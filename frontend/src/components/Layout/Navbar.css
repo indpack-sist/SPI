@@ -1,0 +1,328 @@
+/* =====================================================
+   NAVBAR STYLES
+   ===================================================== */
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navbar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #4b5563;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.navbar-toggle:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.navbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* =====================================================
+   NAVBAR RIGHT - USUARIO Y NOTIFICACIONES
+   ===================================================== */
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navbar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.navbar-icon-btn:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+/* =====================================================
+   NOTIFICACIONES
+   ===================================================== */
+
+.navbar-notifications-container {
+  position: relative;
+}
+
+.navbar-notifications-btn {
+  position: relative;
+}
+
+.navbar-notifications-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #ef4444;
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.navbar-notifications-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 380px;
+  max-height: 500px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar-notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.navbar-notifications-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.navbar-notifications-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.navbar-notifications-close:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.navbar-notifications-body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.navbar-notifications-loading {
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+}
+
+.navbar-notifications-empty {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #9ca3af;
+}
+
+.navbar-notifications-empty svg {
+  margin: 0 auto 1rem;
+}
+
+.navbar-notifications-empty p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.navbar-notification-item {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.navbar-notification-item:hover {
+  background: #f9fafb;
+}
+
+.navbar-notification-item:last-child {
+  border-bottom: none;
+}
+
+/* Colores de notificaciones */
+.navbar-notification-warning {
+  border-left-color: #f59e0b;
+}
+
+.navbar-notification-info {
+  border-left-color: #3b82f6;
+}
+
+.navbar-notification-success {
+  border-left-color: #10b981;
+}
+
+.navbar-notification-danger {
+  border-left-color: #ef4444;
+}
+
+.navbar-notification-content h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.navbar-notification-content p {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.813rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.navbar-notification-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.navbar-notifications-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.navbar-notifications-footer button {
+  width: 100%;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.navbar-notifications-footer button:hover {
+  background: #e0f2fe;
+}
+
+/* =====================================================
+   USUARIO
+   ===================================================== */
+
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.navbar-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+}
+
+.navbar-user-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.navbar-user-role {
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1;
+}
+
+/* =====================================================
+   LOGOUT
+   ===================================================== */
+
+.navbar-logout {
+  color: #dc2626 !important;
+}
+
+.navbar-logout:hover {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
+@media (max-width: 768px) {
+  .navbar-title {
+    display: none;
+  }
+
+  .navbar-user-info {
+    display: none;
+  }
+
+  .navbar-notifications-panel {
+    width: calc(100vw - 2rem);
+    right: -1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar {
+    padding: 0.75rem 1rem;
+  }
+
+  .navbar-user {
+    padding: 0.5rem;
+  }
+}

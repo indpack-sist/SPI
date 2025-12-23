@@ -1,0 +1,1241 @@
+/* =====================================================
+   PRODUCTO DETALLE - ESTILOS MEJORADOS
+   ===================================================== */
+
+.producto-detalle-container {
+  padding: 1.5rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* =====================================================
+   SECCIÓN INFORMACIÓN DEL PRODUCTO
+   ===================================================== */
+
+.seccion-info-producto {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 2rem;
+}
+
+.seccion-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.seccion-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.seccion-subtitulo {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* =====================================================
+   GRID DE INFORMACIÓN
+   ===================================================== */
+
+.info-producto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.info-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s;
+}
+
+.info-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.info-card-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+}
+
+.info-card-body {
+  padding: 1.25rem;
+}
+
+/* =====================================================
+   FILAS DE INFORMACIÓN
+   ===================================================== */
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.codigo-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+}
+
+/* =====================================================
+   STOCK
+   ===================================================== */
+
+.stock-principal {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.stock-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.stock-valor-grande {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #0284c7;
+  line-height: 1;
+}
+
+.stock-unidad {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.valor-destacado {
+  color: #059669 !important;
+  font-weight: 700 !important;
+}
+
+.valor-exito {
+  color: #10b981 !important;
+  font-weight: 700 !important;
+}
+
+/* =====================================================
+   CUP - CON MANEJO ESPECIAL
+   ===================================================== */
+
+.cup-principal {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.cup-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.cup-valor-grande {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #92400e;
+  line-height: 1;
+}
+
+/* CUP SIN VALOR - ALERTA ESPECIAL */
+.cup-sin-valor-card {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 2px dashed #f87171;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.cup-sin-valor-icon {
+  color: #dc2626;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.cup-sin-valor-texto {
+  color: #991b1b;
+}
+
+.cup-sin-valor-texto strong {
+  display: block;
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+}
+
+.cup-sin-valor-texto p {
+  font-size: 0.875rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* =====================================================
+   DESCRIPCIÓN
+   ===================================================== */
+
+.descripcion-producto {
+  background: #f8f9fa;
+  border-left: 4px solid #667eea;
+  padding: 1.25rem;
+  border-radius: 8px;
+  margin-top: 1.5rem;
+}
+
+.descripcion-producto h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.descripcion-producto p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* =====================================================
+   TABS
+   ===================================================== */
+
+.seccion-tabs {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.tabs-header {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.938rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-button:hover {
+  background: #f3f4f6;
+  color: var(--text-primary);
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.tabs-content {
+  padding: 2rem;
+}
+
+/* =====================================================
+   RECETAS - TABS HORIZONTALES
+   ===================================================== */
+
+.recetas-tabs-container {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+}
+
+.recetas-tabs {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.recetas-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.recetas-tabs::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+
+.recetas-tabs::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 3px;
+}
+
+.receta-tab {
+  min-width: 220px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.receta-tab:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.receta-tab.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.receta-tab-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.receta-star {
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.receta-tab.active .receta-star {
+  color: white;
+}
+
+.receta-tab-nombre {
+  font-weight: 700;
+  font-size: 0.938rem;
+  flex: 1;
+}
+
+.receta-icono-activo {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.receta-icono-inactivo {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.receta-tab.active .receta-icono-activo,
+.receta-tab.active .receta-icono-inactivo {
+  color: white;
+}
+
+.receta-tab-info,
+.receta-tab-costo,
+.receta-tab-version {
+  font-size: 0.813rem;
+  margin-top: 0.25rem;
+}
+
+.receta-tab-info {
+  color: #6b7280;
+}
+
+.receta-tab.active .receta-tab-info {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.receta-tab-costo {
+  font-weight: 700;
+  color: #059669;
+}
+
+.receta-tab.active .receta-tab-costo {
+  color: white;
+}
+
+.receta-tab-version {
+  color: #9ca3af;
+}
+
+.receta-tab.active .receta-tab-version {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* =====================================================
+   DETALLE DE RECETA
+   ===================================================== */
+
+.receta-detalle-header {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.receta-detalle-info {
+  flex: 1;
+}
+
+.receta-titulo-badges {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.receta-titulo-badges h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.receta-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.receta-descripcion {
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 1rem;
+  font-size: 0.938rem;
+}
+
+/* =====================================================
+   MÉTRICAS DE RECETA
+   ===================================================== */
+
+.receta-metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.metrica-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.metrica-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.metrica-card.destacado {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #fbbf24;
+}
+
+.metrica-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.metrica-valor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metrica-unidad {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.receta-detalle-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* =====================================================
+   TABLA DE INSUMOS
+   ===================================================== */
+
+.insumos-section {
+  margin-top: 1.5rem;
+}
+
+.insumos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.insumos-header h4 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+}
+
+.insumos-header p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.insumos-tabla-container {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Estilos específicos de celdas */
+.orden-badge {
+  background: #e5e7eb;
+  color: #374151;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.813rem;
+}
+
+.codigo-text {
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.insumo-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.insumo-nombre {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.badge-critico {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.insumo-notas {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.cantidad-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.cantidad-valor {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.cantidad-unidad {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.cup-cell {
+  text-align: right;
+  font-size: 0.875rem;
+}
+
+.cup-sin-valor {
+  color: #dc2626;
+  font-size: 0.813rem;
+  font-style: italic;
+}
+
+.costo-total-cell {
+  text-align: right;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #059669;
+}
+
+.stock-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.stock-valor {
+  font-weight: 600;
+}
+
+.stock-suficiente {
+  color: #10b981;
+}
+
+.stock-insuficiente {
+  color: #ef4444;
+}
+
+.stock-alerta {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+
+.acciones-cell {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+/* =====================================================
+   RESUMEN DE COSTOS
+   ===================================================== */
+
+.costos-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.costo-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  transition: all 0.3s;
+}
+
+.costo-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.costo-card.destacado {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #10b981;
+}
+
+.costo-icono {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.costo-card.destacado .costo-icono {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.costo-info {
+  flex: 1;
+}
+
+.costo-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.costo-valor {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.costo-descripcion {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+}
+
+/* =====================================================
+   HISTORIAL
+   ===================================================== */
+
+.historial-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.historial-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+}
+
+.historial-header p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.historial-filtros {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.historial-tabla-container {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Estilos de celdas de historial */
+.fecha-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.tipo-movimiento-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inventario-text {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.destino-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.destino-principal {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.destino-documento {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.cantidad-historial {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.costo-unitario-text {
+  font-size: 0.875rem;
+}
+
+.costo-total-historial {
+  font-weight: 700;
+  color: #059669;
+}
+
+.registrado-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* =====================================================
+   ESTADOS VACÍOS
+   ===================================================== */
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.empty-icon {
+  color: #d1d5db;
+  margin: 0 auto 1.5rem;
+}
+
+.empty-state h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-state p {
+  color: var(--text-secondary);
+  margin: 0 0 1.5rem 0;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+/* =====================================================
+   MODALES
+   ===================================================== */
+
+.form-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.form-checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.form-checkbox-label span {
+  margin-bottom: 0 !important;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+.cup-advertencia {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: #fef2f2;
+  border-radius: 6px;
+  font-size: 0.813rem;
+  color: #dc2626;
+}
+
+.text-warning {
+  color: #f59e0b;
+  font-style: italic;
+}
+
+.mt-3 {
+  margin-top: 1rem;
+}
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
+@media (max-width: 768px) {
+  .producto-detalle-container {
+    padding: 1rem;
+  }
+
+  .info-producto-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .receta-detalle-header {
+    flex-direction: column;
+  }
+
+  .receta-detalle-acciones {
+    flex-direction: row;
+    width: 100%;
+  }
+
+  .receta-metricas {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .costos-resumen {
+    grid-template-columns: 1fr;
+  }
+
+  .historial-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .historial-filtros {
+    width: 100%;
+  }
+
+  .tabs-header {
+    flex-direction: column;
+  }
+
+  .tab-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+/* =====================================================
+   AGREGAR AL FINAL DE ProductoDetalle.css
+   ===================================================== */
+
+/* Desglose de producciones */
+.cup-desglose {
+  margin-top: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cup-desglose summary {
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.cup-desglose summary:hover {
+  background: var(--bg-hover);
+}
+
+.cup-desglose summary::before {
+  content: '▶';
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.cup-desglose[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.producciones-list {
+  padding: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.produccion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.2s;
+}
+
+.produccion-item:hover {
+  background: var(--bg-secondary);
+}
+
+.produccion-item:last-child {
+  border-bottom: none;
+}
+
+.produccion-item.mas {
+  justify-content: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.produccion-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.produccion-orden {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+.produccion-receta {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.produccion-valores {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.produccion-cantidad {
+  color: var(--text-secondary);
+}
+
+.produccion-cup {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+/* Tabla de evolución CUP */
+.cup-evolucion-tabla {
+  margin-top: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cup-evolucion-tabla table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cup-evolucion-tabla thead {
+  background: var(--bg-secondary);
+}
+
+.cup-evolucion-tabla th {
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.cup-evolucion-tabla td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.875rem;
+}
+
+.cup-evolucion-tabla tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.cup-evolucion-tabla tbody tr:last-child td {
+  border-bottom: none;
+  font-weight: 600;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+}
+
+.cup-tendencia {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.cup-tendencia.sube {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.cup-tendencia.baja {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.cup-tendencia.igual {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .produccion-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .cup-evolucion-tabla {
+    overflow-x: auto;
+  }
+  
+  .cup-evolucion-tabla table {
+    min-width: 500px;
+  }
+}
+/* Agregar al final de ProductoDetalle.css */
+/* ============================================
+   ESTILOS PARA MÁRGENES Y TOOLTIPS (OPTIMIZADO)
+   ============================================ */
+
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--color-primary, #3b82f6);
+  cursor: help;
+  background: rgba(59, 130, 246, 0.1);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+/* El globo del tooltip */
+.info-tooltip::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 140%; /* Un poco más arriba */
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  
+  /* Diseño avanzado */
+  background-color: #1f2937;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  
+  /* Manejo de texto */
+  white-space: pre-wrap; /* Permite saltos de línea si es largo */
+  width: max-content;
+  max-width: 200px;
+  text-align: center;
+  
+  /* Efectos */
+  z-index: 100;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+/* La flechita con mejor diseño */
+.info-tooltip::before {
+  content: "";
+  position: absolute;
+  bottom: 115%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  border: 6px solid transparent;
+  border-top-color: #1f2937;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Estado Hover: Animación de entrada */
+.info-tooltip:hover::after,
+.info-tooltip:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.info-tooltip:hover {
+  background: var(--color-primary, #3b82f6);
+  color: white;
+  opacity: 1;
+}
+
+/* Estilos de la tarjeta de costos */
+.valor-destacado {
+  font-weight: 700;
+  color: var(--color-primary, #3b82f6);
+  font-size: 1.1em;
+}
+
+.info-row:has(.valor-destacado) {
+  background-color: rgba(59, 130, 246, 0.08);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  margin: 0.5rem 0;
+  border: 1px dashed rgba(59, 130, 246, 0.2);
+}

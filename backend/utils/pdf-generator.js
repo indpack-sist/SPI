@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { numeroALetras } from './numeroALetras.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -650,4 +651,402 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       reject(error);
     }
   });
+}
+export async function generarPDFCotizacion(cotizacion, stream) {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: {
+      top: 50,
+      bottom: 50,
+      left: 50,
+      right: 50
+    }
+  });
+
+  doc.pipe(stream);
+
+  // =====================================================
+  // 1. ENCABEZADO (Header) - Flex Row
+  // =====================================================
+  const pageWidth = doc.page.width;
+  const marginLeft = doc.page.margins.left;
+  const marginRight = doc.page.margins.right;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  
+  let currentY = doc.page.margins.top;
+
+  // Columna Izquierda - Logo y datos empresa
+  doc.fontSize(16)
+     .font('Helvetica-Bold')
+     .text('INDPACK S.A.C.', marginLeft, currentY);
+  
+  currentY += 20;
+  
+  doc.fontSize(9)
+     .font('Helvetica')
+     .text('Jr. Huancavelica 123, Lima - Perú', marginLeft, currentY)
+     .text('Tel: (01) 234-5678', marginLeft, currentY + 12)
+     .text('ventas@indpack.com.pe', marginLeft, currentY + 24)
+     .text('www.indpack.com.pe', marginLeft, currentY + 36);
+
+  // Columna Derecha - Recuadro RUC y Documento
+  const boxX = marginLeft + contentWidth - 200;
+  const boxY = doc.page.margins.top;
+  const boxWidth = 200;
+  const boxHeight = 80;
+  
+  doc.rect(boxX, boxY, boxWidth, boxHeight).stroke();
+  
+  // RUC
+  doc.fontSize(11)
+     .font('Helvetica-Bold')
+     .text('R.U.C. 20123456789', boxX + 10, boxY + 10, {
+       width: boxWidth - 20,
+       align: 'center'
+     });
+  
+  // Tipo de documento
+  doc.fontSize(14)
+     .font('Helvetica-Bold')
+     .text('COTIZACIÓN', boxX + 10, boxY + 30, {
+       width: boxWidth - 20,
+       align: 'center'
+     });
+  
+  // Número
+  doc.fontSize(11)
+     .font('Helvetica')
+     .text(cotizacion.numero_cotizacion, boxX + 10, boxY + 52, {
+       width: boxWidth - 20,
+       align: 'center'
+     });
+
+  currentY = boxY + boxHeight + 20;
+
+  // =====================================================
+  // 2. INFORMACIÓN DEL CLIENTE (Grid)
+  // =====================================================
+  doc.rect(marginLeft, currentY, contentWidth, 70)
+     .fillAndStroke('#f3f4f6', '#000000')
+     .fillColor('#000000');
+  
+  currentY += 10;
+  
+  const labelX = marginLeft + 10;
+  const valueX = marginLeft + 80;
+  
+  doc.fontSize(9)
+     .font('Helvetica-Bold')
+     .text('Cliente:', labelX, currentY)
+     .font('Helvetica')
+     .text(cotizacion.cliente, valueX, currentY, { width: 350 });
+  
+  currentY += 15;
+  
+  doc.font('Helvetica-Bold')
+     .text('RUC:', labelX, currentY)
+     .font('Helvetica')
+     .text(cotizacion.ruc_cliente, valueX, currentY);
+  
+  currentY += 15;
+  
+  doc.font('Helvetica-Bold')
+     .text('Dirección:', labelX, currentY)
+     .font('Helvetica')
+     .text(cotizacion.direccion_cliente || '-', valueX, currentY, { width: 350 });
+  
+  currentY += 15;
+  
+  doc.font('Helvetica-Bold')
+     .text('Ciudad:', labelX, currentY)
+     .font('Helvetica')
+     .text(cotizacion.ciudad_cliente || '-', valueX, currentY);
+
+  currentY += 25;
+
+  // =====================================================
+  // 3. METADATOS DE VENTA (Grid 3 columnas)
+  // =====================================================
+  const colWidth = contentWidth / 3;
+  
+  // Fila 1
+  doc.fontSize(8)
+     .font('Helvetica-Bold')
+     .text('Moneda:', marginLeft, currentY)
+     .font('Helvetica')
+     .text(cotizacion.moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES', marginLeft, currentY + 10);
+  
+  doc.font('Helvetica-Bold')
+     .text('Plazo de Pago:', marginLeft + colWidth, currentY)
+     .font('Helvetica')
+     .text(cotizacion.plazo_pago || '-', marginLeft + colWidth, currentY + 10);
+  
+  doc.font('Helvetica-Bold')
+     .text('Forma de Pago:', marginLeft + colWidth * 2, currentY)
+     .font('Helvetica')
+     .text(cotizacion.forma_pago || '-', marginLeft + colWidth * 2, currentY + 10);
+  
+  currentY += 25;
+  
+  // Fila 2
+  doc.font('Helvetica-Bold')
+     .text('Orden de Compra:', marginLeft, currentY)
+     .font('Helvetica')
+     .text(cotizacion.orden_compra_cliente || '-', marginLeft, currentY + 10);
+  
+  doc.font('Helvetica-Bold')
+     .text('Fecha de Pedido:', marginLeft + colWidth, currentY)
+     .font('Helvetica')
+     .text(formatearFecha(cotizacion.fecha_emision), marginLeft + colWidth, currentY + 10);
+  
+  doc.font('Helvetica-Bold')
+     .text('Comercial:', marginLeft + colWidth * 2, currentY)
+     .font('Helvetica')
+     .text(cotizacion.comercial || '-', marginLeft + colWidth * 2, currentY + 10);
+  
+  if (cotizacion.email_comercial) {
+    doc.fontSize(7)
+       .text(cotizacion.email_comercial, marginLeft + colWidth * 2, currentY + 20);
+  }
+
+  currentY += 35;
+
+  // =====================================================
+  // 4. TABLA DE DETALLE
+  // =====================================================
+  const tableTop = currentY;
+  const tableHeaders = [
+    { text: 'Código', x: marginLeft, width: 70, align: 'left' },
+    { text: 'Cantidad', x: marginLeft + 70, width: 70, align: 'right' },
+    { text: 'Unidad', x: marginLeft + 140, width: 50, align: 'center' },
+    { text: 'Descripción', x: marginLeft + 190, width: 200, align: 'left' },
+    { text: 'Valor Unitario', x: marginLeft + 390, width: 80, align: 'right' },
+    { text: 'Valor Venta', x: marginLeft + 470, width: 75, align: 'right' }
+  ];
+  
+  // Encabezado de tabla
+  doc.fontSize(9)
+     .font('Helvetica-Bold');
+  
+  tableHeaders.forEach(header => {
+    doc.text(header.text, header.x, tableTop, {
+      width: header.width,
+      align: header.align
+    });
+  });
+  
+  // Línea debajo del encabezado
+  currentY = tableTop + 15;
+  doc.moveTo(marginLeft, currentY)
+     .lineTo(marginLeft + contentWidth, currentY)
+     .stroke();
+  
+  currentY += 5;
+
+  // Filas de detalle
+  const detalles = cotizacion.detalle || [];
+  doc.font('Helvetica')
+     .fontSize(8);
+  
+  detalles.forEach((item, index) => {
+    // Verificar si necesitamos nueva página
+    if (currentY > doc.page.height - 150) {
+      doc.addPage();
+      currentY = doc.page.margins.top;
+    }
+    
+    const rowY = currentY;
+    
+    // Código
+    doc.text(item.codigo_producto, marginLeft, rowY, {
+      width: 70,
+      align: 'left'
+    });
+    
+    // Cantidad con 5 decimales
+    doc.text(parseFloat(item.cantidad).toFixed(5), marginLeft + 70, rowY, {
+      width: 70,
+      align: 'right'
+    });
+    
+    // Unidad
+    doc.text(item.unidad_medida, marginLeft + 140, rowY, {
+      width: 50,
+      align: 'center'
+    });
+    
+    // Descripción (puede ser multilinea)
+    const descripcionHeight = doc.heightOfString(item.producto, {
+      width: 200
+    });
+    
+    doc.text(item.producto, marginLeft + 190, rowY, {
+      width: 200,
+      align: 'left'
+    });
+    
+    // Valor Unitario
+    doc.text(formatearMoneda(item.precio_unitario, cotizacion.moneda), 
+             marginLeft + 390, rowY, {
+      width: 80,
+      align: 'right'
+    });
+    
+    // Valor Venta
+    const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+    doc.text(formatearMoneda(valorVenta, cotizacion.moneda), 
+             marginLeft + 470, rowY, {
+      width: 75,
+      align: 'right'
+    });
+    
+    currentY += Math.max(12, descripcionHeight + 5);
+    
+    // Línea separadora sutil
+    if (index < detalles.length - 1) {
+      doc.moveTo(marginLeft, currentY)
+         .lineTo(marginLeft + contentWidth, currentY)
+         .strokeOpacity(0.2)
+         .stroke()
+         .strokeOpacity(1);
+      currentY += 3;
+    }
+  });
+
+  currentY += 10;
+
+  // =====================================================
+  // 5. PIE DE PÁGINA - Asimétrico
+  // =====================================================
+  
+  // Posicionar al final si hay espacio, o en nueva página
+  if (currentY > doc.page.height - 200) {
+    doc.addPage();
+    currentY = doc.page.margins.top;
+  }
+
+  // Sección Izquierda - Observaciones
+  const footerLeft = marginLeft;
+  const footerRight = marginLeft + contentWidth - 180;
+  
+  doc.fontSize(8)
+     .font('Helvetica-Bold')
+     .text('OBSERVACIONES:', footerLeft, currentY);
+  
+  currentY += 12;
+  
+  doc.font('Helvetica')
+     .fontSize(7);
+  
+  if (cotizacion.plazo_entrega) {
+    doc.text(`Plazo de Entrega: ${cotizacion.plazo_entrega}`, footerLeft, currentY);
+    currentY += 10;
+  }
+  
+  if (cotizacion.lugar_entrega) {
+    doc.text(`Lugar: ${cotizacion.lugar_entrega}`, footerLeft, currentY, {
+      width: 300
+    });
+    currentY += 15;
+  }
+  
+  if (cotizacion.validez_dias) {
+    doc.text(`Validez: ${cotizacion.validez_dias} días`, footerLeft, currentY);
+    currentY += 10;
+  }
+  
+  if (cotizacion.observaciones) {
+    doc.text(cotizacion.observaciones, footerLeft, currentY, {
+      width: 300
+    });
+  }
+
+  // Monto en letras
+  const totalEnLetras = numeroALetras(cotizacion.total, cotizacion.moneda);
+  const sonY = doc.page.height - doc.page.margins.bottom - 60;
+  
+  doc.fontSize(8)
+     .font('Helvetica-Bold')
+     .text('SON:', footerLeft, sonY);
+  
+  doc.font('Helvetica')
+     .text(totalEnLetras, footerLeft + 30, sonY, {
+       width: 350
+     });
+
+  // Sección Derecha - Totales
+  const totalesY = doc.page.height - doc.page.margins.bottom - 120;
+  const totalesWidth = 170;
+  
+  // Recuadro de totales
+  doc.rect(footerRight, totalesY, totalesWidth, 90)
+     .stroke();
+  
+  const totalesX = footerRight + 10;
+  let totalesRowY = totalesY + 10;
+  
+  doc.fontSize(9)
+     .font('Helvetica-Bold');
+  
+  // Sub Total
+  doc.text('Sub Total:', totalesX, totalesRowY);
+  doc.font('Helvetica')
+     .text(formatearMoneda(cotizacion.subtotal, cotizacion.moneda), 
+           totalesX + 90, totalesRowY, {
+      width: 70,
+      align: 'right'
+    });
+  
+  totalesRowY += 20;
+  
+  // IGV
+  doc.font('Helvetica-Bold')
+     .text('IGV 18%:', totalesX, totalesRowY);
+  doc.font('Helvetica')
+     .text(formatearMoneda(cotizacion.igv, cotizacion.moneda), 
+           totalesX + 90, totalesRowY, {
+      width: 70,
+      align: 'right'
+    });
+  
+  totalesRowY += 20;
+  
+  // Línea antes del total
+  doc.moveTo(totalesX, totalesRowY)
+     .lineTo(totalesX + totalesWidth - 20, totalesRowY)
+     .stroke();
+  
+  totalesRowY += 10;
+  
+  // Total
+  doc.fontSize(11)
+     .font('Helvetica-Bold')
+     .text('TOTAL:', totalesX, totalesRowY);
+  doc.text(formatearMoneda(cotizacion.total, cotizacion.moneda), 
+           totalesX + 90, totalesRowY, {
+      width: 70,
+      align: 'right'
+    });
+
+  // Finalizar documento
+  doc.end();
+}
+
+// =====================================================
+// FUNCIONES AUXILIARES
+// =====================================================
+
+function formatearFecha(fecha) {
+  if (!fecha) return '-';
+  const date = new Date(fecha);
+  return date.toLocaleDateString('es-PE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+}
+
+function formatearMoneda(valor, moneda) {
+  const simbolo = moneda === 'USD' ? '$' : 'S/';
+  return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
 }

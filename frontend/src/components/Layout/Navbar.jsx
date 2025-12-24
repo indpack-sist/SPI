@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Menu, Bell, User, LogOut, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ordenesProduccionAPI } from '../../config/api';
 import './Navbar.css';
 
 function Navbar({ onToggleSidebar }) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [notificaciones, setNotificaciones] = useState([]);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -88,7 +90,7 @@ function Navbar({ onToggleSidebar }) {
   };
 
   const handleNotificacionClick = (notif) => {
-    window.location.href = `/produccion/ordenes/${notif.id_orden}`;
+    navigate(`/produccion/ordenes/${notif.id_orden}`);
     setShowNotificaciones(false);
   };
 

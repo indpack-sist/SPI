@@ -2,29 +2,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Edit, 
-  Download, 
-  Package,
-  Truck,
-  CheckCircle,
-  XCircle,
-  Clock,
-  FileText,
-  Building,
-  DollarSign,
-  MapPin,
-  AlertCircle,
-  TrendingUp,
-  Calendar,
-  Plus,
-  ShoppingCart,
-  Calculator
+  ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
+  XCircle, Clock, FileText, Building, DollarSign, MapPin,
+  AlertCircle, TrendingUp, Calendar, Plus, ShoppingCart, Calculator
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import { ordenesVentaAPI } from '../../config/api';
 
 function DetalleOrdenVenta() {
   const { id } = useParams();
@@ -35,12 +21,10 @@ function DetalleOrdenVenta() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Modales
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [modalProgresoOpen, setModalProgresoOpen] = useState(false);
   
-  // Control de progreso
   const [progreso, setProgreso] = useState([]);
 
   useEffect(() => {
@@ -52,77 +36,23 @@ function DetalleOrdenVenta() {
       setLoading(true);
       setError(null);
       
-      // TODO: API real
-      const mockData = {
-        id_orden_venta: 1,
-        numero_orden: 'OV-2025-0001',
-        numero_cotizacion: 'C-2025-0001',
-        id_cotizacion: 1,
-        fecha_emision: '2025-12-24',
-        fecha_entrega_estimada: '2025-12-31',
-        fecha_entrega_real: null,
-        estado: 'Pendiente',
-        prioridad: 'Alta',
-        moneda: 'PEN',
-        plazo_pago: '30 días',
-        forma_pago: 'Transferencia bancaria',
-        orden_compra_cliente: 'OC-2025-100',
-        direccion_entrega: 'Av. Principal 123, Lima',
-        lugar_entrega: 'Almacén central',
-        ciudad_entrega: 'Lima',
-        contacto_entrega: 'Juan Pérez',
-        telefono_entrega: '(01) 234-5678',
-        observaciones: 'Entrega en horario de oficina',
-        cliente: 'EMPRESA DEMO SAC',
-        ruc_cliente: '20123456789',
-        direccion_cliente: 'Av. Principal 123',
-        ciudad_cliente: 'Lima',
-        comercial: 'María García',
-        subtotal: 5000.00,
-        igv: 900.00,
-        total: 5900.00,
-        fecha_creacion: '2025-12-24T10:30:00',
-        detalle: [
-          {
-            id_detalle: 1,
-            codigo_producto: 'PROD-001',
-            producto: 'Producto Terminado 1',
-            unidad_medida: 'unidad',
-            cantidad: 10.00000,
-            precio_unitario: 100.00,
-            descuento_porcentaje: 0,
-            valor_venta: 1000.00,
-            stock_actual: 5,
-            requiere_produccion: true,
-            cantidad_producida: 3.00000,
-            cantidad_despachada: 0.00000
-          },
-          {
-            id_detalle: 2,
-            codigo_producto: 'PROD-002',
-            producto: 'Producto Terminado 2',
-            unidad_medida: 'unidad',
-            cantidad: 20.00000,
-            precio_unitario: 200.00,
-            descuento_porcentaje: 0,
-            valor_venta: 4000.00,
-            stock_actual: 25,
-            requiere_produccion: false,
-            cantidad_producida: 0.00000,
-            cantidad_despachada: 0.00000
-          }
-        ]
-      };
+      const response = await ordenesVentaAPI.getById(id);
       
-      setOrden(mockData);
-      setProgreso(mockData.detalle.map(d => ({
-        id_detalle: d.id_detalle,
-        cantidad_producida: d.cantidad_producida,
-        cantidad_despachada: d.cantidad_despachada
-      })));
+      if (response.data.success) {
+        const data = response.data.data;
+        setOrden(data);
+        setProgreso(data.detalle.map(d => ({
+          id_detalle: d.id_detalle,
+          cantidad_producida: d.cantidad_producida || 0,
+          cantidad_despachada: d.cantidad_despachada || 0
+        })));
+      } else {
+        setError('Orden no encontrada');
+      }
       
     } catch (err) {
-      setError('Error al cargar la orden de venta: ' + err.message);
+      console.error('Error al cargar la orden de venta:', err);
+      setError(err.response?.data?.error || 'Error al cargar la orden de venta');
     } finally {
       setLoading(false);
     }
@@ -131,46 +61,84 @@ function DetalleOrdenVenta() {
   const handleCambiarEstado = async (estado) => {
     try {
       setError(null);
-      console.log('Cambiar estado a:', estado);
-      setOrden({ ...orden, estado });
-      setSuccess(`Estado actualizado a ${estado}`);
-      setModalEstadoOpen(false);
+      setLoading(true);
+      
+      const response = await ordenesVentaAPI.actualizarEstado(
+        id, 
+        estado,
+        estado === 'Entregada' ? new Date().toISOString().split('T')[0] : null
+      );
+      
+      if (response.data.success) {
+        setOrden({ ...orden, estado });
+        setSuccess(`Estado actualizado a ${estado}`);
+        setModalEstadoOpen(false);
+      } else {
+        setError(response.data.error || 'Error al cambiar estado');
+      }
+      
     } catch (err) {
-      setError('Error al cambiar estado: ' + err.message);
+      console.error('Error al cambiar estado:', err);
+      setError(err.response?.data?.error || 'Error al cambiar estado');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleCambiarPrioridad = async (prioridad) => {
     try {
       setError(null);
-      console.log('Cambiar prioridad a:', prioridad);
-      setOrden({ ...orden, prioridad });
-      setSuccess(`Prioridad actualizada a ${prioridad}`);
-      setModalPrioridadOpen(false);
+      setLoading(true);
+      
+      const response = await ordenesVentaAPI.actualizarPrioridad(id, prioridad);
+      
+      if (response.data.success) {
+        setOrden({ ...orden, prioridad });
+        setSuccess(`Prioridad actualizada a ${prioridad}`);
+        setModalPrioridadOpen(false);
+      } else {
+        setError(response.data.error || 'Error al cambiar prioridad');
+      }
+      
     } catch (err) {
-      setError('Error al cambiar prioridad: ' + err.message);
+      console.error('Error al cambiar prioridad:', err);
+      setError(err.response?.data?.error || 'Error al cambiar prioridad');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleActualizarProgreso = async () => {
     try {
       setError(null);
-      console.log('Actualizar progreso:', progreso);
+      setLoading(true);
       
-      const nuevoDetalle = orden.detalle.map(item => {
-        const prog = progreso.find(p => p.id_detalle === item.id_detalle);
-        return {
-          ...item,
-          cantidad_producida: prog?.cantidad_producida || item.cantidad_producida,
-          cantidad_despachada: prog?.cantidad_despachada || item.cantidad_despachada
-        };
+      const response = await ordenesVentaAPI.actualizarProgreso(id, {
+        detalle: progreso
       });
       
-      setOrden({ ...orden, detalle: nuevoDetalle });
-      setSuccess('Progreso actualizado exitosamente');
-      setModalProgresoOpen(false);
+      if (response.data.success) {
+        const nuevoDetalle = orden.detalle.map(item => {
+          const prog = progreso.find(p => p.id_detalle === item.id_detalle);
+          return {
+            ...item,
+            cantidad_producida: prog?.cantidad_producida || item.cantidad_producida,
+            cantidad_despachada: prog?.cantidad_despachada || item.cantidad_despachada
+          };
+        });
+        
+        setOrden({ ...orden, detalle: nuevoDetalle });
+        setSuccess('Progreso actualizado exitosamente');
+        setModalProgresoOpen(false);
+      } else {
+        setError(response.data.error || 'Error al actualizar progreso');
+      }
+      
     } catch (err) {
-      setError('Error al actualizar progreso: ' + err.message);
+      console.error('Error al actualizar progreso:', err);
+      setError(err.response?.data?.error || 'Error al actualizar progreso');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,9 +146,17 @@ function DetalleOrdenVenta() {
     navigate(`/ventas/guias-remision/nueva?orden=${id}`);
   };
 
-  const handleDescargarPDF = () => {
-    console.log('Descargar PDF de orden:', id);
-    setSuccess('Descargando PDF...');
+  const handleDescargarPDF = async () => {
+    try {
+      setLoading(true);
+      await ordenesVentaAPI.descargarPDF(id);
+      setSuccess('PDF descargado exitosamente');
+    } catch (err) {
+      console.error('Error al descargar PDF:', err);
+      setError('Error al descargar el PDF');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatearFecha = (fecha) => {
@@ -242,9 +218,9 @@ function DetalleOrdenVenta() {
 
   const calcularProgresoPorcentaje = (item) => {
     if (!item.requiere_produccion) {
-      return (parseFloat(item.cantidad_despachada) / parseFloat(item.cantidad)) * 100;
+      return (parseFloat(item.cantidad_despachada || 0) / parseFloat(item.cantidad)) * 100;
     }
-    return (parseFloat(item.cantidad_producida) / parseFloat(item.cantidad)) * 100;
+    return (parseFloat(item.cantidad_producida || 0) / parseFloat(item.cantidad)) * 100;
   };
 
   const columns = [
@@ -325,6 +301,7 @@ function DetalleOrdenVenta() {
   ];
 
   if (loading) return <Loading message="Cargando orden de venta..." />;
+  
   if (!orden) {
     return (
       <div className="p-6">
@@ -514,7 +491,7 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* Modales */}
+      {/* Modal Estado */}
       <Modal isOpen={modalEstadoOpen} onClose={() => setModalEstadoOpen(false)} title="Cambiar Estado">
         <div className="space-y-4">
           <p className="text-muted">Estado actual: <strong>{orden.estado}</strong></p>
@@ -523,7 +500,11 @@ function DetalleOrdenVenta() {
               const config = getEstadoConfig(estado);
               const Icono = config.icono;
               return (
-                <button key={estado} className="btn btn-outline w-full justify-start" onClick={() => handleCambiarEstado(estado)}>
+                <button 
+                  key={estado} 
+                  className="btn btn-outline w-full justify-start" 
+                  onClick={() => handleCambiarEstado(estado)}
+                >
                   <Icono size={20} /> {estado}
                 </button>
               );
@@ -532,11 +513,16 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
+      {/* Modal Prioridad */}
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
         <div className="space-y-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
-            <button key={prioridad} className="btn btn-outline w-full justify-start" 
-              onClick={() => handleCambiarPrioridad(prioridad)} disabled={orden.prioridad === prioridad}>
+            <button 
+              key={prioridad} 
+              className="btn btn-outline w-full justify-start" 
+              onClick={() => handleCambiarPrioridad(prioridad)} 
+              disabled={orden.prioridad === prioridad}
+            >
               <span className="text-2xl mr-2">{getPrioridadConfig(prioridad).icono}</span>
               {prioridad}
             </button>
@@ -544,11 +530,17 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
+      {/* Modal Progreso */}
       <Modal isOpen={modalProgresoOpen} onClose={() => setModalProgresoOpen(false)} title="Actualizar Progreso" size="lg">
         <div className="space-y-4">
           <table className="table">
             <thead>
-              <tr><th>Producto</th><th>Total</th><th>Producida</th><th>Despachada</th></tr>
+              <tr>
+                <th>Producto</th>
+                <th>Total</th>
+                <th>Producida</th>
+                <th>Despachada</th>
+              </tr>
             </thead>
             <tbody>
               {orden.detalle.map((item) => {
@@ -558,23 +550,35 @@ function DetalleOrdenVenta() {
                     <td>{item.producto}</td>
                     <td>{parseFloat(item.cantidad).toFixed(2)}</td>
                     <td>
-                      <input type="number" className="form-input" value={prog?.cantidad_producida || 0}
+                      <input 
+                        type="number" 
+                        className="form-input" 
+                        value={prog?.cantidad_producida || 0}
                         onChange={(e) => {
                           const newProgreso = [...progreso];
                           const idx = newProgreso.findIndex(p => p.id_detalle === item.id_detalle);
                           if (idx >= 0) newProgreso[idx].cantidad_producida = parseFloat(e.target.value) || 0;
                           setProgreso(newProgreso);
                         }}
-                        disabled={!item.requiere_produccion} />
+                        disabled={!item.requiere_produccion}
+                        step="0.01"
+                        min="0"
+                      />
                     </td>
                     <td>
-                      <input type="number" className="form-input" value={prog?.cantidad_despachada || 0}
+                      <input 
+                        type="number" 
+                        className="form-input" 
+                        value={prog?.cantidad_despachada || 0}
                         onChange={(e) => {
                           const newProgreso = [...progreso];
                           const idx = newProgreso.findIndex(p => p.id_detalle === item.id_detalle);
                           if (idx >= 0) newProgreso[idx].cantidad_despachada = parseFloat(e.target.value) || 0;
                           setProgreso(newProgreso);
-                        }} />
+                        }}
+                        step="0.01"
+                        min="0"
+                      />
                     </td>
                   </tr>
                 );
@@ -582,7 +586,9 @@ function DetalleOrdenVenta() {
             </tbody>
           </table>
           <div className="flex gap-2 justify-end">
-            <button className="btn btn-outline" onClick={() => setModalProgresoOpen(false)}>Cancelar</button>
+            <button className="btn btn-outline" onClick={() => setModalProgresoOpen(false)}>
+              Cancelar
+            </button>
             <button className="btn btn-primary" onClick={handleActualizarProgreso}>
               <CheckCircle size={20} /> Guardar
             </button>

@@ -2,20 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
-  Eye, 
-  ShoppingCart, 
-  Filter,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Truck,
-  Package,
-  TrendingUp
+  Plus, Eye, ShoppingCart, Filter, Clock, CheckCircle,
+  XCircle, Truck, Package, TrendingUp
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import { ordenesCompraAPI } from '../../config/api';
 
 function OrdenesCompra() {
   const navigate = useNavigate();
@@ -33,68 +26,30 @@ function OrdenesCompra() {
   const cargarDatos = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // TODO: API real
-      const mockOrdenes = [
-        {
-          id_orden_compra: 1,
-          numero_orden: 'PO202500928',
-          fecha_pedido: '2025-10-29',
-          fecha_confirmacion: '2025-11-26',
-          entrega_esperada: '2025-11-26',
-          estado: 'Confirmada',
-          proveedor: 'HUARCAYA RAMIREZ LEYLA THALIA',
-          ruc_proveedor: '10480477117',
-          moneda: 'PEN',
-          total: 11823.60,
-          total_items: 1,
-          elaborado_por: 'Laura Sofia Molina Ruiz'
-        },
-        {
-          id_orden_compra: 2,
-          numero_orden: 'PO202500927',
-          fecha_pedido: '2025-12-20',
-          fecha_confirmacion: null,
-          entrega_esperada: '2025-12-30',
-          estado: 'Pendiente',
-          proveedor: 'DISTRIBUIDORA ABC SAC',
-          ruc_proveedor: '20123456789',
-          moneda: 'USD',
-          total: 5420.00,
-          total_items: 3,
-          elaborado_por: 'Juan Pérez'
-        },
-        {
-          id_orden_compra: 3,
-          numero_orden: 'PO202500926',
-          fecha_pedido: '2025-12-15',
-          fecha_confirmacion: '2025-12-16',
-          entrega_esperada: '2025-12-20',
-          estado: 'Recibida',
-          proveedor: 'PROVEEDORA XYZ EIRL',
-          ruc_proveedor: '20987654321',
-          moneda: 'PEN',
-          total: 8950.00,
-          total_items: 5,
-          elaborado_por: 'María García'
-        }
-      ];
+      // ✅ INTEGRACIÓN CON API REAL
+      const filtros = {};
+      if (filtroEstado) {
+        filtros.estado = filtroEstado;
+      }
       
-      const mockEstadisticas = {
-        total_ordenes: 25,
-        pendientes: 8,
-        confirmadas: 10,
-        en_transito: 4,
-        recibidas: 2,
-        canceladas: 1,
-        monto_total: 125430.50,
-        proveedores_unicos: 12
-      };
+      const [ordenesRes, statsRes] = await Promise.all([
+        ordenesCompraAPI.getAll(filtros),
+        ordenesCompraAPI.getEstadisticas()
+      ]);
       
-      setOrdenes(mockOrdenes);
-      setEstadisticas(mockEstadisticas);
+      if (ordenesRes.data.success) {
+        setOrdenes(ordenesRes.data.data || []);
+      }
+      
+      if (statsRes.data.success) {
+        setEstadisticas(statsRes.data.data || null);
+      }
+      
     } catch (err) {
-      setError('Error al cargar órdenes de compra: ' + err.message);
+      console.error('Error al cargar órdenes de compra:', err);
+      setError(err.response?.data?.error || 'Error al cargar órdenes de compra');
     } finally {
       setLoading(false);
     }
@@ -192,7 +147,7 @@ function OrdenesCompra() {
       width: '80px',
       align: 'center',
       render: (value) => (
-        <span className="badge badge-primary">{value}</span>
+        <span className="badge badge-primary">{value || 0}</span>
       )
     },
     {
@@ -243,7 +198,6 @@ function OrdenesCompra() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -263,18 +217,16 @@ function OrdenesCompra() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* Estadísticas - Dashboard */}
       {estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {/* Total Órdenes */}
           <div className="card">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Total Órdenes</p>
-                  <h3 className="text-2xl font-bold">{estadisticas.total_ordenes}</h3>
+                  <h3 className="text-2xl font-bold">{estadisticas.total_ordenes || 0}</h3>
                   <p className="text-xs text-muted">
-                    {estadisticas.proveedores_unicos} proveedores
+                    {estadisticas.proveedores_unicos || 0} proveedores
                   </p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
@@ -284,13 +236,12 @@ function OrdenesCompra() {
             </div>
           </div>
 
-          {/* Pendientes */}
           <div className="card border-l-4 border-warning">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Pendientes</p>
-                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes}</h3>
+                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes || 0}</h3>
                   <p className="text-xs text-muted">Sin confirmar</p>
                 </div>
                 <div className="p-3 bg-yellow-100 rounded-lg">
@@ -300,13 +251,12 @@ function OrdenesCompra() {
             </div>
           </div>
 
-          {/* Confirmadas */}
           <div className="card border-l-4 border-info">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Confirmadas</p>
-                  <h3 className="text-2xl font-bold text-info">{estadisticas.confirmadas}</h3>
+                  <h3 className="text-2xl font-bold text-info">{estadisticas.confirmadas || 0}</h3>
                   <p className="text-xs text-muted">En proceso</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
@@ -316,16 +266,15 @@ function OrdenesCompra() {
             </div>
           </div>
 
-          {/* Monto Total */}
           <div className="card border-l-4 border-success">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Monto Total</p>
                   <h3 className="text-2xl font-bold text-success">
-                    {formatearMoneda(estadisticas.monto_total, 'PEN')}
+                    {formatearMoneda(estadisticas.monto_total || 0, 'PEN')}
                   </h3>
-                  <p className="text-xs text-muted">{estadisticas.recibidas} recibidas</p>
+                  <p className="text-xs text-muted">{estadisticas.recibidas || 0} recibidas</p>
                 </div>
                 <div className="p-3 bg-green-100 rounded-lg">
                   <TrendingUp size={24} className="text-success" />
@@ -336,7 +285,6 @@ function OrdenesCompra() {
         </div>
       )}
 
-      {/* Filtros */}
       <div className="card mb-4">
         <div className="card-body">
           <div className="flex items-center gap-3 flex-wrap">
@@ -383,7 +331,6 @@ function OrdenesCompra() {
         </div>
       </div>
 
-      {/* Tabla */}
       <div className="card">
         <div className="card-header">
           <h2 className="card-title">

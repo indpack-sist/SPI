@@ -44,42 +44,57 @@ export function AuthProvider({ children }) {
 
   // ✅ CAMBIO AQUÍ: Recibir email y password por separado
   const login = async (email, password) => {
-    try {
-      // ✅ Crear objeto credentials
-      const credentials = { email, password };
-      
-      const response = await authAPI.login(credentials);
-      
-      if (response.data.success) {
-        const { token, empleado } = response.data;
-        
-        // Guardar token
-        localStorage.setItem('token', token);
-        
-        // Crear objeto user
-        const userData = {
-          id: empleado.id_empleado,
-          nombre: empleado.nombre_completo,
-          email: empleado.email,
-          cargo: empleado.cargo,
-          rol: empleado.rol
-        };
-        
-        localStorage.setItem('user', JSON.stringify(userData));
-        setUser(userData);
-        
-        return { success: true };
-      } else {
-        return { success: false, error: response.data.error || 'Error al iniciar sesión' };
-      }
-    } catch (error) {
-      console.error('Error en login:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.error || error.message || 'Error al iniciar sesión' 
-      };
+  try {
+    const credentials = { email, password };
+    const response = await authAPI.login(credentials);
+    
+    console.log('Respuesta completa del backend:', response.data); // ← Para debug
+    
+    // Manejar diferentes estructuras de respuesta
+    const data = response.data;
+    
+    // Extraer token
+    const token = data.token || data.data?.token;
+    if (!token) {
+      throw new Error('No se recibió token del servidor');
     }
-  };
+    
+    // Extraer empleado (puede venir en diferentes estructuras)
+    const empleado = data.empleado || data.data?.empleado || data.user || data.data;
+    
+    if (!empleado || !empleado.id_empleado) {
+      console.error('Estructura de respuesta:', data);
+      throw new Error('Estructura de respuesta del servidor no válida');
+    }
+    
+    // Guardar token
+    localStorage.setItem('token', token);
+    
+    // Crear objeto user
+    const userData = {
+      id: empleado.id_empleado,
+      nombre: empleado.nombre_completo || empleado.nombre,
+      email: empleado.email,
+      cargo: empleado.cargo || 'Sin cargo',
+      rol: empleado.rol || 'usuario'
+    };
+    
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    
+    return { success: true };
+    
+  } catch (error) {
+    console.error('Error completo en login:', error);
+    console.error('Response data:', error.response?.data);
+    
+    return { 
+      success: false, 
+      error: error.response?.data?.error || error.message || 'Error al iniciar sesión' 
+    };
+  }
+};
+
 
   const logout = () => {
     try {

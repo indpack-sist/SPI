@@ -29,24 +29,23 @@ import OrdenDetalle from './pages/Produccion/OrdenDetalle';
 import CrearOrden from './pages/Produccion/CrearOrden';
 
 // Ventas
-//import Cotizaciones from './pages/Ventas/Cotizaciones';
-//import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
-//import DetalleCotizacion from './pages/Ventas/DetalleCotizacion';
-//import OrdenesVenta from './pages/Ventas/OrdenesVenta';
-//import NuevaOrdenVenta from './pages/Ventas/NuevaOrdenVenta';
-//import DetalleOrdenVenta from './pages/Ventas/DetalleOrdenVenta';
-//import GuiasRemision from './pages/Ventas/GuiasRemision';
-//import NuevaGuiaRemision from './pages/Ventas/NuevaGuiaRemision';
-//import DetalleGuiaRemision from './pages/Ventas/DetalleGuiaRemision';
-//import GuiasTransportista from './pages/Ventas/GuiasTransportista';
-//import NuevaGuiaTransportista from './pages/Ventas/NuevaGuiaTransportista';
-//import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
+import Cotizaciones from './pages/Ventas/Cotizaciones';
+import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
+import DetalleCotizacion from './pages/Ventas/DetalleCotizacion';
+import OrdenesVenta from './pages/Ventas/OrdenesVenta';
+import NuevaOrdenVenta from './pages/Ventas/NuevaOrdenVenta';
+import DetalleOrdenVenta from './pages/Ventas/DetalleOrdenVenta';
+import GuiasRemision from './pages/Ventas/GuiasRemision';
+import NuevaGuiaRemision from './pages/Ventas/NuevaGuiaRemision';
+import DetalleGuiaRemision from './pages/Ventas/DetalleGuiaRemision';
+import GuiasTransportista from './pages/Ventas/GuiasTransportista';
+import NuevaGuiaTransportista from './pages/Ventas/NuevaGuiaTransportista';
+import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
 
 // Compras
-//import OrdenesCompra from './pages/Compras/OrdenesCompra';
-//import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
-//import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
-
+import OrdenesCompra from './pages/Compras/OrdenesCompra';
+import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
+import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
 function App() {
   return (
     <AuthProvider>

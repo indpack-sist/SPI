@@ -2,21 +2,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Save, 
-  ShoppingCart,
-  Building,
-  Calendar,
-  MapPin,
-  Truck,
-  Plus,
-  Trash2,
-  Search,
-  AlertCircle
+  ArrowLeft, Save, ShoppingCart, Building, Calendar,
+  MapPin, Truck, Plus, Trash2, Search, AlertCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import { 
+  ordenesCompraAPI, proveedoresAPI, productosAPI, empleadosAPI 
+} from '../../config/api';
 
 function NuevaOrdenCompra() {
   const navigate = useNavigate();
@@ -25,22 +19,17 @@ function NuevaOrdenCompra() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Catálogos
+  // ✅ Catálogos REALES
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   
-  // Modales
   const [modalProveedorOpen, setModalProveedorOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
   
-  // Proveedor seleccionado
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState(null);
-  
-  // Productos del proveedor (historial)
   const [productosProveedor, setProductosProveedor] = useState([]);
   
-  // Formulario
   const [formData, setFormData] = useState({
     id_proveedor: '',
     fecha_pedido: new Date().toISOString().split('T')[0],
@@ -54,15 +43,8 @@ function NuevaOrdenCompra() {
     id_elaborado_por: ''
   });
   
-  // Detalle de productos
   const [detalle, setDetalle] = useState([]);
-  
-  // Totales
-  const [totales, setTotales] = useState({
-    subtotal: 0,
-    igv: 0,
-    total: 0
-  });
+  const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
 
   useEffect(() => {
     cargarCatalogos();
@@ -72,50 +54,41 @@ function NuevaOrdenCompra() {
     calcularTotales();
   }, [detalle]);
 
+  // ✅ CARGAR CATÁLOGOS REALES
   const cargarCatalogos = async () => {
     try {
-      // TODO: API real
-      setProveedores([
-        {
-          id_proveedor: 1,
-          razon_social: 'HUARCAYA RAMIREZ LEYLA THALIA',
-          ruc: '10480477117',
-          direccion: 'Jr. Los Alamos 123',
-          ciudad: 'Lima'
-        },
-        {
-          id_proveedor: 2,
-          razon_social: 'DISTRIBUIDORA ABC SAC',
-          ruc: '20123456789',
-          direccion: 'Av. Industrial 456',
-          ciudad: 'Lima'
-        }
+      setLoading(true);
+      
+      const [resProveedores, resProductos, resEmpleados] = await Promise.all([
+        proveedoresAPI.getAll({ estado: 'Activo' }),
+        productosAPI.getAll({ 
+          estado: 'Activo',
+          // Materia Prima (1), Insumos (2), Reventa (4)
+          id_tipo_inventario: '1,2,4'
+        }),
+        empleadosAPI.getAll({ 
+          rol: 'Compras,Administrador',
+          estado: 'Activo' 
+        })
       ]);
       
-      setProductos([
-        {
-          id_producto: 1,
-          codigo: 'PPMP008',
-          nombre: 'SACAS MOLIDAS DE POLIPROPILENO',
-          unidad_medida: 'KG',
-          tipo_inventario: 'Materia Prima'
-        },
-        {
-          id_producto: 2,
-          codigo: 'INS-001',
-          nombre: 'TINTA FLEXOGRÁFICA AZUL',
-          unidad_medida: 'LT',
-          tipo_inventario: 'Insumos'
-        }
-      ]);
+      if (resProveedores.data.success) {
+        setProveedores(resProveedores.data.data || []);
+      }
       
-      setEmpleados([
-        { id_empleado: 1, nombres: 'Laura Sofia Molina Ruiz' },
-        { id_empleado: 2, nombres: 'Juan Pérez García' }
-      ]);
+      if (resProductos.data.success) {
+        setProductos(resProductos.data.data || []);
+      }
+      
+      if (resEmpleados.data.success) {
+        setEmpleados(resEmpleados.data.data || []);
+      }
       
     } catch (err) {
-      setError('Error al cargar catálogos: ' + err.message);
+      console.error('Error al cargar catálogos:', err);
+      setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -127,27 +100,20 @@ function NuevaOrdenCompra() {
     });
     setModalProveedorOpen(false);
     
-    // Cargar productos que ha comprado antes a este proveedor
+    // ✅ Cargar historial de productos comprados a este proveedor
     try {
-      // TODO: API real
-      setProductosProveedor([
-        {
-          id_producto: 1,
-          codigo: 'PPMP008',
-          nombre: 'SACAS MOLIDAS DE POLIPROPILENO',
-          unidad_medida: 'KG',
-          precio_promedio: 3.000,
-          ultima_compra: '2025-11-26',
-          cantidad_total: 10000
-        }
-      ]);
+      const response = await ordenesCompraAPI.getProductosPorProveedor(proveedor.id_proveedor);
+      
+      if (response.data.success) {
+        setProductosProveedor(response.data.data || []);
+      }
     } catch (err) {
       console.error('Error al cargar historial:', err);
+      setProductosProveedor([]);
     }
   };
 
   const handleSelectProducto = (producto) => {
-    // Verificar si ya está en el detalle
     const existe = detalle.find(d => d.id_producto === producto.id_producto);
     if (existe) {
       setError('Este producto ya está en la lista');
@@ -163,7 +129,7 @@ function NuevaOrdenCompra() {
       producto: producto.nombre,
       unidad_medida: producto.unidad_medida,
       cantidad: 1.00000,
-      valor_unitario: historial ? historial.precio_promedio : 0.000,
+      valor_unitario: historial ? parseFloat(historial.precio_promedio) : 0.000,
       valor_compra: 0.00
     };
     
@@ -194,16 +160,15 @@ function NuevaOrdenCompra() {
     const subtotal = detalle.reduce((sum, item) => sum + parseFloat(item.valor_compra || 0), 0);
     const igv = subtotal * 0.18;
     const total = subtotal + igv;
-    
     setTotales({ subtotal, igv, total });
   };
 
+  // ✅ GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     
-    // Validaciones
     if (!formData.id_proveedor) {
       setError('Debe seleccionar un proveedor');
       return;
@@ -214,7 +179,6 @@ function NuevaOrdenCompra() {
       return;
     }
     
-    // Validar que todos los productos tengan cantidad y precio
     const invalidos = detalle.filter(item => 
       parseFloat(item.cantidad) <= 0 || parseFloat(item.valor_unitario) <= 0
     );
@@ -228,25 +192,38 @@ function NuevaOrdenCompra() {
       setLoading(true);
       
       const payload = {
-        ...formData,
-        detalle: detalle.map(item => ({
+        id_proveedor: parseInt(formData.id_proveedor),
+        fecha_pedido: formData.fecha_pedido,
+        fecha_confirmacion: formData.fecha_confirmacion || null,
+        entrega_esperada: formData.entrega_esperada || null,
+        condicion_pago: formData.condicion_pago,
+        forma_pago: formData.forma_pago,
+        lugar_entrega: formData.lugar_entrega,
+        moneda: formData.moneda,
+        observaciones: formData.observaciones,
+        id_elaborado_por: formData.id_elaborado_por ? parseInt(formData.id_elaborado_por) : null,
+        detalle: detalle.map((item, index) => ({
           id_producto: item.id_producto,
           cantidad: parseFloat(item.cantidad),
-          valor_unitario: parseFloat(item.valor_unitario)
+          valor_unitario: parseFloat(item.valor_unitario),
+          orden: index + 1
         }))
       };
       
-      // TODO: API real
-      console.log('Payload:', payload);
+      const response = await ordenesCompraAPI.create(payload);
       
-      setSuccess('Orden de compra creada exitosamente');
-      
-      setTimeout(() => {
-        navigate('/compras/ordenes');
-      }, 1500);
+      if (response.data.success) {
+        setSuccess('Orden de compra creada exitosamente');
+        setTimeout(() => {
+          navigate('/compras/ordenes');
+        }, 1500);
+      } else {
+        setError(response.data.error || 'Error al crear orden de compra');
+      }
       
     } catch (err) {
-      setError('Error al crear orden de compra: ' + err.message);
+      console.error('Error al crear orden de compra:', err);
+      setError(err.response?.data?.error || 'Error al crear orden de compra');
     } finally {
       setLoading(false);
     }
@@ -257,9 +234,12 @@ function NuevaOrdenCompra() {
     return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
   };
 
+  if (loading && proveedores.length === 0) {
+    return <Loading message="Cargando formulario..." />;
+  }
+
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button 
           className="btn btn-outline"
@@ -280,7 +260,7 @@ function NuevaOrdenCompra() {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       <form onSubmit={handleSubmit}>
-        {/* Sección Proveedor */}
+        {/* Proveedor */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -343,7 +323,7 @@ function NuevaOrdenCompra() {
           </div>
         </div>
 
-        {/* Fechas y Datos de la Orden */}
+        {/* Fechas y Datos */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -423,7 +403,7 @@ function NuevaOrdenCompra() {
                   <option value="">Seleccionar...</option>
                   {empleados.map(emp => (
                     <option key={emp.id_empleado} value={emp.id_empleado}>
-                      {emp.nombres}
+                      {emp.nombre_completo}
                     </option>
                   ))}
                 </select>
@@ -454,7 +434,7 @@ function NuevaOrdenCompra() {
           </div>
         </div>
 
-        {/* Detalle de Productos */}
+        {/* Detalle */}
         <div className="card mb-4">
           <div className="card-header">
             <div className="flex justify-between items-center">
@@ -505,9 +485,6 @@ function NuevaOrdenCompra() {
                         <td className="font-mono text-sm">{item.codigo_producto}</td>
                         <td>
                           <div className="font-medium">{item.producto}</div>
-                          <div className="text-xs text-muted">
-                            [{item.codigo_producto}] {item.producto}
-                          </div>
                         </td>
                         <td>
                           <input
@@ -619,7 +596,7 @@ function NuevaOrdenCompra() {
             disabled={loading}
           >
             <Save size={20} />
-            Crear Orden de Compra
+            {loading ? 'Guardando...' : 'Crear Orden de Compra'}
           </button>
         </div>
       </form>
@@ -690,7 +667,7 @@ function NuevaOrdenCompra() {
             >
               <div className="font-bold">[{prod.codigo}] {prod.nombre}</div>
               <div className="text-sm text-muted">
-                Unidad: {prod.unidad_medida} • Tipo: {prod.tipo_inventario}
+                Unidad: {prod.unidad_medida} • Tipo: {prod.tipo_inventario_nombre || 'N/A'}
               </div>
             </div>
           ))}

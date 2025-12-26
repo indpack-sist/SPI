@@ -2,24 +2,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Edit, 
-  Download, 
-  ShoppingCart,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Truck,
-  Package,
-  Building,
-  Calendar,
-  MapPin,
-  CreditCard,
-  AlertCircle
+  ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
+  XCircle, Clock, Truck, Package, Building, Calendar,
+  MapPin, CreditCard, AlertCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import { ordenesCompraAPI } from '../../config/api';
 
 function DetalleOrdenCompra() {
   const { id } = useParams();
@@ -30,11 +20,9 @@ function DetalleOrdenCompra() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Modales
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalRecibirOpen, setModalRecibirOpen] = useState(false);
   
-  // Datos para recepción
   const [datosRecepcion, setDatosRecepcion] = useState({
     fecha_recepcion: new Date().toISOString().split('T')[0],
     observaciones: ''
@@ -49,51 +37,17 @@ function DetalleOrdenCompra() {
       setLoading(true);
       setError(null);
       
-      // TODO: API real
-      const mockData = {
-        id_orden_compra: 1,
-        numero_orden: 'PO202500928',
-        fecha_pedido: '2025-10-29',
-        fecha_confirmacion: '2025-11-26',
-        entrega_esperada: '2025-11-26',
-        fecha_recepcion: null,
-        estado: 'Confirmada',
-        condicion_pago: 'Pago inmediato',
-        forma_pago: 'Efectivo',
-        lugar_entrega: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES',
-        moneda: 'PEN',
-        subtotal: 10020.00,
-        igv: 1803.60,
-        total: 11823.60,
-        observaciones: null,
-        // Proveedor
-        proveedor: 'HUARCAYA RAMIREZ LEYLA THALIA',
-        ruc_proveedor: '10480477117',
-        direccion_proveedor: 'Jr. Los Alamos 123',
-        ciudad_proveedor: 'Lima',
-        // Empleado
-        elaborado_por: 'Laura Sofia Molina Ruiz',
-        fecha_creacion: '2025-10-29T10:30:00',
-        // Detalle
-        detalle: [
-          {
-            id_detalle: 1,
-            id_producto: 1,
-            codigo_producto: 'PPMP008',
-            producto: 'SACAS MOLIDAS DE POLIPROPILENO',
-            unidad_medida: 'KG',
-            cantidad: 3340.00000,
-            valor_unitario: 3.000,
-            valor_compra: 10020.00,
-            cantidad_recibida: 0.00000
-          }
-        ]
-      };
+      const response = await ordenesCompraAPI.getById(id);
       
-      setOrden(mockData);
+      if (response.data.success) {
+        setOrden(response.data.data);
+      } else {
+        setError('Orden no encontrada');
+      }
       
     } catch (err) {
-      setError('Error al cargar la orden de compra: ' + err.message);
+      console.error('Error al cargar la orden de compra:', err);
+      setError(err.response?.data?.error || 'Error al cargar la orden de compra');
     } finally {
       setLoading(false);
     }
@@ -102,15 +56,23 @@ function DetalleOrdenCompra() {
   const handleCambiarEstado = async (nuevoEstado) => {
     try {
       setError(null);
+      setLoading(true);
       
-      // TODO: API real
-      console.log('Cambiar estado a:', nuevoEstado);
-      setOrden({ ...orden, estado: nuevoEstado });
-      setSuccess(`Estado actualizado a ${nuevoEstado}`);
-      setModalEstadoOpen(false);
+      const response = await ordenesCompraAPI.actualizarEstado(id, nuevoEstado);
+      
+      if (response.data.success) {
+        setOrden({ ...orden, estado: nuevoEstado });
+        setSuccess(`Estado actualizado a ${nuevoEstado}`);
+        setModalEstadoOpen(false);
+      } else {
+        setError(response.data.error || 'Error al cambiar estado');
+      }
       
     } catch (err) {
-      setError('Error al cambiar estado: ' + err.message);
+      console.error('Error al cambiar estado:', err);
+      setError(err.response?.data?.error || 'Error al cambiar estado');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -119,28 +81,47 @@ function DetalleOrdenCompra() {
       setError(null);
       setLoading(true);
       
-      // TODO: API real
-      console.log('Recibir orden:', datosRecepcion);
-      
-      setOrden({ 
-        ...orden, 
-        estado: 'Recibida',
-        fecha_recepcion: datosRecepcion.fecha_recepcion
+      // ✅ GENERA ENTRADAS AUTOMÁTICAMENTE
+      const response = await ordenesCompraAPI.recibirOrden(id, {
+        fecha_recepcion: datosRecepcion.fecha_recepcion,
+        observaciones: datosRecepcion.observaciones
       });
       
-      setSuccess('Orden recibida exitosamente. Se han generado las entradas de inventario.');
-      setModalRecibirOpen(false);
+      if (response.data.success) {
+        setOrden({ 
+          ...orden, 
+          estado: 'Recibida',
+          fecha_recepcion: datosRecepcion.fecha_recepcion
+        });
+        
+        setSuccess(
+          'Orden recibida exitosamente. ' +
+          'Se han generado las entradas de inventario y actualizado el stock.'
+        );
+        setModalRecibirOpen(false);
+      } else {
+        setError(response.data.error || 'Error al recibir orden');
+      }
       
     } catch (err) {
-      setError('Error al recibir orden: ' + err.message);
+      console.error('Error al recibir orden:', err);
+      setError(err.response?.data?.error || 'Error al recibir orden');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDescargarPDF = () => {
-    console.log('Descargar PDF de orden:', id);
-    setSuccess('Descargando PDF...');
+  const handleDescargarPDF = async () => {
+    try {
+      setLoading(true);
+      await ordenesCompraAPI.descargarPDF(id);
+      setSuccess('PDF descargado exitosamente');
+    } catch (err) {
+      console.error('Error al descargar PDF:', err);
+      setError('Error al descargar el PDF');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatearFecha = (fecha) => {
@@ -153,6 +134,7 @@ function DetalleOrdenCompra() {
   };
 
   const formatearMoneda = (valor) => {
+    if (!orden) return '-';
     const simbolo = orden.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
   };
@@ -411,14 +393,11 @@ function DetalleOrdenCompra() {
                 </tr>
               </thead>
               <tbody>
-                {orden.detalle.map((item, index) => (
+                {orden.detalle && orden.detalle.map((item, index) => (
                   <tr key={index}>
                     <td className="font-mono text-sm">{item.codigo_producto}</td>
                     <td>
                       <div className="font-medium">{item.producto}</div>
-                      <div className="text-xs text-muted">
-                        [{item.codigo_producto}] {item.producto}
-                      </div>
                     </td>
                     <td className="text-right font-mono">
                       {parseFloat(item.cantidad).toFixed(5)}
@@ -436,7 +415,7 @@ function DetalleOrdenCompra() {
               <tfoot>
                 <tr className="bg-gray-50 font-bold">
                   <td colSpan="5" className="text-right">
-                    Total Items: {orden.detalle.length}
+                    Total Items: {orden.detalle?.length || 0}
                   </td>
                   <td className="text-right text-primary">
                     {formatearMoneda(orden.subtotal)}
@@ -533,6 +512,7 @@ function DetalleOrdenCompra() {
                 <ul className="text-sm text-blue-800 mt-2 space-y-1">
                   <li>• Se generarán entradas de inventario automáticamente</li>
                   <li>• Se actualizará el stock de cada producto</li>
+                  <li>• Se recalculará el CUP (Costo Unitario Promedio)</li>
                   <li>• La orden cambiará a estado "Recibida"</li>
                   <li>• Esta acción no se puede deshacer</li>
                 </ul>
@@ -554,7 +534,7 @@ function DetalleOrdenCompra() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Total Items:</span>
-                <span className="font-bold">{orden.detalle.length}</span>
+                <span className="font-bold">{orden.detalle?.length || 0}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Monto Total:</span>
@@ -601,7 +581,7 @@ function DetalleOrdenCompra() {
               disabled={loading}
             >
               <Package size={20} />
-              Confirmar Recepción
+              {loading ? 'Procesando...' : 'Confirmar Recepción'}
             </button>
           </div>
         </div>

@@ -2,21 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
-  Eye, 
-  ShoppingCart, 
-  Filter,
-  TrendingUp,
-  Clock,
-  Package,
-  Truck,
-  CheckCircle,
-  XCircle,
-  AlertTriangle
+  Plus, Eye, ShoppingCart, Filter, TrendingUp, Clock,
+  Package, Truck, CheckCircle, XCircle, AlertTriangle
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import { ordenesVentaAPI } from '../../config/api';
 
 function OrdenesVenta() {
   const navigate = useNavigate();
@@ -35,60 +27,29 @@ function OrdenesVenta() {
   const cargarDatos = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // TODO: Reemplazar con API real
-      // const [ordenesRes, statsRes] = await Promise.all([
-      //   ordenesVentaAPI.getAll({ estado: filtroEstado, prioridad: filtroPrioridad }),
-      //   ordenesVentaAPI.getEstadisticas()
-      // ]);
+      // ✅ Cargar órdenes con filtros
+      const filtros = {};
+      if (filtroEstado) filtros.estado = filtroEstado;
+      if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
       
-      const mockOrdenes = [
-        {
-          id_orden_venta: 1,
-          numero_orden: 'OV-2025-0001',
-          fecha_emision: '2025-12-24',
-          fecha_entrega_estimada: '2025-12-31',
-          cliente: 'EMPRESA DEMO SAC',
-          ruc_cliente: '20123456789',
-          total: 5900.00,
-          moneda: 'PEN',
-          estado: 'Pendiente',
-          prioridad: 'Alta',
-          numero_cotizacion: 'C-2025-0001',
-          total_items: 2
-        },
-        {
-          id_orden_venta: 2,
-          numero_orden: 'OV-2025-0002',
-          fecha_emision: '2025-12-23',
-          fecha_entrega_estimada: '2025-12-30',
-          cliente: 'CORPORACIÓN ABC EIRL',
-          ruc_cliente: '20987654321',
-          total: 8500.00,
-          moneda: 'PEN',
-          estado: 'En Proceso',
-          prioridad: 'Media',
-          numero_cotizacion: null,
-          total_items: 5
-        }
-      ];
+      const [ordenesRes, statsRes] = await Promise.all([
+        ordenesVentaAPI.getAll(filtros),
+        ordenesVentaAPI.getEstadisticas()
+      ]);
       
-      const mockEstadisticas = {
-        total_ordenes: 25,
-        pendientes: 8,
-        en_proceso: 10,
-        despachadas: 4,
-        entregadas: 2,
-        canceladas: 1,
-        monto_total: 125000.00,
-        clientes_unicos: 15,
-        urgentes: 3
-      };
+      if (ordenesRes.data.success) {
+        setOrdenes(ordenesRes.data.data || []);
+      }
       
-      setOrdenes(mockOrdenes);
-      setEstadisticas(mockEstadisticas);
+      if (statsRes.data.success) {
+        setEstadisticas(statsRes.data.data || null);
+      }
+      
     } catch (err) {
-      setError('Error al cargar órdenes de venta: ' + err.message);
+      console.error('Error al cargar órdenes de venta:', err);
+      setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
     } finally {
       setLoading(false);
     }
@@ -194,7 +155,7 @@ function OrdenesVenta() {
       width: '80px',
       align: 'center',
       render: (value) => (
-        <span className="badge badge-outline">{value}</span>
+        <span className="badge badge-outline">{value || 0}</span>
       )
     },
     {
@@ -257,7 +218,6 @@ function OrdenesVenta() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -280,14 +240,13 @@ function OrdenesVenta() {
       {/* Estadísticas */}
       {estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {/* Total Órdenes */}
           <div className="card">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Total Órdenes</p>
-                  <h3 className="text-2xl font-bold">{estadisticas.total_ordenes}</h3>
-                  <p className="text-xs text-muted">{estadisticas.clientes_unicos} clientes</p>
+                  <h3 className="text-2xl font-bold">{estadisticas.total_ordenes || 0}</h3>
+                  <p className="text-xs text-muted">{estadisticas.clientes_unicos || 0} clientes</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <ShoppingCart size={24} className="text-primary" />
@@ -296,13 +255,12 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          {/* Pendientes */}
           <div className="card border-l-4 border-warning">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Pendientes</p>
-                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes}</h3>
+                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes || 0}</h3>
                   <p className="text-xs text-muted">Por iniciar</p>
                 </div>
                 <div className="p-3 bg-yellow-100 rounded-lg">
@@ -312,13 +270,12 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          {/* En Proceso */}
           <div className="card border-l-4 border-info">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">En Proceso</p>
-                  <h3 className="text-2xl font-bold text-info">{estadisticas.en_proceso}</h3>
+                  <h3 className="text-2xl font-bold text-info">{estadisticas.en_proceso || 0}</h3>
                   {estadisticas.urgentes > 0 && (
                     <p className="text-xs text-danger flex items-center gap-1">
                       <AlertTriangle size={12} />
@@ -333,16 +290,15 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          {/* Monto Total */}
           <div className="card border-l-4 border-success">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Monto Total</p>
                   <h3 className="text-2xl font-bold text-success">
-                    {formatearMoneda(estadisticas.monto_total, 'PEN')}
+                    {formatearMoneda(estadisticas.monto_total || 0, 'PEN')}
                   </h3>
-                  <p className="text-xs text-muted">{estadisticas.entregadas} entregadas</p>
+                  <p className="text-xs text-muted">{estadisticas.entregadas || 0} entregadas</p>
                 </div>
                 <div className="p-3 bg-green-100 rounded-lg">
                   <TrendingUp size={24} className="text-success" />
@@ -360,7 +316,6 @@ function OrdenesVenta() {
             <Filter size={20} className="text-muted" />
             <span className="font-medium">Filtrar por:</span>
             
-            {/* Filtro Estado */}
             <div className="flex gap-2">
               <button
                 className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
@@ -400,7 +355,6 @@ function OrdenesVenta() {
 
             <div className="border-l h-6 mx-2"></div>
 
-            {/* Filtro Prioridad */}
             <span className="text-sm text-muted">Prioridad:</span>
             <div className="flex gap-2">
               <button

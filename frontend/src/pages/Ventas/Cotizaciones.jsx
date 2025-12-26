@@ -5,6 +5,7 @@ import { Plus, Eye, Download, Filter, FileText } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import { cotizacionesAPI } from '../../config/api';
 
 function Cotizaciones() {
   const navigate = useNavigate();
@@ -21,23 +22,25 @@ function Cotizaciones() {
   const cargarDatos = async () => {
     try {
       setLoading(true);
-      // TODO: Reemplazar con API real
-      const mockData = [
-        {
-          id_cotizacion: 1,
-          numero_cotizacion: 'C-2025-0001',
-          fecha_emision: '2025-12-24',
-          cliente: 'EMPRESA DEMO SAC',
-          ruc_cliente: '20123456789',
-          total: 5000,
-          moneda: 'PEN',
-          estado: 'Pendiente',
-          comercial: 'Juan Pérez'
-        }
-      ];
-      setCotizaciones(mockData);
+      setError(null);
+      
+      // ✅ INTEGRACIÓN CON API REAL
+      const filtros = {};
+      if (filtroEstado) {
+        filtros.estado = filtroEstado;
+      }
+      
+      const response = await cotizacionesAPI.getAll(filtros);
+      
+      if (response.data.success) {
+        setCotizaciones(response.data.data || []);
+      } else {
+        setError('Error al cargar cotizaciones');
+      }
+      
     } catch (err) {
-      setError(err.message);
+      console.error('Error al cargar cotizaciones:', err);
+      setError(err.response?.data?.error || 'Error al cargar cotizaciones');
     } finally {
       setLoading(false);
     }
@@ -102,7 +105,8 @@ function Cotizaciones() {
     {
       header: 'Comercial',
       accessor: 'comercial',
-      width: '140px'
+      width: '140px',
+      render: (value) => value || '-'
     },
     {
       header: 'Acciones',
@@ -130,8 +134,13 @@ function Cotizaciones() {
     }
   ];
 
-  const handleDescargarPDF = (id) => {
-    console.log('Descargar PDF:', id);
+  const handleDescargarPDF = async (id) => {
+    try {
+      await cotizacionesAPI.descargarPDF(id);
+    } catch (err) {
+      console.error('Error al descargar PDF:', err);
+      setError('Error al descargar el PDF');
+    }
   };
 
   if (loading) return <Loading message="Cargando cotizaciones..." />;

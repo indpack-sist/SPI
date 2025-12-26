@@ -28,6 +28,25 @@ import OrdenesProduccion from './pages/Produccion/OrdenesProduccion';
 import OrdenDetalle from './pages/Produccion/OrdenDetalle';
 import CrearOrden from './pages/Produccion/CrearOrden';
 
+// Ventas
+import Cotizaciones from './pages/Ventas/Cotizaciones';
+import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
+import DetalleCotizacion from './pages/Ventas/DetalleCotizacion';
+import OrdenesVenta from './pages/Ventas/OrdenesVenta';
+import NuevaOrdenVenta from './pages/Ventas/NuevaOrdenVenta';
+import DetalleOrdenVenta from './pages/Ventas/DetalleOrdenVenta';
+import GuiasRemision from './pages/Ventas/GuiasRemision';
+import NuevaGuiaRemision from './pages/Ventas/NuevaGuiaRemision';
+import DetalleGuiaRemision from './pages/Ventas/DetalleGuiaRemision';
+import GuiasTransportista from './pages/Ventas/GuiasTransportista';
+import NuevaGuiaTransportista from './pages/Ventas/NuevaGuiaTransportista';
+import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
+
+// Compras
+import OrdenesCompra from './pages/Compras/OrdenesCompra';
+import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
+import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
+
 function App() {
   return (
     <AuthProvider>
@@ -70,6 +89,31 @@ function App() {
                     <Route path="/produccion/ordenes" element={<OrdenesProduccion />} />
                     <Route path="/produccion/ordenes/nueva" element={<CrearOrden />} />
                     <Route path="/produccion/ordenes/:id" element={<OrdenDetalle />} />
+                    
+                    {/* Ventas - Cotizaciones */}
+                    <Route path="/ventas/cotizaciones" element={<Cotizaciones />} />
+                    <Route path="/ventas/cotizaciones/nueva" element={<NuevaCotizacion />} />
+                    <Route path="/ventas/cotizaciones/:id" element={<DetalleCotizacion />} />
+                    
+                    {/* Ventas - Órdenes de Venta */}
+                    <Route path="/ventas/ordenes" element={<OrdenesVenta />} />
+                    <Route path="/ventas/ordenes/nueva" element={<NuevaOrdenVenta />} />
+                    <Route path="/ventas/ordenes/:id" element={<DetalleOrdenVenta />} />
+                    
+                    {/* Ventas - Guías de Remisión */}
+                    <Route path="/ventas/guias-remision" element={<GuiasRemision />} />
+                    <Route path="/ventas/guias-remision/nueva" element={<NuevaGuiaRemision />} />
+                    <Route path="/ventas/guias-remision/:id" element={<DetalleGuiaRemision />} />
+                    
+                    {/* Ventas - Guías de Transportista */}
+                    <Route path="/ventas/guias-transportista" element={<GuiasTransportista />} />
+                    <Route path="/ventas/guias-transportista/nueva" element={<NuevaGuiaTransportista />} />
+                    <Route path="/ventas/guias-transportista/:id" element={<DetalleGuiaTransportista />} />
+                    
+                    {/* Compras - Órdenes de Compra */}
+                    <Route path="/compras/ordenes" element={<OrdenesCompra />} />
+                    <Route path="/compras/ordenes/nueva" element={<NuevaOrdenCompra />} />
+                    <Route path="/compras/ordenes/:id" element={<DetalleOrdenCompra />} />
                     
                     {/* Redirect por defecto */}
                     <Route path="*" element={<Navigate to="/" replace />} />

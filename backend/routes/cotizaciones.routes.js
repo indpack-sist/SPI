@@ -1,16 +1,13 @@
 // =====================================================
-// REEMPLAZAR: backend/routes/cotizaciones.routes.js
+// backend/routes/cotizaciones.routes.js
 // =====================================================
-
 import express from 'express';
-import { getPDFCotizacion } from '../controllers/cotizaciones.controller.js';
-
 import {
   getAllCotizaciones,
   getCotizacionById,
   createCotizacion,
   cambiarEstado,
-  generarPDF
+  getPDFCotizacion // Usamos solo el nombre correcto
 } from '../controllers/cotizaciones.controller.js';
 
 const router = express.Router();
@@ -18,8 +15,9 @@ const router = express.Router();
 // Listar cotizaciones
 router.get('/', getAllCotizaciones);
 
-// Generar PDF (ANTES de /:id para evitar conflictos)
-router.get('/:id/pdf', generarPDF);
+// Generar PDF (Es importante poner esta ruta ANTES de /:id genérico si fuera conflicto, 
+// pero al tener /pdf al final es específica, así que funciona bien)
+router.get('/:id/pdf', getPDFCotizacion);
 
 // Obtener cotización por ID
 router.get('/:id', getCotizacionById);
@@ -29,6 +27,5 @@ router.post('/', createCotizacion);
 
 // Cambiar estado
 router.patch('/:id/estado', cambiarEstado);
-router.get('/:id/pdf', getPDFCotizacion);
 
 export default router;

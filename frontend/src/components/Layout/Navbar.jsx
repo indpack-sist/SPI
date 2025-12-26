@@ -70,7 +70,7 @@ function Navbar({ onToggleSidebar }) {
     // Ordenar: lo más reciente arriba
     notifs.sort((a, b) => b.fecha - a.fecha);
     setNotificaciones(notifs.slice(0, 10));
-};
+  };
 
   const formatearTiempo = (fecha) => {
     const ahora = new Date();
@@ -92,6 +92,32 @@ function Navbar({ onToggleSidebar }) {
   const handleNotificacionClick = (notif) => {
     navigate(`/produccion/ordenes/${notif.id_orden}`);
     setShowNotificaciones(false);
+  };
+
+  // ============================================
+  // FIX: Logout con redirección correcta
+  // ============================================
+  const handleLogout = () => {
+    try {
+      // 1. Limpiar localStorage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // 2. Llamar logout del contexto (si existe)
+      if (logout) {
+        logout();
+      }
+      
+      // 3. Redirigir a login
+      navigate('/login', { replace: true });
+      
+      // 4. Recargar la página para limpiar estado
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error en logout:', error);
+      // Fallback: forzar redirección
+      window.location.href = '/login';
+    }
   };
 
   return (
@@ -164,7 +190,7 @@ function Navbar({ onToggleSidebar }) {
                 <div className="navbar-notifications-footer">
                   <button 
                     onClick={() => {
-                      window.location.href = '/produccion/ordenes';
+                      navigate('/produccion/ordenes');
                       setShowNotificaciones(false);
                     }}
                   >
@@ -189,10 +215,10 @@ function Navbar({ onToggleSidebar }) {
           </div>
         </div>
 
-        {/* Logout */}
+        {/* Logout - CAMBIADO onClick */}
         <button 
           className="navbar-icon-btn navbar-logout" 
-          onClick={logout}
+          onClick={handleLogout}
           title="Cerrar Sesión"
         >
           <LogOut size={20} />

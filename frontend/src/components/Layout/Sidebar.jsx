@@ -2,7 +2,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   Home, Users, Truck, Building2, UserCircle2, 
   Package, BarChart3, ArrowDownToLine, ArrowUpFromLine, 
-  ArrowLeftRight, Factory, X 
+  ArrowLeftRight, Factory, X,
+  FileText, ShoppingCart, FileCheck, TruckIcon, ShoppingBag
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -44,6 +45,21 @@ function Sidebar({ isOpen, onToggle }) {
       title: 'Producción',
       items: [
         { path: '/produccion/ordenes', icon: Factory, label: 'Órdenes de Producción' }
+      ]
+    },
+    {
+      title: 'Ventas',
+      items: [
+        { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones' },
+        { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Órdenes de Venta' },
+        { path: '/ventas/guias-remision', icon: FileCheck, label: 'Guías de Remisión' },
+        { path: '/ventas/guias-transportista', icon: TruckIcon, label: 'Guías de Transportista' }
+      ]
+    },
+    {
+      title: 'Compras',
+      items: [
+        { path: '/compras/ordenes', icon: ShoppingBag, label: 'Órdenes de Compra' }
       ]
     }
   ];
@@ -111,7 +127,6 @@ function Sidebar({ isOpen, onToggle }) {
         {/* Footer del Sidebar */}
         <div className="sidebar-footer">
           <p className="sidebar-footer-text">© 2025 INDPACK</p>
-
         </div>
       </aside>
     </>

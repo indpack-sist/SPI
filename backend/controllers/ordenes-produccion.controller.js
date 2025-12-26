@@ -124,10 +124,29 @@
     res.status(500).json({ error: error.message });
   }
 }
-  export async function getConsumoMaterialesOrden(req, res) {
-    try {
-      const { id } = req.params;
-      
+  // =====================================================
+// REEMPLAZAR ESTA FUNCIÓN EN:
+// backend/controllers/ordenes-produccion.controller.js
+// =====================================================
+
+export async function getConsumoMaterialesOrden(req, res) {
+  try {
+    const { id } = req.params;
+    
+    // Primero verificar el estado de la orden
+    const ordenResult = await executeQuery(
+      'SELECT estado, id_receta_producto FROM ordenes_produccion WHERE id_orden = ?',
+      [id]
+    );
+    
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    const orden = ordenResult.data[0];
+    
+    // Si la orden ya inició, obtener de op_consumo_materiales
+    if (orden.estado !== 'Pendiente') {
       const sql = `
         SELECT 
           cm.id_consumo,
@@ -152,15 +171,75 @@
         return res.status(500).json({ error: result.error });
       }
       
-      res.json({
+      return res.json({
         success: true,
         data: result.data,
         total: result.data.length
       });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
     }
+    
+    // Si la orden está Pendiente, obtener de la receta
+    let sql = '';
+    let params = [];
+    
+    if (orden.id_receta_producto) {
+      // Orden con receta existente
+      sql = `
+        SELECT 
+          rd.id_detalle_receta AS id_consumo,
+          ? AS id_orden,
+          rd.id_insumo,
+          p.codigo AS codigo_insumo,
+          p.nombre AS insumo,
+          p.unidad_medida,
+          rd.cantidad_requerida,
+          p.costo_unitario_promedio AS costo_unitario,
+          (rd.cantidad_requerida * p.costo_unitario_promedio) AS costo_total,
+          NULL AS fecha_consumo
+        FROM recetas_detalle rd
+        INNER JOIN productos p ON rd.id_insumo = p.id_producto
+        WHERE rd.id_receta_producto = ?
+        ORDER BY p.nombre ASC
+      `;
+      params = [id, orden.id_receta_producto];
+    } else {
+      // Orden con receta provisional
+      sql = `
+        SELECT 
+          rp.id_receta_provisional AS id_consumo,
+          rp.id_orden,
+          rp.id_insumo,
+          p.codigo AS codigo_insumo,
+          p.nombre AS insumo,
+          p.unidad_medida,
+          rp.cantidad_requerida,
+          p.costo_unitario_promedio AS costo_unitario,
+          (rp.cantidad_requerida * p.costo_unitario_promedio) AS costo_total,
+          NULL AS fecha_consumo
+        FROM op_recetas_provisionales rp
+        INNER JOIN productos p ON rp.id_insumo = p.id_producto
+        WHERE rp.id_orden = ?
+        ORDER BY p.nombre ASC
+      `;
+      params = [id];
+    }
+    
+    const result = await executeQuery(sql, params);
+    
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length,
+      estado: orden.estado // Informativo
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
+}
 
   export async function createOrden(req, res) {
     try {

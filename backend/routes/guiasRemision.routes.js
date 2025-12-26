@@ -3,15 +3,14 @@
 // =====================================================
 
 import express from 'express';
-import { getPDFGuiaRemision } from '../controllers/guiasRemision.controller.js';
-
 import {
   getAllGuiasRemision,
   getGuiaRemisionById,
   createGuiaRemision,
   actualizarEstado,
   getProductosDisponiblesOrden,
-  getEstadisticas
+  getEstadisticas,
+  getPDFGuiaRemision // <--- Ahora sí existe
 } from '../controllers/guiasRemision.controller.js';
 
 const router = express.Router();
@@ -29,6 +28,8 @@ router.post('/', createGuiaRemision);
 
 // Actualizar estado
 router.patch('/:id/estado', actualizarEstado);
+
+// Generar PDF
 router.get('/:id/pdf', getPDFGuiaRemision);
 
 export default router;

@@ -3,7 +3,9 @@
 // =====================================================
 
 import { executeQuery, executeTransaction } from '../config/database.js';
-import { generarPDFCotizacion } from '../utils/pdf-generator.js';
+import { generarPDFCotizacion as generarPDFUtils } from '../utils/pdf-generator.js'; 
+// Nota: Renombré el import para no confundirlo con la función del controlador
+
 // LISTAR COTIZACIONES
 export async function getAllCotizaciones(req, res) {
   try {
@@ -237,7 +239,9 @@ export async function cambiarEstado(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
-export async function generarPDF(req, res) {
+
+// GENERAR PDF (RENOMBRADA PARA COINCIDIR CON RUTAS)
+export async function getPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
     
@@ -288,7 +292,7 @@ export async function generarPDF(req, res) {
     res.setHeader('Content-Disposition', `attachment; filename=cotizacion-${cotizacion.numero_cotizacion}.pdf`);
     
     // Generar PDF
-    await generarPDFCotizacion(cotizacion, res);
+    await generarPDFUtils(cotizacion, res);
     
   } catch (error) {
     console.error('Error al generar PDF:', error);

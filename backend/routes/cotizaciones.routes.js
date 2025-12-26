@@ -3,6 +3,8 @@
 // =====================================================
 
 import express from 'express';
+import { getPDFCotizacion } from '../controllers/cotizaciones.controller.js';
+
 import {
   getAllCotizaciones,
   getCotizacionById,
@@ -27,5 +29,6 @@ router.post('/', createCotizacion);
 
 // Cambiar estado
 router.patch('/:id/estado', cambiarEstado);
+router.get('/:id/pdf', getPDFCotizacion);
 
 export default router;

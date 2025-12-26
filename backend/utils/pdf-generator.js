@@ -652,390 +652,572 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
     }
   });
 }
+// =====================================================
+// backend/utils/pdfGenerator.js
+// Generador de PDFs para el sistema ERP INDPACK
+// =====================================================
+
+const PDFDocument = require('pdfkit');
+const numeroALetras = require('./numeroALetras');
+
+// =====================================================
+// PDF COTIZACIÓN
+// =====================================================
 export async function generarPDFCotizacion(cotizacion, stream) {
   const doc = new PDFDocument({
     size: 'A4',
-    margins: {
-      top: 50,
-      bottom: 50,
-      left: 50,
-      right: 50
-    }
+    margins: { top: 50, bottom: 50, left: 50, right: 50 }
   });
-
+  
   doc.pipe(stream);
-
-  // =====================================================
-  // 1. ENCABEZADO (Header) - Flex Row
-  // =====================================================
-  const pageWidth = doc.page.width;
-  const marginLeft = doc.page.margins.left;
-  const marginRight = doc.page.margins.right;
-  const contentWidth = pageWidth - marginLeft - marginRight;
   
-  let currentY = doc.page.margins.top;
-
-  // Columna Izquierda - Logo y datos empresa
-  doc.fontSize(16)
-     .font('Helvetica-Bold')
-     .text('INDPACK S.A.C.', marginLeft, currentY);
+  // Header - Logo y título
+  doc.fontSize(20).text('INDPACK', 50, 50, { align: 'left' });
+  doc.fontSize(10).text('Industrias del Empaque', 50, 75);
   
-  currentY += 20;
+  // Cuadro de cotización
+  doc.fontSize(16).text('COTIZACIÓN', 400, 50, { align: 'right' });
+  doc.fontSize(12).text(cotizacion.numero_cotizacion, 400, 70, { align: 'right' });
   
-  doc.fontSize(9)
-     .font('Helvetica')
-     .text('Jr. Huancavelica 123, Lima - Perú', marginLeft, currentY)
-     .text('Tel: (01) 234-5678', marginLeft, currentY + 12)
-     .text('ventas@indpack.com.pe', marginLeft, currentY + 24)
-     .text('www.indpack.com.pe', marginLeft, currentY + 36);
-
-  // Columna Derecha - Recuadro RUC y Documento
-  const boxX = marginLeft + contentWidth - 200;
-  const boxY = doc.page.margins.top;
-  const boxWidth = 200;
-  const boxHeight = 80;
+  // Línea separadora
+  doc.moveTo(50, 100).lineTo(550, 100).stroke();
+  doc.moveDown(2);
   
-  doc.rect(boxX, boxY, boxWidth, boxHeight).stroke();
+  // Información del cliente
+  doc.fontSize(11).text('CLIENTE:', 50, 120);
+  doc.fontSize(10);
+  doc.text(cotizacion.cliente, 50, 135);
+  doc.text(`RUC: ${cotizacion.ruc_cliente}`, 50, 150);
+  doc.text(`Dirección: ${cotizacion.direccion_cliente || '-'}`, 50, 165);
   
-  // RUC
-  doc.fontSize(11)
-     .font('Helvetica-Bold')
-     .text('R.U.C. 20123456789', boxX + 10, boxY + 10, {
-       width: boxWidth - 20,
-       align: 'center'
-     });
+  // Información de la cotización
+  doc.fontSize(11).text('DATOS DE LA COTIZACIÓN:', 320, 120);
+  doc.fontSize(10);
+  doc.text(`Fecha: ${formatearFecha(cotizacion.fecha_emision)}`, 320, 135);
+  doc.text(`Válida hasta: ${formatearFecha(cotizacion.fecha_vencimiento)}`, 320, 150);
+  doc.text(`Moneda: ${cotizacion.moneda}`, 320, 165);
+  doc.text(`Comercial: ${cotizacion.comercial || '-'}`, 320, 180);
   
-  // Tipo de documento
-  doc.fontSize(14)
-     .font('Helvetica-Bold')
-     .text('COTIZACIÓN', boxX + 10, boxY + 30, {
-       width: boxWidth - 20,
-       align: 'center'
-     });
+  // Tabla de productos
+  const tableTop = 220;
+  const headers = ['Item', 'Código', 'Descripción', 'Cant.', 'P.U.', 'Desc.', 'Total'];
+  const colWidths = [30, 70, 180, 50, 60, 40, 70];
   
-  // Número
-  doc.fontSize(11)
-     .font('Helvetica')
-     .text(cotizacion.numero_cotizacion, boxX + 10, boxY + 52, {
-       width: boxWidth - 20,
-       align: 'center'
-     });
-
-  currentY = boxY + boxHeight + 20;
-
-  // =====================================================
-  // 2. INFORMACIÓN DEL CLIENTE (Grid)
-  // =====================================================
-  doc.rect(marginLeft, currentY, contentWidth, 70)
-     .fillAndStroke('#f3f4f6', '#000000')
-     .fillColor('#000000');
-  
-  currentY += 10;
-  
-  const labelX = marginLeft + 10;
-  const valueX = marginLeft + 80;
-  
-  doc.fontSize(9)
-     .font('Helvetica-Bold')
-     .text('Cliente:', labelX, currentY)
-     .font('Helvetica')
-     .text(cotizacion.cliente, valueX, currentY, { width: 350 });
-  
-  currentY += 15;
-  
-  doc.font('Helvetica-Bold')
-     .text('RUC:', labelX, currentY)
-     .font('Helvetica')
-     .text(cotizacion.ruc_cliente, valueX, currentY);
-  
-  currentY += 15;
-  
-  doc.font('Helvetica-Bold')
-     .text('Dirección:', labelX, currentY)
-     .font('Helvetica')
-     .text(cotizacion.direccion_cliente || '-', valueX, currentY, { width: 350 });
-  
-  currentY += 15;
-  
-  doc.font('Helvetica-Bold')
-     .text('Ciudad:', labelX, currentY)
-     .font('Helvetica')
-     .text(cotizacion.ciudad_cliente || '-', valueX, currentY);
-
-  currentY += 25;
-
-  // =====================================================
-  // 3. METADATOS DE VENTA (Grid 3 columnas)
-  // =====================================================
-  const colWidth = contentWidth / 3;
-  
-  // Fila 1
-  doc.fontSize(8)
-     .font('Helvetica-Bold')
-     .text('Moneda:', marginLeft, currentY)
-     .font('Helvetica')
-     .text(cotizacion.moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES', marginLeft, currentY + 10);
-  
-  doc.font('Helvetica-Bold')
-     .text('Plazo de Pago:', marginLeft + colWidth, currentY)
-     .font('Helvetica')
-     .text(cotizacion.plazo_pago || '-', marginLeft + colWidth, currentY + 10);
-  
-  doc.font('Helvetica-Bold')
-     .text('Forma de Pago:', marginLeft + colWidth * 2, currentY)
-     .font('Helvetica')
-     .text(cotizacion.forma_pago || '-', marginLeft + colWidth * 2, currentY + 10);
-  
-  currentY += 25;
-  
-  // Fila 2
-  doc.font('Helvetica-Bold')
-     .text('Orden de Compra:', marginLeft, currentY)
-     .font('Helvetica')
-     .text(cotizacion.orden_compra_cliente || '-', marginLeft, currentY + 10);
-  
-  doc.font('Helvetica-Bold')
-     .text('Fecha de Pedido:', marginLeft + colWidth, currentY)
-     .font('Helvetica')
-     .text(formatearFecha(cotizacion.fecha_emision), marginLeft + colWidth, currentY + 10);
-  
-  doc.font('Helvetica-Bold')
-     .text('Comercial:', marginLeft + colWidth * 2, currentY)
-     .font('Helvetica')
-     .text(cotizacion.comercial || '-', marginLeft + colWidth * 2, currentY + 10);
-  
-  if (cotizacion.email_comercial) {
-    doc.fontSize(7)
-       .text(cotizacion.email_comercial, marginLeft + colWidth * 2, currentY + 20);
-  }
-
-  currentY += 35;
-
-  // =====================================================
-  // 4. TABLA DE DETALLE
-  // =====================================================
-  const tableTop = currentY;
-  const tableHeaders = [
-    { text: 'Código', x: marginLeft, width: 70, align: 'left' },
-    { text: 'Cantidad', x: marginLeft + 70, width: 70, align: 'right' },
-    { text: 'Unidad', x: marginLeft + 140, width: 50, align: 'center' },
-    { text: 'Descripción', x: marginLeft + 190, width: 200, align: 'left' },
-    { text: 'Valor Unitario', x: marginLeft + 390, width: 80, align: 'right' },
-    { text: 'Valor Venta', x: marginLeft + 470, width: 75, align: 'right' }
-  ];
-  
-  // Encabezado de tabla
-  doc.fontSize(9)
-     .font('Helvetica-Bold');
-  
-  tableHeaders.forEach(header => {
-    doc.text(header.text, header.x, tableTop, {
-      width: header.width,
-      align: header.align
+  // Headers de tabla
+  doc.fontSize(9).fillColor('#000000');
+  let x = 50;
+  headers.forEach((header, i) => {
+    doc.rect(x, tableTop, colWidths[i], 20).fillAndStroke('#e0e0e0', '#000000');
+    doc.fillColor('#000000').text(header, x + 5, tableTop + 5, { 
+      width: colWidths[i] - 10,
+      align: i >= 3 ? 'right' : 'left'
     });
+    x += colWidths[i];
   });
   
-  // Línea debajo del encabezado
-  currentY = tableTop + 15;
-  doc.moveTo(marginLeft, currentY)
-     .lineTo(marginLeft + contentWidth, currentY)
-     .stroke();
-  
-  currentY += 5;
-
-  // Filas de detalle
-  const detalles = cotizacion.detalle || [];
-  doc.font('Helvetica')
-     .fontSize(8);
-  
-  detalles.forEach((item, index) => {
-    // Verificar si necesitamos nueva página
-    if (currentY > doc.page.height - 150) {
-      doc.addPage();
-      currentY = doc.page.margins.top;
+  // Contenido de la tabla
+  let y = tableTop + 20;
+  cotizacion.detalle.forEach((item, index) => {
+    x = 50;
+    const rowHeight = 25;
+    
+    // Alternar color de filas
+    if (index % 2 === 0) {
+      doc.rect(50, y, 500, rowHeight).fillAndStroke('#f9f9f9', '#cccccc');
+    } else {
+      doc.rect(50, y, 500, rowHeight).stroke('#cccccc');
     }
     
-    const rowY = currentY;
+    doc.fillColor('#000000');
+    
+    // Item
+    doc.text((index + 1).toString(), x + 5, y + 7, { width: colWidths[0] - 10, align: 'center' });
+    x += colWidths[0];
     
     // Código
-    doc.text(item.codigo_producto, marginLeft, rowY, {
-      width: 70,
-      align: 'left'
-    });
+    doc.text(item.codigo_producto || '-', x + 5, y + 7, { width: colWidths[1] - 10 });
+    x += colWidths[1];
     
-    // Cantidad con 5 decimales
-    doc.text(parseFloat(item.cantidad).toFixed(5), marginLeft + 70, rowY, {
-      width: 70,
-      align: 'right'
-    });
+    // Descripción
+    doc.text(item.producto, x + 5, y + 7, { width: colWidths[2] - 10 });
+    x += colWidths[2];
     
-    // Unidad
-    doc.text(item.unidad_medida, marginLeft + 140, rowY, {
-      width: 50,
-      align: 'center'
-    });
+    // Cantidad
+    doc.text(parseFloat(item.cantidad).toFixed(2), x + 5, y + 7, { width: colWidths[3] - 10, align: 'right' });
+    x += colWidths[3];
     
-    // Descripción (puede ser multilinea)
-    const descripcionHeight = doc.heightOfString(item.producto, {
-      width: 200
-    });
+    // Precio Unitario
+    doc.text(parseFloat(item.precio_unitario).toFixed(2), x + 5, y + 7, { width: colWidths[4] - 10, align: 'right' });
+    x += colWidths[4];
     
-    doc.text(item.producto, marginLeft + 190, rowY, {
-      width: 200,
-      align: 'left'
-    });
+    // Descuento
+    const descuento = item.descuento_porcentaje || 0;
+    doc.text(`${parseFloat(descuento).toFixed(0)}%`, x + 5, y + 7, { width: colWidths[5] - 10, align: 'right' });
+    x += colWidths[5];
     
-    // Valor Unitario
-    doc.text(formatearMoneda(item.precio_unitario, cotizacion.moneda), 
-             marginLeft + 390, rowY, {
-      width: 80,
-      align: 'right'
-    });
+    // Total
+    doc.text(parseFloat(item.valor_venta).toFixed(2), x + 5, y + 7, { width: colWidths[6] - 10, align: 'right' });
     
-    // Valor Venta
-    const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-    doc.text(formatearMoneda(valorVenta, cotizacion.moneda), 
-             marginLeft + 470, rowY, {
-      width: 75,
-      align: 'right'
-    });
-    
-    currentY += Math.max(12, descripcionHeight + 5);
-    
-    // Línea separadora sutil
-    if (index < detalles.length - 1) {
-      doc.moveTo(marginLeft, currentY)
-         .lineTo(marginLeft + contentWidth, currentY)
-         .strokeOpacity(0.2)
-         .stroke()
-         .strokeOpacity(1);
-      currentY += 3;
-    }
+    y += rowHeight;
   });
-
-  currentY += 10;
-
-  // =====================================================
-  // 5. PIE DE PÁGINA - Asimétrico
-  // =====================================================
   
-  // Posicionar al final si hay espacio, o en nueva página
-  if (currentY > doc.page.height - 200) {
-    doc.addPage();
-    currentY = doc.page.margins.top;
-  }
-
-  // Sección Izquierda - Observaciones
-  const footerLeft = marginLeft;
-  const footerRight = marginLeft + contentWidth - 180;
+  // Totales
+  y += 10;
+  const monedaSimbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
   
-  doc.fontSize(8)
-     .font('Helvetica-Bold')
-     .text('OBSERVACIONES:', footerLeft, currentY);
+  doc.fontSize(10);
+  doc.text('Subtotal:', 400, y);
+  doc.text(`${monedaSimbolo} ${parseFloat(cotizacion.subtotal).toFixed(2)}`, 480, y, { align: 'right' });
   
-  currentY += 12;
+  y += 20;
+  doc.text(`IGV (18%):`, 400, y);
+  doc.text(`${monedaSimbolo} ${parseFloat(cotizacion.igv).toFixed(2)}`, 480, y, { align: 'right' });
   
-  doc.font('Helvetica')
-     .fontSize(7);
+  y += 20;
+  doc.fontSize(12).fillColor('#000000');
+  doc.rect(400, y - 5, 150, 25).fillAndStroke('#e0e0e0', '#000000');
+  doc.fillColor('#000000').text('TOTAL:', 405, y);
+  doc.text(`${monedaSimbolo} ${parseFloat(cotizacion.total).toFixed(2)}`, 480, y, { align: 'right' });
   
-  if (cotizacion.plazo_entrega) {
-    doc.text(`Plazo de Entrega: ${cotizacion.plazo_entrega}`, footerLeft, currentY);
-    currentY += 10;
-  }
-  
-  if (cotizacion.lugar_entrega) {
-    doc.text(`Lugar: ${cotizacion.lugar_entrega}`, footerLeft, currentY, {
-      width: 300
-    });
-    currentY += 15;
-  }
-  
-  if (cotizacion.validez_dias) {
-    doc.text(`Validez: ${cotizacion.validez_dias} días`, footerLeft, currentY);
-    currentY += 10;
-  }
-  
-  if (cotizacion.observaciones) {
-    doc.text(cotizacion.observaciones, footerLeft, currentY, {
-      width: 300
-    });
-  }
-
   // Monto en letras
-  const totalEnLetras = numeroALetras(cotizacion.total, cotizacion.moneda);
-  const sonY = doc.page.height - doc.page.margins.bottom - 60;
+  y += 35;
+  doc.fontSize(9);
+  const totalEnLetras = numeroALetras(parseFloat(cotizacion.total), cotizacion.moneda);
+  doc.text(`SON: ${totalEnLetras}`, 50, y, { width: 500, align: 'left' });
   
-  doc.fontSize(8)
-     .font('Helvetica-Bold')
-     .text('SON:', footerLeft, sonY);
+  // Condiciones comerciales
+  if (cotizacion.observaciones || cotizacion.plazo_pago || cotizacion.forma_pago) {
+    y += 30;
+    doc.fontSize(11).text('CONDICIONES COMERCIALES:', 50, y);
+    doc.fontSize(9);
+    y += 20;
+    
+    if (cotizacion.plazo_pago) {
+      doc.text(`• Plazo de pago: ${cotizacion.plazo_pago}`, 50, y);
+      y += 15;
+    }
+    
+    if (cotizacion.forma_pago) {
+      doc.text(`• Forma de pago: ${cotizacion.forma_pago}`, 50, y);
+      y += 15;
+    }
+    
+    if (cotizacion.observaciones) {
+      doc.text(`• Observaciones: ${cotizacion.observaciones}`, 50, y, { width: 500 });
+    }
+  }
   
-  doc.font('Helvetica')
-     .text(totalEnLetras, footerLeft + 30, sonY, {
-       width: 350
-     });
-
-  // Sección Derecha - Totales
-  const totalesY = doc.page.height - doc.page.margins.bottom - 120;
-  const totalesWidth = 170;
+  // Footer
+  const pageHeight = doc.page.height;
+  doc.fontSize(8).fillColor('#666666');
+  doc.text('Esta cotización tiene una validez limitada según la fecha indicada', 50, pageHeight - 80, {
+    width: 500,
+    align: 'center'
+  });
+  doc.text('Gracias por su preferencia', 50, pageHeight - 60, {
+    width: 500,
+    align: 'center'
+  });
   
-  // Recuadro de totales
-  doc.rect(footerRight, totalesY, totalesWidth, 90)
-     .stroke();
-  
-  const totalesX = footerRight + 10;
-  let totalesRowY = totalesY + 10;
-  
-  doc.fontSize(9)
-     .font('Helvetica-Bold');
-  
-  // Sub Total
-  doc.text('Sub Total:', totalesX, totalesRowY);
-  doc.font('Helvetica')
-     .text(formatearMoneda(cotizacion.subtotal, cotizacion.moneda), 
-           totalesX + 90, totalesRowY, {
-      width: 70,
-      align: 'right'
-    });
-  
-  totalesRowY += 20;
-  
-  // IGV
-  doc.font('Helvetica-Bold')
-     .text('IGV 18%:', totalesX, totalesRowY);
-  doc.font('Helvetica')
-     .text(formatearMoneda(cotizacion.igv, cotizacion.moneda), 
-           totalesX + 90, totalesRowY, {
-      width: 70,
-      align: 'right'
-    });
-  
-  totalesRowY += 20;
-  
-  // Línea antes del total
-  doc.moveTo(totalesX, totalesRowY)
-     .lineTo(totalesX + totalesWidth - 20, totalesRowY)
-     .stroke();
-  
-  totalesRowY += 10;
-  
-  // Total
-  doc.fontSize(11)
-     .font('Helvetica-Bold')
-     .text('TOTAL:', totalesX, totalesRowY);
-  doc.text(formatearMoneda(cotizacion.total, cotizacion.moneda), 
-           totalesX + 90, totalesRowY, {
-      width: 70,
-      align: 'right'
-    });
-
-  // Finalizar documento
   doc.end();
 }
 
 // =====================================================
-// FUNCIONES AUXILIARES
+// PDF ORDEN DE VENTA
 // =====================================================
+export async function generarPDFOrdenVenta(orden, stream) {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: { top: 50, bottom: 50, left: 50, right: 50 }
+  });
+  
+  doc.pipe(stream);
+  
+  // Header - Logo y título
+  doc.fontSize(20).text('INDPACK', 50, 50, { align: 'left' });
+  doc.fontSize(10).text('Industrias del Empaque', 50, 75);
+  
+  // Cuadro de orden
+  doc.fontSize(16).text('ORDEN DE VENTA', 400, 50, { align: 'right' });
+  doc.fontSize(12).text(orden.numero_orden, 400, 70, { align: 'right' });
+  
+  // Estado y prioridad
+  doc.fontSize(10);
+  doc.text(`Estado: ${orden.estado}`, 400, 85, { align: 'right' });
+  doc.text(`Prioridad: ${orden.prioridad}`, 400, 100, { align: 'right' });
+  
+  // Línea separadora
+  doc.moveTo(50, 120).lineTo(550, 120).stroke();
+  doc.moveDown(2);
+  
+  // Información del cliente
+  doc.fontSize(11).text('CLIENTE:', 50, 140);
+  doc.fontSize(10);
+  doc.text(orden.cliente, 50, 155);
+  doc.text(`RUC: ${orden.ruc_cliente}`, 50, 170);
+  doc.text(`Dirección: ${orden.direccion_entrega || orden.direccion_cliente}`, 50, 185);
+  
+  // Información de la orden
+  doc.fontSize(11).text('DATOS DE LA ORDEN:', 320, 140);
+  doc.fontSize(10);
+  doc.text(`Fecha Emisión: ${formatearFecha(orden.fecha_emision)}`, 320, 155);
+  if (orden.fecha_entrega_estimada) {
+    doc.text(`Fecha Entrega: ${formatearFecha(orden.fecha_entrega_estimada)}`, 320, 170);
+  }
+  doc.text(`Moneda: ${orden.moneda}`, 320, 185);
+  if (orden.orden_compra_cliente) {
+    doc.text(`O/C Cliente: ${orden.orden_compra_cliente}`, 320, 200);
+  }
+  
+  // Tabla de productos
+  const tableTop = 240;
+  const headers = ['Item', 'Código', 'Descripción', 'Cant.', 'P.U.', 'Desc.', 'Total'];
+  const colWidths = [30, 70, 180, 50, 60, 40, 70];
+  
+  // Headers de tabla
+  doc.fontSize(9).fillColor('#000000');
+  let x = 50;
+  headers.forEach((header, i) => {
+    doc.rect(x, tableTop, colWidths[i], 20).fillAndStroke('#e0e0e0', '#000000');
+    doc.fillColor('#000000').text(header, x + 5, tableTop + 5, { 
+      width: colWidths[i] - 10,
+      align: i >= 3 ? 'right' : 'left'
+    });
+    x += colWidths[i];
+  });
+  
+  // Contenido de la tabla
+  let y = tableTop + 20;
+  orden.detalle.forEach((item, index) => {
+    x = 50;
+    const rowHeight = 25;
+    
+    // Alternar color de filas
+    if (index % 2 === 0) {
+      doc.rect(50, y, 500, rowHeight).fillAndStroke('#f9f9f9', '#cccccc');
+    } else {
+      doc.rect(50, y, 500, rowHeight).stroke('#cccccc');
+    }
+    
+    doc.fillColor('#000000');
+    
+    // Item
+    doc.text((index + 1).toString(), x + 5, y + 7, { width: colWidths[0] - 10, align: 'center' });
+    x += colWidths[0];
+    
+    // Código
+    doc.text(item.codigo_producto || '-', x + 5, y + 7, { width: colWidths[1] - 10 });
+    x += colWidths[1];
+    
+    // Descripción
+    doc.text(item.producto, x + 5, y + 7, { width: colWidths[2] - 10 });
+    x += colWidths[2];
+    
+    // Cantidad
+    doc.text(parseFloat(item.cantidad).toFixed(2), x + 5, y + 7, { width: colWidths[3] - 10, align: 'right' });
+    x += colWidths[3];
+    
+    // Precio Unitario
+    doc.text(parseFloat(item.precio_unitario).toFixed(2), x + 5, y + 7, { width: colWidths[4] - 10, align: 'right' });
+    x += colWidths[4];
+    
+    // Descuento
+    const descuento = item.descuento_porcentaje || 0;
+    doc.text(`${parseFloat(descuento).toFixed(0)}%`, x + 5, y + 7, { width: colWidths[5] - 10, align: 'right' });
+    x += colWidths[5];
+    
+    // Total
+    doc.text(parseFloat(item.valor_venta || (item.cantidad * item.precio_unitario * (1 - descuento/100))).toFixed(2), x + 5, y + 7, { width: colWidths[6] - 10, align: 'right' });
+    
+    y += rowHeight;
+  });
+  
+  // Totales
+  y += 10;
+  const monedaSimbolo = orden.moneda === 'USD' ? '$' : 'S/';
+  
+  doc.fontSize(10);
+  doc.text('Subtotal:', 400, y);
+  doc.text(`${monedaSimbolo} ${parseFloat(orden.subtotal).toFixed(2)}`, 480, y, { align: 'right' });
+  
+  y += 20;
+  doc.text(`IGV (18%):`, 400, y);
+  doc.text(`${monedaSimbolo} ${parseFloat(orden.igv).toFixed(2)}`, 480, y, { align: 'right' });
+  
+  y += 20;
+  doc.fontSize(12).fillColor('#000000');
+  doc.rect(400, y - 5, 150, 25).fillAndStroke('#e0e0e0', '#000000');
+  doc.fillColor('#000000').text('TOTAL:', 405, y);
+  doc.text(`${monedaSimbolo} ${parseFloat(orden.total).toFixed(2)}`, 480, y, { align: 'right' });
+  
+  // Monto en letras
+  y += 35;
+  doc.fontSize(9);
+  const totalEnLetras = numeroALetras(parseFloat(orden.total), orden.moneda);
+  doc.text(`SON: ${totalEnLetras}`, 50, y, { width: 500, align: 'left' });
+  
+  // Observaciones
+  if (orden.observaciones) {
+    y += 30;
+    doc.fontSize(11).text('OBSERVACIONES:', 50, y);
+    doc.fontSize(9).text(orden.observaciones, 50, y + 15, { width: 500 });
+  }
+  
+  // Footer
+  const pageHeight = doc.page.height;
+  doc.fontSize(8).fillColor('#666666');
+  doc.text('Gracias por su preferencia', 50, pageHeight - 60, {
+    width: 500,
+    align: 'center'
+  });
+  
+  doc.end();
+}
 
+// =====================================================
+// PDF GUÍA DE REMISIÓN
+// =====================================================
+export async function generarPDFGuiaRemision(guia, stream) {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: { top: 50, bottom: 50, left: 50, right: 50 }
+  });
+  
+  doc.pipe(stream);
+  
+  // Header - Logo y título
+  doc.fontSize(20).text('INDPACK', 50, 50, { align: 'left' });
+  doc.fontSize(10).text('Industrias del Empaque', 50, 75);
+  
+  // Cuadro de guía
+  doc.fontSize(16).text('GUÍA DE REMISIÓN', 380, 50, { align: 'right' });
+  doc.fontSize(12).text(guia.numero_guia, 380, 70, { align: 'right' });
+  
+  // Línea separadora
+  doc.moveTo(50, 100).lineTo(550, 100).stroke();
+  doc.moveDown(2);
+  
+  // Datos principales en dos columnas
+  doc.fontSize(10);
+  doc.text(`Fecha Emisión: ${formatearFecha(guia.fecha_emision)}`, 50, 120);
+  doc.text(`Tipo Traslado: ${guia.tipo_traslado}`, 50, 135);
+  doc.text(`Motivo: ${guia.motivo_traslado}`, 50, 150);
+  
+  doc.text(`Modalidad: ${guia.modalidad_transporte || 'Privado'}`, 320, 120);
+  doc.text(`Peso Bruto: ${parseFloat(guia.peso_bruto_kg).toFixed(2)} kg`, 320, 135);
+  doc.text(`N° Bultos: ${guia.numero_bultos}`, 320, 150);
+  
+  // Destinatario
+  doc.fontSize(11).text('DESTINATARIO', 50, 180, { underline: true });
+  doc.fontSize(10);
+  doc.text(`Cliente: ${guia.cliente}`, 50, 195);
+  doc.text(`RUC: ${guia.ruc_cliente}`, 50, 210);
+  
+  // Puntos de traslado
+  doc.fontSize(11).text('PUNTO DE PARTIDA', 50, 240, { underline: true });
+  doc.fontSize(9);
+  doc.text(guia.direccion_partida || 'No especificado', 50, 255, { width: 230 });
+  
+  doc.fontSize(11).text('PUNTO DE LLEGADA', 320, 240, { underline: true });
+  doc.fontSize(9);
+  doc.text(guia.direccion_llegada, 320, 255, { width: 230 });
+  doc.text(`Ciudad: ${guia.ciudad_llegada}`, 320, 270);
+  
+  // Tabla de productos
+  const tableTop = 300;
+  const headers = ['Item', 'Código', 'Descripción', 'Cantidad', 'Unidad', 'Peso'];
+  const colWidths = [30, 70, 200, 70, 60, 70];
+  
+  // Headers de tabla
+  doc.fontSize(9).fillColor('#000000');
+  let x = 50;
+  headers.forEach((header, i) => {
+    doc.rect(x, tableTop, colWidths[i], 20).fillAndStroke('#e0e0e0', '#000000');
+    doc.fillColor('#000000').text(header, x + 5, tableTop + 5, { 
+      width: colWidths[i] - 10,
+      align: i >= 3 ? 'right' : 'left'
+    });
+    x += colWidths[i];
+  });
+  
+  // Contenido de la tabla
+  let y = tableTop + 20;
+  guia.detalle.forEach((item, index) => {
+    x = 50;
+    const rowHeight = 25;
+    
+    // Alternar color de filas
+    if (index % 2 === 0) {
+      doc.rect(50, y, 500, rowHeight).fillAndStroke('#f9f9f9', '#cccccc');
+    } else {
+      doc.rect(50, y, 500, rowHeight).stroke('#cccccc');
+    }
+    
+    doc.fillColor('#000000');
+    
+    // Item
+    doc.text((index + 1).toString(), x + 5, y + 7, { width: colWidths[0] - 10, align: 'center' });
+    x += colWidths[0];
+    
+    // Código
+    doc.text(item.codigo_producto || '-', x + 5, y + 7, { width: colWidths[1] - 10 });
+    x += colWidths[1];
+    
+    // Descripción
+    doc.text(item.producto, x + 5, y + 7, { width: colWidths[2] - 10 });
+    x += colWidths[2];
+    
+    // Cantidad
+    doc.text(parseFloat(item.cantidad).toFixed(2), x + 5, y + 7, { width: colWidths[3] - 10, align: 'right' });
+    x += colWidths[3];
+    
+    // Unidad
+    doc.text(item.unidad_medida || 'unidad', x + 5, y + 7, { width: colWidths[4] - 10, align: 'center' });
+    x += colWidths[4];
+    
+    // Peso
+    doc.text(`${parseFloat(item.peso_total_kg || 0).toFixed(2)} kg`, x + 5, y + 7, { width: colWidths[5] - 10, align: 'right' });
+    
+    y += rowHeight;
+  });
+  
+  // Resumen final
+  y += 10;
+  doc.fontSize(10);
+  doc.rect(400, y - 5, 150, 25).fillAndStroke('#e0e0e0', '#000000');
+  doc.fillColor('#000000').text('PESO TOTAL:', 405, y);
+  doc.text(`${parseFloat(guia.peso_bruto_kg).toFixed(2)} kg`, 480, y, { align: 'right' });
+  
+  // Observaciones
+  if (guia.observaciones) {
+    y += 40;
+    doc.fontSize(11).text('OBSERVACIONES:', 50, y, { underline: true });
+    doc.fontSize(9).text(guia.observaciones, 50, y + 15, { width: 500 });
+  }
+  
+  // Footer
+  const pageHeight = doc.page.height;
+  doc.fontSize(8).fillColor('#666666');
+  doc.text('Esta guía de remisión ampara el traslado de mercadería', 50, pageHeight - 60, {
+    width: 500,
+    align: 'center'
+  });
+  
+  doc.end();
+}
+
+// =====================================================
+// PDF GUÍA DE TRANSPORTISTA
+// =====================================================
+export async function generarPDFGuiaTransportista(guia, stream) {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: { top: 50, bottom: 50, left: 50, right: 50 }
+  });
+  
+  doc.pipe(stream);
+  
+  // Header - Logo y título
+  doc.fontSize(20).text('INDPACK', 50, 50, { align: 'left' });
+  doc.fontSize(10).text('Industrias del Empaque', 50, 75);
+  
+  // Cuadro de guía
+  doc.fontSize(16).text('GUÍA DE TRANSPORTISTA', 360, 50, { align: 'right' });
+  doc.fontSize(12).text(guia.numero_guia, 360, 70, { align: 'right' });
+  
+  // Línea separadora
+  doc.moveTo(50, 100).lineTo(550, 100).stroke();
+  doc.moveDown(2);
+  
+  // Datos principales
+  doc.fontSize(10);
+  doc.text(`Fecha Emisión: ${formatearFecha(guia.fecha_emision)}`, 50, 120);
+  doc.text(`Guía de Remisión: ${guia.numero_guia_remision}`, 50, 135);
+  if (guia.fecha_inicio_traslado) {
+    doc.text(`Inicio Traslado: ${formatearFecha(guia.fecha_inicio_traslado)}`, 50, 150);
+  }
+  
+  // Transportista
+  doc.fontSize(11).text('TRANSPORTISTA', 50, 180, { underline: true });
+  doc.fontSize(10);
+  doc.text(`Razón Social: ${guia.razon_social_transportista}`, 50, 195);
+  doc.text(`RUC: ${guia.ruc_transportista}`, 50, 210);
+  
+  // Conductor
+  doc.fontSize(11).text('CONDUCTOR', 50, 240, { underline: true });
+  doc.fontSize(10);
+  doc.text(`Nombre: ${guia.nombre_conductor}`, 50, 255);
+  doc.text(`Licencia: ${guia.licencia_conducir}`, 50, 270);
+  if (guia.dni_conductor) {
+    doc.text(`DNI: ${guia.dni_conductor}`, 50, 285);
+  }
+  if (guia.telefono_conductor) {
+    doc.text(`Teléfono: ${guia.telefono_conductor}`, 50, 300);
+  }
+  
+  // Vehículo
+  doc.fontSize(11).text('VEHÍCULO', 320, 240, { underline: true });
+  doc.fontSize(10);
+  doc.text(`Placa: ${guia.placa_vehiculo}`, 320, 255);
+  if (guia.marca_vehiculo) {
+    doc.text(`Marca: ${guia.marca_vehiculo}`, 320, 270);
+  }
+  if (guia.modelo_vehiculo) {
+    doc.text(`Modelo: ${guia.modelo_vehiculo}`, 320, 285);
+  }
+  if (guia.certificado_habilitacion) {
+    doc.text(`Cert. Habilitación: ${guia.certificado_habilitacion}`, 320, 300);
+  }
+  
+  // Ruta de traslado
+  const rutaY = 340;
+  doc.fontSize(11).text('RUTA DE TRASLADO', 50, rutaY, { underline: true });
+  
+  doc.fontSize(10).text('PUNTO DE PARTIDA:', 50, rutaY + 20);
+  doc.fontSize(9).text(guia.direccion_partida || 'No especificado', 70, rutaY + 35, { width: 460 });
+  
+  doc.fontSize(10).text('PUNTO DE LLEGADA:', 50, rutaY + 60);
+  doc.fontSize(9).text(guia.direccion_llegada, 70, rutaY + 75, { width: 460 });
+  doc.text(`Ciudad: ${guia.ciudad_llegada}`, 70, rutaY + 90);
+  
+  // Información de carga
+  const cargaY = rutaY + 120;
+  doc.fontSize(11).text('INFORMACIÓN DE CARGA', 50, cargaY, { underline: true });
+  doc.fontSize(10);
+  doc.text(`Peso Bruto: ${parseFloat(guia.peso_bruto_kg).toFixed(2)} kg`, 50, cargaY + 20);
+  doc.text(`Número de Bultos: ${guia.numero_bultos}`, 50, cargaY + 35);
+  
+  // Observaciones
+  if (guia.observaciones) {
+    const obsY = cargaY + 65;
+    doc.fontSize(11).text('OBSERVACIONES:', 50, obsY, { underline: true });
+    doc.fontSize(9).text(guia.observaciones, 50, obsY + 15, { width: 500 });
+  }
+  
+  // Firmas
+  const pageHeight = doc.page.height;
+  const firmasY = pageHeight - 120;
+  
+  doc.fontSize(9);
+  doc.moveTo(50, firmasY).lineTo(200, firmasY).stroke();
+  doc.text('Firma del Conductor', 50, firmasY + 5, { width: 150, align: 'center' });
+  
+  doc.moveTo(350, firmasY).lineTo(500, firmasY).stroke();
+  doc.text('Firma del Receptor', 350, firmasY + 5, { width: 150, align: 'center' });
+  
+  // Footer
+  doc.fontSize(8).fillColor('#666666');
+  doc.text('Esta guía de transportista certifica el traslado de mercadería', 50, pageHeight - 60, {
+    width: 500,
+    align: 'center'
+  });
+  
+  doc.end();
+}
+
+// =====================================================
+// FUNCIÓN AUXILIAR: Formatear Fecha
+// =====================================================
 function formatearFecha(fecha) {
   if (!fecha) return '-';
   const date = new Date(fecha);
@@ -1045,8 +1227,240 @@ function formatearFecha(fecha) {
     year: 'numeric'
   });
 }
+// =====================================================
+// AGREGAR ESTA FUNCIÓN A: backend/utils/pdfGenerator.js
+// =====================================================
 
-function formatearMoneda(valor, moneda) {
-  const simbolo = moneda === 'USD' ? '$' : 'S/';
-  return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+// =====================================================
+// PDF ORDEN DE COMPRA
+// =====================================================
+export async function generarPDFOrdenCompra(orden, stream) {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: { top: 50, bottom: 50, left: 50, right: 50 }
+  });
+  
+  doc.pipe(stream);
+  
+  // =====================================================
+  // ENCABEZADO (Idéntico a Cotización)
+  // =====================================================
+  
+  // Logo y datos de empresa (izquierda)
+  doc.fontSize(20).text('INDPACK S.A.C.', 50, 50, { align: 'left' });
+  doc.fontSize(9).text('Industrias del Empaque', 50, 75);
+  doc.text('AV. EL SOL LT. 4 B MZ. LL-1', 50, 88);
+  doc.text('COO. LAS VERTIENTES - LIMA', 50, 100);
+  
+  // Recuadro del documento (derecha)
+  doc.rect(380, 45, 170, 70).stroke();
+  doc.fontSize(10).text('RUC: 20123456789', 390, 55);
+  doc.fontSize(14).text('ORDEN DE COMPRA', 390, 75, { align: 'center', width: 150 });
+  doc.fontSize(12).text(orden.numero_orden, 390, 95, { align: 'center', width: 150 });
+  
+  // Línea separadora
+  doc.moveTo(50, 130).lineTo(550, 130).stroke();
+  
+  // =====================================================
+  // BLOQUE PROVEEDOR (Grid 2 Columnas)
+  // =====================================================
+  
+  let y = 150;
+  
+  // Columna izquierda
+  doc.fontSize(10).fillColor('#000000');
+  doc.text('Proveedor:', 50, y, { continued: true }).font('Helvetica-Bold').text(` ${orden.proveedor}`);
+  y += 15;
+  doc.font('Helvetica').text('RUC:', 50, y, { continued: true }).font('Helvetica-Bold').text(` ${orden.ruc_proveedor}`);
+  y += 15;
+  if (orden.direccion_proveedor) {
+    doc.font('Helvetica').text('Dirección:', 50, y, { continued: true });
+    doc.font('Helvetica-Bold').text(` ${orden.direccion_proveedor}`, { width: 230 });
+    y += 15;
+  }
+  
+  // Columna derecha
+  y = 150;
+  doc.font('Helvetica').text('Condición de pago:', 320, y, { continued: true });
+  doc.font('Helvetica-Bold').text(` ${orden.condicion_pago || 'Por definir'}`);
+  y += 15;
+  doc.font('Helvetica').text('Fecha de Pedido:', 320, y, { continued: true });
+  doc.font('Helvetica-Bold').text(` ${formatearFecha(orden.fecha_pedido)}`);
+  
+  // =====================================================
+  // BLOQUE LOGÍSTICA (Grid 5 Columnas)
+  // Esta es la sección exclusiva de Orden de Compra
+  // =====================================================
+  
+  y += 30;
+  doc.moveTo(50, y).lineTo(550, y).stroke();
+  y += 10;
+  
+  // Fondo gris para header de logística
+  doc.rect(50, y, 500, 15).fillAndStroke('#e8e8e8', '#000000');
+  doc.fillColor('#000000').fontSize(9).font('Helvetica-Bold');
+  doc.text('DATOS LOGÍSTICOS', 250, y + 3, { align: 'center', width: 100 });
+  y += 20;
+  
+  // Grid de 2x3 para datos logísticos
+  doc.font('Helvetica').fontSize(8);
+  
+  // Fila 1
+  doc.text('Fecha confirmación:', 50, y);
+  doc.font('Helvetica-Bold').text(formatearFecha(orden.fecha_confirmacion) || '-', 150, y);
+  
+  doc.font('Helvetica').text('Entrega esperada:', 280, y);
+  doc.font('Helvetica-Bold').text(formatearFecha(orden.entrega_esperada) || '-', 380, y);
+  y += 15;
+  
+  // Fila 2
+  doc.font('Helvetica').text('Lugar de entrega:', 50, y);
+  // Nota UI: text-wrap para textos largos
+  doc.font('Helvetica-Bold').text(orden.lugar_entrega || '-', 150, y, { width: 120 });
+  
+  doc.font('Helvetica').text('Forma de pago:', 280, y);
+  doc.font('Helvetica-Bold').text(orden.forma_pago || '-', 380, y);
+  y += 20;
+  
+  // Fila 3
+  doc.font('Helvetica').text('Elaborado por:', 50, y);
+  doc.font('Helvetica-Bold').text(orden.elaborado_por || '-', 150, y, { width: 120 });
+  
+  y += 25;
+  doc.moveTo(50, y).lineTo(550, y).stroke();
+  
+  // =====================================================
+  // TABLA DE ITEMS
+  // =====================================================
+  
+  y += 15;
+  const tableTop = y;
+  
+  // Headers de tabla (la columna final es "V. COMPRA")
+  const headers = ['Item', 'Código', 'Descripción', 'Cantidad', 'Unidad', 'V. Unit.', 'V. COMPRA'];
+  const colWidths = [30, 70, 180, 70, 50, 60, 70];
+  
+  doc.fontSize(8).fillColor('#000000').font('Helvetica-Bold');
+  let x = 50;
+  headers.forEach((header, i) => {
+    doc.rect(x, tableTop, colWidths[i], 18).fillAndStroke('#d0d0d0', '#000000');
+    doc.fillColor('#000000').text(header, x + 5, tableTop + 5, { 
+      width: colWidths[i] - 10,
+      align: i >= 3 ? 'right' : 'left'
+    });
+    x += colWidths[i];
+  });
+  
+  // Contenido de la tabla
+  y = tableTop + 18;
+  doc.font('Helvetica').fontSize(8);
+  
+  orden.detalle.forEach((item, index) => {
+    x = 50;
+    const rowHeight = 20;
+    
+    // Alternar color de filas
+    if (index % 2 === 0) {
+      doc.rect(50, y, 530, rowHeight).fillAndStroke('#f5f5f5', '#cccccc');
+    } else {
+      doc.rect(50, y, 530, rowHeight).stroke('#cccccc');
+    }
+    
+    doc.fillColor('#000000');
+    
+    // Item
+    doc.text((index + 1).toString(), x + 5, y + 5, { width: colWidths[0] - 10, align: 'center' });
+    x += colWidths[0];
+    
+    // Código
+    doc.text(item.codigo_producto || '-', x + 5, y + 5, { width: colWidths[1] - 10 });
+    x += colWidths[1];
+    
+    // Descripción (incluir código en formato [CODIGO] NOMBRE)
+    const descripcion = `[${item.codigo_producto}] ${item.producto}`;
+    doc.text(descripcion, x + 5, y + 5, { width: colWidths[2] - 10, ellipsis: true });
+    x += colWidths[2];
+    
+    // Cantidad (5 decimales exactamente como en la imagen)
+    doc.text(parseFloat(item.cantidad).toFixed(5), x + 5, y + 5, { width: colWidths[3] - 10, align: 'right' });
+    x += colWidths[3];
+    
+    // Unidad
+    doc.text(item.unidad_medida || 'unidad', x + 5, y + 5, { width: colWidths[4] - 10, align: 'center' });
+    x += colWidths[4];
+    
+    // V. Unitario (3 decimales como en la imagen)
+    doc.text(parseFloat(item.valor_unitario).toFixed(3), x + 5, y + 5, { width: colWidths[5] - 10, align: 'right' });
+    x += colWidths[5];
+    
+    // V. COMPRA (2 decimales)
+    doc.text(parseFloat(item.valor_compra).toFixed(2), x + 5, y + 5, { width: colWidths[6] - 10, align: 'right' });
+    
+    y += rowHeight;
+  });
+  
+  // =====================================================
+  // PIE DE PÁGINA Y TOTALES
+  // =====================================================
+  
+  y += 15;
+  
+  // Monto en letras (izquierda)
+  const totalEnLetras = numeroALetras(parseFloat(orden.total), orden.moneda);
+  doc.fontSize(8).font('Helvetica');
+  doc.text('SON:', 50, y);
+  doc.font('Helvetica-Bold').text(totalEnLetras, 50, y + 12, { width: 300 });
+  
+  // Observaciones (izquierda, debajo del monto en letras)
+  if (orden.observaciones) {
+    y += 40;
+    doc.font('Helvetica').fontSize(8);
+    doc.text('Observaciones:', 50, y);
+    doc.font('Helvetica-Bold').text(orden.observaciones, 50, y + 12, { width: 300 });
+  }
+  
+  // Totales (derecha)
+  const monedaSimbolo = orden.moneda === 'USD' ? '$' : 'S/';
+  const totalesX = 400;
+  let totalesY = y;
+  
+  doc.font('Helvetica').fontSize(9);
+  
+  // Subtotal
+  doc.text('Subtotal:', totalesX, totalesY);
+  doc.text(`${monedaSimbolo} ${parseFloat(orden.subtotal).toFixed(2)}`, totalesX + 80, totalesY, { align: 'right', width: 70 });
+  totalesY += 15;
+  
+  // IGV
+  doc.text('IGV (18%):', totalesX, totalesY);
+  doc.text(`${monedaSimbolo} ${parseFloat(orden.igv).toFixed(2)}`, totalesX + 80, totalesY, { align: 'right', width: 70 });
+  totalesY += 15;
+  
+  // Total (destacado)
+  doc.rect(totalesX, totalesY - 3, 150, 20).fillAndStroke('#e0e0e0', '#000000');
+  doc.fillColor('#000000').font('Helvetica-Bold').fontSize(11);
+  doc.text('TOTAL:', totalesX + 5, totalesY);
+  doc.text(`${monedaSimbolo} ${parseFloat(orden.total).toFixed(2)}`, totalesX + 80, totalesY, { align: 'right', width: 65 });
+  
+  // Footer
+  const pageHeight = doc.page.height;
+  doc.fontSize(7).fillColor('#666666').font('Helvetica');
+  doc.text('Este documento es una orden de compra válida', 50, pageHeight - 60, {
+    width: 500,
+    align: 'center'
+  });
+  doc.text('INDPACK S.A.C. - Sistema ERP', 50, pageHeight - 45, {
+    width: 500,
+    align: 'center'
+  });
+  
+  doc.end();
 }
+
+export {
+  generarPDFCotizacion,
+  generarPDFOrdenVenta,
+  generarPDFGuiaRemision,
+  generarPDFGuiaTransportista,
+  generarPDFOrdenCompra 
+};

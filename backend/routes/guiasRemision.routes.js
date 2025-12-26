@@ -3,6 +3,8 @@
 // =====================================================
 
 import express from 'express';
+import { getPDFGuiaRemision } from '../controllers/guiasRemision.controller.js';
+
 import {
   getAllGuiasRemision,
   getGuiaRemisionById,
@@ -27,5 +29,6 @@ router.post('/', createGuiaRemision);
 
 // Actualizar estado
 router.patch('/:id/estado', actualizarEstado);
+router.get('/:id/pdf', getPDFGuiaRemision);
 
 export default router;

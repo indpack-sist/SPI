@@ -1,4 +1,3 @@
-// frontend/src/context/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../config/api';
@@ -29,7 +28,6 @@ export function AuthProvider({ children }) {
       if (response.data.success) {
         setUser(response.data.data);
       } else {
-        // Token inválido
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);
@@ -44,52 +42,57 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const login = async (credentials) => {
+  // ✅ CAMBIO AQUÍ: Recibir email y password por separado
+  const login = async (email, password) => {
     try {
+      // ✅ Crear objeto credentials
+      const credentials = { email, password };
+      
       const response = await authAPI.login(credentials);
       
       if (response.data.success) {
-        const { token, user } = response.data;
+        const { token, empleado } = response.data;
         
-        // Guardar en localStorage
+        // Guardar token
         localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
         
-        // Actualizar estado
-        setUser(user);
+        // Crear objeto user
+        const userData = {
+          id: empleado.id_empleado,
+          nombre: empleado.nombre_completo,
+          email: empleado.email,
+          cargo: empleado.cargo,
+          rol: empleado.rol
+        };
+        
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
         
         return { success: true };
       } else {
-        return { success: false, error: response.data.error };
+        return { success: false, error: response.data.error || 'Error al iniciar sesión' };
       }
     } catch (error) {
       console.error('Error en login:', error);
       return { 
         success: false, 
-        error: error.response?.data?.error || 'Error al iniciar sesión' 
+        error: error.response?.data?.error || error.message || 'Error al iniciar sesión' 
       };
     }
   };
 
   const logout = () => {
     try {
-      // 1. Limpiar localStorage
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
-      // 2. Limpiar estado
       setUser(null);
-      
-      // 3. Redirigir a login
       navigate('/login', { replace: true });
       
-      // 4. Opcional: recargar para limpiar todo el estado de la app
       setTimeout(() => {
         window.location.href = '/login';
       }, 100);
     } catch (error) {
       console.error('Error en logout:', error);
-      // Fallback: forzar redirección
       window.location.href = '/login';
     }
   };

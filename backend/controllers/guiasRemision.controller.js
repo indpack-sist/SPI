@@ -3,6 +3,8 @@
 // =====================================================
 
 import { executeQuery, executeTransaction } from '../config/database.js';
+// IMPORTANTE: Agregamos la importación del generador de PDF
+import { generarPDFGuiaRemision } from '../utils/pdf-generator.js';
 
 // =====================================================
 // LISTAR GUÍAS DE REMISIÓN
@@ -422,5 +424,58 @@ export async function getEstadisticas(req, res) {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+}
+
+// =====================================================
+// GENERAR PDF DE GUÍA DE REMISIÓN (NUEVA FUNCIÓN)
+// =====================================================
+export async function getPDFGuiaRemision(req, res) {
+  try {
+    const { id } = req.params;
+
+    // Buscar cabecera
+    const cabeceraResult = await executeQuery(
+      `SELECT 
+        g.*, 
+        c.razon_social AS cliente, 
+        c.ruc AS ruc_cliente,
+        c.direccion AS direccion_cliente,
+        c.ciudad AS ciudad_cliente
+      FROM guias_remision g
+      INNER JOIN clientes c ON g.id_cliente = c.id_cliente
+      WHERE g.id_guia_remision = ?`,
+      [id]
+    );
+
+    if (!cabeceraResult.data || cabeceraResult.data.length === 0) {
+      return res.status(404).json({ message: 'Guía no encontrada' });
+    }
+
+    const guia = cabeceraResult.data[0];
+
+    // Buscar detalles
+    const detalleResult = await executeQuery(
+      `SELECT 
+        gd.*, 
+        p.codigo AS codigo_producto, 
+        p.nombre AS producto,
+        p.unidad_medida 
+      FROM guia_remision_detalle gd
+      INNER JOIN productos p ON gd.id_producto = p.id_producto
+      WHERE gd.id_guia_remision = ?`,
+      [id]
+    );
+
+    guia.detalle = detalleResult.data;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=guia-${guia.numero_guia}.pdf`);
+
+    await generarPDFGuiaRemision(guia, res);
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Error al generar el PDF de la guía', error: error.message });
   }
 }

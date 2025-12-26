@@ -652,17 +652,9 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
     }
   });
 }
-// =====================================================
-// backend/utils/pdfGenerator.js
-// Generador de PDFs para el sistema ERP INDPACK
-// =====================================================
 
-const PDFDocument = require('pdfkit');
 const numeroALetras = require('./numeroALetras');
 
-// =====================================================
-// PDF COTIZACIÓN
-// =====================================================
 export async function generarPDFCotizacion(cotizacion, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -1227,13 +1219,7 @@ function formatearFecha(fecha) {
     year: 'numeric'
   });
 }
-// =====================================================
-// AGREGAR ESTA FUNCIÓN A: backend/utils/pdfGenerator.js
-// =====================================================
 
-// =====================================================
-// PDF ORDEN DE COMPRA
-// =====================================================
 export async function generarPDFOrdenCompra(orden, stream) {
   const doc = new PDFDocument({
     size: 'A4',

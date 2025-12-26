@@ -46,10 +46,11 @@ import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
 import OrdenesCompra from './pages/Compras/OrdenesCompra';
 import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
 import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
+
 function App() {
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <Routes>
           {/* ==========================================
               RUTA PÚBLICA - LOGIN
@@ -122,8 +123,8 @@ function App() {
             }
           />
         </Routes>
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 

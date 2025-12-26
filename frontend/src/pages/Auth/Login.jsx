@@ -36,7 +36,7 @@ function Login() {
         <div className="login-header">
           <div className="login-logo-container">
             <img 
-              src="/images/indpack.png" 
+              src="https://indpackperu.com/images/logohorizontal.png" 
               alt="INDPACK Logo" 
               className="login-logo"
               onError={(e) => {

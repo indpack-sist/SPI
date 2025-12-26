@@ -3,7 +3,7 @@ import {
   Home, Users, Truck, Building2, UserCircle2, 
   Package, BarChart3, ArrowDownToLine, ArrowUpFromLine, 
   ArrowLeftRight, Factory, X,
-  FileText, ShoppingCart, FileCheck, TruckIcon, ShoppingBag
+  FileText, ShoppingCart, FileCheck, ShoppingBag
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -53,7 +53,7 @@ function Sidebar({ isOpen, onToggle }) {
         { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones' },
         { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Órdenes de Venta' },
         { path: '/ventas/guias-remision', icon: FileCheck, label: 'Guías de Remisión' },
-        { path: '/ventas/guias-transportista', icon: TruckIcon, label: 'Guías de Transportista' }
+        { path: '/ventas/guias-transportista', icon: Truck, label: 'Guías de Transportista' }
       ]
     },
     {

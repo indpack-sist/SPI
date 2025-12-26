@@ -1,12 +1,9 @@
-// =====================================================
-// backend/controllers/cotizaciones.controller.js
-// =====================================================
 
 import { executeQuery, executeTransaction } from '../config/database.js';
 // Renombramos el import para evitar confusiones de nombres
 import { generarPDFCotizacion as generarPDFUtils } from '../utils/pdf-generator.js';
 
-// LISTAR COTIZACIONES
+
 export async function getAllCotizaciones(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin, id_cliente } = req.query;
@@ -268,7 +265,6 @@ export async function getPDFCotizacion(req, res) {
       return res.status(404).json({ error: 'Cotización no encontrada' });
     }
     
-    // Obtener detalle
     const detalleResult = await executeQuery(
       `SELECT 
         cd.*,
@@ -286,12 +282,10 @@ export async function getPDFCotizacion(req, res) {
       ...cabeceraResult.data[0],
       detalle: detalleResult.data
     };
-    
-    // Configurar headers para PDF
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=cotizacion-${cotizacion.numero_cotizacion}.pdf`);
-    
-    // Generar PDF
+
     await generarPDFUtils(cotizacion, res);
     
   } catch (error) {

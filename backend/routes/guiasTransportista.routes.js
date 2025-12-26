@@ -3,9 +3,6 @@
 // =====================================================
 
 import express from 'express';
-import { getPDFGuiaTransportista } from '../controllers/guiasTransportista.controller.js';
-
-
 import {
   getAllGuiasTransportista,
   getGuiaTransportistaById,
@@ -14,7 +11,8 @@ import {
   getTransportistasFrecuentes,
   getConductoresFrecuentes,
   getVehiculosFrecuentes,
-  getEstadisticas
+  getEstadisticas,
+  getPDFGuiaTransportista // <--- Ahora lo importamos correctamente
 } from '../controllers/guiasTransportista.controller.js';
 
 const router = express.Router();
@@ -34,7 +32,8 @@ router.post('/', createGuiaTransportista);
 
 // Actualizar estado
 router.patch('/:id/estado', actualizarEstado);
-router.get('/:id/pdf', getPDFCotizacion);
+
+// Generar PDF (Línea corregida)
 router.get('/:id/pdf', getPDFGuiaTransportista);
 
 export default router;

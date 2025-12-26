@@ -3,6 +3,8 @@
 // =====================================================
 
 import { executeQuery, executeTransaction } from '../config/database.js';
+// AGREGADO: Importar generador de PDF
+import { generarPDFGuiaTransportista } from '../utils/pdf-generator.js';
 
 // =====================================================
 // LISTAR GUÍAS DE TRANSPORTISTA
@@ -401,5 +403,46 @@ export async function getEstadisticas(req, res) {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+}
+
+// =====================================================
+// GENERAR PDF DE GUÍA DE TRANSPORTISTA (AGREGADA)
+// =====================================================
+export async function getPDFGuiaTransportista(req, res) {
+  try {
+    const { id } = req.params;
+
+    const result = await executeQuery(
+      `SELECT 
+        gt.*,
+        gr.numero_guia AS numero_guia_remision,
+        gr.direccion_partida,
+        gr.direccion_llegada,
+        gr.ciudad_llegada,
+        gr.peso_bruto_kg,
+        gr.numero_bultos
+      FROM guias_transportista gt
+      INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia_remision
+      WHERE gt.id_guia_transportista = ?`,
+      [id]
+    );
+
+    if (!result.data || result.data.length === 0) {
+      return res.status(404).json({ message: 'Guía de transportista no encontrada' });
+    }
+
+    const guia = result.data[0];
+
+    // Configurar headers para descarga
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=guia-transportista-${guia.numero_guia}.pdf`);
+
+    // Generar el PDF
+    await generarPDFGuiaTransportista(guia, res);
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Error al generar el PDF', error: error.message });
   }
 }

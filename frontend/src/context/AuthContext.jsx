@@ -48,36 +48,34 @@ export function AuthProvider({ children }) {
     const credentials = { email, password };
     const response = await authAPI.login(credentials);
     
-    console.log('Respuesta completa del backend:', response.data); // ← Para debug
+    console.log('Respuesta completa del backend:', response.data);
     
-    // Manejar diferentes estructuras de respuesta
     const data = response.data;
     
-    // Extraer token
-    const token = data.token || data.data?.token;
-    if (!token) {
-      throw new Error('No se recibió token del servidor');
+    // El backend retorna: { success: true, data: { token, usuario } }
+    if (!data.success || !data.data) {
+      throw new Error('Respuesta del servidor no válida');
     }
     
-    // Extraer empleado (puede venir en diferentes estructuras)
-    const empleado = data.empleado || data.data?.empleado || data.user || data.data;
+    const { token, usuario } = data.data;
     
-    if (!empleado || !empleado.id_empleado) {
-      console.error('Estructura de respuesta:', data);
-      throw new Error('Estructura de respuesta del servidor no válida');
+    if (!token || !usuario) {
+      throw new Error('Faltan datos en la respuesta del servidor');
     }
     
     // Guardar token
     localStorage.setItem('token', token);
     
-    // Crear objeto user
+    // Crear objeto user (adaptado a la estructura de "usuario")
     const userData = {
-      id: empleado.id_empleado,
-      nombre: empleado.nombre_completo || empleado.nombre,
-      email: empleado.email,
-      cargo: empleado.cargo || 'Sin cargo',
-      rol: empleado.rol || 'usuario'
+      id: usuario.id_empleado || usuario.id,
+      nombre: usuario.nombre_completo || usuario.nombre,
+      email: usuario.email,
+      cargo: usuario.cargo || 'Sin cargo',
+      rol: usuario.rol || 'usuario'
     };
+    
+    console.log('Usuario procesado:', userData);
     
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
@@ -85,8 +83,7 @@ export function AuthProvider({ children }) {
     return { success: true };
     
   } catch (error) {
-    console.error('Error completo en login:', error);
-    console.error('Response data:', error.response?.data);
+    console.error('Error en login:', error);
     
     return { 
       success: false, 

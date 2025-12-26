@@ -653,8 +653,6 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
   });
 }
 
-const numeroALetras = require('./numeroALetras');
-
 export async function generarPDFCotizacion(cotizacion, stream) {
   const doc = new PDFDocument({
     size: 'A4',

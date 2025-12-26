@@ -3,7 +3,7 @@
 // =====================================================
 
 import { executeQuery, executeTransaction } from '../config/database.js';
-import { generarPDFCotizacion } from '../utils/pdf-Generator.js';
+import { generarPDFCotizacion } from '../utils/pdf-generator.js';
 // LISTAR COTIZACIONES
 export async function getAllCotizaciones(req, res) {
   try {

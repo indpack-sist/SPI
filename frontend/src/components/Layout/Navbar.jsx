@@ -203,17 +203,17 @@ function Navbar({ onToggleSidebar }) {
         </div>
         
         {/* Usuario */}
-        <div className="navbar-user">
-          <User size={20} />
-          <div className="navbar-user-info">
-            <span className="navbar-user-name">
-              {user?.nombre_completo || 'Usuario'}
-            </span>
-            <span className="navbar-user-role">
-              {user?.rol || 'Sin rol'}
-            </span>
-          </div>
-        </div>
+<div className="navbar-user">
+  <User size={20} />
+  <div className="navbar-user-info">
+    <span className="navbar-user-name">
+      {user?.nombre || 'Usuario'}
+    </span>
+    <span className="navbar-user-role">
+      {user?.rol || 'Sin rol'}
+    </span>
+  </div>
+</div>
 
         {/* Logout - CAMBIADO onClick */}
         <button 

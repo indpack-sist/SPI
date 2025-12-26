@@ -2,21 +2,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Plus, 
-  Trash2, 
-  Save, 
-  Search,
-  Calculator,
-  FileText,
-  User,
-  Building,
-  Calendar,
-  DollarSign
+  ArrowLeft, Plus, Trash2, Save, Search,
+  Calculator, FileText, User, Building,
+  Calendar, DollarSign, AlertTriangle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI } from '../../config/api';
 
 function NuevaCotizacion() {
   const navigate = useNavigate();
@@ -25,20 +18,17 @@ function NuevaCotizacion() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Catálogos
+  // ✅ Catálogos REALES
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
   
-  // Modales
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
   
-  // Búsqueda
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
   
-  // Formulario - Cabecera
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
     id_comercial: '',
@@ -54,18 +44,9 @@ function NuevaCotizacion() {
     observaciones: ''
   });
   
-  // Cliente seleccionado
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
-  
-  // Detalle
   const [detalle, setDetalle] = useState([]);
-  
-  // Totales
-  const [totales, setTotales] = useState({
-    subtotal: 0,
-    igv: 0,
-    total: 0
-  });
+  const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
 
   useEffect(() => {
     cargarCatalogos();
@@ -86,58 +67,38 @@ function NuevaCotizacion() {
     }
   }, [formCabecera.fecha_emision, formCabecera.validez_dias]);
 
+  // ✅ CARGAR DATOS REALES DESDE API
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
       
-      // TODO: Reemplazar con llamadas API reales
+      // Cargar clientes activos
+      const resClientes = await clientesAPI.getAll({ estado: 'Activo' });
+      if (resClientes.data.success) {
+        setClientes(resClientes.data.data || []);
+      }
       
-      // Mock clientes
-      setClientes([
-        {
-          id_cliente: 1,
-          razon_social: 'EMPRESA DEMO SAC',
-          ruc: '20123456789',
-          direccion: 'Av. Principal 123',
-          ciudad: 'Lima'
-        },
-        {
-          id_cliente: 2,
-          razon_social: 'CORPORACIÓN ABC EIRL',
-          ruc: '20987654321',
-          direccion: 'Jr. Comercio 456',
-          ciudad: 'Lima'
-        }
-      ]);
+      // Cargar productos de Producto Terminado (tipo_inventario = 3)
+      const resProductos = await productosAPI.getAll({ 
+        id_tipo_inventario: 3,  // Solo productos terminados
+        estado: 'Activo'
+      });
+      if (resProductos.data.success) {
+        setProductos(resProductos.data.data || []);
+      }
       
-      // Mock productos
-      setProductos([
-        {
-          id_producto: 1,
-          codigo: 'PROD-001',
-          nombre: 'Producto Terminado 1',
-          unidad_medida: 'unidad',
-          precio_venta: 100.00,
-          stock_actual: 50
-        },
-        {
-          id_producto: 2,
-          codigo: 'PROD-002',
-          nombre: 'Producto Terminado 2',
-          unidad_medida: 'unidad',
-          precio_venta: 150.00,
-          stock_actual: 30
-        }
-      ]);
-      
-      // Mock comerciales
-      setComerciales([
-        { id_empleado: 1, nombre_completo: 'Juan Pérez', email: 'jperez@indpack.com' },
-        { id_empleado: 2, nombre_completo: 'María García', email: 'mgarcia@indpack.com' }
-      ]);
+      // Cargar empleados con rol Comercial
+      const resComerciales = await empleadosAPI.getAll({ 
+        rol: 'Comercial',
+        estado: 'Activo' 
+      });
+      if (resComerciales.data.success) {
+        setComerciales(resComerciales.data.data || []);
+      }
       
     } catch (err) {
-      setError('Error al cargar catálogos: ' + err.message);
+      console.error('Error al cargar catálogos:', err);
+      setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -148,14 +109,13 @@ function NuevaCotizacion() {
     setFormCabecera({
       ...formCabecera,
       id_cliente: cliente.id_cliente,
-      lugar_entrega: cliente.direccion || ''
+      lugar_entrega: cliente.direccion_despacho || ''
     });
     setModalClienteOpen(false);
     setBusquedaCliente('');
   };
 
   const handleAgregarProducto = (producto) => {
-    // Verificar si ya existe
     const existe = detalle.find(d => d.id_producto === producto.id_producto);
     if (existe) {
       setError('El producto ya está en el detalle');
@@ -164,14 +124,15 @@ function NuevaCotizacion() {
     
     const nuevoItem = {
       id_producto: producto.id_producto,
-      codigo: producto.codigo,
+      codigo_producto: producto.codigo,
       producto: producto.nombre,
       unidad_medida: producto.unidad_medida,
       cantidad: 1,
-      precio_unitario: producto.precio_venta,
+      precio_unitario: producto.precio_venta || 0,
       descuento_porcentaje: 0,
-      subtotal: producto.precio_venta,
-      stock_actual: producto.stock_actual
+      valor_venta: producto.precio_venta || 0,
+      stock_actual: producto.stock_actual,
+      requiere_receta: producto.requiere_receta
     };
     
     setDetalle([...detalle, nuevoItem]);
@@ -182,7 +143,7 @@ function NuevaCotizacion() {
   const handleCantidadChange = (index, cantidad) => {
     const newDetalle = [...detalle];
     newDetalle[index].cantidad = parseFloat(cantidad) || 0;
-    newDetalle[index].subtotal = 
+    newDetalle[index].valor_venta = 
       newDetalle[index].cantidad * 
       newDetalle[index].precio_unitario * 
       (1 - newDetalle[index].descuento_porcentaje / 100);
@@ -192,7 +153,7 @@ function NuevaCotizacion() {
   const handlePrecioChange = (index, precio) => {
     const newDetalle = [...detalle];
     newDetalle[index].precio_unitario = parseFloat(precio) || 0;
-    newDetalle[index].subtotal = 
+    newDetalle[index].valor_venta = 
       newDetalle[index].cantidad * 
       newDetalle[index].precio_unitario * 
       (1 - newDetalle[index].descuento_porcentaje / 100);
@@ -202,7 +163,7 @@ function NuevaCotizacion() {
   const handleDescuentoChange = (index, descuento) => {
     const newDetalle = [...detalle];
     newDetalle[index].descuento_porcentaje = parseFloat(descuento) || 0;
-    newDetalle[index].subtotal = 
+    newDetalle[index].valor_venta = 
       newDetalle[index].cantidad * 
       newDetalle[index].precio_unitario * 
       (1 - newDetalle[index].descuento_porcentaje / 100);
@@ -215,19 +176,18 @@ function NuevaCotizacion() {
   };
 
   const calcularTotales = () => {
-    const subtotal = detalle.reduce((sum, item) => sum + item.subtotal, 0);
+    const subtotal = detalle.reduce((sum, item) => sum + (item.valor_venta || 0), 0);
     const igv = subtotal * 0.18;
     const total = subtotal + igv;
-    
     setTotales({ subtotal, igv, total });
   };
 
+  // ✅ GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     
-    // Validaciones
     if (!formCabecera.id_cliente) {
       setError('Debe seleccionar un cliente');
       return;
@@ -238,30 +198,52 @@ function NuevaCotizacion() {
       return;
     }
     
+    // Validar stock insuficiente
+    const sinStock = detalle.filter(item => item.stock_actual < item.cantidad && !item.requiere_receta);
+    if (sinStock.length > 0) {
+      setError(`Productos sin stock suficiente: ${sinStock.map(i => i.producto).join(', ')}`);
+      return;
+    }
+    
     try {
       setLoading(true);
       
       const payload = {
-        ...formCabecera,
-        detalle: detalle.map(item => ({
+        id_cliente: parseInt(formCabecera.id_cliente),
+        id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
+        fecha_emision: formCabecera.fecha_emision,
+        fecha_vencimiento: formCabecera.fecha_validez,
+        moneda: formCabecera.moneda,
+        plazo_pago: formCabecera.plazo_pago,
+        forma_pago: formCabecera.forma_pago,
+        orden_compra_cliente: formCabecera.orden_compra_cliente,
+        lugar_entrega: formCabecera.lugar_entrega,
+        plazo_entrega: formCabecera.plazo_entrega,
+        validez_dias: parseInt(formCabecera.validez_dias),
+        observaciones: formCabecera.observaciones,
+        detalle: detalle.map((item, index) => ({
           id_producto: item.id_producto,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario,
-          descuento: item.descuento_porcentaje
+          cantidad: parseFloat(item.cantidad),
+          precio_unitario: parseFloat(item.precio_unitario),
+          descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
+          orden: index + 1
         }))
       };
       
-      // TODO: Llamar API real
-      console.log('Payload:', payload);
+      const response = await cotizacionesAPI.create(payload);
       
-      setSuccess('Cotización creada exitosamente');
-      
-      setTimeout(() => {
-        navigate('/ventas/cotizaciones');
-      }, 1500);
+      if (response.data.success) {
+        setSuccess('Cotización creada exitosamente');
+        setTimeout(() => {
+          navigate('/ventas/cotizaciones');
+        }, 1500);
+      } else {
+        setError(response.data.error || 'Error al crear cotización');
+      }
       
     } catch (err) {
-      setError('Error al crear cotización: ' + err.message);
+      console.error('Error al crear cotización:', err);
+      setError(err.response?.data?.error || 'Error al crear cotización');
     } finally {
       setLoading(false);
     }
@@ -288,7 +270,6 @@ function NuevaCotizacion() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button 
           className="btn btn-outline"
@@ -333,11 +314,11 @@ function NuevaCotizacion() {
                       </div>
                       <div>
                         <label className="text-sm font-medium text-muted">Dirección:</label>
-                        <p>{clienteSeleccionado.direccion}</p>
+                        <p>{clienteSeleccionado.direccion_despacho || 'No especificado'}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted">Ciudad:</label>
-                        <p>{clienteSeleccionado.ciudad}</p>
+                        <label className="text-sm font-medium text-muted">Contacto:</label>
+                        <p>{clienteSeleccionado.contacto || 'No especificado'}</p>
                       </div>
                     </div>
                   </div>
@@ -363,7 +344,7 @@ function NuevaCotizacion() {
           </div>
         </div>
 
-        {/* Sección Datos Generales */}
+        {/* Datos de la Cotización */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -504,7 +485,7 @@ function NuevaCotizacion() {
           </div>
         </div>
 
-        {/* Sección Detalle */}
+        {/* Detalle de Productos */}
         <div className="card mb-4">
           <div className="card-header">
             <div className="flex justify-between items-center">
@@ -541,12 +522,19 @@ function NuevaCotizacion() {
                   <tbody>
                     {detalle.map((item, index) => (
                       <tr key={index}>
-                        <td className="font-mono text-sm">{item.codigo}</td>
+                        <td className="font-mono text-sm">{item.codigo_producto}</td>
                         <td>
                           <div className="font-medium">{item.producto}</div>
-                          {item.stock_actual < item.cantidad && (
-                            <div className="text-xs text-danger">
+                          {item.stock_actual < item.cantidad && !item.requiere_receta && (
+                            <div className="text-xs text-danger flex items-center gap-1">
+                              <AlertTriangle size={12} />
                               Stock insuficiente ({item.stock_actual} disponibles)
+                            </div>
+                          )}
+                          {item.requiere_receta && (
+                            <div className="text-xs text-warning flex items-center gap-1">
+                              <AlertTriangle size={12} />
+                              Requiere producción
                             </div>
                           )}
                         </td>
@@ -585,7 +573,7 @@ function NuevaCotizacion() {
                           />
                         </td>
                         <td className="text-right font-bold">
-                          {formatearMoneda(item.subtotal)}
+                          {formatearMoneda(item.valor_venta)}
                         </td>
                         <td>
                           <button
@@ -619,7 +607,7 @@ function NuevaCotizacion() {
           </div>
         </div>
 
-        {/* Sección Totales */}
+        {/* Totales */}
         {detalle.length > 0 && (
           <div className="card mb-4">
             <div className="card-body">
@@ -643,7 +631,7 @@ function NuevaCotizacion() {
           </div>
         )}
 
-        {/* Botones de Acción */}
+        {/* Botones */}
         <div className="flex gap-3 justify-end">
           <button
             type="button"
@@ -658,12 +646,12 @@ function NuevaCotizacion() {
             disabled={loading || !clienteSeleccionado || detalle.length === 0}
           >
             <Save size={20} />
-            Guardar Cotización
+            {loading ? 'Guardando...' : 'Guardar Cotización'}
           </button>
         </div>
       </form>
 
-      {/* Modal Seleccionar Cliente */}
+      {/* Modal Cliente */}
       <Modal
         isOpen={modalClienteOpen}
         onClose={() => setModalClienteOpen(false)}
@@ -692,7 +680,7 @@ function NuevaCotizacion() {
                 >
                   <div className="font-bold">{cliente.razon_social}</div>
                   <div className="text-sm text-muted">RUC: {cliente.ruc}</div>
-                  <div className="text-sm text-muted">{cliente.direccion}</div>
+                  <div className="text-sm text-muted">{cliente.direccion_despacho || 'Sin dirección'}</div>
                 </div>
               ))}
             </div>
@@ -702,7 +690,7 @@ function NuevaCotizacion() {
         </div>
       </Modal>
 
-      {/* Modal Agregar Producto */}
+      {/* Modal Producto */}
       <Modal
         isOpen={modalProductoOpen}
         onClose={() => setModalProductoOpen(false)}
@@ -737,6 +725,9 @@ function NuevaCotizacion() {
                         Stock: <span className={producto.stock_actual > 0 ? 'text-success' : 'text-danger'}>
                           {producto.stock_actual} {producto.unidad_medida}
                         </span>
+                        {producto.requiere_receta && (
+                          <span className="ml-2 badge badge-warning">Requiere producción</span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">

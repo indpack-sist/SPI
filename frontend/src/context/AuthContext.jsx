@@ -48,34 +48,31 @@ export function AuthProvider({ children }) {
     const credentials = { email, password };
     const response = await authAPI.login(credentials);
     
-    console.log('Respuesta completa del backend:', response.data);
-    
     const data = response.data;
     
-    // El backend retorna: { success: true, data: { token, usuario } }
     if (!data.success || !data.data) {
       throw new Error('Respuesta del servidor no válida');
     }
     
     const { token, usuario } = data.data;
     
-    if (!token || !usuario) {
-      throw new Error('Faltan datos en la respuesta del servidor');
-    }
+    // ✅ CORREGIDO: Expandir el objeto completo
+    console.log('Usuario del backend:', usuario); // Para debug
     
     // Guardar token
     localStorage.setItem('token', token);
     
-    // Crear objeto user (adaptado a la estructura de "usuario")
+    // ✅ Mapear TODOS los campos del usuario
     const userData = {
-      id: usuario.id_empleado || usuario.id,
-      nombre: usuario.nombre_completo || usuario.nombre,
+      id: usuario.id_empleado,
+      nombre: usuario.nombre_completo,
       email: usuario.email,
-      cargo: usuario.cargo || 'Sin cargo',
-      rol: usuario.rol || 'usuario'
+      cargo: usuario.cargo,
+      rol: usuario.rol,  // ← Asegúrate que venga del backend
+      dni: usuario.dni
     };
     
-    console.log('Usuario procesado:', userData);
+    console.log('Usuario guardado:', userData);
     
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
@@ -84,7 +81,6 @@ export function AuthProvider({ children }) {
     
   } catch (error) {
     console.error('Error en login:', error);
-    
     return { 
       success: false, 
       error: error.response?.data?.error || error.message || 'Error al iniciar sesión' 

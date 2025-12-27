@@ -1,17 +1,10 @@
-// =====================================================
-// backend/controllers/guiasTransportista.controller.js
-// =====================================================
+// backend/controllers/guias-transportista.controller.js
+import { executeQuery } from '../config/database.js';
 
-import { executeQuery, executeTransaction } from '../config/database.js';
-// AGREGADO: Importar generador de PDF
-import { generarPDFGuiaTransportista } from '../utils/pdf-generator.js';
-
-// =====================================================
-// LISTAR GUÍAS DE TRANSPORTISTA
-// =====================================================
+// ✅ OBTENER TODAS LAS GUÍAS CON FILTROS
 export async function getAllGuiasTransportista(req, res) {
   try {
-    const { estado, fecha_inicio, fecha_fin, ruc_transportista } = req.query;
+    const { estado, fecha_inicio, fecha_fin } = req.query;
     
     let sql = `
       SELECT 
@@ -27,71 +20,75 @@ export async function getAllGuiasTransportista(req, res) {
         gt.marca_vehiculo,
         gr.numero_guia AS numero_guia_remision,
         gr.id_guia_remision,
+        gr.ciudad_llegada,
+        gr.peso_bruto_kg,
         ov.numero_orden,
         ov.id_orden_venta,
-        cli.razon_social AS cliente,
-        cli.ruc AS ruc_cliente,
-        gr.direccion_llegada,
-        gr.ciudad_llegada,
-        gr.peso_bruto_kg
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente
       FROM guias_transportista gt
       INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia_remision
-      INNER JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
-      INNER JOIN clientes cli ON gr.id_cliente = cli.id_cliente
+      LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE 1=1
     `;
+    
     const params = [];
     
     if (estado) {
-      sql += ' AND gt.estado = ?';
+      sql += ` AND gt.estado = ?`;
       params.push(estado);
     }
     
     if (fecha_inicio) {
-      sql += ' AND gt.fecha_emision >= ?';
+      sql += ` AND DATE(gt.fecha_emision) >= ?`;
       params.push(fecha_inicio);
     }
     
     if (fecha_fin) {
-      sql += ' AND gt.fecha_emision <= ?';
+      sql += ` AND DATE(gt.fecha_emision) <= ?`;
       params.push(fecha_fin);
     }
     
-    if (ruc_transportista) {
-      sql += ' AND gt.ruc_transportista = ?';
-      params.push(ruc_transportista);
-    }
-    
-    sql += ' ORDER BY gt.fecha_emision DESC, gt.numero_guia DESC';
+    sql += ` ORDER BY gt.fecha_creacion DESC`;
     
     const result = await executeQuery(sql, params);
     
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
     res.json({
       success: true,
-      data: result.data,
-      total: result.data.length
+      data: result.data
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener guías de transportista:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// OBTENER GUÍA DE TRANSPORTISTA POR ID
-// =====================================================
+// ✅ OBTENER GUÍA POR ID CON DETALLE COMPLETO
 export async function getGuiaTransportistaById(req, res) {
   try {
     const { id } = req.params;
     
-    // Cabecera
-    const cabeceraResult = await executeQuery(
-      `SELECT 
+    // Guía de transportista con datos de remisión
+    const result = await executeQuery(`
+      SELECT 
         gt.*,
         gr.numero_guia AS numero_guia_remision,
         gr.id_guia_remision,
         gr.direccion_partida,
-        gr.direccion_llegada,
         gr.ubigeo_partida,
+        gr.direccion_llegada,
         gr.ubigeo_llegada,
         gr.ciudad_llegada,
         gr.peso_bruto_kg,
@@ -100,33 +97,45 @@ export async function getGuiaTransportistaById(req, res) {
         gr.motivo_traslado,
         ov.numero_orden,
         ov.id_orden_venta,
-        cli.razon_social AS cliente,
-        cli.ruc AS ruc_cliente,
-        cli.direccion AS direccion_cliente
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente
       FROM guias_transportista gt
       INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia_remision
-      INNER JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
-      INNER JOIN clientes cli ON gr.id_cliente = cli.id_cliente
-      WHERE gt.id_guia_transportista = ?`,
-      [id]
-    );
+      LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      WHERE gt.id_guia_transportista = ?
+    `, [id]);
     
-    if (cabeceraResult.data.length === 0) {
-      return res.status(404).json({ error: 'Guía de transportista no encontrada' });
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
+    if (result.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Guía de transportista no encontrada'
+      });
     }
     
     res.json({
       success: true,
-      data: cabeceraResult.data[0]
+      data: result.data[0]
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener guía de transportista:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// CREAR GUÍA DE TRANSPORTISTA
-// =====================================================
+// ✅ CREAR GUÍA DE TRANSPORTISTA
 export async function createGuiaTransportista(req, res) {
   try {
     const {
@@ -146,115 +155,144 @@ export async function createGuiaTransportista(req, res) {
       observaciones
     } = req.body;
     
+    // Validaciones
     if (!id_guia_remision) {
-      return res.status(400).json({ 
-        error: 'ID de guía de remisión es requerido' 
+      return res.status(400).json({
+        success: false,
+        error: 'Guía de remisión es obligatoria'
+      });
+    }
+    
+    if (!razon_social_transportista || !ruc_transportista) {
+      return res.status(400).json({
+        success: false,
+        error: 'Datos del transportista son obligatorios'
+      });
+    }
+    
+    if (!nombre_conductor || !licencia_conducir) {
+      return res.status(400).json({
+        success: false,
+        error: 'Datos del conductor son obligatorios'
+      });
+    }
+    
+    if (!placa_vehiculo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Placa del vehículo es obligatoria'
       });
     }
     
     // Verificar que la guía de remisión existe
-    const guiaResult = await executeQuery(
-      'SELECT id_guia_remision, numero_guia FROM guias_remision WHERE id_guia_remision = ?',
-      [id_guia_remision]
-    );
+    const guiaRemisionResult = await executeQuery(`
+      SELECT id_guia_remision FROM guias_remision WHERE id_guia_remision = ?
+    `, [id_guia_remision]);
     
-    if (guiaResult.data.length === 0) {
-      return res.status(404).json({ error: 'Guía de remisión no encontrada' });
+    if (!guiaRemisionResult.success || guiaRemisionResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Guía de remisión no encontrada'
+      });
     }
     
-    // Verificar que no tenga ya guía de transportista
-    const existeResult = await executeQuery(
-      'SELECT id_guia_transportista FROM guias_transportista WHERE id_guia_remision = ?',
-      [id_guia_remision]
-    );
+    // Verificar que no tenga ya una guía de transportista
+    const guiaExistenteResult = await executeQuery(`
+      SELECT id_guia_transportista 
+      FROM guias_transportista 
+      WHERE id_guia_remision = ?
+    `, [id_guia_remision]);
     
-    if (existeResult.data.length > 0) {
-      return res.status(400).json({ 
-        error: 'Esta guía de remisión ya tiene una guía de transportista asociada' 
+    if (guiaExistenteResult.success && guiaExistenteResult.data.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Esta guía de remisión ya tiene una guía de transportista asociada'
       });
     }
     
     // Generar número de guía
-    const year = new Date().getFullYear();
-    const lastResult = await executeQuery(
-      `SELECT numero_guia FROM guias_transportista 
-       WHERE numero_guia LIKE ? 
-       ORDER BY id_guia_transportista DESC LIMIT 1`,
-      [`GT-${year}-%`]
-    );
+    const ultimaResult = await executeQuery(`
+      SELECT numero_guia 
+      FROM guias_transportista 
+      ORDER BY id_guia_transportista DESC 
+      LIMIT 1
+    `);
     
-    let correlativo = 1;
-    if (lastResult.data.length > 0) {
-      correlativo = parseInt(lastResult.data[0].numero_guia.split('-')[2]) + 1;
+    let numeroSecuencia = 1;
+    if (ultimaResult.success && ultimaResult.data.length > 0) {
+      const match = ultimaResult.data[0].numero_guia.match(/(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
     }
     
-    const numero_guia = `GT-${year}-${correlativo.toString().padStart(4, '0')}`;
-    
-    const queries = [];
+    const numeroGuia = `GT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     // Insertar guía de transportista
-    queries.push({
-      sql: `INSERT INTO guias_transportista (
-        numero_guia, id_guia_remision, fecha_emision,
-        razon_social_transportista, ruc_transportista,
-        nombre_conductor, licencia_conducir, dni_conductor, telefono_conductor,
-        placa_vehiculo, marca_vehiculo, modelo_vehiculo,
-        certificado_habilitacion, fecha_inicio_traslado,
-        estado, observaciones, id_creado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [
+    const result = await executeQuery(`
+      INSERT INTO guias_transportista (
         numero_guia,
         id_guia_remision,
-        fecha_emision || new Date(),
+        fecha_emision,
         razon_social_transportista,
         ruc_transportista,
         nombre_conductor,
         licencia_conducir,
-        dni_conductor || null,
-        telefono_conductor || null,
+        dni_conductor,
+        telefono_conductor,
         placa_vehiculo,
-        marca_vehiculo || null,
-        modelo_vehiculo || null,
-        certificado_habilitacion || null,
-        fecha_inicio_traslado || null,
-        'Activa',
-        observaciones || null,
-        req.user?.id_empleado || null
-      ]
-    });
-    
-    // Actualizar guía de remisión a "En Tránsito"
-    queries.push({
-      sql: `UPDATE guias_remision 
-            SET estado = 'En Tránsito',
-                fecha_inicio_traslado = ?
-            WHERE id_guia_remision = ?`,
-      params: [fecha_inicio_traslado || new Date(), id_guia_remision]
-    });
-    
-    const result = await executeTransaction(queries);
+        marca_vehiculo,
+        modelo_vehiculo,
+        certificado_habilitacion,
+        fecha_inicio_traslado,
+        observaciones,
+        estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Activa')
+    `, [
+      numeroGuia,
+      id_guia_remision,
+      fecha_emision,
+      razon_social_transportista,
+      ruc_transportista,
+      nombre_conductor,
+      licencia_conducir,
+      dni_conductor || null,
+      telefono_conductor || null,
+      placa_vehiculo,
+      marca_vehiculo || null,
+      modelo_vehiculo || null,
+      certificado_habilitacion || null,
+      fecha_inicio_traslado,
+      observaciones
+    ]);
     
     if (!result.success) {
-      return res.status(500).json({ error: result.error });
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
     }
     
     res.status(201).json({
       success: true,
-      message: 'Guía de transportista creada exitosamente',
       data: {
-        numero_guia,
-        id_guia_remision
-      }
+        id_guia_transportista: result.data.insertId,
+        numero_guia: numeroGuia
+      },
+      message: 'Guía de transportista creada exitosamente'
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al crear guía de transportista:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// ACTUALIZAR ESTADO
-// =====================================================
-export async function actualizarEstado(req, res) {
+// ✅ ACTUALIZAR ESTADO
+export async function actualizarEstadoGuiaTransportista(req, res) {
   try {
     const { id } = req.params;
     const { estado } = req.body;
@@ -262,187 +300,230 @@ export async function actualizarEstado(req, res) {
     const estadosValidos = ['Activa', 'Finalizada', 'Cancelada'];
     
     if (!estadosValidos.includes(estado)) {
-      return res.status(400).json({ error: 'Estado no válido' });
+      return res.status(400).json({
+        success: false,
+        error: 'Estado no válido'
+      });
     }
     
-    const result = await executeQuery(
-      'UPDATE guias_transportista SET estado = ? WHERE id_guia_transportista = ?',
-      [estado, id]
-    );
+    const result = await executeQuery(`
+      UPDATE guias_transportista
+      SET estado = ?
+      WHERE id_guia_transportista = ?
+    `, [estado, id]);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
-      message: `Guía de transportista actualizada a estado: ${estado}`
+      message: 'Estado actualizado exitosamente'
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al actualizar estado:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// OBTENER TRANSPORTISTAS FRECUENTES
-// =====================================================
+// ✅ OBTENER TRANSPORTISTAS FRECUENTES
 export async function getTransportistasFrecuentes(req, res) {
   try {
-    const result = await executeQuery(
-      `SELECT 
+    const result = await executeQuery(`
+      SELECT 
         razon_social_transportista,
         ruc_transportista,
-        COUNT(*) AS total_guias,
-        MAX(fecha_emision) AS ultima_guia
+        COUNT(*) AS total_guias
       FROM guias_transportista
       GROUP BY razon_social_transportista, ruc_transportista
       ORDER BY total_guias DESC
-      LIMIT 10`
-    );
+      LIMIT 10
+    `);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
       data: result.data
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener transportistas:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// OBTENER CONDUCTORES FRECUENTES
-// =====================================================
+// ✅ OBTENER CONDUCTORES FRECUENTES
 export async function getConductoresFrecuentes(req, res) {
   try {
-    const result = await executeQuery(
-      `SELECT 
+    const result = await executeQuery(`
+      SELECT 
         nombre_conductor,
         licencia_conducir,
         dni_conductor,
         telefono_conductor,
-        COUNT(*) AS total_viajes,
-        MAX(fecha_emision) AS ultimo_viaje
+        COUNT(*) AS total_viajes
       FROM guias_transportista
-      WHERE nombre_conductor IS NOT NULL
       GROUP BY nombre_conductor, licencia_conducir, dni_conductor, telefono_conductor
       ORDER BY total_viajes DESC
-      LIMIT 10`
-    );
+      LIMIT 15
+    `);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
       data: result.data
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener conductores:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// OBTENER VEHÍCULOS FRECUENTES
-// =====================================================
+// ✅ OBTENER VEHÍCULOS FRECUENTES
 export async function getVehiculosFrecuentes(req, res) {
   try {
-    const result = await executeQuery(
-      `SELECT 
+    const result = await executeQuery(`
+      SELECT 
         placa_vehiculo,
         marca_vehiculo,
         modelo_vehiculo,
         certificado_habilitacion,
-        COUNT(*) AS total_viajes,
-        MAX(fecha_emision) AS ultimo_viaje
+        COUNT(*) AS total_viajes
       FROM guias_transportista
-      WHERE placa_vehiculo IS NOT NULL
       GROUP BY placa_vehiculo, marca_vehiculo, modelo_vehiculo, certificado_habilitacion
       ORDER BY total_viajes DESC
-      LIMIT 10`
-    );
+      LIMIT 15
+    `);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
       data: result.data
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener vehículos:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// ESTADÍSTICAS
-// =====================================================
-export async function getEstadisticas(req, res) {
+// ✅ OBTENER ESTADÍSTICAS
+export async function getEstadisticasGuiasTransportista(req, res) {
   try {
-    const { fecha_inicio, fecha_fin } = req.query;
-    
-    let whereClause = '1=1';
-    const params = [];
-    
-    if (fecha_inicio) {
-      whereClause += ' AND fecha_emision >= ?';
-      params.push(fecha_inicio);
-    }
-    
-    if (fecha_fin) {
-      whereClause += ' AND fecha_emision <= ?';
-      params.push(fecha_fin);
-    }
-    
-    const estadisticas = await executeQuery(
-      `SELECT 
+    const result = await executeQuery(`
+      SELECT 
         COUNT(*) AS total_guias,
         SUM(CASE WHEN estado = 'Activa' THEN 1 ELSE 0 END) AS activas,
         SUM(CASE WHEN estado = 'Finalizada' THEN 1 ELSE 0 END) AS finalizadas,
         SUM(CASE WHEN estado = 'Cancelada' THEN 1 ELSE 0 END) AS canceladas,
-        COUNT(DISTINCT ruc_transportista) AS transportistas_unicos,
+        COUNT(DISTINCT razon_social_transportista) AS transportistas_unicos,
         COUNT(DISTINCT nombre_conductor) AS conductores_unicos,
         COUNT(DISTINCT placa_vehiculo) AS vehiculos_unicos
       FROM guias_transportista
-      WHERE ${whereClause}`,
-      params
-    );
+    `);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
-      data: estadisticas.data[0]
+      data: result.data[0]
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener estadísticas:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// GENERAR PDF DE GUÍA DE TRANSPORTISTA (AGREGADA)
-// =====================================================
-export async function getPDFGuiaTransportista(req, res) {
+// ✅ DESCARGAR PDF
+export async function descargarPDFGuiaTransportista(req, res) {
   try {
     const { id } = req.params;
-
-    const result = await executeQuery(
-      `SELECT 
+    
+    const result = await executeQuery(`
+      SELECT 
         gt.*,
         gr.numero_guia AS numero_guia_remision,
         gr.direccion_partida,
+        gr.ubigeo_partida,
         gr.direccion_llegada,
+        gr.ubigeo_llegada,
         gr.ciudad_llegada,
         gr.peso_bruto_kg,
-        gr.numero_bultos
+        gr.numero_bultos,
+        gr.tipo_traslado,
+        ov.numero_orden,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente
       FROM guias_transportista gt
       INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia_remision
-      WHERE gt.id_guia_transportista = ?`,
-      [id]
-    );
-
-    if (!result.data || result.data.length === 0) {
-      return res.status(404).json({ message: 'Guía de transportista no encontrada' });
+      LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      WHERE gt.id_guia_transportista = ?
+    `, [id]);
+    
+    if (!result.success || result.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Guía no encontrada'
+      });
     }
-
-    const guia = result.data[0];
-
-    // Configurar headers para descarga
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=guia-transportista-${guia.numero_guia}.pdf`);
-
-    // Generar el PDF
-    await generarPDFGuiaTransportista(guia, res);
-
+    
+    // TODO: Implementar generación de PDF
+    res.json({
+      success: true,
+      data: result.data[0],
+      message: 'Generar PDF con estos datos'
+    });
+    
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Error al generar el PDF', error: error.message });
+    console.error('Error al descargar PDF:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }

@@ -1,35 +1,40 @@
-// =====================================================
-// backend/routes/ordenesCompra.routes.js
-// =====================================================
-
 import express from 'express';
 import {
   getAllOrdenesCompra,
   getOrdenCompraById,
   createOrdenCompra,
-  actualizarEstado,
-  recibirOrden,
-  getEstadisticas,
-  getProductosPorProveedor
+  actualizarEstadoOrdenCompra,
+  recibirOrdenCompra,
+  getProductosPorProveedor,
+  getEstadisticasOrdenesCompra,
+  descargarPDFOrdenCompra
 } from '../controllers/ordenesCompra.controller.js';
 
 const router = express.Router();
 
-// Estadísticas
-router.get('/estadisticas', getEstadisticas);
+// ============================================
+// RUTAS ESTÁTICAS (sin parámetros)
+// ============================================
+router.get('/estadisticas', getEstadisticasOrdenesCompra);
 
-// Productos por proveedor
-router.get('/proveedor/:id_proveedor/productos', getProductosPorProveedor);
-
-// CRUD básico
+// ============================================
+// RUTAS DE ÓRDENES DE COMPRA (base)
+// ============================================
 router.get('/', getAllOrdenesCompra);
-router.get('/:id', getOrdenCompraById);
 router.post('/', createOrdenCompra);
 
-// Actualizar estado
-router.patch('/:id/estado', actualizarEstado);
+// ============================================
+// RUTAS CON :id (ORDEN IMPORTANTE)
+// ============================================
+// ✅ RUTAS ESPECÍFICAS PRIMERO (antes del GET /:id)
+router.get('/:id/pdf', descargarPDFOrdenCompra);
+router.put('/:id/estado', actualizarEstadoOrdenCompra);
+router.post('/:id/recibir', recibirOrdenCompra); // 🔥 GENERA ENTRADAS Y ACTUALIZA CUP
 
-// Recibir orden (genera entrada de inventario)
-router.post('/:id/recibir', recibirOrden);
+// ✅ RUTAS DE PROVEEDOR
+router.get('/proveedor/:id/productos', getProductosPorProveedor);
+
+// ✅ RUTAS GENERICAS AL FINAL
+router.get('/:id', getOrdenCompraById);
 
 export default router;

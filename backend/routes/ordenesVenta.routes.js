@@ -1,35 +1,38 @@
-// =====================================================
-// backend/routes/ordenesVenta.routes.js
-// =====================================================
-
 import express from 'express';
 import {
   getAllOrdenesVenta,
   getOrdenVentaById,
   createOrdenVenta,
-  convertirDesdeCotizacion,
-  actualizarEstado,
-  actualizarPrioridad,
-  actualizarProgreso,
-  getEstadisticas
+  actualizarEstadoOrdenVenta,
+  actualizarPrioridadOrdenVenta,
+  actualizarProgresoOrdenVenta,
+  getEstadisticasOrdenesVenta,
+  descargarPDFOrdenVenta
 } from '../controllers/ordenesVenta.controller.js';
 
 const router = express.Router();
 
-// Estadísticas
-router.get('/estadisticas', getEstadisticas);
+// ============================================
+// RUTAS ESTÁTICAS (sin parámetros)
+// ============================================
+router.get('/estadisticas', getEstadisticasOrdenesVenta);
 
-// Convertir desde cotización
-router.post('/convertir-cotizacion/:id_cotizacion', convertirDesdeCotizacion);
-
-// CRUD básico
+// ============================================
+// RUTAS DE ÓRDENES DE VENTA (base)
+// ============================================
 router.get('/', getAllOrdenesVenta);
-router.get('/:id', getOrdenVentaById);
 router.post('/', createOrdenVenta);
 
-// Actualizaciones
-router.patch('/:id/estado', actualizarEstado);
-router.patch('/:id/prioridad', actualizarPrioridad);
-router.patch('/:id/progreso', actualizarProgreso);
+// ============================================
+// RUTAS CON :id (ORDEN IMPORTANTE)
+// ============================================
+// ✅ RUTAS ESPECÍFICAS PRIMERO (antes del GET /:id)
+router.get('/:id/pdf', descargarPDFOrdenVenta);
+router.put('/:id/estado', actualizarEstadoOrdenVenta);
+router.put('/:id/prioridad', actualizarPrioridadOrdenVenta);
+router.put('/:id/progreso', actualizarProgresoOrdenVenta);
+
+// ✅ RUTAS GENERICAS AL FINAL
+router.get('/:id', getOrdenVentaById);
 
 export default router;

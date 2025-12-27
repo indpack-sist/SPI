@@ -2,28 +2,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Edit, 
-  Download, 
-  FileText,
-  Truck,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Building,
-  MapPin,
-  Package,
-  Calendar,
-  ShoppingCart,
-  Plus,
-  AlertCircle,
-  TrendingUp,
-  User
+  ArrowLeft, Edit, Download, FileText, Truck, CheckCircle,
+  XCircle, Clock, Building, MapPin, Package, Calendar,
+  ShoppingCart, Plus, AlertCircle
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import { guiasRemisionAPI } from '../../config/api';
 
 function DetalleGuiaRemision() {
   const { id } = useParams();
@@ -34,11 +21,11 @@ function DetalleGuiaRemision() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Modales
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
+  const [modalDespacharOpen, setModalDespacharOpen] = useState(false);
   const [modalEntregaOpen, setModalEntregaOpen] = useState(false);
   
-  // Fecha de entrega
+  const [fechaDespacho, setFechaDespacho] = useState(new Date().toISOString().split('T')[0]);
   const [fechaEntrega, setFechaEntrega] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -50,73 +37,17 @@ function DetalleGuiaRemision() {
       setLoading(true);
       setError(null);
       
-      // TODO: API real
-      const mockData = {
-        id_guia_remision: 1,
-        numero_guia: 'T001-2025-00000001',
-        id_orden_venta: 1,
-        numero_orden: 'OV-2025-0001',
-        fecha_emision: '2025-12-24',
-        fecha_inicio_traslado: '2025-12-25',
-        fecha_entrega: null,
-        estado: 'Pendiente',
-        tipo_traslado: 'Venta',
-        motivo_traslado: 'Venta',
-        modalidad_transporte: 'Privado',
-        direccion_partida: 'Jr. Industrial 100, Lima',
-        ubigeo_partida: '150101',
-        direccion_llegada: 'Av. Principal 123, Lima',
-        ubigeo_llegada: '150102',
-        ciudad_llegada: 'Lima',
-        peso_bruto_kg: 103.00,
-        numero_bultos: 5,
-        observaciones: 'Entregar en horario de oficina',
-        cliente: 'EMPRESA DEMO SAC',
-        ruc_cliente: '20123456789',
-        direccion_cliente: 'Av. Principal 123',
-        ciudad_cliente: 'Lima',
-        total_orden: 5900.00,
-        moneda: 'PEN',
-        fecha_creacion: '2025-12-24T10:30:00',
-        detalle: [
-          {
-            id_detalle: 1,
-            codigo_producto: 'PROD-001',
-            producto: 'Producto Terminado 1',
-            descripcion: 'Producto Terminado 1 - Color azul',
-            cantidad: 10.00000,
-            unidad_medida: 'unidad',
-            peso_unitario_kg: 5.5,
-            peso_total_kg: 55.00
-          },
-          {
-            id_detalle: 2,
-            codigo_producto: 'PROD-002',
-            producto: 'Producto Terminado 2',
-            descripcion: 'Producto Terminado 2 - Tamaño grande',
-            cantidad: 15.00000,
-            unidad_medida: 'unidad',
-            peso_unitario_kg: 3.2,
-            peso_total_kg: 48.00
-          }
-        ],
-        guia_transportista: {
-          id_guia_transportista: 1,
-          numero_guia: 'GT-2025-0001',
-          razon_social_transportista: 'TRANSPORTES RÁPIDOS SAC',
-          ruc_transportista: '20555666777',
-          nombre_conductor: 'Carlos Rodríguez',
-          licencia_conducir: 'Q12345678',
-          placa_vehiculo: 'ABC-123',
-          marca_vehiculo: 'Volvo',
-          certificado_habilitacion: 'CH-123456'
-        }
-      };
+      const response = await guiasRemisionAPI.getById(id);
       
-      setGuia(mockData);
+      if (response.data.success) {
+        setGuia(response.data.data);
+      } else {
+        setError('Guía no encontrada');
+      }
       
     } catch (err) {
-      setError('Error al cargar la guía de remisión: ' + err.message);
+      console.error('Error al cargar la guía de remisión:', err);
+      setError(err.response?.data?.error || 'Error al cargar la guía de remisión');
     } finally {
       setLoading(false);
     }
@@ -126,6 +57,13 @@ function DetalleGuiaRemision() {
     try {
       setError(null);
       
+      // Si es "En Tránsito", abrir modal de despacho
+      if (estado === 'En Tránsito') {
+        setModalEstadoOpen(false);
+        setModalDespacharOpen(true);
+        return;
+      }
+      
       // Si es "Entregada", abrir modal de confirmación
       if (estado === 'Entregada') {
         setModalEstadoOpen(false);
@@ -133,35 +71,87 @@ function DetalleGuiaRemision() {
         return;
       }
       
-      // TODO: API real
-      console.log('Cambiar estado a:', estado);
-      setGuia({ ...guia, estado });
-      setSuccess(`Estado actualizado a ${estado}`);
-      setModalEstadoOpen(false);
+      setLoading(true);
+      
+      const response = await guiasRemisionAPI.actualizarEstado(id, estado);
+      
+      if (response.data.success) {
+        setGuia({ ...guia, estado });
+        setSuccess(`Estado actualizado a ${estado}`);
+        setModalEstadoOpen(false);
+      } else {
+        setError(response.data.error || 'Error al cambiar estado');
+      }
       
     } catch (err) {
-      setError('Error al cambiar estado: ' + err.message);
+      console.error('Error al cambiar estado:', err);
+      setError(err.response?.data?.error || 'Error al cambiar estado');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ DESPACHAR: GENERA SALIDA AUTOMÁTICA
+  const handleDespachar = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const response = await guiasRemisionAPI.despachar(id, {
+        fecha_despacho: fechaDespacho
+      });
+      
+      if (response.data.success) {
+        setGuia({ 
+          ...guia, 
+          estado: 'En Tránsito',
+          fecha_inicio_traslado: fechaDespacho
+        });
+        
+        setSuccess(
+          'Guía despachada exitosamente. ' +
+          'Se han generado las salidas de inventario y actualizado el stock.'
+        );
+        setModalDespacharOpen(false);
+      } else {
+        setError(response.data.error || 'Error al despachar guía');
+      }
+      
+    } catch (err) {
+      console.error('Error al despachar guía:', err);
+      setError(err.response?.data?.error || 'Error al despachar guía');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleConfirmarEntrega = async () => {
     try {
       setError(null);
+      setLoading(true);
       
-      // TODO: API real
-      console.log('Confirmar entrega:', fechaEntrega);
-      
-      setGuia({ 
-        ...guia, 
-        estado: 'Entregada',
+      const response = await guiasRemisionAPI.marcarEntregada(id, {
         fecha_entrega: fechaEntrega
       });
       
-      setSuccess('Guía marcada como entregada exitosamente');
-      setModalEntregaOpen(false);
+      if (response.data.success) {
+        setGuia({ 
+          ...guia, 
+          estado: 'Entregada',
+          fecha_entrega: fechaEntrega
+        });
+        
+        setSuccess('Guía marcada como entregada exitosamente');
+        setModalEntregaOpen(false);
+      } else {
+        setError(response.data.error || 'Error al confirmar entrega');
+      }
       
     } catch (err) {
-      setError('Error al confirmar entrega: ' + err.message);
+      console.error('Error al confirmar entrega:', err);
+      setError(err.response?.data?.error || 'Error al confirmar entrega');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -169,9 +159,17 @@ function DetalleGuiaRemision() {
     navigate(`/ventas/guias-transportista/nueva?guia=${id}`);
   };
 
-  const handleDescargarPDF = () => {
-    console.log('Descargar PDF de guía:', id);
-    setSuccess('Descargando PDF...');
+  const handleDescargarPDF = async () => {
+    try {
+      setLoading(true);
+      await guiasRemisionAPI.descargarPDF(id);
+      setSuccess('PDF descargado exitosamente');
+    } catch (err) {
+      console.error('Error al descargar PDF:', err);
+      setError('Error al descargar el PDF');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatearFecha = (fecha) => {
@@ -250,7 +248,7 @@ function DetalleGuiaRemision() {
       width: '120px',
       align: 'right',
       render: (value) => (
-        <span className="text-sm">{parseFloat(value).toFixed(2)} kg</span>
+        <span className="text-sm">{parseFloat(value || 0).toFixed(2)} kg</span>
       )
     },
     {
@@ -259,12 +257,12 @@ function DetalleGuiaRemision() {
       width: '120px',
       align: 'right',
       render: (value) => (
-        <span className="font-bold text-primary">{parseFloat(value).toFixed(2)} kg</span>
+        <span className="font-bold text-primary">{parseFloat(value || 0).toFixed(2)} kg</span>
       )
     }
   ];
 
-  if (loading) return <Loading message="Cargando guía de remisión..." />;
+  if (loading && !guia) return <Loading message="Cargando guía de remisión..." />;
   
   if (!guia) {
     return (
@@ -295,13 +293,17 @@ function DetalleGuiaRemision() {
             </h1>
             <p className="text-muted">
               Emitida el {formatearFecha(guia.fecha_emision)}
-              {' • Orden: '}
-              <button 
-                className="text-primary hover:underline"
-                onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
-              >
-                {guia.numero_orden}
-              </button>
+              {guia.numero_orden && (
+                <>
+                  {' • Orden: '}
+                  <button 
+                    className="text-primary hover:underline"
+                    onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
+                  >
+                    {guia.numero_orden}
+                  </button>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -408,15 +410,17 @@ function DetalleGuiaRemision() {
               <label className="text-sm font-medium text-muted">RUC:</label>
               <p>{guia.ruc_cliente}</p>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Orden de Venta:</label>
-              <button
-                className="text-primary hover:underline font-medium"
-                onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
-              >
-                {guia.numero_orden}
-              </button>
-            </div>
+            {guia.numero_orden && (
+              <div>
+                <label className="text-sm font-medium text-muted">Orden de Venta:</label>
+                <button
+                  className="text-primary hover:underline font-medium"
+                  onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
+                >
+                  {guia.numero_orden}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -458,12 +462,12 @@ function DetalleGuiaRemision() {
             <div>
               <label className="text-sm font-medium text-muted">Peso Bruto:</label>
               <p className="font-bold text-lg text-primary">
-                {parseFloat(guia.peso_bruto_kg).toFixed(2)} kg
+                {parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} kg
               </p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted">Número de Bultos:</label>
-              <p className="font-bold">{guia.numero_bultos}</p>
+              <p className="font-bold">{guia.numero_bultos || 0}</p>
             </div>
           </div>
         </div>
@@ -558,18 +562,18 @@ function DetalleGuiaRemision() {
           </h2>
         </div>
         <div className="card-body">
-          <Table columns={columns} data={guia.detalle} />
+          <Table columns={columns} data={guia.detalle || []} />
           
           <div className="flex justify-end mt-4 pt-4 border-t">
             <div className="w-80">
               <div className="flex justify-between py-2">
                 <span className="font-medium">Total Items:</span>
-                <span className="font-bold">{guia.detalle.length}</span>
+                <span className="font-bold">{guia.detalle?.length || 0}</span>
               </div>
               <div className="flex justify-between py-2 border-t">
                 <span className="font-medium">Peso Total:</span>
                 <span className="font-bold text-primary text-lg">
-                  {parseFloat(guia.peso_bruto_kg).toFixed(2)} kg
+                  {parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} kg
                 </span>
               </div>
             </div>
@@ -623,6 +627,83 @@ function DetalleGuiaRemision() {
         </div>
       </Modal>
 
+      {/* Modal Despachar */}
+      <Modal
+        isOpen={modalDespacharOpen}
+        onClose={() => setModalDespacharOpen(false)}
+        title="Despachar Guía de Remisión"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <Truck size={24} className="text-info flex-shrink-0 mt-1" />
+              <div>
+                <p className="font-medium text-blue-900">¿Qué sucederá?</p>
+                <ul className="text-sm text-blue-800 mt-2 space-y-1">
+                  <li>• Se generarán salidas de inventario automáticamente</li>
+                  <li>• Se descontará el stock de cada producto</li>
+                  <li>• La guía cambiará a estado "En Tránsito"</li>
+                  <li>• Esta acción no se puede deshacer</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div className="form-group">
+            <label className="form-label">Fecha de Despacho *</label>
+            <input
+              type="date"
+              className="form-input"
+              value={fechaDespacho}
+              onChange={(e) => setFechaDespacho(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+              required
+            />
+          </div>
+          
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h4 className="font-medium mb-2">Resumen:</h4>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">Guía:</span>
+                <span className="font-medium">{guia.numero_guia}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Cliente:</span>
+                <span className="font-medium">{guia.cliente}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Items:</span>
+                <span>{guia.detalle?.length || 0} productos</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Peso:</span>
+                <span className="font-bold">{parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} kg</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex gap-2 justify-end pt-4 border-t">
+            <button 
+              className="btn btn-outline" 
+              onClick={() => setModalDespacharOpen(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </button>
+            <button 
+              className="btn btn-info" 
+              onClick={handleDespachar}
+              disabled={loading}
+            >
+              <Truck size={20} />
+              {loading ? 'Procesando...' : 'Confirmar Despacho'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Modal Confirmar Entrega */}
       <Modal
         isOpen={modalEntregaOpen}
@@ -668,21 +749,30 @@ function DetalleGuiaRemision() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Items:</span>
-                <span>{guia.detalle.length} productos</span>
+                <span>{guia.detalle?.length || 0} productos</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Peso:</span>
-                <span className="font-bold">{parseFloat(guia.peso_bruto_kg).toFixed(2)} kg</span>
+                <span className="font-bold">{parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} kg</span>
               </div>
             </div>
           </div>
           
           <div className="flex gap-2 justify-end pt-4 border-t">
-            <button className="btn btn-outline" onClick={() => setModalEntregaOpen(false)}>
+            <button 
+              className="btn btn-outline" 
+              onClick={() => setModalEntregaOpen(false)}
+              disabled={loading}
+            >
               Cancelar
             </button>
-            <button className="btn btn-success" onClick={handleConfirmarEntrega}>
-              <CheckCircle size={20} /> Confirmar Entrega
+            <button 
+              className="btn btn-success" 
+              onClick={handleConfirmarEntrega}
+              disabled={loading}
+            >
+              <CheckCircle size={20} />
+              {loading ? 'Procesando...' : 'Confirmar Entrega'}
             </button>
           </div>
         </div>

@@ -2,24 +2,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Edit, 
-  Download, 
-  Truck,
-  CheckCircle,
-  XCircle,
-  FileText,
-  Building,
-  User,
-  Car,
-  MapPin,
-  Calendar,
-  Package,
-  ShoppingCart
+  ArrowLeft, Edit, Download, Truck, CheckCircle,
+  XCircle, FileText, Building, User, Car, MapPin,
+  Calendar, Package, ShoppingCart
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import { guiasTransportistaAPI } from '../../config/api';
 
 function DetalleGuiaTransportista() {
   const { id } = useParams();
@@ -30,7 +20,6 @@ function DetalleGuiaTransportista() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Modal
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
 
   useEffect(() => {
@@ -42,49 +31,17 @@ function DetalleGuiaTransportista() {
       setLoading(true);
       setError(null);
       
-      // TODO: API real
-      const mockData = {
-        id_guia_transportista: 1,
-        numero_guia: 'GT-2025-0001',
-        fecha_emision: '2025-12-24',
-        estado: 'Activa',
-        razon_social_transportista: 'TRANSPORTES RÁPIDOS SAC',
-        ruc_transportista: '20555666777',
-        nombre_conductor: 'Carlos Rodríguez',
-        licencia_conducir: 'Q12345678',
-        dni_conductor: '12345678',
-        telefono_conductor: '987654321',
-        placa_vehiculo: 'ABC-123',
-        marca_vehiculo: 'Volvo',
-        modelo_vehiculo: 'FH16',
-        certificado_habilitacion: 'CH-123456',
-        fecha_inicio_traslado: '2025-12-25',
-        observaciones: 'Entrega prioritaria',
-        // Datos de guía de remisión
-        numero_guia_remision: 'T001-2025-00000001',
-        id_guia_remision: 1,
-        direccion_partida: 'Jr. Industrial 100, Lima',
-        direccion_llegada: 'Av. Principal 123, Lima',
-        ubigeo_partida: '150101',
-        ubigeo_llegada: '150102',
-        ciudad_llegada: 'Lima',
-        peso_bruto_kg: 103.00,
-        numero_bultos: 5,
-        tipo_traslado: 'Venta',
-        motivo_traslado: 'Venta',
-        // Datos de orden
-        numero_orden: 'OV-2025-0001',
-        id_orden_venta: 1,
-        cliente: 'EMPRESA DEMO SAC',
-        ruc_cliente: '20123456789',
-        direccion_cliente: 'Av. Principal 123',
-        fecha_creacion: '2025-12-24T10:30:00'
-      };
+      const response = await guiasTransportistaAPI.getById(id);
       
-      setGuia(mockData);
+      if (response.data.success) {
+        setGuia(response.data.data);
+      } else {
+        setError('Guía no encontrada');
+      }
       
     } catch (err) {
-      setError('Error al cargar la guía de transportista: ' + err.message);
+      console.error('Error al cargar la guía de transportista:', err);
+      setError(err.response?.data?.error || 'Error al cargar la guía de transportista');
     } finally {
       setLoading(false);
     }
@@ -93,21 +50,37 @@ function DetalleGuiaTransportista() {
   const handleCambiarEstado = async (estado) => {
     try {
       setError(null);
+      setLoading(true);
       
-      // TODO: API real
-      console.log('Cambiar estado a:', estado);
-      setGuia({ ...guia, estado });
-      setSuccess(`Estado actualizado a ${estado}`);
-      setModalEstadoOpen(false);
+      const response = await guiasTransportistaAPI.actualizarEstado(id, estado);
+      
+      if (response.data.success) {
+        setGuia({ ...guia, estado });
+        setSuccess(`Estado actualizado a ${estado}`);
+        setModalEstadoOpen(false);
+      } else {
+        setError(response.data.error || 'Error al cambiar estado');
+      }
       
     } catch (err) {
-      setError('Error al cambiar estado: ' + err.message);
+      console.error('Error al cambiar estado:', err);
+      setError(err.response?.data?.error || 'Error al cambiar estado');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDescargarPDF = () => {
-    console.log('Descargar PDF de guía:', id);
-    setSuccess('Descargando PDF...');
+  const handleDescargarPDF = async () => {
+    try {
+      setLoading(true);
+      await guiasTransportistaAPI.descargarPDF(id);
+      setSuccess('PDF descargado exitosamente');
+    } catch (err) {
+      console.error('Error al descargar PDF:', err);
+      setError('Error al descargar el PDF');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatearFecha = (fecha) => {
@@ -143,7 +116,7 @@ function DetalleGuiaTransportista() {
     return configs[estado] || configs['Activa'];
   };
 
-  if (loading) return <Loading message="Cargando guía de transportista..." />;
+  if (loading && !guia) return <Loading message="Cargando guía de transportista..." />;
   
   if (!guia) {
     return (
@@ -174,13 +147,17 @@ function DetalleGuiaTransportista() {
             </h1>
             <p className="text-muted">
               Emitida el {formatearFecha(guia.fecha_emision)}
-              {' • Guía Remisión: '}
-              <button 
-                className="text-primary hover:underline"
-                onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia_remision}`)}
-              >
-                {guia.numero_guia_remision}
-              </button>
+              {guia.numero_guia_remision && (
+                <>
+                  {' • Guía Remisión: '}
+                  <button 
+                    className="text-primary hover:underline"
+                    onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia_remision}`)}
+                  >
+                    {guia.numero_guia_remision}
+                  </button>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -334,17 +311,17 @@ function DetalleGuiaTransportista() {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium text-muted">Tipo de Traslado:</label>
-              <p className="font-medium">{guia.tipo_traslado}</p>
+              <p className="font-medium">{guia.tipo_traslado || '-'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted">Peso Bruto:</label>
               <p className="font-bold text-lg text-primary">
-                {parseFloat(guia.peso_bruto_kg).toFixed(2)} kg
+                {parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} kg
               </p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted">Número de Bultos:</label>
-              <p className="font-bold text-lg">{guia.numero_bultos}</p>
+              <p className="font-bold text-lg">{guia.numero_bultos || 0}</p>
             </div>
           </div>
         </div>
@@ -383,12 +360,12 @@ function DetalleGuiaTransportista() {
           <div className="card-body space-y-2">
             <div>
               <label className="text-sm font-medium text-muted">Dirección:</label>
-              <p className="font-medium">{guia.direccion_llegada}</p>
+              <p className="font-medium">{guia.direccion_llegada || '-'}</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-sm font-medium text-muted">Ciudad:</label>
-                <p>{guia.ciudad_llegada}</p>
+                <p>{guia.ciudad_llegada || '-'}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-muted">Ubigeo:</label>
@@ -409,29 +386,37 @@ function DetalleGuiaTransportista() {
         </div>
         <div className="card-body">
           <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted">Guía de Remisión:</label>
-              <button
-                className="text-primary hover:underline font-medium"
-                onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia_remision}`)}
-              >
-                {guia.numero_guia_remision}
-              </button>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Orden de Venta:</label>
-              <button
-                className="text-primary hover:underline font-medium"
-                onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
-              >
-                {guia.numero_orden}
-              </button>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Cliente:</label>
-              <p className="font-medium">{guia.cliente}</p>
-              <p className="text-sm text-muted">RUC: {guia.ruc_cliente}</p>
-            </div>
+            {guia.numero_guia_remision && (
+              <div>
+                <label className="text-sm font-medium text-muted">Guía de Remisión:</label>
+                <button
+                  className="text-primary hover:underline font-medium"
+                  onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia_remision}`)}
+                >
+                  {guia.numero_guia_remision}
+                </button>
+              </div>
+            )}
+            {guia.numero_orden && (
+              <div>
+                <label className="text-sm font-medium text-muted">Orden de Venta:</label>
+                <button
+                  className="text-primary hover:underline font-medium"
+                  onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
+                >
+                  {guia.numero_orden}
+                </button>
+              </div>
+            )}
+            {guia.cliente && (
+              <div>
+                <label className="text-sm font-medium text-muted">Cliente:</label>
+                <p className="font-medium">{guia.cliente}</p>
+                {guia.ruc_cliente && (
+                  <p className="text-sm text-muted">RUC: {guia.ruc_cliente}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -475,7 +460,11 @@ function DetalleGuiaTransportista() {
           </div>
           
           <div className="flex gap-2 justify-end pt-4 border-t">
-            <button className="btn btn-outline" onClick={() => setModalEstadoOpen(false)}>
+            <button 
+              className="btn btn-outline" 
+              onClick={() => setModalEstadoOpen(false)}
+              disabled={loading}
+            >
               Cancelar
             </button>
           </div>

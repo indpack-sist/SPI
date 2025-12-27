@@ -2,18 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  ArrowLeft, 
-  Save, 
-  Truck,
-  FileText,
-  User,
-  Car,
-  Search,
-  AlertCircle
+  ArrowLeft, Save, Truck, FileText, User,
+  Car, Search, AlertCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import { guiasTransportistaAPI, guiasRemisionAPI } from '../../config/api';
 
 function NuevaGuiaTransportista() {
   const navigate = useNavigate();
@@ -24,20 +19,17 @@ function NuevaGuiaTransportista() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Guía de remisión origen
   const [guiaRemision, setGuiaRemision] = useState(null);
   
-  // Catálogos
+  // Catálogos de datos frecuentes
   const [transportistas, setTransportistas] = useState([]);
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
   
-  // Modales
   const [modalTransportistaOpen, setModalTransportistaOpen] = useState(false);
   const [modalConductorOpen, setModalConductorOpen] = useState(false);
   const [modalVehiculoOpen, setModalVehiculoOpen] = useState(false);
   
-  // Formulario
   const [formData, setFormData] = useState({
     id_guia_remision: idGuia || '',
     fecha_emision: new Date().toISOString().split('T')[0],
@@ -62,90 +54,57 @@ function NuevaGuiaTransportista() {
     cargarCatalogos();
   }, [idGuia]);
 
+  // ✅ CARGAR GUÍA DE REMISIÓN
   const cargarGuiaRemision = async (id) => {
     try {
       setLoading(true);
       
-      // TODO: API real
-      const mockGuia = {
-        id_guia_remision: id,
-        numero_guia: 'T001-2025-00000001',
-        numero_orden: 'OV-2025-0001',
-        cliente: 'EMPRESA DEMO SAC',
-        ruc_cliente: '20123456789',
-        direccion_partida: 'Jr. Industrial 100, Lima',
-        direccion_llegada: 'Av. Principal 123, Lima',
-        ciudad_llegada: 'Lima',
-        peso_bruto_kg: 103.00,
-        numero_bultos: 5,
-        estado: 'Pendiente'
-      };
+      const response = await guiasRemisionAPI.getById(id);
       
-      setGuiaRemision(mockGuia);
-      setFormData(prev => ({
-        ...prev,
-        id_guia_remision: id
-      }));
+      if (response.data.success) {
+        const guia = response.data.data;
+        setGuiaRemision(guia);
+        setFormData(prev => ({
+          ...prev,
+          id_guia_remision: id,
+          fecha_inicio_traslado: guia.fecha_inicio_traslado || prev.fecha_inicio_traslado
+        }));
+      } else {
+        setError('Guía de remisión no encontrada');
+      }
       
     } catch (err) {
-      setError('Error al cargar guía de remisión: ' + err.message);
+      console.error('Error al cargar guía de remisión:', err);
+      setError(err.response?.data?.error || 'Error al cargar guía de remisión');
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ CARGAR CATÁLOGOS DE DATOS FRECUENTES
   const cargarCatalogos = async () => {
     try {
-      // TODO: API real
-      setTransportistas([
-        {
-          razon_social_transportista: 'TRANSPORTES RÁPIDOS SAC',
-          ruc_transportista: '20555666777',
-          total_guias: 15
-        },
-        {
-          razon_social_transportista: 'LOGÍSTICA EXPRESS SAC',
-          ruc_transportista: '20444555666',
-          total_guias: 12
-        }
+      const [transpRes, condRes, vehRes] = await Promise.all([
+        guiasTransportistaAPI.getTransportistasFrecuentes(),
+        guiasTransportistaAPI.getConductoresFrecuentes(),
+        guiasTransportistaAPI.getVehiculosFrecuentes()
       ]);
       
-      setConductores([
-        {
-          nombre_conductor: 'Carlos Rodríguez',
-          licencia_conducir: 'Q12345678',
-          dni_conductor: '12345678',
-          telefono_conductor: '987654321',
-          total_viajes: 25
-        },
-        {
-          nombre_conductor: 'Juan Pérez',
-          licencia_conducir: 'Q87654321',
-          dni_conductor: '87654321',
-          telefono_conductor: '912345678',
-          total_viajes: 18
-        }
-      ]);
+      if (transpRes.data.success) {
+        setTransportistas(transpRes.data.data || []);
+      }
       
-      setVehiculos([
-        {
-          placa_vehiculo: 'ABC-123',
-          marca_vehiculo: 'Volvo',
-          modelo_vehiculo: 'FH16',
-          certificado_habilitacion: 'CH-123456',
-          total_viajes: 30
-        },
-        {
-          placa_vehiculo: 'XYZ-789',
-          marca_vehiculo: 'Mercedes',
-          modelo_vehiculo: 'Actros',
-          certificado_habilitacion: 'CH-789012',
-          total_viajes: 22
-        }
-      ]);
+      if (condRes.data.success) {
+        setConductores(condRes.data.data || []);
+      }
+      
+      if (vehRes.data.success) {
+        setVehiculos(vehRes.data.data || []);
+      }
       
     } catch (err) {
       console.error('Error al cargar catálogos:', err);
+      // No mostrar error, los catálogos son opcionales
     }
   };
 
@@ -180,12 +139,12 @@ function NuevaGuiaTransportista() {
     setModalVehiculoOpen(false);
   };
 
+  // ✅ GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     
-    // Validaciones
     if (!formData.id_guia_remision) {
       setError('Debe especificar una guía de remisión');
       return;
@@ -209,17 +168,37 @@ function NuevaGuiaTransportista() {
     try {
       setLoading(true);
       
-      // TODO: API real
-      console.log('Payload:', formData);
+      const payload = {
+        id_guia_remision: parseInt(formData.id_guia_remision),
+        fecha_emision: formData.fecha_emision,
+        razon_social_transportista: formData.razon_social_transportista,
+        ruc_transportista: formData.ruc_transportista,
+        nombre_conductor: formData.nombre_conductor,
+        licencia_conducir: formData.licencia_conducir,
+        dni_conductor: formData.dni_conductor || null,
+        telefono_conductor: formData.telefono_conductor || null,
+        placa_vehiculo: formData.placa_vehiculo,
+        marca_vehiculo: formData.marca_vehiculo || null,
+        modelo_vehiculo: formData.modelo_vehiculo || null,
+        certificado_habilitacion: formData.certificado_habilitacion || null,
+        fecha_inicio_traslado: formData.fecha_inicio_traslado,
+        observaciones: formData.observaciones
+      };
       
-      setSuccess('Guía de transportista creada exitosamente');
+      const response = await guiasTransportistaAPI.create(payload);
       
-      setTimeout(() => {
-        navigate('/ventas/guias-transportista');
-      }, 1500);
+      if (response.data.success) {
+        setSuccess('Guía de transportista creada exitosamente');
+        setTimeout(() => {
+          navigate('/ventas/guias-transportista');
+        }, 1500);
+      } else {
+        setError(response.data.error || 'Error al crear guía de transportista');
+      }
       
     } catch (err) {
-      setError('Error al crear guía de transportista: ' + err.message);
+      console.error('Error al crear guía de transportista:', err);
+      setError(err.response?.data?.error || 'Error al crear guía de transportista');
     } finally {
       setLoading(false);
     }
@@ -246,7 +225,6 @@ function NuevaGuiaTransportista() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button 
           className="btn btn-outline"
@@ -283,8 +261,8 @@ function NuevaGuiaTransportista() {
                 </p>
                 <p className="text-sm text-blue-700">
                   Destino: {guiaRemision.ciudad_llegada} • 
-                  Peso: {parseFloat(guiaRemision.peso_bruto_kg).toFixed(2)} kg • 
-                  Bultos: {guiaRemision.numero_bultos}
+                  Peso: {parseFloat(guiaRemision.peso_bruto_kg || 0).toFixed(2)} kg • 
+                  Bultos: {guiaRemision.numero_bultos || 0}
                 </p>
               </div>
             </div>
@@ -352,14 +330,16 @@ function NuevaGuiaTransportista() {
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                className="btn btn-primary w-full mb-4"
-                onClick={() => setModalTransportistaOpen(true)}
-              >
-                <Search size={20} />
-                Seleccionar Transportista Frecuente
-              </button>
+              transportistas.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-primary w-full mb-4"
+                  onClick={() => setModalTransportistaOpen(true)}
+                >
+                  <Search size={20} />
+                  Seleccionar Transportista Frecuente
+                </button>
+              )
             )}
             
             <div className="grid grid-cols-2 gap-4">
@@ -426,14 +406,16 @@ function NuevaGuiaTransportista() {
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                className="btn btn-success w-full mb-4"
-                onClick={() => setModalConductorOpen(true)}
-              >
-                <Search size={20} />
-                Seleccionar Conductor Frecuente
-              </button>
+              conductores.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-success w-full mb-4"
+                  onClick={() => setModalConductorOpen(true)}
+                >
+                  <Search size={20} />
+                  Seleccionar Conductor Frecuente
+                </button>
+              )
             )}
             
             <div className="grid grid-cols-2 gap-4">
@@ -522,14 +504,16 @@ function NuevaGuiaTransportista() {
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                className="btn btn-warning w-full mb-4"
-                onClick={() => setModalVehiculoOpen(true)}
-              >
-                <Search size={20} />
-                Seleccionar Vehículo Frecuente
-              </button>
+              vehiculos.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-warning w-full mb-4"
+                  onClick={() => setModalVehiculoOpen(true)}
+                >
+                  <Search size={20} />
+                  Seleccionar Vehículo Frecuente
+                </button>
+              )
             )}
             
             <div className="grid grid-cols-2 gap-4">
@@ -612,7 +596,7 @@ function NuevaGuiaTransportista() {
             disabled={loading}
           >
             <Save size={20} />
-            Crear Guía de Transportista
+            {loading ? 'Guardando...' : 'Crear Guía de Transportista'}
           </button>
         </div>
       </form>
@@ -633,7 +617,7 @@ function NuevaGuiaTransportista() {
             >
               <div className="font-bold">{t.razon_social_transportista}</div>
               <div className="text-sm text-muted">
-                RUC: {t.ruc_transportista} • {t.total_guias} guías previas
+                RUC: {t.ruc_transportista} • {t.total_guias || 0} guías previas
               </div>
             </div>
           ))}
@@ -656,8 +640,9 @@ function NuevaGuiaTransportista() {
             >
               <div className="font-bold">{c.nombre_conductor}</div>
               <div className="text-sm text-muted">
-                Licencia: {c.licencia_conducir} • DNI: {c.dni_conductor} • 
-                {c.total_viajes} viajes previos
+                Licencia: {c.licencia_conducir}
+                {c.dni_conductor && ` • DNI: ${c.dni_conductor}`}
+                {c.total_viajes && ` • ${c.total_viajes} viajes previos`}
               </div>
             </div>
           ))}
@@ -680,9 +665,9 @@ function NuevaGuiaTransportista() {
             >
               <div className="font-bold font-mono text-lg">{v.placa_vehiculo}</div>
               <div className="text-sm text-muted">
-                {v.marca_vehiculo} {v.modelo_vehiculo} • 
-                Cert: {v.certificado_habilitacion} • 
-                {v.total_viajes} viajes previos
+                {v.marca_vehiculo} {v.modelo_vehiculo}
+                {v.certificado_habilitacion && ` • Cert: ${v.certificado_habilitacion}`}
+                {v.total_viajes && ` • ${v.total_viajes} viajes previos`}
               </div>
             </div>
           ))}

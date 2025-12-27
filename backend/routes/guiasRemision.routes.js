@@ -1,35 +1,38 @@
-// =====================================================
-// backend/routes/guiasRemision.routes.js
-// =====================================================
-
 import express from 'express';
 import {
   getAllGuiasRemision,
   getGuiaRemisionById,
   createGuiaRemision,
-  actualizarEstado,
-  getProductosDisponiblesOrden,
-  getEstadisticas,
-  getPDFGuiaRemision // <--- Ahora sí existe
+  despacharGuiaRemision,
+  actualizarEstadoGuiaRemision,
+  marcarEntregadaGuiaRemision,
+  getEstadisticasGuiasRemision,
+  descargarPDFGuiaRemision
 } from '../controllers/guiasRemision.controller.js';
 
 const router = express.Router();
 
-// Estadísticas
-router.get('/estadisticas', getEstadisticas);
+// ============================================
+// RUTAS ESTÁTICAS (sin parámetros)
+// ============================================
+router.get('/estadisticas', getEstadisticasGuiasRemision);
 
-// Productos disponibles de una orden
-router.get('/orden/:id_orden_venta/productos-disponibles', getProductosDisponiblesOrden);
-
-// CRUD básico
+// ============================================
+// RUTAS DE GUÍAS DE REMISIÓN (base)
+// ============================================
 router.get('/', getAllGuiasRemision);
-router.get('/:id', getGuiaRemisionById);
 router.post('/', createGuiaRemision);
 
-// Actualizar estado
-router.patch('/:id/estado', actualizarEstado);
+// ============================================
+// RUTAS CON :id (ORDEN IMPORTANTE)
+// ============================================
+// ✅ RUTAS ESPECÍFICAS PRIMERO (antes del GET /:id)
+router.get('/:id/pdf', descargarPDFGuiaRemision);
+router.post('/:id/despachar', despacharGuiaRemision); // 🔥 GENERA SALIDAS AUTOMÁTICAS
+router.post('/:id/entregar', marcarEntregadaGuiaRemision);
+router.put('/:id/estado', actualizarEstadoGuiaRemision);
 
-// Generar PDF
-router.get('/:id/pdf', getPDFGuiaRemision);
+// ✅ RUTAS GENERICAS AL FINAL
+router.get('/:id', getGuiaRemisionById);
 
 export default router;

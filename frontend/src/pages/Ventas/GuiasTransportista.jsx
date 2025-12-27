@@ -2,19 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
-  Eye, 
-  Truck, 
-  Filter,
-  CheckCircle,
-  XCircle,
-  TrendingUp,
-  Users,
-  Car
+  Plus, Eye, Truck, Filter, CheckCircle,
+  XCircle, TrendingUp, Users, Car
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import { guiasTransportistaAPI } from '../../config/api';
 
 function GuiasTransportista() {
   const navigate = useNavigate();
@@ -32,67 +26,30 @@ function GuiasTransportista() {
   const cargarDatos = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // TODO: API real
-      const mockGuias = [
-        {
-          id_guia_transportista: 1,
-          numero_guia: 'GT-2025-0001',
-          fecha_emision: '2025-12-24',
-          estado: 'Activa',
-          numero_guia_remision: 'T001-2025-00000001',
-          id_guia_remision: 1,
-          numero_orden: 'OV-2025-0001',
-          id_orden_venta: 1,
-          cliente: 'EMPRESA DEMO SAC',
-          ruc_cliente: '20123456789',
-          razon_social_transportista: 'TRANSPORTES RÁPIDOS SAC',
-          ruc_transportista: '20555666777',
-          nombre_conductor: 'Carlos Rodríguez',
-          licencia_conducir: 'Q12345678',
-          placa_vehiculo: 'ABC-123',
-          marca_vehiculo: 'Volvo',
-          direccion_llegada: 'Av. Principal 123, Lima',
-          ciudad_llegada: 'Lima',
-          peso_bruto_kg: 103.00
-        },
-        {
-          id_guia_transportista: 2,
-          numero_guia: 'GT-2025-0002',
-          fecha_emision: '2025-12-23',
-          estado: 'Finalizada',
-          numero_guia_remision: 'T001-2025-00000002',
-          id_guia_remision: 2,
-          numero_orden: 'OV-2025-0002',
-          id_orden_venta: 2,
-          cliente: 'CORPORACIÓN ABC EIRL',
-          ruc_cliente: '20987654321',
-          razon_social_transportista: 'LOGÍSTICA EXPRESS SAC',
-          ruc_transportista: '20444555666',
-          nombre_conductor: 'Juan Pérez',
-          licencia_conducir: 'Q87654321',
-          placa_vehiculo: 'XYZ-789',
-          marca_vehiculo: 'Mercedes',
-          direccion_llegada: 'Jr. Comercio 456, Lima',
-          ciudad_llegada: 'Lima',
-          peso_bruto_kg: 320.00
-        }
-      ];
+      // ✅ INTEGRACIÓN CON API REAL
+      const filtros = {};
+      if (filtroEstado) {
+        filtros.estado = filtroEstado;
+      }
       
-      const mockEstadisticas = {
-        total_guias: 25,
-        activas: 8,
-        finalizadas: 15,
-        canceladas: 2,
-        transportistas_unicos: 6,
-        conductores_unicos: 12,
-        vehiculos_unicos: 10
-      };
+      const [guiasRes, statsRes] = await Promise.all([
+        guiasTransportistaAPI.getAll(filtros),
+        guiasTransportistaAPI.getEstadisticas()
+      ]);
       
-      setGuias(mockGuias);
-      setEstadisticas(mockEstadisticas);
+      if (guiasRes.data.success) {
+        setGuias(guiasRes.data.data || []);
+      }
+      
+      if (statsRes.data.success) {
+        setEstadisticas(statsRes.data.data || null);
+      }
+      
     } catch (err) {
-      setError('Error al cargar guías de transportista: ' + err.message);
+      console.error('Error al cargar guías de transportista:', err);
+      setError(err.response?.data?.error || 'Error al cargar guías de transportista');
     } finally {
       setLoading(false);
     }
@@ -188,7 +145,7 @@ function GuiasTransportista() {
         <div>
           <div className="font-medium">{value}</div>
           <div className="text-xs text-muted">
-            {parseFloat(row.peso_bruto_kg).toFixed(0)} kg
+            {parseFloat(row.peso_bruto_kg || 0).toFixed(0)} kg
           </div>
         </div>
       )
@@ -230,7 +187,6 @@ function GuiasTransportista() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -253,15 +209,14 @@ function GuiasTransportista() {
       {/* Estadísticas */}
       {estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {/* Total Guías */}
           <div className="card">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Total Guías</p>
-                  <h3 className="text-2xl font-bold">{estadisticas.total_guias}</h3>
+                  <h3 className="text-2xl font-bold">{estadisticas.total_guias || 0}</h3>
                   <p className="text-xs text-muted">
-                    {estadisticas.transportistas_unicos} transportistas
+                    {estadisticas.transportistas_unicos || 0} transportistas
                   </p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
@@ -271,13 +226,12 @@ function GuiasTransportista() {
             </div>
           </div>
 
-          {/* Activas */}
           <div className="card border-l-4 border-info">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">En Tránsito</p>
-                  <h3 className="text-2xl font-bold text-info">{estadisticas.activas}</h3>
+                  <h3 className="text-2xl font-bold text-info">{estadisticas.activas || 0}</h3>
                   <p className="text-xs text-muted">Activas</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
@@ -287,14 +241,13 @@ function GuiasTransportista() {
             </div>
           </div>
 
-          {/* Conductores */}
           <div className="card border-l-4 border-warning">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Conductores</p>
                   <h3 className="text-2xl font-bold text-warning">
-                    {estadisticas.conductores_unicos}
+                    {estadisticas.conductores_unicos || 0}
                   </h3>
                   <p className="text-xs text-muted">Registrados</p>
                 </div>
@@ -305,14 +258,13 @@ function GuiasTransportista() {
             </div>
           </div>
 
-          {/* Vehículos */}
           <div className="card border-l-4 border-success">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Vehículos</p>
                   <h3 className="text-2xl font-bold text-success">
-                    {estadisticas.vehiculos_unicos}
+                    {estadisticas.vehiculos_unicos || 0}
                   </h3>
                   <p className="text-xs text-muted">Registrados</p>
                 </div>

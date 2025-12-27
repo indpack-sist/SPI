@@ -287,16 +287,16 @@ export const ordenesProduccionAPI = {
 };
 
 // ============================================
-// COTIZACIONES
+// ✅ COTIZACIONES - ACTUALIZADO
 // ============================================
 export const cotizacionesAPI = {
   // Listar cotizaciones
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
     if (filtros.estado) params.append('estado', filtros.estado);
+    if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    if (filtros.id_cliente) params.append('id_cliente', filtros.id_cliente);
     
     return api.get(`/cotizaciones?${params.toString()}`);
   },
@@ -307,8 +307,14 @@ export const cotizacionesAPI = {
   // Crear cotización
   create: (data) => api.post('/cotizaciones', data),
 
-  // Cambiar estado
-  cambiarEstado: (id, estado) => api.patch(`/cotizaciones/${id}/estado`, { estado }),
+  // ✅ ACTUALIZADO: Cambiar estado (ahora usa PUT en lugar de PATCH)
+  actualizarEstado: (id, estado) => api.put(`/cotizaciones/${id}/estado`, { estado }),
+
+  // ✅ NUEVO: Actualizar prioridad
+  actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
+
+  // ✅ NUEVO: Obtener estadísticas
+  getEstadisticas: () => api.get('/cotizaciones/estadisticas'),
 
   // Descargar PDF
   descargarPDF: async (id) => {
@@ -333,7 +339,7 @@ export const cotizacionesAPI = {
 };
 
 // ============================================
-// ÓRDENES DE VENTA
+// ✅ ÓRDENES DE VENTA - ACTUALIZADO
 // ============================================
 export const ordenesVentaAPI = {
   // Listar órdenes
@@ -343,7 +349,6 @@ export const ordenesVentaAPI = {
     if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    if (filtros.id_cliente) params.append('id_cliente', filtros.id_cliente);
     
     return api.get(`/ordenes-venta?${params.toString()}`);
   },
@@ -354,34 +359,45 @@ export const ordenesVentaAPI = {
   // Crear orden
   create: (data) => api.post('/ordenes-venta', data),
 
-  // Convertir desde cotización
-  convertirDesdeCotizacion: (id_cotizacion) => 
-    api.post(`/ordenes-venta/convertir-cotizacion/${id_cotizacion}`),
-
-  // Actualizar estado
+  // ✅ ACTUALIZADO: Actualizar estado (ahora usa PUT en lugar de PATCH)
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 
-    api.patch(`/ordenes-venta/${id}/estado`, { estado, fecha_entrega_real }),
+    api.put(`/ordenes-venta/${id}/estado`, { estado, fecha_entrega_real }),
 
-  // Actualizar prioridad
+  // ✅ ACTUALIZADO: Actualizar prioridad (ahora usa PUT en lugar de PATCH)
   actualizarPrioridad: (id, prioridad) => 
-    api.patch(`/ordenes-venta/${id}/prioridad`, { prioridad }),
+    api.put(`/ordenes-venta/${id}/prioridad`, { prioridad }),
 
-  // Actualizar progreso
+  // ✅ ACTUALIZADO: Actualizar progreso (ahora usa PUT en lugar de PATCH)
   actualizarProgreso: (id, detalle) => 
-    api.patch(`/ordenes-venta/${id}/progreso`, { detalle }),
+    api.put(`/ordenes-venta/${id}/progreso`, { detalle }),
 
-  // Estadísticas
-  getEstadisticas: (filtros = {}) => {
-    const params = new URLSearchParams();
-    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
-    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+  // ✅ NUEVO: Obtener estadísticas
+  getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
+
+  // Descargar PDF
+  descargarPDF: async (id) => {
+    const response = await fetch(`${API_URL}/ordenes-venta/${id}/pdf`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/pdf',
+      }
+    });
     
-    return api.get(`/ordenes-venta/estadisticas?${params.toString()}`);
+    if (!response.ok) throw new Error('Error al descargar PDF');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orden-venta-${id}.pdf`;
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 };
 
 // ============================================
-// GUÍAS DE REMISIÓN
+// ✅ GUÍAS DE REMISIÓN - ACTUALIZADO
 // ============================================
 export const guiasRemisionAPI = {
   // Listar guías
@@ -390,8 +406,6 @@ export const guiasRemisionAPI = {
     if (filtros.estado) params.append('estado', filtros.estado);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    if (filtros.id_orden_venta) params.append('id_orden_venta', filtros.id_orden_venta);
-    if (filtros.tipo_traslado) params.append('tipo_traslado', filtros.tipo_traslado);
     
     return api.get(`/guias-remision?${params.toString()}`);
   },
@@ -402,26 +416,45 @@ export const guiasRemisionAPI = {
   // Crear guía
   create: (data) => api.post('/guias-remision', data),
 
-  // Actualizar estado
-  actualizarEstado: (id, estado, fecha_entrega = null) => 
-    api.patch(`/guias-remision/${id}/estado`, { estado, fecha_entrega }),
+  // ✅ NUEVO: Despachar guía (GENERA SALIDAS AUTOMÁTICAS)
+  despachar: (id, fecha_despacho = null) => 
+    api.post(`/guias-remision/${id}/despachar`, { fecha_despacho }),
 
-  // Obtener productos disponibles de una orden
-  getProductosDisponibles: (id_orden_venta) => 
-    api.get(`/guias-remision/orden/${id_orden_venta}/productos-disponibles`),
+  // ✅ NUEVO: Marcar como entregada
+  marcarEntregada: (id, fecha_entrega = null) => 
+    api.post(`/guias-remision/${id}/entregar`, { fecha_entrega }),
 
-  // Estadísticas
-  getEstadisticas: (filtros = {}) => {
-    const params = new URLSearchParams();
-    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
-    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+  // ✅ ACTUALIZADO: Actualizar estado (ahora usa PUT en lugar de PATCH)
+  actualizarEstado: (id, estado) => 
+    api.put(`/guias-remision/${id}/estado`, { estado }),
+
+  // ✅ NUEVO: Obtener estadísticas
+  getEstadisticas: () => api.get('/guias-remision/estadisticas'),
+
+  // Descargar PDF
+  descargarPDF: async (id) => {
+    const response = await fetch(`${API_URL}/guias-remision/${id}/pdf`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/pdf',
+      }
+    });
     
-    return api.get(`/guias-remision/estadisticas?${params.toString()}`);
+    if (!response.ok) throw new Error('Error al descargar PDF');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `guia-remision-${id}.pdf`;
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 };
 
 // ============================================
-// GUÍAS DE TRANSPORTISTA
+// ✅ GUÍAS DE TRANSPORTISTA - ACTUALIZADO
 // ============================================
 export const guiasTransportistaAPI = {
   // Listar guías
@@ -440,27 +473,42 @@ export const guiasTransportistaAPI = {
   // Crear guía
   create: (data) => api.post('/guias-transportista', data),
 
-  // Actualizar estado
+  // ✅ ACTUALIZADO: Actualizar estado (ahora usa PUT en lugar de PATCH)
   actualizarEstado: (id, estado) => 
-    api.patch(`/guias-transportista/${id}/estado`, { estado }),
+    api.put(`/guias-transportista/${id}/estado`, { estado }),
 
   // Catálogos de frecuentes
   getTransportistasFrecuentes: () => api.get('/guias-transportista/transportistas-frecuentes'),
   getConductoresFrecuentes: () => api.get('/guias-transportista/conductores-frecuentes'),
   getVehiculosFrecuentes: () => api.get('/guias-transportista/vehiculos-frecuentes'),
 
-  // Estadísticas
-  getEstadisticas: (filtros = {}) => {
-    const params = new URLSearchParams();
-    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
-    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+  // ✅ NUEVO: Obtener estadísticas
+  getEstadisticas: () => api.get('/guias-transportista/estadisticas'),
+
+  // Descargar PDF
+  descargarPDF: async (id) => {
+    const response = await fetch(`${API_URL}/guias-transportista/${id}/pdf`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/pdf',
+      }
+    });
     
-    return api.get(`/guias-transportista/estadisticas?${params.toString()}`);
+    if (!response.ok) throw new Error('Error al descargar PDF');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `guia-transportista-${id}.pdf`;
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 };
 
 // ============================================
-// ÓRDENES DE COMPRA
+// ✅ ÓRDENES DE COMPRA - ACTUALIZADO
 // ============================================
 export const ordenesCompraAPI = {
   // Listar órdenes
@@ -469,7 +517,6 @@ export const ordenesCompraAPI = {
     if (filtros.estado) params.append('estado', filtros.estado);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    if (filtros.id_proveedor) params.append('id_proveedor', filtros.id_proveedor);
     
     return api.get(`/ordenes-compra?${params.toString()}`);
   },
@@ -480,11 +527,11 @@ export const ordenesCompraAPI = {
   // Crear orden
   create: (data) => api.post('/ordenes-compra', data),
 
-  // Actualizar estado
-  actualizarEstado: (id, estado, fecha_confirmacion = null, fecha_recepcion = null) => 
-    api.patch(`/ordenes-compra/${id}/estado`, { estado, fecha_confirmacion, fecha_recepcion }),
+  // ✅ ACTUALIZADO: Actualizar estado (ahora usa PUT en lugar de PATCH)
+  actualizarEstado: (id, estado) => 
+    api.put(`/ordenes-compra/${id}/estado`, { estado }),
 
-  // Recibir orden (genera entradas de inventario automáticamente)
+  // ✅ ACTUALIZADO: Recibir orden (GENERA ENTRADAS Y ACTUALIZA CUP)
   recibirOrden: (id, datos) => 
     api.post(`/ordenes-compra/${id}/recibir`, datos),
 
@@ -492,14 +539,8 @@ export const ordenesCompraAPI = {
   getProductosPorProveedor: (id_proveedor) => 
     api.get(`/ordenes-compra/proveedor/${id_proveedor}/productos`),
 
-  // Estadísticas
-  getEstadisticas: (filtros = {}) => {
-    const params = new URLSearchParams();
-    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
-    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    
-    return api.get(`/ordenes-compra/estadisticas?${params.toString()}`);
-  },
+  // ✅ NUEVO: Obtener estadísticas
+  getEstadisticas: () => api.get('/ordenes-compra/estadisticas'),
 
   // Descargar PDF
   descargarPDF: async (id) => {

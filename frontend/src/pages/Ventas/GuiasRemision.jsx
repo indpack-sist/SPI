@@ -2,20 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
-  Eye, 
-  FileText, 
-  Filter,
-  Truck,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Package,
-  TrendingUp
+  Plus, Eye, FileText, Filter, Truck, Clock,
+  CheckCircle, XCircle, Package, TrendingUp
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import { guiasRemisionAPI } from '../../config/api';
 
 function GuiasRemision() {
   const navigate = useNavigate();
@@ -33,64 +26,30 @@ function GuiasRemision() {
   const cargarDatos = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // TODO: Reemplazar con API real
-      const mockGuias = [
-        {
-          id_guia_remision: 1,
-          numero_guia: 'T001-2025-00000001',
-          fecha_emision: '2025-12-24',
-          fecha_inicio_traslado: '2025-12-25',
-          cliente: 'EMPRESA DEMO SAC',
-          ruc_cliente: '20123456789',
-          numero_orden: 'OV-2025-0001',
-          id_orden_venta: 1,
-          tipo_traslado: 'Venta',
-          modalidad_transporte: 'Privado',
-          estado: 'Pendiente',
-          direccion_llegada: 'Av. Principal 123, Lima',
-          ciudad_llegada: 'Lima',
-          peso_bruto_kg: 150.50,
-          numero_bultos: 5,
-          total_items: 2
-        },
-        {
-          id_guia_remision: 2,
-          numero_guia: 'T001-2025-00000002',
-          fecha_emision: '2025-12-23',
-          fecha_inicio_traslado: '2025-12-24',
-          cliente: 'CORPORACIÓN ABC EIRL',
-          ruc_cliente: '20987654321',
-          numero_orden: 'OV-2025-0002',
-          id_orden_venta: 2,
-          tipo_traslado: 'Venta',
-          modalidad_transporte: 'Público',
-          estado: 'En Tránsito',
-          direccion_llegada: 'Jr. Comercio 456, Lima',
-          ciudad_llegada: 'Lima',
-          peso_bruto_kg: 320.00,
-          numero_bultos: 10,
-          total_items: 5
-        }
-      ];
+      // ✅ INTEGRACIÓN CON API REAL
+      const filtros = {};
+      if (filtroEstado) {
+        filtros.estado = filtroEstado;
+      }
       
-      const mockEstadisticas = {
-        total_guias: 15,
-        pendientes: 5,
-        en_transito: 6,
-        entregadas: 3,
-        canceladas: 1,
-        peso_total: 2500.50,
-        bultos_total: 75,
-        ordenes_relacionadas: 12,
-        transporte_privado: 8,
-        transporte_publico: 7
-      };
+      const [guiasRes, statsRes] = await Promise.all([
+        guiasRemisionAPI.getAll(filtros),
+        guiasRemisionAPI.getEstadisticas()
+      ]);
       
-      setGuias(mockGuias);
-      setEstadisticas(mockEstadisticas);
+      if (guiasRes.data.success) {
+        setGuias(guiasRes.data.data || []);
+      }
+      
+      if (statsRes.data.success) {
+        setEstadisticas(statsRes.data.data || null);
+      }
+      
     } catch (err) {
-      setError('Error al cargar guías de remisión: ' + err.message);
+      console.error('Error al cargar guías de remisión:', err);
+      setError(err.response?.data?.error || 'Error al cargar guías de remisión');
     } finally {
       setLoading(false);
     }
@@ -199,8 +158,8 @@ function GuiasRemision() {
       align: 'center',
       render: (value, row) => (
         <div>
-          <div className="font-bold">{value} items</div>
-          <div className="text-xs text-muted">{row.numero_bultos} bultos</div>
+          <div className="font-bold">{value || 0} items</div>
+          <div className="text-xs text-muted">{row.numero_bultos || 0} bultos</div>
         </div>
       )
     },
@@ -210,7 +169,7 @@ function GuiasRemision() {
       width: '100px',
       align: 'right',
       render: (value) => (
-        <span className="font-medium">{parseFloat(value).toFixed(2)}</span>
+        <span className="font-medium">{parseFloat(value || 0).toFixed(2)}</span>
       )
     },
     {
@@ -250,7 +209,6 @@ function GuiasRemision() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -273,14 +231,13 @@ function GuiasRemision() {
       {/* Estadísticas */}
       {estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {/* Total Guías */}
           <div className="card">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Total Guías</p>
-                  <h3 className="text-2xl font-bold">{estadisticas.total_guias}</h3>
-                  <p className="text-xs text-muted">{estadisticas.ordenes_relacionadas} órdenes</p>
+                  <h3 className="text-2xl font-bold">{estadisticas.total_guias || 0}</h3>
+                  <p className="text-xs text-muted">{estadisticas.ordenes_relacionadas || 0} órdenes</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <FileText size={24} className="text-primary" />
@@ -289,13 +246,12 @@ function GuiasRemision() {
             </div>
           </div>
 
-          {/* Pendientes */}
           <div className="card border-l-4 border-warning">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Pendientes</p>
-                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes}</h3>
+                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes || 0}</h3>
                   <p className="text-xs text-muted">Por despachar</p>
                 </div>
                 <div className="p-3 bg-yellow-100 rounded-lg">
@@ -305,14 +261,13 @@ function GuiasRemision() {
             </div>
           </div>
 
-          {/* En Tránsito */}
           <div className="card border-l-4 border-info">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">En Tránsito</p>
-                  <h3 className="text-2xl font-bold text-info">{estadisticas.en_transito}</h3>
-                  <p className="text-xs text-muted">{estadisticas.bultos_total} bultos</p>
+                  <h3 className="text-2xl font-bold text-info">{estadisticas.en_transito || 0}</h3>
+                  <p className="text-xs text-muted">{estadisticas.bultos_total || 0} bultos</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <Truck size={24} className="text-info" />
@@ -321,14 +276,13 @@ function GuiasRemision() {
             </div>
           </div>
 
-          {/* Peso Total */}
           <div className="card border-l-4 border-success">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Peso Total</p>
                   <h3 className="text-2xl font-bold text-success">
-                    {parseFloat(estadisticas.peso_total).toFixed(2)}
+                    {parseFloat(estadisticas.peso_total || 0).toFixed(2)}
                   </h3>
                   <p className="text-xs text-muted">kilogramos</p>
                 </div>

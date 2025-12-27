@@ -1,15 +1,10 @@
-// =====================================================
-// backend/controllers/ordenesVenta.controller.js
-// =====================================================
+// backend/controllers/ordenes-venta.controller.js
+import { executeQuery } from '../config/database.js';
 
-import { executeQuery, executeTransaction } from '../config/database.js';
-
-// =====================================================
-// LISTAR ÓRDENES DE VENTA
-// =====================================================
+// ✅ OBTENER TODAS LAS ÓRDENES CON FILTROS
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, fecha_inicio, fecha_fin, id_cliente, prioridad } = req.query;
+    const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
     
     let sql = `
       SELECT 
@@ -20,134 +15,175 @@ export async function getAllOrdenesVenta(req, res) {
         ov.fecha_entrega_real,
         ov.estado,
         ov.prioridad,
-        ov.moneda,
         ov.subtotal,
         ov.igv,
         ov.total,
-        cli.razon_social AS cliente,
-        cli.ruc AS ruc_cliente,
-        emp.nombre_completo AS comercial,
-        cot.numero_cotizacion,
-        ov.observaciones,
-        ov.fecha_creacion,
-        (SELECT COUNT(*) FROM orden_venta_detalle WHERE id_orden_venta = ov.id_orden_venta) AS total_items
+        ov.moneda,
+        ov.id_cotizacion,
+        c.numero_cotizacion,
+        cl.id_cliente,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        e.nombre_completo AS comercial,
+        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
+        (
+          SELECT COUNT(*) 
+          FROM detalle_orden_venta dov
+          WHERE dov.id_orden_venta = ov.id_orden_venta 
+          AND dov.cantidad_producida < dov.cantidad
+        ) AS items_pendientes_produccion,
+        (
+          SELECT COUNT(*) 
+          FROM detalle_orden_venta dov
+          WHERE dov.id_orden_venta = ov.id_orden_venta 
+          AND dov.cantidad_despachada < dov.cantidad
+        ) AS items_pendientes_despacho
       FROM ordenes_venta ov
-      INNER JOIN clientes cli ON ov.id_cliente = cli.id_cliente
-      LEFT JOIN empleados emp ON ov.id_comercial = emp.id_empleado
-      LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
       WHERE 1=1
     `;
+    
     const params = [];
     
     if (estado) {
-      sql += ' AND ov.estado = ?';
+      sql += ` AND ov.estado = ?`;
       params.push(estado);
     }
     
+    if (prioridad) {
+      sql += ` AND ov.prioridad = ?`;
+      params.push(prioridad);
+    }
+    
     if (fecha_inicio) {
-      sql += ' AND ov.fecha_emision >= ?';
+      sql += ` AND DATE(ov.fecha_emision) >= ?`;
       params.push(fecha_inicio);
     }
     
     if (fecha_fin) {
-      sql += ' AND ov.fecha_emision <= ?';
+      sql += ` AND DATE(ov.fecha_emision) <= ?`;
       params.push(fecha_fin);
     }
     
-    if (id_cliente) {
-      sql += ' AND ov.id_cliente = ?';
-      params.push(id_cliente);
-    }
-    
-    if (prioridad) {
-      sql += ' AND ov.prioridad = ?';
-      params.push(prioridad);
-    }
-    
-    sql += ' ORDER BY ov.fecha_emision DESC, ov.numero_orden DESC';
+    sql += ` ORDER BY ov.fecha_creacion DESC`;
     
     const result = await executeQuery(sql, params);
     
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
     res.json({
       success: true,
-      data: result.data,
-      total: result.data.length
+      data: result.data
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener órdenes de venta:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// OBTENER ORDEN DE VENTA POR ID
-// =====================================================
+// ✅ OBTENER ORDEN POR ID CON DETALLE
 export async function getOrdenVentaById(req, res) {
   try {
     const { id } = req.params;
     
-    // Cabecera
-    const cabeceraResult = await executeQuery(
-      `SELECT 
+    // Orden principal
+    const ordenResult = await executeQuery(`
+      SELECT 
         ov.*,
-        cli.razon_social AS cliente,
-        cli.ruc AS ruc_cliente,
-        cli.direccion AS direccion_cliente,
-        cli.ciudad AS ciudad_cliente,
-        cli.telefono AS telefono_cliente,
-        cli.email AS email_cliente,
-        emp.nombre_completo AS comercial,
-        emp.email AS email_comercial,
-        cot.numero_cotizacion
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente,
+        cl.telefono AS telefono_cliente,
+        e.nombre_completo AS comercial,
+        c.numero_cotizacion
       FROM ordenes_venta ov
-      INNER JOIN clientes cli ON ov.id_cliente = cli.id_cliente
-      LEFT JOIN empleados emp ON ov.id_comercial = emp.id_empleado
-      LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
-      WHERE ov.id_orden_venta = ?`,
-      [id]
-    );
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
     
-    if (cabeceraResult.data.length === 0) {
-      return res.status(404).json({ error: 'Orden de venta no encontrada' });
+    if (!ordenResult.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: ordenResult.error 
+      });
     }
     
-    // Detalle
-    const detalleResult = await executeQuery(
-      `SELECT 
-        ovd.*,
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const orden = ordenResult.data[0];
+    
+    // Detalle de la orden con info de producción/despacho
+    const detalleResult = await executeQuery(`
+      SELECT 
+        dov.*,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
-        p.stock_actual
-      FROM orden_venta_detalle ovd
-      INNER JOIN productos p ON ovd.id_producto = p.id_producto
-      WHERE ovd.id_orden_venta = ?
-      ORDER BY ovd.orden ASC`,
-      [id]
-    );
+        p.requiere_receta,
+        ti.nombre AS tipo_inventario_nombre,
+        (
+          SELECT stock_actual 
+          FROM stock_productos 
+          WHERE id_producto = dov.id_producto 
+          LIMIT 1
+        ) AS stock_disponible
+      FROM detalle_orden_venta dov
+      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+      WHERE dov.id_orden_venta = ?
+      ORDER BY dov.orden
+    `, [id]);
+    
+    if (!detalleResult.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: detalleResult.error 
+      });
+    }
+    
+    orden.detalle = detalleResult.data;
     
     res.json({
       success: true,
-      data: {
-        ...cabeceraResult.data[0],
-        detalle: detalleResult.data
-      }
+      data: orden
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener orden de venta:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// CREAR ORDEN DE VENTA
-// =====================================================
+// ✅ CREAR ORDEN DE VENTA
 export async function createOrdenVenta(req, res) {
   try {
     const {
-      id_cotizacion,
       id_cliente,
-      id_comercial,
+      id_cotizacion,
       fecha_emision,
       fecha_entrega_estimada,
+      prioridad,
       moneda,
       plazo_pago,
       forma_pago,
@@ -157,192 +193,165 @@ export async function createOrdenVenta(req, res) {
       ciudad_entrega,
       contacto_entrega,
       telefono_entrega,
-      prioridad,
       observaciones,
+      id_comercial,
       detalle
     } = req.body;
     
+    // Validaciones
     if (!id_cliente || !detalle || detalle.length === 0) {
-      return res.status(400).json({ 
-        error: 'Cliente y detalle son requeridos' 
+      return res.status(400).json({
+        success: false,
+        error: 'Cliente y detalle son obligatorios'
       });
     }
     
     // Generar número de orden
-    const year = new Date().getFullYear();
-    const lastResult = await executeQuery(
-      `SELECT numero_orden FROM ordenes_venta 
-       WHERE numero_orden LIKE ? 
-       ORDER BY id_orden_venta DESC LIMIT 1`,
-      [`OV-${year}-%`]
-    );
+    const ultimaResult = await executeQuery(`
+      SELECT numero_orden 
+      FROM ordenes_venta 
+      ORDER BY id_orden_venta DESC 
+      LIMIT 1
+    `);
     
-    let correlativo = 1;
-    if (lastResult.data.length > 0) {
-      correlativo = parseInt(lastResult.data[0].numero_orden.split('-')[2]) + 1;
+    let numeroSecuencia = 1;
+    if (ultimaResult.success && ultimaResult.data.length > 0) {
+      const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
     }
     
-    const numero_orden = `OV-${year}-${correlativo.toString().padStart(4, '0')}`;
+    const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     // Calcular totales
     let subtotal = 0;
-    detalle.forEach(item => {
-      const valorItem = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuento = valorItem * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      subtotal += valorItem - descuento;
-    });
+    for (const item of detalle) {
+      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
+      subtotal += valorVenta - descuentoItem;
+    }
     
     const igv = subtotal * 0.18;
     const total = subtotal + igv;
     
-    const queries = [];
+    // Insertar orden
+    const result = await executeQuery(`
+      INSERT INTO ordenes_venta (
+        numero_orden,
+        id_cliente,
+        id_cotizacion,
+        fecha_emision,
+        fecha_entrega_estimada,
+        prioridad,
+        moneda,
+        plazo_pago,
+        forma_pago,
+        orden_compra_cliente,
+        direccion_entrega,
+        lugar_entrega,
+        ciudad_entrega,
+        contacto_entrega,
+        telefono_entrega,
+        observaciones,
+        id_comercial,
+        subtotal,
+        igv,
+        total,
+        estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+    `, [
+      numeroOrden,
+      id_cliente,
+      id_cotizacion || null,
+      fecha_emision,
+      fecha_entrega_estimada,
+      prioridad || 'Media',
+      moneda,
+      plazo_pago,
+      forma_pago,
+      orden_compra_cliente,
+      direccion_entrega,
+      lugar_entrega,
+      ciudad_entrega,
+      contacto_entrega,
+      telefono_entrega,
+      observaciones,
+      id_comercial,
+      subtotal,
+      igv,
+      total
+    ]);
     
-    // Insertar cabecera
-    queries.push({
-      sql: `INSERT INTO ordenes_venta (
-        numero_orden, id_cotizacion, id_cliente, id_comercial, 
-        fecha_emision, fecha_entrega_estimada,
-        moneda, plazo_pago, forma_pago, orden_compra_cliente,
-        direccion_entrega, lugar_entrega, ciudad_entrega,
-        contacto_entrega, telefono_entrega,
-        subtotal, igv, total, estado, prioridad, observaciones, id_creado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [
-        numero_orden, id_cotizacion || null, id_cliente, id_comercial || null,
-        fecha_emision || new Date(), fecha_entrega_estimada || null,
-        moneda || 'PEN', plazo_pago || null, forma_pago || null, orden_compra_cliente || null,
-        direccion_entrega || null, lugar_entrega || null, ciudad_entrega || null,
-        contacto_entrega || null, telefono_entrega || null,
-        subtotal, igv, total, 'Pendiente', prioridad || 'Media', observaciones || null,
-        req.user?.id_empleado || null
-      ]
-    });
-    
-    // Insertar detalle
-    detalle.forEach((item, index) => {
-      queries.push({
-        sql: `INSERT INTO orden_venta_detalle (
-          id_orden_venta, id_producto, cantidad, precio_unitario,
-          descuento_porcentaje, requiere_produccion, orden
-        ) VALUES (LAST_INSERT_ID(), ?, ?, ?, ?, ?, ?)`,
-        params: [
-          item.id_producto,
-          item.cantidad,
-          item.precio_unitario,
-          item.descuento_porcentaje || 0,
-          item.requiere_produccion || 0,
-          index + 1
-        ]
-      });
-    });
-    
-    // Si viene de cotización, marcarla como convertida
-    if (id_cotizacion) {
-      queries.push({
-        sql: `UPDATE cotizaciones 
-              SET estado = 'Convertida', 
-                  convertida_venta = 1, 
-                  id_orden_venta = LAST_INSERT_ID()
-              WHERE id_cotizacion = ?`,
-        params: [id_cotizacion]
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
       });
     }
     
-    const result = await executeTransaction(queries);
+    const idOrden = result.data.insertId;
     
-    if (!result.success) {
-      return res.status(500).json({ error: result.error });
+    // Insertar detalle
+    for (let i = 0; i < detalle.length; i++) {
+      const item = detalle[i];
+      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
+      const valorTotal = valorVenta - descuentoItem;
+      
+      await executeQuery(`
+        INSERT INTO detalle_orden_venta (
+          id_orden_venta,
+          id_producto,
+          cantidad,
+          precio_unitario,
+          descuento_porcentaje,
+          valor_venta,
+          cantidad_producida,
+          cantidad_despachada,
+          orden
+        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)
+      `, [
+        idOrden,
+        item.id_producto,
+        item.cantidad,
+        item.precio_unitario,
+        item.descuento_porcentaje || 0,
+        valorTotal,
+        i + 1
+      ]);
+    }
+    
+    // Si viene de cotización, marcarla como convertida
+    if (id_cotizacion) {
+      await executeQuery(`
+        UPDATE cotizaciones 
+        SET estado = 'Convertida',
+            id_orden_venta = ?
+        WHERE id_cotizacion = ?
+      `, [idOrden, id_cotizacion]);
     }
     
     res.status(201).json({
       success: true,
-      message: 'Orden de venta creada exitosamente',
       data: {
-        numero_orden,
-        subtotal,
-        igv,
-        total
-      }
+        id_orden_venta: idOrden,
+        numero_orden: numeroOrden
+      },
+      message: 'Orden de venta creada exitosamente'
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al crear orden de venta:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// CONVERTIR COTIZACIÓN A ORDEN DE VENTA
-// =====================================================
-export async function convertirDesdeCotizacion(req, res) {
-  try {
-    const { id_cotizacion } = req.params;
-    
-    // Obtener cotización completa
-    const cotizacionResult = await executeQuery(
-      `SELECT c.*, cd.id_producto, cd.cantidad, cd.precio_unitario, cd.descuento_porcentaje
-       FROM cotizaciones c
-       INNER JOIN cotizacion_detalle cd ON c.id_cotizacion = cd.id_cotizacion
-       WHERE c.id_cotizacion = ?
-       ORDER BY cd.orden`,
-      [id_cotizacion]
-    );
-    
-    if (cotizacionResult.data.length === 0) {
-      return res.status(404).json({ error: 'Cotización no encontrada' });
-    }
-    
-    const cotizacion = cotizacionResult.data[0];
-    
-    // Verificar estado
-    if (cotizacion.estado !== 'Aprobada') {
-      return res.status(400).json({ 
-        error: 'Solo se pueden convertir cotizaciones aprobadas' 
-      });
-    }
-    
-    if (cotizacion.convertida_venta) {
-      return res.status(400).json({ 
-        error: 'Esta cotización ya fue convertida a orden de venta' 
-      });
-    }
-    
-    // Construir detalle
-    const detalle = cotizacionResult.data.map(row => ({
-      id_producto: row.id_producto,
-      cantidad: row.cantidad,
-      precio_unitario: row.precio_unitario,
-      descuento_porcentaje: row.descuento_porcentaje || 0,
-      requiere_produccion: 0 // Se puede calcular según lógica de negocio
-    }));
-    
-    // Crear orden de venta
-    const ordenData = {
-      id_cotizacion: cotizacion.id_cotizacion,
-      id_cliente: cotizacion.id_cliente,
-      id_comercial: cotizacion.id_comercial,
-      fecha_emision: new Date(),
-      moneda: cotizacion.moneda,
-      plazo_pago: cotizacion.plazo_pago,
-      forma_pago: cotizacion.forma_pago,
-      orden_compra_cliente: cotizacion.orden_compra_cliente,
-      lugar_entrega: cotizacion.lugar_entrega,
-      prioridad: 'Media',
-      observaciones: cotizacion.observaciones,
-      detalle
-    };
-    
-    // Usar el método create
-    req.body = ordenData;
-    await createOrdenVenta(req, res);
-    
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-}
-
-// =====================================================
-// ACTUALIZAR ESTADO
-// =====================================================
-export async function actualizarEstado(req, res) {
+// ✅ ACTUALIZAR ESTADO
+export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { estado, fecha_entrega_real } = req.body;
@@ -350,36 +359,60 @@ export async function actualizarEstado(req, res) {
     const estadosValidos = ['Pendiente', 'En Proceso', 'Despachada', 'Entregada', 'Cancelada'];
     
     if (!estadosValidos.includes(estado)) {
-      return res.status(400).json({ error: 'Estado no válido' });
+      return res.status(400).json({
+        success: false,
+        error: 'Estado no válido'
+      });
     }
     
-    let sql = 'UPDATE ordenes_venta SET estado = ?';
-    const params = [estado];
-    
-    // Si el estado es Entregada, registrar fecha
-    if (estado === 'Entregada' && fecha_entrega_real) {
-      sql += ', fecha_entrega_real = ?';
-      params.push(fecha_entrega_real);
+    // Si es "Entregada", verificar que todo esté despachado
+    if (estado === 'Entregada') {
+      const detalleResult = await executeQuery(`
+        SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?
+      `, [id]);
+      
+      const pendientes = detalleResult.data.filter(d => 
+        parseFloat(d.cantidad_despachada) < parseFloat(d.cantidad)
+      );
+      
+      if (pendientes.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se puede marcar como entregada. Hay productos pendientes de despacho.'
+        });
+      }
     }
     
-    sql += ' WHERE id_orden_venta = ?';
-    params.push(id);
+    const result = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET estado = ?,
+          fecha_entrega_real = ?
+      WHERE id_orden_venta = ?
+    `, [estado, fecha_entrega_real || null, id]);
     
-    const result = await executeQuery(sql, params);
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
-      message: `Orden de venta actualizada a estado: ${estado}`
+      message: 'Estado actualizado exitosamente'
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al actualizar estado:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// ACTUALIZAR PRIORIDAD
-// =====================================================
-export async function actualizarPrioridad(req, res) {
+// ✅ ACTUALIZAR PRIORIDAD
+export async function actualizarPrioridadOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { prioridad } = req.body;
@@ -387,95 +420,164 @@ export async function actualizarPrioridad(req, res) {
     const prioridadesValidas = ['Baja', 'Media', 'Alta', 'Urgente'];
     
     if (!prioridadesValidas.includes(prioridad)) {
-      return res.status(400).json({ error: 'Prioridad no válida' });
+      return res.status(400).json({
+        success: false,
+        error: 'Prioridad no válida'
+      });
     }
     
-    const result = await executeQuery(
-      'UPDATE ordenes_venta SET prioridad = ? WHERE id_orden_venta = ?',
-      [prioridad, id]
-    );
+    const result = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET prioridad = ? 
+      WHERE id_orden_venta = ?
+    `, [prioridad, id]);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
-      message: `Prioridad actualizada a: ${prioridad}`
+      message: 'Prioridad actualizada exitosamente'
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al actualizar prioridad:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// ACTUALIZAR CANTIDADES PRODUCIDAS/DESPACHADAS
-// =====================================================
-export async function actualizarProgreso(req, res) {
+// ✅ ACTUALIZAR PROGRESO (PRODUCCIÓN/DESPACHO)
+export async function actualizarProgresoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    const { detalle } = req.body; // [{ id_detalle, cantidad_producida, cantidad_despachada }]
+    const { detalle } = req.body;
     
-    const queries = detalle.map(item => ({
-      sql: `UPDATE orden_venta_detalle 
-            SET cantidad_producida = ?, cantidad_despachada = ?
-            WHERE id_detalle = ? AND id_orden_venta = ?`,
-      params: [
+    // Actualizar cada línea del detalle
+    for (const item of detalle) {
+      await executeQuery(`
+        UPDATE detalle_orden_venta 
+        SET cantidad_producida = ?,
+            cantidad_despachada = ?
+        WHERE id_detalle = ?
+      `, [
         item.cantidad_producida || 0,
         item.cantidad_despachada || 0,
-        item.id_detalle,
-        id
-      ]
-    }));
-    
-    const result = await executeTransaction(queries);
+        item.id_detalle
+      ]);
+    }
     
     res.json({
       success: true,
       message: 'Progreso actualizado exitosamente'
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al actualizar progreso:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 
-// =====================================================
-// ESTADÍSTICAS DEL DASHBOARD
-// =====================================================
-export async function getEstadisticas(req, res) {
+// ✅ OBTENER ESTADÍSTICAS
+export async function getEstadisticasOrdenesVenta(req, res) {
   try {
-    const { fecha_inicio, fecha_fin } = req.query;
-    
-    let whereClause = '1=1';
-    const params = [];
-    
-    if (fecha_inicio) {
-      whereClause += ' AND fecha_emision >= ?';
-      params.push(fecha_inicio);
-    }
-    
-    if (fecha_fin) {
-      whereClause += ' AND fecha_emision <= ?';
-      params.push(fecha_fin);
-    }
-    
-    const estadisticas = await executeQuery(
-      `SELECT 
+    const result = await executeQuery(`
+      SELECT 
         COUNT(*) AS total_ordenes,
         SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
         SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) AS en_proceso,
         SUM(CASE WHEN estado = 'Despachada' THEN 1 ELSE 0 END) AS despachadas,
         SUM(CASE WHEN estado = 'Entregada' THEN 1 ELSE 0 END) AS entregadas,
-        SUM(CASE WHEN estado = 'Cancelada' THEN 1 ELSE 0 END) AS canceladas,
+        SUM(CASE WHEN prioridad = 'Urgente' THEN 1 ELSE 0 END) AS urgentes,
         SUM(total) AS monto_total,
-        COUNT(DISTINCT id_cliente) AS clientes_unicos,
-        SUM(CASE WHEN prioridad = 'Urgente' THEN 1 ELSE 0 END) AS urgentes
+        COUNT(DISTINCT id_cliente) AS clientes_unicos
       FROM ordenes_venta
-      WHERE ${whereClause}`,
-      params
-    );
+      WHERE estado != 'Cancelada'
+    `);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
     
     res.json({
       success: true,
-      data: estadisticas.data[0]
+      data: result.data[0]
     });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error al obtener estadísticas:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+// ✅ DESCARGAR PDF
+export async function descargarPDFOrdenVenta(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const ordenResult = await executeQuery(`
+      SELECT 
+        ov.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente,
+        e.nombre_completo AS comercial
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden no encontrada'
+      });
+    }
+    
+    const orden = ordenResult.data[0];
+    
+    const detalleResult = await executeQuery(`
+      SELECT 
+        dov.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida
+      FROM detalle_orden_venta dov
+      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      WHERE dov.id_orden_venta = ?
+      ORDER BY dov.orden
+    `, [id]);
+    
+    orden.detalle = detalleResult.data;
+    
+    // TODO: Implementar generación de PDF
+    res.json({
+      success: true,
+      data: orden,
+      message: 'Generar PDF con estos datos'
+    });
+    
+  } catch (error) {
+    console.error('Error al descargar PDF:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }

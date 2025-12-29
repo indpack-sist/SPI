@@ -155,6 +155,7 @@ export const crearProductoMultiInventario = async (req, res, next) => {
   }
 };
 
+// ✅ FUNCIÓN CORREGIDA - getAllEntradas
 export const getAllEntradas = async (req, res, next) => {
   try {
     const { estado, id_tipo_inventario, fecha_desde, fecha_hasta } = req.query;
@@ -176,7 +177,8 @@ export const getAllEntradas = async (req, res, next) => {
         e.estado,
         COUNT(DISTINCT de.id_producto) AS num_productos,
         GROUP_CONCAT(
-          CONCAT(p.nombre, ' (', de.cantidad, ' ', p.unidad_medida, ')')
+          DISTINCT CONCAT(p.nombre, ' (', de.cantidad, ' ', p.unidad_medida, ')')
+          ORDER BY p.nombre
           SEPARATOR ', '
         ) AS productos_resumen
       FROM entradas e
@@ -210,7 +212,24 @@ export const getAllEntradas = async (req, res, next) => {
       params.push(fecha_hasta);
     }
     
-    query += ' GROUP BY e.id_entrada ORDER BY e.fecha_movimiento DESC';
+    // ✅ CORRECCIÓN: Agregar TODAS las columnas no agregadas al GROUP BY
+    query += ` 
+      GROUP BY 
+        e.id_entrada,
+        e.id_tipo_inventario,
+        ti.nombre,
+        e.id_proveedor,
+        prov.razon_social,
+        e.documento_soporte,
+        e.total_costo,
+        e.moneda,
+        e.id_registrado_por,
+        emp.nombre_completo,
+        e.fecha_movimiento,
+        e.observaciones,
+        e.estado
+      ORDER BY e.fecha_movimiento DESC
+    `;
     
     const [entradas] = await pool.query(query, params);
     

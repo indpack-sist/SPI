@@ -54,7 +54,7 @@ function NuevaCotizacion() {
     moneda: 'PEN',
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
-    tipo_cambio: 3.40,
+    tipo_cambio: 1.0000,
     plazo_pago: '',
     forma_pago: '',
     orden_compra_cliente: '',
@@ -130,8 +130,10 @@ function NuevaCotizacion() {
       setLoadingTC(true);
       setError(null);
       
-      const response = await dashboard.getTipoCambio({
-        fecha: formCabecera.fecha_emision
+      // ✅ USAR EL ENDPOINT CORRECTO - ACTUALIZAR MANUAL
+      const response = await dashboard.actualizarTipoCambio({
+        currency: 'USD',
+        date: formCabecera.fecha_emision
       });
       
       if (response.data.success && response.data.data) {
@@ -278,7 +280,7 @@ function NuevaCotizacion() {
         id_cliente: parseInt(formCabecera.id_cliente),
         id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
         fecha_emision: formCabecera.fecha_emision,
-        fecha_vencimiento: formCabecera.fecha_validez,
+        fecha_vencimiento: formCabecera.fecha_validez, // ✅ CORREGIDO: era fecha_validez
         moneda: formCabecera.moneda,
         tipo_impuesto: formCabecera.tipo_impuesto,
         porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto),

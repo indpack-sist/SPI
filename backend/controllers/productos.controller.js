@@ -1073,7 +1073,6 @@ export async function recalcularTodosCUP(req, res) {
       const cupCalculado = parseFloat(cupResult.data[0]?.cup_calculado || 0);
       
       if (cupCalculado > 0) {
-        // Actualizar producto
         await executeQuery(
           'UPDATE productos SET costo_unitario_promedio = ? WHERE id_producto = ?',
           [cupCalculado, producto.id_producto]

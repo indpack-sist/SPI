@@ -1,7 +1,5 @@
-// backend/controllers/guias-transportista.controller.js
 import { executeQuery } from '../config/database.js';
 
-// ✅ OBTENER TODAS LAS GUÍAS CON FILTROS
 export async function getAllGuiasTransportista(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin } = req.query;
@@ -75,12 +73,10 @@ export async function getAllGuiasTransportista(req, res) {
   }
 }
 
-// ✅ OBTENER GUÍA POR ID CON DETALLE COMPLETO
 export async function getGuiaTransportistaById(req, res) {
   try {
     const { id } = req.params;
     
-    // Guía de transportista con datos de remisión
     const result = await executeQuery(`
       SELECT 
         gt.*,
@@ -135,7 +131,6 @@ export async function getGuiaTransportistaById(req, res) {
   }
 }
 
-// ✅ CREAR GUÍA DE TRANSPORTISTA
 export async function createGuiaTransportista(req, res) {
   try {
     const {
@@ -155,7 +150,6 @@ export async function createGuiaTransportista(req, res) {
       observaciones
     } = req.body;
     
-    // Validaciones
     if (!id_guia_remision) {
       return res.status(400).json({
         success: false,
@@ -184,7 +178,6 @@ export async function createGuiaTransportista(req, res) {
       });
     }
     
-    // Verificar que la guía de remisión existe
     const guiaRemisionResult = await executeQuery(`
       SELECT id_guia_remision FROM guias_remision WHERE id_guia = ?
     `, [id_guia_remision]);
@@ -196,7 +189,6 @@ export async function createGuiaTransportista(req, res) {
       });
     }
     
-    // Verificar que no tenga ya una guía de transportista
     const guiaExistenteResult = await executeQuery(`
       SELECT id_guia_transportista 
       FROM guias_transportista 
@@ -210,7 +202,6 @@ export async function createGuiaTransportista(req, res) {
       });
     }
     
-    // Generar número de guía
     const ultimaResult = await executeQuery(`
       SELECT numero_guia 
       FROM guias_transportista 
@@ -228,7 +219,6 @@ export async function createGuiaTransportista(req, res) {
     
     const numeroGuia = `GT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // Insertar guía de transportista
     const result = await executeQuery(`
       INSERT INTO guias_transportista (
         numero_guia,
@@ -291,7 +281,6 @@ export async function createGuiaTransportista(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR ESTADO
 export async function actualizarEstadoGuiaTransportista(req, res) {
   try {
     const { id } = req.params;
@@ -333,7 +322,6 @@ export async function actualizarEstadoGuiaTransportista(req, res) {
   }
 }
 
-// ✅ OBTENER TRANSPORTISTAS FRECUENTES
 export async function getTransportistasFrecuentes(req, res) {
   try {
     const result = await executeQuery(`
@@ -368,7 +356,6 @@ export async function getTransportistasFrecuentes(req, res) {
   }
 }
 
-// ✅ OBTENER CONDUCTORES FRECUENTES
 export async function getConductoresFrecuentes(req, res) {
   try {
     const result = await executeQuery(`
@@ -405,7 +392,6 @@ export async function getConductoresFrecuentes(req, res) {
   }
 }
 
-// ✅ OBTENER VEHÍCULOS FRECUENTES
 export async function getVehiculosFrecuentes(req, res) {
   try {
     const result = await executeQuery(`
@@ -442,7 +428,6 @@ export async function getVehiculosFrecuentes(req, res) {
   }
 }
 
-// ✅ OBTENER ESTADÍSTICAS
 export async function getEstadisticasGuiasTransportista(req, res) {
   try {
     const result = await executeQuery(`
@@ -478,7 +463,6 @@ export async function getEstadisticasGuiasTransportista(req, res) {
   }
 }
 
-// ✅ DESCARGAR PDF
 export async function descargarPDFGuiaTransportista(req, res) {
   try {
     const { id } = req.params;
@@ -512,7 +496,6 @@ export async function descargarPDFGuiaTransportista(req, res) {
       });
     }
     
-    // TODO: Implementar generación de PDF
     res.json({
       success: true,
       data: result.data[0],

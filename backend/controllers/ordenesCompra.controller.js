@@ -1,7 +1,6 @@
 // backend/controllers/ordenes-compra.controller.js
 import { executeQuery } from '../config/database.js';
 
-// ✅ OBTENER TODAS LAS ÓRDENES CON FILTROS
 export async function getAllOrdenesCompra(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin } = req.query;
@@ -74,7 +73,6 @@ export async function getAllOrdenesCompra(req, res) {
   }
 }
 
-// ✅ OBTENER ORDEN POR ID CON DETALLE
 export async function getOrdenCompraById(req, res) {
   try {
     const { id } = req.params;
@@ -154,7 +152,6 @@ export async function getOrdenCompraById(req, res) {
   }
 }
 
-// ✅ CREAR ORDEN DE COMPRA
 export async function createOrdenCompra(req, res) {
   try {
     const {
@@ -179,7 +176,6 @@ export async function createOrdenCompra(req, res) {
       });
     }
     
-    // Generar número de orden
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_compra 
@@ -197,7 +193,6 @@ export async function createOrdenCompra(req, res) {
     
     const numeroOrden = `OC-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // Calcular totales
     let subtotal = 0;
     for (const item of detalle) {
       const valorCompra = parseFloat(item.cantidad) * parseFloat(item.valor_unitario);
@@ -207,7 +202,6 @@ export async function createOrdenCompra(req, res) {
     const igv = subtotal * 0.18;
     const total = subtotal + igv;
     
-    // Insertar orden
     const result = await executeQuery(`
       INSERT INTO ordenes_compra (
         numero_orden,
@@ -252,7 +246,6 @@ export async function createOrdenCompra(req, res) {
     
     const idOrden = result.data.insertId;
     
-    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const valorCompra = parseFloat(item.cantidad) * parseFloat(item.valor_unitario);
@@ -294,7 +287,6 @@ export async function createOrdenCompra(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR ESTADO
 export async function actualizarEstadoOrdenCompra(req, res) {
   try {
     const { id } = req.params;
@@ -312,7 +304,6 @@ export async function actualizarEstadoOrdenCompra(req, res) {
     let sql = 'UPDATE ordenes_compra SET estado = ?';
     const params = [estado];
     
-    // Si es confirmada, agregar fecha de confirmación
     if (estado === 'Confirmada') {
       sql += ', fecha_confirmacion = NOW()';
     }
@@ -343,13 +334,11 @@ export async function actualizarEstadoOrdenCompra(req, res) {
   }
 }
 
-// ✅ RECIBIR ORDEN (GENERA ENTRADAS AUTOMÁTICAS Y ACTUALIZA CUP)
 export async function recibirOrdenCompra(req, res) {
   try {
     const { id } = req.params;
     const { fecha_recepcion, observaciones } = req.body;
     
-    // Obtener orden de compra
     const ordenResult = await executeQuery(`
       SELECT * FROM ordenes_compra WHERE id_orden_compra = ?
     `, [id]);
@@ -370,7 +359,6 @@ export async function recibirOrdenCompra(req, res) {
       });
     }
     
-    // Obtener detalle
     const detalleResult = await executeQuery(`
       SELECT doc.*, p.id_tipo_inventario
       FROM detalle_orden_compra doc
@@ -387,7 +375,6 @@ export async function recibirOrdenCompra(req, res) {
     
     const detalle = detalleResult.data;
     
-    // Generar código de entrada
     const ultimaEntradaResult = await executeQuery(`
       SELECT codigo FROM entradas 
       ORDER BY id_entrada DESC 
@@ -404,9 +391,7 @@ export async function recibirOrdenCompra(req, res) {
     
     const codigoEntrada = `ENT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(6, '0')}`;
     
-    // Procesar cada producto
     for (const item of detalle) {
-      // Insertar entrada
       await executeQuery(`
         INSERT INTO entradas (
           codigo,
@@ -432,17 +417,14 @@ export async function recibirOrdenCompra(req, res) {
         id
       ]);
       
-      // Verificar stock existente
       const stockResult = await executeQuery(`
         SELECT * FROM stock_productos WHERE id_producto = ?
       `, [item.id_producto]);
       
       if (stockResult.success && stockResult.data.length > 0) {
-        // Actualizar stock existente con nuevo CUP
         const stock = stockResult.data[0];
         const nuevaCantidad = parseFloat(stock.stock_actual) + parseFloat(item.cantidad);
         
-        // Calcular nuevo CUP (Costo Unitario Promedio)
         const costoTotalAnterior = parseFloat(stock.stock_actual) * parseFloat(stock.costo_unitario_promedio);
         const costoTotalNuevo = parseFloat(item.valor_compra);
         const nuevoCUP = (costoTotalAnterior + costoTotalNuevo) / nuevaCantidad;
@@ -455,7 +437,6 @@ export async function recibirOrdenCompra(req, res) {
           WHERE id_producto = ?
         `, [nuevaCantidad, nuevoCUP, item.id_producto]);
       } else {
-        // Crear nuevo registro de stock
         await executeQuery(`
           INSERT INTO stock_productos (
             id_producto,
@@ -473,7 +454,6 @@ export async function recibirOrdenCompra(req, res) {
       }
     }
     
-    // Actualizar estado de la orden
     await executeQuery(`
       UPDATE ordenes_compra 
       SET estado = 'Recibida',
@@ -495,7 +475,6 @@ export async function recibirOrdenCompra(req, res) {
   }
 }
 
-// ✅ OBTENER PRODUCTOS POR PROVEEDOR (HISTORIAL)
 export async function getProductosPorProveedor(req, res) {
   try {
     const { id } = req.params;
@@ -539,7 +518,6 @@ export async function getProductosPorProveedor(req, res) {
   }
 }
 
-// ✅ OBTENER ESTADÍSTICAS
 export async function getEstadisticasOrdenesCompra(req, res) {
   try {
     const result = await executeQuery(`
@@ -576,7 +554,6 @@ export async function getEstadisticasOrdenesCompra(req, res) {
   }
 }
 
-// ✅ DESCARGAR PDF
 export async function descargarPDFOrdenCompra(req, res) {
   try {
     const { id } = req.params;
@@ -617,7 +594,6 @@ export async function descargarPDFOrdenCompra(req, res) {
     
     orden.detalle = detalleResult.data;
     
-    // TODO: Implementar generación de PDF
     res.json({
       success: true,
       data: orden,

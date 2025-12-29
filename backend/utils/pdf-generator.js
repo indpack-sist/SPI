@@ -116,10 +116,6 @@ function agregarPiePagina(doc, textoPie) {
     doc.text(`Página ${i + 1} de ${pageCount}`, 50, 780, { width: 495, align: 'center' });
   }
 }
-
-// =====================================================
-// PDF ENTRADA
-// =====================================================
 export async function generarPDFEntrada(datos) {
   return new Promise((resolve, reject) => {
     try {
@@ -222,10 +218,6 @@ export async function generarPDFEntrada(datos) {
     }
   });
 }
-
-// =====================================================
-// PDF SALIDA
-// =====================================================
 export async function generarPDFSalida(datos) {
   return new Promise((resolve, reject) => {
     try {
@@ -334,10 +326,6 @@ export async function generarPDFSalida(datos) {
     }
   });
 }
-
-// =====================================================
-// PDF TRANSFERENCIA
-// =====================================================
 export async function generarPDFTransferencia(datos) {
   return new Promise((resolve, reject) => {
     try {
@@ -438,10 +426,6 @@ export async function generarPDFTransferencia(datos) {
     }
   });
 }
-
-// =====================================================
-// PDF ORDEN DE PRODUCCIÓN
-// =====================================================
 export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
   return new Promise((resolve, reject) => {
     try {
@@ -538,10 +522,6 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
     }
   });
 }
-
-// =====================================================
-// PDF COTIZACIÓN
-// =====================================================
 export async function generarPDFCotizacion(cotizacion, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -667,10 +647,6 @@ export async function generarPDFCotizacion(cotizacion, stream) {
   
   doc.end();
 }
-
-// =====================================================
-// PDF ORDEN DE VENTA
-// =====================================================
 export async function generarPDFOrdenVenta(orden, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -784,10 +760,6 @@ export async function generarPDFOrdenVenta(orden, stream) {
   
   doc.end();
 }
-
-// =====================================================
-// PDF GUÍA DE REMISIÓN
-// =====================================================
 export async function generarPDFGuiaRemision(guia, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -887,10 +859,6 @@ export async function generarPDFGuiaRemision(guia, stream) {
   
   doc.end();
 }
-
-// =====================================================
-// PDF GUÍA DE TRANSPORTISTA
-// =====================================================
 export async function generarPDFGuiaTransportista(guia, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -980,9 +948,6 @@ export async function generarPDFGuiaTransportista(guia, stream) {
   doc.end();
 }
 
-// =====================================================
-// PDF ORDEN DE COMPRA
-// =====================================================
 export async function generarPDFOrdenCompra(orden, stream) {
   const doc = new PDFDocument({
     size: 'A4',

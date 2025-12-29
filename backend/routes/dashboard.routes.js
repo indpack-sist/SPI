@@ -53,6 +53,6 @@ router.get('/top-productos', dashboardController.obtenerTopProductos);
  *   - currency (default: USD)
  *   - date (opcional, formato: YYYY-MM-DD)
  */
-router.get('/actualizar-tipo-cambio', dashboardController.actualizarTipoCambioManual);
+router.get('/tipo-cambio/actualizar', actualizarTipoCambioManual);
 
 export default router;

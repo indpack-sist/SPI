@@ -82,7 +82,7 @@ export async function getAllCotizaciones(req, res) {
   }
 }
 
-// ✅ OBTENER COTIZACIÓN POR ID CON DETALLE
+// ✅ OBTENER COTIZACIÓN POR ID CON DETALLE - CORREGIDO
 export async function getCotizacionById(req, res) {
   try {
     const { id } = req.params;
@@ -120,7 +120,7 @@ export async function getCotizacionById(req, res) {
     
     const cotizacion = cotizacionResult.data[0];
     
-    // Detalle de la cotización
+    // ✅ CORREGIDO: Detalle usando productos.stock_actual directamente
     const detalleResult = await executeQuery(`
       SELECT 
         dc.*,
@@ -129,12 +129,7 @@ export async function getCotizacionById(req, res) {
         p.unidad_medida,
         ti.nombre AS tipo_inventario_nombre,
         p.requiere_receta,
-        (
-          SELECT stock_actual 
-          FROM stock_productos 
-          WHERE id_producto = dc.id_producto 
-          LIMIT 1
-        ) AS stock_disponible
+        p.stock_actual AS stock_disponible
       FROM detalle_cotizacion dc
       INNER JOIN productos p ON dc.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario

@@ -18,6 +18,9 @@ export async function getAllCotizaciones(req, res) {
         c.igv,
         c.total,
         c.moneda,
+        c.tipo_impuesto,
+        c.porcentaje_impuesto,
+        c.tipo_cambio,
         c.observaciones,
         c.fecha_creacion,
         cl.id_cliente,
@@ -171,11 +174,18 @@ export async function createCotizacion(req, res) {
       fecha_vencimiento,
       prioridad,
       moneda,
+      tipo_impuesto,
+      porcentaje_impuesto,
+      tipo_cambio,
       plazo_pago,
       forma_pago,
       direccion_entrega,
       observaciones,
       id_comercial,
+      validez_dias,
+      plazo_entrega,
+      orden_compra_cliente,
+      lugar_entrega,
       detalle
     } = req.body;
     
@@ -213,10 +223,12 @@ export async function createCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    const igv = subtotal * 0.18;
+    // ✅ Calcular impuesto con porcentaje dinámico
+    const porcentaje = parseFloat(porcentaje_impuesto) || 18.00;
+    const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
     
-    // Insertar cotización
+    // Insertar cotización con nuevos campos
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
         numero_cotizacion,
@@ -225,28 +237,42 @@ export async function createCotizacion(req, res) {
         fecha_vencimiento,
         prioridad,
         moneda,
+        tipo_impuesto,
+        porcentaje_impuesto,
+        tipo_cambio,
         plazo_pago,
         forma_pago,
         direccion_entrega,
         observaciones,
         id_comercial,
+        validez_dias,
+        plazo_entrega,
+        orden_compra_cliente,
+        lugar_entrega,
         subtotal,
         igv,
         total,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
     `, [
       numeroCotizacion,
       id_cliente,
-      fecha_emision,
-      fecha_vencimiento,
+      fecha_emision || new Date().toISOString().split('T')[0],
+      fecha_vencimiento || null,
       prioridad || 'Media',
-      moneda,
-      plazo_pago,
-      forma_pago,
-      direccion_entrega,
-      observaciones,
-      id_comercial,
+      moneda || 'PEN',
+      tipo_impuesto || 'IGV',
+      porcentaje || 18.00,
+      parseFloat(tipo_cambio) || 1.0000,
+      plazo_pago || null,
+      forma_pago || null,
+      direccion_entrega || null,
+      observaciones || null,
+      id_comercial || null,
+      parseInt(validez_dias) || 7,
+      plazo_entrega || null,
+      orden_compra_cliente || null,
+      lugar_entrega || null,
       subtotal,
       igv,
       total

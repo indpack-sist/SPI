@@ -1,7 +1,7 @@
 // frontend/src/pages/Ventas/Cotizaciones.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, Download, Filter, FileText } from 'lucide-react';
+import { Plus, Eye, Download, Filter, FileText, DollarSign, Percent } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -24,7 +24,6 @@ function Cotizaciones() {
       setLoading(true);
       setError(null);
       
-      // ✅ INTEGRACIÓN CON API REAL
       const filtros = {};
       if (filtroEstado) {
         filtros.estado = filtroEstado;
@@ -48,7 +47,7 @@ function Cotizaciones() {
 
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
+    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
   const getEstadoBadge = (estado) => {
@@ -59,6 +58,21 @@ function Cotizaciones() {
       'Convertida': 'badge-primary'
     };
     return badges[estado] || 'badge-secondary';
+  };
+
+  // ✅ Mapeo de códigos de impuesto a nombres
+  const getTipoImpuestoNombre = (codigo) => {
+    const tipos = {
+      'IGV': '18% IGV',
+      'IGV3': '6% IGV',
+      'IGV4': '18%',
+      'GRA': '0% Gratis',
+      '6%': '6%',
+      'EXO': '0% Exonerado',
+      'INA': 'Inafecto',
+      'EXP': 'Exportación'
+    };
+    return tipos[codigo] || codigo || 'IGV';
   };
 
   const columns = [
@@ -81,6 +95,47 @@ function Cotizaciones() {
         <div>
           <div className="font-medium">{value}</div>
           <div className="text-xs text-muted">RUC: {row.ruc_cliente}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Moneda',
+      accessor: 'moneda',
+      width: '80px',
+      align: 'center',
+      render: (value) => (
+        <span className="badge badge-info">{value}</span>
+      )
+    },
+    // ✅ NUEVA COLUMNA: Tipo de Cambio
+    {
+      header: 'T.C.',
+      accessor: 'tipo_cambio',
+      width: '90px',
+      align: 'right',
+      render: (value, row) => {
+        // Solo mostrar si es USD o si TC es diferente de 1
+        if (row.moneda === 'USD' || (value && parseFloat(value) !== 1.0000)) {
+          return (
+            <div className="text-xs">
+              <DollarSign size={12} className="inline" />
+              {parseFloat(value || 1).toFixed(4)}
+            </div>
+          );
+        }
+        return '-';
+      }
+    },
+    // ✅ NUEVA COLUMNA: Tipo de Impuesto
+    {
+      header: 'Impuesto',
+      accessor: 'tipo_impuesto',
+      width: '110px',
+      align: 'center',
+      render: (value, row) => (
+        <div className="text-xs">
+          <Percent size={12} className="inline" />
+          {getTipoImpuestoNombre(value)}
         </div>
       )
     },

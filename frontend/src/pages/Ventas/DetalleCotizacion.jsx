@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, Check, FileText, Calendar,
   DollarSign, Building, Clock, ShoppingCart, AlertCircle,
-  CheckCircle, XCircle, Calculator
+  CheckCircle, XCircle, Calculator, Percent, TrendingUp
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -137,6 +137,21 @@ function DetalleCotizacion() {
     if (!cotizacion) return '-';
     const simbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+  };
+
+  // ✅ Mapeo de tipos de impuesto
+  const getTipoImpuestoNombre = (codigo) => {
+    const tipos = {
+      'IGV': '18% (Incluye IGV)',
+      'IGV3': '6% (Incluye IGV)',
+      'IGV4': '18%',
+      'GRA': '0% Gratis - Exonerado',
+      '6%': '6%',
+      'EXO': '0% Exonerado',
+      'INA': 'Inafecto',
+      'EXP': 'Exportación'
+    };
+    return tipos[codigo] || codigo || 'IGV (18%)';
   };
 
   const getEstadoConfig = (estado) => {
@@ -409,15 +424,45 @@ function DetalleCotizacion() {
                   {cotizacion.moneda === 'USD' ? 'Dólares (USD)' : 'Soles (PEN)'}
                 </p>
               </div>
+              {/* ✅ TIPO DE CAMBIO */}
+              {(cotizacion.moneda === 'USD' || (cotizacion.tipo_cambio && parseFloat(cotizacion.tipo_cambio) !== 1.0000)) && (
+                <div>
+                  <label className="text-sm font-medium text-muted flex items-center gap-1">
+                    <TrendingUp size={14} />
+                    Tipo de Cambio:
+                  </label>
+                  <p className="font-bold text-primary">
+                    S/ {parseFloat(cotizacion.tipo_cambio || 1).toFixed(4)}
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* ✅ TIPO DE IMPUESTO Y PORCENTAJE */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <label className="text-sm font-medium text-muted flex items-center gap-1">
+                <Percent size={14} />
+                Tipo de Impuesto:
+              </label>
+              <p className="font-bold text-primary">
+                {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}
+              </p>
+              {cotizacion.porcentaje_impuesto !== undefined && (
+                <p className="text-xs text-muted mt-1">
+                  Porcentaje aplicado: {parseFloat(cotizacion.porcentaje_impuesto).toFixed(2)}%
+                </p>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mt-2">
               <div>
                 <label className="text-sm font-medium text-muted">Plazo de Pago:</label>
                 <p>{cotizacion.plazo_pago || '-'}</p>
               </div>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-muted">Forma de Pago:</label>
-              <p>{cotizacion.forma_pago || '-'}</p>
+              <div>
+                <label className="text-sm font-medium text-muted">Forma de Pago:</label>
+                <p>{cotizacion.forma_pago || '-'}</p>
+              </div>
             </div>
             
             {cotizacion.direccion_entrega && (
@@ -485,7 +530,9 @@ function DetalleCotizacion() {
                 <span className="font-bold">{formatearMoneda(cotizacion.subtotal)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="font-medium">IGV (18%):</span>
+                <span className="font-medium">
+                  {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
+                </span>
                 <span className="font-bold">{formatearMoneda(cotizacion.igv)}</span>
               </div>
               <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg">

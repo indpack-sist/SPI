@@ -8,23 +8,17 @@ export async function getAllGuiasRemision(req, res) {
     
     let sql = `
       SELECT 
-        gr.id_guia_remision,
+        gr.id_guia,
         gr.numero_guia,
         gr.fecha_emision,
-        gr.fecha_inicio_traslado,
-        gr.fecha_entrega,
+        gr.fecha_traslado,
         gr.estado,
-        gr.tipo_traslado,
-        gr.modalidad_transporte,
-        gr.direccion_llegada,
-        gr.ciudad_llegada,
-        gr.peso_bruto_kg,
-        gr.numero_bultos,
+        gr.punto_partida,
+        gr.punto_llegada,
         ov.numero_orden,
         ov.id_orden_venta,
         cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente,
-        (SELECT COUNT(*) FROM detalle_guia_remision WHERE id_guia_remision = gr.id_guia_remision) AS total_items
+        cl.ruc AS ruc_cliente
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
@@ -48,7 +42,7 @@ export async function getAllGuiasRemision(req, res) {
       params.push(fecha_fin);
     }
     
-    sql += ` ORDER BY gr.fecha_creacion DESC`;
+    sql += ` ORDER BY gr.fecha_emision DESC, gr.id_guia DESC`;
     
     const result = await executeQuery(sql, params);
     
@@ -85,12 +79,11 @@ export async function getGuiaRemisionById(req, res) {
         ov.numero_orden,
         ov.id_orden_venta,
         cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente,
-        cl.direccion_despacho AS direccion_cliente
+        cl.ruc AS ruc_cliente
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      WHERE gr.id_guia_remision = ?
+      WHERE gr.id_guia = ?
     `, [id]);
     
     if (!guiaResult.success) {
@@ -118,7 +111,7 @@ export async function getGuiaRemisionById(req, res) {
         p.unidad_medida
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
-      WHERE dgr.id_guia_remision = ?
+      WHERE dgr.id_guia = ?
       ORDER BY dgr.orden
     `, [id]);
     

@@ -19,7 +19,7 @@ export async function getAllGuiasTransportista(req, res) {
         gt.placa_vehiculo,
         gt.marca_vehiculo,
         gr.numero_guia AS numero_guia_remision,
-        gr.id_guia_remision,
+        gr.id_guia,
         gr.ciudad_llegada,
         gr.peso_bruto_kg,
         ov.numero_orden,
@@ -27,7 +27,7 @@ export async function getAllGuiasTransportista(req, res) {
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente
       FROM guias_transportista gt
-      INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia_remision
+      INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE 1=1
@@ -85,7 +85,7 @@ export async function getGuiaTransportistaById(req, res) {
       SELECT 
         gt.*,
         gr.numero_guia AS numero_guia_remision,
-        gr.id_guia_remision,
+        gr.id_guia,
         gr.direccion_partida,
         gr.ubigeo_partida,
         gr.direccion_llegada,
@@ -101,7 +101,7 @@ export async function getGuiaTransportistaById(req, res) {
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente
       FROM guias_transportista gt
-      INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia_remision
+      INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE gt.id_guia_transportista = ?
@@ -186,7 +186,7 @@ export async function createGuiaTransportista(req, res) {
     
     // Verificar que la guía de remisión existe
     const guiaRemisionResult = await executeQuery(`
-      SELECT id_guia_remision FROM guias_remision WHERE id_guia_remision = ?
+      SELECT id_guia_remision FROM guias_remision WHERE id_guia = ?
     `, [id_guia_remision]);
     
     if (!guiaRemisionResult.success || guiaRemisionResult.data.length === 0) {
@@ -200,7 +200,7 @@ export async function createGuiaTransportista(req, res) {
     const guiaExistenteResult = await executeQuery(`
       SELECT id_guia_transportista 
       FROM guias_transportista 
-      WHERE id_guia_remision = ?
+      WHERE id_guia = ?
     `, [id_guia_remision]);
     
     if (guiaExistenteResult.success && guiaExistenteResult.data.length > 0) {
@@ -499,7 +499,7 @@ export async function descargarPDFGuiaTransportista(req, res) {
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente
       FROM guias_transportista gt
-      INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia_remision
+      INNER JOIN guias_remision gr ON gt.id_guia_remision = gr.id_guia
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE gt.id_guia_transportista = ?

@@ -121,9 +121,21 @@ export async function getCotizacionById(req, res) {
     const cotizacion = cotizacionResult.data[0];
     
     // ✅ CORREGIDO: Detalle usando productos.stock_actual directamente
+    // También corregido: id_detalle en lugar de id_detalle_cotizacion
     const detalleResult = await executeQuery(`
       SELECT 
-        dc.*,
+        dc.id_detalle,
+        dc.id_cotizacion,
+        dc.id_producto,
+        dc.cantidad,
+        dc.precio_unitario,
+        dc.descuento_porcentaje,
+        dc.valor_venta,
+        dc.subtotal,
+        dc.tiene_stock,
+        dc.requiere_produccion,
+        dc.observaciones,
+        dc.orden,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
@@ -285,10 +297,9 @@ export async function createCotizacion(req, res) {
     // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      const valorTotal = valorVenta - descuentoItem;
       
+      // ✅ CORREGIDO: No calcular valor_venta y subtotal (son GENERATED)
+      // Solo insertar los campos que acepta la tabla
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
           id_cotizacion,
@@ -296,16 +307,14 @@ export async function createCotizacion(req, res) {
           cantidad,
           precio_unitario,
           descuento_porcentaje,
-          valor_venta,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?)
       `, [
         idCotizacion,
         item.id_producto,
         item.cantidad,
         item.precio_unitario,
         item.descuento_porcentaje || 0,
-        valorTotal,
         i + 1
       ]);
     }

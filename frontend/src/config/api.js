@@ -236,7 +236,7 @@ export const inventarioAPI = {
 };
 
 // ============================================
-// DASHBOARD
+// ✅ DASHBOARD - CORREGIDO
 // ============================================
 export const dashboard = {
   // Resumen general (NO consume API - usa cache)
@@ -254,11 +254,12 @@ export const dashboard = {
   // Top productos
   getTopProductos: (params) => api.get('/dashboard/top-productos', { params }),
   
-  // Tipo de cambio
+  // ✅ CORREGIDO: Tipo de cambio desde cache (NO consume token)
   getTipoCambio: (params) => api.get('/dashboard/tipo-cambio', { params }),
   
-  // Actualizar tipo de cambio MANUALMENTE (CONSUME TOKEN)
-  actualizarTipoCambio: (params) => api.get('/dashboard/actualizar-tipo-cambio', { params })
+  // ✅ CORREGIDO: Actualizar tipo de cambio MANUALMENTE (CONSUME TOKEN)
+  // Endpoint debe coincidir con el backend: /dashboard/tipo-cambio/actualizar
+  actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
 
 // ============================================

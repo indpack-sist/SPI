@@ -22,15 +22,10 @@ router.get('/estadisticas', getEstadisticasCotizaciones);
 router.get('/', getAllCotizaciones);
 router.post('/', createCotizacion);
 
-// ============================================
-// RUTAS CON :id (ORDEN IMPORTANTE)
-// ============================================
-// ✅ RUTAS ESPECÍFICAS PRIMERO (antes del GET /:id)
 router.get('/:id/pdf', descargarPDFCotizacion);
 router.put('/:id/estado', actualizarEstadoCotizacion);
 router.put('/:id/prioridad', actualizarPrioridadCotizacion);
 
-// ✅ RUTAS GENERICAS AL FINAL
 router.get('/:id', getCotizacionById);
 
 export default router;

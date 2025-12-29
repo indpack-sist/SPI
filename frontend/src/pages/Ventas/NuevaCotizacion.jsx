@@ -54,7 +54,7 @@ function NuevaCotizacion() {
     moneda: 'PEN',
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
-    tipo_cambio: 1.0000,
+    tipo_cambio: 3.40,
     plazo_pago: '',
     forma_pago: '',
     orden_compra_cliente: '',
@@ -136,19 +136,21 @@ function NuevaCotizacion() {
       
       if (response.data.success && response.data.data) {
         const tc = response.data.data;
-        setTipoCambio(tc.venta || tc.compra || 1.0000);
-        setTipoCambioFecha(tc.fecha);
+        const valorTC = tc.venta || tc.compra || tc.tipo_cambio || 1.0000;
+        setTipoCambio(valorTC);
+        setTipoCambioFecha(tc.fecha || formCabecera.fecha_emision);
         setFormCabecera({
           ...formCabecera,
-          tipo_cambio: parseFloat(tc.venta || tc.compra || 1.0000)
+          tipo_cambio: parseFloat(valorTC)
         });
-        setSuccess(`Tipo de cambio actualizado: S/ ${tc.venta || tc.compra}`);
+        setSuccess(`Tipo de cambio actualizado: S/ ${parseFloat(valorTC).toFixed(4)}`);
       } else {
-        setError('No se pudo obtener el tipo de cambio');
+        setError('No se pudo obtener el tipo de cambio. Ingrese manualmente.');
       }
     } catch (err) {
       console.error('Error al obtener TC:', err);
-      setError('Error al obtener tipo de cambio: ' + (err.response?.data?.error || err.message));
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Servicio no disponible';
+      setError(`Tipo de cambio: ${errorMsg}. Puede ingresar manualmente.`);
     } finally {
       setLoadingTC(false);
     }
@@ -488,7 +490,7 @@ function NuevaCotizacion() {
                 </select>
               </div>
               
-              {/* ✅ TIPO DE CAMBIO CON BOTÓN */}
+              {/* ✅ TIPO DE CAMBIO CON BOTÓN - EDITABLE MANUALMENTE */}
               <div className="form-group">
                 <label className="form-label">Tipo de Cambio</label>
                 <div className="flex gap-2">
@@ -499,15 +501,14 @@ function NuevaCotizacion() {
                     onChange={(e) => setFormCabecera({ ...formCabecera, tipo_cambio: e.target.value })}
                     step="0.0001"
                     min="0"
-                    readOnly={!tipoCambio}
-                    style={tipoCambio ? {} : { backgroundColor: 'var(--bg-secondary)' }}
+                    placeholder="1.0000"
                   />
                   <button
                     type="button"
                     className="btn btn-primary"
                     onClick={obtenerTipoCambio}
                     disabled={loadingTC}
-                    title="Obtener tipo de cambio actual"
+                    title="Obtener tipo de cambio desde API"
                   >
                     {loadingTC ? (
                       <RefreshCw size={18} className="animate-spin" />
@@ -517,10 +518,13 @@ function NuevaCotizacion() {
                   </button>
                 </div>
                 {tipoCambioFecha && (
-                  <p className="text-xs text-muted mt-1">
-                    Actualizado: {new Date(tipoCambioFecha).toLocaleDateString()}
+                  <p className="text-xs text-success mt-1">
+                    ✓ TC API: {new Date(tipoCambioFecha).toLocaleDateString()}
                   </p>
                 )}
+                <p className="text-xs text-muted mt-1">
+                  Ingrese manualmente o use el botón para obtener desde API
+                </p>
               </div>
               
               <div className="form-group">

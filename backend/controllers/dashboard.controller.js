@@ -5,12 +5,8 @@ import {
   convertirPENaUSD 
 } from '../services/tipo-cambio.service.js';
 
-// ============================================
-// OBTENER TIPO DE CAMBIO ACTUAL (SIN CONSUMIR API)
-// ============================================
 export const obtenerTipoCambioActual = async (req, res) => {
   try {
-    // ⚠️ SOLO DESDE CACHE - NO CONSUME API
     const tipoCambio = obtenerTipoCambioCache();
     
     res.json({ 
@@ -26,16 +22,12 @@ export const obtenerTipoCambioActual = async (req, res) => {
   }
 };
 
-// ============================================
-// ACTUALIZAR TIPO DE CAMBIO MANUALMENTE (CONSUME API)
-// ============================================
 export const actualizarTipoCambioManual = async (req, res) => {
   try {
     console.log('🔴 CONSUMIENDO API DE TIPO DE CAMBIO - ACCIÓN MANUAL');
     
     const { currency = 'USD', date = null } = req.query;
     
-    // ⚠️ ESTA FUNCIÓN SÍ CONSUME UN TOKEN DE LA API
     const tipoCambio = await actualizarTipoCambio(currency, date);
 
     if (tipoCambio.valido) {
@@ -60,12 +52,8 @@ export const actualizarTipoCambioManual = async (req, res) => {
   }
 };
 
-// ============================================
-// RESUMEN GENERAL (SIN CONSUMIR API)
-// ============================================
 export const obtenerResumenGeneral = async (req, res) => {
   try {
-    // ⚠️ SOLO DESDE CACHE - NO CONSUME API
     const tipoCambio = obtenerTipoCambioCache();
     
     const productosActivosResult = await executeQuery(
@@ -206,7 +194,6 @@ export const obtenerResumenGeneral = async (req, res) => {
           : parseFloat(tipo.valor_venta) / 3.765
       })),
       
-      // Totales generales
       valor_total_produccion_pen: parseFloat(valor_total_produccion_pen.toFixed(2)),
       valor_total_produccion_usd: parseFloat(valor_total_produccion_usd.toFixed(2)),
       valor_total_venta_pen: parseFloat(valor_total_venta_pen.toFixed(2)),

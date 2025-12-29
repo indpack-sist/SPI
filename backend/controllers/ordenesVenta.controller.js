@@ -1,7 +1,5 @@
-// backend/controllers/ordenes-venta.controller.js
 import { executeQuery } from '../config/database.js';
 
-// ✅ OBTENER TODAS LAS ÓRDENES CON FILTROS
 export async function getAllOrdenesVenta(req, res) {
   try {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
@@ -74,12 +72,10 @@ export async function getAllOrdenesVenta(req, res) {
   }
 }
 
-// ✅ OBTENER ORDEN POR ID CON DETALLE
 export async function getOrdenVentaById(req, res) {
   try {
     const { id } = req.params;
     
-    // Orden principal
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
@@ -112,7 +108,6 @@ export async function getOrdenVentaById(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // Detalle de la orden con info de producción/despacho
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
@@ -157,7 +152,6 @@ export async function getOrdenVentaById(req, res) {
   }
 }
 
-// ✅ CREAR ORDEN DE VENTA
 export async function createOrdenVenta(req, res) {
   try {
     const {
@@ -180,7 +174,6 @@ export async function createOrdenVenta(req, res) {
       detalle
     } = req.body;
     
-    // Validaciones
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,
@@ -188,7 +181,6 @@ export async function createOrdenVenta(req, res) {
       });
     }
     
-    // Generar número de orden
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_venta 
@@ -206,7 +198,6 @@ export async function createOrdenVenta(req, res) {
     
     const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // Calcular totales
     let subtotal = 0;
     for (const item of detalle) {
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -274,7 +265,6 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
-    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -304,7 +294,6 @@ export async function createOrdenVenta(req, res) {
       ]);
     }
     
-    // Si viene de cotización, marcarla como convertida
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 
@@ -332,7 +321,6 @@ export async function createOrdenVenta(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR ESTADO
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -393,7 +381,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR PRIORIDAD
 export async function actualizarPrioridadOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -435,7 +422,6 @@ export async function actualizarPrioridadOrdenVenta(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR PROGRESO (PRODUCCIÓN/DESPACHO)
 export async function actualizarProgresoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -469,7 +455,6 @@ export async function actualizarProgresoOrdenVenta(req, res) {
   }
 }
 
-// ✅ OBTENER ESTADÍSTICAS
 export async function getEstadisticasOrdenesVenta(req, res) {
   try {
     const result = await executeQuery(`
@@ -507,7 +492,6 @@ export async function getEstadisticasOrdenesVenta(req, res) {
   }
 }
 
-// ✅ DESCARGAR PDF
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -548,7 +532,6 @@ export async function descargarPDFOrdenVenta(req, res) {
     
     orden.detalle = detalleResult.data;
     
-    // TODO: Implementar generación de PDF
     res.json({
       success: true,
       data: orden,

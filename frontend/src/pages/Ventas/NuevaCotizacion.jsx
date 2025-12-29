@@ -266,12 +266,8 @@ function NuevaCotizacion() {
       return;
     }
     
-    // Validar stock insuficiente
-    const sinStock = detalle.filter(item => item.stock_actual < item.cantidad && !item.requiere_receta);
-    if (sinStock.length > 0) {
-      setError(`Productos sin stock suficiente: ${sinStock.map(i => i.producto).join(', ')}`);
-      return;
-    }
+    // ✅ VALIDACIÓN REMOVIDA: Permitir cotizar aunque no haya stock
+    // La producción se manejará posteriormente si es necesario
     
     try {
       setLoading(true);
@@ -660,16 +656,11 @@ function NuevaCotizacion() {
                         <td className="font-mono text-sm">{item.codigo_producto}</td>
                         <td>
                           <div className="font-medium">{item.producto}</div>
-                          {item.stock_actual < item.cantidad && !item.requiere_receta && (
-                            <div className="text-xs text-danger flex items-center gap-1">
-                              <AlertTriangle size={12} />
-                              Stock insuficiente ({item.stock_actual} disponibles)
-                            </div>
-                          )}
-                          {item.requiere_receta && (
+                          {/* ✅ LÓGICA CORREGIDA: Solo mostrar si cantidad > stock */}
+                          {item.cantidad > item.stock_actual && (
                             <div className="text-xs text-warning flex items-center gap-1">
                               <AlertTriangle size={12} />
-                              Requiere producción
+                              Requerirá producción (stock: {item.stock_actual})
                             </div>
                           )}
                         </td>

@@ -213,8 +213,12 @@ function DetalleCotizacion() {
       render: (value, row) => (
         <div>
           <div className="font-medium">{value}</div>
-          {row.requiere_receta && (
-            <span className="badge badge-info badge-sm">Requiere Producción</span>
+          {/* ✅ LÓGICA CORREGIDA: Mostrar solo si cantidad > stock */}
+          {parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
+            <div className="text-xs text-warning flex items-center gap-1 mt-1">
+              <AlertTriangle size={12} />
+              Requerirá producción (disponible: {parseFloat(row.stock_disponible || 0).toFixed(2)})
+            </div>
           )}
         </div>
       )

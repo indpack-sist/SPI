@@ -11,10 +11,7 @@ export async function getAllOrdenesVenta(req, res) {
         ov.id_orden_venta,
         ov.numero_orden,
         ov.fecha_emision,
-        ov.fecha_entrega_estimada,
-        ov.fecha_entrega_real,
         ov.estado,
-        ov.prioridad,
         ov.subtotal,
         ov.igv,
         ov.total,
@@ -23,25 +20,10 @@ export async function getAllOrdenesVenta(req, res) {
         c.numero_cotizacion,
         cl.id_cliente,
         cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente,
-        e.nombre_completo AS comercial,
-        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
-        (
-          SELECT COUNT(*) 
-          FROM detalle_orden_venta dov
-          WHERE dov.id_orden_venta = ov.id_orden_venta 
-          AND dov.cantidad_producida < dov.cantidad
-        ) AS items_pendientes_produccion,
-        (
-          SELECT COUNT(*) 
-          FROM detalle_orden_venta dov
-          WHERE dov.id_orden_venta = ov.id_orden_venta 
-          AND dov.cantidad_despachada < dov.cantidad
-        ) AS items_pendientes_despacho
+        cl.ruc AS ruc_cliente
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
       WHERE 1=1
     `;
     
@@ -67,7 +49,7 @@ export async function getAllOrdenesVenta(req, res) {
       params.push(fecha_fin);
     }
     
-    sql += ` ORDER BY ov.fecha_creacion DESC`;
+    sql += ` ORDER BY ov.fecha_emision DESC, ov.id_orden_venta DESC`;
     
     const result = await executeQuery(sql, params);
     

@@ -464,14 +464,17 @@ export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
     
-    // Obtener datos de la cotización
+    // Obtener datos completos de la cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente,
-        e.nombre_completo AS comercial
+        cl.telefono AS telefono_cliente,
+        cl.email AS email_cliente,
+        e.nombre_completo AS comercial,
+        e.email AS email_comercial
       FROM cotizaciones c
       LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
       LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
@@ -490,7 +493,12 @@ export async function descargarPDFCotizacion(req, res) {
     // Obtener detalle
     const detalleResult = await executeQuery(`
       SELECT 
-        dc.*,
+        dc.id_detalle,
+        dc.cantidad,
+        dc.precio_unitario,
+        dc.descuento_porcentaje,
+        dc.valor_venta,
+        dc.orden,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida
@@ -500,20 +508,31 @@ export async function descargarPDFCotizacion(req, res) {
       ORDER BY dc.orden
     `, [id]);
     
+    if (!detalleResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalle de cotización'
+      });
+    }
+    
     cotizacion.detalle = detalleResult.data;
     
-    // TODO: Implementar generación de PDF
-    res.json({
-      success: true,
-      data: cotizacion,
-      message: 'Generar PDF con estos datos'
-    });
+    // ✅ Generar PDF
+    const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
+    const pdfBuffer = await generarCotizacionPDF(cotizacion);
+    
+    // Configurar headers para descarga
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Cotizacion-${cotizacion.numero_cotizacion}.pdf`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
     
   } catch (error) {
     console.error('Error al descargar PDF:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || 'Error al generar PDF'
     });
   }
 }

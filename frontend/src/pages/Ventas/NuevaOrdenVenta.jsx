@@ -58,12 +58,14 @@ function NuevaOrdenVenta() {
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
 
+  uuseEffect(() => {
+  cargarCatalogos();
+}, []);
   useEffect(() => {
-    cargarCatalogos();
-    if (idCotizacion) {
-      cargarCotizacion(idCotizacion);
-    }
-  }, [idCotizacion]);
+  if (idCotizacion && clientes.length > 0 && productos.length > 0) {
+    cargarCotizacion(idCotizacion);
+  }
+}, [idCotizacion, clientes.length, productos.length]);
 
   useEffect(() => {
     calcularTotales();
@@ -101,70 +103,185 @@ function NuevaOrdenVenta() {
   };
 
   // ✅ CARGAR COTIZACIÓN DESDE API
-  const cargarCotizacion = async (id) => {
-    try {
-      setLoading(true);
+  // CORRECCIONES PARA: frontend/src/pages/Ventas/NuevaOrdenVenta.jsx
+
+// ============================================
+// 1. CORREGIR useEffect (líneas ~66-70)
+// ============================================
+
+// ❌ INCORRECTO (actual):
+/*
+useEffect(() => {
+  cargarCatalogos();
+  if (idCotizacion) {
+    cargarCotizacion(idCotizacion);  // ← Se ejecuta antes de tener clientes/productos
+  }
+}, [idCotizacion]);
+*/
+
+// ✅ CORRECTO:
+useEffect(() => {
+  cargarCatalogos();
+}, []);
+
+// ✅ NUEVO: Separar la carga de cotización
+useEffect(() => {
+  if (idCotizacion && clientes.length > 0 && productos.length > 0) {
+    cargarCotizacion(idCotizacion);
+  }
+}, [idCotizacion, clientes.length, productos.length]);
+
+// ============================================
+// 2. MEJORAR cargarCotizacion (líneas ~111-169)
+// ============================================
+
+// ✅ REEMPLAZAR la función completa con esta versión mejorada:
+
+const cargarCotizacion = async (id) => {
+  try {
+    setLoading(true);
+    console.log('🔄 Cargando cotización:', id);
+    
+    const response = await cotizacionesAPI.getById(id);
+    
+    if (response.data.success) {
+      const cotizacion = response.data.data;
+      console.log('✅ Cotización cargada:', cotizacion);
+      setCotizacionOrigen(cotizacion);
       
-      const response = await cotizacionesAPI.getById(id);
+      // ✅ Buscar cliente en el catálogo
+      const cliente = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
+      console.log('🔍 Cliente encontrado:', cliente);
       
-      if (response.data.success) {
-        const cotizacion = response.data.data;
-        setCotizacionOrigen(cotizacion);
-        
-        // Buscar cliente en el catálogo
-        const cliente = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
-        if (cliente) {
-          setClienteSeleccionado(cliente);
-        }
-        
-        // Auto-llenar formulario
-        setFormCabecera(prev => ({
-          ...prev,
-          id_cotizacion: id,
-          id_cliente: cotizacion.id_cliente,
-          id_comercial: cotizacion.id_comercial || '',
-          moneda: cotizacion.moneda,
-          plazo_pago: cotizacion.plazo_pago || '',
-          forma_pago: cotizacion.forma_pago || '',
-          lugar_entrega: cotizacion.lugar_entrega || '',
-          direccion_entrega: cotizacion.direccion_entrega || cliente?.direccion_despacho || '',
-          ciudad_entrega: cotizacion.ciudad_entrega || cliente?.ciudad || '',
-          observaciones: cotizacion.observaciones || ''
-        }));
-        
-        // Cargar detalle
-        if (cotizacion.detalle && cotizacion.detalle.length > 0) {
-          const detalleConvertido = cotizacion.detalle.map(item => {
-            // Buscar producto en catálogo para obtener stock actual
-            const producto = productos.find(p => p.id_producto === item.id_producto);
-            
-            return {
-              id_producto: item.id_producto,
-              codigo_producto: item.codigo_producto,
-              producto: item.producto,
-              unidad_medida: item.unidad_medida,
-              cantidad: parseFloat(item.cantidad),
-              precio_unitario: parseFloat(item.precio_unitario),
-              descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
-              stock_actual: producto?.stock_actual || 0,
-              requiere_produccion: producto ? (producto.requiere_receta && producto.stock_actual < item.cantidad) : false,
-              cantidad_producida: 0,
-              cantidad_despachada: 0,
-              subtotal: item.cantidad * item.precio_unitario * (1 - (item.descuento_porcentaje || 0) / 100)
-            };
-          });
-          
-          setDetalle(detalleConvertido);
-        }
+      if (cliente) {
+        setClienteSeleccionado(cliente);
+      } else {
+        console.warn('⚠️ Cliente no encontrado en catálogo');
       }
       
-    } catch (err) {
-      console.error('Error al cargar cotización:', err);
-      setError('Error al cargar cotización: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
+      // ✅ Auto-llenar formulario con TODOS los campos
+      setFormCabecera(prev => ({
+        ...prev,
+        id_cotizacion: id,
+        id_cliente: cotizacion.id_cliente || '',
+        id_comercial: cotizacion.id_comercial || '',
+        moneda: cotizacion.moneda || 'PEN',
+        plazo_pago: cotizacion.plazo_pago || '',
+        forma_pago: cotizacion.forma_pago || '',
+        lugar_entrega: cotizacion.lugar_entrega || '',
+        direccion_entrega: cotizacion.direccion_entrega || cotizacion.direccion_cliente || cliente?.direccion_despacho || '',
+        ciudad_entrega: cotizacion.ciudad_entrega || cliente?.ciudad || '',
+        contacto_entrega: cliente?.contacto || '',
+        telefono_entrega: cliente?.telefono || '',
+        observaciones: cotizacion.observaciones || '',
+        orden_compra_cliente: cotizacion.orden_compra_cliente || ''
+      }));
+      
+      console.log('📋 Formulario actualizado');
+      
+      // ✅ Cargar detalle de productos
+      if (cotizacion.detalle && cotizacion.detalle.length > 0) {
+        console.log(`📦 Cargando ${cotizacion.detalle.length} productos`);
+        
+        const detalleConvertido = cotizacion.detalle.map((item, idx) => {
+          // Buscar producto en catálogo para stock actual
+          const producto = productos.find(p => p.id_producto === item.id_producto);
+          
+          if (!producto) {
+            console.warn(`⚠️ Producto ${item.id_producto} no encontrado en catálogo`);
+          }
+          
+          const cantidad = parseFloat(item.cantidad || 0);
+          const stockActual = parseFloat(producto?.stock_actual || 0);
+          const precioUnitario = parseFloat(item.precio_unitario || 0);
+          const descuento = parseFloat(item.descuento_porcentaje || 0);
+          
+          const valorVenta = cantidad * precioUnitario;
+          const descuentoMonto = valorVenta * (descuento / 100);
+          const subtotal = valorVenta - descuentoMonto;
+          
+          return {
+            id_producto: item.id_producto,
+            codigo_producto: item.codigo_producto || producto?.codigo || '',
+            producto: item.producto || producto?.nombre || 'Producto no encontrado',
+            unidad_medida: item.unidad_medida || producto?.unidad_medida || 'UND',
+            cantidad: cantidad,
+            precio_unitario: precioUnitario,
+            descuento_porcentaje: descuento,
+            stock_actual: stockActual,
+            requiere_produccion: cantidad > stockActual,
+            cantidad_producida: 0,
+            cantidad_despachada: 0,
+            subtotal: subtotal
+          };
+        });
+        
+        console.log('✅ Detalle convertido:', detalleConvertido);
+        setDetalle(detalleConvertido);
+      } else {
+        console.warn('⚠️ Cotización sin detalle');
+      }
+      
+      setSuccess('Cotización cargada exitosamente');
+      setTimeout(() => setSuccess(null), 3000);
+      
+    } else {
+      throw new Error(response.data.error || 'Error al cargar cotización');
     }
-  };
+    
+  } catch (err) {
+    console.error('❌ Error al cargar cotización:', err);
+    setError('Error al cargar cotización: ' + (err.response?.data?.error || err.message));
+  } finally {
+    setLoading(false);
+  }
+};
+
+// ============================================
+// 3. VERIFICAR EN DEVTOOLS
+// ============================================
+
+// Después de implementar, verifica en la consola del navegador:
+// 1. Abrir DevTools (F12)
+// 2. Ir a Nueva Orden desde cotización
+// 3. Deberías ver en consola:
+//    🔄 Cargando cotización: 1
+//    ✅ Cotización cargada: {objeto}
+//    🔍 Cliente encontrado: {objeto}
+//    📋 Formulario actualizado
+//    📦 Cargando X productos
+//    ✅ Detalle convertido: [array]
+
+// ============================================
+// 4. VERIFICACIÓN VISUAL
+// ============================================
+
+// Al abrir Nueva Orden desde cotización, DEBE verse:
+// ✅ Cliente pre-seleccionado (nombre y RUC visibles)
+// ✅ Campos de formulario llenos (moneda, plazo pago, etc)
+// ✅ Productos en la tabla con cantidades y precios
+// ✅ Totales calculados correctamente
+// ✅ Banner azul indicando "Orden generada desde cotización XXX"
+
+// Si algo no aparece:
+// 1. Revisar logs de consola
+// 2. Verificar que la cotización tenga detalle en BD
+// 3. Verificar que productos existan en catálogo
+
+// ============================================
+// 5. SOLUCIÓN ALTERNATIVA SI PERSISTE
+// ============================================
+
+// Si después de estos cambios sigue sin cargar, agregar delay:
+
+useEffect(() => {
+  if (idCotizacion && clientes.length > 0 && productos.length > 0) {
+    // Dar 500ms para que React termine de renderizar
+    setTimeout(() => {
+      cargarCotizacion(idCotizacion);
+    }, 500);
+  }
+}, [idCotizacion, clientes.length, productos.length]);
 
   const handleSelectCliente = (cliente) => {
     setClienteSeleccionado(cliente);

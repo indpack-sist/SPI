@@ -23,7 +23,7 @@ function NuevaOrdenVenta() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // ✅ Catálogos REALES
+  // Catálogos
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
@@ -41,6 +41,9 @@ function NuevaOrdenVenta() {
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_entrega_estimada: '',
     moneda: 'PEN',
+    tipo_cambio: 1.0000,
+    tipo_impuesto: 'IGV',
+    porcentaje_impuesto: 18.00,
     plazo_pago: '',
     forma_pago: '',
     orden_compra_cliente: '',
@@ -56,30 +59,32 @@ function NuevaOrdenVenta() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [cotizacionOrigen, setCotizacionOrigen] = useState(null);
   const [detalle, setDetalle] = useState([]);
-  const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
+  const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
 
-  uuseEffect(() => {
-  cargarCatalogos();
-}, []);
+  // ✅ CORREGIDO: Cargar catálogos primero
   useEffect(() => {
-  if (idCotizacion && clientes.length > 0 && productos.length > 0) {
-    cargarCotizacion(idCotizacion);
-  }
-}, [idCotizacion, clientes.length, productos.length]);
+    cargarCatalogos();
+  }, []);
+
+  // ✅ NUEVO: Cargar cotización DESPUÉS de tener catálogos
+  useEffect(() => {
+    if (idCotizacion && clientes.length > 0 && productos.length > 0) {
+      cargarCotizacion(idCotizacion);
+    }
+  }, [idCotizacion, clientes.length, productos.length]);
 
   useEffect(() => {
     calcularTotales();
-  }, [detalle]);
+  }, [detalle, formCabecera.porcentaje_impuesto]);
 
-  // ✅ CARGAR CATÁLOGOS REALES
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
       
       const [resClientes, resProductos, resComerciales] = await Promise.all([
         clientesAPI.getAll({ estado: 'Activo' }),
-        productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: 3 }), // Solo productos terminados
-        empleadosAPI.getAll({ rol: 'Comercial', estado: 'Activo' })
+        productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: 3 }),
+        empleadosAPI.getAll({ rol: 'Ventas,Comercial', estado: 'Activo' })
       ]);
       
       if (resClientes.data.success) {
@@ -102,186 +107,108 @@ function NuevaOrdenVenta() {
     }
   };
 
-  // ✅ CARGAR COTIZACIÓN DESDE API
-  // CORRECCIONES PARA: frontend/src/pages/Ventas/NuevaOrdenVenta.jsx
-
-// ============================================
-// 1. CORREGIR useEffect (líneas ~66-70)
-// ============================================
-
-// ❌ INCORRECTO (actual):
-/*
-useEffect(() => {
-  cargarCatalogos();
-  if (idCotizacion) {
-    cargarCotizacion(idCotizacion);  // ← Se ejecuta antes de tener clientes/productos
-  }
-}, [idCotizacion]);
-*/
-
-// ✅ CORRECTO:
-useEffect(() => {
-  cargarCatalogos();
-}, []);
-
-// ✅ NUEVO: Separar la carga de cotización
-useEffect(() => {
-  if (idCotizacion && clientes.length > 0 && productos.length > 0) {
-    cargarCotizacion(idCotizacion);
-  }
-}, [idCotizacion, clientes.length, productos.length]);
-
-// ============================================
-// 2. MEJORAR cargarCotizacion (líneas ~111-169)
-// ============================================
-
-// ✅ REEMPLAZAR la función completa con esta versión mejorada:
-
-const cargarCotizacion = async (id) => {
-  try {
-    setLoading(true);
-    console.log('🔄 Cargando cotización:', id);
-    
-    const response = await cotizacionesAPI.getById(id);
-    
-    if (response.data.success) {
-      const cotizacion = response.data.data;
-      console.log('✅ Cotización cargada:', cotizacion);
-      setCotizacionOrigen(cotizacion);
+  // ✅ MEJORADO: Cargar cotización con logs y mejor manejo
+  const cargarCotizacion = async (id) => {
+    try {
+      setLoading(true);
+      console.log('🔄 Cargando cotización:', id);
       
-      // ✅ Buscar cliente en el catálogo
-      const cliente = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
-      console.log('🔍 Cliente encontrado:', cliente);
+      const response = await cotizacionesAPI.getById(id);
       
-      if (cliente) {
-        setClienteSeleccionado(cliente);
+      if (response.data.success) {
+        const cotizacion = response.data.data;
+        console.log('✅ Cotización cargada:', cotizacion);
+        setCotizacionOrigen(cotizacion);
+        
+        // Buscar cliente en el catálogo
+        const cliente = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
+        console.log('🔍 Cliente encontrado:', cliente);
+        
+        if (cliente) {
+          setClienteSeleccionado(cliente);
+        } else {
+          console.warn('⚠️ Cliente no encontrado en catálogo');
+        }
+        
+        // ✅ Auto-llenar formulario con TODOS los campos (igual que cotización)
+        setFormCabecera(prev => ({
+          ...prev,
+          id_cotizacion: id,
+          id_cliente: cotizacion.id_cliente || '',
+          id_comercial: cotizacion.id_comercial || '',
+          moneda: cotizacion.moneda || 'PEN',
+          tipo_cambio: parseFloat(cotizacion.tipo_cambio || 1),
+          tipo_impuesto: cotizacion.tipo_impuesto || 'IGV',
+          porcentaje_impuesto: parseFloat(cotizacion.porcentaje_impuesto || 18),
+          plazo_pago: cotizacion.plazo_pago || '',
+          forma_pago: cotizacion.forma_pago || '',
+          lugar_entrega: cotizacion.lugar_entrega || '',
+          direccion_entrega: cotizacion.direccion_entrega || cotizacion.direccion_cliente || cliente?.direccion_despacho || '',
+          ciudad_entrega: cotizacion.ciudad_entrega || cliente?.ciudad || '',
+          contacto_entrega: cliente?.contacto || '',
+          telefono_entrega: cliente?.telefono || '',
+          observaciones: cotizacion.observaciones || '',
+          orden_compra_cliente: cotizacion.orden_compra_cliente || ''
+        }));
+        
+        console.log('📋 Formulario actualizado');
+        
+        // Cargar detalle de productos
+        if (cotizacion.detalle && cotizacion.detalle.length > 0) {
+          console.log(`📦 Cargando ${cotizacion.detalle.length} productos`);
+          
+          const detalleConvertido = cotizacion.detalle.map((item, idx) => {
+            const producto = productos.find(p => p.id_producto === item.id_producto);
+            
+            if (!producto) {
+              console.warn(`⚠️ Producto ${item.id_producto} no encontrado en catálogo`);
+            }
+            
+            const cantidad = parseFloat(item.cantidad || 0);
+            const stockActual = parseFloat(producto?.stock_actual || 0);
+            const precioUnitario = parseFloat(item.precio_unitario || 0);
+            const descuento = parseFloat(item.descuento_porcentaje || 0);
+            
+            const valorVenta = cantidad * precioUnitario;
+            const descuentoMonto = valorVenta * (descuento / 100);
+            const subtotal = valorVenta - descuentoMonto;
+            
+            return {
+              id_producto: item.id_producto,
+              codigo_producto: item.codigo_producto || producto?.codigo || '',
+              producto: item.producto || producto?.nombre || 'Producto no encontrado',
+              unidad_medida: item.unidad_medida || producto?.unidad_medida || 'UND',
+              cantidad: cantidad,
+              precio_unitario: precioUnitario,
+              descuento_porcentaje: descuento,
+              stock_actual: stockActual,
+              requiere_produccion: cantidad > stockActual,
+              cantidad_producida: 0,
+              cantidad_despachada: 0,
+              subtotal: subtotal
+            };
+          });
+          
+          console.log('✅ Detalle convertido:', detalleConvertido);
+          setDetalle(detalleConvertido);
+        } else {
+          console.warn('⚠️ Cotización sin detalle');
+        }
+        
+        setSuccess('Cotización cargada exitosamente');
+        setTimeout(() => setSuccess(null), 3000);
+        
       } else {
-        console.warn('⚠️ Cliente no encontrado en catálogo');
+        throw new Error(response.data.error || 'Error al cargar cotización');
       }
       
-      // ✅ Auto-llenar formulario con TODOS los campos
-      setFormCabecera(prev => ({
-        ...prev,
-        id_cotizacion: id,
-        id_cliente: cotizacion.id_cliente || '',
-        id_comercial: cotizacion.id_comercial || '',
-        moneda: cotizacion.moneda || 'PEN',
-        plazo_pago: cotizacion.plazo_pago || '',
-        forma_pago: cotizacion.forma_pago || '',
-        lugar_entrega: cotizacion.lugar_entrega || '',
-        direccion_entrega: cotizacion.direccion_entrega || cotizacion.direccion_cliente || cliente?.direccion_despacho || '',
-        ciudad_entrega: cotizacion.ciudad_entrega || cliente?.ciudad || '',
-        contacto_entrega: cliente?.contacto || '',
-        telefono_entrega: cliente?.telefono || '',
-        observaciones: cotizacion.observaciones || '',
-        orden_compra_cliente: cotizacion.orden_compra_cliente || ''
-      }));
-      
-      console.log('📋 Formulario actualizado');
-      
-      // ✅ Cargar detalle de productos
-      if (cotizacion.detalle && cotizacion.detalle.length > 0) {
-        console.log(`📦 Cargando ${cotizacion.detalle.length} productos`);
-        
-        const detalleConvertido = cotizacion.detalle.map((item, idx) => {
-          // Buscar producto en catálogo para stock actual
-          const producto = productos.find(p => p.id_producto === item.id_producto);
-          
-          if (!producto) {
-            console.warn(`⚠️ Producto ${item.id_producto} no encontrado en catálogo`);
-          }
-          
-          const cantidad = parseFloat(item.cantidad || 0);
-          const stockActual = parseFloat(producto?.stock_actual || 0);
-          const precioUnitario = parseFloat(item.precio_unitario || 0);
-          const descuento = parseFloat(item.descuento_porcentaje || 0);
-          
-          const valorVenta = cantidad * precioUnitario;
-          const descuentoMonto = valorVenta * (descuento / 100);
-          const subtotal = valorVenta - descuentoMonto;
-          
-          return {
-            id_producto: item.id_producto,
-            codigo_producto: item.codigo_producto || producto?.codigo || '',
-            producto: item.producto || producto?.nombre || 'Producto no encontrado',
-            unidad_medida: item.unidad_medida || producto?.unidad_medida || 'UND',
-            cantidad: cantidad,
-            precio_unitario: precioUnitario,
-            descuento_porcentaje: descuento,
-            stock_actual: stockActual,
-            requiere_produccion: cantidad > stockActual,
-            cantidad_producida: 0,
-            cantidad_despachada: 0,
-            subtotal: subtotal
-          };
-        });
-        
-        console.log('✅ Detalle convertido:', detalleConvertido);
-        setDetalle(detalleConvertido);
-      } else {
-        console.warn('⚠️ Cotización sin detalle');
-      }
-      
-      setSuccess('Cotización cargada exitosamente');
-      setTimeout(() => setSuccess(null), 3000);
-      
-    } else {
-      throw new Error(response.data.error || 'Error al cargar cotización');
+    } catch (err) {
+      console.error('❌ Error al cargar cotización:', err);
+      setError('Error al cargar cotización: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
     }
-    
-  } catch (err) {
-    console.error('❌ Error al cargar cotización:', err);
-    setError('Error al cargar cotización: ' + (err.response?.data?.error || err.message));
-  } finally {
-    setLoading(false);
-  }
-};
-
-// ============================================
-// 3. VERIFICAR EN DEVTOOLS
-// ============================================
-
-// Después de implementar, verifica en la consola del navegador:
-// 1. Abrir DevTools (F12)
-// 2. Ir a Nueva Orden desde cotización
-// 3. Deberías ver en consola:
-//    🔄 Cargando cotización: 1
-//    ✅ Cotización cargada: {objeto}
-//    🔍 Cliente encontrado: {objeto}
-//    📋 Formulario actualizado
-//    📦 Cargando X productos
-//    ✅ Detalle convertido: [array]
-
-// ============================================
-// 4. VERIFICACIÓN VISUAL
-// ============================================
-
-// Al abrir Nueva Orden desde cotización, DEBE verse:
-// ✅ Cliente pre-seleccionado (nombre y RUC visibles)
-// ✅ Campos de formulario llenos (moneda, plazo pago, etc)
-// ✅ Productos en la tabla con cantidades y precios
-// ✅ Totales calculados correctamente
-// ✅ Banner azul indicando "Orden generada desde cotización XXX"
-
-// Si algo no aparece:
-// 1. Revisar logs de consola
-// 2. Verificar que la cotización tenga detalle en BD
-// 3. Verificar que productos existan en catálogo
-
-// ============================================
-// 5. SOLUCIÓN ALTERNATIVA SI PERSISTE
-// ============================================
-
-// Si después de estos cambios sigue sin cargar, agregar delay:
-
-useEffect(() => {
-  if (idCotizacion && clientes.length > 0 && productos.length > 0) {
-    // Dar 500ms para que React termine de renderizar
-    setTimeout(() => {
-      cargarCotizacion(idCotizacion);
-    }, 500);
-  }
-}, [idCotizacion, clientes.length, productos.length]);
+  };
 
   const handleSelectCliente = (cliente) => {
     setClienteSeleccionado(cliente);
@@ -313,7 +240,7 @@ useEffect(() => {
       precio_unitario: producto.precio_venta || 0,
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual,
-      requiere_produccion: producto.requiere_receta && producto.stock_actual < 1,
+      requiere_produccion: producto.stock_actual < 1,
       cantidad_producida: 0,
       cantidad_despachada: 0,
       subtotal: producto.precio_venta || 0
@@ -365,12 +292,12 @@ useEffect(() => {
 
   const calcularTotales = () => {
     const subtotal = detalle.reduce((sum, item) => sum + (item.subtotal || 0), 0);
-    const igv = subtotal * 0.18;
-    const total = subtotal + igv;
-    setTotales({ subtotal, igv, total });
+    const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 18;
+    const impuesto = subtotal * (porcentaje / 100);
+    const total = subtotal + impuesto;
+    setTotales({ subtotal, impuesto, total });
   };
 
-  // ✅ GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -401,6 +328,9 @@ useEffect(() => {
         fecha_emision: formCabecera.fecha_emision,
         fecha_entrega_estimada: formCabecera.fecha_entrega_estimada || null,
         moneda: formCabecera.moneda,
+        tipo_cambio: parseFloat(formCabecera.tipo_cambio) || 1.0000,
+        tipo_impuesto: formCabecera.tipo_impuesto || 'IGV',
+        porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto) || 18.00,
         plazo_pago: formCabecera.plazo_pago,
         forma_pago: formCabecera.forma_pago,
         orden_compra_cliente: formCabecera.orden_compra_cliente,
@@ -463,6 +393,18 @@ useEffect(() => {
     };
     return colors[prioridad] || colors['Media'];
   };
+
+  // Tipos de impuesto (igual que cotizaciones)
+  const TIPOS_IMPUESTO = [
+    { codigo: 'IGV', nombre: 'IGV', porcentaje: 18.00 },
+    { codigo: 'IGV3', nombre: 'IGV 3ra Cat.', porcentaje: 3.00 },
+    { codigo: 'IGV4', nombre: 'IGV 4ta Cat.', porcentaje: 4.00 },
+    { codigo: 'GRA', nombre: 'Gratuito', porcentaje: 0.00 },
+    { codigo: '6%', nombre: 'Impuesto 6%', porcentaje: 6.00 },
+    { codigo: 'EXO', nombre: 'Exonerado', porcentaje: 0.00 },
+    { codigo: 'INA', nombre: 'Inafecto', porcentaje: 0.00 },
+    { codigo: 'EXP', nombre: 'Exportación', porcentaje: 0.00 }
+  ];
 
   if (loading && clientes.length === 0) {
     return <Loading message="Cargando formulario..." />;
@@ -621,6 +563,43 @@ useEffect(() => {
                   <option value="PEN">Soles (PEN)</option>
                   <option value="USD">Dólares (USD)</option>
                 </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Tipo de Impuesto *</label>
+                <select
+                  className="form-select"
+                  value={formCabecera.tipo_impuesto}
+                  onChange={(e) => {
+                    const tipoSeleccionado = TIPOS_IMPUESTO.find(t => t.codigo === e.target.value);
+                    setFormCabecera({ 
+                      ...formCabecera, 
+                      tipo_impuesto: e.target.value,
+                      porcentaje_impuesto: tipoSeleccionado?.porcentaje || 18
+                    });
+                  }}
+                  disabled={!!cotizacionOrigen}
+                >
+                  {TIPOS_IMPUESTO.map(tipo => (
+                    <option key={tipo.codigo} value={tipo.codigo}>
+                      {tipo.nombre} ({tipo.porcentaje}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">% Impuesto *</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={formCabecera.porcentaje_impuesto}
+                  onChange={(e) => setFormCabecera({ ...formCabecera, porcentaje_impuesto: e.target.value })}
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  disabled={!!cotizacionOrigen}
+                />
               </div>
               
               <div className="form-group">
@@ -799,8 +778,8 @@ useEffect(() => {
                           <div className="font-medium">{item.producto}</div>
                           {item.requiere_produccion && (
                             <div className="text-xs text-warning flex items-center gap-1">
-                              <AlertCircle size={12} />
-                              Requiere producción (stock: {item.stock_actual})
+                              <AlertTriangle size={12} />
+                              Requerirá producción (disponible: {parseFloat(item.stock_actual).toFixed(2)})
                             </div>
                           )}
                         </td>
@@ -888,13 +867,39 @@ useEffect(() => {
                     <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b">
-                    <span className="font-medium">IGV (18%):</span>
-                    <span className="font-bold">{formatearMoneda(totales.igv)}</span>
+                    <span className="font-medium">
+                      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre || 'Impuesto'} 
+                      ({formCabecera.porcentaje_impuesto}%):
+                    </span>
+                    <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
                   </div>
                   <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2">
                     <span className="font-bold text-lg">TOTAL:</span>
                     <span className="font-bold text-2xl">{formatearMoneda(totales.total)}</span>
                   </div>
+
+                  {/* Conversión de moneda */}
+                  {formCabecera.moneda === 'USD' && parseFloat(formCabecera.tipo_cambio) > 1 && (
+                    <div className="flex justify-between py-2 mt-2 bg-blue-50 px-4 rounded-lg border border-blue-200">
+                      <span className="text-sm font-medium text-blue-900">
+                        Equivalente en Soles (TC: {parseFloat(formCabecera.tipo_cambio).toFixed(4)}):
+                      </span>
+                      <span className="font-bold text-blue-900">
+                        S/ {(totales.total * parseFloat(formCabecera.tipo_cambio)).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {formCabecera.moneda === 'PEN' && parseFloat(formCabecera.tipo_cambio) > 1 && (
+                    <div className="flex justify-between py-2 mt-2 bg-green-50 px-4 rounded-lg border border-green-200">
+                      <span className="text-sm font-medium text-green-900">
+                        Equivalente en Dólares (TC: {parseFloat(formCabecera.tipo_cambio).toFixed(4)}):
+                      </span>
+                      <span className="font-bold text-green-900">
+                        $ {(totales.total / parseFloat(formCabecera.tipo_cambio)).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -995,11 +1000,6 @@ useEffect(() => {
                         Stock: <span className={producto.stock_actual > 0 ? 'text-success' : 'text-danger'}>
                           {producto.stock_actual} {producto.unidad_medida}
                         </span>
-                        {producto.requiere_receta && (
-                          <span className="badge badge-info ml-2">
-                            Requiere producción
-                          </span>
-                        )}
                       </div>
                     </div>
                     <div className="text-right">

@@ -376,41 +376,25 @@ export const ordenesVentaAPI = {
   // Crear orden
   create: (data) => api.post('/ordenes-venta', data),
 
-  // ✅ ACTUALIZADO: Actualizar estado (ahora usa PUT en lugar de PATCH)
+  // Actualizar estado
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 
     api.put(`/ordenes-venta/${id}/estado`, { estado, fecha_entrega_real }),
 
-  // ✅ ACTUALIZADO: Actualizar prioridad (ahora usa PUT en lugar de PATCH)
+  // Actualizar prioridad
   actualizarPrioridad: (id, prioridad) => 
     api.put(`/ordenes-venta/${id}/prioridad`, { prioridad }),
 
-  // ✅ ACTUALIZADO: Actualizar progreso (ahora usa PUT en lugar de PATCH)
+  // Actualizar progreso
   actualizarProgreso: (id, detalle) => 
     api.put(`/ordenes-venta/${id}/progreso`, { detalle }),
 
-  // ✅ NUEVO: Obtener estadísticas
+  // Obtener estadísticas
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 
-  // Descargar PDF
-  descargarPDF: async (id) => {
-    const response = await fetch(`${API_URL}/ordenes-venta/${id}/pdf`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/pdf',
-      }
-    });
-    
-    if (!response.ok) throw new Error('Error al descargar PDF');
-    
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `orden-venta-${id}.pdf`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-  }
+  // ✅ DESCARGAR PDF (simplificado usando axios)
+  descargarPDF: (id) => api.get(`/ordenes-venta/${id}/pdf`, {
+    responseType: 'blob'  // ← Importante: indica que la respuesta es binaria
+  })
 };
 
 // ============================================

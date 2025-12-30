@@ -62,6 +62,17 @@ function numeroALetras(numero) {
 }
 
 /**
+ * Calcular altura que ocupará un texto con el ancho dado
+ */
+function calcularAlturaTexto(doc, texto, ancho, fontSize = 9) {
+  const heightOfString = doc.heightOfString(texto, {
+    width: ancho,
+    lineGap: 2
+  });
+  return Math.ceil(heightOfString);
+}
+
+/**
  * Formatear fecha a DD/MM/YYYY
  */
 function formatearFecha(fecha) {
@@ -165,7 +176,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica');
       doc.text(formatearFecha(cotizacion.fecha_emision), 90, yPos);
 
-      // ✅ COLUMNA IZQUIERDA
+      // ✅ COLUMNA IZQUIERDA CON ALTURA DINÁMICA
       yPos += 15;
       let leftY = yPos;
 
@@ -176,23 +187,35 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text(cotizacion.ruc_cliente || 'N/A', 90, leftY);
       leftY += 15;
 
-      // CLIENTE
+      // CLIENTE (con altura dinámica)
       doc.font('Helvetica-Bold');
       doc.text('CLIENTE:', 50, leftY);
       leftY += 12;
+      
       doc.font('Helvetica');
-      doc.text(cotizacion.cliente || 'N/A', 50, leftY, { width: 230 });
-      leftY += 15;
+      const clienteTexto = cotizacion.cliente || 'N/A';
+      const clienteAltura = calcularAlturaTexto(doc, clienteTexto, 230);
+      doc.text(clienteTexto, 50, leftY, { 
+        width: 230,
+        lineGap: 2
+      });
+      leftY += clienteAltura + 5;
 
-      // DIRECCIÓN
+      // DIRECCIÓN (con altura dinámica)
       doc.font('Helvetica-Bold');
       doc.text('DIRECCIÓN:', 50, leftY);
       leftY += 12;
+      
       doc.font('Helvetica');
-      doc.text(cotizacion.direccion_cliente || 'N/A', 50, leftY, { width: 230 });
-      leftY += 15;
+      const direccionTexto = cotizacion.direccion_cliente || 'N/A';
+      const direccionAltura = calcularAlturaTexto(doc, direccionTexto, 230);
+      doc.text(direccionTexto, 50, leftY, { 
+        width: 230,
+        lineGap: 2
+      });
+      leftY += direccionAltura + 5;
 
-      // ✅ COLUMNA DERECHA
+      // ✅ COLUMNA DERECHA CON ALTURA DINÁMICA
       let rightY = yPos;
       const rightX = 300;
 
@@ -203,34 +226,52 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text(cotizacion.moneda, rightX + 80, rightY);
       rightY += 15;
 
-      // PLAZO PAGO
+      // PLAZO PAGO (con wrap si es largo)
       doc.font('Helvetica-Bold');
       doc.text('PLAZO PAGO:', rightX, rightY);
       doc.font('Helvetica');
-      doc.text(cotizacion.plazo_pago || 'Contado', rightX + 80, rightY);
-      rightY += 15;
+      const plazoTexto = cotizacion.plazo_pago || 'Contado';
+      const plazoAltura = calcularAlturaTexto(doc, plazoTexto, 165);
+      doc.text(plazoTexto, rightX + 80, rightY, {
+        width: 165,
+        lineGap: 2
+      });
+      rightY += Math.max(plazoAltura, 12) + 3;
 
-      // FORMA PAGO
+      // FORMA PAGO (con wrap si es largo)
       doc.font('Helvetica-Bold');
       doc.text('FORMA PAGO:', rightX, rightY);
       doc.font('Helvetica');
-      doc.text(cotizacion.forma_pago || 'N/A', rightX + 80, rightY);
-      rightY += 15;
+      const formaTexto = cotizacion.forma_pago || 'N/A';
+      const formaAltura = calcularAlturaTexto(doc, formaTexto, 165);
+      doc.text(formaTexto, rightX + 80, rightY, {
+        width: 165,
+        lineGap: 2
+      });
+      rightY += Math.max(formaAltura, 12) + 3;
 
-      // Avanzar
+      // ✅ Avanzar yPos al máximo de ambas columnas
       yPos = Math.max(leftY, rightY) + 10;
 
-      // ✅ ASESOR
+      // ✅ ASESOR COMERCIAL (con altura dinámica)
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('ASESOR COMERCIAL:', 50, yPos);
       yPos += 12;
+      
       doc.font('Helvetica');
-      doc.text(cotizacion.comercial || 'N/A', 50, yPos);
+      const asesorTexto = cotizacion.comercial || 'N/A';
+      const asesorAltura = calcularAlturaTexto(doc, asesorTexto, 495);
+      doc.text(asesorTexto, 50, yPos, {
+        width: 495,
+        lineGap: 2
+      });
+      yPos += asesorAltura;
 
       if (cotizacion.email_comercial) {
-        yPos += 12;
+        yPos += 5;
         doc.fontSize(8);
         doc.text(cotizacion.email_comercial, 50, yPos);
+        yPos += 12;
       }
 
       // ============================================
@@ -267,8 +308,17 @@ export async function generarCotizacionPDF(cotizacion) {
 
       // Filas de productos
       cotizacion.detalle.forEach((item, idx) => {
-        const rowH = 25;
+        // ✅ CALCULAR ALTURA REAL DE LA FILA
+        const descripcionAltura = calcularAlturaTexto(doc, item.producto, 200, 8);
+        const rowH = Math.max(descripcionAltura + 10, 25); // Mínimo 25pt
 
+        // ✅ VERIFICAR SI NECESITA NUEVA PÁGINA
+        if (yPos + rowH > 700) {
+          doc.addPage();
+          yPos = 50;
+        }
+
+        // Fondo alternado
         if (idx % 2 === 0) {
           doc.rect(50, yPos, 495, rowH).fill('#f9fafb');
           doc.fillColor('#000000');
@@ -278,33 +328,50 @@ export async function generarCotizacionPDF(cotizacion) {
         doc.fontSize(8).font('Helvetica');
 
         // Código
-        doc.text(item.codigo_producto || '', 50, rowY, { width: 60 });
+        doc.text(item.codigo_producto || '', 50, rowY, { 
+          width: 60,
+          lineBreak: false
+        });
         
         // Cantidad
-        doc.text(parseFloat(item.cantidad).toFixed(2), 115, rowY, { width: 40, align: 'center' });
+        doc.text(parseFloat(item.cantidad).toFixed(2), 115, rowY, { 
+          width: 40, 
+          align: 'center',
+          lineBreak: false
+        });
         
         // Unidad
-        doc.text(item.unidad_medida || 'UND', 160, rowY, { width: 35, align: 'center' });
+        doc.text(item.unidad_medida || 'UND', 160, rowY, { 
+          width: 35, 
+          align: 'center',
+          lineBreak: false
+        });
         
-        // Descripción
-        doc.text(item.producto, 200, rowY, { width: 200 });
+        // Descripción (con wrap automático)
+        doc.text(item.producto, 200, rowY, { 
+          width: 200,
+          lineGap: 2
+        });
         
         // Precio unitario
         const sim = cotizacion.moneda === 'USD' ? '$' : 'S/';
-        doc.text(`${sim} ${parseFloat(item.precio_unitario).toFixed(2)}`, 405, rowY, { width: 65, align: 'right' });
+        doc.text(`${sim} ${parseFloat(item.precio_unitario).toFixed(2)}`, 405, rowY, { 
+          width: 65, 
+          align: 'right',
+          lineBreak: false
+        });
         
         // Valor venta
         const vv = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
         const desc = vv * (parseFloat(item.descuento_porcentaje || 0) / 100);
         const vt = vv - desc;
-        doc.text(`${sim} ${vt.toFixed(2)}`, 475, rowY, { width: 70, align: 'right' });
+        doc.text(`${sim} ${vt.toFixed(2)}`, 475, rowY, { 
+          width: 70, 
+          align: 'right',
+          lineBreak: false
+        });
 
         yPos += rowH;
-
-        if (yPos > 700) {
-          doc.addPage();
-          yPos = 50;
-        }
       });
 
       doc.moveTo(50, yPos).lineTo(545, yPos).stroke();
@@ -392,23 +459,44 @@ export async function generarCotizacionPDF(cotizacion) {
       }
 
       doc.fontSize(8).font('Helvetica');
-      doc.text(`• Plazo de entrega: ${txtPlazo}`, 55, yPos);
-      yPos += 12;
       
-      doc.text(`• Lugar de entrega: ${cotizacion.lugar_entrega || cotizacion.direccion_cliente || 'Por coordinar'}`, 55, yPos, { width: 490 });
-      yPos += 12;
+      // Plazo de entrega (con wrap)
+      const plazoTexto = `• Plazo de entrega: ${txtPlazo}`;
+      const plazoAlt = calcularAlturaTexto(doc, plazoTexto, 490, 8);
+      doc.text(plazoTexto, 55, yPos, { 
+        width: 490,
+        lineGap: 2
+      });
+      yPos += plazoAlt + 5;
       
+      // Lugar de entrega (con wrap)
+      const lugarTexto = `• Lugar de entrega: ${cotizacion.lugar_entrega || cotizacion.direccion_cliente || 'Por coordinar'}`;
+      const lugarAlt = calcularAlturaTexto(doc, lugarTexto, 490, 8);
+      doc.text(lugarTexto, 55, yPos, { 
+        width: 490,
+        lineGap: 2
+      });
+      yPos += lugarAlt + 5;
+      
+      // Validez
       const validez = cotizacion.validez_dias || 7;
       doc.text(`• Validez de la oferta: ${validez} días calendario`, 55, yPos);
+      yPos += 15;
 
-      // Observaciones
+      // ✅ Observaciones con altura dinámica
       if (cotizacion.observaciones) {
-        yPos += 20;
+        yPos += 10;
         doc.fontSize(9).font('Helvetica-Bold');
         doc.text('OBSERVACIONES:', 50, yPos);
         yPos += 12;
+        
         doc.fontSize(8).font('Helvetica');
-        doc.text(cotizacion.observaciones, 50, yPos, { width: 495 });
+        const obsAlt = calcularAlturaTexto(doc, cotizacion.observaciones, 495, 8);
+        doc.text(cotizacion.observaciones, 50, yPos, { 
+          width: 495,
+          lineGap: 2
+        });
+        yPos += obsAlt;
       }
 
       // Pie de página

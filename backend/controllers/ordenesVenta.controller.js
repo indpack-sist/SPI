@@ -161,6 +161,9 @@ export async function createOrdenVenta(req, res) {
       fecha_entrega_estimada,
       prioridad,
       moneda,
+      tipo_cambio,
+      tipo_impuesto,
+      porcentaje_impuesto,
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -174,6 +177,23 @@ export async function createOrdenVenta(req, res) {
       detalle
     } = req.body;
     
+    // ✅ LÓGICA CORRECTA: id_registrado_por es el VENDEDOR
+    // Opciones en orden de prioridad:
+    // 1. Comercial asignado a la orden (viene del formulario o de la cotización)
+    // 2. Usuario autenticado (si es vendedor/comercial)
+    // 3. Requerir que se especifique uno
+    
+    let id_registrado_por = null;
+    
+    if (id_comercial) {
+      // Si se especificó un comercial, ese registra la orden
+      id_registrado_por = id_comercial;
+    } else if (req.user?.id_empleado) {
+      // Si no hay comercial, usar el usuario autenticado
+      id_registrado_por = req.user.id_empleado;
+    }
+    
+    // Validaciones
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,
@@ -181,6 +201,14 @@ export async function createOrdenVenta(req, res) {
       });
     }
     
+    if (!id_registrado_por) {
+      return res.status(400).json({
+        success: false,
+        error: 'Debe especificar un vendedor/comercial para la orden'
+      });
+    }
+    
+    // Generar número de orden
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_venta 
@@ -198,6 +226,7 @@ export async function createOrdenVenta(req, res) {
     
     const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
+    // Calcular totales
     let subtotal = 0;
     for (const item of detalle) {
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -205,10 +234,11 @@ export async function createOrdenVenta(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    const igv = subtotal * 0.18;
-    const total = subtotal + igv;
+    const porcentaje_imp = parseFloat(porcentaje_impuesto || 18);
+    const impuesto = subtotal * (porcentaje_imp / 100);
+    const total = subtotal + impuesto;
     
-    // Insertar orden
+    // ✅ INSERTAR ORDEN con vendedor correcto
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
         numero_orden,
@@ -218,6 +248,9 @@ export async function createOrdenVenta(req, res) {
         fecha_entrega_estimada,
         prioridad,
         moneda,
+        tipo_cambio,
+        tipo_impuesto,
+        porcentaje_impuesto,
         plazo_pago,
         forma_pago,
         orden_compra_cliente,
@@ -228,19 +261,23 @@ export async function createOrdenVenta(req, res) {
         telefono_entrega,
         observaciones,
         id_comercial,
+        id_registrado_por,
         subtotal,
         igv,
         total,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
     `, [
       numeroOrden,
       id_cliente,
       id_cotizacion || null,
       fecha_emision,
-      fecha_entrega_estimada,
+      fecha_entrega_estimada || null,
       prioridad || 'Media',
       moneda,
+      parseFloat(tipo_cambio || 1.0000),
+      tipo_impuesto || 'IGV',
+      porcentaje_imp,
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -250,9 +287,10 @@ export async function createOrdenVenta(req, res) {
       contacto_entrega,
       telefono_entrega,
       observaciones,
-      id_comercial,
+      id_comercial || id_registrado_por,  // ✅ id_comercial puede ser igual a id_registrado_por
+      id_registrado_por,  // ✅ VENDEDOR que registra
       subtotal,
-      igv,
+      impuesto,
       total
     ]);
     
@@ -265,6 +303,7 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
+    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -294,6 +333,7 @@ export async function createOrdenVenta(req, res) {
       ]);
     }
     
+    // Si viene de cotización, actualizar estado
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 

@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, ShoppingCart, Filter, TrendingUp, Clock,
-  Package, Truck, CheckCircle, XCircle, AlertTriangle
+  Package, Truck, CheckCircle, XCircle, AlertTriangle,
+  Download, User, UserCheck
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -17,8 +18,10 @@ function OrdenesVenta() {
   const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroPrioridad, setFiltroPrioridad] = useState('');
+  const [descargandoPDF, setDescargandoPDF] = useState(null);
 
   useEffect(() => {
     cargarDatos();
@@ -29,7 +32,6 @@ function OrdenesVenta() {
       setLoading(true);
       setError(null);
       
-      // ✅ Cargar órdenes con filtros
       const filtros = {};
       if (filtroEstado) filtros.estado = filtroEstado;
       if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
@@ -52,6 +54,36 @@ function OrdenesVenta() {
       setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDescargarPDF = async (idOrden, numeroOrden) => {
+    try {
+      setDescargandoPDF(idOrden);
+      setError(null);
+      
+      const response = await ordenesVentaAPI.descargarPDF(idOrden);
+      
+      if (response.data) {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${numeroOrden}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        setSuccess('PDF descargado exitosamente');
+        setTimeout(() => setSuccess(null), 3000);
+      }
+      
+    } catch (err) {
+      console.error('Error al descargar PDF:', err);
+      setError(err.response?.data?.error || 'Error al descargar PDF');
+    } finally {
+      setDescargandoPDF(null);
     }
   };
 
@@ -150,12 +182,31 @@ function OrdenesVenta() {
       )
     },
     {
-      header: 'Items',
-      accessor: 'total_items',
-      width: '80px',
-      align: 'center',
-      render: (value) => (
-        <span className="badge badge-outline">{value || 0}</span>
+      header: 'Vendedores',
+      accessor: 'comercial',
+      width: '180px',
+      render: (value, row) => (
+        <div className="text-xs">
+          {/* Vendedor Asignado */}
+          {row.comercial && (
+            <div className="flex items-center gap-1 mb-1">
+              <UserCheck size={12} className="text-primary" />
+              <span className="font-medium">Asignado:</span>
+              <span className="text-muted">{row.comercial}</span>
+            </div>
+          )}
+          {/* Vendedor Registrador */}
+          {row.registrado_por && (
+            <div className="flex items-center gap-1">
+              <User size={12} className="text-muted" />
+              <span className="font-medium">Registró:</span>
+              <span className="text-muted">{row.registrado_por}</span>
+            </div>
+          )}
+          {!row.comercial && !row.registrado_por && (
+            <span className="text-muted">Sin asignar</span>
+          )}
+        </div>
       )
     },
     {
@@ -200,16 +251,30 @@ function OrdenesVenta() {
     {
       header: 'Acciones',
       accessor: 'id_orden_venta',
-      width: '100px',
+      width: '120px',
       align: 'center',
-      render: (value) => (
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={() => navigate(`/ventas/ordenes/${value}`)}
-          title="Ver detalle"
-        >
-          <Eye size={14} />
-        </button>
+      render: (value, row) => (
+        <div className="flex gap-1 justify-center">
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => navigate(`/ventas/ordenes/${value}`)}
+            title="Ver detalle"
+          >
+            <Eye size={14} />
+          </button>
+          <button
+            className="btn btn-sm btn-outline"
+            onClick={() => handleDescargarPDF(value, row.numero_orden)}
+            disabled={descargandoPDF === value}
+            title="Descargar PDF"
+          >
+            {descargandoPDF === value ? (
+              <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-t-transparent"></div>
+            ) : (
+              <Download size={14} />
+            )}
+          </button>
+        </div>
       )
     }
   ];
@@ -236,6 +301,7 @@ function OrdenesVenta() {
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       {/* Estadísticas */}
       {estadisticas && (

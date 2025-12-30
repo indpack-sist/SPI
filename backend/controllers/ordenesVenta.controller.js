@@ -9,7 +9,9 @@ export async function getAllOrdenesVenta(req, res) {
         ov.id_orden_venta,
         ov.numero_orden,
         ov.fecha_emision,
+        ov.fecha_entrega_estimada,
         ov.estado,
+        ov.prioridad,
         ov.subtotal,
         ov.igv,
         ov.total,
@@ -18,10 +20,16 @@ export async function getAllOrdenesVenta(req, res) {
         c.numero_cotizacion,
         cl.id_cliente,
         cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente
+        cl.ruc AS ruc_cliente,
+        e_comercial.nombre_completo AS comercial,
+        e_registrado.nombre_completo AS registrado_por,
+        ov.id_comercial,
+        ov.id_registrado_por
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
       WHERE 1=1
     `;
     
@@ -536,28 +544,36 @@ export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     
+    // Obtener orden con detalle
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente,
-        e.nombre_completo AS comercial
+        cl.telefono AS telefono_cliente,
+        e_comercial.nombre_completo AS comercial,
+        e_comercial.email AS email_comercial,
+        e_registrado.nombre_completo AS registrado_por,
+        c.numero_cotizacion
       FROM ordenes_venta ov
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       WHERE ov.id_orden_venta = ?
     `, [id]);
     
     if (!ordenResult.success || ordenResult.data.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Orden no encontrada'
+        error: 'Orden de venta no encontrada'
       });
     }
     
     const orden = ordenResult.data[0];
     
+    // Obtener detalle
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
@@ -570,16 +586,25 @@ export async function descargarPDFOrdenVenta(req, res) {
       ORDER BY dov.orden
     `, [id]);
     
+    if (!detalleResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalle de la orden'
+      });
+    }
+    
     orden.detalle = detalleResult.data;
     
-    res.json({
-      success: true,
-      data: orden,
-      message: 'Generar PDF con estos datos'
-    });
+    // Generar PDF
+    const pdfBuffer = await generarOrdenVentaPDF(orden);
+    
+    // Enviar PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="OrdenVenta-${orden.numero_orden}.pdf"`);
+    res.send(pdfBuffer);
     
   } catch (error) {
-    console.error('Error al descargar PDF:', error);
+    console.error('Error al generar PDF de orden de venta:', error);
     res.status(500).json({
       success: false,
       error: error.message

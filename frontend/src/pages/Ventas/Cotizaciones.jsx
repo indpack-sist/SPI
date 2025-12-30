@@ -143,9 +143,20 @@ function Cotizaciones() {
       header: 'Total',
       accessor: 'total',
       align: 'right',
-      width: '120px',
+      width: '150px',
       render: (value, row) => (
-        <span className="font-bold">{formatearMoneda(value, row.moneda)}</span>
+        <div className="text-right">
+          <div className="font-bold">{formatearMoneda(value, row.moneda)}</div>
+          {/* ✅ Mostrar conversión si hay tipo de cambio */}
+          {row.tipo_cambio && parseFloat(row.tipo_cambio) > 1 && (
+            <div className="text-xs text-muted">
+              {row.moneda === 'USD' 
+                ? `≈ S/ ${(parseFloat(value) * parseFloat(row.tipo_cambio)).toFixed(2)}`
+                : `≈ $ ${(parseFloat(value) / parseFloat(row.tipo_cambio)).toFixed(2)}`
+              }
+            </div>
+          )}
+        </div>
       )
     },
     {

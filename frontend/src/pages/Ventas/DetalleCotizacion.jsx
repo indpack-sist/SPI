@@ -543,6 +543,29 @@ function DetalleCotizacion() {
                 <span className="font-bold text-lg">TOTAL:</span>
                 <span className="font-bold text-2xl">{formatearMoneda(cotizacion.total)}</span>
               </div>
+              
+              {/* ✅ NUEVO: Conversión de moneda con tipo de cambio */}
+              {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 1) > 1 && (
+                <div className="flex justify-between py-2 bg-blue-50 px-4 rounded-lg border border-blue-200">
+                  <span className="text-sm font-medium text-blue-900">
+                    Equivalente en Soles (TC: {parseFloat(cotizacion.tipo_cambio).toFixed(4)}):
+                  </span>
+                  <span className="font-bold text-blue-900">
+                    S/ {(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio)).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              
+              {cotizacion.moneda === 'PEN' && parseFloat(cotizacion.tipo_cambio || 1) > 1 && (
+                <div className="flex justify-between py-2 bg-green-50 px-4 rounded-lg border border-green-200">
+                  <span className="text-sm font-medium text-green-900">
+                    Equivalente en Dólares (TC: {parseFloat(cotizacion.tipo_cambio).toFixed(4)}):
+                  </span>
+                  <span className="font-bold text-green-900">
+                    $ {(parseFloat(cotizacion.total) / parseFloat(cotizacion.tipo_cambio)).toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

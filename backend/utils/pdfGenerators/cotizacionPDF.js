@@ -242,25 +242,25 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica-Bold');
       doc.text('PLAZO PAGO:', rightX, rightY);
       doc.font('Helvetica');
-      const plazoTexto = cotizacion.plazo_pago || 'Contado';
-      const plazoAltura = calcularAlturaTexto(doc, plazoTexto, 165, 9);
-      doc.text(plazoTexto, rightX + 80, rightY, {
+      const plazoPagoTexto = cotizacion.plazo_pago || 'Contado';
+      const plazoPagoAltura = calcularAlturaTexto(doc, plazoPagoTexto, 165, 9);
+      doc.text(plazoPagoTexto, rightX + 80, rightY, {
         width: 165,
         lineGap: 2
       });
-      rightY += Math.max(plazoAltura, 12) + 3;
+      rightY += Math.max(plazoPagoAltura, 12) + 3;
 
       // FORMA PAGO (con wrap si es largo)
       doc.font('Helvetica-Bold');
       doc.text('FORMA PAGO:', rightX, rightY);
       doc.font('Helvetica');
-      const formaTexto = cotizacion.forma_pago || 'N/A';
-      const formaAltura = calcularAlturaTexto(doc, formaTexto, 165, 9);
-      doc.text(formaTexto, rightX + 80, rightY, {
+      const formaPagoTexto = cotizacion.forma_pago || 'N/A';
+      const formaPagoAltura = calcularAlturaTexto(doc, formaPagoTexto, 165, 9);
+      doc.text(formaPagoTexto, rightX + 80, rightY, {
         width: 165,
         lineGap: 2
       });
-      rightY += Math.max(formaAltura, 12) + 3;
+      rightY += Math.max(formaPagoAltura, 12) + 3;
 
       // ✅ Avanzar yPos al máximo de ambas columnas
       yPos = Math.max(leftY, rightY) + 10;
@@ -465,31 +465,32 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text('CONDICIONES:', 50, yPos);
       yPos += 15;
 
-      const plazo = cotizacion.plazo_entrega || 'Según coordinación';
-      let txtPlazo = plazo;
-      if (/^\d+$/.test(plazo)) {
-        txtPlazo = `${plazo} días hábiles`;
+      const plazoEntrega = cotizacion.plazo_entrega || 'Según coordinación';
+      let txtPlazoEntrega = plazoEntrega;
+      if (/^\d+$/.test(plazoEntrega)) {
+        txtPlazoEntrega = `${plazoEntrega} días hábiles`;
       }
 
       doc.fontSize(8).font('Helvetica');
       
       // Plazo de entrega (con wrap)
-      const plazoTexto = `• Plazo de entrega: ${txtPlazo}`;
-      const plazoAlt = calcularAlturaTexto(doc, plazoTexto, 490, 8);
-      doc.text(plazoTexto, 55, yPos, { 
+      const condicionPlazo = `• Plazo de entrega: ${txtPlazoEntrega}`;
+      const condicionPlazoAlt = calcularAlturaTexto(doc, condicionPlazo, 490, 8);
+      doc.text(condicionPlazo, 55, yPos, { 
         width: 490,
         lineGap: 2
       });
-      yPos += plazoAlt + 5;
+      yPos += condicionPlazoAlt + 5;
       
       // Lugar de entrega (con wrap)
-      const lugarTexto = `• Lugar de entrega: ${cotizacion.lugar_entrega || cotizacion.direccion_cliente || 'Por coordinar'}`;
-      const lugarAlt = calcularAlturaTexto(doc, lugarTexto, 490, 8);
-      doc.text(lugarTexto, 55, yPos, { 
+      const lugarEntrega = cotizacion.lugar_entrega || cotizacion.direccion_cliente || 'Por coordinar';
+      const condicionLugar = `• Lugar de entrega: ${lugarEntrega}`;
+      const condicionLugarAlt = calcularAlturaTexto(doc, condicionLugar, 490, 8);
+      doc.text(condicionLugar, 55, yPos, { 
         width: 490,
         lineGap: 2
       });
-      yPos += lugarAlt + 5;
+      yPos += condicionLugarAlt + 5;
       
       // Validez
       const validez = cotizacion.validez_dias || 7;
@@ -504,8 +505,9 @@ export async function generarCotizacionPDF(cotizacion) {
         yPos += 12;
         
         doc.fontSize(8).font('Helvetica');
-        const obsAlt = calcularAlturaTexto(doc, cotizacion.observaciones, 495, 8);
-        doc.text(cotizacion.observaciones, 50, yPos, { 
+        const obsTexto = cotizacion.observaciones || '';
+        const obsAlt = calcularAlturaTexto(doc, obsTexto, 495, 8);
+        doc.text(obsTexto, 50, yPos, { 
           width: 495,
           lineGap: 2
         });

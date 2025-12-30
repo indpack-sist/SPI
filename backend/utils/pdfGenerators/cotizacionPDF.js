@@ -65,10 +65,21 @@ function numeroALetras(numero) {
  * Calcular altura que ocupará un texto con el ancho dado
  */
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 9) {
-  const heightOfString = doc.heightOfString(texto, {
+  // Guardar estado actual
+  const currentFontSize = doc._fontSize || 12;
+  
+  // Establecer fontSize para la medición
+  doc.fontSize(fontSize);
+  
+  // Medir altura
+  const heightOfString = doc.heightOfString(texto || '', {
     width: ancho,
     lineGap: 2
   });
+  
+  // Restaurar fontSize original
+  doc.fontSize(currentFontSize);
+  
   return Math.ceil(heightOfString);
 }
 
@@ -184,7 +195,8 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('RUC:', 50, leftY);
       doc.font('Helvetica');
-      doc.text(cotizacion.ruc_cliente || 'N/A', 90, leftY);
+      const rucTexto = cotizacion.ruc_cliente || 'N/A';
+      doc.text(rucTexto, 90, leftY);
       leftY += 15;
 
       // CLIENTE (con altura dinámica)
@@ -194,12 +206,12 @@ export async function generarCotizacionPDF(cotizacion) {
       
       doc.font('Helvetica');
       const clienteTexto = cotizacion.cliente || 'N/A';
-      const clienteAltura = calcularAlturaTexto(doc, clienteTexto, 230);
+      const clienteAltura = calcularAlturaTexto(doc, clienteTexto, 230, 9);
       doc.text(clienteTexto, 50, leftY, { 
         width: 230,
         lineGap: 2
       });
-      leftY += clienteAltura + 5;
+      leftY += Math.max(clienteAltura, 12) + 5;
 
       // DIRECCIÓN (con altura dinámica)
       doc.font('Helvetica-Bold');
@@ -208,12 +220,12 @@ export async function generarCotizacionPDF(cotizacion) {
       
       doc.font('Helvetica');
       const direccionTexto = cotizacion.direccion_cliente || 'N/A';
-      const direccionAltura = calcularAlturaTexto(doc, direccionTexto, 230);
+      const direccionAltura = calcularAlturaTexto(doc, direccionTexto, 230, 9);
       doc.text(direccionTexto, 50, leftY, { 
         width: 230,
         lineGap: 2
       });
-      leftY += direccionAltura + 5;
+      leftY += Math.max(direccionAltura, 12) + 5;
 
       // ✅ COLUMNA DERECHA CON ALTURA DINÁMICA
       let rightY = yPos;
@@ -223,7 +235,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('MONEDA:', rightX, rightY);
       doc.font('Helvetica');
-      doc.text(cotizacion.moneda, rightX + 80, rightY);
+      doc.text(cotizacion.moneda || 'PEN', rightX + 80, rightY);
       rightY += 15;
 
       // PLAZO PAGO (con wrap si es largo)
@@ -231,7 +243,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text('PLAZO PAGO:', rightX, rightY);
       doc.font('Helvetica');
       const plazoTexto = cotizacion.plazo_pago || 'Contado';
-      const plazoAltura = calcularAlturaTexto(doc, plazoTexto, 165);
+      const plazoAltura = calcularAlturaTexto(doc, plazoTexto, 165, 9);
       doc.text(plazoTexto, rightX + 80, rightY, {
         width: 165,
         lineGap: 2
@@ -243,7 +255,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text('FORMA PAGO:', rightX, rightY);
       doc.font('Helvetica');
       const formaTexto = cotizacion.forma_pago || 'N/A';
-      const formaAltura = calcularAlturaTexto(doc, formaTexto, 165);
+      const formaAltura = calcularAlturaTexto(doc, formaTexto, 165, 9);
       doc.text(formaTexto, rightX + 80, rightY, {
         width: 165,
         lineGap: 2
@@ -260,12 +272,12 @@ export async function generarCotizacionPDF(cotizacion) {
       
       doc.font('Helvetica');
       const asesorTexto = cotizacion.comercial || 'N/A';
-      const asesorAltura = calcularAlturaTexto(doc, asesorTexto, 495);
+      const asesorAltura = calcularAlturaTexto(doc, asesorTexto, 495, 9);
       doc.text(asesorTexto, 50, yPos, {
         width: 495,
         lineGap: 2
       });
-      yPos += asesorAltura;
+      yPos += Math.max(asesorAltura, 12);
 
       if (cotizacion.email_comercial) {
         yPos += 5;
@@ -309,7 +321,8 @@ export async function generarCotizacionPDF(cotizacion) {
       // Filas de productos
       cotizacion.detalle.forEach((item, idx) => {
         // ✅ CALCULAR ALTURA REAL DE LA FILA
-        const descripcionAltura = calcularAlturaTexto(doc, item.producto, 200, 8);
+        const productoTexto = item.producto || 'Sin descripción';
+        const descripcionAltura = calcularAlturaTexto(doc, productoTexto, 200, 8);
         const rowH = Math.max(descripcionAltura + 10, 25); // Mínimo 25pt
 
         // ✅ VERIFICAR SI NECESITA NUEVA PÁGINA
@@ -334,7 +347,7 @@ export async function generarCotizacionPDF(cotizacion) {
         });
         
         // Cantidad
-        doc.text(parseFloat(item.cantidad).toFixed(2), 115, rowY, { 
+        doc.text(parseFloat(item.cantidad || 0).toFixed(2), 115, rowY, { 
           width: 40, 
           align: 'center',
           lineBreak: false
@@ -348,21 +361,21 @@ export async function generarCotizacionPDF(cotizacion) {
         });
         
         // Descripción (con wrap automático)
-        doc.text(item.producto, 200, rowY, { 
+        doc.text(productoTexto, 200, rowY, { 
           width: 200,
           lineGap: 2
         });
         
         // Precio unitario
         const sim = cotizacion.moneda === 'USD' ? '$' : 'S/';
-        doc.text(`${sim} ${parseFloat(item.precio_unitario).toFixed(2)}`, 405, rowY, { 
+        doc.text(`${sim} ${parseFloat(item.precio_unitario || 0).toFixed(2)}`, 405, rowY, { 
           width: 65, 
           align: 'right',
           lineBreak: false
         });
         
         // Valor venta
-        const vv = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+        const vv = parseFloat(item.cantidad || 0) * parseFloat(item.precio_unitario || 0);
         const desc = vv * (parseFloat(item.descuento_porcentaje || 0) / 100);
         const vt = vv - desc;
         doc.text(`${sim} ${vt.toFixed(2)}`, 475, rowY, { 

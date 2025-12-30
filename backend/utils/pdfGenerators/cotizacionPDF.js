@@ -147,10 +147,13 @@ export async function generarCotizacionPDF(cotizacion) {
       yPosition += 12;
       doc.fontSize(8)
          .font('Helvetica')
-         .text('Av. Villa Maria S/N Parque Industrial Villa El Salvador', 50, yPosition);
+         .text('Av. El Sol Mz. D Lt. 01 Sector 1 Grupo 20, Villa El Salvador', 50, yPosition);
       
       yPosition += 10;
-      doc.text('Teléfono: +51 987 654 321', 50, yPosition);
+      doc.text('Teléfono: +51 981 433 796', 50, yPosition);
+      
+      yPosition += 10;
+      doc.text('Email: ventas@indpackperu.com', 50, yPosition);
       
       yPosition += 10;
       doc.text('www.indpackperu.com', 50, yPosition);
@@ -178,57 +181,76 @@ export async function generarCotizacionPDF(cotizacion) {
       yPosition += 15;
       const col1X = 50;
       const col2X = 300;
+      let currentY = yPosition;
 
+      // Columna 1
       doc.fontSize(9)
          .font('Helvetica-Bold')
-         .text('RUC:', col1X, yPosition, { continued: true })
+         .text('RUC:', col1X, currentY, { continued: true })
          .font('Helvetica')
-         .text(` ${cotizacion.ruc_cliente || ''}`, { continued: false });
+         .text(` ${cotizacion.ruc_cliente || 'N/A'}`, { continued: false });
 
+      currentY += 12;
       doc.fontSize(9)
          .font('Helvetica-Bold')
-         .text('MONEDA:', col2X, yPosition, { continued: true })
+         .text('CLIENTE:', col1X, currentY);
+      
+      currentY += 12;
+      doc.fontSize(9)
+         .font('Helvetica')
+         .text(cotizacion.cliente, col1X, currentY, { width: 240 });
+
+      currentY += 12;
+      doc.fontSize(9)
+         .font('Helvetica-Bold')
+         .text('DIRECCIÓN:', col1X, currentY);
+      
+      currentY += 12;
+      doc.fontSize(9)
+         .font('Helvetica')
+         .text(cotizacion.direccion_cliente || 'N/A', col1X, currentY, { width: 240 });
+
+      // Columna 2
+      let col2Y = yPosition;
+      
+      doc.fontSize(9)
+         .font('Helvetica-Bold')
+         .text('MONEDA:', col2X, col2Y, { continued: true })
          .font('Helvetica')
          .text(` ${cotizacion.moneda}`, { continued: false });
 
-      yPosition += 12;
+      col2Y += 12;
       doc.fontSize(9)
          .font('Helvetica-Bold')
-         .text('CLIENTE:', col1X, yPosition, { continued: true })
-         .font('Helvetica')
-         .text(` ${cotizacion.cliente}`, { width: 240, continued: false });
-
-      doc.fontSize(9)
-         .font('Helvetica-Bold')
-         .text('PLAZO PAGO:', col2X, yPosition, { continued: true })
+         .text('PLAZO PAGO:', col2X, col2Y, { continued: true })
          .font('Helvetica')
          .text(` ${cotizacion.plazo_pago || 'Contado'}`, { continued: false });
 
+      col2Y += 12;
+      doc.fontSize(9)
+         .font('Helvetica-Bold')
+         .text('FORMA PAGO:', col2X, col2Y, { continued: true })
+         .font('Helvetica')
+         .text(` ${cotizacion.forma_pago || 'N/A'}`, { continued: false });
+
+      // Avanzar yPosition al máximo de ambas columnas
+      yPosition = Math.max(currentY, col2Y) + 15;
+
+      // Asesor en línea separada
+      doc.fontSize(9)
+         .font('Helvetica-Bold')
+         .text('ASESOR COMERCIAL:', 50, yPosition);
+      
       yPosition += 12;
       doc.fontSize(9)
-         .font('Helvetica-Bold')
-         .text('DIRECCIÓN:', col1X, yPosition, { continued: true })
          .font('Helvetica')
-         .text(` ${cotizacion.direccion_cliente || ''}`, { width: 240, continued: false });
-
-      doc.fontSize(9)
-         .font('Helvetica-Bold')
-         .text('FORMA PAGO:', col2X, yPosition, { continued: true })
-         .font('Helvetica')
-         .text(` ${cotizacion.forma_pago || ''}`, { continued: false });
-
-      yPosition += 12;
-      doc.fontSize(9)
-         .font('Helvetica-Bold')
-         .text('ASESOR:', col1X, yPosition, { continued: true })
-         .font('Helvetica')
-         .text(` ${cotizacion.comercial || ''}`, { width: 240, continued: false });
+         .text(cotizacion.comercial || 'N/A', 50, yPosition);
 
       if (cotizacion.email_comercial) {
-        yPosition += 10;
+        yPosition += 12;
         doc.fontSize(8)
            .font('Helvetica')
-           .text(`${cotizacion.email_comercial}`, col1X + 55, yPosition, { width: 240 });
+           .text(cotizacion.email_comercial, 50, yPosition);
       }
 
       // ============================================
@@ -269,8 +291,8 @@ export async function generarCotizacionPDF(cotizacion) {
       // Filas de productos
       cotizacion.detalle.forEach((item, index) => {
         // Calcular altura de la fila según descripción
-        const descripcionHeight = Math.ceil(item.producto.length / 35) * 12;
-        const rowHeight = Math.max(descripcionHeight, 20);
+        const descripcionLines = Math.ceil(item.producto.length / 35);
+        const rowHeight = Math.max(descripcionLines * 12, 25);
 
         // Alternar color de fondo
         if (index % 2 === 0) {
@@ -281,35 +303,41 @@ export async function generarCotizacionPDF(cotizacion) {
            .fontSize(8)
            .font('Helvetica');
 
+        const rowY = yPosition + 7;
+
         // CÓDIGO
-        doc.text(item.codigo_producto || '', 50, yPosition + 5, { 
+        doc.text(item.codigo_producto || '', 50, rowY, { 
           width: 60, 
-          align: 'left' 
+          align: 'left',
+          lineBreak: false
         });
 
         // CANTIDAD
-        doc.text(parseFloat(item.cantidad).toFixed(2), 115, yPosition + 5, { 
+        doc.text(parseFloat(item.cantidad).toFixed(2), 115, rowY, { 
           width: 40, 
-          align: 'center' 
+          align: 'center',
+          lineBreak: false
         });
 
-        // UNIDAD
-        doc.text(item.unidad_medida || 'UND', 160, yPosition + 5, { 
+        // UNIDAD - ✅ CORREGIDO: Sin lineBreak para evitar mezcla
+        doc.text(item.unidad_medida || 'UND', 160, rowY, { 
           width: 35, 
-          align: 'center' 
+          align: 'center',
+          lineBreak: false
         });
 
-        // DESCRIPCIÓN
-        doc.text(item.producto, 200, yPosition + 5, { 
+        // DESCRIPCIÓN - ✅ CORREGIDO: Con wrap para textos largos
+        doc.text(item.producto, 200, rowY, { 
           width: 200, 
-          align: 'left' 
+          align: 'left'
         });
 
         // VALOR UNITARIO
         const simbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
-        doc.text(`${simbolo} ${parseFloat(item.precio_unitario).toFixed(2)}`, 405, yPosition + 5, { 
+        doc.text(`${simbolo} ${parseFloat(item.precio_unitario).toFixed(2)}`, 405, rowY, { 
           width: 65, 
-          align: 'right' 
+          align: 'right',
+          lineBreak: false
         });
 
         // VALOR VENTA
@@ -317,9 +345,10 @@ export async function generarCotizacionPDF(cotizacion) {
         const descuento = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
         const valorTotal = valorVenta - descuento;
         
-        doc.text(`${simbolo} ${valorTotal.toFixed(2)}`, 475, yPosition + 5, { 
+        doc.text(`${simbolo} ${valorTotal.toFixed(2)}`, 475, rowY, { 
           width: 70, 
-          align: 'right' 
+          align: 'right',
+          lineBreak: false
         });
 
         yPosition += rowHeight;
@@ -376,6 +405,31 @@ export async function generarCotizacionPDF(cotizacion) {
         align: 'right' 
       });
 
+      // ✅ NUEVO: Mostrar tipo de cambio y equivalencia
+      const tipoCambio = parseFloat(cotizacion.tipo_cambio || 1);
+      if (tipoCambio > 1) {
+        yPosition += 20;
+        
+        // Tipo de cambio
+        doc.fontSize(8)
+           .font('Helvetica')
+           .fillColor('#666666')
+           .text(`Tipo de Cambio: ${tipoCambio.toFixed(4)}`, totalesX, yPosition, { width: 140, align: 'left' });
+        
+        yPosition += 12;
+        
+        // Equivalencia
+        if (cotizacion.moneda === 'PEN') {
+          const equivalenteUSD = parseFloat(cotizacion.total) / tipoCambio;
+          doc.text(`Equivalente: $ ${equivalenteUSD.toFixed(2)}`, totalesX, yPosition, { width: 140, align: 'left' });
+        } else if (cotizacion.moneda === 'USD') {
+          const equivalentePEN = parseFloat(cotizacion.total) * tipoCambio;
+          doc.text(`Equivalente: S/ ${equivalentePEN.toFixed(2)}`, totalesX, yPosition, { width: 140, align: 'left' });
+        }
+        
+        doc.fillColor('#000000'); // Restaurar color negro
+      }
+
       // ============================================
       // MONTO EN LETRAS
       // ============================================
@@ -399,16 +453,26 @@ export async function generarCotizacionPDF(cotizacion) {
          .text('CONDICIONES:', 50, yPosition);
       
       yPosition += 15;
+      
+      // Plazo de entrega con formato mejorado
+      const plazoEntrega = cotizacion.plazo_entrega || 'Según coordinación';
+      let textoEntrega = plazoEntrega;
+      
+      // Si es solo un número, agregar "días hábiles"
+      if (/^\d+$/.test(plazoEntrega)) {
+        textoEntrega = `${plazoEntrega} días hábiles`;
+      }
+      
       doc.fontSize(8)
          .font('Helvetica')
-         .text(`• Plazo de entrega: ${cotizacion.plazo_entrega || 'Según coordinación'}`, 55, yPosition);
+         .text(`• Plazo de entrega: ${textoEntrega}`, 55, yPosition);
       
       yPosition += 12;
-      doc.text(`• Lugar de entrega: ${cotizacion.lugar_entrega || cotizacion.direccion_cliente || 'Por coordinar'}`, 55, yPosition);
+      doc.text(`• Lugar de entrega: ${cotizacion.lugar_entrega || cotizacion.direccion_cliente || 'Por coordinar'}`, 55, yPosition, { width: 490 });
       
       yPosition += 12;
       const validezDias = cotizacion.validez_dias || 7;
-      doc.text(`• Validez de la oferta: ${validezDias} días`, 55, yPosition);
+      doc.text(`• Validez de la oferta: ${validezDias} días calendario`, 55, yPosition);
 
       // Observaciones si existen
       if (cotizacion.observaciones) {
@@ -429,7 +493,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.fontSize(7)
          .font('Helvetica')
          .fillColor('#666666')
-         .text('Este documento ha sido generado electrónicamente por el sistema IndPack ERP.', 50, 770, { 
+         .text('Este documento ha sido generado electrónicamente por el sistema IndPack.', 50, 770, { 
            width: 495, 
            align: 'center' 
          });

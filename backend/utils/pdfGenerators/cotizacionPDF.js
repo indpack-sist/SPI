@@ -156,7 +156,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text(cotizacion.numero_cotizacion, boxX, boxY + 55, { width: boxW, align: 'center' });
 
       // Datos de la empresa (Debajo del logo)
-      yPos += 100;
+      yPos += 65;  // ✅ Reducido de 100 a 65
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, yPos);
       

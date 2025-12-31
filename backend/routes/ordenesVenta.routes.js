@@ -1,4 +1,5 @@
 import express from 'express';
+import { verificarToken } from '../middlewares/auth.js';
 import {
   getAllOrdenesVenta,
   getOrdenVentaById,
@@ -11,15 +12,16 @@ import {
 } from '../controllers/ordenesVenta.controller.js';
 
 const router = express.Router();
-router.get('/estadisticas', getEstadisticasOrdenesVenta);
-router.get('/', getAllOrdenesVenta);
-router.post('/', createOrdenVenta);
 
-router.get('/:id/pdf', descargarPDFOrdenVenta);
-router.put('/:id/estado', actualizarEstadoOrdenVenta);
-router.put('/:id/prioridad', actualizarPrioridadOrdenVenta);
-router.put('/:id/progreso', actualizarProgresoOrdenVenta);
+router.get('/estadisticas', verificarToken, getEstadisticasOrdenesVenta);
+router.get('/', verificarToken, getAllOrdenesVenta);
+router.post('/', verificarToken, createOrdenVenta);
 
-router.get('/:id', getOrdenVentaById);
+router.get('/:id/pdf', verificarToken, descargarPDFOrdenVenta);
+router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
+router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
+router.put('/:id/progreso', verificarToken, actualizarProgresoOrdenVenta);
+
+router.get('/:id', verificarToken, getOrdenVentaById);
 
 export default router;

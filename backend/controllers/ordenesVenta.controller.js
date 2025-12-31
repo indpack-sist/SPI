@@ -159,6 +159,9 @@ export async function getOrdenVentaById(req, res) {
   }
 }
 
+// backend/controllers/ordenesVenta.controller.js
+// ✅ CORRECCIÓN: Quitar valor_venta y orden del INSERT
+
 export async function createOrdenVenta(req, res) {
   try {
     const {
@@ -298,11 +301,9 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
+    // ✅ CORRECCIÓN: Quitar valor_venta y orden
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      const valorTotal = valorVenta - descuentoItem;
       
       await executeQuery(`
         INSERT INTO detalle_orden_venta (
@@ -310,21 +311,19 @@ export async function createOrdenVenta(req, res) {
           id_producto,
           cantidad,
           precio_unitario,
-          descuento_porcentaje,
-          valor_venta,
-          cantidad_producida,
-          cantidad_despachada,
-          orden
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)
+          descuento_porcentaje
+        ) VALUES (?, ?, ?, ?, ?)
       `, [
         idOrden,
         item.id_producto,
-        item.cantidad,
-        item.precio_unitario,
-        item.descuento_porcentaje || 0,
-        valorTotal,
-        i + 1
+        parseFloat(item.cantidad),
+        parseFloat(item.precio_unitario),
+        parseFloat(item.descuento_porcentaje || 0)
       ]);
+      
+      // MySQL calcula automáticamente:
+      // subtotal = cantidad * precio_unitario * (1 - descuento_porcentaje/100)
+      // margen = (precio_unitario - costo_unitario) * cantidad
     }
     
     if (id_cotizacion) {

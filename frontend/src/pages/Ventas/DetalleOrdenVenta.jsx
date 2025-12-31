@@ -178,11 +178,17 @@ function DetalleOrdenVenta() {
         color: 'border-warning',
         siguientes: ['En Proceso', 'Cancelada']
       },
-      'En Proceso': { 
-        icono: Package, 
+      'En Preparación': {  // ← Cambiar de "En Proceso"
+        icono: Package,
         clase: 'badge-info',
         color: 'border-info',
         siguientes: ['Despachada', 'Cancelada']
+      },
+      'Confirmada': {  // ← AGREGAR nuevo estado
+        icono: CheckCircle,
+        clase: 'badge-info',
+        color: 'border-info',
+        siguientes: ['En Preparación', 'Cancelada']
       },
       'Despachada': { 
         icono: Truck, 
@@ -356,7 +362,7 @@ function DetalleOrdenVenta() {
               <button className="btn btn-info" onClick={() => setModalProgresoOpen(true)}>
                 <Package size={20} /> Progreso
               </button>
-              {(orden.estado === 'En Proceso' || orden.estado === 'Despachada') && (
+              {(orden.estado === 'En Preparación' || orden.estado === 'Despachada') && (
                 <button className="btn btn-primary" onClick={handleGenerarGuia}>
                   <Plus size={20} /> Guía de Remisión
                 </button>

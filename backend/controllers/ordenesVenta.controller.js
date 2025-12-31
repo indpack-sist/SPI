@@ -80,9 +80,6 @@ export async function getAllOrdenesVenta(req, res) {
   }
 }
 
-// backend/controllers/ordenesVenta.controller.js
-// ✅ CORRECCIÓN: Quitar referencia a stock_productos
-
 export async function getOrdenVentaById(req, res) {
   try {
     const { id } = req.params;
@@ -119,9 +116,11 @@ export async function getOrdenVentaById(req, res) {
     
     const orden = ordenResult.data[0];
     
+    // ✅ CORRECCIÓN: Usar p.stock_actual directamente
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
+        dov.subtotal AS valor_venta,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,

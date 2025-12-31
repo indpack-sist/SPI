@@ -119,7 +119,6 @@ export async function getOrdenVentaById(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // ✅ CORRECCIÓN: Usar p.stock_actual directamente
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
@@ -133,7 +132,7 @@ export async function getOrdenVentaById(req, res) {
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.orden
+      ORDER BY dov.id_detalle
     `, [id]);
     
     if (!detalleResult.success) {
@@ -158,13 +157,6 @@ export async function getOrdenVentaById(req, res) {
     });
   }
 }
-
-// backend/controllers/ordenesVenta.controller.js
-// ✅ CORRECCIÓN: Quitar valor_venta y orden del INSERT
-
-// backend/controllers/ordenesVenta.controller.js
-// ✅ CORRECCIÓN: Quitar valor_venta y orden del INSERT
-
 export async function createOrdenVenta(req, res) {
   try {
     const {
@@ -569,7 +561,7 @@ export async function descargarPDFOrdenVenta(req, res) {
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.orden
+      ORDER BY dov.id_detalle
     `, [id]);
     
     if (!detalleResult.success) {

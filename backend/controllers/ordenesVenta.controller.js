@@ -162,6 +162,9 @@ export async function getOrdenVentaById(req, res) {
 // backend/controllers/ordenesVenta.controller.js
 // ✅ CORRECCIÓN: Quitar valor_venta y orden del INSERT
 
+// backend/controllers/ordenesVenta.controller.js
+// ✅ CORRECCIÓN: Quitar valor_venta y orden del INSERT
+
 export async function createOrdenVenta(req, res) {
   try {
     const {

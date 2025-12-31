@@ -80,6 +80,9 @@ export async function getAllOrdenesVenta(req, res) {
   }
 }
 
+// backend/controllers/ordenesVenta.controller.js
+// ✅ CORRECCIÓN: Quitar referencia a stock_productos
+
 export async function getOrdenVentaById(req, res) {
   try {
     const { id } = req.params;
@@ -116,6 +119,7 @@ export async function getOrdenVentaById(req, res) {
     
     const orden = ordenResult.data[0];
     
+    // ✅ CORRECCIÓN: Usar p.stock_actual directamente
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
@@ -123,13 +127,8 @@ export async function getOrdenVentaById(req, res) {
         p.nombre AS producto,
         p.unidad_medida,
         p.requiere_receta,
-        ti.nombre AS tipo_inventario_nombre,
-        (
-          SELECT stock_actual 
-          FROM stock_productos 
-          WHERE id_producto = dov.id_producto 
-          LIMIT 1
-        ) AS stock_disponible
+        p.stock_actual AS stock_disponible,
+        ti.nombre AS tipo_inventario_nombre
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
@@ -185,23 +184,14 @@ export async function createOrdenVenta(req, res) {
       detalle
     } = req.body;
     
-    // ✅ LÓGICA CORRECTA: id_registrado_por es el VENDEDOR
-    // Opciones en orden de prioridad:
-    // 1. Comercial asignado a la orden (viene del formulario o de la cotización)
-    // 2. Usuario autenticado (si es vendedor/comercial)
-    // 3. Requerir que se especifique uno
-    
     let id_registrado_por = null;
     
     if (id_comercial) {
-      // Si se especificó un comercial, ese registra la orden
       id_registrado_por = id_comercial;
     } else if (req.user?.id_empleado) {
-      // Si no hay comercial, usar el usuario autenticado
       id_registrado_por = req.user.id_empleado;
     }
     
-    // Validaciones
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,
@@ -216,7 +206,6 @@ export async function createOrdenVenta(req, res) {
       });
     }
     
-    // Generar número de orden
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_venta 
@@ -234,7 +223,6 @@ export async function createOrdenVenta(req, res) {
     
     const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // Calcular totales
     let subtotal = 0;
     for (const item of detalle) {
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -246,7 +234,6 @@ export async function createOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje_imp / 100);
     const total = subtotal + impuesto;
     
-    // ✅ INSERTAR ORDEN con vendedor correcto
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
         numero_orden,
@@ -295,8 +282,8 @@ export async function createOrdenVenta(req, res) {
       contacto_entrega,
       telefono_entrega,
       observaciones,
-      id_comercial || id_registrado_por,  // ✅ id_comercial puede ser igual a id_registrado_por
-      id_registrado_por,  // ✅ VENDEDOR que registra
+      id_comercial || id_registrado_por,
+      id_registrado_por,
       subtotal,
       impuesto,
       total
@@ -311,7 +298,6 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
-    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -341,7 +327,6 @@ export async function createOrdenVenta(req, res) {
       ]);
     }
     
-    // Si viene de cotización, actualizar estado
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 
@@ -383,7 +368,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       });
     }
     
-    // Si es "Entregada", verificar que todo esté despachado
     if (estado === 'Entregada') {
       const detalleResult = await executeQuery(`
         SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?

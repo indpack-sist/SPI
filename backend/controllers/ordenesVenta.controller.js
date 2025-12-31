@@ -120,7 +120,7 @@ export async function getOrdenVentaById(req, res) {
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
-        dov.subtotal AS valor_venta,
+        dov.subtotal AS valor_venta,  // ← AGREGAR ALIAS
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
@@ -352,8 +352,8 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     const { id } = req.params;
     const { estado, fecha_entrega_real } = req.body;
     
-    const estadosValidos = ['Pendiente', 'En Proceso', 'Despachada', 'Entregada', 'Cancelada'];
-    
+    const estadosValidos = ['Pendiente', 'Confirmada', 'En Preparación', 'Despachada', 'Entregada', 'Cancelada'];
+
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
         success: false,

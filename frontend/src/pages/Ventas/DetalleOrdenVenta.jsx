@@ -171,46 +171,47 @@ function DetalleOrdenVenta() {
   };
 
   const getEstadoConfig = (estado) => {
-    const configs = {
-      'Pendiente': { 
-        icono: Clock, 
-        clase: 'badge-warning',
-        color: 'border-warning',
-        siguientes: ['En Proceso', 'Cancelada']
-      },
-      'En Preparación': {  // ← Cambiar de "En Proceso"
-        icono: Package,
-        clase: 'badge-info',
-        color: 'border-info',
-        siguientes: ['Despachada', 'Cancelada']
-      },
-      'Confirmada': {  // ← AGREGAR nuevo estado
-        icono: CheckCircle,
-        clase: 'badge-info',
-        color: 'border-info',
-        siguientes: ['En Preparación', 'Cancelada']
-      },
-      'Despachada': { 
-        icono: Truck, 
-        clase: 'badge-primary',
-        color: 'border-primary',
-        siguientes: ['Entregada']
-      },
-      'Entregada': { 
-        icono: CheckCircle, 
-        clase: 'badge-success',
-        color: 'border-success',
-        siguientes: []
-      },
-      'Cancelada': { 
-        icono: XCircle, 
-        clase: 'badge-danger',
-        color: 'border-danger',
-        siguientes: []
-      }
-    };
-    return configs[estado] || configs['Pendiente'];
+  const configs = {
+    'Pendiente': { 
+      icono: Clock, 
+      clase: 'badge-warning',
+      color: 'border-warning',
+      siguientes: ['Confirmada', 'Cancelada']  // ← Cambiar
+    },
+    'Confirmada': {  // ← NUEVO
+      icono: CheckCircle,
+      clase: 'badge-info',
+      color: 'border-info',
+      siguientes: ['En Preparación', 'Cancelada']
+    },
+    'En Preparación': {  // ← Cambiar de "En Proceso"
+      icono: Package, 
+      clase: 'badge-info',
+      color: 'border-info',
+      siguientes: ['Despachada', 'Cancelada']
+    },
+    'Despachada': { 
+      icono: Truck, 
+      clase: 'badge-primary',
+      color: 'border-primary',
+      siguientes: ['Entregada']
+    },
+    'Entregada': { 
+      icono: CheckCircle, 
+      clase: 'badge-success',
+      color: 'border-success',
+      siguientes: []
+    },
+    'Cancelada': { 
+      icono: XCircle, 
+      clase: 'badge-danger',
+      color: 'border-danger',
+      siguientes: []
+    }
   };
+  return configs[estado] || configs['Pendiente'];
+};
+
 
   const getPrioridadConfig = (prioridad) => {
     const configs = {

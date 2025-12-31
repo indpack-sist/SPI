@@ -1,7 +1,6 @@
-// backend/controllers/ordenes-venta.controller.js
 import { executeQuery } from '../config/database.js';
+import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 
-// ✅ OBTENER TODAS LAS ÓRDENES CON FILTROS
 export async function getAllOrdenesVenta(req, res) {
   try {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
@@ -24,24 +23,16 @@ export async function getAllOrdenesVenta(req, res) {
         cl.id_cliente,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
-        e.nombre_completo AS comercial,
-        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
-        (
-          SELECT COUNT(*) 
-          FROM detalle_orden_venta dov
-          WHERE dov.id_orden_venta = ov.id_orden_venta 
-          AND dov.cantidad_producida < dov.cantidad
-        ) AS items_pendientes_produccion,
-        (
-          SELECT COUNT(*) 
-          FROM detalle_orden_venta dov
-          WHERE dov.id_orden_venta = ov.id_orden_venta 
-          AND dov.cantidad_despachada < dov.cantidad
-        ) AS items_pendientes_despacho
+        e_comercial.nombre_completo AS comercial,
+        e_registrado.nombre_completo AS registrado_por,
+        ov.id_comercial,
+        ov.id_registrado_por,
+        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
       WHERE 1=1
     `;
     
@@ -67,7 +58,7 @@ export async function getAllOrdenesVenta(req, res) {
       params.push(fecha_fin);
     }
     
-    sql += ` ORDER BY ov.fecha_creacion DESC`;
+    sql += ` ORDER BY ov.fecha_emision DESC, ov.id_orden_venta DESC`;
     
     const result = await executeQuery(sql, params);
     
@@ -92,12 +83,10 @@ export async function getAllOrdenesVenta(req, res) {
   }
 }
 
-// ✅ OBTENER ORDEN POR ID CON DETALLE
 export async function getOrdenVentaById(req, res) {
   try {
     const { id } = req.params;
     
-    // Orden principal
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
@@ -130,26 +119,21 @@ export async function getOrdenVentaById(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // Detalle de la orden con info de producción/despacho
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
+        dov.subtotal AS valor_venta,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
         p.requiere_receta,
-        ti.nombre AS tipo_inventario_nombre,
-        (
-          SELECT stock_actual 
-          FROM stock_productos 
-          WHERE id_producto = dov.id_producto 
-          LIMIT 1
-        ) AS stock_disponible
+        p.stock_actual AS stock_disponible,
+        ti.nombre AS tipo_inventario_nombre
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.orden
+      ORDER BY dov.id_detalle
     `, [id]);
     
     if (!detalleResult.success) {
@@ -175,7 +159,6 @@ export async function getOrdenVentaById(req, res) {
   }
 }
 
-// ✅ CREAR ORDEN DE VENTA
 export async function createOrdenVenta(req, res) {
   try {
     const {
@@ -185,6 +168,9 @@ export async function createOrdenVenta(req, res) {
       fecha_entrega_estimada,
       prioridad,
       moneda,
+      tipo_cambio,
+      tipo_impuesto,
+      porcentaje_impuesto,
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -198,7 +184,8 @@ export async function createOrdenVenta(req, res) {
       detalle
     } = req.body;
     
-    // Validaciones
+    const id_registrado_por = req.user?.id_empleado || null;
+    
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,
@@ -206,7 +193,13 @@ export async function createOrdenVenta(req, res) {
       });
     }
     
-    // Generar número de orden
+    if (!id_registrado_por) {
+      return res.status(400).json({
+        success: false,
+        error: 'Usuario no autenticado'
+      });
+    }
+    
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_venta 
@@ -224,7 +217,6 @@ export async function createOrdenVenta(req, res) {
     
     const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // Calcular totales
     let subtotal = 0;
     for (const item of detalle) {
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -232,10 +224,10 @@ export async function createOrdenVenta(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    const igv = subtotal * 0.18;
-    const total = subtotal + igv;
+    const porcentaje_imp = parseFloat(porcentaje_impuesto || 18);
+    const impuesto = subtotal * (porcentaje_imp / 100);
+    const total = subtotal + impuesto;
     
-    // Insertar orden
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
         numero_orden,
@@ -245,6 +237,9 @@ export async function createOrdenVenta(req, res) {
         fecha_entrega_estimada,
         prioridad,
         moneda,
+        tipo_cambio,
+        tipo_impuesto,
+        porcentaje_impuesto,
         plazo_pago,
         forma_pago,
         orden_compra_cliente,
@@ -255,19 +250,23 @@ export async function createOrdenVenta(req, res) {
         telefono_entrega,
         observaciones,
         id_comercial,
+        id_registrado_por,
         subtotal,
         igv,
         total,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
     `, [
       numeroOrden,
       id_cliente,
       id_cotizacion || null,
       fecha_emision,
-      fecha_entrega_estimada,
+      fecha_entrega_estimada || null,
       prioridad || 'Media',
       moneda,
+      parseFloat(tipo_cambio || 1.0000),
+      tipo_impuesto || 'IGV',
+      porcentaje_imp,
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -277,9 +276,10 @@ export async function createOrdenVenta(req, res) {
       contacto_entrega,
       telefono_entrega,
       observaciones,
-      id_comercial,
+      id_comercial || null,
+      id_registrado_por,
       subtotal,
-      igv,
+      impuesto,
       total
     ]);
     
@@ -292,12 +292,8 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
-    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      const valorTotal = valorVenta - descuentoItem;
       
       await executeQuery(`
         INSERT INTO detalle_orden_venta (
@@ -305,24 +301,17 @@ export async function createOrdenVenta(req, res) {
           id_producto,
           cantidad,
           precio_unitario,
-          descuento_porcentaje,
-          valor_venta,
-          cantidad_producida,
-          cantidad_despachada,
-          orden
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)
+          descuento_porcentaje
+        ) VALUES (?, ?, ?, ?, ?)
       `, [
         idOrden,
         item.id_producto,
-        item.cantidad,
-        item.precio_unitario,
-        item.descuento_porcentaje || 0,
-        valorTotal,
-        i + 1
+        parseFloat(item.cantidad),
+        parseFloat(item.precio_unitario),
+        parseFloat(item.descuento_porcentaje || 0)
       ]);
     }
     
-    // Si viene de cotización, marcarla como convertida
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 
@@ -350,13 +339,12 @@ export async function createOrdenVenta(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR ESTADO
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { estado, fecha_entrega_real } = req.body;
     
-    const estadosValidos = ['Pendiente', 'En Proceso', 'Despachada', 'Entregada', 'Cancelada'];
+    const estadosValidos = ['Pendiente', 'Confirmada', 'En Preparación', 'Despachada', 'Entregada', 'Cancelada'];
     
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
@@ -365,7 +353,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       });
     }
     
-    // Si es "Entregada", verificar que todo esté despachado
     if (estado === 'Entregada') {
       const detalleResult = await executeQuery(`
         SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?
@@ -411,7 +398,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR PRIORIDAD
 export async function actualizarPrioridadOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -453,13 +439,11 @@ export async function actualizarPrioridadOrdenVenta(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR PROGRESO (PRODUCCIÓN/DESPACHO)
 export async function actualizarProgresoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { detalle } = req.body;
     
-    // Actualizar cada línea del detalle
     for (const item of detalle) {
       await executeQuery(`
         UPDATE detalle_orden_venta 
@@ -487,14 +471,14 @@ export async function actualizarProgresoOrdenVenta(req, res) {
   }
 }
 
-// ✅ OBTENER ESTADÍSTICAS
 export async function getEstadisticasOrdenesVenta(req, res) {
   try {
     const result = await executeQuery(`
       SELECT 
         COUNT(*) AS total_ordenes,
         SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
-        SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) AS en_proceso,
+        SUM(CASE WHEN estado = 'Confirmada' THEN 1 ELSE 0 END) AS confirmadas,
+        SUM(CASE WHEN estado = 'En Preparación' THEN 1 ELSE 0 END) AS en_proceso,
         SUM(CASE WHEN estado = 'Despachada' THEN 1 ELSE 0 END) AS despachadas,
         SUM(CASE WHEN estado = 'Entregada' THEN 1 ELSE 0 END) AS entregadas,
         SUM(CASE WHEN prioridad = 'Urgente' THEN 1 ELSE 0 END) AS urgentes,
@@ -525,7 +509,6 @@ export async function getEstadisticasOrdenesVenta(req, res) {
   }
 }
 
-// ✅ DESCARGAR PDF
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -536,17 +519,23 @@ export async function descargarPDFOrdenVenta(req, res) {
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente,
-        e.nombre_completo AS comercial
+        cl.telefono AS telefono_cliente,
+        e_comercial.nombre_completo AS comercial,
+        e_comercial.email AS email_comercial,
+        e_registrado.nombre_completo AS registrado_por,
+        c.numero_cotizacion
       FROM ordenes_venta ov
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       WHERE ov.id_orden_venta = ?
     `, [id]);
     
     if (!ordenResult.success || ordenResult.data.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Orden no encontrada'
+        error: 'Orden de venta no encontrada'
       });
     }
     
@@ -561,20 +550,26 @@ export async function descargarPDFOrdenVenta(req, res) {
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
-      ORDER BY dov.orden
+      ORDER BY dov.id_detalle
     `, [id]);
+    
+    if (!detalleResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalle de la orden'
+      });
+    }
     
     orden.detalle = detalleResult.data;
     
-    // TODO: Implementar generación de PDF
-    res.json({
-      success: true,
-      data: orden,
-      message: 'Generar PDF con estos datos'
-    });
+    const pdfBuffer = await generarOrdenVentaPDF(orden);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="OrdenVenta-${orden.numero_orden}.pdf"`);
+    res.send(pdfBuffer);
     
   } catch (error) {
-    console.error('Error al descargar PDF:', error);
+    console.error('Error al generar PDF de orden de venta:', error);
     res.status(500).json({
       success: false,
       error: error.message

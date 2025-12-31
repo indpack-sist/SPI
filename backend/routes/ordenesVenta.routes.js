@@ -23,5 +23,5 @@ router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
 router.put('/:id/progreso', verificarToken, actualizarProgresoOrdenVenta);
 
 router.get('/:id', verificarToken, getOrdenVentaById);
-
+//prueba
 export default router;

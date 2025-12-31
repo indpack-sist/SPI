@@ -4,17 +4,30 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
   Calculator, FileText, User, Building,
-  Calendar, DollarSign, AlertTriangle
+  Calendar, DollarSign, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI } from '../../config/api';
+import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, dashboard } from '../../config/api';
+
+// ✅ TIPOS DE IMPUESTO CONFIGURABLES
+const TIPOS_IMPUESTO = [
+  { codigo: 'IGV', nombre: '18% (Incluye IGV)', porcentaje: 18.00 },
+  { codigo: 'IGV3', nombre: '6% (Incluye IGV)', porcentaje: 6.00 },
+  { codigo: 'IGV4', nombre: '18%', porcentaje: 18.00 },
+  { codigo: 'GRA', nombre: '0% Gratis - Exonerado', porcentaje: 0.00 },
+  { codigo: '6%', nombre: '6%', porcentaje: 6.00 },
+  { codigo: 'EXO', nombre: '0% Exonerado', porcentaje: 0.00 },
+  { codigo: 'INA', nombre: 'Inafecto', porcentaje: 0.00 },
+  { codigo: 'EXP', nombre: 'Exportación', porcentaje: 0.00 },
+];
 
 function NuevaCotizacion() {
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(false);
+  const [loadingTC, setLoadingTC] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
@@ -22,6 +35,10 @@ function NuevaCotizacion() {
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
+  
+  // ✅ TIPO DE CAMBIO
+  const [tipoCambio, setTipoCambio] = useState(null);
+  const [tipoCambioFecha, setTipoCambioFecha] = useState(null);
   
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
@@ -35,6 +52,9 @@ function NuevaCotizacion() {
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_validez: '',
     moneda: 'PEN',
+    tipo_impuesto: 'IGV',
+    porcentaje_impuesto: 18.00,
+    tipo_cambio: 1.0000,
     plazo_pago: '',
     forma_pago: '',
     orden_compra_cliente: '',
@@ -46,7 +66,7 @@ function NuevaCotizacion() {
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [detalle, setDetalle] = useState([]);
-  const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
+  const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
 
   useEffect(() => {
     cargarCatalogos();
@@ -54,7 +74,7 @@ function NuevaCotizacion() {
 
   useEffect(() => {
     calcularTotales();
-  }, [detalle]);
+  }, [detalle, formCabecera.tipo_impuesto, formCabecera.porcentaje_impuesto]);
 
   useEffect(() => {
     if (formCabecera.validez_dias && formCabecera.fecha_emision) {
@@ -87,13 +107,13 @@ function NuevaCotizacion() {
         setProductos(resProductos.data.data || []);
       }
       
-      // Cargar empleados con rol Comercial
-      const resComerciales = await empleadosAPI.getAll({ 
-        rol: 'Comercial',
-        estado: 'Activo' 
-      });
+      // ✅ FILTRAR SOLO EMPLEADOS CON ROL "Ventas"
+      const resComerciales = await empleadosAPI.getAll({ estado: 'Activo' });
       if (resComerciales.data.success) {
-        setComerciales(resComerciales.data.data || []);
+        const vendedores = (resComerciales.data.data || []).filter(
+          emp => emp.rol?.toLowerCase() === 'ventas' || emp.rol?.toLowerCase() === 'comercial'
+        );
+        setComerciales(vendedores);
       }
       
     } catch (err) {
@@ -101,6 +121,40 @@ function NuevaCotizacion() {
       setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ OBTENER TIPO DE CAMBIO DESDE API
+  const obtenerTipoCambio = async () => {
+    try {
+      setLoadingTC(true);
+      setError(null);
+      
+      // ✅ USAR EL ENDPOINT CORRECTO - ACTUALIZAR MANUAL
+      const response = await dashboard.actualizarTipoCambio({
+        currency: 'USD',
+        date: formCabecera.fecha_emision
+      });
+      
+      if (response.data.success && response.data.data) {
+        const tc = response.data.data;
+        const valorTC = tc.venta || tc.compra || tc.tipo_cambio || 1.0000;
+        setTipoCambio(valorTC);
+        setTipoCambioFecha(tc.fecha || formCabecera.fecha_emision);
+        setFormCabecera({
+          ...formCabecera,
+          tipo_cambio: parseFloat(valorTC)
+        });
+        setSuccess(`Tipo de cambio actualizado: S/ ${parseFloat(valorTC).toFixed(4)}`);
+      } else {
+        setError('No se pudo obtener el tipo de cambio. Ingrese manualmente.');
+      }
+    } catch (err) {
+      console.error('Error al obtener TC:', err);
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Servicio no disponible';
+      setError(`Tipo de cambio: ${errorMsg}. Puede ingresar manualmente.`);
+    } finally {
+      setLoadingTC(false);
     }
   };
 
@@ -175,11 +229,25 @@ function NuevaCotizacion() {
     setDetalle(newDetalle);
   };
 
+  // ✅ CALCULAR TOTALES CON IMPUESTO DINÁMICO
   const calcularTotales = () => {
     const subtotal = detalle.reduce((sum, item) => sum + (item.valor_venta || 0), 0);
-    const igv = subtotal * 0.18;
-    const total = subtotal + igv;
-    setTotales({ subtotal, igv, total });
+    const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
+    const impuesto = subtotal * (porcentaje / 100);
+    const total = subtotal + impuesto;
+    setTotales({ subtotal, impuesto, total });
+  };
+
+  // ✅ MANEJAR CAMBIO DE TIPO DE IMPUESTO
+  const handleTipoImpuestoChange = (codigo) => {
+    const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
+    if (tipoImpuesto) {
+      setFormCabecera({
+        ...formCabecera,
+        tipo_impuesto: codigo,
+        porcentaje_impuesto: tipoImpuesto.porcentaje
+      });
+    }
   };
 
   // ✅ GUARDAR EN API REAL
@@ -198,12 +266,8 @@ function NuevaCotizacion() {
       return;
     }
     
-    // Validar stock insuficiente
-    const sinStock = detalle.filter(item => item.stock_actual < item.cantidad && !item.requiere_receta);
-    if (sinStock.length > 0) {
-      setError(`Productos sin stock suficiente: ${sinStock.map(i => i.producto).join(', ')}`);
-      return;
-    }
+    // ✅ VALIDACIÓN REMOVIDA: Permitir cotizar aunque no haya stock
+    // La producción se manejará posteriormente si es necesario
     
     try {
       setLoading(true);
@@ -212,8 +276,11 @@ function NuevaCotizacion() {
         id_cliente: parseInt(formCabecera.id_cliente),
         id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
         fecha_emision: formCabecera.fecha_emision,
-        fecha_vencimiento: formCabecera.fecha_validez,
+        fecha_vencimiento: formCabecera.fecha_validez, // ✅ CORREGIDO: era fecha_validez
         moneda: formCabecera.moneda,
+        tipo_impuesto: formCabecera.tipo_impuesto,
+        porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto),
+        tipo_cambio: parseFloat(formCabecera.tipo_cambio),
         plazo_pago: formCabecera.plazo_pago,
         forma_pago: formCabecera.forma_pago,
         orden_compra_cliente: formCabecera.orden_compra_cliente,
@@ -221,11 +288,15 @@ function NuevaCotizacion() {
         plazo_entrega: formCabecera.plazo_entrega,
         validez_dias: parseInt(formCabecera.validez_dias),
         observaciones: formCabecera.observaciones,
+        subtotal: totales.subtotal,
+        igv: totales.impuesto,
+        total: totales.total,
         detalle: detalle.map((item, index) => ({
           id_producto: item.id_producto,
           cantidad: parseFloat(item.cantidad),
           precio_unitario: parseFloat(item.precio_unitario),
           descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
+          valor_venta: parseFloat(item.valor_venta),
           orden: index + 1
         }))
       };
@@ -400,6 +471,60 @@ function NuevaCotizacion() {
                 </select>
               </div>
               
+              {/* ✅ TIPO DE IMPUESTO SELECCIONABLE */}
+              <div className="form-group">
+                <label className="form-label">Tipo de Impuesto *</label>
+                <select
+                  className="form-select"
+                  value={formCabecera.tipo_impuesto}
+                  onChange={(e) => handleTipoImpuestoChange(e.target.value)}
+                  required
+                >
+                  {TIPOS_IMPUESTO.map(tipo => (
+                    <option key={tipo.codigo} value={tipo.codigo}>
+                      {tipo.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* ✅ TIPO DE CAMBIO CON BOTÓN - EDITABLE MANUALMENTE */}
+              <div className="form-group">
+                <label className="form-label">Tipo de Cambio</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formCabecera.tipo_cambio}
+                    onChange={(e) => setFormCabecera({ ...formCabecera, tipo_cambio: e.target.value })}
+                    step="0.0001"
+                    min="0"
+                    placeholder="1.0000"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={obtenerTipoCambio}
+                    disabled={loadingTC}
+                    title="Obtener tipo de cambio desde API"
+                  >
+                    {loadingTC ? (
+                      <RefreshCw size={18} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={18} />
+                    )}
+                  </button>
+                </div>
+                {tipoCambioFecha && (
+                  <p className="text-xs text-success mt-1">
+                    ✓ TC API: {new Date(tipoCambioFecha).toLocaleDateString()}
+                  </p>
+                )}
+                <p className="text-xs text-muted mt-1">
+                  Ingrese manualmente o use el botón para obtener desde API
+                </p>
+              </div>
+              
               <div className="form-group">
                 <label className="form-label">Plazo de Pago</label>
                 <input
@@ -444,8 +569,9 @@ function NuevaCotizacion() {
                 />
               </div>
               
+              {/* ✅ COMERCIAL (SOLO VENDEDORES) */}
               <div className="form-group">
-                <label className="form-label">Comercial</label>
+                <label className="form-label">Vendedor/Comercial</label>
                 <select
                   className="form-select"
                   value={formCabecera.id_comercial}
@@ -454,10 +580,15 @@ function NuevaCotizacion() {
                   <option value="">Seleccione...</option>
                   {comerciales.map(c => (
                     <option key={c.id_empleado} value={c.id_empleado}>
-                      {c.nombre_completo}
+                      {c.nombre_completo} ({c.rol})
                     </option>
                   ))}
                 </select>
+                {comerciales.length === 0 && (
+                  <p className="text-xs text-warning mt-1">
+                    No hay empleados con rol "Ventas" disponibles
+                  </p>
+                )}
               </div>
             </div>
             
@@ -525,16 +656,11 @@ function NuevaCotizacion() {
                         <td className="font-mono text-sm">{item.codigo_producto}</td>
                         <td>
                           <div className="font-medium">{item.producto}</div>
-                          {item.stock_actual < item.cantidad && !item.requiere_receta && (
-                            <div className="text-xs text-danger flex items-center gap-1">
-                              <AlertTriangle size={12} />
-                              Stock insuficiente ({item.stock_actual} disponibles)
-                            </div>
-                          )}
-                          {item.requiere_receta && (
+                          {/* ✅ LÓGICA CORREGIDA: Solo mostrar si cantidad > stock */}
+                          {item.cantidad > item.stock_actual && (
                             <div className="text-xs text-warning flex items-center gap-1">
                               <AlertTriangle size={12} />
-                              Requiere producción
+                              Requerirá producción (stock: {item.stock_actual})
                             </div>
                           )}
                         </td>
@@ -607,7 +733,7 @@ function NuevaCotizacion() {
           </div>
         </div>
 
-        {/* Totales */}
+        {/* ✅ TOTALES CON IMPUESTO DINÁMICO */}
         {detalle.length > 0 && (
           <div className="card mb-4">
             <div className="card-body">
@@ -618,13 +744,38 @@ function NuevaCotizacion() {
                     <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
                   </div>
                   <div className="flex justify-between py-2 border-b">
-                    <span className="font-medium">IGV (18%):</span>
-                    <span className="font-bold">{formatearMoneda(totales.igv)}</span>
+                    <span className="font-medium">
+                      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre || 'Impuesto'}:
+                    </span>
+                    <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
                   </div>
                   <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2">
                     <span className="font-bold text-lg">TOTAL:</span>
                     <span className="font-bold text-2xl">{formatearMoneda(totales.total)}</span>
                   </div>
+                  
+                  {/* ✅ NUEVO: Conversión de moneda con tipo de cambio */}
+                  {formCabecera.moneda === 'USD' && parseFloat(formCabecera.tipo_cambio) > 1 && (
+                    <div className="flex justify-between py-2 mt-2 bg-blue-50 px-4 rounded-lg border border-blue-200">
+                      <span className="text-sm font-medium text-blue-900">
+                        Equivalente en Soles (TC: {parseFloat(formCabecera.tipo_cambio).toFixed(4)}):
+                      </span>
+                      <span className="font-bold text-blue-900">
+                        S/ {(totales.total * parseFloat(formCabecera.tipo_cambio)).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {formCabecera.moneda === 'PEN' && parseFloat(formCabecera.tipo_cambio) > 1 && (
+                    <div className="flex justify-between py-2 mt-2 bg-green-50 px-4 rounded-lg border border-green-200">
+                      <span className="text-sm font-medium text-green-900">
+                        Equivalente en Dólares (TC: {parseFloat(formCabecera.tipo_cambio).toFixed(4)}):
+                      </span>
+                      <span className="font-bold text-green-900">
+                        $ {(totales.total / parseFloat(formCabecera.tipo_cambio)).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

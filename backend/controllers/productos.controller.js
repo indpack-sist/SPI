@@ -138,7 +138,6 @@ export async function getAllProductosConCosto(req, res) {
 
     const result = await executeQuery(sql, params);
 
-    // Validación de seguridad para evitar el error de .map()
     if (!result || !result.success || !Array.isArray(result.data)) {
        return res.json({ success: true, data: [], total: 0 });
     }
@@ -1074,7 +1073,6 @@ export async function recalcularTodosCUP(req, res) {
       const cupCalculado = parseFloat(cupResult.data[0]?.cup_calculado || 0);
       
       if (cupCalculado > 0) {
-        // Actualizar producto
         await executeQuery(
           'UPDATE productos SET costo_unitario_promedio = ? WHERE id_producto = ?',
           [cupCalculado, producto.id_producto]
@@ -1163,7 +1161,6 @@ export async function calcularCUPDesdeReceta(req, res) {
   try {
     const { id } = req.params;
 
-    // 1. Obtener el producto
     const productoResult = await executeQuery(
       'SELECT * FROM productos WHERE id_producto = ?',
       [id]
@@ -1175,7 +1172,6 @@ export async function calcularCUPDesdeReceta(req, res) {
 
     const producto = productoResult.data[0];
 
-    // 2. Si no requiere receta, retornar el CUP actual
     if (!producto.requiere_receta) {
       return res.json({
         success: true,
@@ -1186,7 +1182,6 @@ export async function calcularCUPDesdeReceta(req, res) {
       });
     }
 
-    // 3. BUSCAR PRODUCCIONES CON COSTO > 0 (PROMEDIO PONDERADO)
     const produccionesResult = await executeQuery(
       `SELECT 
         op.id_orden,
@@ -1208,9 +1203,7 @@ export async function calcularCUPDesdeReceta(req, res) {
 
     const producciones = produccionesResult.data || [];
 
-    // 4. SI HAY PRODUCCIONES CON COSTO, CALCULAR PROMEDIO PONDERADO
     if (producciones.length > 0) {
-      // Fórmula: CUP = Σ(cantidad × costo_unitario) / Σ(cantidad)
       const sumaTotal = producciones.reduce((acc, p) => {
         return acc + (parseFloat(p.cantidad_producida) * parseFloat(p.cup_produccion));
       }, 0);
@@ -1243,7 +1236,6 @@ export async function calcularCUPDesdeReceta(req, res) {
       });
     }
 
-    // 5. SI NO HAY PRODUCCIONES CON COSTO, BUSCAR RECETA PRINCIPAL
     const recetaResult = await executeQuery(
       `SELECT id_receta_producto, nombre_receta, rendimiento_unidades
        FROM recetas_productos
@@ -1267,7 +1259,6 @@ export async function calcularCUPDesdeReceta(req, res) {
 
     const receta = recetaResult.data[0];
 
-    // 6. CALCULAR COSTO TEÓRICO DESDE RECETA
     const detalleResult = await executeQuery(
       `SELECT 
         SUM(rd.cantidad_requerida * p.costo_unitario_promedio) as costo_total_materiales
@@ -1281,7 +1272,6 @@ export async function calcularCUPDesdeReceta(req, res) {
     const rendimiento = parseFloat(receta.rendimiento_unidades || 1);
     const cupTeoricoReceta = costoTotalMateriales / rendimiento;
 
-    // 7. VERIFICAR INSUMOS SIN CUP
     const insumosSinCUPResult = await executeQuery(
       `SELECT COUNT(*) as total
        FROM recetas_detalle rd
@@ -1321,7 +1311,6 @@ export async function calcularEvolucionCUP(req, res) {
   try {
     const { id } = req.params;
 
-    // Obtener producto
     const productoResult = await executeQuery(
       'SELECT * FROM productos WHERE id_producto = ?',
       [id]
@@ -1341,7 +1330,6 @@ export async function calcularEvolucionCUP(req, res) {
       });
     }
 
-    // Obtener producciones con costo > 0
     const produccionesResult = await executeQuery(
       `SELECT 
         op.id_orden,
@@ -1376,7 +1364,6 @@ export async function calcularEvolucionCUP(req, res) {
       });
     }
 
-    // ✅ CALCULAR EVOLUCIÓN DEL CUP (CORREGIDO)
     let cantidadAcumulada = 0;
     let costoTotalAcumulado = 0;
     let cupAnterior = null;
@@ -1386,14 +1373,11 @@ export async function calcularEvolucionCUP(req, res) {
       const cupProd = parseFloat(prod.cup_produccion);
       const costoTotalProd = cantidadProd * cupProd;
 
-      // Acumular
       cantidadAcumulada += cantidadProd;
       costoTotalAcumulado += costoTotalProd;
 
-      // CUP Promedio Ponderado hasta este punto
       const cupAcumulado = costoTotalAcumulado / cantidadAcumulada;
 
-      // Tendencia (comparar con CUP anterior)
       let tendencia = 'igual';
       let diferencia = 0;
       
@@ -1406,7 +1390,6 @@ export async function calcularEvolucionCUP(req, res) {
         }
       }
 
-      // Guardar CUP actual para próxima iteración
       const resultado = {
         numero_orden: prod.numero_orden,
         fecha: prod.fecha_fin,
@@ -1422,7 +1405,6 @@ export async function calcularEvolucionCUP(req, res) {
         diferencia
       };
 
-      // Actualizar cupAnterior para la siguiente iteración
       cupAnterior = cupAcumulado;
 
       return resultado;

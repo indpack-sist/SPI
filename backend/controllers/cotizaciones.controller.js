@@ -18,6 +18,9 @@ export async function getAllCotizaciones(req, res) {
         c.igv,
         c.total,
         c.moneda,
+        c.tipo_impuesto,
+        c.porcentaje_impuesto,
+        c.tipo_cambio,
         c.observaciones,
         c.fecha_creacion,
         cl.id_cliente,
@@ -79,20 +82,20 @@ export async function getAllCotizaciones(req, res) {
   }
 }
 
-// ✅ OBTENER COTIZACIÓN POR ID CON DETALLE
+// ✅ OBTENER COTIZACIÓN POR ID CON DETALLE - CORREGIDO
 export async function getCotizacionById(req, res) {
   try {
     const { id } = req.params;
     
-    // Cotización principal
+    console.log('🔍 Obteniendo cotización ID:', id);
+    
+    // Obtener cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente,
-        cl.telefono AS telefono_cliente,
-        cl.email AS email_cliente,
         e.nombre_completo AS comercial,
         e.email AS email_comercial
       FROM cotizaciones c
@@ -102,6 +105,7 @@ export async function getCotizacionById(req, res) {
     `, [id]);
     
     if (!cotizacionResult.success) {
+      console.error('❌ Error al obtener cotización:', cotizacionResult.error);
       return res.status(500).json({ 
         success: false,
         error: cotizacionResult.error 
@@ -109,6 +113,7 @@ export async function getCotizacionById(req, res) {
     }
     
     if (cotizacionResult.data.length === 0) {
+      console.warn('⚠️ Cotización no encontrada:', id);
       return res.status(404).json({
         success: false,
         error: 'Cotización no encontrada'
@@ -116,37 +121,52 @@ export async function getCotizacionById(req, res) {
     }
     
     const cotizacion = cotizacionResult.data[0];
+    console.log('✅ Cotización obtenida:', cotizacion.numero_cotizacion);
     
-    // Detalle de la cotización
+    // ✅ QUERY CORRECTO PARA DETALLE
     const detalleResult = await executeQuery(`
       SELECT 
-        dc.*,
+        dc.id_detalle,
+        dc.id_cotizacion,
+        dc.id_producto,
+        dc.cantidad,
+        dc.precio_unitario,
+        dc.descuento_porcentaje,
+        dc.valor_venta,
+        dc.subtotal,
+        dc.orden,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
-        ti.nombre AS tipo_inventario_nombre,
-        p.requiere_receta,
-        (
-          SELECT stock_actual 
-          FROM stock_productos 
-          WHERE id_producto = dc.id_producto 
-          LIMIT 1
-        ) AS stock_disponible
+        p.stock_actual,
+        p.requiere_receta
       FROM detalle_cotizacion dc
       INNER JOIN productos p ON dc.id_producto = p.id_producto
-      LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dc.id_cotizacion = ?
       ORDER BY dc.orden
     `, [id]);
     
+    console.log('📦 Query detalle ejecutado');
+    console.log('📊 Resultado detalle:', {
+      success: detalleResult.success,
+      rows: detalleResult.data?.length || 0,
+      error: detalleResult.error || 'ninguno'
+    });
+    
     if (!detalleResult.success) {
+      console.error('❌ Error al obtener detalle:', detalleResult.error);
       return res.status(500).json({ 
         success: false,
         error: detalleResult.error 
       });
     }
     
-    cotizacion.detalle = detalleResult.data;
+    cotizacion.detalle = detalleResult.data || [];
+    console.log(`✅ Detalle cargado: ${cotizacion.detalle.length} productos`);
+    
+    if (cotizacion.detalle.length > 0) {
+      console.log('📋 Primer producto:', cotizacion.detalle[0]);
+    }
     
     res.json({
       success: true,
@@ -154,7 +174,7 @@ export async function getCotizacionById(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener cotización:', error);
+    console.error('❌ Error general en getCotizacionById:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -171,11 +191,18 @@ export async function createCotizacion(req, res) {
       fecha_vencimiento,
       prioridad,
       moneda,
+      tipo_impuesto,
+      porcentaje_impuesto,
+      tipo_cambio,
       plazo_pago,
       forma_pago,
       direccion_entrega,
       observaciones,
       id_comercial,
+      validez_dias,
+      plazo_entrega,
+      orden_compra_cliente,
+      lugar_entrega,
       detalle
     } = req.body;
     
@@ -213,10 +240,12 @@ export async function createCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    const igv = subtotal * 0.18;
+    // ✅ Calcular impuesto con porcentaje dinámico
+    const porcentaje = parseFloat(porcentaje_impuesto) || 18.00;
+    const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
     
-    // Insertar cotización
+    // Insertar cotización con nuevos campos
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
         numero_cotizacion,
@@ -225,28 +254,42 @@ export async function createCotizacion(req, res) {
         fecha_vencimiento,
         prioridad,
         moneda,
+        tipo_impuesto,
+        porcentaje_impuesto,
+        tipo_cambio,
         plazo_pago,
         forma_pago,
         direccion_entrega,
         observaciones,
         id_comercial,
+        validez_dias,
+        plazo_entrega,
+        orden_compra_cliente,
+        lugar_entrega,
         subtotal,
         igv,
         total,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
     `, [
       numeroCotizacion,
       id_cliente,
-      fecha_emision,
-      fecha_vencimiento,
+      fecha_emision || new Date().toISOString().split('T')[0],
+      fecha_vencimiento || null,
       prioridad || 'Media',
-      moneda,
-      plazo_pago,
-      forma_pago,
-      direccion_entrega,
-      observaciones,
-      id_comercial,
+      moneda || 'PEN',
+      tipo_impuesto || 'IGV',
+      porcentaje || 18.00,
+      parseFloat(tipo_cambio) || 1.0000,
+      plazo_pago || null,
+      forma_pago || null,
+      direccion_entrega || null,
+      observaciones || null,
+      id_comercial || null,
+      parseInt(validez_dias) || 7,
+      plazo_entrega || null,
+      orden_compra_cliente || null,
+      lugar_entrega || null,
       subtotal,
       igv,
       total
@@ -264,10 +307,9 @@ export async function createCotizacion(req, res) {
     // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      const valorTotal = valorVenta - descuentoItem;
       
+      // ✅ CORREGIDO: No calcular valor_venta y subtotal (son GENERATED)
+      // Solo insertar los campos que acepta la tabla
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
           id_cotizacion,
@@ -275,16 +317,14 @@ export async function createCotizacion(req, res) {
           cantidad,
           precio_unitario,
           descuento_porcentaje,
-          valor_venta,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?)
       `, [
         idCotizacion,
         item.id_producto,
         item.cantidad,
         item.precio_unitario,
         item.descuento_porcentaje || 0,
-        valorTotal,
         i + 1
       ]);
     }
@@ -434,14 +474,17 @@ export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
     
-    // Obtener datos de la cotización
+    // Obtener datos completos de la cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente,
-        e.nombre_completo AS comercial
+        cl.telefono AS telefono_cliente,
+        cl.email AS email_cliente,
+        e.nombre_completo AS comercial,
+        e.email AS email_comercial
       FROM cotizaciones c
       LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
       LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
@@ -460,7 +503,12 @@ export async function descargarPDFCotizacion(req, res) {
     // Obtener detalle
     const detalleResult = await executeQuery(`
       SELECT 
-        dc.*,
+        dc.id_detalle,
+        dc.cantidad,
+        dc.precio_unitario,
+        dc.descuento_porcentaje,
+        dc.valor_venta,
+        dc.orden,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida
@@ -470,20 +518,31 @@ export async function descargarPDFCotizacion(req, res) {
       ORDER BY dc.orden
     `, [id]);
     
+    if (!detalleResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalle de cotización'
+      });
+    }
+    
     cotizacion.detalle = detalleResult.data;
     
-    // TODO: Implementar generación de PDF
-    res.json({
-      success: true,
-      data: cotizacion,
-      message: 'Generar PDF con estos datos'
-    });
+    // ✅ Generar PDF
+    const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
+    const pdfBuffer = await generarCotizacionPDF(cotizacion);
+    
+    // Configurar headers para descarga
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Cotizacion-${cotizacion.numero_cotizacion}.pdf`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
     
   } catch (error) {
     console.error('Error al descargar PDF:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || 'Error al generar PDF'
     });
   }
 }

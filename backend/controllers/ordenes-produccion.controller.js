@@ -186,7 +186,7 @@ export async function getConsumoMaterialesOrden(req, res) {
       // Orden con receta existente
       sql = `
         SELECT 
-          rd.id_detalle_receta AS id_consumo,
+          rd.id_detalle AS id_consumo,
           ? AS id_orden,
           rd.id_insumo,
           p.codigo AS codigo_insumo,
@@ -758,14 +758,15 @@ export async function finalizarProduccion(req, res) {
     }
     else if (orden.id_receta_producto) {
       const cupRecetaResult = await executeQuery(
-        `SELECT (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / 
-               MAX(rp.rendimiento_unidades)) AS cup_calculado
-         FROM recetas_productos rp
-         INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
-         INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
-         WHERE rp.id_receta_producto = ?`,
-        [orden.id_receta_producto]
-      );
+  `SELECT 
+     (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / rp.rendimiento_unidades) AS cup_calculado
+   FROM recetas_productos rp
+   INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
+   INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
+   WHERE rp.id_receta_producto = ?
+   GROUP BY rp.id_receta_producto, rp.rendimiento_unidades`,
+  [orden.id_receta_producto]
+);
       
       if (cupRecetaResult.success && cupRecetaResult.data.length > 0) {
         costoUnitario = parseFloat(cupRecetaResult.data[0].cup_calculado || 0);

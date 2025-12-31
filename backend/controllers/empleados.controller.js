@@ -123,7 +123,6 @@ export async function validarEmailEmpleado(req, res) {
   try {
     const { email } = req.params;
     
-    // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -132,7 +131,6 @@ export async function validarEmailEmpleado(req, res) {
       });
     }
     
-    // Verificar si el email ya existe
     const emailExiste = await executeQuery(
       'SELECT id_empleado, nombre_completo FROM empleados WHERE email = ?',
       [email]
@@ -167,14 +165,12 @@ export async function createEmpleado(req, res) {
       estado
     } = req.body;
 
-    // Validaciones básicas
     if (!nombre_completo || !email || !password || !rol) {
       return res.status(400).json({ 
         error: 'nombre_completo, email, password y rol son requeridos' 
       });
     }
 
-    // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ 
@@ -189,7 +185,6 @@ export async function createEmpleado(req, res) {
       });
     }
 
-    // Verificar si el email ya existe
     const checkEmail = await executeQuery(
       'SELECT * FROM empleados WHERE email = ?',
       [email]
@@ -201,7 +196,6 @@ export async function createEmpleado(req, res) {
       });
     }
     
-    // Validar DNI si se proporciona
     if (dni && validar_dni) {
       const resultadoValidacion = await validarDNI(dni);
       
@@ -219,7 +213,6 @@ export async function createEmpleado(req, res) {
       }
     }
     
-    // Verificar si el DNI ya existe
     if (dni) {
       const checkDNI = await executeQuery(
         'SELECT * FROM empleados WHERE dni = ?',
@@ -233,14 +226,13 @@ export async function createEmpleado(req, res) {
       }
     }
     
-    // Insertar empleado con contraseña en texto plano
     const result = await executeQuery(
       'INSERT INTO empleados (dni, nombre_completo, email, password, cargo, rol, estado) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         dni || null, 
         nombre_completo, 
         email, 
-        password, // Texto plano (como acordamos)
+        password,
         cargo || rol, 
         rol, 
         estado || 'Activo'
@@ -271,7 +263,6 @@ export async function updateEmpleado(req, res) {
     const { id } = req.params;
     const { dni, nombre_completo, email, password, cargo, rol, estado } = req.body;
 
-    // Verificar que el empleado existe
     const checkResult = await executeQuery(
       'SELECT * FROM empleados WHERE id_empleado = ?',
       [id]
@@ -302,7 +293,6 @@ export async function updateEmpleado(req, res) {
       }
     }
     
-    // Verificar DNI si cambió
     if (dni && dni !== checkResult.data[0].dni) {
       const checkDNI = await executeQuery(
         'SELECT * FROM empleados WHERE dni = ? AND id_empleado != ?',
@@ -316,11 +306,9 @@ export async function updateEmpleado(req, res) {
       }
     }
 
-    // Construir query de actualización
     let updateQuery = 'UPDATE empleados SET dni = ?, nombre_completo = ?, email = ?, cargo = ?, rol = ?, estado = ?';
     let updateParams = [dni || null, nombre_completo, email, cargo || rol, rol, estado];
 
-    // Solo actualizar password si se proporcionó uno nuevo
     if (password && password.trim() !== '') {
       if (password.length < 6) {
         return res.status(400).json({ 

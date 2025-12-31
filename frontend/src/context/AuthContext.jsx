@@ -25,82 +25,122 @@ export function AuthProvider({ children }) {
       // Verificar si el token es válido
       const response = await authAPI.verificarToken();
       
-      if (response.data.success) {
-        setUser(response.data.data);
+      if (response.data.success && response.data.data) {
+        const usuario = response.data.data;
+        
+        // ✅ VALIDAR que el usuario tenga rol
+        if (!usuario.rol) {
+          console.error('❌ Usuario sin rol recibido del backend');
+          limpiarSesion();
+          return;
+        }
+        
+        // Mapear datos del usuario
+        const userData = {
+          id: usuario.id_empleado,
+          nombre: usuario.nombre_completo,
+          email: usuario.email,
+          cargo: usuario.cargo,
+          rol: usuario.rol,
+          dni: usuario.dni
+        };
+        
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
       } else {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setUser(null);
+        // Token inválido
+        limpiarSesion();
       }
     } catch (error) {
-      console.error('Error al verificar autenticación:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      setUser(null);
+      console.error('❌ Error al verificar autenticación:', error);
+      
+      // ✅ Si es 401, la sesión expiró
+      if (error.response?.status === 401) {
+        console.log('🔒 Sesión expirada - redirigiendo a login');
+        limpiarSesion();
+        navigate('/login', { replace: true });
+      } else {
+        // Otro error, limpiar de todas formas
+        limpiarSesion();
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ CAMBIO AQUÍ: Recibir email y password por separado
-  const login = async (email, password) => {
-  try {
-    const credentials = { email, password };
-    const response = await authAPI.login(credentials);
-    
-    const data = response.data;
-    
-    if (!data.success || !data.data) {
-      throw new Error('Respuesta del servidor no válida');
-    }
-    
-    const { token, usuario } = data.data;
-    
-    // ✅ CORREGIDO: Expandir el objeto completo
-    console.log('Usuario del backend:', usuario); // Para debug
-    
-    // Guardar token
-    localStorage.setItem('token', token);
-    
-    // ✅ Mapear TODOS los campos del usuario
-    const userData = {
-      id: usuario.id_empleado,
-      nombre: usuario.nombre_completo,
-      email: usuario.email,
-      cargo: usuario.cargo,
-      rol: usuario.rol,  // ← Asegúrate que venga del backend
-      dni: usuario.dni
-    };
-    
-    console.log('Usuario guardado:', userData);
-    
-    localStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData);
-    
-    return { success: true };
-    
-  } catch (error) {
-    console.error('Error en login:', error);
-    return { 
-      success: false, 
-      error: error.response?.data?.error || error.message || 'Error al iniciar sesión' 
-    };
-  }
-};
+  // ✅ NUEVA FUNCIÓN: Limpiar sesión de forma consistente
+  const limpiarSesion = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+  };
 
+  const login = async (email, password) => {
+    try {
+      const credentials = { email, password };
+      const response = await authAPI.login(credentials);
+      
+      const data = response.data;
+      
+      if (!data.success || !data.data) {
+        throw new Error('Respuesta del servidor no válida');
+      }
+      
+      const { token, usuario } = data.data;
+      
+      console.log('👤 Usuario del backend:', usuario);
+      
+      // ✅ VALIDAR que el usuario tenga rol ANTES de guardar
+      if (!usuario.rol) {
+        console.error('❌ Usuario sin rol - login rechazado');
+        return {
+          success: false,
+          error: 'Usuario sin rol asignado. Contacte al administrador.'
+        };
+      }
+      
+      // Guardar token
+      localStorage.setItem('token', token);
+      
+      // Mapear datos del usuario
+      const userData = {
+        id: usuario.id_empleado,
+        nombre: usuario.nombre_completo,
+        email: usuario.email,
+        cargo: usuario.cargo,
+        rol: usuario.rol,
+        dni: usuario.dni
+      };
+      
+      console.log('✅ Usuario guardado:', userData);
+      
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      
+      return { success: true };
+      
+    } catch (error) {
+      console.error('❌ Error en login:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.error || error.message || 'Error al iniciar sesión' 
+      };
+    }
+  };
 
   const logout = () => {
     try {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      setUser(null);
+      console.log('🚪 Cerrando sesión...');
+      limpiarSesion();
       navigate('/login', { replace: true });
       
+      // Forzar recarga para limpiar cualquier estado residual
       setTimeout(() => {
         window.location.href = '/login';
       }, 100);
     } catch (error) {
-      console.error('Error en logout:', error);
+      console.error('❌ Error en logout:', error);
+      limpiarSesion();
       window.location.href = '/login';
     }
   };

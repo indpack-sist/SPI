@@ -4,7 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, Check, FileText, Calendar,
   DollarSign, Building, Clock, ShoppingCart, AlertCircle,
-  CheckCircle, XCircle, Calculator, Percent, TrendingUp
+  CheckCircle, XCircle, Calculator, Percent, TrendingUp,
+  AlertTriangle
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';

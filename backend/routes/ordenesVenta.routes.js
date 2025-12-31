@@ -1,5 +1,5 @@
 import express from 'express';
-import { verificarToken } from '../middlewares/auth.js';
+import { verificarToken } from '../middleware/auth.js';
 import {
   getAllOrdenesVenta,
   getOrdenVentaById,

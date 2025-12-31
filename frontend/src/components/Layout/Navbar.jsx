@@ -14,7 +14,6 @@ function Navbar({ onToggleSidebar }) {
 
   useEffect(() => {
     cargarNotificaciones();
-    // Actualizar notificaciones cada 2 minutos
     const interval = setInterval(cargarNotificaciones, 120000);
     return () => clearInterval(interval);
   }, []);
@@ -42,7 +41,6 @@ function Navbar({ onToggleSidebar }) {
     const ahora = new Date();
 
     ordenes.forEach(orden => {
-        // Determinamos qué fecha usar de referencia
         const fechaReferencia = orden.estado === 'En Proceso' ? orden.fecha_inicio : orden.fecha_creacion;
         const fechaDoc = new Date(fechaReferencia);
 
@@ -67,7 +65,6 @@ function Navbar({ onToggleSidebar }) {
         }
     });
 
-    // Ordenar: lo más reciente arriba
     notifs.sort((a, b) => b.fecha - a.fecha);
     setNotificaciones(notifs.slice(0, 10));
   };
@@ -93,29 +90,20 @@ function Navbar({ onToggleSidebar }) {
     navigate(`/produccion/ordenes/${notif.id_orden}`);
     setShowNotificaciones(false);
   };
-
-  // ============================================
-  // FIX: Logout con redirección correcta
-  // ============================================
-  const handleLogout = () => {
+const handleLogout = () => {
     try {
-      // 1. Limpiar localStorage
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
-      // 2. Llamar logout del contexto (si existe)
       if (logout) {
         logout();
       }
       
-      // 3. Redirigir a login
       navigate('/login', { replace: true });
       
-      // 4. Recargar la página para limpiar estado
       window.location.href = '/login';
     } catch (error) {
       console.error('Error en logout:', error);
-      // Fallback: forzar redirección
       window.location.href = '/login';
     }
   };

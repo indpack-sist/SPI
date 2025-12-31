@@ -171,40 +171,47 @@ function DetalleOrdenVenta() {
   };
 
   const getEstadoConfig = (estado) => {
-    const configs = {
-      'Pendiente': { 
-        icono: Clock, 
-        clase: 'badge-warning',
-        color: 'border-warning',
-        siguientes: ['En Proceso', 'Cancelada']
-      },
-      'En Proceso': { 
-        icono: Package, 
-        clase: 'badge-info',
-        color: 'border-info',
-        siguientes: ['Despachada', 'Cancelada']
-      },
-      'Despachada': { 
-        icono: Truck, 
-        clase: 'badge-primary',
-        color: 'border-primary',
-        siguientes: ['Entregada']
-      },
-      'Entregada': { 
-        icono: CheckCircle, 
-        clase: 'badge-success',
-        color: 'border-success',
-        siguientes: []
-      },
-      'Cancelada': { 
-        icono: XCircle, 
-        clase: 'badge-danger',
-        color: 'border-danger',
-        siguientes: []
-      }
-    };
-    return configs[estado] || configs['Pendiente'];
+  const configs = {
+    'Pendiente': { 
+      icono: Clock, 
+      clase: 'badge-warning',
+      color: 'border-warning',
+      siguientes: ['Confirmada', 'Cancelada']  // ← Cambiar
+    },
+    'Confirmada': {  // ← NUEVO
+      icono: CheckCircle,
+      clase: 'badge-info',
+      color: 'border-info',
+      siguientes: ['En Preparación', 'Cancelada']
+    },
+    'En Preparación': {  // ← Cambiar de "En Proceso"
+      icono: Package, 
+      clase: 'badge-info',
+      color: 'border-info',
+      siguientes: ['Despachada', 'Cancelada']
+    },
+    'Despachada': { 
+      icono: Truck, 
+      clase: 'badge-primary',
+      color: 'border-primary',
+      siguientes: ['Entregada']
+    },
+    'Entregada': { 
+      icono: CheckCircle, 
+      clase: 'badge-success',
+      color: 'border-success',
+      siguientes: []
+    },
+    'Cancelada': { 
+      icono: XCircle, 
+      clase: 'badge-danger',
+      color: 'border-danger',
+      siguientes: []
+    }
   };
+  return configs[estado] || configs['Pendiente'];
+};
+
 
   const getPrioridadConfig = (prioridad) => {
     const configs = {
@@ -356,7 +363,7 @@ function DetalleOrdenVenta() {
               <button className="btn btn-info" onClick={() => setModalProgresoOpen(true)}>
                 <Package size={20} /> Progreso
               </button>
-              {(orden.estado === 'En Proceso' || orden.estado === 'Despachada') && (
+              {(orden.estado === 'En Preparación' || orden.estado === 'Despachada') && (
                 <button className="btn btn-primary" onClick={handleGenerarGuia}>
                   <Plus size={20} /> Guía de Remisión
                 </button>

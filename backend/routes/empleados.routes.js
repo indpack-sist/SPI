@@ -4,7 +4,7 @@ import {
   getEmpleadoById,
   getEmpleadosByRol,
   validarDNIEmpleado,
-  validarEmailEmpleado, // ⚠️ NUEVA FUNCIÓN
+  validarEmailEmpleado, 
   createEmpleado,
   updateEmpleado,
   deleteEmpleado
@@ -12,16 +12,10 @@ import {
 
 const router = express.Router();
 
-// ============================================
-// RUTAS EXISTENTES
-// ============================================
 router.get('/', getAllEmpleados);
 router.get('/rol/:rol', getEmpleadosByRol);
 router.get('/validar-dni/:dni', validarDNIEmpleado);
 
-// ============================================
-// NUEVA RUTA: Validar email
-// ============================================
 router.get('/validar-email/:email', validarEmailEmpleado);
 
 router.get('/:id', getEmpleadoById);

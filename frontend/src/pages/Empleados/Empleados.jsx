@@ -238,6 +238,18 @@ function Empleados() {
     (emp.email && emp.email.toLowerCase().includes(filtro.toLowerCase()))
   );
 
+  // ✅ FUNCIÓN PARA OBTENER COLOR DE BADGE SEGÚN ROL
+  const getRolBadgeClass = (rol) => {
+    const rolLower = rol.toLowerCase();
+    if (rol === 'Administrador') return 'badge-danger';
+    if (rol === 'Gerencia') return 'badge-danger';
+    if (rol === 'Supervisor' || rol === 'Produccion') return 'badge-primary';
+    if (rol === 'Ventas' || rol === 'Comercial') return 'badge-success';
+    if (rol === 'Conductor') return 'badge-info';
+    if (rol === 'Logistica') return 'badge-warning';
+    return 'badge-secondary';
+  };
+
   const columns = [
     {
       header: 'ID',
@@ -268,11 +280,7 @@ function Empleados() {
       header: 'Rol',
       accessor: 'rol',
       render: (value) => (
-        <span className={`badge ${
-          value === 'Administrador' ? 'badge-danger' :
-          value === 'Supervisor' ? 'badge-primary' : 
-          'badge-secondary'
-        }`}>
+        <span className={`badge ${getRolBadgeClass(value)}`}>
           {value}
         </span>
       )
@@ -466,7 +474,7 @@ function Empleados() {
                 </small>
               </div>
 
-              {/* Rol */}
+              {/* ✅ ROL ACTUALIZADO CON TODOS LOS NUEVOS ROLES */}
               <div className="form-group">
                 <label className="form-label">Rol *</label>
                 <select
@@ -475,12 +483,35 @@ function Empleados() {
                   onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
                   required
                 >
-                  <option value="Operario">Operario</option>
-                  <option value="Supervisor">Supervisor</option>
-                  <option value="Almacenero">Almacenero</option>
-                  <option value="Administrativo">Administrativo</option>
-                  <option value="Administrador">Administrador</option>
+                  <optgroup label="Administración y Gerencia">
+                    <option value="Administrador">Administrador</option>
+                    <option value="Gerencia">Gerencia</option>
+                    <option value="Administrativo">Administrativo</option>
+                  </optgroup>
+                  
+                  <optgroup label="Ventas y Comercial">
+                    <option value="Ventas">Ventas</option>
+                    <option value="Comercial">Comercial</option>
+                  </optgroup>
+                  
+                  <optgroup label="Producción">
+                    <option value="Supervisor">Supervisor de Producción</option>
+                    <option value="Operario">Operario de Producción</option>
+                    <option value="Produccion">Jefe de Producción</option>
+                  </optgroup>
+                  
+                  <optgroup label="Almacén y Logística">
+                    <option value="Almacenero">Almacenero</option>
+                    <option value="Logistica">Coordinador de Logística</option>
+                  </optgroup>
+                  
+                  <optgroup label="Transporte">
+                    <option value="Conductor">Conductor</option>
+                  </optgroup>
                 </select>
+                <small className="text-muted">
+                  El rol determina los permisos y accesos en el sistema
+                </small>
               </div>
             </div>
 

@@ -177,17 +177,15 @@ export async function createOrdenVenta(req, res) {
       contacto_entrega,
       telefono_entrega,
       observaciones,
-      id_comercial,
+      id_comercial,  // ← Vendedor asignado (puede venir de cotización o selección manual)
       detalle
     } = req.body;
     
-    let id_registrado_por = null;
+    // ✅ LÓGICA CORREGIDA:
+    // id_registrado_por = Usuario autenticado que está creando la orden
+    // id_comercial = Vendedor asignado a la orden (puede ser diferente)
     
-    if (id_comercial) {
-      id_registrado_por = id_comercial;
-    } else if (req.user?.id_empleado) {
-      id_registrado_por = req.user.id_empleado;
-    }
+    const id_registrado_por = req.user?.id_empleado || null;
     
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
@@ -199,7 +197,7 @@ export async function createOrdenVenta(req, res) {
     if (!id_registrado_por) {
       return res.status(400).json({
         success: false,
-        error: 'Debe especificar un vendedor/comercial para la orden'
+        error: 'Usuario no autenticado'
       });
     }
     
@@ -279,8 +277,8 @@ export async function createOrdenVenta(req, res) {
       contacto_entrega,
       telefono_entrega,
       observaciones,
-      id_comercial || id_registrado_por,
-      id_registrado_por,
+      id_comercial || null,      // ← Vendedor asignado (puede ser NULL)
+      id_registrado_por,          // ← Usuario autenticado (SIEMPRE tiene valor)
       subtotal,
       impuesto,
       total
@@ -295,7 +293,7 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
-    // ✅ CORRECCIÓN: Quitar valor_venta y orden
+    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       
@@ -314,10 +312,6 @@ export async function createOrdenVenta(req, res) {
         parseFloat(item.precio_unitario),
         parseFloat(item.descuento_porcentaje || 0)
       ]);
-      
-      // MySQL calcula automáticamente:
-      // subtotal = cantidad * precio_unitario * (1 - descuento_porcentaje/100)
-      // margen = (precio_unitario - costo_unitario) * cantidad
     }
     
     if (id_cotizacion) {

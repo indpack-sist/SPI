@@ -87,15 +87,15 @@ export async function getCotizacionById(req, res) {
   try {
     const { id } = req.params;
     
-    // Cotización principal
+    console.log('🔍 Obteniendo cotización ID:', id);
+    
+    // Obtener cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente,
-        cl.telefono AS telefono_cliente,
-        cl.email AS email_cliente,
         e.nombre_completo AS comercial,
         e.email AS email_comercial
       FROM cotizaciones c
@@ -105,6 +105,7 @@ export async function getCotizacionById(req, res) {
     `, [id]);
     
     if (!cotizacionResult.success) {
+      console.error('❌ Error al obtener cotización:', cotizacionResult.error);
       return res.status(500).json({ 
         success: false,
         error: cotizacionResult.error 
@@ -112,6 +113,7 @@ export async function getCotizacionById(req, res) {
     }
     
     if (cotizacionResult.data.length === 0) {
+      console.warn('⚠️ Cotización no encontrada:', id);
       return res.status(404).json({
         success: false,
         error: 'Cotización no encontrada'
@@ -119,9 +121,9 @@ export async function getCotizacionById(req, res) {
     }
     
     const cotizacion = cotizacionResult.data[0];
+    console.log('✅ Cotización obtenida:', cotizacion.numero_cotizacion);
     
-    // ✅ CORREGIDO: Detalle usando productos.stock_actual directamente
-    // También corregido: id_detalle en lugar de id_detalle_cotizacion
+    // ✅ QUERY CORRECTO PARA DETALLE
     const detalleResult = await executeQuery(`
       SELECT 
         dc.id_detalle,
@@ -132,31 +134,39 @@ export async function getCotizacionById(req, res) {
         dc.descuento_porcentaje,
         dc.valor_venta,
         dc.subtotal,
-        dc.tiene_stock,
-        dc.requiere_produccion,
-        dc.observaciones,
         dc.orden,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
-        ti.nombre AS tipo_inventario_nombre,
-        p.requiere_receta,
-        p.stock_actual AS stock_disponible
+        p.stock_actual,
+        p.requiere_receta
       FROM detalle_cotizacion dc
       INNER JOIN productos p ON dc.id_producto = p.id_producto
-      LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dc.id_cotizacion = ?
       ORDER BY dc.orden
     `, [id]);
     
+    console.log('📦 Query detalle ejecutado');
+    console.log('📊 Resultado detalle:', {
+      success: detalleResult.success,
+      rows: detalleResult.data?.length || 0,
+      error: detalleResult.error || 'ninguno'
+    });
+    
     if (!detalleResult.success) {
+      console.error('❌ Error al obtener detalle:', detalleResult.error);
       return res.status(500).json({ 
         success: false,
         error: detalleResult.error 
       });
     }
     
-    cotizacion.detalle = detalleResult.data;
+    cotizacion.detalle = detalleResult.data || [];
+    console.log(`✅ Detalle cargado: ${cotizacion.detalle.length} productos`);
+    
+    if (cotizacion.detalle.length > 0) {
+      console.log('📋 Primer producto:', cotizacion.detalle[0]);
+    }
     
     res.json({
       success: true,
@@ -164,7 +174,7 @@ export async function getCotizacionById(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener cotización:', error);
+    console.error('❌ Error general en getCotizacionById:', error);
     res.status(500).json({
       success: false,
       error: error.message

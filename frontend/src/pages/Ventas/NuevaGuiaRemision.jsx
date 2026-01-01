@@ -351,12 +351,14 @@ function NuevaGuiaRemision() {
               <div className="form-group">
                 <label className="form-label">Peso Bruto (kg)</label>
                 <input
-                  type="number"
-                  className="form-input"
-                  value={formData.peso_bruto_kg}
-                  readOnly
-                  style={{ backgroundColor: 'var(--bg-secondary)' }}
-                />
+  type="number"
+  className="form-input"
+  value={formData.peso_bruto_kg}
+  onChange={(e) => setFormData({ ...formData, peso_bruto_kg: e.target.value })}
+  min="0"
+  step="0.01"
+  required
+/>
               </div>
             </div>
           </div>
@@ -495,9 +497,21 @@ function NuevaGuiaRemision() {
                               />
                             </td>
                             <td className="text-sm text-muted">{item.unidad_medida}</td>
-                            <td className="text-right text-sm">
-                              {parseFloat(item.peso_unitario_kg).toFixed(2)} kg
-                            </td>
+                            <td>
+  <input
+    type="number"
+    className="form-input text-right"
+    value={item.peso_unitario_kg}
+    onChange={(e) => {
+      const newDetalle = [...detalle];
+      newDetalle[index].peso_unitario_kg = parseFloat(e.target.value) || 0;
+      setDetalle(newDetalle);
+      calcularTotales();
+    }}
+    min="0"
+    step="0.01"
+  />
+</td>
                             <td className="text-right font-bold">
                               {(parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg)).toFixed(2)} kg
                             </td>

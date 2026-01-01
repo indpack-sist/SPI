@@ -111,7 +111,10 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica-Bold');
       doc.text('Dirección:', 40, 233);
       doc.font('Helvetica');
-      const direccionCliente = cotizacion.direccion_despacho || '';
+      const direccionCliente = cotizacion.direccion_entrega || 
+                               cotizacion.direccion_despacho || 
+                               cotizacion.direccion_cliente || 
+                               '';
       doc.text(direccionCliente, 100, 233, { width: 230 });
       
       doc.font('Helvetica-Bold');
@@ -315,62 +318,48 @@ function numeroALetras(numero, moneda) {
   const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
   const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
   const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+  const especiales = {
+    11: 'ONCE', 12: 'DOCE', 13: 'TRECE', 14: 'CATORCE', 15: 'QUINCE',
+    16: 'DIECISEIS', 17: 'DIECISIETE', 18: 'DIECIOCHO', 19: 'DIECINUEVE'
+  };
   
   const entero = Math.floor(numero);
   const decimales = Math.round((numero - entero) * 100);
   
-  let resultado = '';
-  
-  if (entero === 0) {
-    resultado = 'CERO';
-  } else if (entero < 10) {
-    resultado = unidades[entero];
-  } else if (entero < 100) {
-    const d = Math.floor(entero / 10);
-    const u = entero % 10;
-    if (u === 0) {
-      resultado = decenas[d];
-    } else if (entero >= 11 && entero <= 15) {
-      const especiales = ['ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE'];
-      resultado = especiales[entero - 11];
-    } else if (entero > 15 && entero < 20) {
-      resultado = 'DIECI' + unidades[u];
-    } else if (d === 2 && u > 0) {
-      resultado = 'VEINTI' + unidades[u];
-    } else {
-      resultado = decenas[d] + (u > 0 ? ' Y ' + unidades[u] : '');
+  // Función auxiliar sin moneda (para recursión)
+  function convertirNumero(num) {
+    if (num === 0) return 'CERO';
+    if (num < 10) return unidades[num];
+    if (num >= 11 && num <= 19) return especiales[num];
+    if (num < 100) {
+      const d = Math.floor(num / 10);
+      const u = num % 10;
+      if (num === 20) return 'VEINTE';
+      if (num > 20 && num < 30) return 'VEINTI' + unidades[u];
+      return decenas[d] + (u > 0 ? ' Y ' + unidades[u] : '');
     }
-  } else if (entero < 1000) {
-    const c = Math.floor(entero / 100);
-    const resto = entero % 100;
-    resultado = (entero === 100 ? 'CIEN' : centenas[c]);
-    if (resto > 0) {
-      resultado += ' ' + numeroALetras(resto, moneda);
+    if (num < 1000) {
+      const c = Math.floor(num / 100);
+      const resto = num % 100;
+      if (num === 100) return 'CIEN';
+      return centenas[c] + (resto > 0 ? ' ' + convertirNumero(resto) : '');
     }
-  } else if (entero < 1000000) {
-    const miles = Math.floor(entero / 1000);
-    const resto = entero % 1000;
-    if (miles === 1) {
-      resultado = 'MIL';
-    } else {
-      resultado = numeroALetras(miles, moneda) + ' MIL';
+    if (num < 1000000) {
+      const miles = Math.floor(num / 1000);
+      const resto = num % 1000;
+      const textoMiles = miles === 1 ? 'MIL' : convertirNumero(miles) + ' MIL';
+      return textoMiles + (resto > 0 ? ' ' + convertirNumero(resto) : '');
     }
-    if (resto > 0) {
-      resultado += ' ' + numeroALetras(resto, moneda);
-    }
-  } else {
-    const millones = Math.floor(entero / 1000000);
-    const resto = entero % 1000000;
-    if (millones === 1) {
-      resultado = 'UN MILLON';
-    } else {
-      resultado = numeroALetras(millones, moneda) + ' MILLONES';
-    }
-    if (resto > 0) {
-      resultado += ' ' + numeroALetras(resto, moneda);
-    }
+    // Millones
+    const millones = Math.floor(num / 1000000);
+    const resto = num % 1000000;
+    const textoMillones = millones === 1 ? 'UN MILLON' : convertirNumero(millones) + ' MILLONES';
+    return textoMillones + (resto > 0 ? ' ' + convertirNumero(resto) : '');
   }
   
+  const resultado = convertirNumero(entero);
   const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
+  
+  // Solo una vez la moneda al final
   return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }

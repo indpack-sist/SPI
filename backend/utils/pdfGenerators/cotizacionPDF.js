@@ -92,10 +92,19 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text(`No. ${cotizacion.numero_cotizacion}`, 385, 83, { align: 'center', width: 155 });
 
       // ====================================
-      // DATOS DEL CLIENTE (Recuadro superior)
+      // DATOS DEL CLIENTE (Recuadro superior con altura dinámica)
       // ====================================
       
-      doc.roundedRect(33, 195, 529, 75, 3).stroke('#000000');
+      // Calcular altura necesaria para dirección
+      const direccionCliente = cotizacion.direccion_entrega || 
+                               cotizacion.direccion_despacho || 
+                               cotizacion.direccion_cliente || 
+                               '';
+      
+      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
+      const alturaRecuadroCliente = Math.max(75, alturaDireccion + 60);
+      
+      doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
       // Columna izquierda
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
@@ -111,16 +120,15 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica-Bold');
       doc.text('Dirección:', 40, 233);
       doc.font('Helvetica');
-      const direccionCliente = cotizacion.direccion_entrega || 
-                               cotizacion.direccion_despacho || 
-                               cotizacion.direccion_cliente || 
-                               '';
-      doc.text(direccionCliente, 100, 233, { width: 230 });
+      doc.text(direccionCliente, 100, 233, { width: 230, lineGap: 2 });
+      
+      // Ciudad con posición dinámica (después de dirección)
+      const yPosicionCiudad = 233 + alturaDireccion + 10;
       
       doc.font('Helvetica-Bold');
-      doc.text('Ciudad:', 40, 255);
+      doc.text('Ciudad:', 40, yPosicionCiudad);
       doc.font('Helvetica');
-      doc.text(cotizacion.ciudad_entrega || 'Lima - Perú', 100, 255);
+      doc.text(cotizacion.ciudad_entrega || 'Lima - Perú', 100, yPosicionCiudad);
 
       // Columna derecha
       doc.font('Helvetica-Bold');
@@ -144,30 +152,32 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text(cotizacion.orden_compra_cliente || '', 450, 248);
 
       // ====================================
-      // FECHA Y COMERCIAL (Recuadro intermedio)
+      // FECHA Y COMERCIAL (Recuadro intermedio con posición dinámica)
       // ====================================
       
-      doc.roundedRect(33, 278, 529, 40, 3).stroke('#000000');
+      const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
+      
+      doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
       
       // Columna izquierda - Fecha
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha de Pedido:', 40, 288, { align: 'center', width: 260 });
+      doc.text('Fecha de Pedido:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
       doc.font('Helvetica');
       const fechaEmision = new Date(cotizacion.fecha_emision).toLocaleDateString('es-PE');
-      doc.text(fechaEmision, 40, 303, { align: 'center', width: 260 });
+      doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
 
       // Columna derecha - Comercial
       doc.font('Helvetica-Bold');
-      doc.text('Comercial:', 310, 288, { align: 'center', width: 252 });
+      doc.text('Comercial:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
       doc.font('Helvetica');
-      doc.text(cotizacion.comercial || '', 310, 298, { align: 'center', width: 252 });
-      doc.text(cotizacion.email_comercial || '', 310, 308, { align: 'center', width: 252 });
+      doc.text(cotizacion.comercial || '', 310, yPosRecuadroFechas + 20, { align: 'center', width: 252 });
+      doc.text(cotizacion.email_comercial || '', 310, yPosRecuadroFechas + 30, { align: 'center', width: 252 });
 
       // ====================================
-      // TABLA DE PRODUCTOS
+      // TABLA DE PRODUCTOS (con posición dinámica)
       // ====================================
       
-      let yPos = 330;
+      let yPos = yPosRecuadroFechas + 52;
 
       // Encabezado tabla (gris)
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');

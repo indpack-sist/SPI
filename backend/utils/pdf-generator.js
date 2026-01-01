@@ -376,7 +376,7 @@ export async function generarPDFSalida(datos) {
       // ZONA DE FIRMAS (NEUTRAL)
       // ====================================
       
-      const espacioNecesario = 100;
+      const espacioNecesario = 150;
       if (y + espacioNecesario > 750) {
           doc.addPage();
           y = 50; 

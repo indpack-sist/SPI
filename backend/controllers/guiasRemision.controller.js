@@ -8,20 +8,23 @@ export async function getAllGuiasRemision(req, res) {
     
     let sql = `
       SELECT 
-        gr.id_guia,
+        gr.id_guia,           -- ✅ Cambiar de id_guia_remision
         gr.numero_guia,
         gr.fecha_emision,
         gr.fecha_traslado,
         gr.estado,
         gr.punto_partida,
         gr.punto_llegada,
+        gr.peso_bruto_kg,
+        gr.numero_bultos,
         ov.numero_orden,
         ov.id_orden_venta,
         cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente
+        cl.ruc AS ruc_cliente,
+        (SELECT COUNT(*) FROM detalle_guia_remision WHERE id_guia = gr.id_guia) AS total_items
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
-      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN clientes cl ON gr.id_cliente = cl.id_cliente
       WHERE 1=1
     `;
     
@@ -79,11 +82,12 @@ export async function getGuiaRemisionById(req, res) {
         ov.numero_orden,
         ov.id_orden_venta,
         cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
-      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      WHERE gr.id_guia = ?
+      LEFT JOIN clientes cl ON gr.id_cliente = cl.id_cliente
+      WHERE gr.id_guia = ?  -- ✅ Cambiar de id_guia_remision
     `, [id]);
     
     if (!guiaResult.success) {
@@ -111,7 +115,7 @@ export async function getGuiaRemisionById(req, res) {
         p.unidad_medida
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
-      WHERE dgr.id_guia = ?
+      WHERE dgr.id_guia = ?  -- ✅ Cambiar de id_guia_remision
       ORDER BY dgr.orden
     `, [id]);
     
@@ -136,7 +140,7 @@ export async function getGuiaRemisionById(req, res) {
         placa_vehiculo,
         marca_vehiculo
       FROM guias_transportista
-      WHERE id_guia_remision = ?
+      WHERE id_guia_remision = ?  -- ✅ Este nombre verificar si es correcto
     `, [id]);
     
     if (guiaTransportistaResult.success && guiaTransportistaResult.data.length > 0) {
@@ -503,7 +507,7 @@ export async function actualizarEstadoGuiaRemision(req, res) {
     const { id } = req.params;
     const { estado } = req.body;
     
-    const estadosValidos = ['Pendiente', 'En Tránsito', 'Entregada', 'Cancelada'];
+    const estadosValidos = ['Emitida', 'En Tránsito', 'Entregada', 'Anulada'];  // ✅ Estados correctos según ENUM
     
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
@@ -515,7 +519,7 @@ export async function actualizarEstadoGuiaRemision(req, res) {
     const result = await executeQuery(`
       UPDATE guias_remision
       SET estado = ?
-      WHERE id_guia_remision = ?
+      WHERE id_guia = ?  -- ✅ Cambiar
     `, [estado, id]);
     
     if (!result.success) {
@@ -547,21 +551,20 @@ export async function marcarEntregadaGuiaRemision(req, res) {
     
     await executeQuery(`
       UPDATE guias_remision
-      SET estado = 'Entregada',
-          fecha_entrega = ?
-      WHERE id_guia_remision = ?
-    `, [fecha_entrega || new Date().toISOString().split('T')[0], id]);
+      SET estado = 'Entregada'
+      WHERE id_guia = ?  -- ✅ Cambiar
+    `, [id]);
     
     // Verificar si todas las guías de la orden están entregadas
     const guiaResult = await executeQuery(`
-      SELECT id_orden_venta FROM guias_remision WHERE id_guia_remision = ?
+      SELECT id_orden_venta FROM guias_remision WHERE id_guia = ?  -- ✅ Cambiar
     `, [id]);
     
     if (guiaResult.success && guiaResult.data.length > 0 && guiaResult.data[0].id_orden_venta) {
       const pendientesResult = await executeQuery(`
         SELECT COUNT(*) as pendientes
         FROM guias_remision
-        WHERE id_orden_venta = ? AND estado NOT IN ('Entregada', 'Cancelada')
+        WHERE id_orden_venta = ? AND estado NOT IN ('Entregada', 'Anulada')
       `, [guiaResult.data[0].id_orden_venta]);
       
       if (pendientesResult.success && pendientesResult.data[0].pendientes === 0) {
@@ -587,7 +590,6 @@ export async function marcarEntregadaGuiaRemision(req, res) {
     });
   }
 }
-
 // ✅ OBTENER ESTADÍSTICAS
 export async function getEstadisticasGuiasRemision(req, res) {
   try {

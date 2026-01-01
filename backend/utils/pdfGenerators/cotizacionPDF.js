@@ -2,12 +2,25 @@
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import https from 'https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export async function generarCotizacionPDF(cotizacion) {
+// Función para descargar imagen desde URL
+function descargarImagen(url) {
   return new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => resolve(Buffer.concat(chunks)));
+      response.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+export async function generarCotizacionPDF(cotizacion) {
+  return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ 
         size: 'A4',
@@ -20,15 +33,40 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.on('error', reject);
 
       // ====================================
+      // DESCARGAR LOGO
+      // ====================================
+      let logoBuffer;
+      try {
+        logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
+      } catch (error) {
+        console.error('Error al descargar logo, usando fallback:', error);
+      }
+
+      // ====================================
       // HEADER CON LOGO Y DATOS EMPRESA
       // ====================================
       
-      // Logo (simulado con rectángulo azul con puntos)
-      doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-      doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-      doc.text('IndPack', 60, 55);
-      doc.fontSize(10).font('Helvetica');
-      doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+      // Logo
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
+        } catch (error) {
+          console.error('Error al insertar logo:', error);
+          // Fallback: rectángulo azul con texto
+          doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
+          doc.text('IndPack', 60, 55);
+          doc.fontSize(10).font('Helvetica');
+          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        }
+      } else {
+        // Fallback: rectángulo azul con texto
+        doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
+        doc.text('IndPack', 60, 55);
+        doc.fontSize(10).font('Helvetica');
+        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+      }
 
       // Datos empresa (izquierda)
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');

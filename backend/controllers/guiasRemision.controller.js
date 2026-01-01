@@ -158,12 +158,17 @@ export async function getGuiaRemisionById(req, res) {
 }
 
 // ✅ CREAR GUÍA DE REMISIÓN
+// ============================================
+// guias-remision.controller.js - createGuiaRemision
+// CORREGIDO SEGÚN ESTRUCTURA REAL DE BD
+// ============================================
+
 export async function createGuiaRemision(req, res) {
   try {
     const {
       id_orden_venta,
       fecha_emision,
-      fecha_inicio_traslado,
+      fecha_traslado,  // ✅ NOMBRE CORRECTO
       tipo_traslado,
       motivo_traslado,
       modalidad_transporte,
@@ -186,6 +191,20 @@ export async function createGuiaRemision(req, res) {
       });
     }
     
+    // ✅ Obtener id_cliente desde la orden
+    const ordenResult = await executeQuery(`
+      SELECT id_cliente FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id_orden_venta]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const id_cliente = ordenResult.data[0].id_cliente;
+    
     // Validar cantidades disponibles
     for (const item of detalle) {
       const detalleOrdenResult = await executeQuery(`
@@ -202,7 +221,7 @@ export async function createGuiaRemision(req, res) {
       }
       
       const disponible = parseFloat(detalleOrdenResult.data[0].cantidad) - 
-                        parseFloat(detalleOrdenResult.data[0].cantidad_despachada);
+                        parseFloat(detalleOrdenResult.data[0].cantidad_despachada || 0);
       
       if (parseFloat(item.cantidad) > disponible) {
         return res.status(400).json({
@@ -216,7 +235,7 @@ export async function createGuiaRemision(req, res) {
     const ultimaResult = await executeQuery(`
       SELECT numero_guia 
       FROM guias_remision 
-      ORDER BY id_guia_remision DESC 
+      ORDER BY id_guia DESC 
       LIMIT 1
     `);
     
@@ -230,13 +249,16 @@ export async function createGuiaRemision(req, res) {
     
     const numeroGuia = `T001-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(8, '0')}`;
     
-    // Insertar guía
+    // ✅ INSERT CORREGIDO CON COLUMNAS REALES
     const result = await executeQuery(`
       INSERT INTO guias_remision (
         numero_guia,
         id_orden_venta,
+        id_cliente,
         fecha_emision,
-        fecha_inicio_traslado,
+        fecha_traslado,
+        punto_partida,
+        punto_llegada,
         tipo_traslado,
         motivo_traslado,
         modalidad_transporte,
@@ -249,12 +271,15 @@ export async function createGuiaRemision(req, res) {
         numero_bultos,
         observaciones,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Emitida')
     `, [
       numeroGuia,
       id_orden_venta,
-      fecha_emision,
-      fecha_inicio_traslado || null,
+      id_cliente,  // ✅ AGREGADO
+      fecha_emision || new Date().toISOString().split('T')[0],
+      fecha_traslado || new Date().toISOString().split('T')[0],  // ✅ NOMBRE CORRECTO
+      direccion_partida || 'Almacén Central',  // ✅ punto_partida
+      direccion_llegada || '',  // ✅ punto_llegada
       tipo_traslado,
       motivo_traslado,
       modalidad_transporte,
@@ -284,7 +309,7 @@ export async function createGuiaRemision(req, res) {
       
       await executeQuery(`
         INSERT INTO detalle_guia_remision (
-          id_guia_remision,
+          id_guia,
           id_detalle_orden,
           id_producto,
           cantidad,
@@ -298,7 +323,7 @@ export async function createGuiaRemision(req, res) {
         item.id_detalle_orden,
         item.id_producto,
         item.cantidad,
-        item.descripcion,
+        item.descripcion || item.producto,
         item.peso_unitario_kg || 0,
         pesoTotal,
         item.orden || (i + 1)
@@ -308,7 +333,7 @@ export async function createGuiaRemision(req, res) {
     res.status(201).json({
       success: true,
       data: {
-        id_guia_remision: idGuia,
+        id_guia: idGuia,
         numero_guia: numeroGuia
       },
       message: 'Guía de remisión creada exitosamente'

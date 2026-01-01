@@ -382,7 +382,7 @@ export async function generarPDFSalida(datos) {
           y = 50; 
       }
       
-      const firmaY = Math.max(y + 35, 690);
+      const firmaY = Math.max(y + 60, 690);
 
       // Texto de conformidad NEUTRAL: Aplica para cliente externo o conteo interno
       doc.fontSize(7).font('Helvetica-Oblique').fillColor(COLORES.negro);

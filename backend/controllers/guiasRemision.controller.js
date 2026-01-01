@@ -105,6 +105,7 @@ export async function getGuiaRemisionById(req, res) {
     
     const guia = guiaResult.data[0];
     
+    // ✅ SIN ORDER BY orden
     const detalleResult = await executeQuery(`
       SELECT 
         dgr.*,
@@ -114,7 +115,7 @@ export async function getGuiaRemisionById(req, res) {
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
       WHERE dgr.id_guia = ?
-      ORDER BY dgr.orden
+      ORDER BY dgr.id_detalle
     `, [id]);
     
     if (!detalleResult.success) {
@@ -293,6 +294,7 @@ export async function createGuiaRemision(req, res) {
     
     const idGuia = result.data.insertId;
     
+    // ✅ INSERT SIN COLUMNA ORDEN
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
@@ -306,9 +308,8 @@ export async function createGuiaRemision(req, res) {
           unidad_medida,
           descripcion,
           peso_unitario_kg,
-          peso_total_kg,
-          orden
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          peso_total_kg
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idGuia,
         item.id_detalle_orden,
@@ -317,8 +318,7 @@ export async function createGuiaRemision(req, res) {
         item.unidad_medida || 'UND',
         item.descripcion || item.producto,
         item.peso_unitario_kg || 0,
-        pesoTotal,
-        i + 1
+        pesoTotal
       ]);
     }
     
@@ -340,7 +340,6 @@ export async function createGuiaRemision(req, res) {
   }
 }
 
-// ✅ DESPACHAR GUÍA
 export async function despacharGuiaRemision(req, res) {
   try {
     const { id } = req.params;
@@ -582,7 +581,7 @@ export async function descargarPDFGuiaRemision(req, res) {
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
       WHERE dgr.id_guia = ?
-      ORDER BY dgr.orden
+      ORDER BY dgr.id_detalle
     `, [id]);
     
     guia.detalle = detalleResult.data;

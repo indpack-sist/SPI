@@ -8,7 +8,7 @@ export async function getAllGuiasRemision(req, res) {
     
     let sql = `
       SELECT 
-        gr.id_guia,           -- ✅ Cambiar de id_guia_remision
+        gr.id_guia,
         gr.numero_guia,
         gr.fecha_emision,
         gr.fecha_traslado,
@@ -75,7 +75,6 @@ export async function getGuiaRemisionById(req, res) {
   try {
     const { id } = req.params;
     
-    // Guía principal
     const guiaResult = await executeQuery(`
       SELECT 
         gr.*,
@@ -87,7 +86,7 @@ export async function getGuiaRemisionById(req, res) {
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON gr.id_cliente = cl.id_cliente
-      WHERE gr.id_guia = ?  -- ✅ Cambiar de id_guia_remision
+      WHERE gr.id_guia = ?
     `, [id]);
     
     if (!guiaResult.success) {
@@ -106,7 +105,6 @@ export async function getGuiaRemisionById(req, res) {
     
     const guia = guiaResult.data[0];
     
-    // Detalle de la guía
     const detalleResult = await executeQuery(`
       SELECT 
         dgr.*,
@@ -115,7 +113,7 @@ export async function getGuiaRemisionById(req, res) {
         p.unidad_medida
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
-      WHERE dgr.id_guia = ?  -- ✅ Cambiar de id_guia_remision
+      WHERE dgr.id_guia = ?
       ORDER BY dgr.orden
     `, [id]);
     
@@ -128,7 +126,6 @@ export async function getGuiaRemisionById(req, res) {
     
     guia.detalle = detalleResult.data;
     
-    // Verificar si tiene guía de transportista
     const guiaTransportistaResult = await executeQuery(`
       SELECT 
         id_guia_transportista,
@@ -140,7 +137,7 @@ export async function getGuiaRemisionById(req, res) {
         placa_vehiculo,
         marca_vehiculo
       FROM guias_transportista
-      WHERE id_guia_remision = ?  -- ✅ Este nombre verificar si es correcto
+      WHERE id_guia = ?
     `, [id]);
     
     if (guiaTransportistaResult.success && guiaTransportistaResult.data.length > 0) {
@@ -162,17 +159,12 @@ export async function getGuiaRemisionById(req, res) {
 }
 
 // ✅ CREAR GUÍA DE REMISIÓN
-// ============================================
-// guias-remision.controller.js - createGuiaRemision
-// CORREGIDO SEGÚN ESTRUCTURA REAL DE BD
-// ============================================
-
 export async function createGuiaRemision(req, res) {
   try {
     const {
       id_orden_venta,
       fecha_emision,
-      fecha_traslado,  // ✅ NOMBRE CORRECTO
+      fecha_traslado,
       tipo_traslado,
       motivo_traslado,
       modalidad_transporte,
@@ -187,7 +179,6 @@ export async function createGuiaRemision(req, res) {
       detalle
     } = req.body;
     
-    // Validaciones
     if (!id_orden_venta || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,
@@ -195,7 +186,6 @@ export async function createGuiaRemision(req, res) {
       });
     }
     
-    // ✅ Obtener id_cliente desde la orden
     const ordenResult = await executeQuery(`
       SELECT id_cliente FROM ordenes_venta WHERE id_orden_venta = ?
     `, [id_orden_venta]);
@@ -209,7 +199,6 @@ export async function createGuiaRemision(req, res) {
     
     const id_cliente = ordenResult.data[0].id_cliente;
     
-    // Validar cantidades disponibles
     for (const item of detalle) {
       const detalleOrdenResult = await executeQuery(`
         SELECT cantidad, cantidad_despachada
@@ -235,7 +224,6 @@ export async function createGuiaRemision(req, res) {
       }
     }
     
-    // Generar número de guía
     const ultimaResult = await executeQuery(`
       SELECT numero_guia 
       FROM guias_remision 
@@ -253,7 +241,6 @@ export async function createGuiaRemision(req, res) {
     
     const numeroGuia = `T001-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(8, '0')}`;
     
-    // ✅ INSERT CORREGIDO CON COLUMNAS REALES
     const result = await executeQuery(`
       INSERT INTO guias_remision (
         numero_guia,
@@ -279,11 +266,11 @@ export async function createGuiaRemision(req, res) {
     `, [
       numeroGuia,
       id_orden_venta,
-      id_cliente,  // ✅ AGREGADO
+      id_cliente,
       fecha_emision || new Date().toISOString().split('T')[0],
-      fecha_traslado || new Date().toISOString().split('T')[0],  // ✅ NOMBRE CORRECTO
-      direccion_partida || 'Almacén Central',  // ✅ punto_partida
-      direccion_llegada || '',  // ✅ punto_llegada
+      fecha_traslado || new Date().toISOString().split('T')[0],
+      direccion_partida || 'Almacén Central',
+      direccion_llegada || '',
       tipo_traslado,
       motivo_traslado,
       modalidad_transporte,
@@ -306,7 +293,6 @@ export async function createGuiaRemision(req, res) {
     
     const idGuia = result.data.insertId;
     
-    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
@@ -317,20 +303,22 @@ export async function createGuiaRemision(req, res) {
           id_detalle_orden,
           id_producto,
           cantidad,
+          unidad_medida,
           descripcion,
           peso_unitario_kg,
           peso_total_kg,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idGuia,
         item.id_detalle_orden,
         item.id_producto,
         item.cantidad,
+        item.unidad_medida || 'UND',
         item.descripcion || item.producto,
         item.peso_unitario_kg || 0,
         pesoTotal,
-        item.orden || (i + 1)
+        i + 1
       ]);
     }
     
@@ -352,18 +340,17 @@ export async function createGuiaRemision(req, res) {
   }
 }
 
-// ✅ DESPACHAR GUÍA (GENERA SALIDAS AUTOMÁTICAS)
+// ✅ DESPACHAR GUÍA
 export async function despacharGuiaRemision(req, res) {
   try {
     const { id } = req.params;
     const { fecha_despacho } = req.body;
     
-    // Obtener guía
     const guiaResult = await executeQuery(`
       SELECT gr.*, ov.id_cliente
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
-      WHERE gr.id_guia_remision = ?
+      WHERE gr.id_guia = ?
     `, [id]);
     
     if (!guiaResult.success || guiaResult.data.length === 0) {
@@ -375,19 +362,18 @@ export async function despacharGuiaRemision(req, res) {
     
     const guia = guiaResult.data[0];
     
-    if (guia.estado !== 'Pendiente') {
+    if (guia.estado !== 'Emitida') {
       return res.status(400).json({
         success: false,
-        error: 'Solo se pueden despachar guías en estado Pendiente'
+        error: 'Solo se pueden despachar guías en estado Emitida'
       });
     }
     
-    // Obtener detalle
     const detalleResult = await executeQuery(`
       SELECT dgr.*, p.id_tipo_inventario
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
-      WHERE dgr.id_guia_remision = ?
+      WHERE dgr.id_guia = ?
     `, [id]);
     
     if (!detalleResult.success) {
@@ -399,29 +385,10 @@ export async function despacharGuiaRemision(req, res) {
     
     const detalle = detalleResult.data;
     
-    // Generar código de salida
-    const ultimaSalidaResult = await executeQuery(`
-      SELECT codigo FROM salidas 
-      ORDER BY id_salida DESC 
-      LIMIT 1
-    `);
-    
-    let numeroSecuencia = 1;
-    if (ultimaSalidaResult.success && ultimaSalidaResult.data.length > 0) {
-      const match = ultimaSalidaResult.data[0].codigo.match(/(\d+)$/);
-      if (match) {
-        numeroSecuencia = parseInt(match[1]) + 1;
-      }
-    }
-    
-    const codigoSalida = `SAL-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(6, '0')}`;
-    
-    // Validar stock y crear salidas
     for (const item of detalle) {
-      // Verificar stock
       const stockResult = await executeQuery(`
         SELECT stock_actual, costo_unitario_promedio
-        FROM stock_productos
+        FROM productos
         WHERE id_producto = ?
       `, [item.id_producto]);
       
@@ -432,64 +399,17 @@ export async function despacharGuiaRemision(req, res) {
           error: `Stock insuficiente para el producto ${item.id_producto}`
         });
       }
-      
-      const stock = stockResult.data[0];
-      
-      // Crear salida
-      await executeQuery(`
-        INSERT INTO salidas (
-          codigo,
-          id_tipo_inventario,
-          tipo_movimiento,
-          id_producto,
-          cantidad,
-          costo_unitario,
-          costo_total,
-          fecha_movimiento,
-          observaciones,
-          id_guia_remision
-        ) VALUES (?, ?, 'Venta', ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        codigoSalida,
-        item.id_tipo_inventario,
-        item.id_producto,
-        item.cantidad,
-        stock.costo_unitario_promedio,
-        parseFloat(item.cantidad) * parseFloat(stock.costo_unitario_promedio),
-        fecha_despacho || new Date().toISOString().split('T')[0],
-        `Despacho guía ${guia.numero_guia}`,
-        id
-      ]);
-      
-      // Descontar stock
-      await executeQuery(`
-        UPDATE stock_productos
-        SET stock_actual = stock_actual - ?,
-            fecha_ultimo_movimiento = NOW()
-        WHERE id_producto = ?
-      `, [item.cantidad, item.id_producto]);
-      
-      // Actualizar cantidad despachada en orden de venta
-      if (item.id_detalle_orden) {
-        await executeQuery(`
-          UPDATE detalle_orden_venta
-          SET cantidad_despachada = cantidad_despachada + ?
-          WHERE id_detalle = ?
-        `, [item.cantidad, item.id_detalle_orden]);
-      }
     }
     
-    // Actualizar estado de guía
     await executeQuery(`
       UPDATE guias_remision
-      SET estado = 'En Tránsito',
-          fecha_inicio_traslado = ?
-      WHERE id_guia_remision = ?
-    `, [fecha_despacho || new Date().toISOString().split('T')[0], id]);
+      SET estado = 'En Tránsito'
+      WHERE id_guia = ?
+    `, [id]);
     
     res.json({
       success: true,
-      message: 'Guía despachada exitosamente. Se generaron las salidas de inventario.'
+      message: 'Guía despachada exitosamente'
     });
     
   } catch (error) {
@@ -507,7 +427,7 @@ export async function actualizarEstadoGuiaRemision(req, res) {
     const { id } = req.params;
     const { estado } = req.body;
     
-    const estadosValidos = ['Emitida', 'En Tránsito', 'Entregada', 'Anulada'];  // ✅ Estados correctos según ENUM
+    const estadosValidos = ['Emitida', 'En Tránsito', 'Entregada', 'Anulada'];
     
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
@@ -519,7 +439,7 @@ export async function actualizarEstadoGuiaRemision(req, res) {
     const result = await executeQuery(`
       UPDATE guias_remision
       SET estado = ?
-      WHERE id_guia = ?  -- ✅ Cambiar
+      WHERE id_guia = ?
     `, [estado, id]);
     
     if (!result.success) {
@@ -552,12 +472,11 @@ export async function marcarEntregadaGuiaRemision(req, res) {
     await executeQuery(`
       UPDATE guias_remision
       SET estado = 'Entregada'
-      WHERE id_guia = ?  -- ✅ Cambiar
+      WHERE id_guia = ?
     `, [id]);
     
-    // Verificar si todas las guías de la orden están entregadas
     const guiaResult = await executeQuery(`
-      SELECT id_orden_venta FROM guias_remision WHERE id_guia = ?  -- ✅ Cambiar
+      SELECT id_orden_venta FROM guias_remision WHERE id_guia = ?
     `, [id]);
     
     if (guiaResult.success && guiaResult.data.length > 0 && guiaResult.data[0].id_orden_venta) {
@@ -590,20 +509,21 @@ export async function marcarEntregadaGuiaRemision(req, res) {
     });
   }
 }
-// ✅ OBTENER ESTADÍSTICAS
+
+// ✅ ESTADÍSTICAS
 export async function getEstadisticasGuiasRemision(req, res) {
   try {
     const result = await executeQuery(`
       SELECT 
         COUNT(*) AS total_guias,
-        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
+        SUM(CASE WHEN estado = 'Emitida' THEN 1 ELSE 0 END) AS emitidas,
         SUM(CASE WHEN estado = 'En Tránsito' THEN 1 ELSE 0 END) AS en_transito,
         SUM(CASE WHEN estado = 'Entregada' THEN 1 ELSE 0 END) AS entregadas,
         SUM(peso_bruto_kg) AS peso_total,
         SUM(numero_bultos) AS bultos_total,
         COUNT(DISTINCT id_orden_venta) AS ordenes_relacionadas
       FROM guias_remision
-      WHERE estado != 'Cancelada'
+      WHERE estado != 'Anulada'
     `);
     
     if (!result.success) {
@@ -640,8 +560,8 @@ export async function descargarPDFGuiaRemision(req, res) {
         cl.ruc AS ruc_cliente
       FROM guias_remision gr
       LEFT JOIN ordenes_venta ov ON gr.id_orden_venta = ov.id_orden_venta
-      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      WHERE gr.id_guia_remision = ?
+      LEFT JOIN clientes cl ON gr.id_cliente = cl.id_cliente
+      WHERE gr.id_guia = ?
     `, [id]);
     
     if (!guiaResult.success || guiaResult.data.length === 0) {
@@ -661,13 +581,12 @@ export async function descargarPDFGuiaRemision(req, res) {
         p.unidad_medida
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
-      WHERE dgr.id_guia_remision = ?
+      WHERE dgr.id_guia = ?
       ORDER BY dgr.orden
     `, [id]);
     
     guia.detalle = detalleResult.data;
     
-    // TODO: Implementar generación de PDF
     res.json({
       success: true,
       data: guia,

@@ -238,135 +238,131 @@ export async function generarPDFSalida(datos) {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
       const chunks = [];
-      
+
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-      
+
       // ====================================
-      // ENCABEZADO
+      // ENCABEZADO NEUTRAL
       // ====================================
-      
-      let y = agregarEncabezado(doc, 'COMPROBANTE INTERNO\nSALIDA DE INVENTARIO');
+      let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA\nCONTROL DE DESPACHO');
       y += 10;
-      
+
       // ====================================
       // INFORMACIÓN GENERAL
       // ====================================
-      
-      doc.rect(50, y, 495, 140).stroke(COLORES.negro);
+
+      doc.rect(50, y, 495, 125).stroke(COLORES.negro);
       y += 10;
-      
+
       doc.fontSize(9).fillColor(COLORES.negro);
-      
-      // Columna izquierda
+
+      // --- Columna izquierda ---
       doc.font('Helvetica').text('N° Documento:', 60, y);
       doc.font('Helvetica-Bold').text(datos.codigo || datos.id_salida || 'N/A', 160, y);
-      
+
       doc.font('Helvetica').text('Tipo Inventario:', 60, y + 15);
       doc.font('Helvetica-Bold').text(datos.tipo_inventario || 'N/A', 160, y + 15, { width: 140 });
-      
+
       doc.font('Helvetica').text('Tipo Movimiento:', 60, y + 30);
       doc.font('Helvetica-Bold').text(datos.tipo_movimiento || 'N/A', 160, y + 30, { width: 140 });
-      
+
+      // Etiqueta neutral para el destino
       const destino = datos.tipo_movimiento === 'Venta' 
         ? datos.cliente 
         : datos.departamento || datos.tipo_movimiento;
-      doc.font('Helvetica').text('Destino:', 60, y + 45);
+      doc.font('Helvetica').text('Destinatario/Área:', 60, y + 45);
       doc.font('Helvetica-Bold').text((destino || 'N/A'), 160, y + 45, { width: 140, lineGap: 2 });
-      
-      doc.font('Helvetica').text('Vehículo:', 60, y + 75);
-      doc.font('Helvetica-Bold').text((datos.vehiculo || 'N/A'), 160, y + 75, { width: 140, lineGap: 2 });
-      
-      doc.font('Helvetica').text('Registrado por:', 60, y + 90);
-      doc.font('Helvetica-Bold').text((datos.registrado_por || 'N/A'), 160, y + 90, { width: 140, lineGap: 2 });
-      
-      // Columna derecha
+
+      doc.font('Helvetica').text('Referencia/Vehículo:', 60, y + 75);
+      doc.font('Helvetica-Bold').text((datos.vehiculo || '---'), 160, y + 75, { width: 140, lineGap: 2 });
+
+      // [ELIMINADO] "Registrado por" (según instrucción)
+
+      // --- Columna derecha ---
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFechaLima(datos.fecha_movimiento), 420, y);
-      
+
       doc.font('Helvetica').text('Hora:', 320, y + 15);
       doc.font('Helvetica-Bold').text(formatearHoraLima(datos.fecha_movimiento), 420, y + 15);
-      
+
       doc.font('Helvetica').text('Estado:', 320, y + 30);
       const estadoColor = datos.estado === 'Completada' ? '#28a745' : COLORES.negro;
       doc.font('Helvetica-Bold').fillColor(estadoColor);
       doc.text(datos.estado || 'N/A', 420, y + 30);
       doc.fillColor(COLORES.negro);
-      
-      y += 155;
-      
+
+      y += 140;
+
       // ====================================
-      // TABLA DE PRODUCTOS (SIN PRECIOS)
+      // TABLA DE PRODUCTOS
       // ====================================
-      
+
       const detalles = datos.detalles || [];
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
-      doc.text(`Productos Despachados (${detalles.length} items)`, 50, y);
+      doc.text(`Detalle de Items (${detalles.length})`, 50, y);
       y += 20;
-      
+
       // Encabezado tabla
       doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
       doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
       doc.text('Código', 60, y + 6);
-      doc.text('Descripción del Producto', 140, y + 6);
+      doc.text('Descripción', 140, y + 6);
       doc.text('Cantidad', 420, y + 6, { width: 60, align: 'center' });
       doc.text('Unidad', 485, y + 6, { width: 50, align: 'center' });
       y += 20;
-      
+
       // Filas de productos
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        // Verificar nueva página
-        if (y > 700) {
+        // Control de salto de página
+        if (y > 680) { 
           doc.addPage();
-          y = agregarEncabezado(doc, 'COMPROBANTE INTERNO\nSALIDA (cont.)');
+          y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA (cont.)');
           y += 30;
-          
-          // Repetir encabezado
+
+          // Repetir encabezado tabla
           doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
           doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
           doc.text('Código', 60, y + 6);
-          doc.text('Descripción del Producto', 140, y + 6);
+          doc.text('Descripción', 140, y + 6);
           doc.text('Cantidad', 420, y + 6, { width: 60, align: 'center' });
           doc.text('Unidad', 485, y + 6, { width: 50, align: 'center' });
           y += 20;
           doc.fillColor(COLORES.negro);
         }
-        
-        // Fondo alternado
+
+        // Color alternado
         if (idx % 2 === 0) {
           doc.rect(50, y, 495, 18).fill('#F5F5F5');
         }
-        
+
         doc.fontSize(8).fillColor(COLORES.negro);
         doc.font('Helvetica').text((det.codigo_producto || '').substring(0, 15), 60, y + 5);
         doc.text((det.producto || '').substring(0, 50), 140, y + 5, { width: 270 });
         doc.font('Helvetica-Bold').text(parseFloat(det.cantidad || 0).toFixed(2), 420, y + 5, { width: 60, align: 'center' });
         doc.font('Helvetica').text(det.unidad_medida || '', 485, y + 5, { width: 50, align: 'center' });
-        
+
         y += 18;
         doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
       });
-      
+
       // ====================================
-      // RESUMEN
+      // TOTALES
       // ====================================
-      
       y += 15;
-      
-      doc.rect(370, y, 175, 30).fill('#E3F2FD').stroke('#1e88e5');
+      doc.rect(370, y, 175, 30).fill('#E3F2FD').stroke('#1e88e5'); // Azul muy suave
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
-      doc.text('TOTAL PRODUCTOS:', 380, y + 10);
+      doc.text('TOTAL ITEMS:', 380, y + 10);
       doc.fontSize(12);
       doc.text(`${detalles.length}`, 490, y + 9, { align: 'right', width: 45 });
-      
+
       y += 45;
-      
+
       // ====================================
       // OBSERVACIONES
       // ====================================
-      
       if (datos.observaciones) {
         doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORES.negro);
         doc.text('Observaciones:', 50, y);
@@ -375,33 +371,55 @@ export async function generarPDFSalida(datos) {
         doc.text(datos.observaciones, 50, y, { width: 495, align: 'justify' });
         y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
       }
-      
+
       // ====================================
-      // FIRMAS
+      // ZONA DE FIRMAS (NEUTRAL)
       // ====================================
       
-      const firmaY = Math.max(y + 15, 680);
+      const espacioNecesario = 100;
+      if (y + espacioNecesario > 750) {
+          doc.addPage();
+          y = 50; 
+      }
       
+      const firmaY = Math.max(y + 35, 690);
+
+      // Texto de conformidad NEUTRAL: Aplica para cliente externo o conteo interno
+      doc.fontSize(7).font('Helvetica-Oblique').fillColor(COLORES.negro);
+      doc.text(
+        'CONFORMIDAD: Mediante la presente firma se certifica que los productos detallados han sido verificados y contados físicamente, encontrándose conformes en cantidad y estado aparente.', 
+        50, 
+        firmaY - 30, 
+        { width: 495, align: 'center' }
+      );
+
       // Líneas de firma
-      doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
-      doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
-      
-      // Títulos
+      doc.moveTo(60, firmaY + 20).lineTo(210, firmaY + 20).stroke(COLORES.negro);
+      doc.moveTo(340, firmaY + 20).lineTo(490, firmaY + 20).stroke(COLORES.negro);
+
+      // --- FIRMA IZQUIERDA: Quien entrega / Autoriza ---
       doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
-      doc.text('CONTEO VERIFICADO POR', 80, firmaY + 5, { width: 150, align: 'center' });
-      doc.text('AUTORIZADO POR', 320, firmaY + 5, { width: 150, align: 'center' });
+      doc.text('AUTORIZADO / ENTREGADO POR', 60, firmaY + 25, { width: 150, align: 'center' });
       
-      // Subtítulos
       doc.fontSize(7).fillColor(COLORES.gris).font('Helvetica');
-      doc.text('(Contador de Productos)', 80, firmaY + 18, { width: 150, align: 'center' });
-      doc.text('(Supervisor/Jefe de Área)', 320, firmaY + 18, { width: 150, align: 'center' });
+      doc.text('INDPACK S.A.C.', 60, firmaY + 35, { width: 150, align: 'center' });
+      // Espacio opcional si el almacenista quiere poner su nombre
+      doc.text('__________________', 60, firmaY + 50, { width: 150, align: 'center' });
+
+      // --- FIRMA DERECHA: Quien recibe / Cuenta (Cliente o Interno) ---
+      doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
+      doc.text('RECIBIDO / VERIFICADO POR', 340, firmaY + 25, { width: 150, align: 'center' });
       
+      doc.fontSize(7).fillColor(COLORES.negro).font('Helvetica');
+      // Campos genéricos: Sirven para DNI de cliente o Código de empleado
+      doc.text('Nombre: ____________________', 340, firmaY + 40, { width: 150, align: 'left' });
+      doc.text('DNI / ID: ___________________', 340, firmaY + 55, { width: 150, align: 'left' });
+
       // ====================================
       // PIE DE PÁGINA
       // ====================================
-      
-      agregarPiePagina(doc, 'Documento interno de control - Solo para uso administrativo - INDPACK S.A.C.');
-      
+      agregarPiePagina(doc, 'Documento de Control de Inventario y Despacho - INDPACK S.A.C.');
+
       doc.end();
     } catch (error) {
       console.error('Error al generar PDF de salida:', error);

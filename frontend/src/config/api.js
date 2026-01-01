@@ -289,8 +289,8 @@ export const ordenesVentaAPI = {
   actualizarPrioridad: (id, prioridad) => 
     api.put(`/ordenes-venta/${id}/prioridad`, { prioridad }),
 
-  actualizarProgreso: (id, detalle) => 
-    api.put(`/ordenes-venta/${id}/progreso`, { detalle }),
+  actualizarProgreso: (id, data) => 
+    api.put(`/ordenes-venta/${id}/progreso`, data),
 
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 

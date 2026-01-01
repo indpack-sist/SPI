@@ -38,7 +38,7 @@ function Sidebar({ isOpen, onToggle }) {
         { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas' },
         { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas' },
         { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias' },
-        { path: '/inventario/stock', icon: BarChart3, label: 'Stock por Inventario' }
+        // { path: '/inventario/stock', icon: BarChart3, label: 'Stock por Inventario' }
       ]
     },
     {
@@ -78,7 +78,7 @@ function Sidebar({ isOpen, onToggle }) {
           <div className="sidebar-logo">
             <div className="sidebar-logo-image-container">
               <img 
-                src="/images/indpack.png" 
+                src="https://indpackperu.com/images/logohorizontal.png" 
                 alt="INDPACK Logo" 
                 className="sidebar-logo-image"
                 onError={(e) => {
@@ -92,7 +92,6 @@ function Sidebar({ isOpen, onToggle }) {
             </div>
             <div className="sidebar-logo-text">
               <span className="sidebar-title">INDPACK</span>
-              <span className="sidebar-subtitle">Sistema ERP</span>
             </div>
           </div>
           <button className="sidebar-close" onClick={onToggle}>

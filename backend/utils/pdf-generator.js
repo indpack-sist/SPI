@@ -246,7 +246,7 @@ export async function generarPDFSalida(datos) {
       // ====================================
       // ENCABEZADO NEUTRAL
       // ====================================
-      let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA\nCONTROL DE DESPACHO');
+      let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA');
       y += 10;
 
       // ====================================
@@ -399,26 +399,17 @@ export async function generarPDFSalida(datos) {
 
       // --- FIRMA IZQUIERDA: Quien entrega / Autoriza ---
       doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
-      doc.text('AUTORIZADO / ENTREGADO POR', 60, firmaY + 25, { width: 150, align: 'center' });
-      
-      doc.fontSize(7).fillColor(COLORES.gris).font('Helvetica');
-      doc.text('INDPACK S.A.C.', 60, firmaY + 35, { width: 150, align: 'center' });
-      // Espacio opcional si el almacenista quiere poner su nombre
-      doc.text('__________________', 60, firmaY + 50, { width: 150, align: 'center' });
+      doc.text('CONTABILIZADO POR', 60, firmaY + 25, { width: 150, align: 'center' });
 
       // --- FIRMA DERECHA: Quien recibe / Cuenta (Cliente o Interno) ---
       doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
-      doc.text('RECIBIDO / VERIFICADO POR', 340, firmaY + 25, { width: 150, align: 'center' });
+      doc.text('AUTORIZADO POR', 340, firmaY + 25, { width: 150, align: 'center' });
       
-      doc.fontSize(7).fillColor(COLORES.negro).font('Helvetica');
-      // Campos genéricos: Sirven para DNI de cliente o Código de empleado
-      doc.text('Nombre: ____________________', 340, firmaY + 40, { width: 150, align: 'left' });
-      doc.text('DNI / ID: ___________________', 340, firmaY + 55, { width: 150, align: 'left' });
 
       // ====================================
       // PIE DE PÁGINA
       // ====================================
-      agregarPiePagina(doc, 'Documento de Control de Inventario y Despacho - INDPACK S.A.C.');
+      agregarPiePagina(doc, 'Documento de Control de Inventario - INDPACK S.A.C.');
 
       doc.end();
     } catch (error) {

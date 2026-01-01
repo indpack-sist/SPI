@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/GuiasRemision.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -28,7 +27,7 @@ function GuiasRemision() {
       setLoading(true);
       setError(null);
       
-      // ✅ INTEGRACIÓN CON API REAL
+      // INTEGRACIÓN CON API REAL
       const filtros = {};
       if (filtroEstado) {
         filtros.estado = filtroEstado;
@@ -64,8 +63,14 @@ function GuiasRemision() {
     });
   };
 
+  // ✅ CORRECCIÓN 2: Configuración de estados actualizada
   const getEstadoConfig = (estado) => {
     const configs = {
+      'Emitida': { 
+        icono: FileText, 
+        clase: 'badge-info',
+        texto: 'Emitida'
+      },
       'Pendiente': { 
         icono: Clock, 
         clase: 'badge-warning',
@@ -85,9 +90,14 @@ function GuiasRemision() {
         icono: XCircle, 
         clase: 'badge-danger',
         texto: 'Cancelada'
+      },
+      'Anulada': { 
+        icono: XCircle, 
+        clase: 'badge-danger',
+        texto: 'Anulada'
       }
     };
-    return configs[estado] || configs['Pendiente'];
+    return configs[estado] || configs['Emitida']; // Default a 'Emitida'
   };
 
   const columns = [
@@ -188,9 +198,10 @@ function GuiasRemision() {
         );
       }
     },
+    // ✅ CORRECCIÓN 1: Accessor cambiado a 'id_guia'
     {
       header: 'Acciones',
-      accessor: 'id_guia_remision',
+      accessor: 'id_guia',
       width: '100px',
       align: 'center',
       render: (value) => (
@@ -246,16 +257,17 @@ function GuiasRemision() {
             </div>
           </div>
 
+          {/* ✅ CORRECCIÓN 4: Estadísticas de Emitidas */}
           <div className="card border-l-4 border-warning">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Pendientes</p>
-                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes || 0}</h3>
+                  <p className="text-sm text-muted">Emitidas</p>
+                  <h3 className="text-2xl font-bold text-warning">{estadisticas.emitidas || 0}</h3>
                   <p className="text-xs text-muted">Por despachar</p>
                 </div>
                 <div className="p-3 bg-yellow-100 rounded-lg">
-                  <Clock size={24} className="text-warning" />
+                  <FileText size={24} className="text-warning" />
                 </div>
               </div>
             </div>
@@ -309,13 +321,16 @@ function GuiasRemision() {
               >
                 Todos
               </button>
+              
+              {/* ✅ CORRECCIÓN 3: Filtro 'Emitida' en lugar de 'Pendiente' */}
               <button
-                className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Pendiente')}
+                className={`btn btn-sm ${filtroEstado === 'Emitida' ? 'btn-info' : 'btn-outline'}`}
+                onClick={() => setFiltroEstado('Emitida')}
               >
-                <Clock size={14} />
-                Pendiente
+                <FileText size={14} />
+                Emitida
               </button>
+
               <button
                 className={`btn btn-sm ${filtroEstado === 'En Tránsito' ? 'btn-info' : 'btn-outline'}`}
                 onClick={() => setFiltroEstado('En Tránsito')}

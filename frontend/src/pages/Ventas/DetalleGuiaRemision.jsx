@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/DetalleGuiaRemision.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -91,7 +90,7 @@ function DetalleGuiaRemision() {
     }
   };
 
-  // ✅ DESPACHAR: GENERA SALIDA AUTOMÁTICA
+  // DESPACHAR: GENERA SALIDA AUTOMÁTICA
   const handleDespachar = async () => {
     try {
       setError(null);
@@ -181,19 +180,26 @@ function DetalleGuiaRemision() {
     });
   };
 
+  // ✅ CORRECCIÓN 1: getEstadoConfig CON ESTADOS CORRECTOS Y COMPLETOS
   const getEstadoConfig = (estado) => {
     const configs = {
+      'Emitida': { 
+        icono: FileText, 
+        clase: 'badge-info',
+        color: 'border-info',
+        siguientes: ['En Tránsito', 'Anulada']
+      },
       'Pendiente': { 
         icono: Clock, 
         clase: 'badge-warning',
         color: 'border-warning',
-        siguientes: ['En Tránsito', 'Cancelada']
+        siguientes: ['En Tránsito', 'Anulada']
       },
       'En Tránsito': { 
         icono: Truck, 
         clase: 'badge-info',
         color: 'border-info',
-        siguientes: ['Entregada', 'Cancelada']
+        siguientes: ['Entregada', 'Anulada']
       },
       'Entregada': { 
         icono: CheckCircle, 
@@ -206,9 +212,15 @@ function DetalleGuiaRemision() {
         clase: 'badge-danger',
         color: 'border-danger',
         siguientes: []
+      },
+      'Anulada': { 
+        icono: XCircle, 
+        clase: 'badge-danger',
+        color: 'border-danger',
+        siguientes: []
       }
     };
-    return configs[estado] || configs['Pendiente'];
+    return configs[estado] || configs['Emitida'];
   };
 
   const columns = [
@@ -313,7 +325,8 @@ function DetalleGuiaRemision() {
             <Download size={20} /> PDF
           </button>
           
-          {guia.estado !== 'Cancelada' && guia.estado !== 'Entregada' && (
+          {/* ✅ CORRECCIÓN 2: CONDICIÓN CORRECTA PARA MOSTRAR BOTONES */}
+          {guia.estado !== 'Anulada' && guia.estado !== 'Entregada' && (
             <>
               <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
                 <Edit size={20} /> Estado

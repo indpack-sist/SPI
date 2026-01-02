@@ -656,11 +656,11 @@ function NuevaCotizacion() {
                         <td className="font-mono text-sm">{item.codigo_producto}</td>
                         <td>
                           <div className="font-medium">{item.producto}</div>
-                          {/* ✅ LÓGICA CORREGIDA: Solo mostrar si cantidad > stock */}
-                          {item.cantidad > item.stock_actual && (
-                            <div className="text-xs text-warning flex items-center gap-1">
+                          {/* ✅ Solo mostrar si cantidad supera stock Y tiene stock insuficiente */}
+                          {parseFloat(item.cantidad) > parseFloat(item.stock_actual || 0) && (
+                            <div className="text-xs text-warning flex items-center gap-1 mt-1">
                               <AlertTriangle size={12} />
-                              Requerirá producción (stock: {item.stock_actual})
+                              Stock insuficiente (disponible: {parseFloat(item.stock_actual || 0).toFixed(2)} {item.unidad_medida})
                             </div>
                           )}
                         </td>

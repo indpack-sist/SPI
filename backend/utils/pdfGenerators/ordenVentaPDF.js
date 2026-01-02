@@ -1,10 +1,6 @@
-// backend/utils/pdfGenerators/ordenVentaPDF.js
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
 
-/**
- * Convertir número a texto en español
- */
 function numeroALetras(numero) {
   const unidades = ['', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
   const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
@@ -60,9 +56,17 @@ function numeroALetras(numero) {
   return letras.trim();
 }
 
-/**
- * Formatear fecha a DD/MM/YYYY
- */
+function calcularAlturaTexto(doc, texto, ancho, fontSize = 9) {
+  const currentFontSize = doc._fontSize || 12;
+  doc.fontSize(fontSize);
+  const heightOfString = doc.heightOfString(texto || '', {
+    width: ancho,
+    lineGap: 2
+  });
+  doc.fontSize(currentFontSize);
+  return Math.ceil(heightOfString);
+}
+
 function formatearFecha(fecha) {
   if (!fecha) return '';
   const date = new Date(fecha);
@@ -72,9 +76,6 @@ function formatearFecha(fecha) {
   return `${dia}/${mes}/${anio}`;
 }
 
-/**
- * Descargar logo desde URL
- */
 async function descargarLogo(url) {
   try {
     const response = await axios.get(url, { responseType: 'arraybuffer' });
@@ -85,9 +86,6 @@ async function descargarLogo(url) {
   }
 }
 
-/**
- * Generar PDF de Orden de Venta
- */
 export async function generarOrdenVentaPDF(orden) {
   return new Promise(async (resolve, reject) => {
     try {
@@ -105,11 +103,6 @@ export async function generarOrdenVentaPDF(orden) {
 
       let yPos = 50;
 
-      // ============================================
-      // ENCABEZADO
-      // ============================================
-
-      // Logo (Izquierda)
       try {
         const logoBuffer = await descargarLogo('https://indpackperu.com/images/logohorizontal.png');
         if (logoBuffer) {
@@ -119,7 +112,6 @@ export async function generarOrdenVentaPDF(orden) {
         console.error('Error al cargar logo:', error);
       }
 
-      // Recuadro RUC y ORDEN DE VENTA (Derecha)
       const boxX = 400;
       const boxY = yPos;
       const boxW = 145;
@@ -133,7 +125,6 @@ export async function generarOrdenVentaPDF(orden) {
       doc.fontSize(12).font('Helvetica');
       doc.text(orden.numero_orden, boxX, boxY + 55, { width: boxW, align: 'center' });
 
-      // Datos de la empresa
       yPos += 65;
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, yPos);
@@ -151,73 +142,68 @@ export async function generarOrdenVentaPDF(orden) {
       yPos += 10;
       doc.text('www.indpackperu.com', 50, yPos);
 
-      // ============================================
-      // INFORMACIÓN DEL CLIENTE
-      // ============================================
       yPos += 30;
-      
       doc.moveTo(50, yPos).lineTo(545, yPos).stroke();
       yPos += 15;
 
-      // Fecha
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('FECHA EMISIÓN:', 50, yPos);
       doc.font('Helvetica');
       doc.text(formatearFecha(orden.fecha_emision), 130, yPos);
 
-      // Columna Izquierda
       yPos += 15;
       let leftY = yPos;
 
-      // RUC
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('RUC:', 50, leftY);
       doc.font('Helvetica');
-      doc.text(orden.ruc_cliente || 'N/A', 90, leftY);
+      const rucTexto = orden.ruc_cliente || 'N/A';
+      doc.text(rucTexto, 90, leftY);
       leftY += 15;
 
-      // CLIENTE
       doc.font('Helvetica-Bold');
       doc.text('CLIENTE:', 50, leftY);
       leftY += 12;
       doc.font('Helvetica');
-      doc.text(orden.cliente || 'N/A', 50, leftY, { width: 230 });
-      leftY += 15;
+      const clienteTexto = orden.cliente || 'N/A';
+      const clienteAltura = calcularAlturaTexto(doc, clienteTexto, 230, 9);
+      doc.text(clienteTexto, 50, leftY, { width: 230, lineGap: 2 });
+      leftY += Math.max(clienteAltura, 12) + 5;
 
-      // DIRECCIÓN ENTREGA
       doc.font('Helvetica-Bold');
       doc.text('DIRECCIÓN ENTREGA:', 50, leftY);
       leftY += 12;
       doc.font('Helvetica');
-      doc.text(orden.direccion_entrega || 'N/A', 50, leftY, { width: 230 });
-      leftY += 15;
+      const direccionTexto = orden.direccion_entrega || 'N/A';
+      const direccionAltura = calcularAlturaTexto(doc, direccionTexto, 230, 9);
+      doc.text(direccionTexto, 50, leftY, { width: 230, lineGap: 2 });
+      leftY += Math.max(direccionAltura, 12) + 5;
 
-      // Columna Derecha
       let rightY = yPos;
       const rightX = 300;
 
-      // MONEDA
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('MONEDA:', rightX, rightY);
       doc.font('Helvetica');
       doc.text(orden.moneda || 'PEN', rightX + 80, rightY);
       rightY += 15;
 
-      // PLAZO PAGO
       doc.font('Helvetica-Bold');
       doc.text('PLAZO PAGO:', rightX, rightY);
       doc.font('Helvetica');
-      doc.text(orden.plazo_pago || 'Contado', rightX + 80, rightY);
-      rightY += 15;
+      const plazoPagoTexto = orden.plazo_pago || 'Contado';
+      const plazoPagoAltura = calcularAlturaTexto(doc, plazoPagoTexto, 165, 9);
+      doc.text(plazoPagoTexto, rightX + 80, rightY, { width: 165, lineGap: 2 });
+      rightY += Math.max(plazoPagoAltura, 12) + 3;
 
-      // FORMA PAGO
       doc.font('Helvetica-Bold');
       doc.text('FORMA PAGO:', rightX, rightY);
       doc.font('Helvetica');
-      doc.text(orden.forma_pago || 'N/A', rightX + 80, rightY);
-      rightY += 15;
+      const formaPagoTexto = orden.forma_pago || 'N/A';
+      const formaPagoAltura = calcularAlturaTexto(doc, formaPagoTexto, 165, 9);
+      doc.text(formaPagoTexto, rightX + 80, rightY, { width: 165, lineGap: 2 });
+      rightY += Math.max(formaPagoAltura, 12) + 3;
 
-      // FECHA ENTREGA ESTIMADA
       if (orden.fecha_entrega_estimada) {
         doc.font('Helvetica-Bold');
         doc.text('ENTREGA:', rightX, rightY);
@@ -228,16 +214,12 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPos = Math.max(leftY, rightY) + 10;
 
-      // VENDEDOR
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('VENDEDOR:', 50, yPos);
       yPos += 12;
       doc.font('Helvetica');
       doc.text(orden.comercial || 'N/A', 50, yPos);
 
-      // ============================================
-      // TABLA DE PRODUCTOS
-      // ============================================
       yPos += 25;
       
       const tableTop = yPos;
@@ -250,7 +232,6 @@ export async function generarOrdenVentaPDF(orden) {
         { text: 'TOTAL', x: 475, w: 70 }
       ];
 
-      // Encabezado de tabla
       doc.rect(50, tableTop, 495, 20).fill('#2563eb');
       doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
       
@@ -267,13 +248,28 @@ export async function generarOrdenVentaPDF(orden) {
       yPos = tableTop + 20;
       doc.fillColor('#000000');
 
-      // Filas de productos
       orden.detalle.forEach((item, idx) => {
-        const rowH = 25;
+        const descripcion = item.producto || '';
+        const descripcionAltura = calcularAlturaTexto(doc, descripcion, 200, 8);
+        const rowH = Math.max(25, descripcionAltura + 14);
 
         if (yPos + rowH > 700) {
           doc.addPage();
           yPos = 50;
+          
+          doc.rect(50, 50, 495, 20).fill('#2563eb');
+          doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
+          headers.forEach(h => {
+            if (h.text === 'CANT.' || h.text === 'UNID') {
+              doc.text(h.text, h.x, 56, { width: h.w, align: 'center' });
+            } else if (h.text === 'P. UNIT.' || h.text === 'TOTAL') {
+              doc.text(h.text, h.x, 56, { width: h.w, align: 'right' });
+            } else {
+              doc.text(h.text, h.x, 56, { width: h.w, align: 'left' });
+            }
+          });
+          yPos = 70;
+          doc.fillColor('#000000');
         }
 
         if (idx % 2 === 0) {
@@ -287,20 +283,17 @@ export async function generarOrdenVentaPDF(orden) {
         doc.text(item.codigo_producto || '', 50, rowY, { width: 60, lineBreak: false });
         doc.text(parseFloat(item.cantidad || 0).toFixed(2), 115, rowY, { width: 40, align: 'center', lineBreak: false });
         doc.text(item.unidad_medida || 'UND', 160, rowY, { width: 35, align: 'center', lineBreak: false });
-        doc.text(item.producto || '', 200, rowY, { width: 200, lineGap: 2 });
+        doc.text(descripcion, 200, rowY, { width: 200, lineGap: 2 });
         
         const sim = orden.moneda === 'USD' ? '$' : 'S/';
         doc.text(`${sim} ${parseFloat(item.precio_unitario || 0).toFixed(2)}`, 405, rowY, { width: 65, align: 'right', lineBreak: false });
-        doc.text(`${sim} ${parseFloat(item.valor_venta || 0).toFixed(2)}`, 475, rowY, { width: 70, align: 'right', lineBreak: false });
+        doc.text(`${sim} ${parseFloat(item.subtotal || 0).toFixed(2)}`, 475, rowY, { width: 70, align: 'right', lineBreak: false });
 
         yPos += rowH;
       });
 
       doc.moveTo(50, yPos).lineTo(545, yPos).stroke();
 
-      // ============================================
-      // TOTALES
-      // ============================================
       yPos += 20;
       
       const totBoxX = 350;
@@ -312,14 +305,12 @@ export async function generarOrdenVentaPDF(orden) {
       const sim = orden.moneda === 'USD' ? '$' : 'S/';
       let totY = totBoxY + 10;
 
-      // SUB TOTAL
       doc.fontSize(9).font('Helvetica-Bold');
       doc.text('SUB TOTAL:', totBoxX + 10, totY);
       doc.font('Helvetica');
       doc.text(`${sim} ${parseFloat(orden.subtotal).toFixed(2)}`, totBoxX + 100, totY, { width: 85, align: 'right' });
       totY += 15;
 
-      // IGV
       const impNombre = orden.tipo_impuesto || 'IGV';
       const impPorc = parseFloat(orden.porcentaje_impuesto || 18).toFixed(0);
       doc.font('Helvetica-Bold');
@@ -328,13 +319,11 @@ export async function generarOrdenVentaPDF(orden) {
       doc.text(`${sim} ${parseFloat(orden.igv).toFixed(2)}`, totBoxX + 100, totY, { width: 85, align: 'right' });
       totY += 15;
 
-      // TOTAL
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text('TOTAL:', totBoxX + 10, totY);
       doc.text(`${sim} ${parseFloat(orden.total).toFixed(2)}`, totBoxX + 100, totY, { width: 85, align: 'right' });
       totY += 20;
 
-      // Tipo de cambio
       const tc = parseFloat(orden.tipo_cambio || 1);
       if (tc > 1) {
         doc.fontSize(8).font('Helvetica').fillColor('#666666');
@@ -353,9 +342,6 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPos += 90;
 
-      // ============================================
-      // MONTO EN LETRAS
-      // ============================================
       const letras = numeroALetras(parseFloat(orden.total));
       const monLet = orden.moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES';
       
@@ -364,21 +350,61 @@ export async function generarOrdenVentaPDF(orden) {
       doc.font('Helvetica');
       doc.text(`${letras} ${monLet}`, 80, yPos, { width: 465 });
 
-      // ============================================
-      // OBSERVACIONES
-      // ============================================
+      yPos += 25;
+      
+      doc.fontSize(9).font('Helvetica-Bold');
+      doc.text('CONDICIONES COMERCIALES:', 50, yPos);
+      yPos += 15;
+
+      doc.fontSize(8).font('Helvetica');
+
+      const condiciones = [];
+      
+      if (orden.plazo_pago) {
+        condiciones.push(`• Forma de Pago: ${orden.plazo_pago}`);
+      }
+      
+      if (orden.fecha_entrega_estimada) {
+        condiciones.push(`• Fecha de Entrega: ${formatearFecha(orden.fecha_entrega_estimada)}`);
+      }
+      
+      if (orden.lugar_entrega) {
+        condiciones.push(`• Lugar de Entrega: ${orden.lugar_entrega}`);
+      } else if (orden.direccion_entrega) {
+        condiciones.push(`• Lugar de Entrega: ${orden.direccion_entrega}`);
+      }
+      
+      if (orden.orden_compra_cliente) {
+        condiciones.push(`• Orden de Compra Cliente: ${orden.orden_compra_cliente}`);
+      }
+      
+      condiciones.push('• Los productos serán entregados según especificaciones acordadas');
+      condiciones.push('• Esta orden de venta está sujeta a nuestros términos y condiciones generales');
+
+      condiciones.forEach(cond => {
+        const condAltura = calcularAlturaTexto(doc, cond, 490, 8);
+        doc.text(cond, 55, yPos, { width: 490, lineGap: 2 });
+        yPos += condAltura + 5;
+      });
+
       if (orden.observaciones) {
-        yPos += 20;
+        yPos += 10;
         doc.fontSize(9).font('Helvetica-Bold');
         doc.text('OBSERVACIONES:', 50, yPos);
         yPos += 12;
         doc.fontSize(8).font('Helvetica');
-        doc.text(orden.observaciones, 50, yPos, { width: 495 });
+        const obsTexto = orden.observaciones || '';
+        const obsAlt = calcularAlturaTexto(doc, obsTexto, 495, 8);
+        doc.text(obsTexto, 50, yPos, { width: 495, lineGap: 2 });
+        yPos += obsAlt;
       }
 
-      // Pie de página
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
-      doc.text('Este documento es una orden de venta generada por el sistema IndPack ERP.', 50, 770, { 
+      doc.text('Esta orden de venta constituye un compromiso de compra-venta entre las partes.', 50, 770, { 
+        width: 495, 
+        align: 'center' 
+      });
+      doc.text('Documento generado por el sistema IndPack ERP', 50, 780, { 
         width: 495, 
         align: 'center' 
       });

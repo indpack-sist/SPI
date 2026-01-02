@@ -1,11 +1,5 @@
 import PDFDocument from 'pdfkit';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { numeroALetras } from './numeroALetras.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import axios from 'axios';
 
 const EMPRESA = {
   ruc: '20550932297',
@@ -25,60 +19,38 @@ const COLORES = {
   blanco: '#FFFFFF'
 };
 
-function agregarLogoDeFondo(doc) {
-  const possibleLogoPaths = [
-    path.join(__dirname, '..', '..', 'frontend', 'public', 'images', 'indpack.png'),
-    path.join(__dirname, '..', '..', 'frontend', 'images', 'indpack.png'),
-    path.join(__dirname, '..', 'frontend', 'public', 'images', 'indpack.png'),
-    path.join(__dirname, '..', 'frontend', 'images', 'indpack.png'),
-    path.join(process.cwd(), 'frontend', 'public', 'images', 'indpack.png'),
-    path.join(process.cwd(), 'frontend', 'images', 'indpack.png')
-  ];
-  
-  let logoLoaded = false;
-  for (const logoPath of possibleLogoPaths) {
-    if (fs.existsSync(logoPath)) {
-      try {
-        doc.save();
-        doc.opacity(0.08); 
-        const logoSize = 350;
-        const pageWidth = 595; 
-        const pageHeight = 842; 
-        const centerX = (pageWidth - logoSize) / 2 + 100;
-        const centerY = (pageHeight - logoSize) / 2 + 10;
-        doc.translate(centerX + logoSize/2, centerY + logoSize/2);
-        doc.rotate(-45, { origin: [0, 0] });
-        doc.translate(-(logoSize/2), -(logoSize/2));
-        doc.image(logoPath, 0, 0, { 
-          width: logoSize,
-          height: logoSize,
-          fit: [logoSize, logoSize]
-        });
-        doc.restore();
-        logoLoaded = true;
-        break;
-      } catch (err) {
-        console.log(`No se pudo cargar logo de fondo desde: ${logoPath}`);
-      }
-    }
-  }
-  
-  if (!logoLoaded) {
-    console.log('Logo de fondo no encontrado');
+async function cargarLogoURL() {
+  try {
+    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
+      responseType: 'arraybuffer'
+    });
+    return Buffer.from(response.data);
+  } catch (error) {
+    console.warn('No se pudo cargar el logo:', error.message);
+    return null;
   }
 }
 
 function formatearFecha(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
-  if (isNaN(date.getTime())) return 'N/A';
-  
-  return date.toLocaleDateString('es-PE', {
+  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  return limaDate.toLocaleDateString('es-PE', {
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function formatearHora(fecha) {
+  if (!fecha) return 'N/A';
+  const date = new Date(fecha);
+  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  return limaDate.toLocaleTimeString('es-PE', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
   });
 }
 
@@ -87,19 +59,26 @@ function formatearMoneda(valor, moneda = 'PEN') {
   return `${simbolos[moneda] || 'S/'} ${parseFloat(valor || 0).toFixed(2)}`;
 }
 
-function agregarEncabezado(doc, titulo) {
-  agregarLogoDeFondo(doc);
+function agregarEncabezado(doc, titulo, logoBuffer) {
+  if (logoBuffer) {
+    doc.image(logoBuffer, 60, 60, { width: 100 });
+  }
+  
   doc.rect(50, 50, 495, 90).stroke(COLORES.negro);
+  
   doc.fontSize(12).font('Helvetica-Bold').fillColor(COLORES.negro);
-  doc.text('INDPACK S.A.C.', 60, 60);
+  doc.text('INDPACK S.A.C.', 180, 60);
   doc.fontSize(8).font('Helvetica').fillColor(COLORES.grisOscuro);
-  doc.text(`RUC: ${EMPRESA.ruc}`, 60, 77);
-  doc.text(EMPRESA.actividad, 60, 88);
-  doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito} - ${EMPRESA.departamento}`, 60, 99, { width: 300, lineGap: 2 });
-  doc.text(EMPRESA.web, 60, 121);
-  doc.moveTo(370, 60).lineTo(370, 130).stroke(COLORES.grisMedio);
+  doc.text(`RUC: ${EMPRESA.ruc}`, 180, 77);
+  doc.text(EMPRESA.actividad, 180, 88);
+  doc.text(`${EMPRESA.direccion}`, 180, 99, { width: 200 });
+  doc.text(`${EMPRESA.distrito} - ${EMPRESA.departamento}`, 180, 110);
+  doc.text(EMPRESA.web, 180, 121);
+  
+  doc.moveTo(390, 60).lineTo(390, 130).stroke(COLORES.grisMedio);
   doc.fontSize(14).font('Helvetica-Bold').fillColor(COLORES.negro);
-  doc.text(titulo, 380, 70, { width: 155, align: 'center' });
+  doc.text(titulo, 400, 75, { width: 135, align: 'center' });
+  
   doc.moveTo(50, 145).lineTo(545, 145).lineWidth(1.5).stroke(COLORES.negro);
   doc.fillColor(COLORES.negro);
   return 160;
@@ -109,14 +88,16 @@ function agregarPiePagina(doc, textoPie) {
   const pageCount = doc.bufferedPageRange().count;
   for (let i = 0; i < pageCount; i++) {
     doc.switchToPage(i);
-    agregarLogoDeFondo(doc);
     doc.moveTo(50, 760).lineTo(545, 760).lineWidth(0.5).stroke(COLORES.grisMedio);
     doc.fontSize(7).fillColor(COLORES.grisMedio);
     doc.text(textoPie, 50, 768, { width: 495, align: 'center' });
     doc.text(`Página ${i + 1} de ${pageCount}`, 50, 780, { width: 495, align: 'center' });
   }
 }
+
 export async function generarPDFEntrada(datos) {
+  const logoBuffer = await cargarLogoURL();
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
@@ -125,8 +106,8 @@ export async function generarPDFEntrada(datos) {
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-      
-      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA');
+
+      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA', logoBuffer);
       y += 10;
       
       doc.rect(50, y, 495, 100).stroke(COLORES.negro);
@@ -141,6 +122,7 @@ export async function generarPDFEntrada(datos) {
       doc.font('Helvetica-Bold').text((datos.proveedor || 'N/A'), 160, y + 30, { width: 140, lineGap: 2 });
       doc.font('Helvetica').text('Doc. Soporte:', 60, y + 60);
       doc.font('Helvetica-Bold').text(datos.documento_soporte || 'N/A', 160, y + 60, { width: 140 });
+      
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_movimiento), 400, y);
       doc.font('Helvetica').text('Estado:', 320, y + 15);
@@ -166,14 +148,24 @@ export async function generarPDFEntrada(datos) {
       
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        if (y > 700) {
+        if (y > 670) {
           doc.addPage();
-          y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA (cont.)');
-          y += 30;
+          y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA (cont.)', logoBuffer);
+          y += 10;
+          
+          doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+          doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+          doc.text('Código', 60, y + 6);
+          doc.text('Producto', 140, y + 6);
+          doc.text('Cantidad', 350, y + 6);
+          doc.text('Costo Unit.', 420, y + 6);
+          doc.text('Subtotal', 490, y + 6, { align: 'right' });
+          y += 20;
+          doc.fillColor(COLORES.negro);
         }
-        if (idx % 2 === 0) {
-          doc.rect(50, y, 495, 18).fill('#F5F5F5');
-        }
+
+        if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
+        
         const subtotal = (det.cantidad || 0) * (det.costo_unitario || 0);
         doc.fontSize(8).fillColor(COLORES.negro);
         doc.text((det.codigo_producto || '').substring(0, 15), 60, y + 5);
@@ -201,13 +193,20 @@ export async function generarPDFEntrada(datos) {
         y += 15;
         doc.fontSize(8).font('Helvetica');
         doc.text(datos.observaciones, 50, y, { width: 495, align: 'justify' });
-        y += 35;
+        y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
       }
       
-      const firmaY = Math.max(y + 15, 690);
+      const espacioNecesario = 80;
+      if (y + espacioNecesario > 690) {
+          doc.addPage();
+          y = 100; 
+      }
+      const firmaY = Math.max(y + 20, 650);
+
       doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
       doc.fontSize(8).fillColor(COLORES.grisOscuro);
       doc.text('Registrado por', 80, firmaY + 5, { width: 150, align: 'center' });
+      
       doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
       doc.text('Autorizado por', 320, firmaY + 5, { width: 150, align: 'center' });
       
@@ -218,6 +217,7 @@ export async function generarPDFEntrada(datos) {
     }
   });
 }
+
 export async function generarPDFSalida(datos) {
   return new Promise((resolve, reject) => {
     try {
@@ -466,7 +466,10 @@ export async function generarPDFSalida(datos) {
     }
   });
 }
+
 export async function generarPDFTransferencia(datos) {
+  const logoBuffer = await cargarLogoURL();
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
@@ -475,8 +478,8 @@ export async function generarPDFTransferencia(datos) {
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-      
-      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA');
+
+      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA', logoBuffer);
       y += 10;
       
       doc.rect(50, y, 495, 100).stroke(COLORES.negro);
@@ -491,6 +494,7 @@ export async function generarPDFTransferencia(datos) {
       doc.font('Helvetica-Bold').text(datos.tipo_inventario_destino || 'N/A', 165, y + 30, { width: 130 });
       doc.font('Helvetica').text('Registrado por:', 60, y + 60);
       doc.font('Helvetica-Bold').text((datos.registrado_por || 'N/A'), 165, y + 60, { width: 130, lineGap: 2 });
+      
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_transferencia), 400, y);
       doc.font('Helvetica').text('Estado:', 320, y + 15);
@@ -514,14 +518,24 @@ export async function generarPDFTransferencia(datos) {
       
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        if (y > 700) {
+        if (y > 670) {
           doc.addPage();
-          y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA (cont.)');
-          y += 30;
+          y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA (cont.)', logoBuffer);
+          y += 10;
+          
+          doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+          doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+          doc.text('Cód. Origen', 60, y + 6);
+          doc.text('Producto', 140, y + 6);
+          doc.text('Cód. Destino', 320, y + 6);
+          doc.text('Cantidad', 410, y + 6);
+          doc.text('Costo', 490, y + 6, { align: 'right' });
+          y += 20;
+          doc.fillColor(COLORES.negro);
         }
-        if (idx % 2 === 0) {
-          doc.rect(50, y, 495, 18).fill('#F5F5F5');
-        }
+
+        if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
+        
         const subtotal = (det.cantidad || 0) * (det.costo_unitario || 0);
         doc.fontSize(8).fillColor(COLORES.negro);
         doc.text((det.codigo_origen || det.codigo_producto || '').substring(0, 15), 60, y + 5);
@@ -549,13 +563,20 @@ export async function generarPDFTransferencia(datos) {
         y += 15;
         doc.fontSize(8).font('Helvetica');
         doc.text(datos.observaciones, 50, y, { width: 495 });
-        y += 35;
+        y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
       }
       
-      const firmaY = Math.max(y + 15, 690);
+      const espacioNecesario = 80;
+      if (y + espacioNecesario > 690) {
+          doc.addPage();
+          y = 100; 
+      }
+      const firmaY = Math.max(y + 20, 650);
+
       doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
       doc.fontSize(8).fillColor(COLORES.grisOscuro);
       doc.text('Entrega', 80, firmaY + 5, { width: 150, align: 'center' });
+      
       doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
       doc.text('Recibe', 320, firmaY + 5, { width: 150, align: 'center' });
       
@@ -566,7 +587,10 @@ export async function generarPDFTransferencia(datos) {
     }
   });
 }
+
 export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
+  const logoBuffer = await cargarLogoURL();
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
@@ -576,7 +600,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
       
-      let y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN');
+      let y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN', logoBuffer);
       y += 10;
       
       doc.rect(50, y, 495, 120).stroke(COLORES.negro);
@@ -593,6 +617,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       doc.font('Helvetica-Bold').text((datos.supervisor || 'N/A'), 160, y + 60, { width: 140, lineGap: 2 });
       doc.font('Helvetica').text('Cant. Planificada:', 60, y + 90);
       doc.font('Helvetica-Bold').text(`${datos.cantidad_planificada || 0} ${datos.unidad_medida || ''}`, 160, y + 90);
+      
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_creacion), 400, y);
       doc.font('Helvetica').text('Estado:', 320, y + 15);
@@ -620,14 +645,23 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         
         doc.font('Helvetica').fillColor(COLORES.negro);
         consumoMateriales.forEach((mat, idx) => {
-          if (y > 700) {
+          if (y > 670) {
             doc.addPage();
-            y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN (cont.)');
-            y += 30;
+            y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN (cont.)', logoBuffer);
+            y += 10;
+            
+            doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+            doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+            doc.text('Insumo', 60, y + 6);
+            doc.text('Cantidad', 350, y + 6);
+            doc.text('Costo Unit.', 420, y + 6);
+            doc.text('Subtotal', 490, y + 6, { align: 'right' });
+            y += 20;
+            doc.fillColor(COLORES.negro);
           }
-          if (idx % 2 === 0) {
-            doc.rect(50, y, 495, 18).fill('#F5F5F5');
-          }
+          
+          if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
+          
           doc.fontSize(8).fillColor(COLORES.negro);
           doc.text((mat.insumo || '').substring(0, 50), 60, y + 5);
           doc.text(`${mat.cantidad_requerida} ${mat.unidad_medida || ''}`, 350, y + 5);
@@ -662,6 +696,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
     }
   });
 }
+
 export async function generarPDFCotizacion(cotizacion, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -750,6 +785,7 @@ export async function generarPDFCotizacion(cotizacion, stream) {
   doc.text(`${monedaSimbolo} ${parseFloat(cotizacion.total).toFixed(2)}`, 480, y, { align: 'right' });
   y += 35;
   doc.fontSize(9);
+  const { numeroALetras } = await import('./numeroALetras.js');
   const totalEnLetras = numeroALetras(parseFloat(cotizacion.total), cotizacion.moneda);
   doc.text(`SON: ${totalEnLetras}`, 50, y, { width: 500, align: 'left' });
   
@@ -787,6 +823,7 @@ export async function generarPDFCotizacion(cotizacion, stream) {
   
   doc.end();
 }
+
 export async function generarPDFOrdenVenta(orden, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -882,6 +919,7 @@ export async function generarPDFOrdenVenta(orden, stream) {
   doc.text(`${monedaSimbolo} ${parseFloat(orden.total).toFixed(2)}`, 480, y, { align: 'right' });
   y += 35;
   doc.fontSize(9);
+  const { numeroALetras } = await import('./numeroALetras.js');
   const totalEnLetras = numeroALetras(parseFloat(orden.total), orden.moneda);
   doc.text(`SON: ${totalEnLetras}`, 50, y, { width: 500, align: 'left' });
   
@@ -900,6 +938,7 @@ export async function generarPDFOrdenVenta(orden, stream) {
   
   doc.end();
 }
+
 export async function generarPDFGuiaRemision(guia, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -999,6 +1038,7 @@ export async function generarPDFGuiaRemision(guia, stream) {
   
   doc.end();
 }
+
 export async function generarPDFGuiaTransportista(guia, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -1204,6 +1244,7 @@ export async function generarPDFOrdenCompra(orden, stream) {
   
   y += 15;
   
+  const { numeroALetras } = await import('./numeroALetras.js');
   const totalEnLetras = numeroALetras(parseFloat(orden.total), orden.moneda);
   doc.fontSize(8).font('Helvetica');
   doc.text('SON:', 50, y);

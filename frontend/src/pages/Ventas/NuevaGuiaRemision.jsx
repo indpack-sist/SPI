@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/NuevaGuiaRemision.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
@@ -21,15 +20,16 @@ function NuevaGuiaRemision() {
   const [orden, setOrden] = useState(null);
   const [productosDisponibles, setProductosDisponibles] = useState([]);
   
+  // ✅ CAMBIO 1: ESTADO INICIAL ACTUALIZADO
   const [formData, setFormData] = useState({
     id_orden_venta: idOrden || '',
     fecha_emision: new Date().toISOString().split('T')[0],
-    fecha_inicio_traslado: '',
+    fecha_traslado: '',  // Cambiado de fecha_inicio_traslado
     tipo_traslado: 'Venta',
     motivo_traslado: 'Venta',
     modalidad_transporte: 'Privado',
     direccion_partida: '',
-    ubigeo_partida: '150101', // Lima
+    ubigeo_partida: '150101',
     direccion_llegada: '',
     ubigeo_llegada: '',
     ciudad_llegada: '',
@@ -50,7 +50,7 @@ function NuevaGuiaRemision() {
     calcularTotales();
   }, [detalle]);
 
-  // ✅ CARGAR ORDEN DESDE API
+  // CARGAR ORDEN DESDE API
   const cargarOrden = async (id) => {
     try {
       setLoading(true);
@@ -139,7 +139,7 @@ function NuevaGuiaRemision() {
     }));
   };
 
-  // ✅ GUARDAR EN API REAL
+  // GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -170,10 +170,11 @@ function NuevaGuiaRemision() {
     try {
       setLoading(true);
       
+      // ✅ CAMBIO 5: PAYLOAD ACTUALIZADO
       const payload = {
         id_orden_venta: parseInt(formData.id_orden_venta),
         fecha_emision: formData.fecha_emision,
-        fecha_inicio_traslado: formData.fecha_inicio_traslado || null,
+        fecha_traslado: formData.fecha_traslado || null, // Cambiado nombre de propiedad
         tipo_traslado: formData.tipo_traslado,
         motivo_traslado: formData.motivo_traslado,
         modalidad_transporte: formData.modalidad_transporte,
@@ -191,7 +192,7 @@ function NuevaGuiaRemision() {
             id_detalle_orden: item.id_detalle_orden,
             id_producto: item.id_producto,
             cantidad: parseFloat(item.cantidad),
-            descripcion: item.descripcion,
+            descripcion: item.descripcion || item.producto,
             peso_unitario_kg: parseFloat(item.peso_unitario_kg) || 0,
             orden: index + 1
           }))
@@ -299,13 +300,15 @@ function NuevaGuiaRemision() {
                 />
               </div>
               
+              {/* ✅ CAMBIO 2: LABEL Y CAMPO DE FECHA DE TRASLADO ACTUALIZADOS */}
               <div className="form-group">
-                <label className="form-label">Fecha Inicio Traslado</label>
+                <label className="form-label">Fecha de Traslado *</label>
                 <input
                   type="date"
                   className="form-input"
-                  value={formData.fecha_inicio_traslado}
-                  onChange={(e) => setFormData({ ...formData, fecha_inicio_traslado: e.target.value })}
+                  value={formData.fecha_traslado}
+                  onChange={(e) => setFormData({ ...formData, fecha_traslado: e.target.value })}
+                  required
                 />
               </div>
               
@@ -348,15 +351,20 @@ function NuevaGuiaRemision() {
                 />
               </div>
               
+              {/* ✅ CAMBIO 3: PESO BRUTO EDITABLE CON MENSAJE */}
               <div className="form-group">
                 <label className="form-label">Peso Bruto (kg)</label>
                 <input
                   type="number"
                   className="form-input"
                   value={formData.peso_bruto_kg}
-                  readOnly
-                  style={{ backgroundColor: 'var(--bg-secondary)' }}
+                  onChange={(e) => setFormData({ ...formData, peso_bruto_kg: e.target.value })}
+                  min="0"
+                  step="0.01"
                 />
+                <p className="text-xs text-muted mt-1">
+                  Se calcula automáticamente, pero puede modificarse manualmente
+                </p>
               </div>
             </div>
           </div>
@@ -495,9 +503,24 @@ function NuevaGuiaRemision() {
                               />
                             </td>
                             <td className="text-sm text-muted">{item.unidad_medida}</td>
-                            <td className="text-right text-sm">
-                              {parseFloat(item.peso_unitario_kg).toFixed(2)} kg
+                            
+                            {/* ✅ CAMBIO 4: PESO UNITARIO EDITABLE EN TABLA */}
+                            <td>
+                              <input
+                                type="number"
+                                className="form-input text-right text-sm"
+                                value={item.peso_unitario_kg}
+                                onChange={(e) => {
+                                  const newDetalle = [...detalle];
+                                  newDetalle[index].peso_unitario_kg = parseFloat(e.target.value) || 0;
+                                  setDetalle(newDetalle);
+                                  calcularTotales();
+                                }}
+                                min="0"
+                                step="0.01"
+                              />
                             </td>
+                            
                             <td className="text-right font-bold">
                               {(parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg)).toFixed(2)} kg
                             </td>

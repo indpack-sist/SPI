@@ -1,4 +1,5 @@
 import { executeQuery } from '../config/database.js';
+import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 
 export async function getAllOrdenesVenta(req, res) {
   try {
@@ -10,6 +11,7 @@ export async function getAllOrdenesVenta(req, res) {
         ov.numero_orden,
         ov.fecha_emision,
         ov.fecha_entrega_estimada,
+        ov.fecha_entrega_real,
         ov.estado,
         ov.prioridad,
         ov.subtotal,
@@ -24,7 +26,8 @@ export async function getAllOrdenesVenta(req, res) {
         e_comercial.nombre_completo AS comercial,
         e_registrado.nombre_completo AS registrado_por,
         ov.id_comercial,
-        ov.id_registrado_por
+        ov.id_registrado_por,
+        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
@@ -116,11 +119,10 @@ export async function getOrdenVentaById(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // ✅ CORRECCIÓN: Usar p.stock_actual directamente
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
-        dov.subtotal AS valor_venta,  // ← AGREGAR ALIAS
+        dov.subtotal AS valor_venta,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
@@ -156,6 +158,7 @@ export async function getOrdenVentaById(req, res) {
     });
   }
 }
+
 export async function createOrdenVenta(req, res) {
   try {
     const {
@@ -177,13 +180,9 @@ export async function createOrdenVenta(req, res) {
       contacto_entrega,
       telefono_entrega,
       observaciones,
-      id_comercial,  // ← Vendedor asignado (puede venir de cotización o selección manual)
+      id_comercial,
       detalle
     } = req.body;
-    
-    // ✅ LÓGICA CORREGIDA:
-    // id_registrado_por = Usuario autenticado que está creando la orden
-    // id_comercial = Vendedor asignado a la orden (puede ser diferente)
     
     const id_registrado_por = req.user?.id_empleado || null;
     
@@ -277,8 +276,8 @@ export async function createOrdenVenta(req, res) {
       contacto_entrega,
       telefono_entrega,
       observaciones,
-      id_comercial || null,      // ← Vendedor asignado (puede ser NULL)
-      id_registrado_por,          // ← Usuario autenticado (SIEMPRE tiene valor)
+      id_comercial || null,
+      id_registrado_por,
       subtotal,
       impuesto,
       total
@@ -293,7 +292,6 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
-    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       
@@ -345,15 +343,30 @@ export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { estado, fecha_entrega_real } = req.body;
+    const id_usuario = req.user?.id_empleado || null;
     
     const estadosValidos = ['Pendiente', 'Confirmada', 'En Preparación', 'Despachada', 'Entregada', 'Cancelada'];
-
+    
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
         success: false,
         error: 'Estado no válido'
       });
     }
+    
+    const ordenResult = await executeQuery(`
+      SELECT * FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const ordenActual = ordenResult.data[0];
+    const estadoAnterior = ordenActual.estado;
     
     if (estado === 'Entregada') {
       const detalleResult = await executeQuery(`
@@ -368,6 +381,218 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         return res.status(400).json({
           success: false,
           error: 'No se puede marcar como entregada. Hay productos pendientes de despacho.'
+        });
+      }
+    }
+    
+    if (estado === 'Confirmada' && estadoAnterior === 'Pendiente') {
+      const detalleResult = await executeQuery(`
+        SELECT 
+          dov.id_detalle,
+          dov.id_producto,
+          dov.cantidad,
+          dov.precio_unitario,
+          dov.descuento_porcentaje,
+          p.codigo AS codigo_producto,
+          p.nombre AS producto,
+          p.unidad_medida,
+          p.stock_actual,
+          p.costo_unitario_promedio,
+          p.precio_venta,
+          p.id_tipo_inventario
+        FROM detalle_orden_venta dov
+        INNER JOIN productos p ON dov.id_producto = p.id_producto
+        WHERE dov.id_orden_venta = ?
+      `, [id]);
+      
+      if (!detalleResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: 'Error al obtener detalle de la orden'
+        });
+      }
+      
+      for (const item of detalleResult.data) {
+        const stockDisponible = parseFloat(item.stock_actual);
+        const cantidadRequerida = parseFloat(item.cantidad);
+        
+        if (stockDisponible < cantidadRequerida) {
+          return res.status(400).json({
+            success: false,
+            error: `Stock insuficiente para ${item.producto}. Disponible: ${stockDisponible}, Requerido: ${cantidadRequerida}`
+          });
+        }
+      }
+      
+      const id_tipo_inventario = detalleResult.data[0].id_tipo_inventario || 4;
+      
+      let totalCosto = 0;
+      let totalPrecio = 0;
+      
+      for (const item of detalleResult.data) {
+        const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+        const precioUnitario = parseFloat(item.precio_unitario || 0);
+        const cantidad = parseFloat(item.cantidad);
+        const descuento = parseFloat(item.descuento_porcentaje || 0);
+        
+        const precioConDescuento = precioUnitario * (1 - descuento / 100);
+        
+        totalCosto += cantidad * costoUnitario;
+        totalPrecio += cantidad * precioConDescuento;
+      }
+      
+      const salidaResult = await executeQuery(`
+        INSERT INTO salidas (
+          id_tipo_inventario,
+          tipo_movimiento,
+          id_cliente,
+          total_costo,
+          total_precio,
+          moneda,
+          id_registrado_por,
+          observaciones,
+          estado
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id_tipo_inventario,
+        'Venta',
+        ordenActual.id_cliente,
+        totalCosto,
+        totalPrecio,
+        ordenActual.moneda || 'PEN',
+        id_usuario,
+        `[RESERVA] Orden de Venta ${ordenActual.numero_orden}`,
+        'Activo'
+      ]);
+      
+      if (!salidaResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: `Error al crear salida de reserva: ${salidaResult.error}`
+        });
+      }
+      
+      const id_salida = salidaResult.data.insertId;
+      
+      let productosReservados = 0;
+      
+      for (const item of detalleResult.data) {
+        const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+        const precioUnitario = parseFloat(item.precio_unitario || 0);
+        const cantidad = parseFloat(item.cantidad);
+        const descuento = parseFloat(item.descuento_porcentaje || 0);
+        
+        const precioConDescuento = precioUnitario * (1 - descuento / 100);
+        
+        const detalleInsertResult = await executeQuery(`
+          INSERT INTO detalle_salidas (
+            id_salida,
+            id_producto,
+            cantidad,
+            costo_unitario,
+            precio_unitario
+          ) VALUES (?, ?, ?, ?, ?)
+        `, [
+          id_salida,
+          item.id_producto,
+          cantidad,
+          costoUnitario,
+          precioConDescuento
+        ]);
+        
+        if (!detalleInsertResult.success) {
+          await executeQuery('DELETE FROM salidas WHERE id_salida = ?', [id_salida]);
+          
+          return res.status(500).json({
+            success: false,
+            error: `Error al insertar detalle: ${detalleInsertResult.error}`
+          });
+        }
+        
+        const stockUpdateResult = await executeQuery(`
+          UPDATE productos 
+          SET stock_actual = stock_actual - ?
+          WHERE id_producto = ?
+        `, [cantidad, item.id_producto]);
+        
+        if (!stockUpdateResult.success) {
+          console.error(`Error actualizando stock para ${item.producto}:`, stockUpdateResult.error);
+        }
+        
+        productosReservados++;
+      }
+      
+      await executeQuery(`
+        UPDATE ordenes_venta 
+        SET estado = ?,
+            fecha_entrega_real = ?
+        WHERE id_orden_venta = ?
+      `, [estado, fecha_entrega_real || null, id]);
+      
+      return res.json({
+        success: true,
+        message: `Orden confirmada. Stock reservado exitosamente (Salida ID: ${id_salida})`,
+        data: {
+          id_salida,
+          productos_reservados: productosReservados,
+          total_costo: totalCosto,
+          total_precio: totalPrecio
+        }
+      });
+    }
+    
+    if (estado === 'Cancelada' && estadoAnterior === 'Confirmada') {
+      const salidaResult = await executeQuery(`
+        SELECT id_salida 
+        FROM salidas 
+        WHERE id_cliente = ?
+        AND tipo_movimiento = 'Venta'
+        AND estado = 'Activo'
+        AND observaciones LIKE ?
+        ORDER BY fecha_movimiento DESC
+        LIMIT 1
+      `, [ordenActual.id_cliente, `%${ordenActual.numero_orden}%`]);
+      
+      if (salidaResult.success && salidaResult.data.length > 0) {
+        const id_salida = salidaResult.data[0].id_salida;
+        
+        const detalleSalidaResult = await executeQuery(`
+          SELECT id_producto, cantidad 
+          FROM detalle_salidas 
+          WHERE id_salida = ?
+        `, [id_salida]);
+        
+        if (detalleSalidaResult.success) {
+          for (const item of detalleSalidaResult.data) {
+            await executeQuery(`
+              UPDATE productos 
+              SET stock_actual = stock_actual + ?
+              WHERE id_producto = ?
+            `, [item.cantidad, item.id_producto]);
+          }
+        }
+        
+        await executeQuery(`
+          UPDATE salidas 
+          SET estado = 'Anulado',
+              observaciones = CONCAT(observaciones, ' - ANULADA: Orden de venta cancelada')
+          WHERE id_salida = ?
+        `, [id_salida]);
+        
+        await executeQuery(`
+          UPDATE ordenes_venta 
+          SET estado = ?,
+              fecha_entrega_real = ?
+          WHERE id_orden_venta = ?
+        `, [estado, fecha_entrega_real || null, id]);
+        
+        return res.json({
+          success: true,
+          message: `Orden cancelada. Stock restaurado exitosamente (Salida ID: ${id_salida} anulada)`,
+          data: {
+            id_salida_anulada: id_salida,
+            productos_restaurados: detalleSalidaResult.data.length
+          }
         });
       }
     }
@@ -446,7 +671,6 @@ export async function actualizarProgresoOrdenVenta(req, res) {
     const { id } = req.params;
     const { detalle } = req.body;
     
-    // Actualizar cada línea del detalle
     for (const item of detalle) {
       await executeQuery(`
         UPDATE detalle_orden_venta 
@@ -480,7 +704,8 @@ export async function getEstadisticasOrdenesVenta(req, res) {
       SELECT 
         COUNT(*) AS total_ordenes,
         SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
-        SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) AS en_proceso,
+        SUM(CASE WHEN estado = 'Confirmada' THEN 1 ELSE 0 END) AS confirmadas,
+        SUM(CASE WHEN estado = 'En Preparación' THEN 1 ELSE 0 END) AS en_proceso,
         SUM(CASE WHEN estado = 'Despachada' THEN 1 ELSE 0 END) AS despachadas,
         SUM(CASE WHEN estado = 'Entregada' THEN 1 ELSE 0 END) AS entregadas,
         SUM(CASE WHEN prioridad = 'Urgente' THEN 1 ELSE 0 END) AS urgentes,
@@ -515,7 +740,6 @@ export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     
-    // Obtener orden con detalle
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
@@ -544,7 +768,6 @@ export async function descargarPDFOrdenVenta(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // Obtener detalle
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
@@ -566,14 +789,12 @@ export async function descargarPDFOrdenVenta(req, res) {
     
     orden.detalle = detalleResult.data;
     
-    // Generar PDF
     const pdfBuffer = await generarOrdenVentaPDF(orden);
     
-    // Enviar PDF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="OrdenVenta-${orden.numero_orden}.pdf"`);
     res.send(pdfBuffer);
-    
+  //prueba
   } catch (error) {
     console.error('Error al generar PDF de orden de venta:', error);
     res.status(500).json({

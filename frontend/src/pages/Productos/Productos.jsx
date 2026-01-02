@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Eye, BookOpen } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Eye, BookOpen, ClipboardCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { productosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import ModalConteoFisico from '../../components/Productos/ModalConteoFisico';
 
 function Productos() {
   const navigate = useNavigate();
@@ -19,6 +20,10 @@ function Productos() {
   const [editando, setEditando] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+
+  // NUEVO: Estados para Conteo Físico
+  const [modalConteoOpen, setModalConteoOpen] = useState(false);
+  const [productoConteo, setProductoConteo] = useState(null);
 
   const [formData, setFormData] = useState({
     codigo: '',
@@ -44,7 +49,6 @@ function Productos() {
       setError(null);
       
       const [prodRes, tiposRes, categRes] = await Promise.all([
-        // CAMBIO AQUÍ: Usamos getAllConCosto en lugar de getAll
         productosAPI.getAllConCosto(), 
         productosAPI.getTiposInventario(),
         productosAPI.getCategorias()
@@ -98,6 +102,21 @@ function Productos() {
   const cerrarModal = () => {
     setModalOpen(false);
     setEditando(null);
+  };
+
+  // NUEVO: Función para abrir modal de conteo físico
+  const abrirModalConteo = (producto) => {
+    setProductoConteo(producto);
+    setModalConteoOpen(true);
+  };
+
+  // NUEVO: Callback cuando se completa el conteo
+  const handleConteoSuccess = (data) => {
+    setSuccess(
+      `${data.tipo_ajuste === 'Positivo' ? '✓' : '⚠'} Ajuste ${data.tipo_ajuste.toLowerCase()} realizado: ${data.diferencia > 0 ? '+' : ''}${data.diferencia} ${productoConteo.unidad_medida}`
+    );
+    cargarDatos(); // Recargar productos para mostrar stock actualizado
+    setProductoConteo(null);
   };
 
   const handleSubmit = async (e) => {
@@ -205,10 +224,20 @@ function Productos() {
     {
       header: 'Acciones',
       accessor: 'id_producto',
-      width: '150px',
+      width: '200px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-2 justify-center">
+          {/* NUEVO: Botón de Conteo Físico */}
+          <button
+            className="btn btn-sm btn-warning"
+            onClick={() => abrirModalConteo(row)}
+            title="Conteo Físico"
+            disabled={row.estado === 'Inactivo'}
+          >
+            <ClipboardCheck size={14} />
+          </button>
+          
           <button
             className="btn btn-sm btn-primary"
             onClick={() => navigate(`/productos/${value}`)}
@@ -216,6 +245,7 @@ function Productos() {
           >
             <Eye size={14} />
           </button>
+          
           <button
             className="btn btn-sm btn-outline"
             onClick={() => abrirModal(row)}
@@ -223,6 +253,7 @@ function Productos() {
           >
             <Edit size={14} />
           </button>
+          
           <button
             className="btn btn-sm btn-danger"
             onClick={() => handleDelete(value)}
@@ -312,6 +343,7 @@ function Productos() {
         emptyMessage="No se encontraron productos"
       />
 
+      {/* Modal de Edición/Creación */}
       <Modal
         isOpen={modalOpen}
         onClose={cerrarModal}
@@ -489,6 +521,17 @@ function Productos() {
           </div>
         </form>
       </Modal>
+
+      {/* NUEVO: Modal de Conteo Físico */}
+      <ModalConteoFisico
+        isOpen={modalConteoOpen}
+        onClose={() => {
+          setModalConteoOpen(false);
+          setProductoConteo(null);
+        }}
+        producto={productoConteo}
+        onSuccess={handleConteoSuccess}
+      />
     </div>
   );
 }

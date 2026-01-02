@@ -203,7 +203,36 @@ export const salidasAPI = {
   update: (id, data) => api.put(`/inventario/movimientos-salidas/${id}`, data),
   delete: (id) => api.delete(`/inventario/movimientos-salidas/${id}`),
   
-  generarPDF: (id) => api.get(`/inventario/movimientos-salidas/${id}/pdf`, { responseType: 'blob' }),
+  generarPDF: async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/inventario/movimientos-salidas/${id}/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: 'Error al generar PDF' 
+        }));
+        throw new Error(errorData.error || 'Error al generar PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `salida-${id}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar PDF salida:', error);
+      throw error;
+    }
+  },
   
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };
@@ -219,7 +248,37 @@ export const transferenciasAPI = {
     return api.get(`/inventario/transferencias/productos-disponibles?${queryString}`);
   },
   getResumenStock: () => api.get('/inventario/transferencias/resumen-stock'),
-  generarPDF: (id) => api.get(`/inventario/transferencias/${id}/pdf`, { responseType: 'blob' }),
+   generarPDF: async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/inventario/transferencias/${id}/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: 'Error al generar PDF' 
+        }));
+        throw new Error(errorData.error || 'Error al generar PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `transferencia-${id}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar PDF transferencia:', error);
+      throw error;
+    }
+  },
+  
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };
 
@@ -250,9 +309,36 @@ export const ordenesProduccionAPI = {
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   
-  generarPDF: (id) => api.get(`/produccion/ordenes/${id}/pdf`, { 
-    responseType: 'blob' 
-  }),
+  generarPDF: async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/produccion/ordenes/${id}/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: 'Error al generar PDF' 
+        }));
+        throw new Error(errorData.error || 'Error al generar PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `orden-produccion-${id}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar PDF orden producción:', error);
+      throw error;
+    }
+  },
   
   getNotificaciones: () => api.get('/produccion/ordenes/notificaciones')
 };
@@ -325,9 +411,36 @@ export const ordenesVentaAPI = {
 
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 
-  descargarPDF: (id) => api.get(`/ordenes-venta/${id}/pdf`, {
-    responseType: 'blob'
-  })
+  descargarPDF: async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/ordenes-venta/${id}/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: 'Error al generar PDF' 
+        }));
+        throw new Error(errorData.error || 'Error al generar PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `orden-venta-${id}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar PDF orden venta:', error);
+      throw error;
+    }
+  }
 };
 
 export const guiasRemisionAPI = {

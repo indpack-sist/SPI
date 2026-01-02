@@ -484,7 +484,7 @@ function Dashboard() {
                   <th>Tipo</th>
                   <th className="text-right">Productos</th>
                   <th className="text-right">Stock</th>
-                  <th className="text-right">V. Producción</th>
+                  <th className="text-right">V. Entrada / Producción</th>
                   <th className="text-right">V. Venta</th>
                   <th className="text-right">Margen</th>
                 </tr>

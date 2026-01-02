@@ -385,12 +385,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       }
     }
     
-    // ====================================
-    // CASO 1: Pendiente → Confirmada (RESERVAR STOCK)
-    // ====================================
     if (estado === 'Confirmada' && estadoAnterior === 'Pendiente') {
-      console.log('🔵 Iniciando reserva de stock para orden:', id);
-      
       const detalleResult = await executeQuery(`
         SELECT 
           dov.id_detalle,
@@ -411,21 +406,15 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       `, [id]);
       
       if (!detalleResult.success) {
-        console.error('❌ Error al obtener detalle:', detalleResult.error);
         return res.status(500).json({
           success: false,
           error: 'Error al obtener detalle de la orden'
         });
       }
       
-      console.log('📦 Productos encontrados:', detalleResult.data.length);
-      
-      // Validar stock disponible
       for (const item of detalleResult.data) {
         const stockDisponible = parseFloat(item.stock_actual);
         const cantidadRequerida = parseFloat(item.cantidad);
-        
-        console.log(`   - ${item.producto}: Stock=${stockDisponible}, Req=${cantidadRequerida}`);
         
         if (stockDisponible < cantidadRequerida) {
           return res.status(400).json({
@@ -435,12 +424,8 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         }
       }
       
-      // Obtener tipo de inventario (usar el del primer producto)
       const id_tipo_inventario = detalleResult.data[0].id_tipo_inventario || 4;
       
-      console.log('📋 Tipo de inventario:', id_tipo_inventario);
-      
-      // Calcular totales
       let totalCosto = 0;
       let totalPrecio = 0;
       
@@ -450,16 +435,12 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         const cantidad = parseFloat(item.cantidad);
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         
-        // Calcular precio con descuento
         const precioConDescuento = precioUnitario * (1 - descuento / 100);
         
         totalCosto += cantidad * costoUnitario;
         totalPrecio += cantidad * precioConDescuento;
       }
       
-      console.log('💰 Total Costo:', totalCosto, '| Total Precio:', totalPrecio);
-      
-      // ✅ CREAR SALIDA
       const salidaResult = await executeQuery(`
         INSERT INTO salidas (
           id_tipo_inventario,
@@ -485,7 +466,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       ]);
       
       if (!salidaResult.success) {
-        console.error('❌ Error al crear salida:', salidaResult.error);
         return res.status(500).json({
           success: false,
           error: `Error al crear salida de reserva: ${salidaResult.error}`
@@ -493,9 +473,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       }
       
       const id_salida = salidaResult.data.insertId;
-      console.log('✅ Salida creada con ID:', id_salida);
       
-      // ✅ INSERTAR DETALLE Y DESCONTAR STOCK
       let productosReservados = 0;
       
       for (const item of detalleResult.data) {
@@ -504,35 +482,25 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         const cantidad = parseFloat(item.cantidad);
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         
-        // Calcular precio con descuento
         const precioConDescuento = precioUnitario * (1 - descuento / 100);
-        const subtotal = cantidad * precioConDescuento;
         
-        console.log(`   📝 Insertando detalle: ${item.producto} (${cantidad} ${item.unidad_medida})`);
-        
-        // ✅ INSERTAR EN DETALLE_SALIDAS
         const detalleInsertResult = await executeQuery(`
           INSERT INTO detalle_salidas (
             id_salida,
             id_producto,
             cantidad,
             costo_unitario,
-            precio_unitario,
-            subtotal
-          ) VALUES (?, ?, ?, ?, ?, ?)
+            precio_unitario
+          ) VALUES (?, ?, ?, ?, ?)
         `, [
           id_salida,
           item.id_producto,
           cantidad,
           costoUnitario,
-          precioConDescuento,
-          subtotal
+          precioConDescuento
         ]);
         
         if (!detalleInsertResult.success) {
-          console.error(`   ❌ Error insertando detalle para ${item.producto}:`, detalleInsertResult.error);
-          
-          // Rollback: eliminar salida creada
           await executeQuery('DELETE FROM salidas WHERE id_salida = ?', [id_salida]);
           
           return res.status(500).json({
@@ -541,9 +509,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
           });
         }
         
-        console.log(`   ✅ Detalle insertado OK`);
-        
-        // ✅ DESCONTAR STOCK
         const stockUpdateResult = await executeQuery(`
           UPDATE productos 
           SET stock_actual = stock_actual - ?
@@ -551,17 +516,12 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         `, [cantidad, item.id_producto]);
         
         if (!stockUpdateResult.success) {
-          console.error(`   ❌ Error actualizando stock para ${item.producto}:`, stockUpdateResult.error);
-        } else {
-          console.log(`   ✅ Stock descontado: -${cantidad}`);
+          console.error(`Error actualizando stock para ${item.producto}:`, stockUpdateResult.error);
         }
         
         productosReservados++;
       }
       
-      console.log('✅ Proceso completado:', productosReservados, 'productos reservados');
-      
-      // ✅ ACTUALIZAR ESTADO DE ORDEN
       await executeQuery(`
         UPDATE ordenes_venta 
         SET estado = ?,
@@ -581,13 +541,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       });
     }
     
-    // ====================================
-    // CASO 2: Confirmada → Cancelada (RESTAURAR STOCK)
-    // ====================================
     if (estado === 'Cancelada' && estadoAnterior === 'Confirmada') {
-      console.log('🔴 Iniciando cancelación de orden:', id);
-      
-      // Buscar salida de reserva asociada
       const salidaResult = await executeQuery(`
         SELECT id_salida 
         FROM salidas 
@@ -601,9 +555,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       
       if (salidaResult.success && salidaResult.data.length > 0) {
         const id_salida = salidaResult.data[0].id_salida;
-        console.log('📦 Salida encontrada:', id_salida);
         
-        // Obtener detalle de salida
         const detalleSalidaResult = await executeQuery(`
           SELECT id_producto, cantidad 
           FROM detalle_salidas 
@@ -611,21 +563,15 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         `, [id_salida]);
         
         if (detalleSalidaResult.success) {
-          console.log('📝 Restaurando stock de', detalleSalidaResult.data.length, 'productos');
-          
-          // ✅ RESTAURAR STOCK
           for (const item of detalleSalidaResult.data) {
             await executeQuery(`
               UPDATE productos 
               SET stock_actual = stock_actual + ?
               WHERE id_producto = ?
             `, [item.cantidad, item.id_producto]);
-            
-            console.log(`   ✅ Stock restaurado: +${item.cantidad} (Producto ${item.id_producto})`);
           }
         }
         
-        // ✅ ANULAR SALIDA
         await executeQuery(`
           UPDATE salidas 
           SET estado = 'Anulado',
@@ -633,9 +579,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
           WHERE id_salida = ?
         `, [id_salida]);
         
-        console.log('✅ Salida anulada');
-        
-        // Actualizar estado de orden
         await executeQuery(`
           UPDATE ordenes_venta 
           SET estado = ?,
@@ -651,14 +594,9 @@ export async function actualizarEstadoOrdenVenta(req, res) {
             productos_restaurados: detalleSalidaResult.data.length
           }
         });
-      } else {
-        console.log('⚠️ No se encontró salida de reserva para anular');
       }
     }
     
-    // ====================================
-    // OTROS CASOS: Solo actualizar estado
-    // ====================================
     const result = await executeQuery(`
       UPDATE ordenes_venta 
       SET estado = ?,

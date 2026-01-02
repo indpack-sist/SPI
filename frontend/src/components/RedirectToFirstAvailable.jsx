@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { usePermisos } from '../contexts/PermisosContext';
+import { usePermisos } from '../context/PermisosContext';
 
 export const RedirectToFirstAvailable = () => {
   const { puedeAcceder, cargando, permisos } = usePermisos();

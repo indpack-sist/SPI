@@ -147,6 +147,9 @@ export const productosAPI = {
   getEvolucionCUP: (id) => api.get(`/productos/${id}/evolucion-cup`),
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A ENTRADAS
+// ==========================================
 export const entradasAPI = {
   getAll: (params) => api.get('/inventario/movimientos-entradas', { params }),
   getById: (id) => api.get(`/inventario/movimientos-entradas/${id}`),
@@ -179,8 +182,14 @@ export const entradasAPI = {
       const link = document.createElement('a');
       link.href = url;
       link.download = `entrada-${id}.pdf`;
+
+      // FIX: Añadir al DOM y retrasar limpieza
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       
       return { success: true };
     } catch (error) {
@@ -192,6 +201,9 @@ export const entradasAPI = {
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A SALIDAS
+// ==========================================
 export const salidasAPI = {
   getAll: (params) => api.get('/inventario/movimientos-salidas', { params }),
   getById: (id) => api.get(`/inventario/movimientos-salidas/${id}`),
@@ -221,8 +233,14 @@ export const salidasAPI = {
       const link = document.createElement('a');
       link.href = url;
       link.download = `salida-${id}.pdf`;
+
+      // FIX: Añadir al DOM y retrasar limpieza
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       
       return { success: true };
     } catch (error) {
@@ -234,6 +252,9 @@ export const salidasAPI = {
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A TRANSFERENCIAS
+// ==========================================
 export const transferenciasAPI = {
   getAll: (params) => api.get('/inventario/transferencias', { params }),
   getById: (id) => api.get(`/inventario/transferencias/${id}`),
@@ -267,8 +288,14 @@ export const transferenciasAPI = {
       const link = document.createElement('a');
       link.href = url;
       link.download = `transferencia-${id}.pdf`;
+
+      // FIX: Añadir al DOM y retrasar limpieza
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       
       return { success: true };
     } catch (error) {
@@ -295,6 +322,9 @@ export const dashboard = {
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A ORDENES PRODUCCION
+// ==========================================
 export const ordenesProduccionAPI = {
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
@@ -328,8 +358,14 @@ export const ordenesProduccionAPI = {
       const link = document.createElement('a');
       link.href = url;
       link.download = `orden-produccion-${id}.pdf`;
+
+      // FIX: Añadir al DOM y retrasar limpieza
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       
       return { success: true };
     } catch (error) {
@@ -341,6 +377,9 @@ export const ordenesProduccionAPI = {
   getNotificaciones: () => api.get('/produccion/ordenes/notificaciones')
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A COTIZACIONES (PREVENTIVO)
+// ==========================================
 export const cotizacionesAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -378,11 +417,20 @@ export const cotizacionesAPI = {
     const link = document.createElement('a');
     link.href = url;
     link.download = `cotizacion-${id}.pdf`;
+    
+    // FIX: Añadir al DOM y retrasar limpieza
+    document.body.appendChild(link);
     link.click();
-    window.URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
   }
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A ORDENES VENTA (PREVENTIVO)
+// ==========================================
 export const ordenesVentaAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -430,8 +478,14 @@ export const ordenesVentaAPI = {
       const link = document.createElement('a');
       link.href = url;
       link.download = `orden-venta-${id}.pdf`;
+      
+      // FIX: Añadir al DOM y retrasar limpieza
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       
       return { success: true };
     } catch (error) {
@@ -441,6 +495,9 @@ export const ordenesVentaAPI = {
   }
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A GUIAS REMISION (PREVENTIVO)
+// ==========================================
 export const guiasRemisionAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -482,11 +539,20 @@ export const guiasRemisionAPI = {
     const link = document.createElement('a');
     link.href = url;
     link.download = `guia-remision-${id}.pdf`;
+    
+    // FIX: Añadir al DOM y retrasar limpieza
+    document.body.appendChild(link);
     link.click();
-    window.URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
   }
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A GUIAS TRANSPORTISTA (PREVENTIVO)
+// ==========================================
 export const guiasTransportistaAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -524,11 +590,20 @@ export const guiasTransportistaAPI = {
     const link = document.createElement('a');
     link.href = url;
     link.download = `guia-transportista-${id}.pdf`;
+    
+    // FIX: Añadir al DOM y retrasar limpieza
+    document.body.appendChild(link);
     link.click();
-    window.URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
   }
 };
 
+// ==========================================
+// CORRECCIÓN APLICADA A ORDENES COMPRA (PREVENTIVO)
+// ==========================================
 export const ordenesCompraAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -570,8 +645,14 @@ export const ordenesCompraAPI = {
     const link = document.createElement('a');
     link.href = url;
     link.download = `orden-compra-${id}.pdf`;
+    
+    // FIX: Añadir al DOM y retrasar limpieza
+    document.body.appendChild(link);
     link.click();
-    window.URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
   }
 };
 

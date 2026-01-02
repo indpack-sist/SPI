@@ -159,7 +159,38 @@ export const entradasAPI = {
   validarInventario: (data) => api.post('/inventario/movimientos-entradas/validar-inventario', data),
   crearProductoMultiInventario: (data) => api.post('/inventario/movimientos-entradas/crear-multi-inventario', data),
   
-  generarPDF: (id) => api.get(`/inventario/movimientos-entradas/${id}/pdf`, { responseType: 'blob' }),
+  generarPDF: async (id) => {
+  try {
+    const response = await fetch(`${API_URL}/inventario/movimientos-entradas/${id}/pdf`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      }
+    });
+    
+    // Manejar errores
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ 
+        error: 'Error al generar PDF' 
+      }));
+      throw new Error(errorData.error || 'Error al generar PDF');
+    }
+    
+    // Si todo OK, procesar blob
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `entrada-${id}.pdf`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error al descargar PDF entrada:', error);
+    throw error;
+  }
+},
   
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };

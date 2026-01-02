@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import api from '../services/api';
 
 const PermisosContext = createContext();
 
@@ -24,11 +23,25 @@ export const PermisosProvider = ({ children }) => {
         return;
       }
 
-      const response = await api.get('/auth/permisos');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       
-      if (response.data.success) {
-        setPermisos(response.data.data.permisos);
-        setRol(response.data.data.rol);
+      const response = await fetch(`${API_URL}/auth/permisos`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar permisos');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setPermisos(data.data.permisos);
+        setRol(data.data.rol);
       }
     } catch (error) {
       console.error('Error al cargar permisos:', error);

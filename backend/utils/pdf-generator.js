@@ -1,12 +1,5 @@
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { numeroALetras } from './numeroALetras.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const EMPRESA = {
   ruc: '20550932297',
@@ -26,77 +19,18 @@ const COLORES = {
   blanco: '#FFFFFF'
 };
 
-function agregarLogoDeFondo(doc) {
-  const possibleLogoPaths = [
-    path.join(__dirname, '..', '..', 'frontend', 'public', 'images', 'indpack.png'),
-    path.join(__dirname, '..', '..', 'frontend', 'images', 'indpack.png'),
-    path.join(__dirname, '..', 'frontend', 'public', 'images', 'indpack.png'),
-    path.join(__dirname, '..', 'frontend', 'images', 'indpack.png'),
-    path.join(process.cwd(), 'frontend', 'public', 'images', 'indpack.png'),
-    path.join(process.cwd(), 'frontend', 'images', 'indpack.png')
-  ];
-  
-  let logoLoaded = false;
-  for (const logoPath of possibleLogoPaths) {
-    if (fs.existsSync(logoPath)) {
-      try {
-        doc.save();
-        doc.opacity(0.08); 
-        const logoSize = 350;
-        const pageWidth = 595; 
-        const pageHeight = 842; 
-        const centerX = (pageWidth - logoSize) / 2 + 100;
-        const centerY = (pageHeight - logoSize) / 2 + 10;
-        doc.translate(centerX + logoSize/2, centerY + logoSize/2);
-        doc.rotate(-45, { origin: [0, 0] });
-        doc.translate(-(logoSize/2), -(logoSize/2));
-        doc.image(logoPath, 0, 0, { 
-          width: logoSize,
-          height: logoSize,
-          fit: [logoSize, logoSize]
-        });
-        doc.restore();
-        logoLoaded = true;
-        break;
-      } catch (err) {
-        console.log(`No se pudo cargar logo de fondo desde: ${logoPath}`);
-      }
-    }
-  }
-  
-  if (!logoLoaded) {
-    console.log('Logo de fondo no encontrado');
+async function cargarLogoURL() {
+  try {
+    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
+      responseType: 'arraybuffer'
+    });
+    return Buffer.from(response.data);
+  } catch (error) {
+    console.warn('No se pudo cargar el logo:', error.message);
+    return null;
   }
 }
 
-function formatearFechaLima(fecha) {
-  if (!fecha) return 'N/A';
-  const date = new Date(fecha);
-  
-  // Convertir a zona horaria de Lima (UTC-5)
-  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
-  
-  return limaDate.toLocaleDateString('es-PE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
-}
-
-function formatearHoraLima(fecha) {
-  if (!fecha) return 'N/A';
-  const date = new Date(fecha);
-  
-  // Convertir a zona horaria de Lima (UTC-5)
-  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
-  
-  return limaDate.toLocaleTimeString('es-PE', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
-}
 function formatearFecha(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
@@ -107,24 +41,44 @@ function formatearFecha(fecha) {
     year: 'numeric'
   });
 }
+
+function formatearHora(fecha) {
+  if (!fecha) return 'N/A';
+  const date = new Date(fecha);
+  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  return limaDate.toLocaleTimeString('es-PE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+}
+
 function formatearMoneda(valor, moneda = 'PEN') {
   const simbolos = { 'PEN': 'S/', 'USD': '$', 'EUR': '€' };
   return `${simbolos[moneda] || 'S/'} ${parseFloat(valor || 0).toFixed(2)}`;
 }
 
-function agregarEncabezado(doc, titulo) {
-  agregarLogoDeFondo(doc);
+function agregarEncabezado(doc, titulo, logoBuffer) {
+  if (logoBuffer) {
+    doc.image(logoBuffer, 60, 60, { width: 100 });
+  }
+  
   doc.rect(50, 50, 495, 90).stroke(COLORES.negro);
+  
   doc.fontSize(12).font('Helvetica-Bold').fillColor(COLORES.negro);
-  doc.text('INDPACK S.A.C.', 60, 60);
+  doc.text('INDPACK S.A.C.', 180, 60);
   doc.fontSize(8).font('Helvetica').fillColor(COLORES.grisOscuro);
-  doc.text(`RUC: ${EMPRESA.ruc}`, 60, 77);
-  doc.text(EMPRESA.actividad, 60, 88);
-  doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito} - ${EMPRESA.departamento}`, 60, 99, { width: 300, lineGap: 2 });
-  doc.text(EMPRESA.web, 60, 121);
-  doc.moveTo(370, 60).lineTo(370, 130).stroke(COLORES.grisMedio);
+  doc.text(`RUC: ${EMPRESA.ruc}`, 180, 77);
+  doc.text(EMPRESA.actividad, 180, 88);
+  doc.text(`${EMPRESA.direccion}`, 180, 99, { width: 200 });
+  doc.text(`${EMPRESA.distrito} - ${EMPRESA.departamento}`, 180, 110);
+  doc.text(EMPRESA.web, 180, 121);
+  
+  doc.moveTo(390, 60).lineTo(390, 130).stroke(COLORES.grisMedio);
   doc.fontSize(14).font('Helvetica-Bold').fillColor(COLORES.negro);
-  doc.text(titulo, 380, 70, { width: 155, align: 'center' });
+  doc.text(titulo, 400, 75, { width: 135, align: 'center' });
+  
   doc.moveTo(50, 145).lineTo(545, 145).lineWidth(1.5).stroke(COLORES.negro);
   doc.fillColor(COLORES.negro);
   return 160;
@@ -134,24 +88,15 @@ function agregarPiePagina(doc, textoPie) {
   const pageCount = doc.bufferedPageRange().count;
   for (let i = 0; i < pageCount; i++) {
     doc.switchToPage(i);
-    agregarLogoDeFondo(doc);
     doc.moveTo(50, 760).lineTo(545, 760).lineWidth(0.5).stroke(COLORES.grisMedio);
     doc.fontSize(7).fillColor(COLORES.grisMedio);
     doc.text(textoPie, 50, 768, { width: 495, align: 'center' });
     doc.text(`Página ${i + 1} de ${pageCount}`, 50, 780, { width: 495, align: 'center' });
   }
 }
+
 export async function generarPDFEntrada(datos) {
-  // 1. Descarga del logo (Igual que en Salida)
-  let logoBuffer = null;
-  try {
-    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-      responseType: 'arraybuffer'
-    });
-    logoBuffer = Buffer.from(response.data);
-  } catch (error) {
-    console.warn('No se pudo cargar el logo:', error.message);
-  }
+  const logoBuffer = await cargarLogoURL();
 
   return new Promise((resolve, reject) => {
     try {
@@ -161,18 +106,10 @@ export async function generarPDFEntrada(datos) {
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-      
-      // LOGO
-      if (logoBuffer) {
-        doc.image(logoBuffer, 50, 25, { width: 110 }); 
-      }
 
-      // ENCABEZADO
-      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA');
-      y = Math.max(y, 100); // Ajuste de seguridad
+      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA', logoBuffer);
       y += 10;
       
-      // INFORMACIÓN
       doc.rect(50, y, 495, 100).stroke(COLORES.negro);
       y += 10;
       
@@ -186,7 +123,6 @@ export async function generarPDFEntrada(datos) {
       doc.font('Helvetica').text('Doc. Soporte:', 60, y + 60);
       doc.font('Helvetica-Bold').text(datos.documento_soporte || 'N/A', 160, y + 60, { width: 140 });
       
-      // Columna Derecha
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_movimiento), 400, y);
       doc.font('Helvetica').text('Estado:', 320, y + 15);
@@ -196,7 +132,6 @@ export async function generarPDFEntrada(datos) {
       
       y += 115;
       
-      // TABLA
       const detalles = datos.detalles || [];
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
       doc.text(`Detalle de Entrada (${detalles.length} productos)`, 50, y);
@@ -213,14 +148,11 @@ export async function generarPDFEntrada(datos) {
       
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        if (y > 650) { // Salto de página seguro
+        if (y > 670) {
           doc.addPage();
-          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 });
-          y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA (cont.)');
-          y = Math.max(y, 100);
-          y += 20;
+          y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA (cont.)', logoBuffer);
+          y += 10;
           
-          // Repetir Header Tabla
           doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
           doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
           doc.text('Código', 60, y + 6);
@@ -246,7 +178,6 @@ export async function generarPDFEntrada(datos) {
         doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
       });
       
-      // TOTALES
       y += 15;
       const totalCosto = datos.total_costo || detalles.reduce((sum, d) => sum + ((d.costo_unitario || 0) * (d.cantidad || 0)), 0);
       doc.rect(370, y, 175, 30).stroke(COLORES.negro);
@@ -265,20 +196,19 @@ export async function generarPDFEntrada(datos) {
         y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
       }
       
-      // FIRMAS (Lógica corregida)
-      const espacioNecesario = 120;
-      if (y + espacioNecesario > 680) {
+      const espacioNecesario = 80;
+      if (y + espacioNecesario > 690) {
           doc.addPage();
-          y = 50; 
+          y = 100; 
       }
-      const firmaY = Math.max(y + 30, 620); // Anclar firmas arriba del pie
+      const firmaY = Math.max(y + 20, 650);
 
-      doc.moveTo(80, firmaY + 45).lineTo(230, firmaY + 45).stroke(COLORES.negro);
+      doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
       doc.fontSize(8).fillColor(COLORES.grisOscuro);
-      doc.text('Registrado por', 80, firmaY + 50, { width: 150, align: 'center' });
+      doc.text('Registrado por', 80, firmaY + 5, { width: 150, align: 'center' });
       
-      doc.moveTo(320, firmaY + 45).lineTo(470, firmaY + 45).stroke(COLORES.negro);
-      doc.text('Autorizado por', 320, firmaY + 50, { width: 150, align: 'center' });
+      doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
+      doc.text('Autorizado por', 320, firmaY + 5, { width: 150, align: 'center' });
       
       agregarPiePagina(doc, 'Comprobante de registro de entrada de inventario - INDPACK S.A.C.');
       doc.end();
@@ -287,16 +217,9 @@ export async function generarPDFEntrada(datos) {
     }
   });
 }
+
 export async function generarPDFSalida(datos) {
-  let logoBuffer = null;
-  try {
-    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-      responseType: 'arraybuffer'
-    });
-    logoBuffer = Buffer.from(response.data);
-  } catch (error) {
-    console.warn('No se pudo cargar el logo:', error.message);
-  }
+  const logoBuffer = await cargarLogoURL();
 
   return new Promise((resolve, reject) => {
     try {
@@ -307,31 +230,14 @@ export async function generarPDFSalida(datos) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // ====================================
-      // 1. LOGO (Posición ajustada)
-      // ====================================
-      if (logoBuffer) {
-        doc.image(logoBuffer, 50, 25, { width: 110 }); 
-      }
-
-      // ====================================
-      // 2. ENCABEZADO (Evitar choque con logo)
-      // ====================================
-      let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA');
-      
-      // FORZAMOS espacio seguro: si el encabezado terminó muy arriba, bajamos a 100
-      y = Math.max(y, 100); 
+      let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA', logoBuffer);
       y += 10;
 
-      // ====================================
-      // INFORMACIÓN GENERAL
-      // ====================================
       doc.rect(50, y, 495, 125).stroke(COLORES.negro);
       y += 10;
 
       doc.fontSize(9).fillColor(COLORES.negro);
 
-      // --- Columna izquierda ---
       doc.font('Helvetica').text('N° Documento:', 60, y);
       doc.font('Helvetica-Bold').text(datos.codigo || datos.id_salida || 'N/A', 160, y);
 
@@ -350,12 +256,11 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica').text('Referencia/Vehículo:', 60, y + 75);
       doc.font('Helvetica-Bold').text((datos.vehiculo || '---'), 160, y + 75, { width: 140, lineGap: 2 });
 
-      // --- Columna derecha ---
       doc.font('Helvetica').text('Fecha:', 320, y);
-      doc.font('Helvetica-Bold').text(formatearFechaLima(datos.fecha_movimiento), 420, y);
+      doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_movimiento), 420, y);
 
       doc.font('Helvetica').text('Hora:', 320, y + 15);
-      doc.font('Helvetica-Bold').text(formatearHoraLima(datos.fecha_movimiento), 420, y + 15);
+      doc.font('Helvetica-Bold').text(formatearHora(datos.fecha_movimiento), 420, y + 15);
 
       doc.font('Helvetica').text('Estado:', 320, y + 30);
       const estadoColor = datos.estado === 'Completada' ? '#28a745' : COLORES.negro;
@@ -365,15 +270,11 @@ export async function generarPDFSalida(datos) {
 
       y += 140;
 
-      // ====================================
-      // TABLA DE PRODUCTOS
-      // ====================================
       const detalles = datos.detalles || [];
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
       doc.text(`Detalle de Items (${detalles.length})`, 50, y);
       y += 20;
 
-      // Encabezado tabla
       doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
       doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
       doc.text('Código', 60, y + 6);
@@ -382,19 +283,13 @@ export async function generarPDFSalida(datos) {
       doc.text('Unidad', 485, y + 6, { width: 50, align: 'center' });
       y += 20;
 
-      // Filas
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        // CORRECCIÓN: Saltamos página ANTES (650 en vez de 680) para proteger el pie de página
-        if (y > 650) { 
+        if (y > 640) {
           doc.addPage();
-          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 }); 
-          
-          y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA (cont.)');
-          y = Math.max(y, 100); 
-          y += 20;
+          y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA (cont.)', logoBuffer);
+          y += 10;
 
-          // Repetir encabezado tabla
           doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
           doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
           doc.text('Código', 60, y + 6);
@@ -419,7 +314,6 @@ export async function generarPDFSalida(datos) {
         doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
       });
 
-      // Totales
       y += 15;
       doc.rect(370, y, 175, 30).fill('#E3F2FD').stroke('#1e88e5'); 
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
@@ -435,44 +329,33 @@ export async function generarPDFSalida(datos) {
         y += 15;
         doc.fontSize(8).font('Helvetica');
         doc.text(datos.observaciones, 50, y, { width: 495, align: 'justify' });
-        y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
+        y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 15;
       }
 
-      // ====================================
-      // 3. ZONA DE FIRMAS (CORREGIDA)
-      // ====================================
-      
-      const espacioNecesario = 120;
-      // Verificar si cabe en la página actual
-      if (y + espacioNecesario > 680) {
+      const espacioNecesario = 90;
+      if (y + espacioNecesario > 690) {
           doc.addPage();
-          y = 50; 
+          y = 100; 
       }
-      
-      // CORRECCIÓN PRINCIPAL: 
-      // Usamos 620 en lugar de 690 para que la firma NO pise el pie de página
-      const firmaY = Math.max(y + 50, 620);
+      const firmaY = Math.max(y + 20, 640);
 
-      // Texto de conformidad
       doc.fontSize(7).font('Helvetica-Oblique').fillColor(COLORES.negro);
       doc.text(
-        'CONFORMIDAD: Mediante la presente firma se certifica que los productos detallados han sido verificados y contados físicamente, encontrándose conformes en cantidad y estado aparente.', 
+        'CONFORMIDAD: Mediante la presente firma se certifica que los productos detallados han sido verificados y contados físicamente.', 
         50, 
-        firmaY - 25, 
+        firmaY - 15, 
         { width: 495, align: 'center' }
       );
 
-      // Líneas de firma
-      const lineaFirmaY = firmaY + 45; 
+      const lineaY = firmaY + 25;
 
-      doc.moveTo(60, lineaFirmaY).lineTo(210, lineaFirmaY).stroke(COLORES.negro);
-      doc.moveTo(340, lineaFirmaY).lineTo(490, lineaFirmaY).stroke(COLORES.negro);
+      doc.moveTo(70, lineaY).lineTo(220, lineaY).stroke(COLORES.negro);
+      doc.moveTo(330, lineaY).lineTo(480, lineaY).stroke(COLORES.negro);
 
       doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
-      doc.text('CONTABILIZADO POR', 60, lineaFirmaY + 5, { width: 150, align: 'center' });
-      doc.text('AUTORIZADO POR', 340, lineaFirmaY + 5, { width: 150, align: 'center' });
+      doc.text('CONTABILIZADO POR', 70, lineaY + 5, { width: 150, align: 'center' });
+      doc.text('AUTORIZADO POR', 330, lineaY + 5, { width: 150, align: 'center' });
       
-      // Pie de página
       agregarPiePagina(doc, 'Documento de Control de Inventario - INDPACK S.A.C.');
 
       doc.end();
@@ -482,16 +365,9 @@ export async function generarPDFSalida(datos) {
     }
   });
 }
+
 export async function generarPDFTransferencia(datos) {
-  let logoBuffer = null;
-  try {
-    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-      responseType: 'arraybuffer'
-    });
-    logoBuffer = Buffer.from(response.data);
-  } catch (error) {
-    console.warn('No se pudo cargar el logo:', error.message);
-  }
+  const logoBuffer = await cargarLogoURL();
 
   return new Promise((resolve, reject) => {
     try {
@@ -501,13 +377,8 @@ export async function generarPDFTransferencia(datos) {
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-      
-      if (logoBuffer) {
-        doc.image(logoBuffer, 50, 25, { width: 110 });
-      }
 
-      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA');
-      y = Math.max(y, 100);
+      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA', logoBuffer);
       y += 10;
       
       doc.rect(50, y, 495, 100).stroke(COLORES.negro);
@@ -546,12 +417,10 @@ export async function generarPDFTransferencia(datos) {
       
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        if (y > 650) {
+        if (y > 670) {
           doc.addPage();
-          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 });
-          y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA (cont.)');
-          y = Math.max(y, 100);
-          y += 20;
+          y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA (cont.)', logoBuffer);
+          y += 10;
           
           doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
           doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
@@ -596,19 +465,19 @@ export async function generarPDFTransferencia(datos) {
         y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
       }
       
-      const espacioNecesario = 120;
-      if (y + espacioNecesario > 680) {
+      const espacioNecesario = 80;
+      if (y + espacioNecesario > 690) {
           doc.addPage();
-          y = 50; 
+          y = 100; 
       }
-      const firmaY = Math.max(y + 30, 620);
+      const firmaY = Math.max(y + 20, 650);
 
-      doc.moveTo(80, firmaY + 45).lineTo(230, firmaY + 45).stroke(COLORES.negro);
+      doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
       doc.fontSize(8).fillColor(COLORES.grisOscuro);
-      doc.text('Entrega', 80, firmaY + 50, { width: 150, align: 'center' });
+      doc.text('Entrega', 80, firmaY + 5, { width: 150, align: 'center' });
       
-      doc.moveTo(320, firmaY + 45).lineTo(470, firmaY + 45).stroke(COLORES.negro);
-      doc.text('Recibe', 320, firmaY + 50, { width: 150, align: 'center' });
+      doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
+      doc.text('Recibe', 320, firmaY + 5, { width: 150, align: 'center' });
       
       agregarPiePagina(doc, 'Comprobante de transferencia entre inventarios - INDPACK S.A.C.');
       doc.end();
@@ -617,16 +486,9 @@ export async function generarPDFTransferencia(datos) {
     }
   });
 }
+
 export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
-  let logoBuffer = null;
-  try {
-    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-      responseType: 'arraybuffer'
-    });
-    logoBuffer = Buffer.from(response.data);
-  } catch (error) {
-    console.warn('No se pudo cargar el logo:', error.message);
-  }
+  const logoBuffer = await cargarLogoURL();
 
   return new Promise((resolve, reject) => {
     try {
@@ -637,12 +499,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
       
-      if (logoBuffer) {
-        doc.image(logoBuffer, 50, 25, { width: 110 });
-      }
-      
-      let y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN');
-      y = Math.max(y, 100);
+      let y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN', logoBuffer);
       y += 10;
       
       doc.rect(50, y, 495, 120).stroke(COLORES.negro);
@@ -687,12 +544,10 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         
         doc.font('Helvetica').fillColor(COLORES.negro);
         consumoMateriales.forEach((mat, idx) => {
-          if (y > 650) {
+          if (y > 670) {
             doc.addPage();
-            if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 });
-            y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN (cont.)');
-            y = Math.max(y, 100);
-            y += 20;
+            y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN (cont.)', logoBuffer);
+            y += 10;
             
             doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
             doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
@@ -740,6 +595,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
     }
   });
 }
+
 export async function generarPDFCotizacion(cotizacion, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -828,6 +684,7 @@ export async function generarPDFCotizacion(cotizacion, stream) {
   doc.text(`${monedaSimbolo} ${parseFloat(cotizacion.total).toFixed(2)}`, 480, y, { align: 'right' });
   y += 35;
   doc.fontSize(9);
+  const { numeroALetras } = await import('./numeroALetras.js');
   const totalEnLetras = numeroALetras(parseFloat(cotizacion.total), cotizacion.moneda);
   doc.text(`SON: ${totalEnLetras}`, 50, y, { width: 500, align: 'left' });
   
@@ -865,6 +722,7 @@ export async function generarPDFCotizacion(cotizacion, stream) {
   
   doc.end();
 }
+
 export async function generarPDFOrdenVenta(orden, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -960,6 +818,7 @@ export async function generarPDFOrdenVenta(orden, stream) {
   doc.text(`${monedaSimbolo} ${parseFloat(orden.total).toFixed(2)}`, 480, y, { align: 'right' });
   y += 35;
   doc.fontSize(9);
+  const { numeroALetras } = await import('./numeroALetras.js');
   const totalEnLetras = numeroALetras(parseFloat(orden.total), orden.moneda);
   doc.text(`SON: ${totalEnLetras}`, 50, y, { width: 500, align: 'left' });
   
@@ -978,6 +837,7 @@ export async function generarPDFOrdenVenta(orden, stream) {
   
   doc.end();
 }
+
 export async function generarPDFGuiaRemision(guia, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -1077,6 +937,7 @@ export async function generarPDFGuiaRemision(guia, stream) {
   
   doc.end();
 }
+
 export async function generarPDFGuiaTransportista(guia, stream) {
   const doc = new PDFDocument({
     size: 'A4',
@@ -1282,6 +1143,7 @@ export async function generarPDFOrdenCompra(orden, stream) {
   
   y += 15;
   
+  const { numeroALetras } = await import('./numeroALetras.js');
   const totalEnLetras = numeroALetras(parseFloat(orden.total), orden.moneda);
   doc.fontSize(8).font('Helvetica');
   doc.text('SON:', 50, y);

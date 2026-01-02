@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const PermisosContext = createContext();
 
@@ -14,6 +15,7 @@ export const PermisosProvider = ({ children }) => {
   const [permisos, setPermisos] = useState(null);
   const [rol, setRol] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const { user } = useAuth();
 
   const cargarPermisos = async () => {
     try {
@@ -21,6 +23,13 @@ export const PermisosProvider = ({ children }) => {
       if (!token) {
         setCargando(false);
         return;
+      }
+
+      console.log('🔍 Usuario de AuthContext:', user);
+      console.log('🔍 Rol del usuario:', user?.rol);
+
+      if (user?.rol) {
+        setRol(user.rol);
       }
 
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -39,12 +48,16 @@ export const PermisosProvider = ({ children }) => {
 
       const data = await response.json();
       
+      console.log('📦 Respuesta de permisos:', data);
+      
       if (data.success) {
+        console.log('✅ Permisos cargados:', data.data.permisos);
+        console.log('✅ Rol desde backend:', data.data.rol);
         setPermisos(data.data.permisos);
         setRol(data.data.rol);
       }
     } catch (error) {
-      console.error('Error al cargar permisos:', error);
+      console.error('❌ Error al cargar permisos:', error);
       setPermisos(null);
       setRol(null);
     } finally {
@@ -53,12 +66,20 @@ export const PermisosProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    cargarPermisos();
-  }, []);
+    if (user) {
+      console.log('👤 Usuario cambió, cargando permisos...');
+      cargarPermisos();
+    }
+  }, [user]);
 
   const tienePermiso = (modulo) => {
-    if (!permisos) return false;
-    return permisos[modulo] === true;
+    if (!permisos) {
+      console.log(`⚠️ Sin permisos cargados para verificar: ${modulo}`);
+      return false;
+    }
+    const tiene = permisos[modulo] === true;
+    console.log(`🔐 Verificando permiso [${modulo}]: ${tiene ? '✅' : '❌'}`);
+    return tiene;
   };
 
   const puedeAcceder = (modulos) => {

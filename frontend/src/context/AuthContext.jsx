@@ -22,20 +22,20 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      // Verificar si el token es válido
       const response = await authAPI.verificarToken();
       
       if (response.data.success && response.data.data) {
-        const usuario = response.data.data;
+        const usuario = response.data.data.usuario;
         
-        // ✅ VALIDAR que el usuario tenga rol
+        console.log('✅ Usuario verificado desde backend:', usuario);
+        console.log('✅ Rol del usuario verificado:', usuario.rol);
+        
         if (!usuario.rol) {
           console.error('❌ Usuario sin rol recibido del backend');
           limpiarSesion();
           return;
         }
         
-        // Mapear datos del usuario
         const userData = {
           id: usuario.id_empleado,
           nombre: usuario.nombre_completo,
@@ -45,22 +45,21 @@ export function AuthProvider({ children }) {
           dni: usuario.dni
         };
         
+        console.log('✅ Usuario guardado en estado:', userData);
+        
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
       } else {
-        // Token inválido
         limpiarSesion();
       }
     } catch (error) {
       console.error('❌ Error al verificar autenticación:', error);
       
-      // ✅ Si es 401, la sesión expiró
       if (error.response?.status === 401) {
         console.log('🔒 Sesión expirada - redirigiendo a login');
         limpiarSesion();
         navigate('/login', { replace: true });
       } else {
-        // Otro error, limpiar de todas formas
         limpiarSesion();
       }
     } finally {
@@ -68,7 +67,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // ✅ NUEVA FUNCIÓN: Limpiar sesión de forma consistente
   const limpiarSesion = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -88,9 +86,10 @@ export function AuthProvider({ children }) {
       
       const { token, usuario } = data.data;
       
+      console.log('📦 Respuesta completa del backend:', data.data);
       console.log('👤 Usuario del backend:', usuario);
+      console.log('🎭 Rol del usuario:', usuario.rol);
       
-      // ✅ VALIDAR que el usuario tenga rol ANTES de guardar
       if (!usuario.rol) {
         console.error('❌ Usuario sin rol - login rechazado');
         return {
@@ -99,10 +98,8 @@ export function AuthProvider({ children }) {
         };
       }
       
-      // Guardar token
       localStorage.setItem('token', token);
       
-      // Mapear datos del usuario
       const userData = {
         id: usuario.id_empleado,
         nombre: usuario.nombre_completo,
@@ -112,10 +109,14 @@ export function AuthProvider({ children }) {
         dni: usuario.dni
       };
       
-      console.log('✅ Usuario guardado:', userData);
+      console.log('💾 Guardando usuario en estado:', userData);
+      console.log('💾 Rol que se guardará:', userData.rol);
       
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
+      
+      console.log('✅ Usuario final guardado:', userData);
+      console.log('✅ Estado de user después de setUser:', userData);
       
       return { success: true };
       
@@ -134,7 +135,6 @@ export function AuthProvider({ children }) {
       limpiarSesion();
       navigate('/login', { replace: true });
       
-      // Forzar recarga para limpiar cualquier estado residual
       setTimeout(() => {
         window.location.href = '/login';
       }, 100);

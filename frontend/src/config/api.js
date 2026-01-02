@@ -44,7 +44,6 @@ api.interceptors.response.use(
       
       if (!window.location.pathname.includes('/login')) {
         console.log('🔄 Redirigiendo a login...');
-        
         window.location.replace('/login');
       }
       
@@ -160,37 +159,35 @@ export const entradasAPI = {
   crearProductoMultiInventario: (data) => api.post('/inventario/movimientos-entradas/crear-multi-inventario', data),
   
   generarPDF: async (id) => {
-  try {
-    const response = await fetch(`${API_URL}/inventario/movimientos-entradas/${id}/pdf`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    try {
+      const response = await fetch(`${API_URL}/inventario/movimientos-entradas/${id}/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: 'Error al generar PDF' 
+        }));
+        throw new Error(errorData.error || 'Error al generar PDF');
       }
-    });
-    
-    // Manejar errores
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ 
-        error: 'Error al generar PDF' 
-      }));
-      throw new Error(errorData.error || 'Error al generar PDF');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `entrada-${id}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar PDF entrada:', error);
+      throw error;
     }
-    
-    // Si todo OK, procesar blob
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `entrada-${id}.pdf`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Error al descargar PDF entrada:', error);
-    throw error;
-  }
-},
+  },
   
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };
@@ -248,7 +245,8 @@ export const transferenciasAPI = {
     return api.get(`/inventario/transferencias/productos-disponibles?${queryString}`);
   },
   getResumenStock: () => api.get('/inventario/transferencias/resumen-stock'),
-   generarPDF: async (id) => {
+  
+  generarPDF: async (id) => {
     try {
       const response = await fetch(`${API_URL}/inventario/transferencias/${id}/pdf`, {
         method: 'GET',
@@ -530,6 +528,7 @@ export const guiasTransportistaAPI = {
     window.URL.revokeObjectURL(url);
   }
 };
+
 export const ordenesCompraAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -576,7 +575,6 @@ export const ordenesCompraAPI = {
   }
 };
 
-// Asignar dashboard al objeto api
 api.dashboard = dashboard;
 
 export { api };

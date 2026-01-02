@@ -3,11 +3,12 @@ import { AuthProvider } from './context/AuthContext';
 import { PermisosProvider } from './context/PermisosContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ProtectedRoute as ProtectedRouteWithPermiso } from './components/ProtectedRouteWithPermiso';
+import { RedirectToFirstAvailable } from './components/RedirectToFirstAvailable';
 import Login from './pages/Auth/Login';
 import Layout from './components/Layout/Layout';
 
 import Dashboard from "./pages/Dashboard/Dashboard";
-//probando
+
 import Empleados from './pages/Empleados/Empleados';
 import Flota from './pages/Flota/Flota';
 import Proveedores from './pages/Proveedores/Proveedores';
@@ -15,7 +16,7 @@ import Clientes from './pages/Clientes/Clientes';
 
 import Productos from './pages/Productos/Productos';
 import ProductoDetalle from './pages/Productos/ProductoDetalle';
-//test
+
 import Entradas from './pages/Inventario/Entradas';
 import Salidas from './pages/Inventario/Salidas';
 import Transferencias from './pages/Inventario/Transferencias';
@@ -56,8 +57,10 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Routes>
+                      <Route path="/" element={<RedirectToFirstAvailable />} />
+                      
                       <Route 
-                        path="/" 
+                        path="/dashboard" 
                         element={
                           <ProtectedRouteWithPermiso modulo="dashboard">
                             <Dashboard />
@@ -298,7 +301,7 @@ function App() {
                         } 
                       />
                       
-                      <Route path="*" element={<Navigate to="/" replace />} />
+                      <Route path="*" element={<RedirectToFirstAvailable />} />
                     </Routes>
                   </Layout>
                 </ProtectedRoute>

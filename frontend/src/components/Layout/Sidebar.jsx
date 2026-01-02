@@ -5,18 +5,21 @@ import {
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag
 } from 'lucide-react';
-import { usePermisos, ConPermiso } from '../../context/PermisosContext';
+import { usePermisos, ConPermiso } from '../../contexts/PermisosContext';
 import './Sidebar.css';
 
 function Sidebar({ isOpen, onToggle }) {
   const location = useLocation();
-  const { rol } = usePermisos();
+  const { rol, permisos, tienePermiso } = usePermisos();
+
+  console.log('🔐 Sidebar - Rol:', rol);
+  console.log('🔐 Sidebar - Permisos:', permisos);
 
   const menuItems = [
     {
       title: 'Principal',
       items: [
-        { path: '/', icon: Home, label: 'Dashboard', modulo: 'dashboard' }
+        { path: '/dashboard', icon: Home, label: 'Dashboard', modulo: 'dashboard' }
       ]
     },
     {
@@ -67,13 +70,6 @@ function Sidebar({ isOpen, onToggle }) {
 
   const isActive = (path) => location.pathname === path;
 
-  const tieneSomeItemVisible = (items) => {
-    return items.some(item => {
-      const { tienePermiso } = usePermisos();
-      return tienePermiso(item.modulo);
-    });
-  };
-
   return (
     <>
       {isOpen && (
@@ -111,12 +107,11 @@ function Sidebar({ isOpen, onToggle }) {
 
         <nav className="sidebar-nav">
           {menuItems.map((section, idx) => {
-            const hasVisibleItems = section.items.some(item => {
-              const permisos = usePermisos();
-              return permisos.tienePermiso(item.modulo);
-            });
-
-            if (!hasVisibleItems) return null;
+            const itemsVisibles = section.items.filter(item => tienePermiso(item.modulo));
+            
+            if (itemsVisibles.length === 0) {
+              return null;
+            }
 
             return (
               <div key={idx} className="sidebar-section">
@@ -124,18 +119,22 @@ function Sidebar({ isOpen, onToggle }) {
                 <ul className="sidebar-menu">
                   {section.items.map((item) => {
                     const Icon = item.icon;
+                    const puedeVer = tienePermiso(item.modulo);
+                    
+                    if (!puedeVer) {
+                      return null;
+                    }
+
                     return (
-                      <ConPermiso key={item.path} modulo={item.modulo}>
-                        <li>
-                          <Link
-                            to={item.path}
-                            className={`sidebar-link ${isActive(item.path) ? 'active' : ''}`}
-                          >
-                            <Icon size={20} />
-                            <span>{item.label}</span>
-                          </Link>
-                        </li>
-                      </ConPermiso>
+                      <li key={item.path}>
+                        <Link
+                          to={item.path}
+                          className={`sidebar-link ${isActive(item.path) ? 'active' : ''}`}
+                        >
+                          <Icon size={20} />
+                          <span>{item.label}</span>
+                        </Link>
+                      </li>
                     );
                   })}
                 </ul>

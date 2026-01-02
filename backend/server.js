@@ -11,6 +11,7 @@ import proveedoresRoutes from './routes/proveedores.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
 
 import productosRoutes from './routes/productos.routes.js';
+import ajustesRoutes from './routes/ajustes.routes.js'; // NUEVO - Conteo Físico
 
 import entradasRoutes from './routes/movimientos-entradas.routes.js';
 import salidasRoutes from './routes/movimientos-salidas.routes.js';
@@ -48,11 +49,11 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'API INDPACK - Sistema ERP Completo',
-    version: '2.0.0',
+    version: '2.0.1', // Actualizado
     status: 'online',
     modules: {
       base: ['auth', 'empleados', 'flota', 'proveedores', 'clientes'],
-      productos: ['productos', 'recetas'],
+      productos: ['productos', 'recetas', 'ajustes'], // Agregado 'ajustes'
       inventario: ['entradas', 'salidas', 'transferencias'],
       produccion: ['ordenes'],
       ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista'],
@@ -71,31 +72,60 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+// =====================================================
+// RUTAS DE AUTENTICACIÓN (SIN RESTRICCIÓN)
+// =====================================================
 app.use('/api/auth', authRoutes);
 
+// =====================================================
+// MÓDULOS BASE CON CONTROL DE ACCESO
+// =====================================================
 app.use('/api/empleados', verificarToken, verificarPermiso('empleados'), empleadosRoutes);
 app.use('/api/flota', verificarToken, verificarPermiso('flota'), flotaRoutes);
 app.use('/api/proveedores', verificarToken, verificarPermiso('proveedores'), proveedoresRoutes);
 app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesRoutes);
 
+// =====================================================
+// PRODUCTOS Y AJUSTES DE INVENTARIO
+// =====================================================
 app.use('/api/productos', verificarToken, verificarPermiso('productos'), productosRoutes);
+// NUEVO - Rutas separadas para reportes y estadísticas de ajustes
+app.use('/api/ajustes', verificarToken, verificarPermiso('productos'), ajustesRoutes);
 
+// =====================================================
+// INVENTARIO
+// =====================================================
 app.use('/api/inventario/movimientos-entradas', verificarToken, verificarPermiso('entradas'), entradasRoutes); 
 app.use('/api/inventario/movimientos-salidas', verificarToken, verificarPermiso('salidas'), salidasRoutes);
 app.use('/api/inventario/transferencias', verificarToken, verificarPermiso('transferencias'), transferenciasRoutes);
 app.use('/api/inventario', verificarToken, inventarioRoutes);
 
+// =====================================================
+// PRODUCCIÓN
+// =====================================================
 app.use('/api/produccion/ordenes', verificarToken, verificarPermiso('ordenesProduccion'), ordenesProduccionRoutes);
 
+// =====================================================
+// VENTAS
+// =====================================================
 app.use('/api/cotizaciones', verificarToken, verificarPermiso('cotizaciones'), cotizacionesRoutes);
 app.use('/api/ordenes-venta', verificarToken, verificarPermiso('ordenesVenta'), ordenesVentaRoutes);
 app.use('/api/guias-remision', verificarToken, verificarPermiso('guiasRemision'), guiasRemisionRoutes);
 app.use('/api/guias-transportista', verificarToken, verificarPermiso('guiasTransportista'), guiasTransportistaRoutes);
 
+// =====================================================
+// COMPRAS
+// =====================================================
 app.use('/api/ordenes-compra', verificarToken, verificarPermiso('ordenesCompra'), ordenesCompraRoutes);
 
+// =====================================================
+// ANALYTICS
+// =====================================================
 app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboardRoutes);
 
+// =====================================================
+// MANEJO DE ERRORES 404
+// =====================================================
 app.use((req, res) => {
   res.status(404).json({
     error: 'Ruta no encontrada',
@@ -104,6 +134,9 @@ app.use((req, res) => {
   });
 });
 
+// =====================================================
+// MANEJO GLOBAL DE ERRORES
+// =====================================================
 app.use((err, req, res, next) => {
   console.error('='.repeat(80));
   console.error('ERROR CAPTURADO EN SERVIDOR');
@@ -161,6 +194,9 @@ app.use((err, req, res, next) => {
   });
 });
 
+// =====================================================
+// INICIO DEL SERVIDOR
+// =====================================================
 async function startServer() {
   try {
     const dbConnected = await testConnection();
@@ -191,8 +227,10 @@ async function startServer() {
       console.log('   - /api/proveedores [proveedores]');
       console.log('   - /api/clientes [clientes]');
       console.log('');
-      console.log('PRODUCTOS:');
+      console.log('PRODUCTOS Y AJUSTES:');
       console.log('   - /api/productos [productos]');
+      console.log('   - /api/productos/ajustes/conteo-fisico [productos] ⭐ NUEVO');
+      console.log('   - /api/ajustes [productos - reportes] ⭐ NUEVO');
       console.log('');
       console.log('INVENTARIO:');
       console.log('   - /api/inventario/movimientos-entradas [entradas]');
@@ -221,6 +259,10 @@ async function startServer() {
       console.log('                   Produccion, Supervisor, Operario, Almacenero,');
       console.log('                   Logistica, Conductor, Administrativo');
       console.log('='.repeat(80));
+      console.log('✅ NUEVO: Sistema de Conteo Físico y Ajustes de Inventario');
+      console.log('   Tablas: ajustes_inventario, historial_ajustes_inventario');
+      console.log('   Endpoints: /api/productos/ajustes/*, /api/ajustes/*');
+      console.log('='.repeat(80));
       console.log('SISTEMA LISTO PARA RECIBIR PETICIONES');
       console.log('='.repeat(80));
     });
@@ -230,6 +272,9 @@ async function startServer() {
   }
 }
 
+// =====================================================
+// MANEJO DE SEÑALES Y ERRORES
+// =====================================================
 process.on('SIGTERM', () => {
   console.log('\n⚠️  SIGTERM recibido. Cerrando servidor gracefully...');
   process.exit(0);

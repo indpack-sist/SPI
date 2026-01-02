@@ -385,6 +385,9 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       }
     }
     
+    // ====================================
+    // CASO 1: Pendiente → Confirmada (RESERVAR STOCK)
+    // ====================================
     if (estado === 'Confirmada' && estadoAnterior === 'Pendiente') {
       const detalleResult = await executeQuery(`
         SELECT 
@@ -407,6 +410,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         });
       }
       
+      // Validar stock disponible
       for (const item of detalleResult.data) {
         const stockDisponible = parseFloat(item.stock_actual);
         const cantidadRequerida = parseFloat(item.cantidad);
@@ -419,23 +423,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         }
       }
       
-      const clienteResult = await executeQuery(`
-        SELECT razon_social FROM clientes WHERE id_cliente = ?
-      `, [ordenActual.id_cliente]);
-      
-      const clienteNombre = clienteResult.success && clienteResult.data.length > 0 
-        ? clienteResult.data[0].razon_social 
-        : 'Cliente';
-      
-      const ultimaSalidaResult = await executeQuery(`
-        SELECT id_salida FROM salidas ORDER BY id_salida DESC LIMIT 1
-      `);
-      
-      let numeroSecuencia = 1;
-      if (ultimaSalidaResult.success && ultimaSalidaResult.data.length > 0) {
-        numeroSecuencia = ultimaSalidaResult.data[0].id_salida + 1;
-      }
-      
+      // Obtener tipo de inventario del primer producto
       const productoResult = await executeQuery(`
         SELECT p.id_tipo_inventario 
         FROM detalle_orden_venta dov
@@ -446,8 +434,9 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       
       const id_tipo_inventario = productoResult.success && productoResult.data.length > 0
         ? productoResult.data[0].id_tipo_inventario
-        : 4;
+        : 4; // Default: Producto Terminado
       
+      // Calcular totales
       let totalCosto = 0;
       let totalPrecio = 0;
       
@@ -460,6 +449,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         totalPrecio += cantidad * precioUnitario;
       }
       
+      // ✅ CREAR SALIDA (estado: Activo con observación especial)
       const salidaResult = await executeQuery(`
         INSERT INTO salidas (
           id_tipo_inventario,
@@ -485,25 +475,28 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         ordenActual.moneda || 'PEN',
         null,
         id_usuario,
-        `Reserva automática - Orden de Venta ${ordenActual.numero_orden}`,
-        'Reservada'
+        `[RESERVA] Orden de Venta ${ordenActual.numero_orden}`,
+        'Activo'  // ✅ Usar estado válido del ENUM
       ]);
       
       if (!salidaResult.success) {
+        console.error('Error al crear salida:', salidaResult.error);
         return res.status(500).json({
           success: false,
-          error: 'Error al crear salida de reserva'
+          error: `Error al crear salida de reserva: ${salidaResult.error}`
         });
       }
       
       const id_salida = salidaResult.data.insertId;
       
+      // Insertar detalle de salidas y descontar stock
       for (const item of detalleResult.data) {
         const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
         const precioUnitario = parseFloat(item.precio_unitario || 0);
         const cantidad = parseFloat(item.cantidad);
         const subtotal = cantidad * precioUnitario;
         
+        // Insertar detalle
         await executeQuery(`
           INSERT INTO detalle_salidas (
             id_salida,
@@ -522,6 +515,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
           subtotal
         ]);
         
+        // ✅ DESCONTAR STOCK
         await executeQuery(`
           UPDATE productos 
           SET stock_actual = stock_actual - ?
@@ -529,6 +523,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         `, [cantidad, item.id_producto]);
       }
       
+      // Actualizar estado de orden
       await executeQuery(`
         UPDATE ordenes_venta 
         SET estado = ?,
@@ -541,18 +536,24 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         message: `Orden confirmada. Stock reservado exitosamente (Salida ID: ${id_salida})`,
         data: {
           id_salida,
-          productos_reservados: detalleResult.data.length
+          productos_reservados: detalleResult.data.length,
+          total_costo: totalCosto,
+          total_precio: totalPrecio
         }
       });
     }
     
+    // ====================================
+    // CASO 2: Confirmada → Cancelada (RESTAURAR STOCK)
+    // ====================================
     if (estado === 'Cancelada' && estadoAnterior === 'Confirmada') {
+      // Buscar salida de reserva asociada
       const salidaResult = await executeQuery(`
         SELECT id_salida 
         FROM salidas 
         WHERE id_cliente = ?
         AND tipo_movimiento = 'Venta'
-        AND estado = 'Reservada'
+        AND estado = 'Activo'
         AND observaciones LIKE ?
         ORDER BY fecha_movimiento DESC
         LIMIT 1
@@ -561,6 +562,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       if (salidaResult.success && salidaResult.data.length > 0) {
         const id_salida = salidaResult.data[0].id_salida;
         
+        // Obtener detalle de salida
         const detalleSalidaResult = await executeQuery(`
           SELECT id_producto, cantidad 
           FROM detalle_salidas 
@@ -568,6 +570,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         `, [id_salida]);
         
         if (detalleSalidaResult.success) {
+          // ✅ RESTAURAR STOCK
           for (const item of detalleSalidaResult.data) {
             await executeQuery(`
               UPDATE productos 
@@ -577,6 +580,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
           }
         }
         
+        // ✅ ANULAR SALIDA
         await executeQuery(`
           UPDATE salidas 
           SET estado = 'Anulado',
@@ -584,6 +588,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
           WHERE id_salida = ?
         `, [id_salida]);
         
+        // Actualizar estado de orden
         await executeQuery(`
           UPDATE ordenes_venta 
           SET estado = ?,
@@ -602,6 +607,9 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       }
     }
     
+    // ====================================
+    // OTROS CASOS: Solo actualizar estado
+    // ====================================
     const result = await executeQuery(`
       UPDATE ordenes_venta 
       SET estado = ?,

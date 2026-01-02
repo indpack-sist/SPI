@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { PermisosProvider } from './contexts/PermisosContext';
+import { PermisosProvider } from './context/PermisosContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ProtectedRoute as ProtectedRouteWithPermiso } from './components/ProtectedRouteWithPermiso';
 import Login from './pages/Auth/Login';

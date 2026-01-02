@@ -145,6 +145,11 @@ export const productosAPI = {
   deleteRecetaItem: (id) => api.delete(`/productos/recetas/items/${id}`),
   calcularCUPDesdeReceta: (id) => api.get(`/productos/${id}/calcular-cup-receta`),
   getEvolucionCUP: (id) => api.get(`/productos/${id}/evolucion-cup`),
+  ajustes: {
+    realizarConteo: (data) => api.post('/productos/ajustes/conteo-fisico', data),
+    getMotivos: () => api.get('/productos/ajustes/motivos'),
+    getPorProducto: (id, params) => api.get(`/productos/${id}/ajustes`, { params })
+  }
 };
 
 // ==========================================

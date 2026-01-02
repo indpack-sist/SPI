@@ -96,220 +96,113 @@ function agregarPiePagina(doc, textoPie) {
 }
 
 export async function generarPDFSalida(datos) {
-
-  return new Promise((resolve, reject) => {
-
-    try {
-
-      const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
-
-      const chunks = [];
-
-     
-
-      doc.on('data', chunk => chunks.push(chunk));
-
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-
-      doc.on('error', reject);
-
-     
-
-      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nSALIDA');
-
-      y += 10;
-
-     
-
-      doc.rect(50, y, 495, 120).stroke(COLORES.negro);
-
-      y += 10;
-
-     
-
-      doc.fontSize(9).fillColor(COLORES.negro);
-
-      doc.font('Helvetica').text('Documento N°:', 60, y);
-
-      doc.font('Helvetica-Bold').text(datos.id_salida || 'N/A', 160, y);
-
-      doc.font('Helvetica').text('Tipo Inventario:', 60, y + 15);
-
-      doc.font('Helvetica-Bold').text(datos.tipo_inventario || 'N/A', 160, y + 15, { width: 140 });
-
-      doc.font('Helvetica').text('Tipo Movimiento:', 60, y + 30);
-
-      doc.font('Helvetica-Bold').text(datos.tipo_movimiento || 'N/A', 160, y + 30, { width: 140 });
-
-      const destino = datos.tipo_movimiento === 'Venta' ? datos.cliente : datos.departamento || datos.tipo_movimiento;
-
-      doc.font('Helvetica').text('Cliente/Destino:', 60, y + 45);
-
-      doc.font('Helvetica-Bold').text((destino || 'N/A'), 160, y + 45, { width: 140, lineGap: 2 });
-
-      doc.font('Helvetica').text('Vehículo:', 60, y + 75);
-
-      doc.font('Helvetica-Bold').text((datos.vehiculo || 'N/A'), 160, y + 75, { width: 140, lineGap: 2 });
-
-      doc.font('Helvetica').text('Fecha:', 320, y);
-
-      doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_movimiento), 400, y);
-
-      doc.font('Helvetica').text('Estado:', 320, y + 15);
-
-      doc.font('Helvetica-Bold').text(datos.estado || 'N/A', 400, y + 15);
-
-      doc.font('Helvetica').text('Registrado por:', 320, y + 30);
-
-      doc.font('Helvetica-Bold').text((datos.registrado_por || 'N/A'), 400, y + 30, { width: 135, lineGap: 2 });
-
-      doc.font('Helvetica').text('Moneda:', 320, y + 45);
-
-      doc.font('Helvetica-Bold').text(datos.moneda === 'PEN' ? 'Soles' : datos.moneda, 400, y + 45);
-
-     
-
-      y += 135;
-
-     
-
-      const detalles = datos.detalles || [];
-
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
-
-      doc.text(`Detalle de Salida (${detalles.length} productos)`, 50, y);
-
-      y += 20;
-
-     
-
-      doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
-
-      doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
-
-      doc.text('Código', 60, y + 6);
-
-      doc.text('Producto', 140, y + 6);
-
-      doc.text('Cantidad', 340, y + 6);
-
-      doc.text('Precio Unit.', 410, y + 6);
-
-      doc.text('Subtotal', 490, y + 6, { align: 'right' });
-
-      y += 20;
-
-     
-
-      doc.font('Helvetica').fillColor(COLORES.negro);
-
-      detalles.forEach((det, idx) => {
-
-        if (y > 700) {
-
-          doc.addPage();
-
-          y = agregarEncabezado(doc, 'COMPROBANTE DE\nSALIDA (cont.)');
-
-          y += 30;
-
-        }
-
-        if (idx % 2 === 0) {
-
-          doc.rect(50, y, 495, 18).fill('#F5F5F5');
-
-        }
-
-        const precio = det.precio_unitario || det.costo_unitario || 0;
-
-        const subtotal = (det.cantidad || 0) * precio;
-
-        doc.fontSize(8).fillColor(COLORES.negro);
-
-        doc.text((det.codigo_producto || '').substring(0, 15), 60, y + 5);
-
-        doc.text((det.producto || '').substring(0, 38), 140, y + 5);
-
-        doc.text(`${parseFloat(det.cantidad || 0).toFixed(2)} ${det.unidad_medida || ''}`, 340, y + 5);
-
-        doc.text(formatearMoneda(precio, datos.moneda), 410, y + 5);
-
-        doc.font('Helvetica-Bold').text(formatearMoneda(subtotal, datos.moneda), 490, y + 5, { align: 'right' });
-
-        doc.font('Helvetica');
-
-        y += 18;
-
-        doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
-
-      });
-
-     
-
-      y += 15;
-
-      const totalPrecio = detalles.reduce((sum, d) => sum + ((d.precio_unitario || d.costo_unitario || 0) * (d.cantidad || 0)), 0);
-
-      doc.rect(370, y, 175, 30).stroke(COLORES.negro);
-
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
-
-      doc.text('TOTAL:', 380, y + 10);
-
-      doc.fontSize(12);
-
-      doc.text(formatearMoneda(totalPrecio, datos.moneda), 465, y + 9, { align: 'right', width: 70 });
-
-      y += 45;
-
-     
-
-      if (datos.observaciones) {
-
-        doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORES.negro);
-
-        doc.text('Observaciones:', 50, y);
-
-        y += 15;
-
-        doc.fontSize(8).font('Helvetica');
-
-        doc.text(datos.observaciones, 50, y, { width: 495, align: 'justify' });
-
-        y += 35;
-
-      }
-
-     
-
-      const firmaY = Math.max(y + 15, 690);
-
-      doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
-
-      doc.fontSize(8).fillColor(COLORES.grisOscuro);
-
-      doc.text('Autorizado por', 80, firmaY + 5, { width: 150, align: 'center' });
-
-      doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
-
-      doc.text('Recibido por', 320, firmaY + 5, { width: 150, align: 'center' });
-
-     
-
-      agregarPiePagina(doc, 'Comprobante de registro de salida de inventario - INDPACK S.A.C.');
-
-      doc.end();
-
-    } catch (error) {
-
-      reject(error);
-
-    }
-
-  });
-
-}
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+      const chunks = [];
+      
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+      
+      let y = agregarEncabezado(doc, 'COMPROBANTE DE\nSALIDA');
+      y += 10;
+      
+      doc.rect(50, y, 495, 120).stroke(COLORES.negro);
+      y += 10;
+      
+      doc.fontSize(9).fillColor(COLORES.negro);
+      doc.font('Helvetica').text('Documento N°:', 60, y);
+      doc.font('Helvetica-Bold').text(datos.id_salida || 'N/A', 160, y);
+      doc.font('Helvetica').text('Tipo Inventario:', 60, y + 15);
+      doc.font('Helvetica-Bold').text(datos.tipo_inventario || 'N/A', 160, y + 15, { width: 140 });
+      doc.font('Helvetica').text('Tipo Movimiento:', 60, y + 30);
+      doc.font('Helvetica-Bold').text(datos.tipo_movimiento || 'N/A', 160, y + 30, { width: 140 });
+      const destino = datos.tipo_movimiento === 'Venta' ? datos.cliente : datos.departamento || datos.tipo_movimiento;
+      doc.font('Helvetica').text('Cliente/Destino:', 60, y + 45);
+      doc.font('Helvetica-Bold').text((destino || 'N/A'), 160, y + 45, { width: 140, lineGap: 2 });
+      doc.font('Helvetica').text('Vehículo:', 60, y + 75);
+      doc.font('Helvetica-Bold').text((datos.vehiculo || 'N/A'), 160, y + 75, { width: 140, lineGap: 2 });
+      doc.font('Helvetica').text('Fecha:', 320, y);
+      doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_movimiento), 400, y);
+      doc.font('Helvetica').text('Estado:', 320, y + 15);
+      doc.font('Helvetica-Bold').text(datos.estado || 'N/A', 400, y + 15);
+      doc.font('Helvetica').text('Registrado por:', 320, y + 30);
+      doc.font('Helvetica-Bold').text((datos.registrado_por || 'N/A'), 400, y + 30, { width: 135, lineGap: 2 });
+      doc.font('Helvetica').text('Moneda:', 320, y + 45);
+      doc.font('Helvetica-Bold').text(datos.moneda === 'PEN' ? 'Soles' : datos.moneda, 400, y + 45);
+      
+      y += 135;
+      
+      const detalles = datos.detalles || [];
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
+      doc.text(`Detalle de Salida (${detalles.length} productos)`, 50, y);
+      y += 20;
+      
+      doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+      doc.text('Código', 60, y + 6);
+      doc.text('Producto', 140, y + 6);
+      doc.text('Cantidad', 340, y + 6);
+      doc.text('Precio Unit.', 410, y + 6);
+      doc.text('Subtotal', 490, y + 6, { align: 'right' });
+      y += 20;
+      
+      doc.font('Helvetica').fillColor(COLORES.negro);
+      detalles.forEach((det, idx) => {
+        if (y > 700) {
+          doc.addPage();
+          y = agregarEncabezado(doc, 'COMPROBANTE DE\nSALIDA (cont.)');
+          y += 30;
+        }
+        if (idx % 2 === 0) {
+          doc.rect(50, y, 495, 18).fill('#F5F5F5');
+        }
+        const precio = det.precio_unitario || det.costo_unitario || 0;
+        const subtotal = (det.cantidad || 0) * precio;
+        doc.fontSize(8).fillColor(COLORES.negro);
+        doc.text((det.codigo_producto || '').substring(0, 15), 60, y + 5);
+        doc.text((det.producto || '').substring(0, 38), 140, y + 5);
+        doc.text(`${parseFloat(det.cantidad || 0).toFixed(2)} ${det.unidad_medida || ''}`, 340, y + 5);
+        doc.text(formatearMoneda(precio, datos.moneda), 410, y + 5);
+        doc.font('Helvetica-Bold').text(formatearMoneda(subtotal, datos.moneda), 490, y + 5, { align: 'right' });
+        doc.font('Helvetica');
+        y += 18;
+        doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
+      });
+      
+      y += 15;
+      const totalPrecio = detalles.reduce((sum, d) => sum + ((d.precio_unitario || d.costo_unitario || 0) * (d.cantidad || 0)), 0);
+      doc.rect(370, y, 175, 30).stroke(COLORES.negro);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
+      doc.text('TOTAL:', 380, y + 10);
+      doc.fontSize(12);
+      doc.text(formatearMoneda(totalPrecio, datos.moneda), 465, y + 9, { align: 'right', width: 70 });
+      y += 45;
+      
+      if (datos.observaciones) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORES.negro);
+        doc.text('Observaciones:', 50, y);
+        y += 15;
+        doc.fontSize(8).font('Helvetica');
+        doc.text(datos.observaciones, 50, y, { width: 495, align: 'justify' });
+        y += 35;
+      }
+      
+      const firmaY = Math.max(y + 15, 690);
+      doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
+      doc.fontSize(8).fillColor(COLORES.grisOscuro);
+      doc.text('Autorizado por', 80, firmaY + 5, { width: 150, align: 'center' });
+      doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
+      doc.text('Recibido por', 320, firmaY + 5, { width: 150, align: 'center' });
+      
+      agregarPiePagina(doc, 'Comprobante de registro de salida de inventario - INDPACK S.A.C.');
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+} 
 
 export async function generarPDFTransferencia(datos) {
   const logoBuffer = await cargarLogoURL();

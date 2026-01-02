@@ -209,21 +209,21 @@ function DetalleCotizacion() {
       render: (value) => <span className="font-mono text-sm">{value}</span>
     },
     {
-      header: 'Producto',
-      accessor: 'producto',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium">{value}</div>
-          {/* ✅ LÓGICA CORREGIDA: Mostrar solo si cantidad > stock */}
-          {parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
-            <div className="text-xs text-warning flex items-center gap-1 mt-1">
-              <AlertTriangle size={12} />
-              Requerirá producción (disponible: {parseFloat(row.stock_disponible || 0).toFixed(2)})
-            </div>
-          )}
+  header: 'Producto',
+  accessor: 'producto',
+  render: (value, row) => (
+    <div>
+      <div className="font-medium">{value}</div>
+      {/* ✅ Solo mostrar si cantidad supera stock disponible */}
+      {parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
+        <div className="text-xs text-warning flex items-center gap-1 mt-1">
+          <AlertTriangle size={12} />
+          Stock insuficiente (disponible: {parseFloat(row.stock_disponible || 0).toFixed(2)} {row.unidad_medida})
         </div>
-      )
-    },
+      )}
+    </div>
+  )
+},
     {
       header: 'Cantidad',
       accessor: 'cantidad',

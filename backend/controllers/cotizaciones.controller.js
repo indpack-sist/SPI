@@ -123,28 +123,27 @@ export async function getCotizacionById(req, res) {
     const cotizacion = cotizacionResult.data[0];
     console.log('✅ Cotización obtenida:', cotizacion.numero_cotizacion);
     
-    // ✅ QUERY CORRECTO PARA DETALLE
     const detalleResult = await executeQuery(`
-      SELECT 
-        dc.id_detalle,
-        dc.id_cotizacion,
-        dc.id_producto,
-        dc.cantidad,
-        dc.precio_unitario,
-        dc.descuento_porcentaje,
-        dc.valor_venta,
-        dc.subtotal,
-        dc.orden,
-        p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida,
-        p.stock_actual,
-        p.requiere_receta
-      FROM detalle_cotizacion dc
-      INNER JOIN productos p ON dc.id_producto = p.id_producto
-      WHERE dc.id_cotizacion = ?
-      ORDER BY dc.orden
-    `, [id]);
+  SELECT 
+    dc.id_detalle,
+    dc.id_cotizacion,
+    dc.id_producto,
+    dc.cantidad,
+    dc.precio_unitario,
+    dc.descuento_porcentaje,
+    dc.valor_venta,
+    dc.subtotal,
+    dc.orden,
+    p.codigo AS codigo_producto,
+    p.nombre AS producto,
+    p.unidad_medida,
+    p.stock_actual AS stock_disponible,
+    p.requiere_receta
+  FROM detalle_cotizacion dc
+  INNER JOIN productos p ON dc.id_producto = p.id_producto
+  WHERE dc.id_cotizacion = ?
+  ORDER BY dc.orden
+`, [id]);
     
     console.log('📦 Query detalle ejecutado');
     console.log('📊 Resultado detalle:', {

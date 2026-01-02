@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -234,6 +235,17 @@ export async function generarPDFEntrada(datos) {
   });
 }
 export async function generarPDFSalida(datos) {
+  // 1. Descargamos el logo ANTES de crear el PDF para tener el buffer listo
+  let logoBuffer = null;
+  try {
+    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
+      responseType: 'arraybuffer' // Importante para imágenes
+    });
+    logoBuffer = Buffer.from(response.data);
+  } catch (error) {
+    console.warn('No se pudo cargar el logo:', error.message);
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
@@ -244,8 +256,18 @@ export async function generarPDFSalida(datos) {
       doc.on('error', reject);
 
       // ====================================
+      // LOGO (Posicionado arriba a la izquierda)
+      // ====================================
+      if (logoBuffer) {
+        // x: 50, y: 30 ajusta según necesites. width: 120 mantiene proporción
+        doc.image(logoBuffer, 50, 30, { width: 120 }); 
+      }
+
+      // ====================================
       // ENCABEZADO NEUTRAL
       // ====================================
+      // Ajustamos un poco 'y' inicial si el logo es muy alto, 
+      // pero usualmente agregarEncabezado maneja su propia posición.
       let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA');
       y += 10;
 
@@ -277,8 +299,6 @@ export async function generarPDFSalida(datos) {
 
       doc.font('Helvetica').text('Referencia/Vehículo:', 60, y + 75);
       doc.font('Helvetica-Bold').text((datos.vehiculo || '---'), 160, y + 75, { width: 140, lineGap: 2 });
-
-      // [ELIMINADO] "Registrado por" (según instrucción)
 
       // --- Columna derecha ---
       doc.font('Helvetica').text('Fecha:', 320, y);
@@ -319,6 +339,9 @@ export async function generarPDFSalida(datos) {
         // Control de salto de página
         if (y > 680) { 
           doc.addPage();
+          // NOTA: Si quieres el logo en cada página nueva, descomenta esto:
+          // if (logoBuffer) doc.image(logoBuffer, 50, 30, { width: 120 });
+          
           y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA (cont.)');
           y += 30;
 
@@ -352,7 +375,7 @@ export async function generarPDFSalida(datos) {
       // TOTALES
       // ====================================
       y += 15;
-      doc.rect(370, y, 175, 30).fill('#E3F2FD').stroke('#1e88e5'); // Azul muy suave
+      doc.rect(370, y, 175, 30).fill('#E3F2FD').stroke('#1e88e5'); 
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
       doc.text('TOTAL ITEMS:', 380, y + 10);
       doc.fontSize(12);
@@ -373,7 +396,7 @@ export async function generarPDFSalida(datos) {
       }
 
       // ====================================
-      // ZONA DE FIRMAS (NEUTRAL)
+      // ZONA DE FIRMAS (MODIFICADA)
       // ====================================
       
       const espacioNecesario = 150;
@@ -382,28 +405,30 @@ export async function generarPDFSalida(datos) {
           y = 50; 
       }
       
+      // Definimos el inicio del bloque de firmas
       const firmaY = Math.max(y + 60, 690);
 
-      // Texto de conformidad NEUTRAL: Aplica para cliente externo o conteo interno
+      // Texto de conformidad
       doc.fontSize(7).font('Helvetica-Oblique').fillColor(COLORES.negro);
       doc.text(
         'CONFORMIDAD: Mediante la presente firma se certifica que los productos detallados han sido verificados y contados físicamente, encontrándose conformes en cantidad y estado aparente.', 
         50, 
-        firmaY - 30, 
+        firmaY - 30, // Posición del texto
         { width: 495, align: 'center' }
       );
 
+      // --- CAMBIO: AUMENTO DE ESPACIO PARA FIRMAR ---
+      // Antes estaba en firmaY + 20. Lo bajamos a + 60 para dar espacio.
+      const lineaFirmaY = firmaY + 60; 
+
       // Líneas de firma
-      doc.moveTo(60, firmaY + 20).lineTo(210, firmaY + 20).stroke(COLORES.negro);
-      doc.moveTo(340, firmaY + 20).lineTo(490, firmaY + 20).stroke(COLORES.negro);
+      doc.moveTo(60, lineaFirmaY).lineTo(210, lineaFirmaY).stroke(COLORES.negro);
+      doc.moveTo(340, lineaFirmaY).lineTo(490, lineaFirmaY).stroke(COLORES.negro);
 
-      // --- FIRMA IZQUIERDA: Quien entrega / Autoriza ---
+      // Nombres debajo de la línea
       doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
-      doc.text('CONTABILIZADO POR', 60, firmaY + 25, { width: 150, align: 'center' });
-
-      // --- FIRMA DERECHA: Quien recibe / Cuenta (Cliente o Interno) ---
-      doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
-      doc.text('AUTORIZADO POR', 340, firmaY + 25, { width: 150, align: 'center' });
+      doc.text('CONTABILIZADO POR', 60, lineaFirmaY + 5, { width: 150, align: 'center' });
+      doc.text('AUTORIZADO POR', 340, lineaFirmaY + 5, { width: 150, align: 'center' });
       
 
       // ====================================

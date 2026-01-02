@@ -97,7 +97,16 @@ function formatearHoraLima(fecha) {
     hour12: true
   });
 }
-
+function formatearFecha(fecha) {
+  if (!fecha) return 'N/A';
+  const date = new Date(fecha);
+  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  return limaDate.toLocaleDateString('es-PE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+}
 function formatearMoneda(valor, moneda = 'PEN') {
   const simbolos = { 'PEN': 'S/', 'USD': '$', 'EUR': '€' };
   return `${simbolos[moneda] || 'S/'} ${parseFloat(valor || 0).toFixed(2)}`;
@@ -235,11 +244,10 @@ export async function generarPDFEntrada(datos) {
   });
 }
 export async function generarPDFSalida(datos) {
-  // 1. Descargamos el logo ANTES de crear el PDF para tener el buffer listo
   let logoBuffer = null;
   try {
     const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-      responseType: 'arraybuffer' // Importante para imágenes
+      responseType: 'arraybuffer'
     });
     logoBuffer = Buffer.from(response.data);
   } catch (error) {
@@ -256,25 +264,30 @@ export async function generarPDFSalida(datos) {
       doc.on('error', reject);
 
       // ====================================
-      // LOGO (Posicionado arriba a la izquierda)
+      // 1. LOGO (Ajustado para no chocar con el título)
       // ====================================
       if (logoBuffer) {
-        // x: 50, y: 30 ajusta según necesites. width: 120 mantiene proporción
-        doc.image(logoBuffer, 50, 30, { width: 120 }); 
+        // Reducimos un poco el width (110) y lo subimos (y: 25) para dar aire al título
+        doc.image(logoBuffer, 50, 25, { width: 110 }); 
       }
 
       // ====================================
-      // ENCABEZADO NEUTRAL
+      // 2. ENCABEZADO
       // ====================================
-      // Ajustamos un poco 'y' inicial si el logo es muy alto, 
-      // pero usualmente agregarEncabezado maneja su propia posición.
+      // Llamamos al encabezado. 
+      // Si tu función 'agregarEncabezado' escribe en Y=30 o 40, ahora el logo está en 25.
+      // Si siguen chocando, es posible que 'agregarEncabezado' no gestione bien el espacio superior,
+      // pero este ajuste de 'y' inferior ayuda a que la tabla no suba.
       let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA');
+      
+      // CORRECCIÓN: Forzamos que el contenido empiece DEBAJO del logo si el encabezado quedó corto.
+      // (100 es una altura segura para que empiece el cuadro de datos)
+      y = Math.max(y, 100); 
       y += 10;
 
       // ====================================
       // INFORMACIÓN GENERAL
       // ====================================
-
       doc.rect(50, y, 495, 125).stroke(COLORES.negro);
       y += 10;
 
@@ -290,7 +303,6 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica').text('Tipo Movimiento:', 60, y + 30);
       doc.font('Helvetica-Bold').text(datos.tipo_movimiento || 'N/A', 160, y + 30, { width: 140 });
 
-      // Etiqueta neutral para el destino
       const destino = datos.tipo_movimiento === 'Venta' 
         ? datos.cliente 
         : datos.departamento || datos.tipo_movimiento;
@@ -318,7 +330,6 @@ export async function generarPDFSalida(datos) {
       // ====================================
       // TABLA DE PRODUCTOS
       // ====================================
-
       const detalles = datos.detalles || [];
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
       doc.text(`Detalle de Items (${detalles.length})`, 50, y);
@@ -333,17 +344,17 @@ export async function generarPDFSalida(datos) {
       doc.text('Unidad', 485, y + 6, { width: 50, align: 'center' });
       y += 20;
 
-      // Filas de productos
+      // Filas
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        // Control de salto de página
-        if (y > 680) { 
+        // CORRECCIÓN: Saltamos página ANTES (650 en vez de 680) para evitar colisión con pie de página
+        if (y > 650) { 
           doc.addPage();
-          // NOTA: Si quieres el logo en cada página nueva, descomenta esto:
-          // if (logoBuffer) doc.image(logoBuffer, 50, 30, { width: 120 });
+          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 }); // Repetimos logo ajustado
           
           y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA (cont.)');
-          y += 30;
+          y = Math.max(y, 100); // Mismo ajuste de seguridad
+          y += 20;
 
           // Repetir encabezado tabla
           doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
@@ -356,7 +367,6 @@ export async function generarPDFSalida(datos) {
           doc.fillColor(COLORES.negro);
         }
 
-        // Color alternado
         if (idx % 2 === 0) {
           doc.rect(50, y, 495, 18).fill('#F5F5F5');
         }
@@ -371,9 +381,7 @@ export async function generarPDFSalida(datos) {
         doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
       });
 
-      // ====================================
-      // TOTALES
-      // ====================================
+      // Totales
       y += 15;
       doc.rect(370, y, 175, 30).fill('#E3F2FD').stroke('#1e88e5'); 
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
@@ -383,9 +391,6 @@ export async function generarPDFSalida(datos) {
 
       y += 45;
 
-      // ====================================
-      // OBSERVACIONES
-      // ====================================
       if (datos.observaciones) {
         doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORES.negro);
         doc.text('Observaciones:', 50, y);
@@ -396,44 +401,45 @@ export async function generarPDFSalida(datos) {
       }
 
       // ====================================
-      // ZONA DE FIRMAS (MODIFICADA)
+      // 3. ZONA DE FIRMAS (CORREGIDA)
       // ====================================
       
-      const espacioNecesario = 150;
-      if (y + espacioNecesario > 750) {
+      const espacioNecesario = 120; // Reducido un poco
+      // Saltamos de página si estamos muy abajo (pixel 680)
+      if (y + espacioNecesario > 680) {
           doc.addPage();
           y = 50; 
       }
       
-      // Definimos el inicio del bloque de firmas
-      const firmaY = Math.max(y + 60, 690);
+      // CORRECCIÓN CLAVE:
+      // Antes estaba en Math.max(y + 60, 690). 690 es muy abajo (cerca del pie).
+      // Lo subimos a 620. Esto ancla las firmas más arriba.
+      const firmaY = Math.max(y + 50, 620);
 
       // Texto de conformidad
       doc.fontSize(7).font('Helvetica-Oblique').fillColor(COLORES.negro);
       doc.text(
         'CONFORMIDAD: Mediante la presente firma se certifica que los productos detallados han sido verificados y contados físicamente, encontrándose conformes en cantidad y estado aparente.', 
         50, 
-        firmaY - 30, // Posición del texto
+        firmaY - 25, 
         { width: 495, align: 'center' }
       );
 
-      // --- CAMBIO: AUMENTO DE ESPACIO PARA FIRMAR ---
-      // Antes estaba en firmaY + 20. Lo bajamos a + 60 para dar espacio.
-      const lineaFirmaY = firmaY + 60; 
+      // Línea de firmas (un poco más separada del texto de conformidad)
+      const lineaFirmaY = firmaY + 45; 
 
-      // Líneas de firma
       doc.moveTo(60, lineaFirmaY).lineTo(210, lineaFirmaY).stroke(COLORES.negro);
       doc.moveTo(340, lineaFirmaY).lineTo(490, lineaFirmaY).stroke(COLORES.negro);
 
-      // Nombres debajo de la línea
       doc.fontSize(8).fillColor(COLORES.grisOscuro).font('Helvetica-Bold');
       doc.text('CONTABILIZADO POR', 60, lineaFirmaY + 5, { width: 150, align: 'center' });
       doc.text('AUTORIZADO POR', 340, lineaFirmaY + 5, { width: 150, align: 'center' });
       
-
       // ====================================
       // PIE DE PÁGINA
       // ====================================
+      // El pie de página suele estar en coord Y ~ 780-800.
+      // Con firmaY en 620 + 45 + texto ~ 680, ahora hay ~100px de espacio libre.
       agregarPiePagina(doc, 'Documento de Control de Inventario - INDPACK S.A.C.');
 
       doc.end();

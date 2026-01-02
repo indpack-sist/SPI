@@ -5,7 +5,7 @@ import {
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag
 } from 'lucide-react';
-import { usePermisos, ConPermiso } from '../../contexts/PermisosContext';
+import { usePermisos, ConPermiso } from '../../context/PermisosContext';
 import './Sidebar.css';
 
 function Sidebar({ isOpen, onToggle }) {

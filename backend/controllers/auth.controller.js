@@ -5,6 +5,8 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('🔐 Intento de login para:', email);
+
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -18,6 +20,7 @@ export const login = async (req, res) => {
     );
 
     if (!result.success || result.data.length === 0) {
+      console.log('❌ Usuario no encontrado:', email);
       return res.status(401).json({
         success: false,
         error: 'Credenciales inválidas'
@@ -25,10 +28,27 @@ export const login = async (req, res) => {
     }
 
     const empleado = result.data[0];
+    
+    console.log('👤 Empleado encontrado:', {
+      id: empleado.id_empleado,
+      email: empleado.email,
+      rol: empleado.rol,
+      nombre: empleado.nombre_completo
+    });
+
     if (password !== empleado.password) {
+      console.log('❌ Contraseña incorrecta para:', email);
       return res.status(401).json({
         success: false,
         error: 'Credenciales inválidas'
+      });
+    }
+
+    if (!empleado.rol) {
+      console.error('❌ CRÍTICO: Empleado sin rol en BD:', empleado.id_empleado);
+      return res.status(500).json({
+        success: false,
+        error: 'Usuario sin rol asignado. Contacte al administrador.'
       });
     }
 
@@ -42,22 +62,32 @@ export const login = async (req, res) => {
       process.env.JWT_SECRET || 'indpack-secret-key-2025',
       { expiresIn: '24h' }
     );
+
+    const usuarioRespuesta = {
+      id_empleado: empleado.id_empleado,
+      nombre_completo: empleado.nombre_completo,
+      email: empleado.email,
+      rol: empleado.rol,
+      cargo: empleado.cargo,
+      dni: empleado.dni
+    };
+
+    console.log('✅ Login exitoso. Enviando respuesta:', {
+      token: token.substring(0, 20) + '...',
+      usuario: usuarioRespuesta
+    });
+
+    console.log('🎭 ROL ENVIADO AL FRONTEND:', empleado.rol);
+
     res.json({
       success: true,
       data: {
         token,
-        usuario: {
-          id_empleado: empleado.id_empleado,
-          nombre_completo: empleado.nombre_completo,
-          email: empleado.email,
-          rol: empleado.rol,
-          cargo: empleado.cargo,
-          dni: empleado.dni
-        }
+        usuario: usuarioRespuesta
       }
     });
   } catch (error) {
-    console.error('Error en login:', error);
+    console.error('❌ Error en login:', error);
     res.status(500).json({
       success: false,
       error: 'Error en el servidor'
@@ -81,26 +111,43 @@ export const verificarToken = async (req, res) => {
       process.env.JWT_SECRET || 'indpack-secret-key-2025'
     );
 
+    console.log('🔍 Token decodificado:', {
+      id_empleado: decoded.id_empleado,
+      email: decoded.email,
+      rol: decoded.rol
+    });
+
     const result = await executeQuery(
       'SELECT id_empleado, nombre_completo, email, rol, cargo, dni FROM empleados WHERE id_empleado = ? AND estado = "Activo"',
       [decoded.id_empleado]
     );
 
     if (!result.success || result.data.length === 0) {
+      console.log('❌ Usuario no encontrado o inactivo:', decoded.id_empleado);
       return res.status(401).json({
         success: false,
         error: 'Token inválido o usuario inactivo'
       });
     }
 
+    const usuario = result.data[0];
+
+    console.log('✅ Usuario verificado:', {
+      id: usuario.id_empleado,
+      email: usuario.email,
+      rol: usuario.rol
+    });
+
+    console.log('🎭 ROL ENVIADO EN VERIFICACIÓN:', usuario.rol);
+
     res.json({
       success: true,
       data: {
-        usuario: result.data[0]
+        usuario: usuario
       }
     });
   } catch (error) {
-    console.error('Error al verificar token:', error);
+    console.error('❌ Error al verificar token:', error);
     res.status(401).json({
       success: false,
       error: 'Token inválido o expirado'
@@ -132,6 +179,7 @@ export const cambiarPassword = async (req, res) => {
         error: 'Contraseña actual incorrecta'
       });
     }
+
     await executeQuery(
       'UPDATE empleados SET password = ? WHERE id_empleado = ?',
       [password_nuevo, id_empleado]

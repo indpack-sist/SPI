@@ -142,6 +142,17 @@ function agregarPiePagina(doc, textoPie) {
   }
 }
 export async function generarPDFEntrada(datos) {
+  // 1. Descarga del logo (Igual que en Salida)
+  let logoBuffer = null;
+  try {
+    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
+      responseType: 'arraybuffer'
+    });
+    logoBuffer = Buffer.from(response.data);
+  } catch (error) {
+    console.warn('No se pudo cargar el logo:', error.message);
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
@@ -151,9 +162,17 @@ export async function generarPDFEntrada(datos) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
       
+      // LOGO
+      if (logoBuffer) {
+        doc.image(logoBuffer, 50, 25, { width: 110 }); 
+      }
+
+      // ENCABEZADO
       let y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA');
+      y = Math.max(y, 100); // Ajuste de seguridad
       y += 10;
       
+      // INFORMACIÓN
       doc.rect(50, y, 495, 100).stroke(COLORES.negro);
       y += 10;
       
@@ -166,6 +185,8 @@ export async function generarPDFEntrada(datos) {
       doc.font('Helvetica-Bold').text((datos.proveedor || 'N/A'), 160, y + 30, { width: 140, lineGap: 2 });
       doc.font('Helvetica').text('Doc. Soporte:', 60, y + 60);
       doc.font('Helvetica-Bold').text(datos.documento_soporte || 'N/A', 160, y + 60, { width: 140 });
+      
+      // Columna Derecha
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_movimiento), 400, y);
       doc.font('Helvetica').text('Estado:', 320, y + 15);
@@ -175,6 +196,7 @@ export async function generarPDFEntrada(datos) {
       
       y += 115;
       
+      // TABLA
       const detalles = datos.detalles || [];
       doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
       doc.text(`Detalle de Entrada (${detalles.length} productos)`, 50, y);
@@ -191,14 +213,27 @@ export async function generarPDFEntrada(datos) {
       
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        if (y > 700) {
+        if (y > 650) { // Salto de página seguro
           doc.addPage();
+          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 });
           y = agregarEncabezado(doc, 'COMPROBANTE DE\nENTRADA (cont.)');
-          y += 30;
+          y = Math.max(y, 100);
+          y += 20;
+          
+          // Repetir Header Tabla
+          doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+          doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+          doc.text('Código', 60, y + 6);
+          doc.text('Producto', 140, y + 6);
+          doc.text('Cantidad', 350, y + 6);
+          doc.text('Costo Unit.', 420, y + 6);
+          doc.text('Subtotal', 490, y + 6, { align: 'right' });
+          y += 20;
+          doc.fillColor(COLORES.negro);
         }
-        if (idx % 2 === 0) {
-          doc.rect(50, y, 495, 18).fill('#F5F5F5');
-        }
+
+        if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
+        
         const subtotal = (det.cantidad || 0) * (det.costo_unitario || 0);
         doc.fontSize(8).fillColor(COLORES.negro);
         doc.text((det.codigo_producto || '').substring(0, 15), 60, y + 5);
@@ -211,6 +246,7 @@ export async function generarPDFEntrada(datos) {
         doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
       });
       
+      // TOTALES
       y += 15;
       const totalCosto = datos.total_costo || detalles.reduce((sum, d) => sum + ((d.costo_unitario || 0) * (d.cantidad || 0)), 0);
       doc.rect(370, y, 175, 30).stroke(COLORES.negro);
@@ -226,15 +262,23 @@ export async function generarPDFEntrada(datos) {
         y += 15;
         doc.fontSize(8).font('Helvetica');
         doc.text(datos.observaciones, 50, y, { width: 495, align: 'justify' });
-        y += 35;
+        y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
       }
       
-      const firmaY = Math.max(y + 15, 690);
-      doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
+      // FIRMAS (Lógica corregida)
+      const espacioNecesario = 120;
+      if (y + espacioNecesario > 680) {
+          doc.addPage();
+          y = 50; 
+      }
+      const firmaY = Math.max(y + 30, 620); // Anclar firmas arriba del pie
+
+      doc.moveTo(80, firmaY + 45).lineTo(230, firmaY + 45).stroke(COLORES.negro);
       doc.fontSize(8).fillColor(COLORES.grisOscuro);
-      doc.text('Registrado por', 80, firmaY + 5, { width: 150, align: 'center' });
-      doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
-      doc.text('Autorizado por', 320, firmaY + 5, { width: 150, align: 'center' });
+      doc.text('Registrado por', 80, firmaY + 50, { width: 150, align: 'center' });
+      
+      doc.moveTo(320, firmaY + 45).lineTo(470, firmaY + 45).stroke(COLORES.negro);
+      doc.text('Autorizado por', 320, firmaY + 50, { width: 150, align: 'center' });
       
       agregarPiePagina(doc, 'Comprobante de registro de entrada de inventario - INDPACK S.A.C.');
       doc.end();
@@ -264,24 +308,18 @@ export async function generarPDFSalida(datos) {
       doc.on('error', reject);
 
       // ====================================
-      // 1. LOGO (Ajustado para no chocar con el título)
+      // 1. LOGO (Posición ajustada)
       // ====================================
       if (logoBuffer) {
-        // Reducimos un poco el width (110) y lo subimos (y: 25) para dar aire al título
         doc.image(logoBuffer, 50, 25, { width: 110 }); 
       }
 
       // ====================================
-      // 2. ENCABEZADO
+      // 2. ENCABEZADO (Evitar choque con logo)
       // ====================================
-      // Llamamos al encabezado. 
-      // Si tu función 'agregarEncabezado' escribe en Y=30 o 40, ahora el logo está en 25.
-      // Si siguen chocando, es posible que 'agregarEncabezado' no gestione bien el espacio superior,
-      // pero este ajuste de 'y' inferior ayuda a que la tabla no suba.
       let y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA');
       
-      // CORRECCIÓN: Forzamos que el contenido empiece DEBAJO del logo si el encabezado quedó corto.
-      // (100 es una altura segura para que empiece el cuadro de datos)
+      // FORZAMOS espacio seguro: si el encabezado terminó muy arriba, bajamos a 100
       y = Math.max(y, 100); 
       y += 10;
 
@@ -347,13 +385,13 @@ export async function generarPDFSalida(datos) {
       // Filas
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        // CORRECCIÓN: Saltamos página ANTES (650 en vez de 680) para evitar colisión con pie de página
+        // CORRECCIÓN: Saltamos página ANTES (650 en vez de 680) para proteger el pie de página
         if (y > 650) { 
           doc.addPage();
-          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 }); // Repetimos logo ajustado
+          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 }); 
           
           y = agregarEncabezado(doc, 'CONSTANCIA DE SALIDA (cont.)');
-          y = Math.max(y, 100); // Mismo ajuste de seguridad
+          y = Math.max(y, 100); 
           y += 20;
 
           // Repetir encabezado tabla
@@ -404,16 +442,15 @@ export async function generarPDFSalida(datos) {
       // 3. ZONA DE FIRMAS (CORREGIDA)
       // ====================================
       
-      const espacioNecesario = 120; // Reducido un poco
-      // Saltamos de página si estamos muy abajo (pixel 680)
+      const espacioNecesario = 120;
+      // Verificar si cabe en la página actual
       if (y + espacioNecesario > 680) {
           doc.addPage();
           y = 50; 
       }
       
-      // CORRECCIÓN CLAVE:
-      // Antes estaba en Math.max(y + 60, 690). 690 es muy abajo (cerca del pie).
-      // Lo subimos a 620. Esto ancla las firmas más arriba.
+      // CORRECCIÓN PRINCIPAL: 
+      // Usamos 620 en lugar de 690 para que la firma NO pise el pie de página
       const firmaY = Math.max(y + 50, 620);
 
       // Texto de conformidad
@@ -425,7 +462,7 @@ export async function generarPDFSalida(datos) {
         { width: 495, align: 'center' }
       );
 
-      // Línea de firmas (un poco más separada del texto de conformidad)
+      // Líneas de firma
       const lineaFirmaY = firmaY + 45; 
 
       doc.moveTo(60, lineaFirmaY).lineTo(210, lineaFirmaY).stroke(COLORES.negro);
@@ -435,11 +472,7 @@ export async function generarPDFSalida(datos) {
       doc.text('CONTABILIZADO POR', 60, lineaFirmaY + 5, { width: 150, align: 'center' });
       doc.text('AUTORIZADO POR', 340, lineaFirmaY + 5, { width: 150, align: 'center' });
       
-      // ====================================
-      // PIE DE PÁGINA
-      // ====================================
-      // El pie de página suele estar en coord Y ~ 780-800.
-      // Con firmaY en 620 + 45 + texto ~ 680, ahora hay ~100px de espacio libre.
+      // Pie de página
       agregarPiePagina(doc, 'Documento de Control de Inventario - INDPACK S.A.C.');
 
       doc.end();
@@ -450,6 +483,16 @@ export async function generarPDFSalida(datos) {
   });
 }
 export async function generarPDFTransferencia(datos) {
+  let logoBuffer = null;
+  try {
+    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
+      responseType: 'arraybuffer'
+    });
+    logoBuffer = Buffer.from(response.data);
+  } catch (error) {
+    console.warn('No se pudo cargar el logo:', error.message);
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
@@ -459,7 +502,12 @@ export async function generarPDFTransferencia(datos) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
       
+      if (logoBuffer) {
+        doc.image(logoBuffer, 50, 25, { width: 110 });
+      }
+
       let y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA');
+      y = Math.max(y, 100);
       y += 10;
       
       doc.rect(50, y, 495, 100).stroke(COLORES.negro);
@@ -474,6 +522,7 @@ export async function generarPDFTransferencia(datos) {
       doc.font('Helvetica-Bold').text(datos.tipo_inventario_destino || 'N/A', 165, y + 30, { width: 130 });
       doc.font('Helvetica').text('Registrado por:', 60, y + 60);
       doc.font('Helvetica-Bold').text((datos.registrado_por || 'N/A'), 165, y + 60, { width: 130, lineGap: 2 });
+      
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_transferencia), 400, y);
       doc.font('Helvetica').text('Estado:', 320, y + 15);
@@ -497,14 +546,26 @@ export async function generarPDFTransferencia(datos) {
       
       doc.font('Helvetica').fillColor(COLORES.negro);
       detalles.forEach((det, idx) => {
-        if (y > 700) {
+        if (y > 650) {
           doc.addPage();
+          if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 });
           y = agregarEncabezado(doc, 'COMPROBANTE DE\nTRANSFERENCIA (cont.)');
-          y += 30;
+          y = Math.max(y, 100);
+          y += 20;
+          
+          doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+          doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+          doc.text('Cód. Origen', 60, y + 6);
+          doc.text('Producto', 140, y + 6);
+          doc.text('Cód. Destino', 320, y + 6);
+          doc.text('Cantidad', 410, y + 6);
+          doc.text('Costo', 490, y + 6, { align: 'right' });
+          y += 20;
+          doc.fillColor(COLORES.negro);
         }
-        if (idx % 2 === 0) {
-          doc.rect(50, y, 495, 18).fill('#F5F5F5');
-        }
+
+        if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
+        
         const subtotal = (det.cantidad || 0) * (det.costo_unitario || 0);
         doc.fontSize(8).fillColor(COLORES.negro);
         doc.text((det.codigo_origen || det.codigo_producto || '').substring(0, 15), 60, y + 5);
@@ -532,15 +593,22 @@ export async function generarPDFTransferencia(datos) {
         y += 15;
         doc.fontSize(8).font('Helvetica');
         doc.text(datos.observaciones, 50, y, { width: 495 });
-        y += 35;
+        y += Math.ceil(doc.heightOfString(datos.observaciones, { width: 495 })) + 20;
       }
       
-      const firmaY = Math.max(y + 15, 690);
-      doc.moveTo(80, firmaY).lineTo(230, firmaY).stroke(COLORES.negro);
+      const espacioNecesario = 120;
+      if (y + espacioNecesario > 680) {
+          doc.addPage();
+          y = 50; 
+      }
+      const firmaY = Math.max(y + 30, 620);
+
+      doc.moveTo(80, firmaY + 45).lineTo(230, firmaY + 45).stroke(COLORES.negro);
       doc.fontSize(8).fillColor(COLORES.grisOscuro);
-      doc.text('Entrega', 80, firmaY + 5, { width: 150, align: 'center' });
-      doc.moveTo(320, firmaY).lineTo(470, firmaY).stroke(COLORES.negro);
-      doc.text('Recibe', 320, firmaY + 5, { width: 150, align: 'center' });
+      doc.text('Entrega', 80, firmaY + 50, { width: 150, align: 'center' });
+      
+      doc.moveTo(320, firmaY + 45).lineTo(470, firmaY + 45).stroke(COLORES.negro);
+      doc.text('Recibe', 320, firmaY + 50, { width: 150, align: 'center' });
       
       agregarPiePagina(doc, 'Comprobante de transferencia entre inventarios - INDPACK S.A.C.');
       doc.end();
@@ -550,6 +618,16 @@ export async function generarPDFTransferencia(datos) {
   });
 }
 export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
+  let logoBuffer = null;
+  try {
+    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
+      responseType: 'arraybuffer'
+    });
+    logoBuffer = Buffer.from(response.data);
+  } catch (error) {
+    console.warn('No se pudo cargar el logo:', error.message);
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
@@ -559,7 +637,12 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
       
+      if (logoBuffer) {
+        doc.image(logoBuffer, 50, 25, { width: 110 });
+      }
+      
       let y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN');
+      y = Math.max(y, 100);
       y += 10;
       
       doc.rect(50, y, 495, 120).stroke(COLORES.negro);
@@ -576,6 +659,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       doc.font('Helvetica-Bold').text((datos.supervisor || 'N/A'), 160, y + 60, { width: 140, lineGap: 2 });
       doc.font('Helvetica').text('Cant. Planificada:', 60, y + 90);
       doc.font('Helvetica-Bold').text(`${datos.cantidad_planificada || 0} ${datos.unidad_medida || ''}`, 160, y + 90);
+      
       doc.font('Helvetica').text('Fecha:', 320, y);
       doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_creacion), 400, y);
       doc.font('Helvetica').text('Estado:', 320, y + 15);
@@ -603,14 +687,25 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         
         doc.font('Helvetica').fillColor(COLORES.negro);
         consumoMateriales.forEach((mat, idx) => {
-          if (y > 700) {
+          if (y > 650) {
             doc.addPage();
+            if (logoBuffer) doc.image(logoBuffer, 50, 25, { width: 110 });
             y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN (cont.)');
-            y += 30;
+            y = Math.max(y, 100);
+            y += 20;
+            
+            doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+            doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+            doc.text('Insumo', 60, y + 6);
+            doc.text('Cantidad', 350, y + 6);
+            doc.text('Costo Unit.', 420, y + 6);
+            doc.text('Subtotal', 490, y + 6, { align: 'right' });
+            y += 20;
+            doc.fillColor(COLORES.negro);
           }
-          if (idx % 2 === 0) {
-            doc.rect(50, y, 495, 18).fill('#F5F5F5');
-          }
+          
+          if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
+          
           doc.fontSize(8).fillColor(COLORES.negro);
           doc.text((mat.insumo || '').substring(0, 50), 60, y + 5);
           doc.text(`${mat.cantidad_requerida} ${mat.unidad_medida || ''}`, 350, y + 5);

@@ -343,6 +343,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { estado, fecha_entrega_real } = req.body;
+    const id_usuario = req.user?.id_empleado || null;
     
     const estadosValidos = ['Pendiente', 'Confirmada', 'En Preparación', 'Despachada', 'Entregada', 'Cancelada'];
     
@@ -352,6 +353,20 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         error: 'Estado no válido'
       });
     }
+    
+    const ordenResult = await executeQuery(`
+      SELECT * FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const ordenActual = ordenResult.data[0];
+    const estadoAnterior = ordenActual.estado;
     
     if (estado === 'Entregada') {
       const detalleResult = await executeQuery(`
@@ -366,6 +381,223 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         return res.status(400).json({
           success: false,
           error: 'No se puede marcar como entregada. Hay productos pendientes de despacho.'
+        });
+      }
+    }
+    
+    if (estado === 'Confirmada' && estadoAnterior === 'Pendiente') {
+      const detalleResult = await executeQuery(`
+        SELECT 
+          dov.*,
+          p.codigo AS codigo_producto,
+          p.nombre AS producto,
+          p.unidad_medida,
+          p.stock_actual,
+          p.costo_unitario_promedio,
+          p.precio_venta
+        FROM detalle_orden_venta dov
+        INNER JOIN productos p ON dov.id_producto = p.id_producto
+        WHERE dov.id_orden_venta = ?
+      `, [id]);
+      
+      if (!detalleResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: 'Error al obtener detalle de la orden'
+        });
+      }
+      
+      for (const item of detalleResult.data) {
+        const stockDisponible = parseFloat(item.stock_actual);
+        const cantidadRequerida = parseFloat(item.cantidad);
+        
+        if (stockDisponible < cantidadRequerida) {
+          return res.status(400).json({
+            success: false,
+            error: `Stock insuficiente para ${item.producto}. Disponible: ${stockDisponible}, Requerido: ${cantidadRequerida}`
+          });
+        }
+      }
+      
+      const clienteResult = await executeQuery(`
+        SELECT razon_social FROM clientes WHERE id_cliente = ?
+      `, [ordenActual.id_cliente]);
+      
+      const clienteNombre = clienteResult.success && clienteResult.data.length > 0 
+        ? clienteResult.data[0].razon_social 
+        : 'Cliente';
+      
+      const ultimaSalidaResult = await executeQuery(`
+        SELECT id_salida FROM salidas ORDER BY id_salida DESC LIMIT 1
+      `);
+      
+      let numeroSecuencia = 1;
+      if (ultimaSalidaResult.success && ultimaSalidaResult.data.length > 0) {
+        numeroSecuencia = ultimaSalidaResult.data[0].id_salida + 1;
+      }
+      
+      const productoResult = await executeQuery(`
+        SELECT p.id_tipo_inventario 
+        FROM detalle_orden_venta dov
+        INNER JOIN productos p ON dov.id_producto = p.id_producto
+        WHERE dov.id_orden_venta = ?
+        LIMIT 1
+      `, [id]);
+      
+      const id_tipo_inventario = productoResult.success && productoResult.data.length > 0
+        ? productoResult.data[0].id_tipo_inventario
+        : 4;
+      
+      let totalCosto = 0;
+      let totalPrecio = 0;
+      
+      for (const item of detalleResult.data) {
+        const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+        const precioUnitario = parseFloat(item.precio_unitario || 0);
+        const cantidad = parseFloat(item.cantidad);
+        
+        totalCosto += cantidad * costoUnitario;
+        totalPrecio += cantidad * precioUnitario;
+      }
+      
+      const salidaResult = await executeQuery(`
+        INSERT INTO salidas (
+          id_tipo_inventario,
+          tipo_movimiento,
+          id_cliente,
+          departamento,
+          total_costo,
+          total_precio,
+          moneda,
+          id_vehiculo,
+          id_registrado_por,
+          fecha_movimiento,
+          observaciones,
+          estado
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)
+      `, [
+        id_tipo_inventario,
+        'Venta',
+        ordenActual.id_cliente,
+        null,
+        totalCosto,
+        totalPrecio,
+        ordenActual.moneda || 'PEN',
+        null,
+        id_usuario,
+        `Reserva automática - Orden de Venta ${ordenActual.numero_orden}`,
+        'Reservada'
+      ]);
+      
+      if (!salidaResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: 'Error al crear salida de reserva'
+        });
+      }
+      
+      const id_salida = salidaResult.data.insertId;
+      
+      for (const item of detalleResult.data) {
+        const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+        const precioUnitario = parseFloat(item.precio_unitario || 0);
+        const cantidad = parseFloat(item.cantidad);
+        const subtotal = cantidad * precioUnitario;
+        
+        await executeQuery(`
+          INSERT INTO detalle_salidas (
+            id_salida,
+            id_producto,
+            cantidad,
+            costo_unitario,
+            precio_unitario,
+            subtotal
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          id_salida,
+          item.id_producto,
+          cantidad,
+          costoUnitario,
+          precioUnitario,
+          subtotal
+        ]);
+        
+        await executeQuery(`
+          UPDATE productos 
+          SET stock_actual = stock_actual - ?
+          WHERE id_producto = ?
+        `, [cantidad, item.id_producto]);
+      }
+      
+      await executeQuery(`
+        UPDATE ordenes_venta 
+        SET estado = ?,
+            fecha_entrega_real = ?
+        WHERE id_orden_venta = ?
+      `, [estado, fecha_entrega_real || null, id]);
+      
+      return res.json({
+        success: true,
+        message: `Orden confirmada. Stock reservado exitosamente (Salida ID: ${id_salida})`,
+        data: {
+          id_salida,
+          productos_reservados: detalleResult.data.length
+        }
+      });
+    }
+    
+    if (estado === 'Cancelada' && estadoAnterior === 'Confirmada') {
+      const salidaResult = await executeQuery(`
+        SELECT id_salida 
+        FROM salidas 
+        WHERE id_cliente = ?
+        AND tipo_movimiento = 'Venta'
+        AND estado = 'Reservada'
+        AND observaciones LIKE ?
+        ORDER BY fecha_movimiento DESC
+        LIMIT 1
+      `, [ordenActual.id_cliente, `%${ordenActual.numero_orden}%`]);
+      
+      if (salidaResult.success && salidaResult.data.length > 0) {
+        const id_salida = salidaResult.data[0].id_salida;
+        
+        const detalleSalidaResult = await executeQuery(`
+          SELECT id_producto, cantidad 
+          FROM detalle_salidas 
+          WHERE id_salida = ?
+        `, [id_salida]);
+        
+        if (detalleSalidaResult.success) {
+          for (const item of detalleSalidaResult.data) {
+            await executeQuery(`
+              UPDATE productos 
+              SET stock_actual = stock_actual + ?
+              WHERE id_producto = ?
+            `, [item.cantidad, item.id_producto]);
+          }
+        }
+        
+        await executeQuery(`
+          UPDATE salidas 
+          SET estado = 'Anulado',
+              observaciones = CONCAT(observaciones, ' - ANULADA: Orden de venta cancelada')
+          WHERE id_salida = ?
+        `, [id_salida]);
+        
+        await executeQuery(`
+          UPDATE ordenes_venta 
+          SET estado = ?,
+              fecha_entrega_real = ?
+          WHERE id_orden_venta = ?
+        `, [estado, fecha_entrega_real || null, id]);
+        
+        return res.json({
+          success: true,
+          message: `Orden cancelada. Stock restaurado exitosamente (Salida ID: ${id_salida} anulada)`,
+          data: {
+            id_salida_anulada: id_salida,
+            productos_restaurados: detalleSalidaResult.data.length
+          }
         });
       }
     }

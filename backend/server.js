@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { testConnection } from './config/database.js';
-
+import { verificarToken, verificarPermiso } from './middleware/auth.js';
 
 import authRoutes from './routes/auth.routes.js';
 import empleadosRoutes from './routes/empleados.routes.js';
@@ -40,7 +40,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
   next();
@@ -72,31 +71,30 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-
 app.use('/api/auth', authRoutes);
 
-app.use('/api/empleados', empleadosRoutes);
-app.use('/api/flota', flotaRoutes);
-app.use('/api/proveedores', proveedoresRoutes);
-app.use('/api/clientes', clientesRoutes);
+app.use('/api/empleados', verificarToken, verificarPermiso('empleados'), empleadosRoutes);
+app.use('/api/flota', verificarToken, verificarPermiso('flota'), flotaRoutes);
+app.use('/api/proveedores', verificarToken, verificarPermiso('proveedores'), proveedoresRoutes);
+app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesRoutes);
 
-app.use('/api/productos', productosRoutes);
+app.use('/api/productos', verificarToken, verificarPermiso('productos'), productosRoutes);
 
-app.use('/api/inventario/movimientos-entradas', entradasRoutes); 
-app.use('/api/inventario/movimientos-salidas', salidasRoutes);
-app.use('/api/inventario/transferencias', transferenciasRoutes);
-app.use('/api/inventario', inventarioRoutes);
+app.use('/api/inventario/movimientos-entradas', verificarToken, verificarPermiso('entradas'), entradasRoutes); 
+app.use('/api/inventario/movimientos-salidas', verificarToken, verificarPermiso('salidas'), salidasRoutes);
+app.use('/api/inventario/transferencias', verificarToken, verificarPermiso('transferencias'), transferenciasRoutes);
+app.use('/api/inventario', verificarToken, inventarioRoutes);
 
-app.use('/api/produccion/ordenes', ordenesProduccionRoutes);
+app.use('/api/produccion/ordenes', verificarToken, verificarPermiso('ordenesProduccion'), ordenesProduccionRoutes);
 
-app.use('/api/cotizaciones', cotizacionesRoutes);
-app.use('/api/ordenes-venta', ordenesVentaRoutes);
-app.use('/api/guias-remision', guiasRemisionRoutes);
-app.use('/api/guias-transportista', guiasTransportistaRoutes);
+app.use('/api/cotizaciones', verificarToken, verificarPermiso('cotizaciones'), cotizacionesRoutes);
+app.use('/api/ordenes-venta', verificarToken, verificarPermiso('ordenesVenta'), ordenesVentaRoutes);
+app.use('/api/guias-remision', verificarToken, verificarPermiso('guiasRemision'), guiasRemisionRoutes);
+app.use('/api/guias-transportista', verificarToken, verificarPermiso('guiasTransportista'), guiasTransportistaRoutes);
 
-app.use('/api/ordenes-compra', ordenesCompraRoutes);
+app.use('/api/ordenes-compra', verificarToken, verificarPermiso('ordenesCompra'), ordenesCompraRoutes);
 
-app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboardRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -163,7 +161,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-
 async function startServer() {
   try {
     const dbConnected = await testConnection();
@@ -183,41 +180,46 @@ async function startServer() {
       console.log(`Health Check: http://localhost:${PORT}/api/health`);
       console.log(`Base de datos: CONECTADA`);
       console.log('='.repeat(80));
-      console.log('MÓDULOS DISPONIBLES:');
+      console.log('MÓDULOS DISPONIBLES CON CONTROL DE ACCESO:');
       console.log('');
-      console.log('AUTENTICACIÓN:');
+      console.log('AUTENTICACIÓN (Sin restricción):');
       console.log('   - /api/auth');
       console.log('');
       console.log('MÓDULOS BASE:');
-      console.log('   - /api/empleados');
-      console.log('   - /api/flota');
-      console.log('   - /api/proveedores');
-      console.log('   - /api/clientes');
+      console.log('   - /api/empleados [empleados]');
+      console.log('   - /api/flota [flota]');
+      console.log('   - /api/proveedores [proveedores]');
+      console.log('   - /api/clientes [clientes]');
       console.log('');
       console.log('PRODUCTOS:');
-      console.log('   - /api/productos');
+      console.log('   - /api/productos [productos]');
       console.log('');
       console.log('INVENTARIO:');
-      console.log('   - /api/inventario/movimientos-entradas');
-      console.log('   - /api/inventario/movimientos-salidas');
-      console.log('   - /api/inventario/transferencias');
-      console.log('   - /api/inventario');
+      console.log('   - /api/inventario/movimientos-entradas [entradas]');
+      console.log('   - /api/inventario/movimientos-salidas [salidas]');
+      console.log('   - /api/inventario/transferencias [transferencias]');
+      console.log('   - /api/inventario [general]');
       console.log('');
       console.log('PRODUCCIÓN:');
-      console.log('   - /api/produccion/ordenes');
+      console.log('   - /api/produccion/ordenes [ordenesProduccion]');
       console.log('');
       console.log('VENTAS:');
-      console.log('   - /api/cotizaciones');
-      console.log('   - /api/ordenes-venta');
-      console.log('   - /api/guias-remision');
-      console.log('   - /api/guias-transportista');
+      console.log('   - /api/cotizaciones [cotizaciones]');
+      console.log('   - /api/ordenes-venta [ordenesVenta]');
+      console.log('   - /api/guias-remision [guiasRemision]');
+      console.log('   - /api/guias-transportista [guiasTransportista]');
       console.log('');
       console.log('COMPRAS:');
-      console.log('   - /api/ordenes-compra');
+      console.log('   - /api/ordenes-compra [ordenesCompra]');
       console.log('');
       console.log('ANALYTICS:');
-      console.log('   - /api/dashboard');
+      console.log('   - /api/dashboard [dashboard]');
       console.log('');
+      console.log('='.repeat(80));
+      console.log('SISTEMA DE ROLES ACTIVO');
+      console.log('Roles disponibles: Administrador, Gerencia, Comercial, Ventas,');
+      console.log('                   Produccion, Supervisor, Operario, Almacenero,');
+      console.log('                   Logistica, Conductor, Administrativo');
       console.log('='.repeat(80));
       console.log('SISTEMA LISTO PARA RECIBIR PETICIONES');
       console.log('='.repeat(80));

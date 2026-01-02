@@ -7,7 +7,7 @@ import Login from './pages/Auth/Login';
 import Layout from './components/Layout/Layout';
 
 import Dashboard from "./pages/Dashboard/Dashboard";
-
+//probando
 import Empleados from './pages/Empleados/Empleados';
 import Flota from './pages/Flota/Flota';
 import Proveedores from './pages/Proveedores/Proveedores';

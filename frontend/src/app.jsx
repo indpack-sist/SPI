@@ -15,7 +15,7 @@ import Clientes from './pages/Clientes/Clientes';
 
 import Productos from './pages/Productos/Productos';
 import ProductoDetalle from './pages/Productos/ProductoDetalle';
-
+//test
 import Entradas from './pages/Inventario/Entradas';
 import Salidas from './pages/Inventario/Salidas';
 import Transferencias from './pages/Inventario/Transferencias';

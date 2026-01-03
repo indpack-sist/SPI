@@ -58,9 +58,10 @@ export async function realizarConteoFisico(req, res) {
       });
     }
 
-    const result = await executeTransaction(async (connection) => {
-      const ajusteResult = await executeQuery(
-        `INSERT INTO ajustes_inventario (
+    // CORREGIDO: executeTransaction debe recibir un array de queries
+    const result = await executeTransaction([
+      {
+        sql: `INSERT INTO ajustes_inventario (
           id_producto,
           stock_sistema,
           stock_fisico,
@@ -70,7 +71,7 @@ export async function realizarConteoFisico(req, res) {
           observaciones,
           id_usuario_ajuste
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
+        params: [
           id_producto,
           stock_sistema,
           stock_fisico_decimal,
@@ -79,20 +80,13 @@ export async function realizarConteoFisico(req, res) {
           motivo,
           observaciones || null,
           id_usuario_ajuste
-        ],
-        connection
-      );
-
-      const id_ajuste = ajusteResult.data.insertId;
-
-      await executeQuery(
-        'UPDATE productos SET stock_actual = ? WHERE id_producto = ?',
-        [stock_fisico_decimal, id_producto],
-        connection
-      );
-
-      return { id_ajuste };
-    });
+        ]
+      },
+      {
+        sql: 'UPDATE productos SET stock_actual = ? WHERE id_producto = ?',
+        params: [stock_fisico_decimal, id_producto]
+      }
+    ]);
 
     if (!result.success) {
       return res.status(500).json({
@@ -101,16 +95,19 @@ export async function realizarConteoFisico(req, res) {
       });
     }
 
+    // El ID del ajuste está en el primer resultado
+    const id_ajuste = result.data[0].insertId;
+
     const ajusteCompleto = await executeQuery(
       'SELECT * FROM vista_ajustes_inventario WHERE id_ajuste = ?',
-      [result.data.id_ajuste]
+      [id_ajuste]
     );
 
     res.status(201).json({
       success: true,
       message: `Ajuste ${tipo_ajuste.toLowerCase()} realizado exitosamente`,
       data: {
-        id_ajuste: result.data.id_ajuste,
+        id_ajuste: id_ajuste,
         producto: producto.nombre,
         stock_anterior: stock_sistema,
         stock_nuevo: stock_fisico_decimal,

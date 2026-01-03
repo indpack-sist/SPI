@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertTriangle, CheckCircle, Package, TrendingUp, TrendingDown } from 'lucide-react';
 import Modal from '../UI/Modal';
-import { productosAPI } from '../../config/api';
+import api from '../../config/api';
 
 function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,8 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
 
   const cargarMotivos = async () => {
     try {
-      const response = await productosAPI.ajustes.getMotivos();
+      // Método 1: Usando api directamente
+      const response = await api.get('/productos/ajustes/motivos');
       
       if (response.data.success) {
         setMotivos(response.data.data);
@@ -79,12 +80,23 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
     setError(null);
 
     try {
-      const response = await productosAPI.ajustes.realizarConteo({
+      // DEBUG: Verificar que el token exista
+      const token = localStorage.getItem('token');
+      console.log('🔑 Token presente:', !!token);
+      
+      if (!token) {
+        throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
+      }
+
+      // Método directo con api
+      const response = await api.post('/productos/ajustes/conteo-fisico', {
         id_producto: producto.id_producto,
         stock_fisico: parseFloat(formData.stock_fisico),
         motivo: formData.motivo,
         observaciones: formData.observaciones || null
       });
+
+      console.log('✅ Respuesta del servidor:', response.data);
 
       if (response.data.success) {
         if (onSuccess) {
@@ -92,11 +104,25 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
         }
         onClose();
         resetForm();
+      } else {
+        throw new Error(response.data.error || 'Error desconocido');
       }
 
     } catch (err) {
-      console.error('Error al realizar conteo físico:', err);
-      setError(err.error || err.message || 'Error al realizar el conteo físico');
+      console.error('❌ Error completo:', err);
+      console.error('❌ Error response:', err.response?.data);
+      
+      let mensajeError = 'Error al realizar el conteo físico';
+      
+      if (err.response?.data?.error) {
+        mensajeError = err.response.data.error;
+      } else if (err.error) {
+        mensajeError = err.error;
+      } else if (err.message) {
+        mensajeError = err.message;
+      }
+      
+      setError(mensajeError);
     } finally {
       setLoading(false);
     }

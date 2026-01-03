@@ -49,11 +49,11 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'API INDPACK - Sistema ERP Completo',
-    version: '2.0.1', // Actualizado
+    version: '2.0.1',
     status: 'online',
     modules: {
       base: ['auth', 'empleados', 'flota', 'proveedores', 'clientes'],
-      productos: ['productos', 'recetas', 'ajustes'], // Agregado 'ajustes'
+      productos: ['productos', 'recetas', 'ajustes'],
       inventario: ['entradas', 'salidas', 'transferencias'],
       produccion: ['ordenes'],
       ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista'],
@@ -88,7 +88,8 @@ app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesR
 // =====================================================
 // PRODUCTOS Y AJUSTES DE INVENTARIO
 // =====================================================
-app.use('/api/productos', verificarToken('productos'), productosRoutes);
+// CORREGIDO: verificarToken NO lleva parámetros
+app.use('/api/productos', verificarToken, verificarPermiso('productos'), productosRoutes);
 // NUEVO - Rutas separadas para reportes y estadísticas de ajustes
 app.use('/api/ajustes', verificarToken, verificarPermiso('productos'), ajustesRoutes);
 

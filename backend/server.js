@@ -88,7 +88,7 @@ app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesR
 // =====================================================
 // PRODUCTOS Y AJUSTES DE INVENTARIO
 // =====================================================
-app.use('/api/productos', verificarToken, verificarPermiso('productos'), productosRoutes);
+app.use('/api/productos', verificarToken('productos'), productosRoutes);
 // NUEVO - Rutas separadas para reportes y estadísticas de ajustes
 app.use('/api/ajustes', verificarToken, verificarPermiso('productos'), ajustesRoutes);
 

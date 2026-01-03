@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertTriangle, CheckCircle, Package, TrendingUp, TrendingDown } from 'lucide-react';
 import Modal from '../UI/Modal';
+import { productosAPI } from '../../config/api';
 
 function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -39,19 +40,14 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
 
   const cargarMotivos = async () => {
     try {
-      const response = await fetch('/api/productos/ajustes/motivos', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await productosAPI.ajustes.getMotivos();
       
-      const data = await response.json();
-      
-      if (data.success) {
-        setMotivos(data.data);
+      if (response.data.success) {
+        setMotivos(response.data.data);
       }
     } catch (err) {
       console.error('Error al cargar motivos:', err);
+      setError('Error al cargar los motivos de ajuste');
     }
   };
 
@@ -83,36 +79,24 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
     setError(null);
 
     try {
-      const response = await fetch('/api/productos/ajustes/conteo-fisico', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          id_producto: producto.id_producto,
-          stock_fisico: parseFloat(formData.stock_fisico),
-          motivo: formData.motivo,
-          observaciones: formData.observaciones || null
-        })
+      const response = await productosAPI.ajustes.realizarConteo({
+        id_producto: producto.id_producto,
+        stock_fisico: parseFloat(formData.stock_fisico),
+        motivo: formData.motivo,
+        observaciones: formData.observaciones || null
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Error al realizar el conteo físico');
+      if (response.data.success) {
+        if (onSuccess) {
+          onSuccess(response.data.data);
+        }
+        onClose();
+        resetForm();
       }
-
-      if (onSuccess) {
-        onSuccess(data.data);
-      }
-
-      onClose();
-      resetForm();
 
     } catch (err) {
       console.error('Error al realizar conteo físico:', err);
-      setError(err.message || 'Error al realizar el conteo físico');
+      setError(err.error || err.message || 'Error al realizar el conteo físico');
     } finally {
       setLoading(false);
     }
@@ -286,6 +270,9 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
                 </option>
               ))}
             </select>
+            {motivos.length === 0 && (
+              <small className="text-red-500">Cargando motivos...</small>
+            )}
           </div>
 
           {/* Observaciones */}
@@ -347,8 +334,8 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
               </>
             ) : (
               <>
-                {tipoAjuste === 'Positivo' && 'Registrar Sobrante'}
-                {tipoAjuste === 'Negativo' && 'Registrar Faltante'}
+                {tipoAjuste === 'Positivo' && '✓ Registrar Sobrante'}
+                {tipoAjuste === 'Negativo' && '⚠ Registrar Faltante'}
                 {(!tipoAjuste || diferencia === 0) && 'Realizar Ajuste'}
               </>
             )}

@@ -152,9 +152,6 @@ export const productosAPI = {
   }
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A ENTRADAS
-// ==========================================
 export const entradasAPI = {
   getAll: (params) => api.get('/inventario/movimientos-entradas', { params }),
   getById: (id) => api.get(`/inventario/movimientos-entradas/${id}`),
@@ -188,7 +185,6 @@ export const entradasAPI = {
       link.href = url;
       link.download = `entrada-${id}.pdf`;
 
-      // FIX: Añadir al DOM y retrasar limpieza
       document.body.appendChild(link);
       link.click();
       setTimeout(() => {
@@ -206,9 +202,6 @@ export const entradasAPI = {
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A SALIDAS
-// ==========================================
 export const salidasAPI = {
   getAll: (params) => api.get('/inventario/movimientos-salidas', { params }),
   getById: (id) => api.get(`/inventario/movimientos-salidas/${id}`),
@@ -239,7 +232,6 @@ export const salidasAPI = {
       link.href = url;
       link.download = `salida-${id}.pdf`;
 
-      // FIX: Añadir al DOM y retrasar limpieza
       document.body.appendChild(link);
       link.click();
       setTimeout(() => {
@@ -257,9 +249,6 @@ export const salidasAPI = {
   getTiposInventario: () => api.get('/productos/tipos-inventario')
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A TRANSFERENCIAS
-// ==========================================
 export const transferenciasAPI = {
   getAll: (params) => api.get('/inventario/transferencias', { params }),
   getById: (id) => api.get(`/inventario/transferencias/${id}`),
@@ -294,7 +283,6 @@ export const transferenciasAPI = {
       link.href = url;
       link.download = `transferencia-${id}.pdf`;
 
-      // FIX: Añadir al DOM y retrasar limpieza
       document.body.appendChild(link);
       link.click();
       setTimeout(() => {
@@ -327,9 +315,6 @@ export const dashboard = {
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A ORDENES PRODUCCION
-// ==========================================
 export const ordenesProduccionAPI = {
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
@@ -364,7 +349,6 @@ export const ordenesProduccionAPI = {
       link.href = url;
       link.download = `orden-produccion-${id}.pdf`;
 
-      // FIX: Añadir al DOM y retrasar limpieza
       document.body.appendChild(link);
       link.click();
       setTimeout(() => {
@@ -382,9 +366,6 @@ export const ordenesProduccionAPI = {
   getNotificaciones: () => api.get('/produccion/ordenes/notificaciones')
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A COTIZACIONES (PREVENTIVO)
-// ==========================================
 export const cotizacionesAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();

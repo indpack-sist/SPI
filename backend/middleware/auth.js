@@ -69,7 +69,7 @@ const PERMISOS_POR_ROL = {
     guiasTransportista: false,
     ordenesCompra: false
   },
-  'Produccion': {
+  'Jefe de Produccion': {
     dashboard: false,
     empleados: false,
     flota: false,

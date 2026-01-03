@@ -72,7 +72,7 @@
     'Produccion': {
       dashboard: false,
       empleados: true,
-      flota: false,
+      flota: true,
       proveedores: true,
       clientes: true,
       productos: true,

@@ -71,7 +71,7 @@
     },
     'Produccion': {
       dashboard: false,
-      empleados: false,
+      empleados: true,
       flota: false,
       proveedores: false,
       clientes: false,

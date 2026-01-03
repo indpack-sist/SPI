@@ -339,14 +339,6 @@ export async function generarPDFSalida(datos) {
       }
       const firmaY = Math.max(y + 20, 640);
 
-      doc.fontSize(7).font('Helvetica-Oblique').fillColor(COLORES.negro);
-      doc.text(
-        'CONFORMIDAD: Mediante la presente firma se certifica que los productos detallados han sido verificados y contados físicamente.', 
-        50, 
-        firmaY - 15, 
-        { width: 495, align: 'center' }
-      );
-
       const lineaY = firmaY + 25;
 
       doc.moveTo(70, lineaY).lineTo(220, lineaY).stroke(COLORES.negro);

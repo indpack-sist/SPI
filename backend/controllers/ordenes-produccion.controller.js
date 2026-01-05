@@ -1075,52 +1075,70 @@ export async function getMermasOrden(req, res) {
   }
 
   export const generarPDFOrdenController = async (req, res, next) => {
-    try {
-      const { id } = req.params;
-      
-      const ordenResult = await executeQuery(`
-        SELECT 
-          op.*,
-          p.codigo AS codigo_producto,
-          p.nombre AS producto,
-          p.unidad_medida,
-          e.nombre_completo AS supervisor,
-          rp.nombre_receta AS nombre_receta
-        FROM ordenes_produccion op
-        INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
-        INNER JOIN empleados e ON op.id_supervisor = e.id_empleado
-        LEFT JOIN recetas_productos rp ON op.id_receta_producto = rp.id_receta_producto
-        WHERE op.id_orden = ?
-      `, [id]);
-      
-      if (!ordenResult.success || ordenResult.data.length === 0) {
-        return res.status(404).json({ error: 'Orden de producción no encontrada' });
-      }
-      
-      const orden = ordenResult.data[0];
-      
-      const consumoResult = await executeQuery(`
-        SELECT 
-          opm.cantidad_requerida,
-          opm.costo_unitario,
-          opm.costo_total,
-          p.nombre AS insumo,
-          p.unidad_medida
-        FROM op_consumo_materiales opm
-        INNER JOIN productos p ON opm.id_insumo = p.id_producto
-        WHERE opm.id_orden = ?
-        ORDER BY opm.fecha_consumo
-      `, [id]);
-      
-      const consumo = consumoResult.success ? consumoResult.data : [];
-      
-      const pdfBuffer = await generarPDFOrdenProduccion(orden, consumo);
-      
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="orden_produccion_${id}.pdf"`);
-      res.send(pdfBuffer);
-    } catch (error) {
-      console.error('Error al generar PDF:', error);
-      res.status(500).json({ error: error.message });
+  try {
+    const { id } = req.params;
+    
+    // 1. Obtener Datos de la Orden (IGUAL QUE ANTES)
+    const ordenResult = await executeQuery(`
+      SELECT 
+        op.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida,
+        e.nombre_completo AS supervisor,
+        rp.nombre_receta AS nombre_receta
+      FROM ordenes_produccion op
+      INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
+      INNER JOIN empleados e ON op.id_supervisor = e.id_empleado
+      LEFT JOIN recetas_productos rp ON op.id_receta_producto = rp.id_receta_producto
+      WHERE op.id_orden = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ error: 'Orden de producción no encontrada' });
     }
-  };
+    
+    const orden = ordenResult.data[0];
+    
+    // 2. Obtener Materiales (IGUAL QUE ANTES)
+    const consumoResult = await executeQuery(`
+      SELECT 
+        opm.cantidad_requerida,
+        opm.costo_unitario,
+        opm.costo_total,
+        p.nombre AS insumo,
+        p.unidad_medida
+      FROM op_consumo_materiales opm
+      INNER JOIN productos p ON opm.id_insumo = p.id_producto
+      WHERE opm.id_orden = ?
+      ORDER BY p.nombre
+    `, [id]);
+    const consumo = consumoResult.success ? consumoResult.data : [];
+
+    // 3. NUEVO: Obtener Mermas (Si existen)
+    // Usamos LEFT JOIN para traer el nombre del producto merma
+    const mermasResult = await executeQuery(`
+      SELECT 
+        mp.cantidad,
+        mp.observaciones,
+        p.codigo,
+        p.nombre AS producto_merma,
+        p.unidad_medida
+      FROM mermas_produccion mp
+      INNER JOIN productos p ON mp.id_producto_merma = p.id_producto
+      WHERE mp.id_orden_produccion = ?
+    `, [id]);
+    const mermas = mermasResult.success ? mermasResult.data : [];
+    
+    // 4. Generar PDF pasando los 3 objetos
+    const pdfBuffer = await generarPDFOrdenProduccion(orden, consumo, mermas);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="orden_${orden.numero_orden}.pdf"`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('Error al generar PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

@@ -437,7 +437,8 @@ function Productos() {
                 <option value="m">Metro (m)</option>
                 <option value="m2">Metro cuadrado (m²)</option>
                 <option value="m3">Metro cúbico (m³)</option>
-                <option value="m3">Millar (Mill)</option>
+                <option value="mill">Millar (mill)</option>
+                <option value="m3">Bolsas (bol)</option>
               </select>
             </div>
           </div>

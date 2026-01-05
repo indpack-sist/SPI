@@ -1,7 +1,18 @@
-// frontend/src/pages/Ventas/Cotizaciones.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, Download, Filter, FileText, DollarSign, Percent } from 'lucide-react';
+import { 
+  Plus, 
+  Eye, 
+  Download, 
+  Filter, 
+  FileText, 
+  DollarSign, 
+  Percent, 
+  Search,
+  // IMPORTES PARA PAGINACIÓN
+  ChevronLeft, 
+  ChevronRight 
+} from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -13,11 +24,21 @@ function Cotizaciones() {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Estados de filtros y paginación
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   useEffect(() => {
     cargarDatos();
   }, [filtroEstado]);
+
+  // Resetear a página 1 cuando cambian los filtros o la búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtroEstado, busqueda]);
 
   const cargarDatos = async () => {
     try {
@@ -45,6 +66,27 @@ function Cotizaciones() {
     }
   };
 
+  // 1. LÓGICA DE FILTRADO (Texto)
+  const cotizacionesFiltradas = cotizaciones.filter(item => {
+    if (!busqueda) return true;
+    const term = busqueda.toLowerCase();
+    return (
+      item.numero_cotizacion?.toLowerCase().includes(term) ||
+      item.cliente?.toLowerCase().includes(term) ||
+      item.ruc_cliente?.toLowerCase().includes(term) ||
+      item.comercial?.toLowerCase().includes(term)
+    );
+  });
+
+  // 2. LÓGICA DE PAGINACIÓN
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = cotizacionesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(cotizacionesFiltradas.length / itemsPerPage);
+
+  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
@@ -60,7 +102,6 @@ function Cotizaciones() {
     return badges[estado] || 'badge-secondary';
   };
 
-  // ✅ Mapeo de códigos de impuesto a nombres
   const getTipoImpuestoNombre = (codigo) => {
     const tipos = {
       'IGV': '18% IGV',
@@ -107,14 +148,12 @@ function Cotizaciones() {
         <span className="badge badge-info">{value}</span>
       )
     },
-    // ✅ NUEVA COLUMNA: Tipo de Cambio
     {
       header: 'T.C.',
       accessor: 'tipo_cambio',
       width: '90px',
       align: 'right',
       render: (value, row) => {
-        // Solo mostrar si es USD o si TC es diferente de 1
         if (row.moneda === 'USD' || (value && parseFloat(value) !== 1.0000)) {
           return (
             <div className="text-xs">
@@ -126,7 +165,6 @@ function Cotizaciones() {
         return '-';
       }
     },
-    // ✅ NUEVA COLUMNA: Tipo de Impuesto
     {
       header: 'Impuesto',
       accessor: 'tipo_impuesto',
@@ -147,7 +185,6 @@ function Cotizaciones() {
       render: (value, row) => (
         <div className="text-right">
           <div className="font-bold">{formatearMoneda(value, row.moneda)}</div>
-          {/* ✅ Mostrar conversión si hay tipo de cambio */}
           {row.tipo_cambio && parseFloat(row.tipo_cambio) > 1 && (
             <div className="text-xs text-muted">
               {row.moneda === 'USD' 
@@ -232,55 +269,104 @@ function Cotizaciones() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
+      {/* Tarjeta de Filtros y Búsqueda */}
       <div className="card mb-4">
         <div className="card-body">
-          <div className="flex items-center gap-3">
-            <Filter size={20} className="text-muted" />
-            <span className="font-medium">Filtrar por estado:</span>
-            <div className="flex gap-2">
-              <button
-                className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('')}
-              >
-                Todos
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Pendiente')}
-              >
-                Pendiente
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Aprobada' ? 'btn-success' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Aprobada')}
-              >
-                Aprobada
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Convertida' ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Convertida')}
-              >
-                Convertida
-              </button>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            {/* Buscador */}
+            <div className="relative w-full md:w-96">
+              <Search 
+                size={20} 
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+              />
+              <input
+                type="text"
+                className="form-input pl-10 w-full"
+                placeholder="Buscar por N°, cliente, RUC..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
+
+            {/* Botones de Estado */}
+            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+              <Filter size={20} className="text-muted shrink-0" />
+              <div className="flex gap-2">
+                <button
+                  className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('')}
+                >
+                  Todos
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Pendiente')}
+                >
+                  Pendiente
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Aprobada' ? 'btn-success' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Aprobada')}
+                >
+                  Aprobada
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Convertida' ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Convertida')}
+                >
+                  Convertida
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Tabla con Paginación */}
       <div className="card">
-        <div className="card-header">
+        <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
             Lista de Cotizaciones
-            <span className="badge badge-primary ml-2">{cotizaciones.length}</span>
+            <span className="badge badge-primary ml-2">{cotizacionesFiltradas.length}</span>
           </h2>
+          <div className="text-sm text-muted">
+             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, cotizacionesFiltradas.length)} de {cotizacionesFiltradas.length}
+          </div>
         </div>
+        
         <div className="card-body">
           <Table
             columns={columns}
-            data={cotizaciones}
+            data={currentItems}
             emptyMessage="No hay cotizaciones registradas"
           />
         </div>
+
+        {/* Footer de Paginación */}
+        {cotizacionesFiltradas.length > itemsPerPage && (
+          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+            >
+                <ChevronLeft size={16} /> Anterior
+            </button>
+
+            <span className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+            </span>
+
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

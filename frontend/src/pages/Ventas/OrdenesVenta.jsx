@@ -1,10 +1,24 @@
-// frontend/src/pages/Ventas/OrdenesVenta.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, Eye, ShoppingCart, Filter, TrendingUp, Clock,
-  Package, Truck, CheckCircle, XCircle, AlertTriangle,
-  Download, User, UserCheck
+  Plus, 
+  Eye, 
+  ShoppingCart, 
+  Filter, 
+  TrendingUp, 
+  Clock,
+  Package, 
+  Truck, 
+  CheckCircle, 
+  XCircle, 
+  AlertTriangle,
+  Download, 
+  User, 
+  UserCheck,
+  Search,
+  // IMPORTES PARA PAGINACIÓN
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -19,13 +33,23 @@ function OrdenesVenta() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [descargandoPDF, setDescargandoPDF] = useState(null);
+
+  // Estados de filtros y paginación
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroPrioridad, setFiltroPrioridad] = useState('');
-  const [descargandoPDF, setDescargandoPDF] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   useEffect(() => {
     cargarDatos();
   }, [filtroEstado, filtroPrioridad]);
+
+  // Resetear a página 1 cuando cambian los filtros o búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtroEstado, filtroPrioridad, busqueda]);
 
   const cargarDatos = async () => {
     try {
@@ -56,6 +80,29 @@ function OrdenesVenta() {
       setLoading(false);
     }
   };
+
+  // 1. LÓGICA DE FILTRADO (Texto)
+  const ordenesFiltradas = ordenes.filter(orden => {
+    if (!busqueda) return true;
+    const term = busqueda.toLowerCase();
+    return (
+      orden.numero_orden?.toLowerCase().includes(term) ||
+      orden.numero_cotizacion?.toLowerCase().includes(term) ||
+      orden.cliente?.toLowerCase().includes(term) ||
+      orden.ruc_cliente?.toLowerCase().includes(term) ||
+      orden.comercial?.toLowerCase().includes(term) ||
+      orden.registrado_por?.toLowerCase().includes(term)
+    );
+  });
+
+  // 2. LÓGICA DE PAGINACIÓN
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
+
+  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
   const handleDescargarPDF = async (idOrden, numeroOrden) => {
     try {
@@ -187,7 +234,6 @@ function OrdenesVenta() {
       width: '180px',
       render: (value, row) => (
         <div className="text-xs">
-          {/* Vendedor Asignado */}
           {row.comercial && (
             <div className="flex items-center gap-1 mb-1">
               <UserCheck size={12} className="text-primary" />
@@ -195,7 +241,6 @@ function OrdenesVenta() {
               <span className="text-muted">{row.comercial}</span>
             </div>
           )}
-          {/* Vendedor Registrador */}
           {row.registrado_por && (
             <div className="flex items-center gap-1">
               <User size={12} className="text-muted" />
@@ -375,92 +420,134 @@ function OrdenesVenta() {
         </div>
       )}
 
-      {/* Filtros */}
+      {/* Filtros y Buscador */}
       <div className="card mb-4">
         <div className="card-body">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Filter size={20} className="text-muted" />
-            <span className="font-medium">Filtrar por:</span>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             
-            <div className="flex gap-2">
-              <button
-                className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('')}
-              >
-                Todos
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Pendiente')}
-              >
-                <Clock size={14} />
-                Pendiente
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'En Proceso' ? 'btn-info' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('En Proceso')}
-              >
-                <Package size={14} />
-                En Proceso
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Despachada')}
-              >
-                <Truck size={14} />
-                Despachada
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Entregada')}
-              >
-                <CheckCircle size={14} />
-                Entregada
-              </button>
+            {/* Buscador */}
+            <div className="relative w-full md:w-80">
+              <Search 
+                size={20} 
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+              />
+              <input
+                type="text"
+                className="form-input pl-10 w-full"
+                placeholder="Buscar por N°, cliente, RUC..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
             </div>
 
-            <div className="border-l h-6 mx-2"></div>
+            {/* Filtros de Estado y Prioridad */}
+            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+              <Filter size={20} className="text-muted shrink-0" />
+              
+              <div className="flex gap-2">
+                <button
+                  className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('')}
+                >
+                  Todos
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Pendiente')}
+                >
+                  <Clock size={14} />
+                  Pendiente
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'En Proceso' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('En Proceso')}
+                >
+                  <Package size={14} />
+                  En Proceso
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Despachada')}
+                >
+                  <Truck size={14} />
+                  Despachada
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Entregada')}
+                >
+                  <CheckCircle size={14} />
+                  Entregada
+                </button>
+              </div>
 
-            <span className="text-sm text-muted">Prioridad:</span>
-            <div className="flex gap-2">
-              <button
-                className={`btn btn-sm ${!filtroPrioridad ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setFiltroPrioridad('')}
-              >
-                Todas
-              </button>
-              <button
-                className={`btn btn-sm ${filtroPrioridad === 'Urgente' ? 'btn-danger' : 'btn-outline'}`}
-                onClick={() => setFiltroPrioridad('Urgente')}
-              >
-                Urgente
-              </button>
-              <button
-                className={`btn btn-sm ${filtroPrioridad === 'Alta' ? 'btn-warning' : 'btn-outline'}`}
-                onClick={() => setFiltroPrioridad('Alta')}
-              >
-                Alta
-              </button>
+              <div className="border-l h-6 mx-2 hidden md:block"></div>
+
+              <div className="flex gap-2">
+                <button
+                  className={`btn btn-sm ${filtroPrioridad === 'Urgente' ? 'btn-danger' : 'btn-outline'}`}
+                  onClick={() => setFiltroPrioridad(filtroPrioridad === 'Urgente' ? '' : 'Urgente')}
+                  title="Filtrar Urgentes"
+                >
+                  Urgente
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroPrioridad === 'Alta' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroPrioridad(filtroPrioridad === 'Alta' ? '' : 'Alta')}
+                  title="Filtrar Alta"
+                >
+                  Alta
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Tabla con Paginación */}
       <div className="card">
-        <div className="card-header">
+        <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
             Lista de Órdenes de Venta
-            <span className="badge badge-primary ml-2">{ordenes.length}</span>
+            <span className="badge badge-primary ml-2">{ordenesFiltradas.length}</span>
           </h2>
+          <div className="text-sm text-muted">
+             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
+          </div>
         </div>
+        
         <div className="card-body">
           <Table
             columns={columns}
-            data={ordenes}
+            data={currentItems}
             emptyMessage="No hay órdenes de venta registradas"
           />
         </div>
+
+        {/* Footer de Paginación */}
+        {ordenesFiltradas.length > itemsPerPage && (
+          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+            >
+                <ChevronLeft size={16} /> Anterior
+            </button>
+
+            <span className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+            </span>
+
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

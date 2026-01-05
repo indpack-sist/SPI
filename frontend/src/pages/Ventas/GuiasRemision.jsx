@@ -1,8 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, Eye, FileText, Filter, Truck, Clock,
-  CheckCircle, XCircle, Package, TrendingUp
+  Plus, 
+  Eye, 
+  FileText, 
+  Filter, 
+  Truck, 
+  Clock,
+  CheckCircle, 
+  XCircle, 
+  Package, 
+  TrendingUp,
+  Search,
+  // IMPORTES PARA PAGINACIÓN
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -16,18 +28,27 @@ function GuiasRemision() {
   const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Estados de filtros y paginación
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   useEffect(() => {
     cargarDatos();
   }, [filtroEstado]);
+
+  // Resetear a página 1 cuando cambian los filtros o búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtroEstado, busqueda]);
 
   const cargarDatos = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // INTEGRACIÓN CON API REAL
       const filtros = {};
       if (filtroEstado) {
         filtros.estado = filtroEstado;
@@ -54,6 +75,27 @@ function GuiasRemision() {
     }
   };
 
+  // 1. LÓGICA DE FILTRADO (Texto)
+  const guiasFiltradas = guias.filter(guia => {
+    if (!busqueda) return true;
+    const term = busqueda.toLowerCase();
+    return (
+      guia.numero_guia?.toLowerCase().includes(term) ||
+      guia.cliente?.toLowerCase().includes(term) ||
+      guia.ruc_cliente?.toLowerCase().includes(term) ||
+      guia.numero_orden?.toLowerCase().includes(term)
+    );
+  });
+
+  // 2. LÓGICA DE PAGINACIÓN
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = guiasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(guiasFiltradas.length / itemsPerPage);
+
+  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
     return new Date(fecha).toLocaleDateString('es-PE', {
@@ -63,7 +105,6 @@ function GuiasRemision() {
     });
   };
 
-  // ✅ CORRECCIÓN 2: Configuración de estados actualizada
   const getEstadoConfig = (estado) => {
     const configs = {
       'Emitida': { 
@@ -97,7 +138,7 @@ function GuiasRemision() {
         texto: 'Anulada'
       }
     };
-    return configs[estado] || configs['Emitida']; // Default a 'Emitida'
+    return configs[estado] || configs['Emitida'];
   };
 
   const columns = [
@@ -198,7 +239,6 @@ function GuiasRemision() {
         );
       }
     },
-    // ✅ CORRECCIÓN 1: Accessor cambiado a 'id_guia'
     {
       header: 'Acciones',
       accessor: 'id_guia',
@@ -257,7 +297,6 @@ function GuiasRemision() {
             </div>
           </div>
 
-          {/* ✅ CORRECCIÓN 4: Estadísticas de Emitidas */}
           <div className="card border-l-4 border-warning">
             <div className="card-body">
               <div className="flex items-center justify-between">
@@ -307,64 +346,107 @@ function GuiasRemision() {
         </div>
       )}
 
-      {/* Filtros */}
+      {/* Filtros y Búsqueda */}
       <div className="card mb-4">
         <div className="card-body">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Filter size={20} className="text-muted" />
-            <span className="font-medium">Filtrar por estado:</span>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             
-            <div className="flex gap-2">
-              <button
-                className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('')}
-              >
-                Todos
-              </button>
-              
-              {/* ✅ CORRECCIÓN 3: Filtro 'Emitida' en lugar de 'Pendiente' */}
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Emitida' ? 'btn-info' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Emitida')}
-              >
-                <FileText size={14} />
-                Emitida
-              </button>
+            {/* Buscador */}
+            <div className="relative w-full md:w-96">
+              <Search 
+                size={20} 
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+              />
+              <input
+                type="text"
+                className="form-input pl-10 w-full"
+                placeholder="Buscar por N° Guía, cliente, RUC..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
 
-              <button
-                className={`btn btn-sm ${filtroEstado === 'En Tránsito' ? 'btn-info' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('En Tránsito')}
-              >
-                <Truck size={14} />
-                En Tránsito
-              </button>
-              <button
-                className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`}
-                onClick={() => setFiltroEstado('Entregada')}
-              >
-                <CheckCircle size={14} />
-                Entregada
-              </button>
+            {/* Filtros de Estado */}
+            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+              <Filter size={20} className="text-muted shrink-0" />
+              <div className="flex gap-2">
+                <button
+                  className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('')}
+                >
+                  Todos
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Emitida' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Emitida')}
+                >
+                  <FileText size={14} />
+                  Emitida
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'En Tránsito' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('En Tránsito')}
+                >
+                  <Truck size={14} />
+                  En Tránsito
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Entregada')}
+                >
+                  <CheckCircle size={14} />
+                  Entregada
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Tabla con Paginación */}
       <div className="card">
-        <div className="card-header">
+        <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
             Lista de Guías de Remisión
-            <span className="badge badge-primary ml-2">{guias.length}</span>
+            <span className="badge badge-primary ml-2">{guiasFiltradas.length}</span>
           </h2>
+          <div className="text-sm text-muted">
+             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, guiasFiltradas.length)} de {guiasFiltradas.length}
+          </div>
         </div>
+        
         <div className="card-body">
           <Table
             columns={columns}
-            data={guias}
+            data={currentItems}
             emptyMessage="No hay guías de remisión registradas"
           />
         </div>
+
+        {/* Footer de Paginación */}
+        {guiasFiltradas.length > itemsPerPage && (
+          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+            >
+                <ChevronLeft size={16} /> Anterior
+            </button>
+
+            <span className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+            </span>
+
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

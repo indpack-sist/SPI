@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, X, ArrowRight, FileText, Loader, AlertCircle, Package } from 'lucide-react';
+import { 
+  Plus, 
+  Trash2, 
+  Search, 
+  X, 
+  ArrowRight, 
+  FileText, 
+  Loader, 
+  AlertCircle, 
+  Package,
+  // IMPORTES PARA PAGINACIÓN
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { transferenciasAPI, empleadosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
@@ -11,13 +24,19 @@ function Transferencias() {
   const [productosDisponibles, setProductosDisponibles] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [tiposInventario, setTiposInventario] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [loadingProductos, setLoadingProductos] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
+
+  // ESTADOS DE PAGINACIÓN
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const [detalles, setDetalles] = useState([{
     id_producto_origen: '',
@@ -46,6 +65,11 @@ function Transferencias() {
     }
   }, [formData.id_tipo_inventario_origen]);
 
+  // RESETEAR PÁGINA AL FILTRAR
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtro]);
+
   const cargarDatos = async () => {
     try {
       setLoading(true);
@@ -58,13 +82,13 @@ function Transferencias() {
       ]);
       
       const transData = Array.isArray(transferenciasRes.data?.data) ? transferenciasRes.data.data : 
-                       Array.isArray(transferenciasRes.data) ? transferenciasRes.data : [];
+                        Array.isArray(transferenciasRes.data) ? transferenciasRes.data : [];
       
       const empData = Array.isArray(empRes.data?.data) ? empRes.data.data : 
-                     Array.isArray(empRes.data) ? empRes.data : [];
+                      Array.isArray(empRes.data) ? empRes.data : [];
       
       const tiposData = Array.isArray(tiposRes.data?.data) ? tiposRes.data.data : 
-                       Array.isArray(tiposRes.data) ? tiposRes.data : [];
+                        Array.isArray(tiposRes.data) ? tiposRes.data : [];
       
       setTransferencias(transData);
       setEmpleados(empData);
@@ -85,7 +109,7 @@ function Transferencias() {
       });
       
       const prodData = Array.isArray(response.data?.data) ? response.data.data : 
-                      Array.isArray(response.data) ? response.data : [];
+                       Array.isArray(response.data) ? response.data : [];
       
       setProductosDisponibles(prodData);
     } catch (err) {
@@ -258,11 +282,22 @@ function Transferencias() {
     });
   };
 
+  // 1. FILTRADO
   const transferenciasFiltradas = transferencias.filter(t =>
     (t.tipo_inventario_origen && t.tipo_inventario_origen.toLowerCase().includes(filtro.toLowerCase())) ||
     (t.tipo_inventario_destino && t.tipo_inventario_destino.toLowerCase().includes(filtro.toLowerCase())) ||
     (t.registrado_por && t.registrado_por.toLowerCase().includes(filtro.toLowerCase()))
   );
+
+  // 2. PAGINACIÓN
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = transferenciasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(transferenciasFiltradas.length / itemsPerPage);
+
+  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
 
   const tiposOrigenDisponibles = tiposInventario.filter(t => 
     t.id_tipo_inventario != formData.id_tipo_inventario_destino
@@ -405,12 +440,43 @@ function Transferencias() {
         </div>
       </div>
 
+      {/* TABLA CON PAGINACIÓN */}
       <div className="card">
+        {/* Info Superior */}
+        <div className="p-3 border-b border-border text-sm text-muted">
+             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, transferenciasFiltradas.length)} de {transferenciasFiltradas.length} transferencias
+        </div>
+
         <Table
           columns={columns}
-          data={transferenciasFiltradas}
+          data={currentItems}
           emptyMessage="No se encontraron transferencias"
         />
+
+        {/* Footer de Paginación */}
+        {transferenciasFiltradas.length > itemsPerPage && (
+          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+            >
+                <ChevronLeft size={16} /> Anterior
+            </button>
+
+            <span className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+            </span>
+
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
       <Modal

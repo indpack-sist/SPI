@@ -18,8 +18,11 @@ import {
   Calendar,
   Search,
   RefreshCw,
-  ClipboardList, // <--- IMPORTANTE: Nuevo icono para recetas
-  AlertTriangle  // <--- IMPORTANTE: Nuevo icono para alertas
+  ClipboardList,
+  AlertTriangle,
+  // NUEVOS IMPORTES PARA PAGINACIÓN
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -29,19 +32,30 @@ import Loading from '../../components/UI/Loading';
 function OrdenesProduccion() {
   const navigate = useNavigate();
   
-  // ... (MANTÉN TUS ESTADOS Y USEEFFECT IGUAL QUE ANTES) ...
   const [ordenes, setOrdenes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  
+  // Estados de filtros
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
+  // ESTADO DE PAGINACIÓN
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
   useEffect(() => {
     cargarDatos();
   }, [filtroEstado, fechaInicio, fechaFin]);
+
+  // EFECTO PARA RESETEAR PAGINACIÓN AL FILTRAR
+  // Si el usuario busca o cambia filtros, volvemos a la pág 1
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtroEstado, busqueda, fechaInicio, fechaFin]);
 
   const cargarDatos = async () => {
     try {
@@ -63,7 +77,6 @@ function OrdenesProduccion() {
     }
   };
 
-  // ... (MANTÉN LA FUNCIÓN calcularEstadisticas IGUAL) ...
   const calcularEstadisticas = () => {
     const total = ordenes.length;
     const pendientes = ordenes.filter(o => o.estado === 'Pendiente').length;
@@ -82,7 +95,7 @@ function OrdenesProduccion() {
     };
   };
 
-  // ... (MANTÉN ordenesFiltradas, formatearFecha, etc. IGUAL) ...
+  // 1. PRIMERO FILTRAMOS (Lógica existente)
   const ordenesFiltradas = ordenes.filter(orden => {
     if (!busqueda) return true;
     const searchTerm = busqueda.toLowerCase();
@@ -93,6 +106,16 @@ function OrdenesProduccion() {
       orden.supervisor?.toLowerCase().includes(searchTerm)
     );
   });
+
+  // 2. LUEGO PAGINAMOS SOBRE EL RESULTADO FILTRADO
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
+
+  // Funciones de control de paginación
+  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
@@ -137,9 +160,6 @@ function OrdenesProduccion() {
     setFiltroEstado(''); setBusqueda(''); setFechaInicio(''); setFechaFin('');
   };
 
-  // =================================================================
-  // AQUÍ ESTÁ LA CORRECCIÓN DE COLUMNAS (NO EMOJIS, SI ICONOS)
-  // =================================================================
   const columns = [
     {
       header: 'N° Orden',
@@ -161,16 +181,12 @@ function OrdenesProduccion() {
         <div className="flex flex-col gap-1">
           <div className="font-medium text-sm">{value}</div>
           <div className="text-xs text-muted font-mono">{row.codigo_producto}</div>
-          
-          {/* CORRECCIÓN: Icono ClipboardList en lugar de emoji */}
           {row.nombre_receta && (
             <div className="flex items-center gap-1 text-xs text-info bg-info-light px-2 py-0.5 rounded w-fit">
               <ClipboardList size={12} />
               <span className="font-medium">{row.nombre_receta}</span>
             </div>
           )}
-          
-          {/* CORRECCIÓN: Icono AlertTriangle en lugar de emoji */}
           {row.producto_eliminado === 1 && (
             <div className="flex items-center gap-1 badge badge-danger text-xs w-fit">
               <AlertTriangle size={12} />
@@ -198,21 +214,17 @@ function OrdenesProduccion() {
               </span>
               {producida > 0 && (
                 <span className="text-xs text-success font-bold flex items-center gap-1">
-                   {/* Icono CheckCircle pequeño */}
                    <CheckCircle size={10} />
                    {porcentaje}%
                 </span>
               )}
             </div>
-            
-            {/* Barra de progreso CSS pura */}
             <div className="progress-bar" style={{ height: '6px' }}>
               <div 
                 className="progress-fill bg-success" 
                 style={{ width: `${Math.min(porcentaje, 100)}%` }}
               />
             </div>
-            
             <div className="text-xs text-muted mt-1 text-right">
               Prod: {producida.toFixed(2)}
             </div>
@@ -296,7 +308,6 @@ function OrdenesProduccion() {
 
   const stats = calcularEstadisticas();
 
-  // MANTÉN EL RETURN ORIGINAL (Tu JSX ya usa las clases que agregamos al CSS)
   return (
     <div className="container py-6">
       {/* Header */}
@@ -317,8 +328,9 @@ function OrdenesProduccion() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Grid de Estadísticas (Ahora funciona con el CSS agregado) */}
+      {/* Grid de Estadísticas */}
       <div className="stats-grid mb-6">
+        {/* ... (Tus tarjetas de estadísticas se mantienen igual) ... */}
         <div className="stat-card total">
           <div className="stat-icon"><Factory size={24} /></div>
           <div className="stat-content">
@@ -378,7 +390,6 @@ function OrdenesProduccion() {
               />
             </div>
             
-            {/* Botones de estado (Simplificado para el ejemplo) */}
             <div className="flex gap-2 flex-wrap lg:col-span-3 items-center">
                {['Pendiente', 'En Curso', 'Finalizada', 'Cancelada'].map(est => (
                  <button
@@ -394,15 +405,47 @@ function OrdenesProduccion() {
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Tabla con Paginación */}
       <div className="card">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">Listado</h2>
-          <button className="btn btn-sm btn-outline" onClick={cargarDatos}><RefreshCw size={16}/></button>
+          <div className="flex gap-2 items-center text-sm text-muted">
+             {/* Info de conteo */}
+             <span>
+                Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
+             </span>
+             <button className="btn btn-sm btn-outline ml-2" onClick={cargarDatos}><RefreshCw size={16}/></button>
+          </div>
         </div>
         <div className="card-body table-container">
-            <Table columns={columns} data={ordenesFiltradas} emptyMessage="No hay órdenes registradas" />
+            {/* CORRECCIÓN: Usamos currentItems en lugar de ordenesFiltradas */}
+            <Table columns={columns} data={currentItems} emptyMessage="No hay órdenes registradas" />
         </div>
+        
+        {/* Controles de Paginación */}
+        {ordenesFiltradas.length > itemsPerPage && (
+          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+            >
+                <ChevronLeft size={16} /> Anterior
+            </button>
+
+            <span className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+            </span>
+
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

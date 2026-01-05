@@ -362,8 +362,12 @@ export const ordenesProduccionAPI = {
       throw error;
     }
   },
-  
-  getNotificaciones: () => api.get('/produccion/ordenes/notificaciones')
+
+  getNotificaciones: () => api.get('/produccion/ordenes/notificaciones'),
+  getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
+  getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`)
+
+
 };
 
 export const cotizacionesAPI = {

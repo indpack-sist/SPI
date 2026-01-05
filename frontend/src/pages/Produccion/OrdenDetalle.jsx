@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Play, Pause, Square, CheckCircle, XCircle, 
   Star, Package, Clock, Beaker, FileText, ClipboardList, 
-  BarChart, DollarSign, Info 
+  BarChart, DollarSign, Info, AlertTriangle, Trash2, Plus
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -19,9 +19,16 @@ function OrdenDetalle() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
+  
+  // Estados del modal finalizar
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadProducida, setCantidadProducida] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
+  
+  // NUEVO: Estados para mermas
+  const [productosMerma, setProductosMerma] = useState([]);
+  const [mermas, setMermas] = useState([]);
+  const [mostrarMermas, setMostrarMermas] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -43,6 +50,16 @@ function OrdenDetalle() {
       setError(err.error || 'Error al cargar la orden');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // NUEVO: Cargar productos de merma
+  const cargarProductosMerma = async () => {
+    try {
+      const response = await ordenesProduccionAPI.getProductosMerma();
+      setProductosMerma(response.data.data);
+    } catch (err) {
+      console.error('Error al cargar productos de merma:', err);
     }
   };
 
@@ -90,18 +107,60 @@ function OrdenDetalle() {
     }
   };
 
+  // NUEVO: Agregar línea de merma
+  const agregarMerma = () => {
+    setMermas([...mermas, {
+      id_temp: Date.now(),
+      id_producto_merma: '',
+      cantidad: '',
+      observaciones: ''
+    }]);
+  };
+
+  // NUEVO: Eliminar línea de merma
+  const eliminarMerma = (id_temp) => {
+    setMermas(mermas.filter(m => m.id_temp !== id_temp));
+  };
+
+  // NUEVO: Actualizar merma
+  const actualizarMerma = (id_temp, campo, valor) => {
+    setMermas(mermas.map(m => 
+      m.id_temp === id_temp ? { ...m, [campo]: valor } : m
+    ));
+  };
+
   const handleFinalizar = async (e) => {
     e.preventDefault();
+    
+    // Validar mermas
+    const mermasValidas = mermas.filter(m => 
+      m.id_producto_merma && 
+      m.cantidad && 
+      parseFloat(m.cantidad) > 0
+    );
     
     try {
       setProcesando(true);
       setError(null);
+      
       await ordenesProduccionAPI.finalizar(id, {
         cantidad_producida: cantidadProducida,
-        observaciones: observacionesFinal
+        observaciones: observacionesFinal,
+        mermas: mermasValidas.map(m => ({
+          id_producto_merma: parseInt(m.id_producto_merma),
+          cantidad: parseFloat(m.cantidad),
+          observaciones: m.observaciones || null
+        }))
       });
-      setSuccess('Producción finalizada exitosamente. Los productos han sido agregados al inventario.');
+      
+      const mensajeExito = mermasValidas.length > 0
+        ? `Producción finalizada exitosamente. Productos y ${mermasValidas.length} merma(s) agregados al inventario.`
+        : 'Producción finalizada exitosamente. Los productos han sido agregados al inventario.';
+      
+      setSuccess(mensajeExito);
       setModalFinalizar(false);
+      setMermas([]);
+      setMostrarMermas(false);
       cargarDatos();
     } catch (err) {
       setError(err.error || 'Error al finalizar producción');
@@ -170,6 +229,12 @@ function OrdenDetalle() {
   const calcularLotesPlanificados = () => {
     if (!orden || !orden.cantidad_planificada || !orden.rendimiento_unidades) return 0;
     return Math.ceil(parseFloat(orden.cantidad_planificada) / parseFloat(orden.rendimiento_unidades));
+  };
+
+  // NUEVO: Obtener nombre del producto de merma
+  const getNombreMerma = (id_producto) => {
+    const producto = productosMerma.find(p => p.id_producto === parseInt(id_producto));
+    return producto ? `${producto.nombre} (${producto.unidad_medida})` : '';
   };
 
   if (loading) {
@@ -247,6 +312,9 @@ function OrdenDetalle() {
               onClick={() => {
                 setCantidadProducida(orden.cantidad_planificada);
                 setObservacionesFinal('');
+                setMermas([]);
+                setMostrarMermas(false);
+                cargarProductosMerma();
                 setModalFinalizar(true);
               }}
               disabled={procesando}
@@ -484,7 +552,7 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* MODAL: Finalizar Producción */}
+      {/* MODAL: Finalizar Producción CON MERMAS */}
       <Modal
         isOpen={modalFinalizar}
         onClose={() => setModalFinalizar(false)}
@@ -493,7 +561,7 @@ function OrdenDetalle() {
             <CheckCircle className="text-success" /> Finalizar Producción
           </span>
         }
-        size="md"
+        size="lg"
       >
         <form onSubmit={handleFinalizar}>
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
@@ -504,8 +572,7 @@ function OrdenDetalle() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">
- Real *</label>
+            <label className="form-label">Cantidad Producida Real *</label>
             <input
               type="number"
               step="0.01"
@@ -543,8 +610,109 @@ function OrdenDetalle() {
               value={observacionesFinal}
               onChange={(e) => setObservacionesFinal(e.target.value)}
               placeholder="Explique diferencias entre lo planificado y producido, si las hay"
-              rows={4}
+              rows={3}
             />
+          </div>
+
+          {/* SECCIÓN DE MERMAS */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-warning" />
+                <h3 className="font-semibold">Registro de Mermas (Opcional)</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => setMostrarMermas(!mostrarMermas)}
+              >
+                {mostrarMermas ? 'Ocultar' : 'Agregar Mermas'}
+              </button>
+            </div>
+
+            {mostrarMermas && (
+              <div className="space-y-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+                  <p className="text-yellow-800">
+                    <strong>Nota:</strong> Registre aquí las mermas generadas durante la producción (esquineros, zunchos, burbupack defectuosos, etc.). 
+                    Estas mermas se agregarán automáticamente al inventario.
+                  </p>
+                </div>
+
+                {mermas.map((merma, index) => (
+                  <div key={merma.id_temp} className="bg-gray-50 p-3 rounded border border-gray-200">
+                    <div className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-5">
+                        <label className="form-label text-xs">Tipo de Merma *</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={merma.id_producto_merma}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'id_producto_merma', e.target.value)}
+                          required={mermas.length > 0}
+                        >
+                          <option value="">Seleccione...</option>
+                          {productosMerma.map(p => (
+                            <option key={p.id_producto} value={p.id_producto}>
+                              {p.nombre} ({p.unidad_medida})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="form-label text-xs">Cantidad *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          className="form-input form-input-sm"
+                          value={merma.cantidad}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'cantidad', e.target.value)}
+                          placeholder="0.00"
+                          required={mermas.length > 0}
+                        />
+                      </div>
+
+                      <div className="col-span-4">
+                        <label className="form-label text-xs">Observaciones</label>
+                        <input
+                          type="text"
+                          className="form-input form-input-sm"
+                          value={merma.observaciones}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'observaciones', e.target.value)}
+                          placeholder="Ej: Material defectuoso"
+                        />
+                      </div>
+
+                      <div className="col-span-1 flex items-end">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger w-full"
+                          onClick={() => eliminarMerma(merma.id_temp)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline w-full"
+                  onClick={agregarMerma}
+                >
+                  <Plus size={16} className="mr-1" /> Agregar Línea de Merma
+                </button>
+
+                {mermas.length > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
+                    📝 Se registrarán {mermas.filter(m => m.id_producto_merma && m.cantidad).length} merma(s)
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end mt-6">

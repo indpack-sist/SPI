@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'; // Agregamos useRef
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, Plus, Trash2, Star, Package, Zap, Search, ChevronDown } from 'lucide-react'; // Agregamos iconos útiles
+import { ArrowLeft, AlertCircle, Plus, Trash2, Star, Package, Zap } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -8,10 +8,6 @@ import Modal from '../../components/UI/Modal';
 
 function CrearOrden() {
   const navigate = useNavigate();
-  
-  // Referencia para detectar clics fuera del buscador
-  const wrapperRef = useRef(null);
-
   const [productosTerminados, setProductosTerminados] = useState([]);
   const [supervisores, setSupervisores] = useState([]);
   const [recetasDisponibles, setRecetasDisponibles] = useState([]);
@@ -23,10 +19,6 @@ function CrearOrden() {
   const [success, setSuccess] = useState(null);
   const [guardando, setGuardando] = useState(false);
   
-  // NUEVOS ESTADOS PARA EL BUSCADOR
-  const [busqueda, setBusqueda] = useState('');
-  const [mostrarDropdown, setMostrarDropdown] = useState(false);
-
   const [modoReceta, setModoReceta] = useState('seleccionar');
   const [recetaProvisional, setRecetaProvisional] = useState([]);
   const [rendimientoProvisional, setRendimientoProvisional] = useState('1');
@@ -47,15 +39,6 @@ function CrearOrden() {
 
   useEffect(() => {
     cargarDatos();
-
-    // Evento para cerrar el dropdown si clicamos fuera
-    function handleClickOutside(event) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-        setMostrarDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const cargarDatos = async () => {
@@ -118,36 +101,21 @@ function CrearOrden() {
     }
   };
 
-  // --- NUEVA LÓGICA DE SELECCIÓN ---
-  const seleccionarProductoDesdeBuscador = (producto) => {
-    setFormData({ ...formData, id_producto_terminado: producto.id_producto });
-    setBusqueda(`${producto.codigo} - ${producto.nombre}`); // Llenamos el input con el nombre
-    setMostrarDropdown(false);
+  const handleProductoChange = (e) => {
+    const productoId = e.target.value;
+    setFormData({ ...formData, id_producto_terminado: productoId });
     
-    // Ejecutamos la lógica original de carga
-    cargarRecetasProducto(producto.id_producto);
-    setRecetaProvisional([]);
-    setRendimientoProvisional('1');
-  };
-
-  const handleInputBusquedaChange = (e) => {
-    setBusqueda(e.target.value);
-    setMostrarDropdown(true);
-    // Si borra todo el texto, reseteamos la selección
-    if (e.target.value === '') {
-      setFormData({ ...formData, id_producto_terminado: '' });
+    if (productoId) {
+      cargarRecetasProducto(productoId);
+    } else {
       setRecetasDisponibles([]);
       setRecetaSeleccionada(null);
       setDetalleReceta([]);
     }
+    
+    setRecetaProvisional([]);
+    setRendimientoProvisional('1');
   };
-
-  // Filtramos los productos según lo que se escribe
-  const productosFiltrados = productosTerminados.filter(p => 
-    p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
-    p.codigo.toLowerCase().includes(busqueda.toLowerCase())
-  );
-  // --------------------------------
 
   const cambiarModoReceta = (modo) => {
     setModoReceta(modo);
@@ -348,7 +316,7 @@ function CrearOrden() {
   const validacionStock = validarStock();
   const lotesNecesarios = calcularLotes();
   const recetaActual = modoReceta === 'seleccionar' ? detalleReceta : 
-                        modoReceta === 'provisional' ? recetaProvisional : [];
+                       modoReceta === 'provisional' ? recetaProvisional : [];
   const rendimientoActual = modoReceta === 'seleccionar' 
     ? (recetaSeleccionada?.rendimiento_unidades || 1) 
     : parseFloat(rendimientoProvisional) || 1;
@@ -388,45 +356,22 @@ function CrearOrden() {
               />
             </div>
 
-            {/* --- BUSCADOR DE PRODUCTOS (Reemplaza al Select) --- */}
-            <div className="form-group relative" ref={wrapperRef}>
+            <div className="form-group">
               <label className="form-label">Producto a Fabricar *</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  className="form-input pl-9"
-                  placeholder="Buscar por código o nombre..."
-                  value={busqueda}
-                  onChange={handleInputBusquedaChange}
-                  onFocus={() => setMostrarDropdown(true)}
-                  required={!formData.id_producto_terminado} // Requerido si no hay ID seleccionado
-                />
-                <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                <ChevronDown className="absolute right-3 top-2.5 text-gray-400" size={18} />
-              </div>
-
-              {mostrarDropdown && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {productosFiltrados.length > 0 ? (
-                    productosFiltrados.map((prod) => (
-                      <div
-                        key={prod.id_producto}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                        onClick={() => seleccionarProductoDesdeBuscador(prod)}
-                      >
-                        <div className="font-bold text-gray-800">{prod.codigo}</div>
-                        <div className="text-gray-600">{prod.nombre}</div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-4 py-2 text-sm text-gray-500 text-center">
-                      No se encontraron productos
-                    </div>
-                  )}
-                </div>
-              )}
+              <select
+                className="form-select"
+                value={formData.id_producto_terminado}
+                onChange={handleProductoChange}
+                required
+              >
+                <option value="">Seleccione un producto...</option>
+                {productosTerminados.map(prod => (
+                  <option key={prod.id_producto} value={prod.id_producto}>
+                    {prod.codigo} - {prod.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
-            {/* --------------------------------------------------- */}
 
             <div className="form-group">
               <label className="form-label">Cantidad a Fabricar *</label>

@@ -723,7 +723,11 @@ export async function getConsumoMaterialesOrden(req, res) {
 export async function finalizarProduccion(req, res) {
   try {
     const { id } = req.params;
-    const { cantidad_producida, observaciones } = req.body;
+    const { 
+      cantidad_producida, 
+      observaciones,
+      mermas  // NUEVO: Array de mermas [{id_producto_merma, cantidad, observaciones}]
+    } = req.body;
     
     if (!cantidad_producida || cantidad_producida <= 0) {
       return res.status(400).json({ 
@@ -758,15 +762,15 @@ export async function finalizarProduccion(req, res) {
     }
     else if (orden.id_receta_producto) {
       const cupRecetaResult = await executeQuery(
-  `SELECT 
-     (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / rp.rendimiento_unidades) AS cup_calculado
-   FROM recetas_productos rp
-   INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
-   INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
-   WHERE rp.id_receta_producto = ?
-   GROUP BY rp.id_receta_producto, rp.rendimiento_unidades`,
-  [orden.id_receta_producto]
-);
+        `SELECT 
+           (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / rp.rendimiento_unidades) AS cup_calculado
+         FROM recetas_productos rp
+         INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
+         INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
+         WHERE rp.id_receta_producto = ?
+         GROUP BY rp.id_receta_producto, rp.rendimiento_unidades`,
+        [orden.id_receta_producto]
+      );
       
       if (cupRecetaResult.success && cupRecetaResult.data.length > 0) {
         costoUnitario = parseFloat(cupRecetaResult.data[0].cup_calculado || 0);
@@ -778,7 +782,8 @@ export async function finalizarProduccion(req, res) {
     
     const totalCosto = parseFloat(cantidad_producida) * costoUnitario;
     
-    const queries1 = [
+    // Preparar queries base
+    const queries = [
       {
         sql: `UPDATE ordenes_produccion 
               SET estado = ?, cantidad_producida = ?, fecha_fin = NOW(),
@@ -802,7 +807,8 @@ export async function finalizarProduccion(req, res) {
       }
     ];
     
-    const result1 = await executeTransaction(queries1);
+    // Ejecutar primera transacción
+    const result1 = await executeTransaction(queries);
     
     if (!result1.success) {
       return res.status(500).json({ error: result1.error });
@@ -810,6 +816,7 @@ export async function finalizarProduccion(req, res) {
     
     const idEntrada = result1.data[1].insertId;
     
+    // Preparar queries de productos
     const queries2 = [
       {
         sql: `INSERT INTO detalle_entradas (
@@ -829,6 +836,39 @@ export async function finalizarProduccion(req, res) {
       }
     ];
     
+    // NUEVO: Procesar mermas si existen
+    const mermasRegistradas = [];
+    if (mermas && Array.isArray(mermas) && mermas.length > 0) {
+      for (const merma of mermas) {
+        if (merma.id_producto_merma && merma.cantidad && parseFloat(merma.cantidad) > 0) {
+          // Insertar registro de merma
+          queries2.push({
+            sql: `INSERT INTO mermas_produccion (
+              id_orden_produccion, id_producto_merma, cantidad, observaciones
+            ) VALUES (?, ?, ?, ?)`,
+            params: [
+              id,
+              merma.id_producto_merma,
+              parseFloat(merma.cantidad),
+              merma.observaciones || null
+            ]
+          });
+          
+          // Agregar merma al stock (las mermas se suman al inventario)
+          queries2.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+            params: [parseFloat(merma.cantidad), merma.id_producto_merma]
+          });
+          
+          mermasRegistradas.push({
+            id_producto: merma.id_producto_merma,
+            cantidad: parseFloat(merma.cantidad)
+          });
+        }
+      }
+    }
+    
+    // Ejecutar segunda transacción
     const result2 = await executeTransaction(queries2);
     
     if (!result2.success) {
@@ -842,11 +882,82 @@ export async function finalizarProduccion(req, res) {
         cantidad_producida: parseFloat(cantidad_producida),
         tiempo_total_minutos: tiempoMinutos,
         costo_unitario: costoUnitario,
-        costo_total: totalCosto
+        costo_total: totalCosto,
+        mermas_registradas: mermasRegistradas.length,
+        detalle_mermas: mermasRegistradas
       }
     });
   } catch (error) {
+    console.error('Error al finalizar producción:', error);
     res.status(500).json({ error: error.message });
+  }
+}
+
+// NUEVO: Obtener productos de merma disponibles
+export async function getProductosMerma(req, res) {
+  try {
+    const result = await executeQuery(
+      `SELECT 
+        id_producto,
+        codigo,
+        nombre,
+        unidad_medida,
+        stock_actual
+      FROM productos
+      WHERE id_categoria = 10 AND estado = 'Activo'
+      ORDER BY nombre`,
+      []
+    );
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener productos de merma:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+// NUEVO: Obtener mermas de una orden
+export async function getMermasOrden(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const result = await executeQuery(
+      `SELECT * FROM vista_mermas_produccion WHERE id_orden_produccion = ?`,
+      [id]
+    );
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener mermas de la orden:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }
 

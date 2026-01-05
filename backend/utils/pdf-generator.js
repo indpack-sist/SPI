@@ -479,109 +479,76 @@ export async function generarPDFTransferencia(datos) {
   });
 }
 
-export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
-  const logoBuffer = await cargarLogoURL();
-
+export async function generarPDFOrdenProduccion(orden, materiales = [], mermas = []) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+      const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
       const chunks = [];
       
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
       
-      let y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN', logoBuffer);
-      y += 10;
+      // 1. ENCABEZADO
+      let y = 40;
+      doc.rect(0, 0, 600, 100).fill(COLORES.primario);
+      doc.fillColor(COLORES.blanco).fontSize(24).font('Helvetica-Bold').text('ORDEN DE PRODUCCIÓN', 50, 45);
       
-      doc.rect(50, y, 495, 120).stroke(COLORES.negro);
-      y += 10;
+      // Info derecha del header
+      doc.fontSize(10).font('Helvetica');
+      doc.text('INDPACK S.A.C.', 400, 40, { align: 'right' });
+      doc.text(`RUC: 20123456789`, 400, 55, { align: 'right' });
+      doc.font('Helvetica-Bold').fontSize(14).text(`N° ${orden.numero_orden}`, 400, 75, { align: 'right' });
       
-      doc.fontSize(9).fillColor(COLORES.negro);
-      doc.font('Helvetica').text('Orden N°:', 60, y);
-      doc.font('Helvetica-Bold').text(datos.numero_orden || 'N/A', 160, y);
-      doc.font('Helvetica').text('Producto:', 60, y + 15);
-      doc.font('Helvetica-Bold').text((datos.producto || 'N/A'), 160, y + 15, { width: 140, lineGap: 2 });
-      doc.font('Helvetica').text('Código:', 60, y + 45);
-      doc.font('Helvetica-Bold').text(datos.codigo_producto || 'N/A', 160, y + 45);
-      doc.font('Helvetica').text('Supervisor:', 60, y + 60);
-      doc.font('Helvetica-Bold').text((datos.supervisor || 'N/A'), 160, y + 60, { width: 140, lineGap: 2 });
-      doc.font('Helvetica').text('Cant. Planificada:', 60, y + 90);
-      doc.font('Helvetica-Bold').text(`${datos.cantidad_planificada || 0} ${datos.unidad_medida || ''}`, 160, y + 90);
-      
-      doc.font('Helvetica').text('Fecha:', 320, y);
-      doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_creacion), 400, y);
-      doc.font('Helvetica').text('Estado:', 320, y + 15);
-      doc.font('Helvetica-Bold').text(datos.estado || 'N/A', 400, y + 15);
-      
-      if (datos.cantidad_producida > 0) {
-        doc.font('Helvetica').text('Cant. Producida:', 320, y + 30);
-        doc.font('Helvetica-Bold').text(`${datos.cantidad_producida} ${datos.unidad_medida || ''}`, 400, y + 30);
+      y = 120; // Posición inicial del cuerpo
+
+      // 2. RESUMEN DE ESTADO Y TIEMPOS (Bloque Superior)
+      drawInfoBox(doc, y, orden);
+      y += 110;
+
+      // 3. MÉTRICAS DE PRODUCCIÓN (Barras de progreso)
+      drawMetrics(doc, y, orden);
+      y += 80;
+
+      // 4. TABLA DE MATERIALES (INSUMOS)
+      if (materiales.length > 0) {
+        y = checkPageBreak(doc, y, 100);
+        drawSectionTitle(doc, y, 'LISTA DE MATERIALES / INSUMOS', COLORES.primario);
+        y += 25;
+        y = drawMaterialesTable(doc, y, materiales);
+        y += 20; // Espacio post tabla
       }
-      
-      y += 135;
-      
-      if (consumoMateriales.length > 0) {
-        doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
-        doc.text('Materiales Consumidos', 50, y);
+
+      // 5. TABLA DE MERMAS (Solo si hay)
+      if (mermas.length > 0) {
+        y = checkPageBreak(doc, y, 100);
+        drawSectionTitle(doc, y, 'REGISTRO DE MERMAS Y DESPERDICIOS', COLORES.rojo);
+        y += 25;
+        y = drawMermasTable(doc, y, mermas);
         y += 20;
-        
-        doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
-        doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
-        doc.text('Insumo', 60, y + 6);
-        doc.text('Cantidad', 350, y + 6);
-        doc.text('Costo Unit.', 420, y + 6);
-        doc.text('Subtotal', 490, y + 6, { align: 'right' });
-        y += 20;
-        
-        doc.font('Helvetica').fillColor(COLORES.negro);
-        consumoMateriales.forEach((mat, idx) => {
-          if (y > 670) {
-            doc.addPage();
-            y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN (cont.)', logoBuffer);
-            y += 10;
-            
-            doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
-            doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
-            doc.text('Insumo', 60, y + 6);
-            doc.text('Cantidad', 350, y + 6);
-            doc.text('Costo Unit.', 420, y + 6);
-            doc.text('Subtotal', 490, y + 6, { align: 'right' });
-            y += 20;
-            doc.fillColor(COLORES.negro);
-          }
-          
-          if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
-          
-          doc.fontSize(8).fillColor(COLORES.negro);
-          doc.text((mat.insumo || '').substring(0, 50), 60, y + 5);
-          doc.text(`${mat.cantidad_requerida} ${mat.unidad_medida || ''}`, 350, y + 5);
-          doc.text(formatearMoneda(mat.costo_unitario), 420, y + 5);
-          doc.font('Helvetica-Bold').text(formatearMoneda(mat.costo_total), 490, y + 5, { align: 'right' });
-          doc.font('Helvetica');
-          y += 18;
-          doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
-        });
-        
-        y += 15;
-        doc.rect(370, y, 175, 30).stroke(COLORES.negro);
-        doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
-        doc.text('COSTO MATERIALES:', 380, y + 10);
-        doc.fontSize(12);
-        doc.text(formatearMoneda(datos.costo_materiales), 465, y + 9, { align: 'right', width: 70 });
-        y += 45;
       }
-      
-      if (datos.observaciones) {
-        doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORES.negro);
-        doc.text('Observaciones:', 50, y);
+
+      // 6. OBSERVACIONES
+      if (orden.observaciones) {
+        y = checkPageBreak(doc, y, 60);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORES.secundario).text('OBSERVACIONES:', 40, y);
         y += 15;
-        doc.fontSize(8).font('Helvetica');
-        doc.text(datos.observaciones, 50, y, { width: 495 });
+        doc.font('Helvetica').fontSize(9).text(orden.observaciones, 40, y, { width: 515, align: 'justify' });
+        y += 40;
       }
-      
-      agregarPiePagina(doc, 'Orden de producción - INDPACK S.A.C.');
+
+      // 7. PIE DE PÁGINA (FIRMAS)
+      drawSignatures(doc);
+
+      // Paginación
+      const range = doc.bufferedPageRange();
+      for (let i = range.start; i < range.start + range.count; i++) {
+        doc.switchToPage(i);
+        doc.fontSize(8).fillColor(COLORES.secundario)
+           .text(`Página ${i + 1} de ${range.count} - Generado el ${formatDate(new Date())}`, 40, 800, { align: 'center' });
+      }
+
       doc.end();
+
     } catch (error) {
       reject(error);
     }

@@ -639,22 +639,6 @@ function Dashboard() {
           </div>
         </div>
       </div>
-
-      {resumen?.productos_stock_bajo > 0 && (
-        <div className="alert-section">
-          <div className="alert-header">
-            <AlertTriangle size={24} />
-            <div>
-              <h3>Productos con Stock Bajo</h3>
-              <p>{resumen.productos_stock_bajo} producto(s) requieren atención</p>
-            </div>
-          </div>
-          <Link to="/inventario/stock?filtro=bajo" className="alert-action">
-            Ver Detalle
-            <ArrowUpRight size={16} style={{ marginLeft: '8px' }} />
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

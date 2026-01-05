@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown // Iconos necesarios
+  Package, Zap, Search, X, RefreshCw, ChevronDown 
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
@@ -11,7 +11,7 @@ import Modal from '../../components/UI/Modal';
 
 function CrearOrden() {
   const navigate = useNavigate();
-  const dropdownRef = useRef(null); // Para cerrar el buscador al hacer clic fuera
+  const dropdownRef = useRef(null);
 
   const [productosTerminados, setProductosTerminados] = useState([]);
   const [supervisores, setSupervisores] = useState([]);
@@ -37,7 +37,7 @@ function CrearOrden() {
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
 
   const [formData, setFormData] = useState({
-    numero_orden: '', // Se llenará automáticamente
+    numero_orden: '', 
     id_producto_terminado: '',
     cantidad_planificada: '',
     id_supervisor: '',
@@ -51,9 +51,8 @@ function CrearOrden() {
 
   useEffect(() => {
     cargarDatos();
-    generarSiguienteCorrelativo(); // Generar número al iniciar
+    generarSiguienteCorrelativo(); 
 
-    // Cerrar dropdown al hacer clic fuera
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setMostrarDropdown(false);
@@ -63,22 +62,16 @@ function CrearOrden() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- 1. LÓGICA PARA GENERAR CORRELATIVO ---
   const generarSiguienteCorrelativo = async () => {
     try {
       setGenerandoCorrelativo(true);
-      
-      // Obtenemos todas las órdenes para calcular el siguiente
       const response = await ordenesProduccionAPI.getAll(); 
       const ordenes = response.data.data || [];
-      
       const anioActual = new Date().getFullYear();
       const prefijo = `${anioActual}-`;
       
-      // Filtrar órdenes del año actual
       const ordenesDelAnio = ordenes.filter(o => o.numero_orden && o.numero_orden.startsWith(prefijo));
       
-      // Encontrar el mayor
       let maxCorrelativo = 0;
       ordenesDelAnio.forEach(o => {
         const partes = o.numero_orden.split('-');
@@ -90,7 +83,6 @@ function CrearOrden() {
         }
       });
       
-      // Generar siguiente (ej: 2026-00001)
       const siguienteNumero = maxCorrelativo + 1;
       const correlativoStr = String(siguienteNumero).padStart(5, '0');
       const nuevoCodigo = `${anioActual}-${correlativoStr}`;
@@ -165,7 +157,6 @@ function CrearOrden() {
     }
   };
 
-  // --- 2. LÓGICA DE SELECCIÓN DE PRODUCTO (BUSCADOR) ---
   const handleSeleccionarProducto = (producto) => {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
@@ -182,14 +173,14 @@ function CrearOrden() {
     setRecetaSeleccionada(null);
     setDetalleReceta([]);
     setRecetaProvisional([]);
-    setMostrarDropdown(true); // Mostrar lista al limpiar para volver a elegir
+    setMostrarDropdown(true);
   };
 
+  // Filtramos sin límites
   const productosFiltrados = productosTerminados.filter(p => 
     p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
-  // -----------------------------------------------------
 
   const cambiarModoReceta = (modo) => {
     setModoReceta(modo);
@@ -376,13 +367,11 @@ function CrearOrden() {
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          {/* COLUMNA 1: Información Básica */}
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">Información Básica</h2>
             </div>
 
-            {/* --- CAMPO NÚMERO DE ORDEN AUTOMÁTICO --- */}
             <div className="form-group">
               <label className="form-label">Número de Orden (Automático) *</label>
               <div className="flex gap-2">
@@ -390,7 +379,7 @@ function CrearOrden() {
                   type="text"
                   className="form-input bg-gray-100 font-mono font-bold"
                   value={formData.numero_orden}
-                  readOnly // Solo lectura, no editable
+                  readOnly
                   placeholder="Generando..."
                 />
                 <button 
@@ -404,9 +393,8 @@ function CrearOrden() {
                 </button>
               </div>
             </div>
-            {/* ---------------------------------------- */}
 
-            {/* --- BUSCADOR DE PRODUCTOS (Reemplaza al Select) --- */}
+            {/* --- BUSCADOR DE PRODUCTOS (CORREGIDO) --- */}
             <div className="form-group relative" ref={dropdownRef}>
               <label className="form-label">Producto a Fabricar *</label>
               <div className="relative">
@@ -439,11 +427,11 @@ function CrearOrden() {
                 )}
               </div>
 
-              {/* LISTA DESPLEGABLE CON FONDO SÓLIDO */}
+              {/* LISTA DESPLEGABLE CON ALTURA AMPLIADA */}
               {mostrarDropdown && (
                 <div 
-                  className="absolute z-50 w-full mt-1 border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
-                  style={{ backgroundColor: '#ffffff' }} // FONDO BLANCO SÓLIDO EXPLÍCITO
+                  className="absolute z-50 w-full mt-1 border border-gray-200 rounded-md shadow-lg overflow-y-auto"
+                  style={{ backgroundColor: '#ffffff', maxHeight: '384px' }} // Altura fija de 384px (~10 items)
                 >
                   {productosFiltrados.length > 0 ? (
                     productosFiltrados.map((prod) => (
@@ -465,7 +453,6 @@ function CrearOrden() {
                 </div>
               )}
               
-              {/* Validación HTML5 oculta */}
               {!formData.id_producto_terminado && (
                  <input tabIndex={-1} autoComplete="off" style={{opacity: 0, height: 0, position: 'absolute'}} required={true} onInvalid={e => e.target.setCustomValidity('Seleccione un producto de la lista')} onInput={e => e.target.setCustomValidity('')} />
               )}
@@ -519,7 +506,6 @@ function CrearOrden() {
             </div>
           </div>
 
-          {/* COLUMNA 2: Tipo de Orden */}
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">Tipo de Orden</h2>
@@ -623,11 +609,9 @@ function CrearOrden() {
                                 </span>
                               )}
                             </div>
-                            
                             {recetaSeleccionada.descripcion && (
                               <p className="text-sm text-muted mb-2">{recetaSeleccionada.descripcion}</p>
                             )}
-                            
                             <div className="grid grid-cols-2 gap-2 text-sm">
                               <div>
                                 <span className="text-muted">Rendimiento:</span>
@@ -747,7 +731,6 @@ function CrearOrden() {
             )}
           </div>
 
-          {/* COLUMNA 3: Resumen */}
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">Resumen de Producción</h2>
@@ -821,7 +804,6 @@ function CrearOrden() {
           </div>
         </div>
 
-        {/* TABLA DE MATERIALES (Solo si NO es manual) */}
         {modoReceta !== 'manual' && recetaActual.length > 0 && formData.cantidad_planificada && (
           <div className="card">
             <div className="card-header">
@@ -874,7 +856,6 @@ function CrearOrden() {
           </div>
         )}
 
-        {/* BOTONES DE ACCIÓN */}
         <div className="flex gap-2 justify-end mt-4">
           <button type="button" className="btn btn-outline" onClick={() => navigate('/produccion/ordenes')} disabled={guardando}>Cancelar</button>
           <button type="submit" className="btn btn-primary" disabled={guardando || !formData.id_producto_terminado || (modoReceta !== 'manual' && recetaActual.length === 0)}>
@@ -883,7 +864,6 @@ function CrearOrden() {
         </div>
       </form>
 
-      {/* MODAL: Agregar Insumo */}
       <Modal isOpen={modalAgregarInsumo} onClose={() => setModalAgregarInsumo(false)} title="Agregar Insumo" size="md">
         <div className="form-group">
           <label className="form-label">Insumo / Material *</label>

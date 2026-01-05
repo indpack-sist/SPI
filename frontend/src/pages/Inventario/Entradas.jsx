@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, X, FileText, Loader } from 'lucide-react';
+import { 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Search, 
+  X, 
+  FileText, 
+  Loader,
+  // NUEVOS IMPORTES PARA PAGINACIÓN
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { entradasAPI, productosAPI, proveedoresAPI, empleadosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
@@ -12,13 +23,19 @@ function Entradas() {
   const [proveedores, setProveedores] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [tiposInventario, setTiposInventario] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
+
+  // ESTADOS DE PAGINACIÓN
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const [detalles, setDetalles] = useState([{
     id_producto: '',
@@ -40,6 +57,11 @@ function Entradas() {
     cargarDatos();
   }, []);
 
+  // RESETEAR A PÁGINA 1 CUANDO CAMBIA EL FILTRO
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtro]);
+
   const cargarDatos = async () => {
     try {
       setLoading(true);
@@ -54,7 +76,7 @@ function Entradas() {
       ]);
       
       const entradasData = Array.isArray(entradasRes.data?.data) ? entradasRes.data.data : 
-                          Array.isArray(entradasRes.data) ? entradasRes.data : [];
+                           Array.isArray(entradasRes.data) ? entradasRes.data : [];
       
       const productosData = Array.isArray(productosRes.data?.data) ? productosRes.data.data : 
                            Array.isArray(productosRes.data) ? productosRes.data : [];
@@ -63,10 +85,10 @@ function Entradas() {
                              Array.isArray(proveedoresRes.data) ? proveedoresRes.data : [];
       
       const empData = Array.isArray(empRes.data?.data) ? empRes.data.data : 
-                     Array.isArray(empRes.data) ? empRes.data : [];
+                      Array.isArray(empRes.data) ? empRes.data : [];
       
       const tiposInvData = Array.isArray(tiposInvRes.data?.data) ? tiposInvRes.data.data : 
-                          Array.isArray(tiposInvRes.data) ? tiposInvRes.data : [];
+                           Array.isArray(tiposInvRes.data) ? tiposInvRes.data : [];
 
       setEntradas(entradasData);
       setProductos(productosData);
@@ -284,12 +306,23 @@ function Entradas() {
     }, 0);
   };
 
+  // 1. FILTRAR
   const entradasFiltradas = entradas.filter(e =>
     (e.productos_resumen && e.productos_resumen.toLowerCase().includes(filtro.toLowerCase())) ||
     (e.tipo_inventario && e.tipo_inventario.toLowerCase().includes(filtro.toLowerCase())) ||
     (e.proveedor && e.proveedor.toLowerCase().includes(filtro.toLowerCase())) ||
     (e.documento_soporte && e.documento_soporte.toLowerCase().includes(filtro.toLowerCase()))
   );
+
+  // 2. PAGINAR
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = entradasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(entradasFiltradas.length / itemsPerPage);
+
+  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
 
   const productosDisponibles = productos.filter(p => 
     p.estado === 'Activo' && 
@@ -431,12 +464,46 @@ function Entradas() {
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        data={entradasFiltradas}
-        emptyMessage="No se encontraron entradas"
-      />
+      <div className="card">
+        {/* Info de conteo (Opcional, pero útil) */}
+        <div className="p-3 border-b border-border text-sm text-muted">
+             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, entradasFiltradas.length)} de {entradasFiltradas.length} entradas
+        </div>
 
+        {/* TABLA: Usamos currentItems */}
+        <Table
+            columns={columns}
+            data={currentItems}
+            emptyMessage="No se encontraron entradas"
+        />
+
+        {/* CONTROLES DE PAGINACIÓN */}
+        {entradasFiltradas.length > itemsPerPage && (
+          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+            >
+                <ChevronLeft size={16} /> Anterior
+            </button>
+
+            <span className="text-sm font-medium">
+                Página {currentPage} de {totalPages}
+            </span>
+
+            <button 
+                className="btn btn-sm btn-outline flex items-center gap-1"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL (Sin cambios) */}
       <Modal
         isOpen={modalOpen}
         onClose={cerrarModal}

@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, Plus, Trash2, Star, Package, Zap } from 'lucide-react';
+import { 
+  ArrowLeft, AlertCircle, Plus, Trash2, Star, 
+  Package, Zap, Search, X, RefreshCw // <--- Agregamos RefreshCw
+} from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -8,6 +11,8 @@ import Modal from '../../components/UI/Modal';
 
 function CrearOrden() {
   const navigate = useNavigate();
+  const dropdownRef = useRef(null);
+
   const [productosTerminados, setProductosTerminados] = useState([]);
   const [supervisores, setSupervisores] = useState([]);
   const [recetasDisponibles, setRecetasDisponibles] = useState([]);
@@ -19,13 +24,19 @@ function CrearOrden() {
   const [success, setSuccess] = useState(null);
   const [guardando, setGuardando] = useState(false);
   
+  // ESTADO PARA GENERANDO CORRELATIVO
+  const [generandoCorrelativo, setGenerandoCorrelativo] = useState(false);
+
+  const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [mostrarResultados, setMostrarResultados] = useState(false);
+
   const [modoReceta, setModoReceta] = useState('seleccionar');
   const [recetaProvisional, setRecetaProvisional] = useState([]);
   const [rendimientoProvisional, setRendimientoProvisional] = useState('1');
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
 
   const [formData, setFormData] = useState({
-    numero_orden: '',
+    numero_orden: '', // Se llenará automáticamente
     id_producto_terminado: '',
     cantidad_planificada: '',
     id_supervisor: '',
@@ -39,7 +50,62 @@ function CrearOrden() {
 
   useEffect(() => {
     cargarDatos();
+    generarSiguienteCorrelativo(); // <--- Generar al iniciar
+    
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setMostrarResultados(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // --- LÓGICA PARA GENERAR CORRELATIVO ---
+  const generarSiguienteCorrelativo = async () => {
+    try {
+      setGenerandoCorrelativo(true);
+      
+      // 1. Obtener todas las órdenes existentes
+      // NOTA: Lo ideal es tener un endpoint específico en el backend (ej: /api/ordenes/siguiente-numero)
+      // Aquí lo simulamos calculando desde el frontend con lo que hay.
+      const response = await ordenesProduccionAPI.getAll(); 
+      const ordenes = response.data.data || [];
+      
+      const anioActual = new Date().getFullYear();
+      const prefijo = `${anioActual}-`;
+      
+      // 2. Filtrar órdenes del año actual
+      const ordenesDelAnio = ordenes.filter(o => o.numero_orden && o.numero_orden.startsWith(prefijo));
+      
+      // 3. Encontrar el número más alto
+      let maxCorrelativo = 0;
+      
+      ordenesDelAnio.forEach(o => {
+        const partes = o.numero_orden.split('-');
+        if (partes.length === 2) {
+          const numero = parseInt(partes[1]);
+          if (!isNaN(numero) && numero > maxCorrelativo) {
+            maxCorrelativo = numero;
+          }
+        }
+      });
+      
+      // 4. Generar el siguiente (rellenando con ceros a la izquierda)
+      const siguienteNumero = maxCorrelativo + 1;
+      const correlativoStr = String(siguienteNumero).padStart(5, '0');
+      const nuevoCodigo = `${anioActual}-${correlativoStr}`;
+      
+      setFormData(prev => ({ ...prev, numero_orden: nuevoCodigo }));
+      
+    } catch (err) {
+      console.error("Error generando correlativo:", err);
+      // Fallback: Dejar vacío para escribir manual si falla
+    } finally {
+      setGenerandoCorrelativo(false);
+    }
+  };
+  // -------------------------------------
 
   const cargarDatos = async () => {
     try {
@@ -48,24 +114,27 @@ function CrearOrden() {
       
       const [productosRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getAll({ requiere_receta: 'true', estado: 'Activo' }),
-        empleadosAPI.getByRol('Supervisor'),
+        empleadosAPI.getAll({ rol: 'Supervisor', estado: 'Activo' }),
         productosAPI.getAll({ estado: 'Activo' })
       ]);
       
-      setProductosTerminados(productosRes.data.data);
-      setSupervisores(supervisoresRes.data.data);
+      setProductosTerminados(Array.isArray(productosRes.data.data) ? productosRes.data.data : []);
+      setSupervisores(Array.isArray(supervisoresRes.data.data) ? supervisoresRes.data.data : []);
       
-      const insumosFiltrados = insumosRes.data.data.filter(p => 
+      const insumosData = Array.isArray(insumosRes.data.data) ? insumosRes.data.data : [];
+      const insumosFiltrados = insumosData.filter(p => 
         p.id_tipo_inventario == 1 || p.id_tipo_inventario == 2
       );
       setInsumosDisponibles(insumosFiltrados);
     } catch (err) {
+      console.error(err);
       setError(err.error || 'Error al cargar datos');
     } finally {
       setLoading(false);
     }
   };
 
+  // ... (RESTO DE FUNCIONES IGUALES: cargarRecetasProducto, seleccionarReceta, etc.) ...
   const cargarRecetasProducto = async (idProducto) => {
     try {
       const response = await productosAPI.getRecetasByProducto(idProducto);
@@ -91,7 +160,6 @@ function CrearOrden() {
     try {
       const response = await productosAPI.getDetalleReceta(idReceta);
       const receta = recetasDisponibles.find(r => r.id_receta_producto == idReceta);
-      
       setRecetaSeleccionada(receta);
       setDetalleReceta(response.data.data || []);
       setModoReceta('seleccionar');
@@ -101,21 +169,29 @@ function CrearOrden() {
     }
   };
 
-  const handleProductoChange = (e) => {
-    const productoId = e.target.value;
-    setFormData({ ...formData, id_producto_terminado: productoId });
-    
-    if (productoId) {
-      cargarRecetasProducto(productoId);
-    } else {
-      setRecetasDisponibles([]);
-      setRecetaSeleccionada(null);
-      setDetalleReceta([]);
-    }
-    
+  const handleSeleccionarProducto = (producto) => {
+    setFormData({ ...formData, id_producto_terminado: producto.id_producto });
+    setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
+    setMostrarResultados(false);
+    cargarRecetasProducto(producto.id_producto);
     setRecetaProvisional([]);
     setRendimientoProvisional('1');
   };
+
+  const handleLimpiarProducto = () => {
+    setFormData({ ...formData, id_producto_terminado: '' });
+    setBusquedaProducto('');
+    setRecetasDisponibles([]);
+    setRecetaSeleccionada(null);
+    setDetalleReceta([]);
+    setRecetaProvisional([]);
+    setMostrarResultados(true);
+  };
+
+  const productosFiltrados = productosTerminados.filter(p => 
+    p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
+    p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
+  );
 
   const cambiarModoReceta = (modo) => {
     setModoReceta(modo);
@@ -135,15 +211,12 @@ function CrearOrden() {
       setError('Complete todos los campos del insumo');
       return;
     }
-
     const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumo.id_insumo);
     if (!insumo) return;
-
     if (recetaProvisional.find(i => i.id_insumo == nuevoInsumo.id_insumo)) {
       setError('Este insumo ya está en la receta provisional');
       return;
     }
-
     setRecetaProvisional([
       ...recetaProvisional,
       {
@@ -156,7 +229,6 @@ function CrearOrden() {
         stock_actual: parseFloat(insumo.stock_actual)
       }
     ]);
-
     setModalAgregarInsumo(false);
     setNuevoInsumo({ id_insumo: '', cantidad_requerida: '' });
   };
@@ -179,13 +251,9 @@ function CrearOrden() {
 
       if (modoReceta === 'manual') {
         payload.es_orden_manual = true;
-        
         const response = await ordenesProduccionAPI.create(payload);
         setSuccess('Orden manual creada exitosamente (sin consumo de materiales)');
-        
-        setTimeout(() => {
-          navigate(`/produccion/ordenes/${response.data.data.id_orden}`);
-        }, 1500);
+        setTimeout(() => { navigate(`/produccion/ordenes/${response.data.data.id_orden}`); }, 1500);
         return;
       }
 
@@ -207,10 +275,7 @@ function CrearOrden() {
 
       const response = await ordenesProduccionAPI.create(payload);
       setSuccess('Orden de producción creada exitosamente');
-      
-      setTimeout(() => {
-        navigate(`/produccion/ordenes/${response.data.data.id_orden}`);
-      }, 1500);
+      setTimeout(() => { navigate(`/produccion/ordenes/${response.data.data.id_orden}`); }, 1500);
     } catch (err) {
       setError(err.error || 'Error al crear la orden');
       setGuardando(false);
@@ -218,19 +283,14 @@ function CrearOrden() {
   };
 
   const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-PE', {
-      style: 'currency',
-      currency: 'PEN'
-    }).format(valor || 0);
+    return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(valor || 0);
   };
 
   const calcularCostoMateriales = () => {
     if (!formData.cantidad_planificada || modoReceta === 'manual') return 0;
-    
     const cantidad = parseFloat(formData.cantidad_planificada);
     let rendimiento = 1;
     let receta = [];
-
     if (modoReceta === 'seleccionar' && recetaSeleccionada) {
       rendimiento = parseFloat(recetaSeleccionada.rendimiento_unidades) || 1;
       receta = detalleReceta;
@@ -238,11 +298,8 @@ function CrearOrden() {
       rendimiento = parseFloat(rendimientoProvisional) || 1;
       receta = recetaProvisional;
     }
-
     if (receta.length === 0) return 0;
-
     const lotesNecesarios = Math.ceil(cantidad / rendimiento);
-    
     return receta.reduce((sum, item) => {
       const cantidadPorLote = parseFloat(item.cantidad_requerida);
       const cantidadTotal = cantidadPorLote * lotesNecesarios;
@@ -252,14 +309,10 @@ function CrearOrden() {
   };
 
   const validarStock = () => {
-    if (!formData.cantidad_planificada || modoReceta === 'manual') {
-      return { valido: true, faltantes: [] };
-    }
-    
+    if (!formData.cantidad_planificada || modoReceta === 'manual') return { valido: true, faltantes: [] };
     const cantidad = parseFloat(formData.cantidad_planificada);
     let rendimiento = 1;
     let receta = [];
-
     if (modoReceta === 'seleccionar' && recetaSeleccionada) {
       rendimiento = parseFloat(recetaSeleccionada.rendimiento_unidades) || 1;
       receta = detalleReceta;
@@ -267,17 +320,13 @@ function CrearOrden() {
       rendimiento = parseFloat(rendimientoProvisional) || 1;
       receta = recetaProvisional;
     }
-
     if (receta.length === 0) return { valido: true, faltantes: [] };
-
     const lotesNecesarios = Math.ceil(cantidad / rendimiento);
     const faltantes = [];
-    
     receta.forEach(item => {
       const cantidadPorLote = parseFloat(item.cantidad_requerida);
       const cantidadTotal = cantidadPorLote * lotesNecesarios;
       const stockDisponible = parseFloat(item.stock_actual);
-      
       if (stockDisponible < cantidadTotal) {
         faltantes.push({
           insumo: item.insumo,
@@ -288,38 +337,29 @@ function CrearOrden() {
         });
       }
     });
-    
     return { valido: faltantes.length === 0, faltantes };
   };
 
   const calcularLotes = () => {
     if (!formData.cantidad_planificada || modoReceta === 'manual') return 0;
-    
     const cantidad = parseFloat(formData.cantidad_planificada);
     let rendimiento = 1;
-
     if (modoReceta === 'seleccionar' && recetaSeleccionada) {
       rendimiento = parseFloat(recetaSeleccionada.rendimiento_unidades) || 1;
     } else if (modoReceta === 'provisional') {
       rendimiento = parseFloat(rendimientoProvisional) || 1;
     }
-
     return Math.ceil(cantidad / rendimiento);
   };
 
-  if (loading) {
-    return <Loading message="Cargando formulario..." />;
-  }
+  if (loading) return <Loading message="Cargando formulario..." />;
 
   const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
   const costoMateriales = calcularCostoMateriales();
   const validacionStock = validarStock();
   const lotesNecesarios = calcularLotes();
-  const recetaActual = modoReceta === 'seleccionar' ? detalleReceta : 
-                       modoReceta === 'provisional' ? recetaProvisional : [];
-  const rendimientoActual = modoReceta === 'seleccionar' 
-    ? (recetaSeleccionada?.rendimiento_unidades || 1) 
-    : parseFloat(rendimientoProvisional) || 1;
+  const recetaActual = modoReceta === 'seleccionar' ? detalleReceta : modoReceta === 'provisional' ? recetaProvisional : [];
+  const rendimientoActual = modoReceta === 'seleccionar' ? (recetaSeleccionada?.rendimiento_unidades || 1) : parseFloat(rendimientoProvisional) || 1;
 
   return (
     <div>
@@ -337,40 +377,89 @@ function CrearOrden() {
       {success && <Alert type="success" message={success} />}
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           {/* COLUMNA 1: Información Básica */}
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">Información Básica</h2>
             </div>
 
+            {/* --- CAMPO NÚMERO DE ORDEN AUTOMÁTICO --- */}
             <div className="form-group">
-              <label className="form-label">Número de Orden *</label>
-              <input
-                type="text"
-                className="form-input"
-                value={formData.numero_orden}
-                onChange={(e) => setFormData({ ...formData, numero_orden: e.target.value.toUpperCase() })}
-                required
-                placeholder="OP-2024-001"
-              />
+              <label className="form-label">Número de Orden (Automático) *</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="form-input bg-gray-100 font-mono font-bold"
+                  value={formData.numero_orden}
+                  readOnly // Solo lectura
+                  placeholder="Generando..."
+                />
+                <button 
+                  type="button" 
+                  className="btn btn-outline p-2" 
+                  onClick={generarSiguienteCorrelativo}
+                  title="Regenerar correlativo"
+                  disabled={generandoCorrelativo}
+                >
+                  <RefreshCw size={18} className={generandoCorrelativo ? 'animate-spin' : ''} />
+                </button>
+              </div>
             </div>
+            {/* ---------------------------------------- */}
 
-            <div className="form-group">
+            {/* BUSCADOR DE PRODUCTO */}
+            <div className="form-group relative" ref={dropdownRef}>
               <label className="form-label">Producto a Fabricar *</label>
-              <select
-                className="form-select"
-                value={formData.id_producto_terminado}
-                onChange={handleProductoChange}
-                required
-              >
-                <option value="">Seleccione un producto...</option>
-                {productosTerminados.map(prod => (
-                  <option key={prod.id_producto} value={prod.id_producto}>
-                    {prod.codigo} - {prod.nombre}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  className="form-input pl-10 pr-10"
+                  placeholder="Buscar por código o nombre..."
+                  value={busquedaProducto}
+                  onChange={(e) => {
+                    setBusquedaProducto(e.target.value);
+                    setMostrarResultados(true);
+                    if (e.target.value === '') setFormData({ ...formData, id_producto_terminado: '' });
+                  }}
+                  onFocus={() => setMostrarResultados(true)}
+                />
+                {formData.id_producto_terminado && (
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    onClick={handleLimpiarProducto}
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
+
+              {mostrarResultados && busquedaProducto && !formData.id_producto_terminado && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {productosFiltrados.length > 0 ? (
+                    productosFiltrados.map(prod => (
+                      <div
+                        key={prod.id_producto}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => handleSeleccionarProducto(prod)}
+                      >
+                        <div className="font-bold text-primary">{prod.codigo}</div>
+                        <div>{prod.nombre}</div>
+                        <div className="text-xs text-muted">Stock: {parseFloat(prod.stock_actual).toFixed(2)} {prod.unidad_medida}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                      No se encontraron productos.
+                    </div>
+                  )}
+                </div>
+              )}
+              {!formData.id_producto_terminado && (
+                 <input tabIndex={-1} autoComplete="off" style={{opacity: 0, height: 0, position: 'absolute'}} required={true} onInvalid={e => e.target.setCustomValidity('Seleccione un producto de la lista')} onInput={e => e.target.setCustomValidity('')} />
+              )}
             </div>
 
             <div className="form-group">
@@ -433,7 +522,6 @@ function CrearOrden() {
               </div>
             ) : (
               <>
-                {/* SELECTOR DE TIPO DE ORDEN */}
                 <div className="mb-4">
                   <label className="form-label">Seleccione el Tipo de Orden *</label>
                   <div className="flex flex-col gap-2">
@@ -479,21 +567,18 @@ function CrearOrden() {
                   </div>
                 </div>
 
-                {/* MODO: Manual */}
                 {modoReceta === 'manual' && (
                   <div className="alert alert-warning">
                     <Zap size={20} />
                     <div>
                       <strong>Orden Manual Seleccionada</strong>
                       <p className="text-xs mt-1">
-                        Esta orden NO consumirá materiales del inventario. 
-                        Solo registrará la producción final.
+                        Esta orden NO consumirá materiales del inventario. Solo registrará la producción final.
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* MODO: Seleccionar Receta Existente */}
                 {modoReceta === 'seleccionar' && (
                   <>
                     {recetasDisponibles.length > 0 ? (
@@ -553,16 +638,13 @@ function CrearOrden() {
                         <AlertCircle size={20} />
                         <div>
                           <strong>Sin recetas configuradas</strong>
-                          <p className="text-xs mt-1">
-                            Este producto no tiene recetas. Use "Receta Provisional" o "Orden Manual".
-                          </p>
+                          <p className="text-xs mt-1">Este producto no tiene recetas.</p>
                         </div>
                       </div>
                     )}
                   </>
                 )}
 
-                {/* MODO: Receta Provisional */}
                 {modoReceta === 'provisional' && (
                   <>
                     <div className="form-group">
@@ -668,7 +750,6 @@ function CrearOrden() {
                   </p>
                   <p className="text-xs text-muted">Sin consumo de materiales</p>
                 </div>
-
                 <div className="alert alert-info">
                   <Zap size={18} />
                   <div>
@@ -717,22 +798,11 @@ function CrearOrden() {
                     <p className="text-xs">Todos los insumos disponibles</p>
                   </div>
                 )}
-
-                {modoReceta === 'provisional' && (
-                  <div className="alert alert-info">
-                    <strong>Receta Provisional</strong>
-                    <p className="text-xs">Esta receta es temporal y solo se usará para esta orden</p>
-                  </div>
-                )}
               </>
             ) : (
               <div className="p-6 text-center">
                 <p className="text-muted text-sm">
-                  {!formData.id_producto_terminado 
-                    ? 'Seleccione un producto'
-                    : !formData.cantidad_planificada
-                    ? 'Ingrese la cantidad'
-                    : 'Configure el tipo de orden'}
+                  {!formData.id_producto_terminado ? 'Seleccione un producto' : !formData.cantidad_planificada ? 'Ingrese la cantidad' : 'Configure el tipo de orden'}
                 </p>
               </div>
             )}
@@ -745,7 +815,6 @@ function CrearOrden() {
             <div className="card-header">
               <h2 className="card-title">Materiales Requeridos (Total para {lotesNecesarios} lote(s))</h2>
             </div>
-
             <div className="table-container">
               <table className="table">
                 <thead>
@@ -772,21 +841,10 @@ function CrearOrden() {
                       <tr key={item.id_insumo || item.id_detalle}>
                         <td className="font-mono">{item.codigo_insumo}</td>
                         <td>{item.insumo}</td>
-                        <td className="text-right">
-                          {cantidadPorLote.toFixed(4)} <span className="text-muted">{item.unidad_medida}</span>
-                        </td>
-                        <td className="text-right">
-                          <span className="badge badge-primary">{lotesNecesarios}</span>
-                        </td>
-                        <td className="text-right">
-                          <strong>{cantidadTotal.toFixed(4)}</strong> <span className="text-muted">{item.unidad_medida}</span>
-                        </td>
-                        <td className="text-right">
-                          <span className={suficiente ? 'text-success' : 'text-danger'}>
-                            {stockDisponible.toFixed(2)}
-                            {!suficiente && ' ⚠️'}
-                          </span>
-                        </td>
+                        <td className="text-right">{cantidadPorLote.toFixed(4)} <span className="text-muted">{item.unidad_medida}</span></td>
+                        <td className="text-right"><span className="badge badge-primary">{lotesNecesarios}</span></td>
+                        <td className="text-right"><strong>{cantidadTotal.toFixed(4)}</strong> <span className="text-muted">{item.unidad_medida}</span></td>
+                        <td className="text-right"><span className={suficiente ? 'text-success' : 'text-danger'}>{stockDisponible.toFixed(2)}{!suficiente && ' ⚠️'}</span></td>
                         <td className="text-right">{formatearMoneda(item.costo_unitario_promedio)}</td>
                         <td className="text-right font-bold">{formatearMoneda(costoTotal)}</td>
                       </tr>
@@ -804,119 +862,33 @@ function CrearOrden() {
           </div>
         )}
 
-        {/* INSUMOS FALTANTES */}
-        {!validacionStock.valido && validacionStock.faltantes.length > 0 && (
-          <div className="card mt-4">
-            <div className="card-header">
-              <h2 className="card-title">Insumos Faltantes</h2>
-            </div>
-
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Insumo</th>
-                    <th className="text-right">Requerido</th>
-                    <th className="text-right">Disponible</th>
-                    <th className="text-right">Faltante</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {validacionStock.faltantes.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.insumo}</td>
-                      <td className="text-right">{item.requerido.toFixed(2)} {item.unidad}</td>
-                      <td className="text-right">{item.disponible.toFixed(2)} {item.unidad}</td>
-                      <td className="text-right text-danger">
-                        <strong>{item.faltante.toFixed(2)} {item.unidad}</strong>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
         {/* BOTONES DE ACCIÓN */}
         <div className="flex gap-2 justify-end mt-4">
-          <button 
-            type="button" 
-            className="btn btn-outline" 
-            onClick={() => navigate('/produccion/ordenes')}
-            disabled={guardando}
-          >
-            Cancelar
-          </button>
-          <button 
-            type="submit" 
-            className="btn btn-primary"
-            disabled={guardando || !formData.id_producto_terminado || 
-                     (modoReceta !== 'manual' && recetaActual.length === 0)}
-          >
+          <button type="button" className="btn btn-outline" onClick={() => navigate('/produccion/ordenes')} disabled={guardando}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={guardando || !formData.id_producto_terminado || (modoReceta !== 'manual' && recetaActual.length === 0)}>
             {guardando ? 'Creando...' : 'Crear Orden de Producción'}
           </button>
         </div>
       </form>
 
-      {/* MODAL: Agregar Insumo a Receta Provisional */}
-      <Modal
-        isOpen={modalAgregarInsumo}
-        onClose={() => setModalAgregarInsumo(false)}
-        title="Agregar Insumo a Receta Provisional"
-        size="md"
-      >
+      {/* MODAL: Agregar Insumo */}
+      <Modal isOpen={modalAgregarInsumo} onClose={() => setModalAgregarInsumo(false)} title="Agregar Insumo" size="md">
         <div className="form-group">
           <label className="form-label">Insumo / Material *</label>
-          <select
-            className="form-select"
-            value={nuevoInsumo.id_insumo}
-            onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}
-          >
+          <select className="form-select" value={nuevoInsumo.id_insumo} onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}>
             <option value="">Seleccione un insumo...</option>
-            {insumosDisponibles
-              .filter(i => !recetaProvisional.find(rp => rp.id_insumo == i.id_producto))
-              .map(insumo => (
-                <option key={insumo.id_producto} value={insumo.id_producto}>
-                  {insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(insumo.stock_actual).toFixed(2)} {insumo.unidad_medida})
-                </option>
-              ))}
+            {insumosDisponibles.filter(i => !recetaProvisional.find(rp => rp.id_insumo == i.id_producto)).map(insumo => (
+              <option key={insumo.id_producto} value={insumo.id_producto}>{insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(insumo.stock_actual).toFixed(2)})</option>
+            ))}
           </select>
-          <small className="text-muted">Solo insumos y materia prima</small>
         </div>
-
         <div className="form-group">
           <label className="form-label">Cantidad Requerida (por lote) *</label>
-          <input
-            type="number"
-            step="0.0001"
-            min="0.0001"
-            className="form-input"
-            value={nuevoInsumo.cantidad_requerida}
-            onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, cantidad_requerida: e.target.value })}
-            placeholder="0.0000"
-          />
-          <small className="text-muted">
-            Por cada {rendimientoProvisional} {productoSeleccionado?.unidad_medida} producida(s)
-          </small>
+          <input type="number" step="0.0001" className="form-input" value={nuevoInsumo.cantidad_requerida} onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, cantidad_requerida: e.target.value })} placeholder="0.0000" />
         </div>
-
         <div className="flex gap-2 justify-end mt-4">
-          <button 
-            type="button" 
-            className="btn btn-outline" 
-            onClick={() => setModalAgregarInsumo(false)}
-          >
-            Cancelar
-          </button>
-          <button 
-            type="button" 
-            className="btn btn-primary"
-            onClick={agregarInsumoProvisional}
-            disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida}
-          >
-            Agregar Insumo
-          </button>
+          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumo(false)}>Cancelar</button>
+          <button type="button" className="btn btn-primary" onClick={agregarInsumoProvisional} disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida}>Agregar</button>
         </div>
       </Modal>
     </div>

@@ -16,13 +16,7 @@ const COLORES = {
   grisOscuro: '#333333',
   grisMedio: '#666666',
   grisClaro: '#999999',
-  blanco: '#FFFFFF',
-  // Nuevos colores para el reporte de producción mejorado
-  primario: '#1a237e', // Azul oscuro corporativo para header OP
-  rojo: '#c62828',     // Para mermas/alertas
-  verde: '#2e7d32',    // Para eficiencias
-  borde: '#e0e0e0',
-  fondoHeader: '#f3f4f6'
+  blanco: '#FFFFFF'
 };
 
 async function cargarLogoURL() {
@@ -100,10 +94,6 @@ function agregarPiePagina(doc, textoPie) {
     doc.text(`Página ${i + 1} de ${pageCount}`, 50, 780, { width: 495, align: 'center' });
   }
 }
-
-// ==========================================
-// MÓDULO: INVENTARIOS (Entradas, Salidas, Transferencias)
-// ==========================================
 
 export async function generarPDFEntrada(datos) {
   const logoBuffer = await cargarLogoURL();
@@ -489,93 +479,114 @@ export async function generarPDFTransferencia(datos) {
   });
 }
 
-// ==========================================
-// MÓDULO: PRODUCCIÓN (RENOVADO)
-// ==========================================
+export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
+  const logoBuffer = await cargarLogoURL();
 
-export async function generarPDFOrdenProduccion(orden, materiales = [], mermas = []) {
-  // Nota: Esta función utiliza helpers específicos definidos al final del archivo
-  // para lograr el diseño profesional solicitado.
-  
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+      const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
       const chunks = [];
       
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
       
-      // 1. ENCABEZADO
-      let y = 40;
-      doc.rect(0, 0, 600, 100).fill(COLORES.primario);
-      doc.fillColor(COLORES.blanco).fontSize(24).font('Helvetica-Bold').text('ORDEN DE PRODUCCIÓN', 50, 45);
+      let y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN', logoBuffer);
+      y += 10;
       
-      // Info derecha del header
-      doc.fontSize(10).font('Helvetica');
-      doc.text('INDPACK S.A.C.', 400, 40, { align: 'right' });
-      doc.text(`RUC: ${EMPRESA.ruc}`, 400, 55, { align: 'right' });
-      doc.font('Helvetica-Bold').fontSize(14).text(`N° ${orden.numero_orden}`, 400, 75, { align: 'right' });
+      doc.rect(50, y, 495, 120).stroke(COLORES.negro);
+      y += 10;
       
-      y = 120; // Posición inicial del cuerpo
-
-      // 2. RESUMEN DE ESTADO Y TIEMPOS (Bloque Superior)
-      drawInfoBox(doc, y, orden);
-      y += 110;
-
-      // 3. MÉTRICAS DE PRODUCCIÓN (Barras de progreso)
-      drawMetrics(doc, y, orden);
-      y += 80;
-
-      // 4. TABLA DE MATERIALES (INSUMOS)
-      if (materiales.length > 0) {
-        y = checkPageBreak(doc, y, 100);
-        drawSectionTitle(doc, y, 'LISTA DE MATERIALES / INSUMOS', COLORES.primario);
-        y += 25;
-        y = drawMaterialesTable(doc, y, materiales);
-        y += 20; // Espacio post tabla
+      doc.fontSize(9).fillColor(COLORES.negro);
+      doc.font('Helvetica').text('Orden N°:', 60, y);
+      doc.font('Helvetica-Bold').text(datos.numero_orden || 'N/A', 160, y);
+      doc.font('Helvetica').text('Producto:', 60, y + 15);
+      doc.font('Helvetica-Bold').text((datos.producto || 'N/A'), 160, y + 15, { width: 140, lineGap: 2 });
+      doc.font('Helvetica').text('Código:', 60, y + 45);
+      doc.font('Helvetica-Bold').text(datos.codigo_producto || 'N/A', 160, y + 45);
+      doc.font('Helvetica').text('Supervisor:', 60, y + 60);
+      doc.font('Helvetica-Bold').text((datos.supervisor || 'N/A'), 160, y + 60, { width: 140, lineGap: 2 });
+      doc.font('Helvetica').text('Cant. Planificada:', 60, y + 90);
+      doc.font('Helvetica-Bold').text(`${datos.cantidad_planificada || 0} ${datos.unidad_medida || ''}`, 160, y + 90);
+      
+      doc.font('Helvetica').text('Fecha:', 320, y);
+      doc.font('Helvetica-Bold').text(formatearFecha(datos.fecha_creacion), 400, y);
+      doc.font('Helvetica').text('Estado:', 320, y + 15);
+      doc.font('Helvetica-Bold').text(datos.estado || 'N/A', 400, y + 15);
+      
+      if (datos.cantidad_producida > 0) {
+        doc.font('Helvetica').text('Cant. Producida:', 320, y + 30);
+        doc.font('Helvetica-Bold').text(`${datos.cantidad_producida} ${datos.unidad_medida || ''}`, 400, y + 30);
       }
-
-      // 5. TABLA DE MERMAS (Solo si hay)
-      if (mermas.length > 0) {
-        y = checkPageBreak(doc, y, 100);
-        drawSectionTitle(doc, y, 'REGISTRO DE MERMAS Y DESPERDICIOS', COLORES.rojo);
-        y += 25;
-        y = drawMermasTable(doc, y, mermas);
+      
+      y += 135;
+      
+      if (consumoMateriales.length > 0) {
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
+        doc.text('Materiales Consumidos', 50, y);
         y += 20;
-      }
-
-      // 6. OBSERVACIONES
-      if (orden.observaciones) {
-        y = checkPageBreak(doc, y, 60);
-        doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORES.grisOscuro).text('OBSERVACIONES:', 40, y);
+        
+        doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+        doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+        doc.text('Insumo', 60, y + 6);
+        doc.text('Cantidad', 350, y + 6);
+        doc.text('Costo Unit.', 420, y + 6);
+        doc.text('Subtotal', 490, y + 6, { align: 'right' });
+        y += 20;
+        
+        doc.font('Helvetica').fillColor(COLORES.negro);
+        consumoMateriales.forEach((mat, idx) => {
+          if (y > 670) {
+            doc.addPage();
+            y = agregarEncabezado(doc, 'ORDEN DE\nPRODUCCIÓN (cont.)', logoBuffer);
+            y += 10;
+            
+            doc.rect(50, y, 495, 20).fill(COLORES.grisOscuro);
+            doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORES.blanco);
+            doc.text('Insumo', 60, y + 6);
+            doc.text('Cantidad', 350, y + 6);
+            doc.text('Costo Unit.', 420, y + 6);
+            doc.text('Subtotal', 490, y + 6, { align: 'right' });
+            y += 20;
+            doc.fillColor(COLORES.negro);
+          }
+          
+          if (idx % 2 === 0) doc.rect(50, y, 495, 18).fill('#F5F5F5');
+          
+          doc.fontSize(8).fillColor(COLORES.negro);
+          doc.text((mat.insumo || '').substring(0, 50), 60, y + 5);
+          doc.text(`${mat.cantidad_requerida} ${mat.unidad_medida || ''}`, 350, y + 5);
+          doc.text(formatearMoneda(mat.costo_unitario), 420, y + 5);
+          doc.font('Helvetica-Bold').text(formatearMoneda(mat.costo_total), 490, y + 5, { align: 'right' });
+          doc.font('Helvetica');
+          y += 18;
+          doc.moveTo(50, y).lineTo(545, y).stroke(COLORES.grisClaro);
+        });
+        
         y += 15;
-        doc.font('Helvetica').fontSize(9).text(orden.observaciones, 40, y, { width: 515, align: 'justify' });
-        y += 40;
+        doc.rect(370, y, 175, 30).stroke(COLORES.negro);
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.negro);
+        doc.text('COSTO MATERIALES:', 380, y + 10);
+        doc.fontSize(12);
+        doc.text(formatearMoneda(datos.costo_materiales), 465, y + 9, { align: 'right', width: 70 });
+        y += 45;
       }
-
-      // 7. PIE DE PÁGINA (FIRMAS)
-      drawSignatures(doc);
-
-      // Paginación
-      const range = doc.bufferedPageRange();
-      for (let i = range.start; i < range.start + range.count; i++) {
-        doc.switchToPage(i);
-        doc.fontSize(8).fillColor(COLORES.grisMedio)
-           .text(`Página ${i + 1} de ${range.count} - Generado el ${formatearFecha(new Date())} ${formatearHora(new Date())}`, 40, 800, { align: 'center' });
+      
+      if (datos.observaciones) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORES.negro);
+        doc.text('Observaciones:', 50, y);
+        y += 15;
+        doc.fontSize(8).font('Helvetica');
+        doc.text(datos.observaciones, 50, y, { width: 495 });
       }
-
+      
+      agregarPiePagina(doc, 'Orden de producción - INDPACK S.A.C.');
       doc.end();
-
     } catch (error) {
       reject(error);
     }
   });
 }
-
-// ==========================================
-// MÓDULO: COMERCIAL Y VENTAS
-// ==========================================
 
 export async function generarPDFCotizacion(cotizacion, stream) {
   const doc = new PDFDocument({
@@ -887,7 +898,7 @@ export async function generarPDFGuiaRemision(guia, stream) {
     x += colWidths[0];
     doc.text(item.codigo_producto || '-', x + 5, y + 7, { width: colWidths[1] - 10 });
     x += colWidths[1];
-    doc.text(item.producto, x + 7, y + 7, { width: colWidths[2] - 10 });
+    doc.text(item.producto, x + 5, y + 7, { width: colWidths[2] - 10 });
     x += colWidths[2];
     doc.text(parseFloat(item.cantidad).toFixed(2), x + 5, y + 7, { width: colWidths[3] - 10, align: 'right' });
     x += colWidths[3];
@@ -1165,172 +1176,4 @@ export async function generarPDFOrdenCompra(orden, stream) {
   });
   
   doc.end();
-}
-
-// =========================================================
-// HELPERS INTERNOS PARA ORDEN DE PRODUCCIÓN (DISEÑO NUEVO)
-// =========================================================
-
-function drawInfoBox(doc, y, orden) {
-  // Fondo Gris
-  doc.rect(40, y, 515, 90).fill(COLORES.fondoHeader);
-  doc.strokeColor(COLORES.borde).rect(40, y, 515, 90).stroke();
-
-  // Columna 1: Producto
-  doc.fillColor(COLORES.grisOscuro).fontSize(8).font('Helvetica-Bold');
-  
-  doc.text('PRODUCTO TERMINADO:', 50, y + 10);
-  doc.font('Helvetica').fontSize(10).fillColor('#000').text(orden.producto || 'N/A', 50, y + 22, { width: 200 });
-  
-  doc.fillColor(COLORES.grisOscuro).fontSize(8).font('Helvetica-Bold').text('CÓDIGO SKU:', 50, y + 50);
-  doc.font('Helvetica').fontSize(10).fillColor('#000').text(orden.codigo_producto || '-', 50, y + 62);
-
-  // Columna 2: Receta y Supervisor
-  doc.fillColor(COLORES.grisOscuro).fontSize(8).font('Helvetica-Bold').text('RECETA / FÓRMULA:', 220, y + 10);
-  doc.font('Helvetica').fontSize(9).fillColor('#000').text(orden.nombre_receta || 'Receta Provisional/Manual', 220, y + 22, { width: 150 });
-
-  doc.fillColor(COLORES.grisOscuro).fontSize(8).font('Helvetica-Bold').text('SUPERVISOR:', 220, y + 50);
-  doc.font('Helvetica').fontSize(9).fillColor('#000').text(orden.supervisor || 'No Asignado', 220, y + 62);
-
-  // Columna 3: Tiempos (Aquí usamos los datos reales)
-  doc.fillColor(COLORES.grisOscuro).fontSize(8).font('Helvetica-Bold').text('INICIO:', 380, y + 10);
-  doc.font('Helvetica').text(formatearFecha(orden.fecha_inicio), 450, y + 10);
-
-  doc.font('Helvetica-Bold').text('FIN:', 380, y + 25);
-  doc.font('Helvetica').text(formatearFecha(orden.fecha_fin), 450, y + 25);
-
-  doc.font('Helvetica-Bold').text('DURACIÓN:', 380, y + 40);
-  const duracion = orden.tiempo_total_minutos ? `${orden.tiempo_total_minutos} min` : 'En curso';
-  doc.font('Helvetica').text(duracion, 450, y + 40);
-
-  doc.font('Helvetica-Bold').text('ESTADO:', 380, y + 65);
-  let colorEstado = orden.estado === 'Finalizada' ? COLORES.verde : COLORES.primario;
-  doc.fillColor(colorEstado).font('Helvetica-Bold').fontSize(10).text((orden.estado || 'N/A').toUpperCase(), 450, y + 65);
-}
-
-function drawMetrics(doc, y, orden) {
-  // Cálculo de eficiencia
-  const plan = parseFloat(orden.cantidad_planificada) || 0;
-  const prod = parseFloat(orden.cantidad_producida) || 0;
-  const eficiencia = plan > 0 ? (prod / plan) * 100 : 0;
-  
-  // Caja Planificado
-  doc.rect(40, y, 160, 60).stroke(COLORES.borde);
-  doc.fontSize(9).fillColor(COLORES.grisOscuro).text('CANTIDAD PLANIFICADA', 50, y + 10);
-  doc.fontSize(16).fillColor(COLORES.primario).font('Helvetica-Bold').text(`${plan} ${orden.unidad_medida || ''}`, 50, y + 30);
-
-  // Caja Producido
-  doc.rect(210, y, 160, 60).stroke(COLORES.borde);
-  doc.fontSize(9).fillColor(COLORES.grisOscuro).text('CANTIDAD PRODUCIDA', 220, y + 10);
-  doc.fontSize(16).fillColor(COLORES.verde).font('Helvetica-Bold').text(`${prod} ${orden.unidad_medida || ''}`, 220, y + 30);
-
-  // Caja Eficiencia
-  doc.rect(380, y, 175, 60).stroke(COLORES.borde);
-  doc.fontSize(9).fillColor(COLORES.grisOscuro).text('EFICIENCIA / CUMPLIMIENTO', 390, y + 10);
-  doc.fontSize(16).fillColor(eficiencia >= 95 ? COLORES.verde : COLORES.rojo)
-     .font('Helvetica-Bold').text(`${eficiencia.toFixed(2)}%`, 390, y + 30);
-}
-
-function drawMaterialesTable(doc, startY, items) {
-  let y = startY;
-  
-  // Header Tabla
-  doc.rect(40, y, 515, 20).fill(COLORES.primario);
-  doc.fontSize(8).fillColor(COLORES.blanco).font('Helvetica-Bold');
-  doc.text('INSUMO / MATERIAL', 50, y + 6);
-  doc.text('CANT. REQUERIDA', 300, y + 6);
-  doc.text('COSTO UNIT.', 390, y + 6);
-  doc.text('SUBTOTAL', 480, y + 6);
-  y += 20;
-
-  // Filas
-  doc.fillColor(COLORES.grisOscuro).font('Helvetica');
-  let totalCosto = 0;
-
-  items.forEach((item, i) => {
-    // Verificar salto de página dentro del loop
-    if (y > 750) {
-      doc.addPage();
-      y = 50;
-      // Repetir header tabla
-      doc.rect(40, y, 515, 20).fill(COLORES.primario);
-      doc.fillColor(COLORES.blanco).font('Helvetica-Bold');
-      doc.text('INSUMO / MATERIAL (Cont.)', 50, y + 6);
-      y += 20;
-    }
-
-    if (i % 2 !== 0) doc.rect(40, y, 515, 20).fill('#f9f9f9'); // Zebra striping
-
-    doc.fillColor('#000').fontSize(8);
-    doc.text((item.insumo || '').substring(0, 45), 50, y + 6);
-    doc.text(`${parseFloat(item.cantidad_requerida).toFixed(2)} ${item.unidad_medida || ''}`, 300, y + 6);
-    doc.text(formatearMoneda(item.costo_unitario), 390, y + 6);
-    doc.text(formatearMoneda(item.costo_total), 480, y + 6);
-    
-    totalCosto += parseFloat(item.costo_total || 0);
-    y += 20;
-  });
-
-  // Total Materiales
-  y += 5;
-  doc.font('Helvetica-Bold').text('COSTO TOTAL MATERIALES:', 350, y);
-  doc.text(formatearMoneda(totalCosto), 480, y);
-
-  return y + 15;
-}
-
-function drawMermasTable(doc, startY, items) {
-  let y = startY;
-  
-  // Header Tabla Mermas
-  doc.rect(40, y, 515, 20).fill(COLORES.rojo);
-  doc.fontSize(8).fillColor(COLORES.blanco).font('Helvetica-Bold');
-  doc.text('PRODUCTO MERMA / DESPERDICIO', 50, y + 6);
-  doc.text('CANTIDAD', 250, y + 6);
-  doc.text('CAUSA / OBSERVACIÓN', 350, y + 6);
-  y += 20;
-
-  // Filas
-  doc.fillColor(COLORES.grisOscuro).font('Helvetica');
-
-  items.forEach((item, i) => {
-    if (y > 750) { doc.addPage(); y = 50; }
-
-    doc.rect(40, y, 515, 20).stroke(COLORES.borde);
-    
-    doc.fillColor('#000').fontSize(8);
-    doc.text(`${item.codigo || ''} - ${item.producto_merma || ''}`, 50, y + 6);
-    doc.text(`${item.cantidad} ${item.unidad_medida || ''}`, 250, y + 6);
-    doc.text(item.observaciones || '-', 350, y + 6, { width: 190 });
-    
-    y += 20;
-  });
-
-  return y;
-}
-
-function drawSectionTitle(doc, y, text, color) {
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(color).text(text, 40, y);
-  doc.moveTo(40, y + 12).lineTo(555, y + 12).strokeColor(color).stroke();
-}
-
-function drawSignatures(doc) {
-  const y = 730; // Posición fija al final de la hoja
-  
-  doc.moveTo(60, y).lineTo(180, y).strokeColor('#000').stroke();
-  doc.fontSize(7).text('JEFE DE PRODUCCIÓN', 60, y + 5, { width: 120, align: 'center' });
-
-  doc.moveTo(220, y).lineTo(340, y).stroke();
-  doc.text('CONTROL DE CALIDAD', 220, y + 5, { width: 120, align: 'center' });
-
-  doc.moveTo(380, y).lineTo(500, y).stroke();
-  doc.text('SUPERVISOR / OPERARIO', 380, y + 5, { width: 120, align: 'center' });
-}
-
-function checkPageBreak(doc, y, needed) {
-  if (y + needed > 750) {
-    doc.addPage();
-    return 50; // Nuevo Y
-  }
-  return y;
 }

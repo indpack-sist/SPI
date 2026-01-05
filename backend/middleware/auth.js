@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 
 // Sistema de permisos de dos niveles:
 // - ui: Lo que el usuario VE en el sidebar
-// - api: Lo que el usuario PUEDE CONSUMIR de la API
+// - api: Lo que el usuario PUEDE CONSUMIR de la API (para llenar selects, combos, etc.)
 
 const PERMISOS_POR_ROL = {
   'Administrador': {
@@ -133,9 +133,9 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,  // ← Acceso a datos sin ver en menú
-      flota: true,      // ← Acceso a datos sin ver en menú
-      proveedores: true, // ← Acceso a datos sin ver en menú
+      empleados: true,    // Acceso interno para selects
+      flota: true,        // Acceso interno para selects
+      proveedores: true,  // Acceso interno para selects
       clientes: true,
       productos: true,
       entradas: false,
@@ -152,15 +152,15 @@ const PERMISOS_POR_ROL = {
   'Produccion': {
     ui: {
       dashboard: false,
-      empleados: false,     // ← NO ve en sidebar
-      flota: false,         // ← NO ve en sidebar
-      proveedores: false,   // ← NO ve en sidebar
-      clientes: false,      // ← NO ve en sidebar
-      productos: true,      // ← SÍ ve en sidebar
-      entradas: true,       // ← SÍ ve en sidebar
-      salidas: true,        // ← SÍ ve en sidebar
-      transferencias: true, // ← SÍ ve en sidebar
-      ordenesProduccion: true, // ← SÍ ve en sidebar
+      empleados: false,       // NO visible en menú
+      flota: false,           // NO visible en menú
+      proveedores: false,     // NO visible en menú
+      clientes: false,        // NO visible en menú
+      productos: true,
+      entradas: true,
+      salidas: true,
+      transferencias: true,
+      ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
       guiasRemision: false,
@@ -169,10 +169,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,      // ← SÍ puede consultar datos
-      flota: true,          // ← SÍ puede consultar datos
-      proveedores: true,    // ← SÍ puede consultar datos
-      clientes: true,       // ← SÍ puede consultar datos
+      empleados: true,        // TRUE: Para cargar "Registrado Por"
+      flota: true,            // TRUE: Para cargar vehículos en Salidas/Guías
+      proveedores: true,      // TRUE: Para cargar proveedores en Entradas
+      clientes: true,         // TRUE: Para cargar clientes en Salidas/Ordenes
       productos: true,
       entradas: true,
       salidas: true,
@@ -205,10 +205,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,
-      flota: true,
-      proveedores: true,
-      clientes: true,
+      empleados: true,      // Acceso interno
+      flota: true,          // Acceso interno
+      proveedores: true,    // Acceso interno
+      clientes: true,       // Acceso interno
       productos: true,
       entradas: true,
       salidas: true,
@@ -241,7 +241,7 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,
+      empleados: true,      // Acceso interno por si acaso
       flota: false,
       proveedores: false,
       clientes: false,
@@ -277,10 +277,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,
-      flota: true,
-      proveedores: true,
-      clientes: true,
+      empleados: true,      // Necesario para selects
+      flota: true,          // Necesario para selects
+      proveedores: true,    // Necesario para selects
+      clientes: true,       // Necesario para selects
       productos: true,
       entradas: true,
       salidas: true,
@@ -440,11 +440,10 @@ export const verificarToken = (req, res, next) => {
     return res.status(500).json({
       success: false,
       error: 'Error al verificar token'
-      });
+    });
   }
 };
 
-// Middleware para verificar permisos de API (backend)
 export const verificarPermiso = (modulo) => {
   return (req, res, next) => {
     try {
@@ -466,7 +465,7 @@ export const verificarPermiso = (modulo) => {
         });
       }
       
-      // Verifica permiso de API (no UI)
+      // ✅ CORRECCIÓN: Verifica el permiso en 'api', no en 'ui'
       if (!permisos.api[modulo]) {
         return res.status(403).json({
           success: false,
@@ -488,7 +487,6 @@ export const verificarPermiso = (modulo) => {
   };
 };
 
-// Endpoint para obtener permisos (retorna AMBOS: ui y api)
 export const obtenerPermisos = (req, res) => {
   try {
     const { rol } = req.user;
@@ -499,8 +497,8 @@ export const obtenerPermisos = (req, res) => {
       success: true,
       data: {
         rol,
-        permisos: permisos.ui,  // Frontend usa permisos UI
-        permisosApi: permisos.api // Por si lo necesitas
+        permisos: permisos.ui, // El frontend usa esto para pintar el menú
+        permisosApi: permisos.api
       }
     });
     

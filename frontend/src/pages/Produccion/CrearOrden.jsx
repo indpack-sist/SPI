@@ -394,7 +394,7 @@ function CrearOrden() {
               </div>
             </div>
 
-            {/* --- BUSCADOR DE PRODUCTOS (CORREGIDO) --- */}
+            {/* --- BUSCADOR DE PRODUCTOS --- */}
             <div className="form-group relative" ref={dropdownRef}>
               <label className="form-label">Producto a Fabricar *</label>
               <div className="relative">
@@ -427,11 +427,12 @@ function CrearOrden() {
                 )}
               </div>
 
-              {/* LISTA DESPLEGABLE CON ALTURA AMPLIADA */}
+              {/* LISTA DESPLEGABLE CON ALTURA AMPLIADA Y PADDING */}
               {mostrarDropdown && (
                 <div 
-                  className="absolute z-50 w-full mt-1 border border-gray-200 rounded-md shadow-lg overflow-y-auto"
-                  style={{ backgroundColor: '#ffffff', maxHeight: '384px' }} // Altura fija de 384px (~10 items)
+                  // SE AÑADIÓ py-2 PARA DAR ESPACIO VERTICAL
+                  className="absolute z-50 w-full mt-1 border border-gray-200 rounded-md shadow-lg overflow-y-auto py-2"
+                  style={{ backgroundColor: '#ffffff', maxHeight: '384px' }} 
                 >
                   {productosFiltrados.length > 0 ? (
                     productosFiltrados.map((prod) => (

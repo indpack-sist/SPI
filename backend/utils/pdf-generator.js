@@ -18,10 +18,10 @@ const COLORES = {
   grisClaro: '#999999',
   blanco: '#FFFFFF'
 };
-//test
+
 async function cargarLogoURL() {
   try {
-    const response = await axios.get('https://ibb.co/d4PyNB49', {
+    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
       responseType: 'arraybuffer'
     });
     return Buffer.from(response.data);

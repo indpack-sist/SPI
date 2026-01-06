@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Eye, BookOpen, ClipboardCheck } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Eye, BookOpen, ClipboardCheck, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { productosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -20,6 +20,9 @@ function Productos() {
   const [editando, setEditando] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  
+  // NUEVO: Estado para filtro de stock
+  const [filtroStock, setFiltroStock] = useState(false);
 
   // NUEVO: Estados para Conteo Físico
   const [modalConteoOpen, setModalConteoOpen] = useState(false);
@@ -163,7 +166,10 @@ function Productos() {
     const matchTexto = p.nombre.toLowerCase().includes(filtro.toLowerCase()) ||
                        p.codigo.toLowerCase().includes(filtro.toLowerCase());
     const matchTipo = !filtroTipo || p.id_tipo_inventario == filtroTipo;
-    return matchTexto && matchTipo;
+    // NUEVO: Filtro de stock >= 1
+    const matchStock = !filtroStock || parseFloat(p.stock_actual) >= 1;
+    
+    return matchTexto && matchTipo && matchStock;
   });
 
   const esProductoVendible = (tipoId) => {
@@ -314,9 +320,9 @@ function Productos() {
             </div>
           </div>
 
-          <div className="form-group" style={{ marginBottom: 0 }}>
+          <div className="form-group flex gap-2" style={{ marginBottom: 0 }}>
             <select
-              className="form-select"
+              className="form-select flex-1"
               value={filtroTipo}
               onChange={(e) => setFiltroTipo(e.target.value)}
             >
@@ -327,6 +333,15 @@ function Productos() {
                 </option>
               ))}
             </select>
+            
+            <button 
+              className={`btn ${filtroStock ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setFiltroStock(!filtroStock)}
+              title="Mostrar solo productos con stock >= 1"
+            >
+              <Filter size={20} />
+              Stock ≥ 1
+            </button>
           </div>
 
           <div className="text-right">

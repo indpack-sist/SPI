@@ -79,7 +79,7 @@ const PERMISOS_POR_ROL = {
   },
   'Comercial': {
     ui: {
-      dashboard: false,
+      dashboard: true,
       empleados: false,
       flota: true,
       proveedores: true,
@@ -96,7 +96,7 @@ const PERMISOS_POR_ROL = {
       ordenesCompra: false
     },
     api: {
-      dashboard: false,
+      dashboard: true,
       empleados: true,
       flota: true,
       proveedores: true,

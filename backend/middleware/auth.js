@@ -105,7 +105,7 @@ const PERMISOS_POR_ROL = {
       entradas: true,
       salidas: true,
       transferencias: true,
-      ordenesProduccion: false,
+      ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: true,

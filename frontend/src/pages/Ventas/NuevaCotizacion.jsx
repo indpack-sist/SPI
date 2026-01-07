@@ -3,40 +3,35 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
-  Calculator, FileText, User, Building,
-  Calendar, DollarSign, AlertTriangle, RefreshCw
+  Calculator, FileText, Building,
+  Calendar, RefreshCw, AlertCircle, Info
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, dashboard } from '../../config/api';
+import { useAuth } from '../../context/AuthContext';
 
 // ✅ TIPOS DE IMPUESTO CONFIGURABLES
 const TIPOS_IMPUESTO = [
-  { codigo: 'IGV', nombre: '18% (Incluye IGV)', porcentaje: 18.00 },
-  { codigo: 'IGV3', nombre: '6% (Incluye IGV)', porcentaje: 6.00 },
-  { codigo: 'IGV4', nombre: '18%', porcentaje: 18.00 },
-  { codigo: 'GRA', nombre: '0% Gratis - Exonerado', porcentaje: 0.00 },
-  { codigo: '6%', nombre: '6%', porcentaje: 6.00 },
-  { codigo: 'EXO', nombre: '0% Exonerado', porcentaje: 0.00 },
-  { codigo: 'INA', nombre: 'Inafecto', porcentaje: 0.00 },
-  { codigo: 'EXP', nombre: 'Exportación', porcentaje: 0.00 },
+  { codigo: 'IGV', nombre: 'IGV 18%', porcentaje: 18.00 },
+  { codigo: 'EXO', nombre: 'Exonerado 0%', porcentaje: 0.00 },
+  { codigo: 'INA', nombre: 'Inafecto 0%', porcentaje: 0.00 }
 ];
 
 function NuevaCotizacion() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [loading, setLoading] = useState(false);
   const [loadingTC, setLoadingTC] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // ✅ Catálogos REALES
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
   
-  // ✅ TIPO DE CAMBIO
   const [tipoCambio, setTipoCambio] = useState(null);
   const [tipoCambioFecha, setTipoCambioFecha] = useState(null);
   
@@ -48,25 +43,29 @@ function NuevaCotizacion() {
   
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
-    id_comercial: '',
-    fecha_emision: new Date().toISOString().split('T')[0],
-    fecha_validez: '',
+    id_comercial: user?.id_empleado || '',  // ✅ AUTOLLENAR con usuario actual
+    fecha_emision: new Date().toISOString().split('T')[0],  // ✅ HOY por defecto
     moneda: 'PEN',
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     tipo_cambio: 1.0000,
-    plazo_pago: '',
+    plazo_pago: '',           // ✅ OBLIGATORIO
     forma_pago: '',
-    orden_compra_cliente: '',
-    lugar_entrega: '',
+    direccion_entrega: '',
+    observaciones: '',
+    validez_dias: 7,          // ✅ Default 7 días
     plazo_entrega: '',
-    validez_dias: '7',
-    observaciones: ''
+    lugar_entrega: ''
+    // ❌ ELIMINADO: orden_compra_cliente
+    // ❌ ELIMINADO: fecha_vencimiento (se calcula automáticamente)
   });
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
+  
+  // ✅ CALCULAR FECHA DE VENCIMIENTO AUTOMÁTICAMENTE
+  const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
 
   useEffect(() => {
     cargarCatalogos();
@@ -74,51 +73,57 @@ function NuevaCotizacion() {
 
   useEffect(() => {
     calcularTotales();
-  }, [detalle, formCabecera.tipo_impuesto, formCabecera.porcentaje_impuesto]);
+  }, [detalle, formCabecera.porcentaje_impuesto]);
 
+  // ✅ CALCULAR FECHA DE VENCIMIENTO AUTOMÁTICAMENTE
   useEffect(() => {
     if (formCabecera.validez_dias && formCabecera.fecha_emision) {
       const fechaEmision = new Date(formCabecera.fecha_emision);
       fechaEmision.setDate(fechaEmision.getDate() + parseInt(formCabecera.validez_dias));
-      setFormCabecera({
-        ...formCabecera,
-        fecha_validez: fechaEmision.toISOString().split('T')[0]
-      });
+      setFechaVencimientoCalculada(fechaEmision.toISOString().split('T')[0]);
     }
   }, [formCabecera.fecha_emision, formCabecera.validez_dias]);
 
-  // ✅ CARGAR DATOS REALES DESDE API
+  // ✅ AUTO-OBTENER TIPO DE CAMBIO SI MONEDA = USD
+  useEffect(() => {
+    if (formCabecera.moneda === 'USD') {
+      obtenerTipoCambio();
+    } else {
+      setFormCabecera(prev => ({ ...prev, tipo_cambio: 1.0000 }));
+      setTipoCambio(null);
+      setTipoCambioFecha(null);
+    }
+  }, [formCabecera.moneda]);
+
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
       
-      // Cargar clientes activos
       const resClientes = await clientesAPI.getAll({ estado: 'Activo' });
       if (resClientes.data.success) {
         setClientes(resClientes.data.data || []);
       }
       
-      // Cargar productos de Producto Terminado (tipo_inventario = 3)
       const resProductos = await productosAPI.getAll({ 
-        id_tipo_inventario: 3,  // Solo productos terminados
+        id_tipo_inventario: 3,
         estado: 'Activo'
       });
       if (resProductos.data.success) {
         setProductos(resProductos.data.data || []);
       }
       
-      // ✅ FILTRAR SOLO EMPLEADOS CON ROL "Ventas"
+      // ✅ FILTRAR SOLO VENDEDORES/COMERCIALES
       const resComerciales = await empleadosAPI.getAll({ estado: 'Activo' });
       if (resComerciales.data.success) {
         const vendedores = (resComerciales.data.data || []).filter(
-          emp => emp.rol?.toLowerCase() === 'ventas' || emp.rol?.toLowerCase() === 'comercial'
+          emp => ['ventas', 'comercial'].includes(emp.rol?.toLowerCase())
         );
         setComerciales(vendedores);
       }
       
     } catch (err) {
       console.error('Error al cargar catálogos:', err);
-      setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
+      setError('Error al cargar catálogos');
     } finally {
       setLoading(false);
     }
@@ -128,9 +133,7 @@ function NuevaCotizacion() {
   const obtenerTipoCambio = async () => {
     try {
       setLoadingTC(true);
-      setError(null);
       
-      // ✅ USAR EL ENDPOINT CORRECTO - ACTUALIZAR MANUAL
       const response = await dashboard.actualizarTipoCambio({
         currency: 'USD',
         date: formCabecera.fecha_emision
@@ -138,21 +141,17 @@ function NuevaCotizacion() {
       
       if (response.data.success && response.data.data) {
         const tc = response.data.data;
-        const valorTC = tc.venta || tc.compra || tc.tipo_cambio || 1.0000;
+        const valorTC = tc.venta || tc.compra || tc.tipo_cambio || 3.80;
         setTipoCambio(valorTC);
         setTipoCambioFecha(tc.fecha || formCabecera.fecha_emision);
-        setFormCabecera({
-          ...formCabecera,
-          tipo_cambio: parseFloat(valorTC)
-        });
-        setSuccess(`Tipo de cambio actualizado: S/ ${parseFloat(valorTC).toFixed(4)}`);
-      } else {
-        setError('No se pudo obtener el tipo de cambio. Ingrese manualmente.');
+        setFormCabecera(prev => ({
+          ...prev,
+          tipo_cambio: parseFloat(valorTC).toFixed(4)
+        }));
       }
     } catch (err) {
-      console.error('Error al obtener TC:', err);
-      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Servicio no disponible';
-      setError(`Tipo de cambio: ${errorMsg}. Puede ingresar manualmente.`);
+      console.error('Error TC:', err);
+      setFormCabecera(prev => ({ ...prev, tipo_cambio: 3.80 }));
     } finally {
       setLoadingTC(false);
     }
@@ -160,11 +159,11 @@ function NuevaCotizacion() {
 
   const handleSelectCliente = (cliente) => {
     setClienteSeleccionado(cliente);
-    setFormCabecera({
-      ...formCabecera,
+    setFormCabecera(prev => ({
+      ...prev,
       id_cliente: cliente.id_cliente,
       lugar_entrega: cliente.direccion_despacho || ''
-    });
+    }));
     setModalClienteOpen(false);
     setBusquedaCliente('');
   };
@@ -184,9 +183,7 @@ function NuevaCotizacion() {
       cantidad: 1,
       precio_unitario: producto.precio_venta || 0,
       descuento_porcentaje: 0,
-      valor_venta: producto.precio_venta || 0,
-      stock_actual: producto.stock_actual,
-      requiere_receta: producto.requiere_receta
+      stock_actual: producto.stock_actual
     };
     
     setDetalle([...detalle, nuevoItem]);
@@ -197,65 +194,55 @@ function NuevaCotizacion() {
   const handleCantidadChange = (index, cantidad) => {
     const newDetalle = [...detalle];
     newDetalle[index].cantidad = parseFloat(cantidad) || 0;
-    newDetalle[index].valor_venta = 
-      newDetalle[index].cantidad * 
-      newDetalle[index].precio_unitario * 
-      (1 - newDetalle[index].descuento_porcentaje / 100);
     setDetalle(newDetalle);
   };
 
   const handlePrecioChange = (index, precio) => {
     const newDetalle = [...detalle];
     newDetalle[index].precio_unitario = parseFloat(precio) || 0;
-    newDetalle[index].valor_venta = 
-      newDetalle[index].cantidad * 
-      newDetalle[index].precio_unitario * 
-      (1 - newDetalle[index].descuento_porcentaje / 100);
     setDetalle(newDetalle);
   };
 
   const handleDescuentoChange = (index, descuento) => {
     const newDetalle = [...detalle];
     newDetalle[index].descuento_porcentaje = parseFloat(descuento) || 0;
-    newDetalle[index].valor_venta = 
-      newDetalle[index].cantidad * 
-      newDetalle[index].precio_unitario * 
-      (1 - newDetalle[index].descuento_porcentaje / 100);
     setDetalle(newDetalle);
   };
 
   const handleEliminarItem = (index) => {
-    const newDetalle = detalle.filter((_, i) => i !== index);
-    setDetalle(newDetalle);
+    setDetalle(detalle.filter((_, i) => i !== index));
   };
 
-  // ✅ CALCULAR TOTALES CON IMPUESTO DINÁMICO
   const calcularTotales = () => {
-    const subtotal = detalle.reduce((sum, item) => sum + (item.valor_venta || 0), 0);
+    const subtotal = detalle.reduce((sum, item) => {
+      const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
+      return sum + valorVenta;
+    }, 0);
+    
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
+    
     setTotales({ subtotal, impuesto, total });
   };
 
-  // ✅ MANEJAR CAMBIO DE TIPO DE IMPUESTO
   const handleTipoImpuestoChange = (codigo) => {
     const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
     if (tipoImpuesto) {
-      setFormCabecera({
-        ...formCabecera,
+      setFormCabecera(prev => ({
+        ...prev,
         tipo_impuesto: codigo,
         porcentaje_impuesto: tipoImpuesto.porcentaje
-      });
+      }));
     }
   };
 
-  // ✅ GUARDAR EN API REAL
+  // ✅ GUARDAR CON VALIDACIONES
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
     
+    // ✅ VALIDACIONES ESTRICTAS
     if (!formCabecera.id_cliente) {
       setError('Debe seleccionar un cliente');
       return;
@@ -266,8 +253,10 @@ function NuevaCotizacion() {
       return;
     }
     
-    // ✅ VALIDACIÓN REMOVIDA: Permitir cotizar aunque no haya stock
-    // La producción se manejará posteriormente si es necesario
+    if (!formCabecera.plazo_pago || formCabecera.plazo_pago.trim() === '') {
+      setError('Plazo de pago es obligatorio (define el riesgo de la venta)');
+      return;
+    }
     
     try {
       setLoading(true);
@@ -276,27 +265,22 @@ function NuevaCotizacion() {
         id_cliente: parseInt(formCabecera.id_cliente),
         id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
         fecha_emision: formCabecera.fecha_emision,
-        fecha_vencimiento: formCabecera.fecha_validez, // ✅ CORREGIDO: era fecha_validez
         moneda: formCabecera.moneda,
         tipo_impuesto: formCabecera.tipo_impuesto,
         porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto),
         tipo_cambio: parseFloat(formCabecera.tipo_cambio),
         plazo_pago: formCabecera.plazo_pago,
-        forma_pago: formCabecera.forma_pago,
-        orden_compra_cliente: formCabecera.orden_compra_cliente,
-        lugar_entrega: formCabecera.lugar_entrega,
-        plazo_entrega: formCabecera.plazo_entrega,
-        validez_dias: parseInt(formCabecera.validez_dias),
-        observaciones: formCabecera.observaciones,
-        subtotal: totales.subtotal,
-        igv: totales.impuesto,
-        total: totales.total,
+        forma_pago: formCabecera.forma_pago || null,
+        direccion_entrega: formCabecera.direccion_entrega || null,
+        lugar_entrega: formCabecera.lugar_entrega || null,
+        plazo_entrega: formCabecera.plazo_entrega || null,
+        validez_dias: parseInt(formCabecera.validez_dias) || 7,
+        observaciones: formCabecera.observaciones || null,
         detalle: detalle.map((item, index) => ({
           id_producto: item.id_producto,
           cantidad: parseFloat(item.cantidad),
           precio_unitario: parseFloat(item.precio_unitario),
           descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
-          valor_venta: parseFloat(item.valor_venta),
           orden: index + 1
         }))
       };
@@ -304,16 +288,12 @@ function NuevaCotizacion() {
       const response = await cotizacionesAPI.create(payload);
       
       if (response.data.success) {
-        setSuccess('Cotización creada exitosamente');
-        setTimeout(() => {
-          navigate('/ventas/cotizaciones');
-        }, 1500);
-      } else {
-        setError(response.data.error || 'Error al crear cotización');
+        setSuccess(`Cotización creada: ${response.data.data.numero_cotizacion}`);
+        setTimeout(() => navigate('/ventas/cotizaciones'), 1500);
       }
       
     } catch (err) {
-      console.error('Error al crear cotización:', err);
+      console.error('Error:', err);
       setError(err.response?.data?.error || 'Error al crear cotización');
     } finally {
       setLoading(false);
@@ -342,10 +322,7 @@ function NuevaCotizacion() {
   return (
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
-        <button 
-          className="btn btn-outline"
-          onClick={() => navigate('/ventas/cotizaciones')}
-        >
+        <button className="btn btn-outline" onClick={() => navigate('/ventas/cotizaciones')}>
           <ArrowLeft size={20} />
         </button>
         <div>
@@ -353,7 +330,7 @@ function NuevaCotizacion() {
             <FileText size={32} />
             Nueva Cotización
           </h1>
-          <p className="text-muted">Registre una nueva cotización de venta</p>
+          <p className="text-muted">Emitir cotización de venta al cliente</p>
         </div>
       </div>
 
@@ -361,53 +338,35 @@ function NuevaCotizacion() {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       <form onSubmit={handleSubmit}>
-        {/* Sección Cliente */}
+        {/* CLIENTE */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
               <Building size={20} />
-              Información del Cliente
+              Cliente *
             </h2>
           </div>
           <div className="card-body">
             {clienteSeleccionado ? (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted">Cliente:</label>
-                        <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted">RUC:</label>
-                        <p className="font-bold">{clienteSeleccionado.ruc}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted">Dirección:</label>
-                        <p>{clienteSeleccionado.direccion_despacho || 'No especificado'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted">Contacto:</label>
-                        <p>{clienteSeleccionado.contacto || 'No especificado'}</p>
-                      </div>
+                  <div className="flex-1 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted">Cliente:</label>
+                      <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted">RUC:</label>
+                      <p className="font-bold">{clienteSeleccionado.ruc}</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline"
-                    onClick={() => setClienteSeleccionado(null)}
-                  >
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => setClienteSeleccionado(null)}>
                     Cambiar
                   </button>
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                className="btn btn-primary btn-lg w-full"
-                onClick={() => setModalClienteOpen(true)}
-              >
+              <button type="button" className="btn btn-primary btn-lg w-full" onClick={() => setModalClienteOpen(true)}>
                 <Search size={20} />
                 Seleccionar Cliente
               </button>
@@ -415,7 +374,7 @@ function NuevaCotizacion() {
           </div>
         </div>
 
-        {/* Datos de la Cotización */}
+        {/* DATOS DE LA COTIZACIÓN */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -425,6 +384,7 @@ function NuevaCotizacion() {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-3 gap-4">
+              {/* ✅ FECHA DE EMISIÓN - DEFAULT HOY */}
               <div className="form-group">
                 <label className="form-label">Fecha de Emisión *</label>
                 <input
@@ -436,28 +396,35 @@ function NuevaCotizacion() {
                 />
               </div>
               
+              {/* ✅ VALIDEZ EN DÍAS */}
               <div className="form-group">
-                <label className="form-label">Validez (días)</label>
+                <label className="form-label">Validez (días) *</label>
                 <input
                   type="number"
                   className="form-input"
                   value={formCabecera.validez_dias}
                   onChange={(e) => setFormCabecera({ ...formCabecera, validez_dias: e.target.value })}
                   min="1"
+                  required
                 />
               </div>
               
+              {/* ✅ FECHA VENCIMIENTO - CALCULADA AUTOMÁTICAMENTE */}
               <div className="form-group">
-                <label className="form-label">Fecha de Vencimiento</label>
+                <label className="form-label">Fecha de Vencimiento (calculada)</label>
                 <input
                   type="date"
                   className="form-input"
-                  value={formCabecera.fecha_validez}
+                  value={fechaVencimientoCalculada}
                   readOnly
-                  style={{ backgroundColor: 'var(--bg-secondary)' }}
+                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
                 />
+                <small className="text-muted block mt-1">
+                  <Info size={12} className="inline" /> Se calcula automáticamente
+                </small>
               </div>
               
+              {/* MONEDA */}
               <div className="form-group">
                 <label className="form-label">Moneda *</label>
                 <select
@@ -471,7 +438,7 @@ function NuevaCotizacion() {
                 </select>
               </div>
               
-              {/* ✅ TIPO DE IMPUESTO SELECCIONABLE */}
+              {/* TIPO DE IMPUESTO */}
               <div className="form-group">
                 <label className="form-label">Tipo de Impuesto *</label>
                 <select
@@ -481,59 +448,48 @@ function NuevaCotizacion() {
                   required
                 >
                   {TIPOS_IMPUESTO.map(tipo => (
-                    <option key={tipo.codigo} value={tipo.codigo}>
-                      {tipo.nombre}
-                    </option>
+                    <option key={tipo.codigo} value={tipo.codigo}>{tipo.nombre}</option>
                   ))}
                 </select>
               </div>
               
-              {/* ✅ TIPO DE CAMBIO CON BOTÓN - EDITABLE MANUALMENTE */}
-              <div className="form-group">
-                <label className="form-label">Tipo de Cambio</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={formCabecera.tipo_cambio}
-                    onChange={(e) => setFormCabecera({ ...formCabecera, tipo_cambio: e.target.value })}
-                    step="0.0001"
-                    min="0"
-                    placeholder="1.0000"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={obtenerTipoCambio}
-                    disabled={loadingTC}
-                    title="Obtener tipo de cambio desde API"
-                  >
-                    {loadingTC ? (
-                      <RefreshCw size={18} className="animate-spin" />
-                    ) : (
-                      <RefreshCw size={18} />
-                    )}
-                  </button>
+              {/* ✅ TIPO DE CAMBIO - SOLO SI MONEDA = USD */}
+              {formCabecera.moneda === 'USD' && (
+                <div className="form-group">
+                  <label className="form-label">Tipo de Cambio</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={formCabecera.tipo_cambio}
+                      onChange={(e) => setFormCabecera({ ...formCabecera, tipo_cambio: e.target.value })}
+                      step="0.0001"
+                      min="0"
+                    />
+                    <button type="button" className="btn btn-primary" onClick={obtenerTipoCambio} disabled={loadingTC}>
+                      {loadingTC ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                    </button>
+                  </div>
+                  {tipoCambioFecha && (
+                    <small className="text-success block mt-1">
+                      ✓ API: {new Date(tipoCambioFecha).toLocaleDateString()}
+                    </small>
+                  )}
                 </div>
-                {tipoCambioFecha && (
-                  <p className="text-xs text-success mt-1">
-                    ✓ TC API: {new Date(tipoCambioFecha).toLocaleDateString()}
-                  </p>
-                )}
-                <p className="text-xs text-muted mt-1">
-                  Ingrese manualmente o use el botón para obtener desde API
-                </p>
-              </div>
+              )}
               
+              {/* ✅ PLAZO DE PAGO - OBLIGATORIO */}
               <div className="form-group">
-                <label className="form-label">Plazo de Pago</label>
+                <label className="form-label">Plazo de Pago * <AlertCircle size={14} className="inline text-warning" /></label>
                 <input
                   type="text"
                   className="form-input"
                   value={formCabecera.plazo_pago}
                   onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
-                  placeholder="Ej: 30 días"
+                  placeholder="Ej: Contado, 30 días, 60 días"
+                  required
                 />
+                <small className="text-warning block mt-1">Define el riesgo de la venta</small>
               </div>
               
               <div className="form-group">
@@ -543,18 +499,7 @@ function NuevaCotizacion() {
                   className="form-input"
                   value={formCabecera.forma_pago}
                   onChange={(e) => setFormCabecera({ ...formCabecera, forma_pago: e.target.value })}
-                  placeholder="Ej: Transferencia"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label className="form-label">O/C Cliente</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formCabecera.orden_compra_cliente}
-                  onChange={(e) => setFormCabecera({ ...formCabecera, orden_compra_cliente: e.target.value })}
-                  placeholder="Número de O/C"
+                  placeholder="Ej: Transferencia, Efectivo"
                 />
               </div>
               
@@ -569,8 +514,8 @@ function NuevaCotizacion() {
                 />
               </div>
               
-              {/* ✅ COMERCIAL (SOLO VENDEDORES) */}
-              <div className="form-group">
+              {/* ✅ COMERCIAL - AUTOSELECCIONADO */}
+              <div className="form-group col-span-3">
                 <label className="form-label">Vendedor/Comercial</label>
                 <select
                   className="form-select"
@@ -584,11 +529,9 @@ function NuevaCotizacion() {
                     </option>
                   ))}
                 </select>
-                {comerciales.length === 0 && (
-                  <p className="text-xs text-warning mt-1">
-                    No hay empleados con rol "Ventas" disponibles
-                  </p>
-                )}
+                <small className="text-muted block mt-1">
+                  <Info size={12} className="inline" /> Por defecto se asigna al usuario actual
+                </small>
               </div>
             </div>
             
@@ -616,19 +559,15 @@ function NuevaCotizacion() {
           </div>
         </div>
 
-        {/* Detalle de Productos */}
+        {/* DETALLE DE PRODUCTOS */}
         <div className="card mb-4">
           <div className="card-header">
             <div className="flex justify-between items-center">
               <h2 className="card-title">
                 <Calculator size={20} />
-                Detalle de Productos
+                Productos *
               </h2>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setModalProductoOpen(true)}
-              >
+              <button type="button" className="btn btn-primary" onClick={() => setModalProductoOpen(true)}>
                 <Plus size={20} />
                 Agregar Producto
               </button>
@@ -640,78 +579,66 @@ function NuevaCotizacion() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th style={{ width: '100px' }}>Código</th>
+                      <th>Código</th>
                       <th>Descripción</th>
-                      <th style={{ width: '100px' }}>Cantidad</th>
-                      <th style={{ width: '80px' }}>Unidad</th>
-                      <th style={{ width: '120px' }}>P. Unitario</th>
-                      <th style={{ width: '100px' }}>Desc. %</th>
-                      <th style={{ width: '120px' }}>Subtotal</th>
-                      <th style={{ width: '60px' }}></th>
+                      <th className="text-right">Cantidad</th>
+                      <th>UM</th>
+                      <th className="text-right">P. Unit.</th>
+                      <th className="text-right">Desc. %</th>
+                      <th className="text-right">Subtotal</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {detalle.map((item, index) => (
-                      <tr key={index}>
-                        <td className="font-mono text-sm">{item.codigo_producto}</td>
-                        <td>
-                          <div className="font-medium">{item.producto}</div>
-                          {/* ✅ Solo mostrar si cantidad supera stock Y tiene stock insuficiente */}
-                          {parseFloat(item.cantidad) > parseFloat(item.stock_actual || 0) && (
-                            <div className="text-xs text-warning flex items-center gap-1 mt-1">
-                              <AlertTriangle size={12} />
-                              Stock insuficiente (disponible: {parseFloat(item.stock_actual || 0).toFixed(2)} {item.unidad_medida})
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-input text-right"
-                            value={item.cantidad}
-                            onChange={(e) => handleCantidadChange(index, e.target.value)}
-                            min="0.00001"
-                            step="0.00001"
-                            required
-                          />
-                        </td>
-                        <td className="text-sm text-muted">{item.unidad_medida}</td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-input text-right"
-                            value={item.precio_unitario}
-                            onChange={(e) => handlePrecioChange(index, e.target.value)}
-                            min="0"
-                            step="0.01"
-                            required
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-input text-right"
-                            value={item.descuento_porcentaje}
-                            onChange={(e) => handleDescuentoChange(index, e.target.value)}
-                            min="0"
-                            max="100"
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="text-right font-bold">
-                          {formatearMoneda(item.valor_venta)}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-danger"
-                            onClick={() => handleEliminarItem(index)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {detalle.map((item, index) => {
+                      const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
+                      return (
+                        <tr key={index}>
+                          <td className="font-mono text-sm">{item.codigo_producto}</td>
+                          <td>{item.producto}</td>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right"
+                              value={item.cantidad}
+                              onChange={(e) => handleCantidadChange(index, e.target.value)}
+                              min="0.01"
+                              step="0.01"
+                              required
+                            />
+                          </td>
+                          <td className="text-sm text-muted">{item.unidad_medida}</td>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right"
+                              value={item.precio_unitario}
+                              onChange={(e) => handlePrecioChange(index, e.target.value)}
+                              min="0"
+                              step="0.01"
+                              required
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right"
+                              value={item.descuento_porcentaje}
+                              onChange={(e) => handleDescuentoChange(index, e.target.value)}
+                              min="0"
+                              max="100"
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
+                          <td>
+                            <button type="button" className="btn btn-sm btn-danger" onClick={() => handleEliminarItem(index)}>
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -719,12 +646,7 @@ function NuevaCotizacion() {
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
                 <Calculator size={64} className="mx-auto text-muted mb-4" style={{ opacity: 0.3 }} />
                 <p className="text-muted font-bold mb-2">No hay productos agregados</p>
-                <p className="text-muted text-sm mb-4">Agregue productos para continuar con la cotización</p>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setModalProductoOpen(true)}
-                >
+                <button type="button" className="btn btn-primary" onClick={() => setModalProductoOpen(true)}>
                   <Plus size={20} />
                   Agregar Primer Producto
                 </button>
@@ -733,7 +655,7 @@ function NuevaCotizacion() {
           </div>
         </div>
 
-        {/* ✅ TOTALES CON IMPUESTO DINÁMICO */}
+        {/* TOTALES */}
         {detalle.length > 0 && (
           <div className="card mb-4">
             <div className="card-body">
@@ -745,7 +667,7 @@ function NuevaCotizacion() {
                   </div>
                   <div className="flex justify-between py-2 border-b">
                     <span className="font-medium">
-                      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre || 'Impuesto'}:
+                      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:
                     </span>
                     <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
                   </div>
@@ -753,42 +675,15 @@ function NuevaCotizacion() {
                     <span className="font-bold text-lg">TOTAL:</span>
                     <span className="font-bold text-2xl">{formatearMoneda(totales.total)}</span>
                   </div>
-                  
-                  {/* ✅ NUEVO: Conversión de moneda con tipo de cambio */}
-                  {formCabecera.moneda === 'USD' && parseFloat(formCabecera.tipo_cambio) > 1 && (
-                    <div className="flex justify-between py-2 mt-2 bg-blue-50 px-4 rounded-lg border border-blue-200">
-                      <span className="text-sm font-medium text-blue-900">
-                        Equivalente en Soles (TC: {parseFloat(formCabecera.tipo_cambio).toFixed(4)}):
-                      </span>
-                      <span className="font-bold text-blue-900">
-                        S/ {(totales.total * parseFloat(formCabecera.tipo_cambio)).toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {formCabecera.moneda === 'PEN' && parseFloat(formCabecera.tipo_cambio) > 1 && (
-                    <div className="flex justify-between py-2 mt-2 bg-green-50 px-4 rounded-lg border border-green-200">
-                      <span className="text-sm font-medium text-green-900">
-                        Equivalente en Dólares (TC: {parseFloat(formCabecera.tipo_cambio).toFixed(4)}):
-                      </span>
-                      <span className="font-bold text-green-900">
-                        $ {(totales.total / parseFloat(formCabecera.tipo_cambio)).toFixed(2)}
-                      </span>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Botones */}
+        {/* BOTONES */}
         <div className="flex gap-3 justify-end">
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => navigate('/ventas/cotizaciones')}
-          >
+          <button type="button" className="btn btn-outline" onClick={() => navigate('/ventas/cotizaciones')}>
             Cancelar
           </button>
           <button
@@ -802,13 +697,8 @@ function NuevaCotizacion() {
         </div>
       </form>
 
-      {/* Modal Cliente */}
-      <Modal
-        isOpen={modalClienteOpen}
-        onClose={() => setModalClienteOpen(false)}
-        title="Seleccionar Cliente"
-        size="lg"
-      >
+      {/* MODALES */}
+      <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
         <div className="mb-4">
           <input
             type="text"
@@ -819,7 +709,6 @@ function NuevaCotizacion() {
             autoFocus
           />
         </div>
-        
         <div className="max-h-96 overflow-y-auto">
           {clientesFiltrados.length > 0 ? (
             <div className="space-y-2">
@@ -831,7 +720,6 @@ function NuevaCotizacion() {
                 >
                   <div className="font-bold">{cliente.razon_social}</div>
                   <div className="text-sm text-muted">RUC: {cliente.ruc}</div>
-                  <div className="text-sm text-muted">{cliente.direccion_despacho || 'Sin dirección'}</div>
                 </div>
               ))}
             </div>
@@ -841,13 +729,7 @@ function NuevaCotizacion() {
         </div>
       </Modal>
 
-      {/* Modal Producto */}
-      <Modal
-        isOpen={modalProductoOpen}
-        onClose={() => setModalProductoOpen(false)}
-        title="Agregar Producto"
-        size="lg"
-      >
+      <Modal isOpen={modalProductoOpen} onClose={() => setModalProductoOpen(false)} title="Agregar Producto" size="lg">
         <div className="mb-4">
           <input
             type="text"
@@ -858,7 +740,6 @@ function NuevaCotizacion() {
             autoFocus
           />
         </div>
-        
         <div className="max-h-96 overflow-y-auto">
           {productosFiltrados.length > 0 ? (
             <div className="space-y-2">
@@ -872,19 +753,9 @@ function NuevaCotizacion() {
                     <div className="flex-1">
                       <div className="font-bold">{producto.nombre}</div>
                       <div className="text-sm text-muted">Código: {producto.codigo}</div>
-                      <div className="text-sm">
-                        Stock: <span className={producto.stock_actual > 0 ? 'text-success' : 'text-danger'}>
-                          {producto.stock_actual} {producto.unidad_medida}
-                        </span>
-                        {producto.requiere_receta && (
-                          <span className="ml-2 badge badge-warning">Requiere producción</span>
-                        )}
-                      </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-primary text-lg">
-                        {formatearMoneda(producto.precio_venta)}
-                      </div>
+                      <div className="font-bold text-primary text-lg">{formatearMoneda(producto.precio_venta)}</div>
                       <div className="text-sm text-muted">por {producto.unidad_medida}</div>
                     </div>
                   </div>

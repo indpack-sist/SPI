@@ -347,8 +347,8 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: false
     },
+    dashboard: false,
     api: {
-      dashboard: false,
       empleados: false,
       flota: true,
       proveedores: false,

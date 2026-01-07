@@ -7,7 +7,6 @@ import {
   X, 
   FileText, 
   Loader,
-  // IMPORTES PARA PAGINACIÓN
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -35,7 +34,6 @@ function Salidas() {
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
 
-  // ESTADOS DE PAGINACIÓN
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -43,7 +41,8 @@ function Salidas() {
     id_producto: '',
     cantidad: '',
     precio_unitario: '',
-    producto_nombre: ''
+    producto_nombre: '',
+    busqueda: ''
   }]);
 
   const [formData, setFormData] = useState({
@@ -61,7 +60,6 @@ function Salidas() {
     cargarDatos();
   }, []);
 
-  // RESETEAR A PÁGINA 1 AL FILTRAR
   useEffect(() => {
     setCurrentPage(1);
   }, [filtro]);
@@ -81,7 +79,7 @@ function Salidas() {
         salidasAPI.getTiposMovimiento()
       ]);
       
-      setSalidas(salidasRes.data.data || []); // Asegurar array
+      setSalidas(salidasRes.data.data || []);
       setProductos(productosRes.data.data || []);
       setClientes(clientesRes.data.data || []);
       setVehiculos(vehiculosRes.data.data || []);
@@ -121,12 +119,16 @@ function Salidas() {
         });
         
         if (salidaCompleta.detalles && salidaCompleta.detalles.length > 0) {
-          setDetalles(salidaCompleta.detalles.map(d => ({
-            id_producto: d.id_producto,
-            cantidad: d.cantidad,
-            precio_unitario: d.precio_unitario || '',
-            producto_nombre: d.producto
-          })));
+          setDetalles(salidaCompleta.detalles.map(d => {
+            const prod = productos.find(p => p.id_producto === d.id_producto);
+            return {
+              id_producto: d.id_producto,
+              cantidad: d.cantidad,
+              precio_unitario: d.precio_unitario || '',
+              producto_nombre: d.producto,
+              busqueda: prod ? `${prod.codigo} - ${prod.nombre}` : d.producto
+            };
+          }));
         }
       } catch (err) {
         setError(err.error || 'Error al cargar detalles de la salida.');
@@ -149,7 +151,8 @@ function Salidas() {
         id_producto: '',
         cantidad: '',
         precio_unitario: '',
-        producto_nombre: ''
+        producto_nombre: '',
+        busqueda: ''
       }]);
     }
     setModalOpen(true);
@@ -165,7 +168,8 @@ function Salidas() {
       id_producto: '',
       cantidad: '',
       precio_unitario: '',
-      producto_nombre: ''
+      producto_nombre: '',
+      busqueda: ''
     }]);
   };
 
@@ -181,15 +185,27 @@ function Salidas() {
   const actualizarDetalle = (index, campo, valor) => {
     const nuevosDetalles = [...detalles];
     nuevosDetalles[index][campo] = valor;
+    setDetalles(nuevosDetalles);
+  };
 
-    if (campo === 'id_producto') {
-      const producto = productos.find(p => p.id_producto == valor);
-      if (producto) {
-        if (formData.tipo_movimiento === 'Venta') {
-          nuevosDetalles[index].precio_unitario = producto.precio_venta || '';
-        }
-        nuevosDetalles[index].producto_nombre = producto.nombre;
+  const buscarYSeleccionarProducto = (index, valorBusqueda) => {
+    const nuevosDetalles = [...detalles];
+    nuevosDetalles[index].busqueda = valorBusqueda;
+
+    const productoEncontrado = productos.find(p => 
+      `${p.codigo} - ${p.nombre}` === valorBusqueda
+    );
+
+    if (productoEncontrado) {
+      nuevosDetalles[index].id_producto = productoEncontrado.id_producto;
+      nuevosDetalles[index].producto_nombre = productoEncontrado.nombre;
+      
+      if (formData.tipo_movimiento === 'Venta') {
+        nuevosDetalles[index].precio_unitario = productoEncontrado.precio_venta || '';
       }
+    } else {
+      nuevosDetalles[index].id_producto = '';
+      nuevosDetalles[index].precio_unitario = '';
     }
 
     setDetalles(nuevosDetalles);
@@ -305,7 +321,6 @@ function Salidas() {
     }, 0);
   };
 
-  // 1. FILTRADO
   const salidasFiltradas = salidas.filter(s =>
     (s.productos_resumen && s.productos_resumen.toLowerCase().includes(filtro.toLowerCase())) ||
     s.tipo_movimiento.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -313,7 +328,6 @@ function Salidas() {
     (s.departamento && s.departamento.toLowerCase().includes(filtro.toLowerCase()))
   );
 
-  // 2. PAGINACIÓN
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = salidasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
@@ -461,21 +475,17 @@ function Salidas() {
         </div>
       </div>
 
-      {/* TABLA CON PAGINACIÓN */}
       <div className="card">
-         {/* Info superior */}
          <div className="p-3 border-b border-border text-sm text-muted">
              Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, salidasFiltradas.length)} de {salidasFiltradas.length} salidas
          </div>
 
-        {/* Tabla usa currentItems */}
         <Table
           columns={columns}
           data={currentItems}
           emptyMessage="No se encontraron salidas"
         />
 
-        {/* Footer de Paginación */}
         {salidasFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 
@@ -649,20 +659,21 @@ function Salidas() {
                     <div className={`flex-1 grid ${esVenta ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Producto</label>
-                        <select
-                          className="form-select"
-                          value={detalle.id_producto}
-                          onChange={(e) => actualizarDetalle(index, 'id_producto', e.target.value)}
+                        <input
+                          type="text"
+                          className="form-input"
+                          list={`lista-productos-${index}`}
+                          value={detalle.busqueda}
+                          onChange={(e) => buscarYSeleccionarProducto(index, e.target.value)}
                           required
+                          placeholder="Buscar código o nombre..."
                           disabled={editando && editando.detalles.length > 1}
-                        >
-                          <option value="">Seleccione...</option>
-                          {productosDisponibles.map(prod => (
-                            <option key={prod.id_producto} value={prod.id_producto}>
-                              {prod.codigo} - {prod.nombre} (Stock: {prod.stock_actual} {prod.unidad_medida})
-                            </option>
-                          ))}
-                        </select>
+                        />
+                        <datalist id={`lista-productos-${index}`}>
+                            {productosDisponibles.map(prod => (
+                                <option key={prod.id_producto} value={`${prod.codigo} - ${prod.nombre}`} />
+                            ))}
+                        </datalist>
                       </div>
 
                       <div className="form-group" style={{ marginBottom: 0 }}>
@@ -706,7 +717,6 @@ function Salidas() {
                       </button>
                     )}
 
-                      {/* Mensaje de advertencia en edición si es múltiple */}
                       {editando && editando.detalles.length > 1 && index === 0 && (
                           <div className="alert alert-warning text-xs mt-2 p-2" style={{ marginTop: '1.5rem' }}>
                             Solo se muestra el primer producto para referencia. La edición del detalle no está permitida en salidas con múltiples productos.

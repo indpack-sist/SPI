@@ -7,7 +7,6 @@ import {
   X, 
   FileText, 
   Loader,
-  // NUEVOS IMPORTES PARA PAGINACIÓN
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -33,7 +32,6 @@ function Entradas() {
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
 
-  // ESTADOS DE PAGINACIÓN
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -41,7 +39,8 @@ function Entradas() {
     id_producto: '',
     cantidad: '',
     costo_unitario: '',
-    producto_nombre: ''
+    producto_nombre: '',
+    busqueda: ''
   }]);
 
   const [formData, setFormData] = useState({
@@ -57,7 +56,6 @@ function Entradas() {
     cargarDatos();
   }, []);
 
-  // RESETEAR A PÁGINA 1 CUANDO CAMBIA EL FILTRO
   useEffect(() => {
     setCurrentPage(1);
   }, [filtro]);
@@ -79,10 +77,10 @@ function Entradas() {
                            Array.isArray(entradasRes.data) ? entradasRes.data : [];
       
       const productosData = Array.isArray(productosRes.data?.data) ? productosRes.data.data : 
-                           Array.isArray(productosRes.data) ? productosRes.data : [];
+                            Array.isArray(productosRes.data) ? productosRes.data : [];
       
       const proveedoresData = Array.isArray(proveedoresRes.data?.data) ? proveedoresRes.data.data : 
-                             Array.isArray(proveedoresRes.data) ? proveedoresRes.data : [];
+                              Array.isArray(proveedoresRes.data) ? proveedoresRes.data : [];
       
       const empData = Array.isArray(empRes.data?.data) ? empRes.data.data : 
                       Array.isArray(empRes.data) ? empRes.data : [];
@@ -127,12 +125,16 @@ function Entradas() {
         });
         
         if (entradaCompleta.detalles && entradaCompleta.detalles.length > 0) {
-          setDetalles(entradaCompleta.detalles.map(d => ({
-            id_producto: d.id_producto,
-            cantidad: d.cantidad,
-            costo_unitario: d.costo_unitario,
-            producto_nombre: d.producto
-          })));
+          setDetalles(entradaCompleta.detalles.map(d => {
+            const prod = productos.find(p => p.id_producto === d.id_producto);
+            return {
+              id_producto: d.id_producto,
+              cantidad: d.cantidad,
+              costo_unitario: d.costo_unitario,
+              producto_nombre: d.producto,
+              busqueda: prod ? `${prod.codigo} - ${prod.nombre}` : d.producto
+            };
+          }));
         }
       } catch (err) {
         console.error('Error al cargar entrada:', err);
@@ -153,7 +155,8 @@ function Entradas() {
         id_producto: '',
         cantidad: '',
         costo_unitario: '',
-        producto_nombre: ''
+        producto_nombre: '',
+        busqueda: ''
       }]);
     }
     setModalOpen(true);
@@ -169,7 +172,8 @@ function Entradas() {
       id_producto: '',
       cantidad: '',
       costo_unitario: '',
-      producto_nombre: ''
+      producto_nombre: '',
+      busqueda: ''
     }]);
   };
 
@@ -185,12 +189,22 @@ function Entradas() {
   const actualizarDetalle = (index, campo, valor) => {
     const nuevosDetalles = [...detalles];
     nuevosDetalles[index][campo] = valor;
+    setDetalles(nuevosDetalles);
+  };
 
-    if (campo === 'id_producto') {
-      const producto = productos.find(p => p.id_producto == valor);
-      if (producto) {
-        nuevosDetalles[index].producto_nombre = producto.nombre;
-      }
+  const buscarYSeleccionarProducto = (index, valorBusqueda) => {
+    const nuevosDetalles = [...detalles];
+    nuevosDetalles[index].busqueda = valorBusqueda;
+
+    const productoEncontrado = productos.find(p => 
+      `${p.codigo} - ${p.nombre}` === valorBusqueda
+    );
+
+    if (productoEncontrado) {
+      nuevosDetalles[index].id_producto = productoEncontrado.id_producto;
+      nuevosDetalles[index].producto_nombre = productoEncontrado.nombre;
+    } else {
+      nuevosDetalles[index].id_producto = '';
     }
 
     setDetalles(nuevosDetalles);
@@ -306,7 +320,6 @@ function Entradas() {
     }, 0);
   };
 
-  // 1. FILTRAR
   const entradasFiltradas = entradas.filter(e =>
     (e.productos_resumen && e.productos_resumen.toLowerCase().includes(filtro.toLowerCase())) ||
     (e.tipo_inventario && e.tipo_inventario.toLowerCase().includes(filtro.toLowerCase())) ||
@@ -314,7 +327,6 @@ function Entradas() {
     (e.documento_soporte && e.documento_soporte.toLowerCase().includes(filtro.toLowerCase()))
   );
 
-  // 2. PAGINAR
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = entradasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
@@ -322,7 +334,6 @@ function Entradas() {
 
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
-
 
   const productosDisponibles = productos.filter(p => 
     p.estado === 'Activo' && 
@@ -465,19 +476,16 @@ function Entradas() {
       </div>
 
       <div className="card">
-        {/* Info de conteo (Opcional, pero útil) */}
         <div className="p-3 border-b border-border text-sm text-muted">
              Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, entradasFiltradas.length)} de {entradasFiltradas.length} entradas
         </div>
 
-        {/* TABLA: Usamos currentItems */}
         <Table
             columns={columns}
             data={currentItems}
             emptyMessage="No se encontraron entradas"
         />
 
-        {/* CONTROLES DE PAGINACIÓN */}
         {entradasFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 
@@ -503,7 +511,6 @@ function Entradas() {
         )}
       </div>
 
-      {/* MODAL (Sin cambios) */}
       <Modal
         isOpen={modalOpen}
         onClose={cerrarModal}
@@ -615,20 +622,21 @@ function Entradas() {
                     <div className="flex-1 grid grid-cols-3 gap-3">
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Producto</label>
-                        <select
-                          className="form-select"
-                          value={detalle.id_producto}
-                          onChange={(e) => actualizarDetalle(index, 'id_producto', e.target.value)}
+                        <input
+                          type="text"
+                          className="form-input"
+                          list={`lista-productos-${index}`}
+                          value={detalle.busqueda}
+                          onChange={(e) => buscarYSeleccionarProducto(index, e.target.value)}
                           required
+                          placeholder="Buscar código o nombre..."
                           disabled={editando && editando.num_productos > 1}
-                        >
-                          <option value="">Seleccione...</option>
-                          {productosDisponibles.map(prod => (
-                            <option key={prod.id_producto} value={prod.id_producto}>
-                              {prod.codigo} - {prod.nombre} (Stock: {prod.stock_actual} {prod.unidad_medida})
-                            </option>
-                          ))}
-                        </select>
+                        />
+                        <datalist id={`lista-productos-${index}`}>
+                            {productosDisponibles.map(prod => (
+                                <option key={prod.id_producto} value={`${prod.codigo} - ${prod.nombre}`} />
+                            ))}
+                        </datalist>
                       </div>
 
                       <div className="form-group" style={{ marginBottom: 0 }}>

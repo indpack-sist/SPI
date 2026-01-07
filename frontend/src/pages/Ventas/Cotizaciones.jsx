@@ -1,17 +1,10 @@
+// frontend/src/pages/Ventas/Cotizaciones.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
-  Eye, 
-  Download, 
-  Filter, 
-  FileText, 
-  DollarSign, 
-  Percent, 
-  Search,
-  // IMPORTES PARA PAGINACIÓN
-  ChevronLeft, 
-  ChevronRight 
+  Plus, Eye, Download, Filter, FileText, Search,
+  ChevronLeft, ChevronRight, RefreshCw, Calendar,
+  TrendingUp, Users, DollarSign
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -24,8 +17,8 @@ function Cotizaciones() {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   
-  // Estados de filtros y paginación
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -35,14 +28,14 @@ function Cotizaciones() {
     cargarDatos();
   }, [filtroEstado]);
 
-  // Resetear a página 1 cuando cambian los filtros o la búsqueda
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, busqueda]);
 
-  const cargarDatos = async () => {
+  const cargarDatos = async (silencioso = false) => {
     try {
-      setLoading(true);
+      if (!silencioso) setLoading(true);
+      setRefreshing(silencioso);
       setError(null);
       
       const filtros = {};
@@ -54,8 +47,6 @@ function Cotizaciones() {
       
       if (response.data.success) {
         setCotizaciones(response.data.data || []);
-      } else {
-        setError('Error al cargar cotizaciones');
       }
       
     } catch (err) {
@@ -63,10 +54,11 @@ function Cotizaciones() {
       setError(err.response?.data?.error || 'Error al cargar cotizaciones');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // 1. LÓGICA DE FILTRADO (Texto)
+  // Filtrado por texto
   const cotizacionesFiltradas = cotizaciones.filter(item => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
@@ -78,7 +70,7 @@ function Cotizaciones() {
     );
   });
 
-  // 2. LÓGICA DE PAGINACIÓN
+  // Paginación
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = cotizacionesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
@@ -86,6 +78,18 @@ function Cotizaciones() {
 
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
+  // Estadísticas rápidas
+  const estadisticas = {
+    total: cotizaciones.length,
+    pendientes: cotizaciones.filter(c => c.estado === 'Pendiente').length,
+    aprobadas: cotizaciones.filter(c => c.estado === 'Aprobada').length,
+    convertidas: cotizaciones.filter(c => c.estado === 'Convertida').length,
+    montoTotal: cotizaciones.reduce((sum, c) => {
+      const monto = c.moneda === 'PEN' ? parseFloat(c.total || 0) : 0;
+      return sum + monto;
+    }, 0)
+  };
 
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
@@ -95,25 +99,13 @@ function Cotizaciones() {
   const getEstadoBadge = (estado) => {
     const badges = {
       'Pendiente': 'badge-warning',
+      'Enviada': 'badge-info',
       'Aprobada': 'badge-success',
       'Rechazada': 'badge-danger',
-      'Convertida': 'badge-primary'
+      'Convertida': 'badge-primary',
+      'Vencida': 'badge-secondary'
     };
     return badges[estado] || 'badge-secondary';
-  };
-
-  const getTipoImpuestoNombre = (codigo) => {
-    const tipos = {
-      'IGV': '18% IGV',
-      'IGV3': '6% IGV',
-      'IGV4': '18%',
-      'GRA': '0% Gratis',
-      '6%': '6%',
-      'EXO': '0% Exonerado',
-      'INA': 'Inafecto',
-      'EXP': 'Exportación'
-    };
-    return tipos[codigo] || codigo || 'IGV';
   };
 
   const columns = [
@@ -121,13 +113,12 @@ function Cotizaciones() {
       header: 'N° Cotización',
       accessor: 'numero_cotizacion',
       width: '140px',
-      render: (value) => <span className="font-mono font-bold">{value}</span>
-    },
-    {
-      header: 'Fecha',
-      accessor: 'fecha_emision',
-      width: '110px',
-      render: (value) => new Date(value).toLocaleDateString('es-PE')
+      render: (value, row) => (
+        <div>
+          <span className="font-mono font-bold text-primary">{value}</span>
+          <div className="text-xs text-muted">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</div>
+        </div>
+      )
     },
     {
       header: 'Cliente',
@@ -140,57 +131,16 @@ function Cotizaciones() {
       )
     },
     {
-      header: 'Moneda',
-      accessor: 'moneda',
-      width: '80px',
-      align: 'center',
-      render: (value) => (
-        <span className="badge badge-info">{value}</span>
-      )
-    },
-    {
-      header: 'T.C.',
-      accessor: 'tipo_cambio',
-      width: '90px',
-      align: 'right',
-      render: (value, row) => {
-        if (row.moneda === 'USD' || (value && parseFloat(value) !== 1.0000)) {
-          return (
-            <div className="text-xs">
-              <DollarSign size={12} className="inline" />
-              {parseFloat(value || 1).toFixed(4)}
-            </div>
-          );
-        }
-        return '-';
-      }
-    },
-    {
-      header: 'Impuesto',
-      accessor: 'tipo_impuesto',
-      width: '110px',
-      align: 'center',
-      render: (value, row) => (
-        <div className="text-xs">
-          <Percent size={12} className="inline" />
-          {getTipoImpuestoNombre(value)}
-        </div>
-      )
-    },
-    {
       header: 'Total',
       accessor: 'total',
       align: 'right',
-      width: '150px',
+      width: '140px',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold">{formatearMoneda(value, row.moneda)}</div>
-          {row.tipo_cambio && parseFloat(row.tipo_cambio) > 1 && (
+          <div className="font-bold text-lg">{formatearMoneda(value, row.moneda)}</div>
+          {row.moneda === 'USD' && parseFloat(row.tipo_cambio || 0) > 1 && (
             <div className="text-xs text-muted">
-              {row.moneda === 'USD' 
-                ? `≈ S/ ${(parseFloat(value) * parseFloat(row.tipo_cambio)).toFixed(2)}`
-                : `≈ $ ${(parseFloat(value) / parseFloat(row.tipo_cambio)).toFixed(2)}`
-              }
+              TC: S/ {parseFloat(row.tipo_cambio).toFixed(4)}
             </div>
           )}
         </div>
@@ -208,8 +158,12 @@ function Cotizaciones() {
     {
       header: 'Comercial',
       accessor: 'comercial',
-      width: '140px',
-      render: (value) => value || '-'
+      width: '160px',
+      render: (value) => (
+        <div className="text-sm">
+          {value || <span className="text-muted italic">Sin asignar</span>}
+        </div>
+      )
     },
     {
       header: 'Acciones',
@@ -227,7 +181,10 @@ function Cotizaciones() {
           </button>
           <button
             className="btn btn-sm btn-outline"
-            onClick={() => handleDescargarPDF(value)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDescargarPDF(value);
+            }}
             title="Descargar PDF"
           >
             <Download size={14} />
@@ -250,32 +207,106 @@ function Cotizaciones() {
 
   return (
     <div className="p-6">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileText size={32} />
+            <FileText size={32} className="text-primary" />
             Cotizaciones
           </h1>
           <p className="text-muted">Gestión de cotizaciones de venta</p>
         </div>
-        <button 
-          className="btn btn-primary"
-          onClick={() => navigate('/ventas/cotizaciones/nueva')}
-        >
-          <Plus size={20} />
-          Nueva Cotización
-        </button>
+        <div className="flex gap-2">
+          <button 
+            className="btn btn-outline"
+            onClick={() => cargarDatos(true)}
+            disabled={refreshing}
+            title="Actualizar datos"
+          >
+            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/ventas/cotizaciones/nueva')}
+          >
+            <Plus size={20} />
+            Nueva Cotización
+          </button>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* Tarjeta de Filtros y Búsqueda */}
+      {/* Estadísticas Rápidas */}
+      <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="card">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold">Total</p>
+                <p className="text-2xl font-bold">{estadisticas.total}</p>
+              </div>
+              <FileText size={32} className="text-muted opacity-20" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card border-l-4 border-warning">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold">Pendientes</p>
+                <p className="text-2xl font-bold text-warning">{estadisticas.pendientes}</p>
+              </div>
+              <Calendar size={32} className="text-warning opacity-20" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card border-l-4 border-success">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold">Aprobadas</p>
+                <p className="text-2xl font-bold text-success">{estadisticas.aprobadas}</p>
+              </div>
+              <TrendingUp size={32} className="text-success opacity-20" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card border-l-4 border-primary">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold">Convertidas</p>
+                <p className="text-2xl font-bold text-primary">{estadisticas.convertidas}</p>
+              </div>
+              <Users size={32} className="text-primary opacity-20" />
+            </div>
+          </div>
+        </div>
+
+        <div className="card bg-gradient-to-br from-primary to-blue-600 text-white">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase font-semibold opacity-90">Monto Total (PEN)</p>
+                <p className="text-2xl font-bold">S/ {estadisticas.montoTotal.toFixed(2)}</p>
+              </div>
+              <DollarSign size={32} className="opacity-20" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filtros y Búsqueda */}
       <div className="card mb-4">
         <div className="card-body">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             
             {/* Buscador */}
-            <div className="relative w-full md:w-96">
+            <div className="relative flex-1">
               <Search 
                 size={20} 
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
@@ -283,16 +314,16 @@ function Cotizaciones() {
               <input
                 type="text"
                 className="form-input pl-10 w-full"
-                placeholder="Buscar por N°, cliente, RUC..."
+                placeholder="Buscar por N°, cliente, RUC o comercial..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
 
-            {/* Botones de Estado */}
-            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-              <Filter size={20} className="text-muted shrink-0" />
-              <div className="flex gap-2">
+            {/* Filtros de Estado */}
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-muted shrink-0" />
+              <div className="flex gap-2 flex-wrap">
                 <button
                   className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('')}
@@ -323,47 +354,54 @@ function Cotizaciones() {
         </div>
       </div>
 
-      {/* Tabla con Paginación */}
+      {/* Tabla */}
       <div className="card">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
             Lista de Cotizaciones
-            <span className="badge badge-primary ml-2">{cotizacionesFiltradas.length}</span>
+            {cotizacionesFiltradas.length !== cotizaciones.length && (
+              <span className="badge badge-info ml-2">
+                {cotizacionesFiltradas.length} de {cotizaciones.length}
+              </span>
+            )}
           </h2>
           <div className="text-sm text-muted">
-             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, cotizacionesFiltradas.length)} de {cotizacionesFiltradas.length}
+            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, cotizacionesFiltradas.length)} de {cotizacionesFiltradas.length}
           </div>
         </div>
         
-        <div className="card-body">
+        <div className="card-body p-0">
           <Table
             columns={columns}
             data={currentItems}
             emptyMessage="No hay cotizaciones registradas"
+            onRowClick={(row) => navigate(`/ventas/cotizaciones/${row.id_cotizacion}`)}
           />
         </div>
 
-        {/* Footer de Paginación */}
+        {/* Paginación */}
         {cotizacionesFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToPrevPage}
-                disabled={currentPage === 1}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
             >
-                <ChevronLeft size={16} /> Anterior
+              <ChevronLeft size={16} /> Anterior
             </button>
 
-            <span className="text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">
                 Página {currentPage} de {totalPages}
-            </span>
+              </span>
+            </div>
 
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
             >
-                Siguiente <ChevronRight size={16} />
+              Siguiente <ChevronRight size={16} />
             </button>
           </div>
         )}

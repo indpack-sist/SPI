@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, Check, FileText, Calendar,
-  DollarSign, Building, Clock, ShoppingCart, AlertCircle,
+  Building, Clock, ShoppingCart, AlertCircle,
   CheckCircle, XCircle, Calculator, Percent, TrendingUp,
-  AlertTriangle
+  AlertTriangle, User, CreditCard, Package, MapPin
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -74,12 +74,9 @@ function DetalleCotizacion() {
         setCotizacion({ ...cotizacion, estado });
         setSuccess(`Estado actualizado a ${estado}`);
         setModalEstadoOpen(false);
-      } else {
-        setError(response.data.error || 'Error al cambiar estado');
       }
       
     } catch (err) {
-      console.error('Error al cambiar estado:', err);
       setError(err.response?.data?.error || 'Error al cambiar estado');
     } finally {
       setLoading(false);
@@ -97,12 +94,9 @@ function DetalleCotizacion() {
         setCotizacion({ ...cotizacion, prioridad });
         setSuccess(`Prioridad actualizada a ${prioridad}`);
         setModalPrioridadOpen(false);
-      } else {
-        setError(response.data.error || 'Error al cambiar prioridad');
       }
       
     } catch (err) {
-      console.error('Error al cambiar prioridad:', err);
       setError(err.response?.data?.error || 'Error al cambiar prioridad');
     } finally {
       setLoading(false);
@@ -110,19 +104,7 @@ function DetalleCotizacion() {
   };
 
   const handleConvertirVenta = async () => {
-    try {
-      setError(null);
-      setLoading(true);
-      
-      // Esta función redirige a crear orden desde cotización
-      navigate(`/ventas/ordenes/nueva?cotizacion=${id}`);
-      
-    } catch (err) {
-      console.error('Error al convertir:', err);
-      setError(err.response?.data?.error || 'Error al convertir a orden de venta');
-    } finally {
-      setLoading(false);
-    }
+    navigate(`/ventas/ordenes/nueva?cotizacion=${id}`);
   };
 
   const formatearFecha = (fecha) => {
@@ -140,127 +122,105 @@ function DetalleCotizacion() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
-  // ✅ Mapeo de tipos de impuesto
   const getTipoImpuestoNombre = (codigo) => {
     const tipos = {
-      'IGV': '18% (Incluye IGV)',
-      'IGV3': '6% (Incluye IGV)',
-      'IGV4': '18%',
-      'GRA': '0% Gratis - Exonerado',
-      '6%': '6%',
-      'EXO': '0% Exonerado',
-      'INA': 'Inafecto',
-      'EXP': 'Exportación'
+      'IGV': 'IGV 18%',
+      'EXO': 'Exonerado 0%',
+      'INA': 'Inafecto 0%'
     };
-    return tipos[codigo] || codigo || 'IGV (18%)';
+    return tipos[codigo] || 'IGV 18%';
   };
 
   const getEstadoConfig = (estado) => {
     const configs = {
       'Pendiente': { 
         icono: Clock, 
-        clase: 'badge-warning',
-        color: 'border-warning'
+        clase: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        badge: 'badge-warning'
       },
       'Enviada': { 
         icono: FileText, 
-        clase: 'badge-info',
-        color: 'border-info'
+        clase: 'bg-blue-100 text-blue-800 border-blue-200',
+        badge: 'badge-info'
       },
       'Aprobada': { 
         icono: CheckCircle, 
-        clase: 'badge-success',
-        color: 'border-success'
+        clase: 'bg-green-100 text-green-800 border-green-200',
+        badge: 'badge-success'
       },
       'Rechazada': { 
         icono: XCircle, 
-        clase: 'badge-danger',
-        color: 'border-danger'
+        clase: 'bg-red-100 text-red-800 border-red-200',
+        badge: 'badge-danger'
       },
       'Convertida': { 
         icono: Check, 
-        clase: 'badge-primary',
-        color: 'border-primary'
+        clase: 'bg-primary/10 text-primary border-primary/20',
+        badge: 'badge-primary'
       },
       'Vencida': { 
         icono: AlertCircle, 
-        clase: 'badge-secondary',
-        color: 'border-secondary'
+        clase: 'bg-gray-100 text-gray-800 border-gray-200',
+        badge: 'badge-secondary'
       }
     };
     return configs[estado] || configs['Pendiente'];
   };
 
-  const getPrioridadConfig = (prioridad) => {
-    const configs = {
-      'Baja': { clase: 'badge-secondary' },
-      'Media': { clase: 'badge-info' },
-      'Alta': { clase: 'badge-warning' },
-      'Urgente': { clase: 'badge-danger' }
-    };
-    return configs[prioridad] || configs['Media'];
-  };
-
   const columns = [
     {
-      header: 'Código',
-      accessor: 'codigo_producto',
-      width: '120px',
-      render: (value) => <span className="font-mono text-sm">{value}</span>
-    },
-    {
-  header: 'Producto',
-  accessor: 'producto',
-  render: (value, row) => (
-    <div>
-      <div className="font-medium">{value}</div>
-      {/* ✅ Solo mostrar si cantidad supera stock disponible */}
-      {parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
-        <div className="text-xs text-warning flex items-center gap-1 mt-1">
-          <AlertTriangle size={12} />
-          Stock insuficiente (disponible: {parseFloat(row.stock_disponible || 0).toFixed(2)} {row.unidad_medida})
+      header: 'Producto',
+      accessor: 'producto',
+      render: (value, row) => (
+        <div>
+          <div className="font-medium">{value}</div>
+          <div className="text-xs text-muted font-mono">{row.codigo_producto}</div>
+          {parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
+            <div className="text-xs text-warning flex items-center gap-1 mt-1">
+              <AlertTriangle size={12} />
+              Stock insuficiente ({parseFloat(row.stock_disponible || 0).toFixed(2)} {row.unidad_medida})
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  )
-},
+      )
+    },
     {
       header: 'Cantidad',
       accessor: 'cantidad',
-      width: '120px',
+      width: '140px',
       align: 'right',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold">{parseFloat(value).toFixed(5)}</div>
+          <div className="font-bold text-lg">{parseFloat(value).toFixed(2)}</div>
           <div className="text-xs text-muted">{row.unidad_medida}</div>
         </div>
       )
     },
     {
-      header: 'Precio Unitario',
+      header: 'P. Unitario',
       accessor: 'precio_unitario',
-      width: '140px',
+      width: '130px',
       align: 'right',
       render: (value) => (
         <span className="font-medium">{formatearMoneda(value)}</span>
       )
     },
     {
-      header: 'Descuento',
+      header: 'Desc.',
       accessor: 'descuento_porcentaje',
-      width: '100px',
+      width: '80px',
       align: 'center',
       render: (value) => (
-        <span className="text-sm">{parseFloat(value || 0).toFixed(2)}%</span>
+        <span className="text-sm">{parseFloat(value || 0).toFixed(1)}%</span>
       )
     },
     {
-      header: 'Valor Venta',
+      header: 'Subtotal',
       accessor: 'valor_venta',
       width: '140px',
       align: 'right',
       render: (value) => (
-        <span className="font-bold text-primary">{formatearMoneda(value)}</span>
+        <span className="font-bold text-primary text-lg">{formatearMoneda(value)}</span>
       )
     }
   ];
@@ -285,129 +245,130 @@ function DetalleCotizacion() {
   }
 
   const estadoConfig = getEstadoConfig(cotizacion.estado);
-  const prioridadConfig = getPrioridadConfig(cotizacion.prioridad);
   const IconoEstado = estadoConfig.icono;
+  const diasVencimiento = cotizacion.fecha_vencimiento 
+    ? Math.ceil((new Date(cotizacion.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24))
+    : null;
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <button 
-            className="btn btn-outline"
-            onClick={() => navigate('/ventas/cotizaciones')}
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <FileText size={32} />
-              Cotización {cotizacion.numero_cotizacion}
-            </h1>
-            <p className="text-muted">
-              Emitida el {formatearFecha(cotizacion.fecha_emision)}
-            </p>
+      {/* Header Sticky */}
+      <div className="sticky top-0 bg-white z-10 pb-4 mb-6 border-b">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button 
+              className="btn btn-outline"
+              onClick={() => navigate('/ventas/cotizaciones')}
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <FileText size={32} className="text-primary" />
+                {cotizacion.numero_cotizacion}
+              </h1>
+              <p className="text-sm text-muted">
+                Emitida el {formatearFecha(cotizacion.fecha_emision)}
+                {diasVencimiento !== null && diasVencimiento > 0 && (
+                  <span className="ml-2 text-warning">
+                    • Vence en {diasVencimiento} día(s)
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
-        </div>
-        
-        <div className="flex gap-2">
-          <button className="btn btn-outline" onClick={handleDescargarPDF}>
-            <Download size={20} /> PDF
-          </button>
           
-          {cotizacion.estado !== 'Convertida' && cotizacion.estado !== 'Vencida' && (
-            <>
-              <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
-                <Edit size={20} /> Estado
-              </button>
-              
-              <button className="btn btn-outline" onClick={() => setModalPrioridadOpen(true)}>
-                <Edit size={20} /> Prioridad
-              </button>
-              
-              {cotizacion.estado === 'Aprobada' && (
-                <button className="btn btn-primary" onClick={() => setModalConvertirOpen(true)}>
-                  <ShoppingCart size={20} /> Convertir a Orden
+          <div className="flex gap-2">
+            <button className="btn btn-outline" onClick={handleDescargarPDF}>
+              <Download size={18} /> PDF
+            </button>
+            
+            {cotizacion.estado !== 'Convertida' && cotizacion.estado !== 'Vencida' && (
+              <>
+                <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
+                  <Edit size={18} /> Estado
                 </button>
-              )}
-            </>
-          )}
+                
+                {cotizacion.estado === 'Aprobada' && (
+                  <button className="btn btn-success" onClick={() => setModalConvertirOpen(true)}>
+                    <ShoppingCart size={18} /> Convertir a Orden
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Estado y Prioridad */}
-      <div className={`card border-l-4 ${estadoConfig.color} mb-4`}>
+      {/* Badge de Estado Grande */}
+      <div className={`card border-2 ${estadoConfig.clase} mb-6`}>
         <div className="card-body">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`p-3 rounded-lg ${estadoConfig.clase} bg-opacity-10`}>
-                <IconoEstado size={32} />
+            <div className="flex items-center gap-4">
+              <div className={`p-4 rounded-xl ${estadoConfig.clase}`}>
+                <IconoEstado size={40} />
               </div>
               <div>
-                <p className="text-sm text-muted">Estado de la Cotización</p>
-                <h3 className="text-xl font-bold">{cotizacion.estado}</h3>
+                <p className="text-sm uppercase font-semibold opacity-70 mb-1">Estado Actual</p>
+                <h3 className="text-3xl font-bold">{cotizacion.estado}</h3>
+                {cotizacion.fecha_vencimiento && cotizacion.estado === 'Pendiente' && (
+                  <p className="text-sm mt-1 opacity-70">
+                    Válida hasta: {formatearFecha(cotizacion.fecha_vencimiento)}
+                  </p>
+                )}
               </div>
             </div>
             
             <div className="text-right">
-              <p className="text-sm text-muted">Prioridad</p>
-              <span className={`badge ${prioridadConfig.clase}`}>
+              <p className="text-sm uppercase font-semibold opacity-70 mb-2">Prioridad</p>
+              <button 
+                className={`badge ${cotizacion.prioridad === 'Urgente' ? 'badge-danger' : cotizacion.prioridad === 'Alta' ? 'badge-warning' : 'badge-info'} text-lg px-4 py-2`}
+                onClick={() => cotizacion.estado !== 'Convertida' && cotizacion.estado !== 'Vencida' && setModalPrioridadOpen(true)}
+              >
                 {cotizacion.prioridad}
-              </span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Alerta de vencimiento */}
-      {cotizacion.estado === 'Pendiente' && cotizacion.fecha_vencimiento && (
-        <div className="card border-l-4 border-warning bg-yellow-50 mb-4">
-          <div className="card-body">
-            <div className="flex items-center gap-3">
-              <AlertCircle size={24} className="text-warning" />
-              <div>
-                <p className="font-medium">Validez de la Cotización</p>
-                <p className="text-sm text-muted">
-                  Válida hasta el {formatearFecha(cotizacion.fecha_vencimiento)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Información General */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      {/* Información Principal */}
+      <div className="grid grid-cols-3 gap-6 mb-6">
         {/* Cliente */}
         <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">
+          <div className="card-header bg-gradient-to-r from-blue-50 to-white">
+            <h2 className="card-title text-blue-900">
               <Building size={20} />
-              Información del Cliente
+              Cliente
             </h2>
           </div>
-          <div className="card-body space-y-2">
+          <div className="card-body space-y-3">
             <div>
-              <label className="text-sm font-medium text-muted">Razón Social:</label>
+              <p className="text-xs text-muted uppercase font-semibold mb-1">Razón Social</p>
               <p className="font-bold text-lg">{cotizacion.cliente}</p>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted">RUC:</label>
-              <p className="font-medium">{cotizacion.ruc_cliente}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold mb-1">RUC</p>
+                <p className="font-mono font-medium">{cotizacion.ruc_cliente}</p>
+              </div>
+              {cotizacion.telefono_cliente && (
+                <div>
+                  <p className="text-xs text-muted uppercase font-semibold mb-1">Teléfono</p>
+                  <p className="font-medium">{cotizacion.telefono_cliente}</p>
+                </div>
+              )}
             </div>
             {cotizacion.direccion_cliente && (
               <div>
-                <label className="text-sm font-medium text-muted">Dirección:</label>
-                <p>{cotizacion.direccion_cliente}</p>
-              </div>
-            )}
-            {cotizacion.telefono_cliente && (
-              <div>
-                <label className="text-sm font-medium text-muted">Teléfono:</label>
-                <p>{cotizacion.telefono_cliente}</p>
+                <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
+                  <MapPin size={12} />
+                  Dirección
+                </p>
+                <p className="text-sm">{cotizacion.direccion_cliente}</p>
               </div>
             )}
           </div>
@@ -415,27 +376,26 @@ function DetalleCotizacion() {
 
         {/* Datos Comerciales */}
         <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">
-              <DollarSign size={20} />
-              Datos Comerciales
+          <div className="card-header bg-gradient-to-r from-green-50 to-white">
+            <h2 className="card-title text-green-900">
+              <CreditCard size={20} />
+              Condiciones Comerciales
             </h2>
           </div>
-          <div className="card-body space-y-2">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="card-body space-y-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-muted">Moneda:</label>
-                <p className="font-medium">
-                  {cotizacion.moneda === 'USD' ? 'Dólares (USD)' : 'Soles (PEN)'}
-                </p>
+                <p className="text-xs text-muted uppercase font-semibold mb-1">Moneda</p>
+                <span className={`badge ${cotizacion.moneda === 'USD' ? 'badge-success' : 'badge-primary'}`}>
+                  {cotizacion.moneda === 'USD' ? '$ USD' : 'S/ PEN'}
+                </span>
               </div>
-              {/* ✅ TIPO DE CAMBIO */}
-              {(cotizacion.moneda === 'USD' || (cotizacion.tipo_cambio && parseFloat(cotizacion.tipo_cambio) !== 1.0000)) && (
+              {cotizacion.moneda === 'USD' && (
                 <div>
-                  <label className="text-sm font-medium text-muted flex items-center gap-1">
-                    <TrendingUp size={14} />
-                    Tipo de Cambio:
-                  </label>
+                  <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
+                    <TrendingUp size={12} />
+                    T.C.
+                  </p>
                   <p className="font-bold text-primary">
                     S/ {parseFloat(cotizacion.tipo_cambio || 1).toFixed(4)}
                   </p>
@@ -443,44 +403,60 @@ function DetalleCotizacion() {
               )}
             </div>
             
-            {/* ✅ TIPO DE IMPUESTO Y PORCENTAJE */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <label className="text-sm font-medium text-muted flex items-center gap-1">
-                <Percent size={14} />
-                Tipo de Impuesto:
-              </label>
-              <p className="font-bold text-primary">
+              <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
+                <Percent size={12} />
+                Impuesto
+              </p>
+              <p className="font-bold text-blue-900">
                 {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}
               </p>
-              {cotizacion.porcentaje_impuesto !== undefined && (
-                <p className="text-xs text-muted mt-1">
-                  Porcentaje aplicado: {parseFloat(cotizacion.porcentaje_impuesto).toFixed(2)}%
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold mb-1">Plazo Pago</p>
+                <p className="font-medium">{cotizacion.plazo_pago || '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold mb-1">Forma Pago</p>
+                <p className="font-medium">{cotizacion.forma_pago || '-'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Vendedor */}
+        <div className="card">
+          <div className="card-header bg-gradient-to-r from-purple-50 to-white">
+            <h2 className="card-title text-purple-900">
+              <User size={20} />
+              Información Adicional
+            </h2>
+          </div>
+          <div className="card-body space-y-3">
+            <div>
+              <p className="text-xs text-muted uppercase font-semibold mb-1">Comercial Responsable</p>
+              <p className="font-medium text-lg">{cotizacion.comercial || 'Sin asignar'}</p>
+            </div>
+            
+            {cotizacion.plazo_entrega && (
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
+                  <Calendar size={12} />
+                  Plazo de Entrega
                 </p>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <div>
-                <label className="text-sm font-medium text-muted">Plazo de Pago:</label>
-                <p>{cotizacion.plazo_pago || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Forma de Pago:</label>
-                <p>{cotizacion.forma_pago || '-'}</p>
-              </div>
-            </div>
-            
-            {cotizacion.direccion_entrega && (
-              <div>
-                <label className="text-sm font-medium text-muted">Dirección de Entrega:</label>
-                <p className="text-sm">{cotizacion.direccion_entrega}</p>
+                <p className="font-medium">{cotizacion.plazo_entrega}</p>
               </div>
             )}
             
-            {cotizacion.comercial && (
+            {cotizacion.lugar_entrega && (
               <div>
-                <label className="text-sm font-medium text-muted">Comercial:</label>
-                <p className="font-medium">{cotizacion.comercial}</p>
+                <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
+                  <MapPin size={12} />
+                  Lugar de Entrega
+                </p>
+                <p className="text-sm">{cotizacion.lugar_entrega}</p>
               </div>
             )}
           </div>
@@ -488,83 +464,74 @@ function DetalleCotizacion() {
       </div>
 
       {/* Detalle de Productos */}
-      <div className="card mb-4">
-        <div className="card-header">
+      <div className="card mb-6">
+        <div className="card-header bg-gradient-to-r from-gray-50 to-white">
           <h2 className="card-title">
-            <FileText size={20} />
-            Detalle de Productos
+            <Package size={20} />
+            Productos Cotizados
+            <span className="badge badge-primary ml-2">{cotizacion.detalle?.length || 0}</span>
           </h2>
         </div>
-        <div className="card-body">
+        <div className="card-body p-0">
           <Table
             columns={columns}
             data={cotizacion.detalle || []}
-            emptyMessage="No hay productos en esta cotización"
+            emptyMessage="No hay productos en esta cotizacion"
           />
         </div>
       </div>
 
       {/* Observaciones y Totales */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-3 gap-6">
         {/* Observaciones */}
-        {cotizacion.observaciones ? (
-          <div className="card">
+        {cotizacion.observaciones && (
+          <div className="col-span-2 card">
             <div className="card-header">
               <h3 className="card-title">Observaciones</h3>
             </div>
             <div className="card-body">
-              <p className="whitespace-pre-wrap">{cotizacion.observaciones}</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{cotizacion.observaciones}</p>
             </div>
           </div>
-        ) : (
-          <div></div>
         )}
 
         {/* Totales */}
-        <div className="card">
-          <div className="card-header">
+        <div className={`card ${!cotizacion.observaciones ? 'col-span-3 ml-auto w-full max-w-md' : ''}`}>
+          <div className="card-header bg-gradient-to-r from-primary/5 to-white">
             <h3 className="card-title">
               <Calculator size={20} />
-              Resumen de Totales
+              Resumen
             </h3>
           </div>
           <div className="card-body">
             <div className="space-y-3">
               <div className="flex justify-between py-2 border-b">
-                <span className="font-medium">Sub Total:</span>
-                <span className="font-bold">{formatearMoneda(cotizacion.subtotal)}</span>
+                <span className="text-muted">Sub Total:</span>
+                <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="font-medium">
-                  {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
-                </span>
-                <span className="font-bold">{formatearMoneda(cotizacion.igv)}</span>
+                <span className="text-muted">{getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:</span>
+                <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
               </div>
-              <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg">
-                <span className="font-bold text-lg">TOTAL:</span>
-                <span className="font-bold text-2xl">{formatearMoneda(cotizacion.total)}</span>
+              <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
+                <span className="font-bold text-xl">TOTAL:</span>
+                <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
               </div>
               
-              {/* ✅ NUEVO: Conversión de moneda con tipo de cambio */}
-              {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 1) > 1 && (
-                <div className="flex justify-between py-2 bg-blue-50 px-4 rounded-lg border border-blue-200">
-                  <span className="text-sm font-medium text-blue-900">
-                    Equivalente en Soles (TC: {parseFloat(cotizacion.tipo_cambio).toFixed(4)}):
-                  </span>
-                  <span className="font-bold text-blue-900">
-                    S/ {(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio)).toFixed(2)}
-                  </span>
-                </div>
-              )}
-              
-              {cotizacion.moneda === 'PEN' && parseFloat(cotizacion.tipo_cambio || 1) > 1 && (
-                <div className="flex justify-between py-2 bg-green-50 px-4 rounded-lg border border-green-200">
-                  <span className="text-sm font-medium text-green-900">
-                    Equivalente en Dólares (TC: {parseFloat(cotizacion.tipo_cambio).toFixed(4)}):
-                  </span>
-                  <span className="font-bold text-green-900">
-                    $ {(parseFloat(cotizacion.total) / parseFloat(cotizacion.tipo_cambio)).toFixed(2)}
-                  </span>
+              {/* Conversión de moneda */}
+              {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-900 font-medium">
+                      Equivalente en Soles:
+                    </span>
+                    <span className="font-bold text-blue-900 text-lg">
+                      S/ {(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio)).toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-700 mt-1">
+                    TC: S/ {parseFloat(cotizacion.tipo_cambio).toFixed(4)}
+                  </p>
                 </div>
               )}
             </div>
@@ -572,27 +539,35 @@ function DetalleCotizacion() {
         </div>
       </div>
 
-      {/* Modal Cambiar Estado */}
+      {/* Modales */}
       <Modal
         isOpen={modalEstadoOpen}
         onClose={() => setModalEstadoOpen(false)}
-        title="Cambiar Estado"
+        title="Cambiar Estado de Cotización"
         size="md"
       >
         <div className="space-y-4">
-          <p className="text-muted">Estado actual: <strong>{cotizacion.estado}</strong></p>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <p className="text-sm text-muted">Estado actual:</p>
+            <p className="font-bold text-lg">{cotizacion.estado}</p>
+          </div>
           
           <div className="space-y-2">
-            {['Pendiente', 'Enviada', 'Aprobada', 'Rechazada'].map(estado => (
-              <button
-                key={estado}
-                className="btn btn-outline w-full justify-start"
-                onClick={() => handleCambiarEstado(estado)}
-                disabled={cotizacion.estado === estado}
-              >
-                {estado}
-              </button>
-            ))}
+            {['Pendiente', 'Enviada', 'Aprobada', 'Rechazada'].map(estado => {
+              const config = getEstadoConfig(estado);
+              const Icono = config.icono;
+              return (
+                <button
+                  key={estado}
+                  className={`btn btn-outline w-full justify-start ${cotizacion.estado === estado ? 'opacity-50' : ''}`}
+                  onClick={() => handleCambiarEstado(estado)}
+                  disabled={cotizacion.estado === estado}
+                >
+                  <Icono size={18} className="mr-2" />
+                  {estado}
+                </button>
+              );
+            })}
           </div>
           
           <div className="flex gap-2 justify-end pt-4 border-t">
@@ -603,7 +578,6 @@ function DetalleCotizacion() {
         </div>
       </Modal>
 
-      {/* Modal Cambiar Prioridad */}
       <Modal
         isOpen={modalPrioridadOpen}
         onClose={() => setModalPrioridadOpen(false)}
@@ -611,13 +585,16 @@ function DetalleCotizacion() {
         size="md"
       >
         <div className="space-y-4">
-          <p className="text-muted">Prioridad actual: <strong>{cotizacion.prioridad}</strong></p>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <p className="text-sm text-muted">Prioridad actual:</p>
+            <p className="font-bold text-lg">{cotizacion.prioridad}</p>
+          </div>
           
           <div className="space-y-2">
             {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
               <button
                 key={prioridad}
-                className="btn btn-outline w-full justify-start"
+                className={`btn btn-outline w-full justify-start ${cotizacion.prioridad === prioridad ? 'opacity-50' : ''}`}
                 onClick={() => handleCambiarPrioridad(prioridad)}
                 disabled={cotizacion.prioridad === prioridad}
               >
@@ -634,7 +611,6 @@ function DetalleCotizacion() {
         </div>
       </Modal>
 
-      {/* Modal Convertir a Orden */}
       <Modal
         isOpen={modalConvertirOpen}
         onClose={() => setModalConvertirOpen(false)}
@@ -646,29 +622,27 @@ function DetalleCotizacion() {
             <div className="flex items-start gap-3">
               <AlertCircle size={24} className="text-info flex-shrink-0 mt-1" />
               <div>
-                <p className="font-medium text-blue-900">¿Convertir esta cotización?</p>
+                <p className="font-medium text-blue-900">¿Convertir esta cotización a Orden de Venta?</p>
                 <p className="text-sm text-blue-700 mt-2">
-                  Se creará una nueva Orden de Venta con todos los datos de esta cotización.
+                  Se creará una nueva orden con todos los datos de esta cotización.
                 </p>
               </div>
             </div>
           </div>
           
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h4 className="font-medium mb-2">Resumen:</h4>
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted">Cliente:</span>
-                <span className="font-medium">{cotizacion.cliente}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Total:</span>
-                <span className="font-bold text-primary">{formatearMoneda(cotizacion.total)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Productos:</span>
-                <span>{cotizacion.detalle?.length || 0} item(s)</span>
-              </div>
+          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+            <h4 className="font-semibold mb-3">Resumen:</h4>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Cliente:</span>
+              <span className="font-medium">{cotizacion.cliente}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Total:</span>
+              <span className="font-bold text-primary text-lg">{formatearMoneda(cotizacion.total)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Productos:</span>
+              <span className="font-medium">{cotizacion.detalle?.length || 0} item(s)</span>
             </div>
           </div>
           
@@ -676,8 +650,8 @@ function DetalleCotizacion() {
             <button className="btn btn-outline" onClick={() => setModalConvertirOpen(false)}>
               Cancelar
             </button>
-            <button className="btn btn-primary" onClick={handleConvertirVenta}>
-              <Check size={20} /> Continuar
+            <button className="btn btn-success" onClick={handleConvertirVenta}>
+              <Check size={20} /> Confirmar Conversión
             </button>
           </div>
         </div>

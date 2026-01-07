@@ -82,14 +82,11 @@ export async function getAllCotizaciones(req, res) {
   }
 }
 
-// ✅ OBTENER COTIZACIÓN POR ID CON DETALLE - CORREGIDO
+// ✅ OBTENER COTIZACIÓN POR ID CON DETALLE
 export async function getCotizacionById(req, res) {
   try {
     const { id } = req.params;
     
-    console.log('🔍 Obteniendo cotización ID:', id);
-    
-    // Obtener cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
@@ -105,7 +102,6 @@ export async function getCotizacionById(req, res) {
     `, [id]);
     
     if (!cotizacionResult.success) {
-      console.error('❌ Error al obtener cotización:', cotizacionResult.error);
       return res.status(500).json({ 
         success: false,
         error: cotizacionResult.error 
@@ -113,7 +109,6 @@ export async function getCotizacionById(req, res) {
     }
     
     if (cotizacionResult.data.length === 0) {
-      console.warn('⚠️ Cotización no encontrada:', id);
       return res.status(404).json({
         success: false,
         error: 'Cotización no encontrada'
@@ -121,39 +116,30 @@ export async function getCotizacionById(req, res) {
     }
     
     const cotizacion = cotizacionResult.data[0];
-    console.log('✅ Cotización obtenida:', cotizacion.numero_cotizacion);
     
     const detalleResult = await executeQuery(`
-  SELECT 
-    dc.id_detalle,
-    dc.id_cotizacion,
-    dc.id_producto,
-    dc.cantidad,
-    dc.precio_unitario,
-    dc.descuento_porcentaje,
-    dc.valor_venta,
-    dc.subtotal,
-    dc.orden,
-    p.codigo AS codigo_producto,
-    p.nombre AS producto,
-    p.unidad_medida,
-    p.stock_actual AS stock_disponible,
-    p.requiere_receta
-  FROM detalle_cotizacion dc
-  INNER JOIN productos p ON dc.id_producto = p.id_producto
-  WHERE dc.id_cotizacion = ?
-  ORDER BY dc.orden
-`, [id]);
-    
-    console.log('📦 Query detalle ejecutado');
-    console.log('📊 Resultado detalle:', {
-      success: detalleResult.success,
-      rows: detalleResult.data?.length || 0,
-      error: detalleResult.error || 'ninguno'
-    });
+      SELECT 
+        dc.id_detalle,
+        dc.id_cotizacion,
+        dc.id_producto,
+        dc.cantidad,
+        dc.precio_unitario,
+        dc.descuento_porcentaje,
+        dc.valor_venta,
+        dc.subtotal,
+        dc.orden,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida,
+        p.stock_actual AS stock_disponible,
+        p.requiere_receta
+      FROM detalle_cotizacion dc
+      INNER JOIN productos p ON dc.id_producto = p.id_producto
+      WHERE dc.id_cotizacion = ?
+      ORDER BY dc.orden
+    `, [id]);
     
     if (!detalleResult.success) {
-      console.error('❌ Error al obtener detalle:', detalleResult.error);
       return res.status(500).json({ 
         success: false,
         error: detalleResult.error 
@@ -161,11 +147,6 @@ export async function getCotizacionById(req, res) {
     }
     
     cotizacion.detalle = detalleResult.data || [];
-    console.log(`✅ Detalle cargado: ${cotizacion.detalle.length} productos`);
-    
-    if (cotizacion.detalle.length > 0) {
-      console.log('📋 Primer producto:', cotizacion.detalle[0]);
-    }
     
     res.json({
       success: true,
@@ -173,7 +154,7 @@ export async function getCotizacionById(req, res) {
     });
     
   } catch (error) {
-    console.error('❌ Error general en getCotizacionById:', error);
+    console.error('Error en getCotizacionById:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -181,36 +162,75 @@ export async function getCotizacionById(req, res) {
   }
 }
 
-// ✅ CREAR COTIZACIÓN
+// ✅ CREAR COTIZACIÓN - CORREGIDO CON VALIDACIONES Y CÁLCULOS AUTOMÁTICOS
 export async function createCotizacion(req, res) {
   try {
     const {
       id_cliente,
       fecha_emision,
-      fecha_vencimiento,
       prioridad,
       moneda,
       tipo_impuesto,
       porcentaje_impuesto,
       tipo_cambio,
-      plazo_pago,
+      plazo_pago,          // ✅ AHORA OBLIGATORIO
       forma_pago,
       direccion_entrega,
       observaciones,
-      id_comercial,
-      validez_dias,
+      id_comercial,        // Puede venir del frontend o ser null
+      validez_dias,        // ✅ OBLIGATORIO (default: 7)
       plazo_entrega,
-      orden_compra_cliente,
       lugar_entrega,
       detalle
     } = req.body;
     
-    // Validaciones
-    if (!id_cliente || !detalle || detalle.length === 0) {
+    // ✅ VALIDACIONES ESTRICTAS
+    if (!id_cliente) {
       return res.status(400).json({
         success: false,
-        error: 'Cliente y detalle son obligatorios'
+        error: 'Cliente es obligatorio'
       });
+    }
+    
+    if (!detalle || detalle.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Debe agregar al menos un producto'
+      });
+    }
+    
+    if (!plazo_pago || plazo_pago.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Plazo de pago es obligatorio (define el riesgo de la venta)'
+      });
+    }
+    
+    // ✅ COMERCIAL: Si no viene del frontend, usar el usuario actual
+    const comercialFinal = id_comercial || req.user?.id_empleado;
+    
+    if (!comercialFinal) {
+      return res.status(400).json({
+        success: false,
+        error: 'No se pudo determinar el comercial responsable'
+      });
+    }
+    
+    // ✅ FECHA DE EMISIÓN: Si no viene, usar HOY
+    const fechaEmisionFinal = fecha_emision || new Date().toISOString().split('T')[0];
+    
+    // ✅ VALIDEZ: Default 7 días si no se especifica
+    const validezDiasFinal = parseInt(validez_dias) || 7;
+    
+    // ✅ CALCULAR FECHA DE VENCIMIENTO AUTOMÁTICAMENTE
+    const fechaEmisionDate = new Date(fechaEmisionFinal);
+    fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
+    const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
+    
+    // ✅ TIPO DE CAMBIO: Si moneda es PEN, forzar a 1.0000
+    let tipoCambioFinal = parseFloat(tipo_cambio) || 1.0000;
+    if (moneda === 'PEN') {
+      tipoCambioFinal = 1.0000;
     }
     
     // Generar número de cotización
@@ -239,16 +259,16 @@ export async function createCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    // ✅ Calcular impuesto con porcentaje dinámico
     const porcentaje = parseFloat(porcentaje_impuesto) || 18.00;
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
     
-    // Insertar cotización con nuevos campos
+    // ✅ INSERTAR COTIZACIÓN (SIN orden_compra_cliente)
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
         numero_cotizacion,
         id_cliente,
+        id_comercial,
         fecha_emision,
         fecha_vencimiento,
         prioridad,
@@ -260,38 +280,37 @@ export async function createCotizacion(req, res) {
         forma_pago,
         direccion_entrega,
         observaciones,
-        id_comercial,
         validez_dias,
         plazo_entrega,
-        orden_compra_cliente,
         lugar_entrega,
         subtotal,
         igv,
         total,
-        estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+        estado,
+        id_creado_por
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
     `, [
       numeroCotizacion,
       id_cliente,
-      fecha_emision || new Date().toISOString().split('T')[0],
-      fecha_vencimiento || null,
+      comercialFinal,                    // ✅ Usuario actual si no se especifica
+      fechaEmisionFinal,                 // ✅ HOY si no se especifica
+      fechaVencimientoCalculada,         // ✅ CALCULADO AUTOMÁTICAMENTE
       prioridad || 'Media',
       moneda || 'PEN',
       tipo_impuesto || 'IGV',
       porcentaje || 18.00,
-      parseFloat(tipo_cambio) || 1.0000,
-      plazo_pago || null,
+      tipoCambioFinal,                   // ✅ 1.0000 si es PEN
+      plazo_pago,                        // ✅ OBLIGATORIO
       forma_pago || null,
       direccion_entrega || null,
       observaciones || null,
-      id_comercial || null,
-      parseInt(validez_dias) || 7,
+      validezDiasFinal,                  // ✅ Default: 7
       plazo_entrega || null,
-      orden_compra_cliente || null,
       lugar_entrega || null,
       subtotal,
       igv,
-      total
+      total,
+      comercialFinal                     // ✅ Guardar quién creó la cotización
     ]);
     
     if (!result.success) {
@@ -307,8 +326,6 @@ export async function createCotizacion(req, res) {
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       
-      // ✅ CORREGIDO: No calcular valor_venta y subtotal (son GENERATED)
-      // Solo insertar los campos que acepta la tabla
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
           id_cotizacion,
@@ -332,7 +349,8 @@ export async function createCotizacion(req, res) {
       success: true,
       data: {
         id_cotizacion: idCotizacion,
-        numero_cotizacion: numeroCotizacion
+        numero_cotizacion: numeroCotizacion,
+        fecha_vencimiento: fechaVencimientoCalculada
       },
       message: 'Cotización creada exitosamente'
     });
@@ -473,7 +491,6 @@ export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
     
-    // Obtener datos completos de la cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
@@ -499,7 +516,6 @@ export async function descargarPDFCotizacion(req, res) {
     
     const cotizacion = cotizacionResult.data[0];
     
-    // Obtener detalle
     const detalleResult = await executeQuery(`
       SELECT 
         dc.id_detalle,
@@ -526,11 +542,9 @@ export async function descargarPDFCotizacion(req, res) {
     
     cotizacion.detalle = detalleResult.data;
     
-    // ✅ Generar PDF
     const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
     const pdfBuffer = await generarCotizacionPDF(cotizacion);
     
-    // Configurar headers para descarga
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=Cotizacion-${cotizacion.numero_cotizacion}.pdf`);
     res.setHeader('Content-Length', pdfBuffer.length);

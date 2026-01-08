@@ -1,4 +1,3 @@
-// backend/utils/pdfGenerators/cotizacionPDF.js
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,7 +6,6 @@ import https from 'https';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Función para descargar imagen desde URL
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
     https.get(url, (response) => {
@@ -32,27 +30,17 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // ====================================
-      // DESCARGAR LOGO
-      // ====================================
       let logoBuffer;
       try {
         logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
       } catch (error) {
-        console.error('Error al descargar logo, usando fallback:', error);
+        console.error(error);
       }
 
-      // ====================================
-      // HEADER CON LOGO Y DATOS EMPRESA
-      // ====================================
-      
-      // Logo
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
-          // Fallback: rectángulo azul con texto
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
           doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
           doc.text('IndPack', 60, 55);
@@ -60,7 +48,6 @@ export async function generarCotizacionPDF(cotizacion) {
           doc.text('EMBALAJE INDUSTRIAL', 60, 80);
         }
       } else {
-        // Fallback: rectángulo azul con texto
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
         doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
         doc.text('IndPack', 60, 55);
@@ -68,7 +55,6 @@ export async function generarCotizacionPDF(cotizacion) {
         doc.text('EMBALAJE INDUSTRIAL', 60, 80);
       }
 
-      // Datos empresa (izquierda)
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, 110);
       
@@ -79,7 +65,6 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text('E-mail: informes@indpackperu.com', 50, 160);
       doc.text('Web: https://www.indpackperu.com/', 50, 172);
 
-      // Recuadro RUC y COTIZACIÓN (derecha)
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
       
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
@@ -91,11 +76,6 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${cotizacion.numero_cotizacion}`, 385, 83, { align: 'center', width: 155 });
 
-      // ====================================
-      // DATOS DEL CLIENTE (Recuadro superior con altura dinámica)
-      // ====================================
-      
-      // Calcular altura necesaria para dirección
       const direccionCliente = cotizacion.direccion_entrega || 
                                cotizacion.direccion_despacho || 
                                cotizacion.direccion_cliente || 
@@ -106,7 +86,6 @@ export async function generarCotizacionPDF(cotizacion) {
       
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
-      // Columna izquierda
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Cliente:', 40, 203);
       doc.font('Helvetica');
@@ -122,7 +101,6 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica');
       doc.text(direccionCliente, 100, 233, { width: 230, lineGap: 2 });
       
-      // Ciudad con posición dinámica (después de dirección)
       const yPosicionCiudad = 233 + alturaDireccion + 10;
       
       doc.font('Helvetica-Bold');
@@ -130,7 +108,6 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica');
       doc.text(cotizacion.ciudad_entrega || 'Lima - Perú', 100, yPosicionCiudad);
 
-      // Columna derecha
       doc.font('Helvetica-Bold');
       doc.text('Moneda:', 360, 203);
       doc.font('Helvetica');
@@ -147,39 +124,40 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text(cotizacion.forma_pago || '', 450, 233);
       
       doc.font('Helvetica-Bold');
-      doc.text('Orden de Compra', 360, 248);
+      doc.text('Plazo Entrega:', 360, 248);
       doc.font('Helvetica');
-      doc.text(cotizacion.orden_compra_cliente || '', 450, 248);
-
-      // ====================================
-      // FECHA Y COMERCIAL (Recuadro intermedio con posición dinámica)
-      // ====================================
+      doc.text(cotizacion.plazo_entrega || '-', 450, 248);
       
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
       
       doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
       
-      // Columna izquierda - Fecha
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha de Pedido:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
+      doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
       doc.font('Helvetica');
-      const fechaEmision = new Date(cotizacion.fecha_emision).toLocaleDateString('es-PE');
+      const fechaEmisionObj = new Date(cotizacion.fecha_emision);
+      const fechaEmision = fechaEmisionObj.toLocaleDateString('es-PE');
       doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
 
-      // Columna derecha - Comercial
+      if (cotizacion.validez_dias) {
+        const fechaVenc = new Date(fechaEmisionObj);
+        fechaVenc.setDate(fechaVenc.getDate() + parseInt(cotizacion.validez_dias));
+        const fechaVencimiento = fechaVenc.toLocaleDateString('es-PE');
+        
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('Válido hasta:', 150, yPosRecuadroFechas + 10, { align: 'center', width: 100 });
+        doc.font('Helvetica');
+        doc.text(fechaVencimiento, 150, yPosRecuadroFechas + 25, { align: 'center', width: 100 });
+      }
+
       doc.font('Helvetica-Bold');
       doc.text('Comercial:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
       doc.font('Helvetica');
       doc.text(cotizacion.comercial || '', 310, yPosRecuadroFechas + 20, { align: 'center', width: 252 });
       doc.text(cotizacion.email_comercial || '', 310, yPosRecuadroFechas + 30, { align: 'center', width: 252 });
 
-      // ====================================
-      // TABLA DE PRODUCTOS (con posición dinámica)
-      // ====================================
-      
       let yPos = yPosRecuadroFechas + 52;
 
-      // Encabezado tabla (gris)
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
       
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
@@ -192,7 +170,6 @@ export async function generarCotizacionPDF(cotizacion) {
 
       yPos += 20;
 
-      // Filas de productos
       const simboloMoneda = cotizacion.moneda === 'USD' ? '$' : 'S/';
       
       cotizacion.detalle.forEach((item, idx) => {
@@ -200,17 +177,14 @@ export async function generarCotizacionPDF(cotizacion) {
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
         const valorVenta = parseFloat(item.valor_venta || item.subtotal).toFixed(2);
         
-        // Fila con altura dinámica
         const descripcion = `[${item.codigo_producto}] ${item.producto}`;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
-        // Verificar si necesita nueva página
         if (yPos + alturaFila > 700) {
           doc.addPage();
           yPos = 50;
           
-          // Repetir encabezado en nueva página
           doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
           doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
           doc.text('CÓDIGO', 40, yPos + 6);
@@ -222,7 +196,6 @@ export async function generarCotizacionPDF(cotizacion) {
           yPos += 20;
         }
 
-        // Contenido de la fila
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         
         doc.text(item.codigo_producto, 40, yPos + 5);
@@ -235,13 +208,8 @@ export async function generarCotizacionPDF(cotizacion) {
         yPos += alturaFila;
       });
 
-      // ====================================
-      // OBSERVACIONES Y TOTALES
-      // ====================================
-      
       yPos += 10;
 
-      // Observaciones (izquierda)
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('OBSERVACIONES', 40, yPos);
       
@@ -250,12 +218,11 @@ export async function generarCotizacionPDF(cotizacion) {
         doc.text(cotizacion.observaciones, 40, yPos + 15, { width: 330 });
       }
 
-      // Totales (derecha con fondo gris redondeado)
       const subtotal = parseFloat(cotizacion.subtotal).toFixed(2);
       const igv = parseFloat(cotizacion.igv).toFixed(2);
       const total = parseFloat(cotizacion.total).toFixed(2);
+      const etiquetaImpuesto = cotizacion.tipo_impuesto || 'IGV';
 
-      // SUB TOTAL
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
       doc.text('SUB TOTAL', 390, yPos + 4);
@@ -266,10 +233,9 @@ export async function generarCotizacionPDF(cotizacion) {
 
       yPos += 20;
 
-      // IGV
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('IGV', 390, yPos + 4);
+      doc.text(etiquetaImpuesto, 390, yPos + 4);
       
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
@@ -277,7 +243,6 @@ export async function generarCotizacionPDF(cotizacion) {
 
       yPos += 20;
 
-      // TOTAL
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
       doc.text('TOTAL', 390, yPos + 4);
@@ -288,30 +253,21 @@ export async function generarCotizacionPDF(cotizacion) {
 
       yPos += 25;
 
-      // Total en letras
       doc.fontSize(8).font('Helvetica');
       const totalEnLetras = numeroALetras(parseFloat(total), cotizacion.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
 
-      // ====================================
-      // PIE DE PÁGINA
-      // ====================================
-      
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Page: 1 / 1', 50, 770, { align: 'center', width: 495 });
 
       doc.end();
       
     } catch (error) {
-      console.error('Error al generar PDF:', error);
+      console.error(error);
       reject(error);
     }
   });
 }
-
-// ====================================
-// FUNCIONES AUXILIARES
-// ====================================
 
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
   const currentFontSize = doc._fontSize || 12;
@@ -336,7 +292,6 @@ function numeroALetras(numero, moneda) {
   const entero = Math.floor(numero);
   const decimales = Math.round((numero - entero) * 100);
   
-  // Función auxiliar sin moneda (para recursión)
   function convertirNumero(num) {
     if (num === 0) return 'CERO';
     if (num < 10) return unidades[num];
@@ -360,7 +315,6 @@ function numeroALetras(numero, moneda) {
       const textoMiles = miles === 1 ? 'MIL' : convertirNumero(miles) + ' MIL';
       return textoMiles + (resto > 0 ? ' ' + convertirNumero(resto) : '');
     }
-    // Millones
     const millones = Math.floor(num / 1000000);
     const resto = num % 1000000;
     const textoMillones = millones === 1 ? 'UN MILLON' : convertirNumero(millones) + ' MILLONES';
@@ -370,6 +324,5 @@ function numeroALetras(numero, moneda) {
   const resultado = convertirNumero(entero);
   const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
   
-  // Solo una vez la moneda al final
   return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }

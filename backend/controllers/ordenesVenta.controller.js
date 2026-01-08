@@ -735,7 +735,269 @@ export async function getEstadisticasOrdenesVenta(req, res) {
     });
   }
 }
+// ... (todo tu código existente)
 
+export async function convertirCotizacionAOrden(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      orden_compra_cliente,
+      fecha_entrega_programada,
+      direccion_entrega,
+      contacto_entrega,
+      telefono_entrega,
+      lugar_entrega,
+      ciudad_entrega,
+      observaciones
+    } = req.body;
+    
+    const id_registrado_por = req.user?.id_empleado || null;
+    
+    if (!id_registrado_por) {
+      return res.status(401).json({
+        success: false,
+        error: 'Usuario no autenticado'
+      });
+    }
+    
+    if (!orden_compra_cliente || orden_compra_cliente.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'La orden de compra del cliente es obligatoria'
+      });
+    }
+    
+    if (!fecha_entrega_programada) {
+      return res.status(400).json({
+        success: false,
+        error: 'La fecha de entrega programada es obligatoria'
+      });
+    }
+    
+    if (!direccion_entrega || direccion_entrega.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'La dirección de entrega confirmada es obligatoria'
+      });
+    }
+    
+    if (!contacto_entrega || !telefono_entrega) {
+      return res.status(400).json({
+        success: false,
+        error: 'El contacto de recepción (nombre y teléfono) es obligatorio'
+      });
+    }
+    
+    const cotizacionResult = await executeQuery(`
+      SELECT 
+        c.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente
+      FROM cotizaciones c
+      LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
+      WHERE c.id_cotizacion = ?
+    `, [id]);
+    
+    if (!cotizacionResult.success || cotizacionResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cotización no encontrada'
+      });
+    }
+    
+    const cotizacion = cotizacionResult.data[0];
+    
+    if (cotizacion.estado === 'Convertida') {
+      return res.status(400).json({
+        success: false,
+        error: 'Esta cotización ya fue convertida a orden de venta'
+      });
+    }
+    
+    if (cotizacion.estado !== 'Aprobada') {
+      return res.status(400).json({
+        success: false,
+        error: 'Solo se pueden convertir cotizaciones aprobadas'
+      });
+    }
+    
+    const detalleResult = await executeQuery(`
+      SELECT 
+        dc.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida,
+        p.stock_actual,
+        p.requiere_receta
+      FROM detalle_cotizacion dc
+      INNER JOIN productos p ON dc.id_producto = p.id_producto
+      WHERE dc.id_cotizacion = ?
+      ORDER BY dc.orden
+    `, [id]);
+    
+    if (!detalleResult.success || detalleResult.data.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'La cotización no tiene productos'
+      });
+    }
+    
+    const productosInsuficientes = [];
+    const productosRequierenProduccion = [];
+    
+    for (const item of detalleResult.data) {
+      const stockDisponible = parseFloat(item.stock_actual || 0);
+      const cantidadRequerida = parseFloat(item.cantidad);
+      
+      if (stockDisponible < cantidadRequerida) {
+        productosInsuficientes.push({
+          producto: item.producto,
+          requerido: cantidadRequerida,
+          disponible: stockDisponible,
+          faltante: cantidadRequerida - stockDisponible
+        });
+        
+        if (item.requiere_receta) {
+          productosRequierenProduccion.push(item.producto);
+        }
+      }
+    }
+    
+    const ultimaResult = await executeQuery(`
+      SELECT numero_orden 
+      FROM ordenes_venta 
+      ORDER BY id_orden_venta DESC 
+      LIMIT 1
+    `);
+    
+    let numeroSecuencia = 1;
+    if (ultimaResult.success && ultimaResult.data.length > 0) {
+      const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
+    }
+    
+    const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
+    
+    const result = await executeQuery(`
+      INSERT INTO ordenes_venta (
+        numero_orden,
+        id_cliente,
+        id_cotizacion,
+        id_comercial,
+        fecha_emision,
+        fecha_entrega_programada,
+        prioridad,
+        moneda,
+        tipo_cambio,
+        tipo_impuesto,
+        porcentaje_impuesto,
+        plazo_pago,
+        forma_pago,
+        orden_compra_cliente,
+        direccion_entrega,
+        lugar_entrega,
+        ciudad_entrega,
+        contacto_entrega,
+        telefono_entrega,
+        observaciones,
+        id_registrado_por,
+        subtotal,
+        igv,
+        total,
+        estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+    `, [
+      numeroOrden,
+      cotizacion.id_cliente,
+      id,
+      cotizacion.id_comercial || null,
+      new Date().toISOString().split('T')[0],
+      fecha_entrega_programada,
+      cotizacion.prioridad || 'Media',
+      cotizacion.moneda || 'PEN',
+      parseFloat(cotizacion.tipo_cambio || 1.0000),
+      cotizacion.tipo_impuesto || 'IGV',
+      parseFloat(cotizacion.porcentaje_impuesto || 18.00),
+      cotizacion.plazo_pago || null,
+      cotizacion.forma_pago || null,
+      orden_compra_cliente,
+      direccion_entrega,
+      lugar_entrega || null,
+      ciudad_entrega || null,
+      contacto_entrega,
+      telefono_entrega,
+      observaciones || cotizacion.observaciones || null,
+      id_registrado_por,
+      parseFloat(cotizacion.subtotal || 0),
+      parseFloat(cotizacion.igv || 0),
+      parseFloat(cotizacion.total || 0)
+    ]);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
+    const idOrden = result.data.insertId;
+    
+    for (const item of detalleResult.data) {
+      await executeQuery(`
+        INSERT INTO detalle_orden_venta (
+          id_orden_venta,
+          id_producto,
+          cantidad,
+          precio_unitario,
+          descuento_porcentaje
+        ) VALUES (?, ?, ?, ?, ?)
+      `, [
+        idOrden,
+        item.id_producto,
+        parseFloat(item.cantidad),
+        parseFloat(item.precio_unitario),
+        parseFloat(item.descuento_porcentaje || 0)
+      ]);
+    }
+    
+    await executeQuery(`
+      UPDATE cotizaciones 
+      SET estado = 'Convertida',
+          id_orden_venta = ?
+      WHERE id_cotizacion = ?
+    `, [idOrden, id]);
+    
+    const responseData = {
+      id_orden_venta: idOrden,
+      numero_orden: numeroOrden,
+      numero_cotizacion: cotizacion.numero_cotizacion
+    };
+    
+    if (productosInsuficientes.length > 0) {
+      responseData.alertas = {
+        stock_insuficiente: productosInsuficientes,
+        requieren_produccion: productosRequierenProduccion
+      };
+    }
+    
+    res.status(201).json({
+      success: true,
+      data: responseData,
+      message: productosInsuficientes.length > 0 
+        ? `Orden creada con alertas de stock. ${productosInsuficientes.length} producto(s) requieren atención.`
+        : 'Orden de venta creada exitosamente desde cotización'
+    });
+    
+  } catch (error) {
+    console.error('Error al convertir cotización:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;

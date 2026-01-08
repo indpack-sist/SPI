@@ -133,11 +133,11 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
       
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
+      doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 130 });
       doc.font('Helvetica');
       const fechaEmisionObj = new Date(cotizacion.fecha_emision);
       const fechaEmision = fechaEmisionObj.toLocaleDateString('es-PE');
-      doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
+      doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 130 });
 
       if (cotizacion.validez_dias) {
         const fechaVenc = new Date(fechaEmisionObj);
@@ -145,9 +145,9 @@ export async function generarCotizacionPDF(cotizacion) {
         const fechaVencimiento = fechaVenc.toLocaleDateString('es-PE');
         
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-        doc.text('Válido hasta:', 150, yPosRecuadroFechas + 10, { align: 'center', width: 100 });
+        doc.text('Válido hasta:', 170, yPosRecuadroFechas + 10, { align: 'center', width: 130 });
         doc.font('Helvetica');
-        doc.text(fechaVencimiento, 150, yPosRecuadroFechas + 25, { align: 'center', width: 100 });
+        doc.text(fechaVencimiento, 170, yPosRecuadroFechas + 25, { align: 'center', width: 130 });
       }
 
       doc.font('Helvetica-Bold');

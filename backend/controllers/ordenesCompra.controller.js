@@ -1,4 +1,3 @@
-// backend/controllers/ordenes-compra.controller.js
 import { executeQuery } from '../config/database.js';
 
 export async function getAllOrdenesCompra(req, res) {
@@ -77,7 +76,6 @@ export async function getOrdenCompraById(req, res) {
   try {
     const { id } = req.params;
     
-    // Orden principal
     const ordenResult = await executeQuery(`
       SELECT 
         oc.*,
@@ -108,7 +106,6 @@ export async function getOrdenCompraById(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // Detalle de la orden
     const detalleResult = await executeQuery(`
       SELECT 
         doc.*,
@@ -168,7 +165,6 @@ export async function createOrdenCompra(req, res) {
       detalle
     } = req.body;
     
-    // Validaciones
     if (!id_proveedor || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,

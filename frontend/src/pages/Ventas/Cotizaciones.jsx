@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/Cotizaciones.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -58,7 +57,6 @@ function Cotizaciones() {
     }
   };
 
-  // Filtrado por texto
   const cotizacionesFiltradas = cotizaciones.filter(item => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
@@ -70,7 +68,6 @@ function Cotizaciones() {
     );
   });
 
-  // Paginación
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = cotizacionesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
@@ -79,7 +76,6 @@ function Cotizaciones() {
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
-  // Estadísticas rápidas
   const estadisticas = {
     total: cotizaciones.length,
     pendientes: cotizaciones.filter(c => c.estado === 'Pendiente').length,

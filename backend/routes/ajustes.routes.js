@@ -13,10 +13,6 @@ import { verificarToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// =====================================================
-// RUTAS PÚBLICAS (requieren solo autenticación)
-// =====================================================
-
 /**
  * @route   GET /api/productos/ajustes/motivos
  * @desc    Obtener lista de motivos de ajuste disponibles

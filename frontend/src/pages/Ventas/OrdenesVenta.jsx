@@ -16,7 +16,6 @@ import {
   User, 
   UserCheck,
   Search,
-  // IMPORTES PARA PAGINACIÓN
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -35,7 +34,6 @@ function OrdenesVenta() {
   const [success, setSuccess] = useState(null);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
 
-  // Estados de filtros y paginación
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroPrioridad, setFiltroPrioridad] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -46,7 +44,6 @@ function OrdenesVenta() {
     cargarDatos();
   }, [filtroEstado, filtroPrioridad]);
 
-  // Resetear a página 1 cuando cambian los filtros o búsqueda
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, filtroPrioridad, busqueda]);
@@ -81,7 +78,6 @@ function OrdenesVenta() {
     }
   };
 
-  // 1. LÓGICA DE FILTRADO (Texto)
   const ordenesFiltradas = ordenes.filter(orden => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
@@ -95,7 +91,6 @@ function OrdenesVenta() {
     );
   });
 
-  // 2. LÓGICA DE PAGINACIÓN
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);

@@ -46,7 +46,6 @@ function StockInventario() {
       setProductos(productosRes.data.data);
       setTiposInventario(tiposRes.data.data);
       
-      // Expandir todas las secciones por defecto
       const expandidas = {};
       resumenRes.data.data.forEach(item => {
         expandidas[item.id_tipo_inventario] = true;
@@ -108,7 +107,6 @@ function StockInventario() {
     getEstadoStock(p.stock_actual, p.stock_minimo, p.stock_maximo) === 'bajo'
   );
 
-  // Configuración de colores idéntica al Dashboard
   const getConfigTipo = (nombreTipo) => {
     const colores = {
       'Materia Prima': { 
@@ -185,7 +183,7 @@ function StockInventario() {
     },
     {
       header: 'Valor Costo',
-      accessor: 'stock_actual', // Usamos stock para calcular el total en render
+      accessor: 'stock_actual', 
       align: 'right',
       width: '130px',
       render: (value, row) => (
@@ -196,7 +194,7 @@ function StockInventario() {
     },
     {
       header: 'Estado',
-      accessor: 'stock_actual', // Placeholder
+      accessor: 'stock_actual', 
       align: 'center',
       width: '100px',
       render: (value, row) => {
@@ -214,7 +212,6 @@ function StockInventario() {
 
   if (loading) return <Loading message="Calculando valorizaciones..." />;
 
-  // Cálculo de totales generales
   const valorTotalCosto = resumenStock.reduce((sum, item) => sum + parseFloat(item.valor_costo || 0), 0);
   const valorTotalVenta = resumenStock.reduce((sum, item) => sum + parseFloat(item.valor_venta || 0), 0);
   const totalProductos = resumenStock.reduce((sum, item) => sum + parseInt(item.total_productos || 0), 0);
@@ -320,7 +317,6 @@ function StockInventario() {
             const isExpanded = seccionesExpandidas[tipoInventario.id_tipo_inventario];
             const esTerminado = esProductoTerminado(tipoInventario.tipo_inventario);
             
-            // Si el filtro oculta todos los productos de este tipo, no renderizamos la sección
             if (productosFiltradosDelTipo.length === 0 && filtroEstado !== 'todos') return null;
 
             return (

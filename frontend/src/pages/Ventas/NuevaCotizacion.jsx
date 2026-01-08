@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/NuevaCotizacion.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -12,7 +11,6 @@ import Modal from '../../components/UI/Modal';
 import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, dashboard } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 
-// ✅ TIPOS DE IMPUESTO CONFIGURABLES
 const TIPOS_IMPUESTO = [
   { codigo: 'IGV', nombre: 'IGV 18%', porcentaje: 18.00 },
   { codigo: 'EXO', nombre: 'Exonerado 0%', porcentaje: 0.00 },
@@ -43,28 +41,25 @@ function NuevaCotizacion() {
   
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
-    id_comercial: user?.id_empleado || '',  // ✅ AUTOLLENAR con usuario actual
-    fecha_emision: new Date().toISOString().split('T')[0],  // ✅ HOY por defecto
+    id_comercial: user?.id_empleado || '',
+    fecha_emision: new Date().toISOString().split('T')[0],
     moneda: 'PEN',
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     tipo_cambio: 1.0000,
-    plazo_pago: '',           // ✅ OBLIGATORIO
+    plazo_pago: '',
     forma_pago: '',
     direccion_entrega: '',
     observaciones: '',
-    validez_dias: 7,          // ✅ Default 7 días
+    validez_dias: 7,
     plazo_entrega: '',
     lugar_entrega: ''
-    // ❌ ELIMINADO: orden_compra_cliente
-    // ❌ ELIMINADO: fecha_vencimiento (se calcula automáticamente)
   });
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
   
-  // ✅ CALCULAR FECHA DE VENCIMIENTO AUTOMÁTICAMENTE
   const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
 
   useEffect(() => {
@@ -75,7 +70,6 @@ function NuevaCotizacion() {
     calcularTotales();
   }, [detalle, formCabecera.porcentaje_impuesto]);
 
-  // ✅ CALCULAR FECHA DE VENCIMIENTO AUTOMÁTICAMENTE
   useEffect(() => {
     if (formCabecera.validez_dias && formCabecera.fecha_emision) {
       const fechaEmision = new Date(formCabecera.fecha_emision);
@@ -84,7 +78,6 @@ function NuevaCotizacion() {
     }
   }, [formCabecera.fecha_emision, formCabecera.validez_dias]);
 
-  // ✅ AUTO-OBTENER TIPO DE CAMBIO SI MONEDA = USD
   useEffect(() => {
     if (formCabecera.moneda === 'USD') {
       obtenerTipoCambio();
@@ -112,7 +105,6 @@ function NuevaCotizacion() {
         setProductos(resProductos.data.data || []);
       }
       
-      // ✅ FILTRAR SOLO VENDEDORES/COMERCIALES
       const resComerciales = await empleadosAPI.getAll({ estado: 'Activo' });
       if (resComerciales.data.success) {
         const vendedores = (resComerciales.data.data || []).filter(
@@ -129,7 +121,6 @@ function NuevaCotizacion() {
     }
   };
 
-  // ✅ OBTENER TIPO DE CAMBIO DESDE API
   const obtenerTipoCambio = async () => {
     try {
       setLoadingTC(true);
@@ -237,12 +228,10 @@ function NuevaCotizacion() {
     }
   };
 
-  // ✅ GUARDAR CON VALIDACIONES
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     
-    // ✅ VALIDACIONES ESTRICTAS
     if (!formCabecera.id_cliente) {
       setError('Debe seleccionar un cliente');
       return;

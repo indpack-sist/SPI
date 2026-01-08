@@ -58,7 +58,6 @@ export async function realizarConteoFisico(req, res) {
       });
     }
 
-    // CORREGIDO: executeTransaction debe recibir un array de queries
     const result = await executeTransaction([
       {
         sql: `INSERT INTO ajustes_inventario (
@@ -95,7 +94,6 @@ export async function realizarConteoFisico(req, res) {
       });
     }
 
-    // El ID del ajuste está en el primer resultado
     const id_ajuste = result.data[0].insertId;
 
     const ajusteCompleto = await executeQuery(

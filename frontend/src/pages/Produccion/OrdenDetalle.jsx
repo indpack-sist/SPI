@@ -20,12 +20,10 @@ function OrdenDetalle() {
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
   
-  // Estados del modal finalizar
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadProducida, setCantidadProducida] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
   
-  // NUEVO: Estados para mermas
   const [productosMerma, setProductosMerma] = useState([]);
   const [mermas, setMermas] = useState([]);
   const [mostrarMermas, setMostrarMermas] = useState(false);
@@ -53,7 +51,6 @@ function OrdenDetalle() {
     }
   };
 
-  // NUEVO: Cargar productos de merma
   const cargarProductosMerma = async () => {
     try {
       const response = await ordenesProduccionAPI.getProductosMerma();
@@ -107,7 +104,6 @@ function OrdenDetalle() {
     }
   };
 
-  // NUEVO: Agregar línea de merma
   const agregarMerma = () => {
     setMermas([...mermas, {
       id_temp: Date.now(),
@@ -117,12 +113,10 @@ function OrdenDetalle() {
     }]);
   };
 
-  // NUEVO: Eliminar línea de merma
   const eliminarMerma = (id_temp) => {
     setMermas(mermas.filter(m => m.id_temp !== id_temp));
   };
 
-  // NUEVO: Actualizar merma
   const actualizarMerma = (id_temp, campo, valor) => {
     setMermas(mermas.map(m => 
       m.id_temp === id_temp ? { ...m, [campo]: valor } : m
@@ -132,7 +126,6 @@ function OrdenDetalle() {
   const handleFinalizar = async (e) => {
     e.preventDefault();
     
-    // Validar mermas
     const mermasValidas = mermas.filter(m => 
       m.id_producto_merma && 
       m.cantidad && 
@@ -231,7 +224,6 @@ function OrdenDetalle() {
     return Math.ceil(parseFloat(orden.cantidad_planificada) / parseFloat(orden.rendimiento_unidades));
   };
 
-  // NUEVO: Obtener nombre del producto de merma
   const getNombreMerma = (id_producto) => {
     const producto = productosMerma.find(p => p.id_producto === parseInt(id_producto));
     return producto ? `${producto.nombre} (${producto.unidad_medida})` : '';

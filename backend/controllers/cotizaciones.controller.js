@@ -1,7 +1,5 @@
-// backend/controllers/cotizaciones.controller.js
 import { executeQuery } from '../config/database.js';
 
-// ✅ OBTENER TODAS LAS COTIZACIONES CON FILTROS
 export async function getAllCotizaciones(req, res) {
   try {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
@@ -82,7 +80,6 @@ export async function getAllCotizaciones(req, res) {
   }
 }
 
-// ✅ OBTENER COTIZACIÓN POR ID CON DETALLE
 export async function getCotizacionById(req, res) {
   try {
     const { id } = req.params;
@@ -162,7 +159,6 @@ export async function getCotizacionById(req, res) {
   }
 }
 
-// ✅ CREAR COTIZACIÓN - CORREGIDO CON VALIDACIONES Y CÁLCULOS AUTOMÁTICOS
 export async function createCotizacion(req, res) {
   try {
     const {
@@ -173,18 +169,17 @@ export async function createCotizacion(req, res) {
       tipo_impuesto,
       porcentaje_impuesto,
       tipo_cambio,
-      plazo_pago,          // ✅ AHORA OBLIGATORIO
+      plazo_pago,         
       forma_pago,
       direccion_entrega,
       observaciones,
-      id_comercial,        // Puede venir del frontend o ser null
-      validez_dias,        // ✅ OBLIGATORIO (default: 7)
+      id_comercial,        
+      validez_dias,        
       plazo_entrega,
       lugar_entrega,
       detalle
     } = req.body;
     
-    // ✅ VALIDACIONES ESTRICTAS
     if (!id_cliente) {
       return res.status(400).json({
         success: false,
@@ -206,7 +201,6 @@ export async function createCotizacion(req, res) {
       });
     }
     
-    // ✅ COMERCIAL: Si no viene del frontend, usar el usuario actual
     const comercialFinal = id_comercial || req.user?.id_empleado;
     
     if (!comercialFinal) {
@@ -216,24 +210,19 @@ export async function createCotizacion(req, res) {
       });
     }
     
-    // ✅ FECHA DE EMISIÓN: Si no viene, usar HOY
     const fechaEmisionFinal = fecha_emision || new Date().toISOString().split('T')[0];
     
-    // ✅ VALIDEZ: Default 7 días si no se especifica
     const validezDiasFinal = parseInt(validez_dias) || 7;
     
-    // ✅ CALCULAR FECHA DE VENCIMIENTO AUTOMÁTICAMENTE
     const fechaEmisionDate = new Date(fechaEmisionFinal);
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
     
-    // ✅ TIPO DE CAMBIO: Si moneda es PEN, forzar a 1.0000
     let tipoCambioFinal = parseFloat(tipo_cambio) || 1.0000;
     if (moneda === 'PEN') {
       tipoCambioFinal = 1.0000;
     }
     
-    // Generar número de cotización
     const ultimaResult = await executeQuery(`
       SELECT numero_cotizacion 
       FROM cotizaciones 
@@ -251,7 +240,6 @@ export async function createCotizacion(req, res) {
     
     const numeroCotizacion = `COT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // Calcular totales
     let subtotal = 0;
     for (const item of detalle) {
       const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
@@ -263,7 +251,6 @@ export async function createCotizacion(req, res) {
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
     
-    // ✅ INSERTAR COTIZACIÓN (SIN orden_compra_cliente)
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
         numero_cotizacion,
@@ -292,25 +279,25 @@ export async function createCotizacion(req, res) {
     `, [
       numeroCotizacion,
       id_cliente,
-      comercialFinal,                    // ✅ Usuario actual si no se especifica
-      fechaEmisionFinal,                 // ✅ HOY si no se especifica
-      fechaVencimientoCalculada,         // ✅ CALCULADO AUTOMÁTICAMENTE
+      comercialFinal,                   
+      fechaEmisionFinal,                 
+      fechaVencimientoCalculada,         
       prioridad || 'Media',
       moneda || 'PEN',
       tipo_impuesto || 'IGV',
       porcentaje || 18.00,
-      tipoCambioFinal,                   // ✅ 1.0000 si es PEN
-      plazo_pago,                        // ✅ OBLIGATORIO
+      tipoCambioFinal,                   
+      plazo_pago,                        
       forma_pago || null,
       direccion_entrega || null,
       observaciones || null,
-      validezDiasFinal,                  // ✅ Default: 7
+      validezDiasFinal,                  
       plazo_entrega || null,
       lugar_entrega || null,
       subtotal,
       igv,
       total,
-      comercialFinal                     // ✅ Guardar quién creó la cotización
+      comercialFinal                    
     ]);
     
     if (!result.success) {
@@ -322,7 +309,6 @@ export async function createCotizacion(req, res) {
     
     const idCotizacion = result.data.insertId;
     
-    // Insertar detalle
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       
@@ -364,7 +350,6 @@ export async function createCotizacion(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR ESTADO
 export async function actualizarEstadoCotizacion(req, res) {
   try {
     const { id } = req.params;
@@ -406,7 +391,6 @@ export async function actualizarEstadoCotizacion(req, res) {
   }
 }
 
-// ✅ ACTUALIZAR PRIORIDAD
 export async function actualizarPrioridadCotizacion(req, res) {
   try {
     const { id } = req.params;
@@ -448,7 +432,6 @@ export async function actualizarPrioridadCotizacion(req, res) {
   }
 }
 
-// ✅ OBTENER ESTADÍSTICAS
 export async function getEstadisticasCotizaciones(req, res) {
   try {
     const result = await executeQuery(`
@@ -486,7 +469,6 @@ export async function getEstadisticasCotizaciones(req, res) {
   }
 }
 
-// ✅ DESCARGAR PDF
 export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;

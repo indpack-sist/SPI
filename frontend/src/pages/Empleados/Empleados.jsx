@@ -56,7 +56,7 @@ function Empleados() {
         dni: empleado.dni || '',
         nombre_completo: empleado.nombre_completo,
         email: empleado.email || '',
-        password: '', // No mostramos la contraseña actual
+        password: '', 
         cargo: empleado.cargo || '',
         rol: empleado.rol,
         validar_dni: false,
@@ -192,7 +192,6 @@ function Empleados() {
     setError(null);
     setSuccess(null);
 
-    // Validaciones
     if (!editando && !formData.password) {
       setError('La contraseña es requerida para nuevos empleados');
       return;
@@ -238,7 +237,6 @@ function Empleados() {
     (emp.email && emp.email.toLowerCase().includes(filtro.toLowerCase()))
   );
 
-  // ✅ FUNCIÓN PARA OBTENER COLOR DE BADGE SEGÚN ROL
   const getRolBadgeClass = (rol) => {
     const rolLower = rol.toLowerCase();
     if (rol === 'Administrador') return 'badge-danger';

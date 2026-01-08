@@ -1,4 +1,3 @@
-// frontend/src/pages/Compras/DetalleOrdenCompra.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -81,7 +80,6 @@ function DetalleOrdenCompra() {
       setError(null);
       setLoading(true);
       
-      // ✅ GENERA ENTRADAS AUTOMÁTICAMENTE
       const response = await ordenesCompraAPI.recibirOrden(id, {
         fecha_recepcion: datosRecepcion.fecha_recepcion,
         observaciones: datosRecepcion.observaciones

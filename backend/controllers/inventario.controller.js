@@ -63,7 +63,6 @@ export async function getResumenStockInventario(_req, res) {
       return res.status(500).json({ error: result.error });
     }
     
-    // Formateamos los números para asegurar que sean float
     const data = result.data.map(row => ({
       ...row,
       stock_total: parseFloat(row.stock_total) || 0,

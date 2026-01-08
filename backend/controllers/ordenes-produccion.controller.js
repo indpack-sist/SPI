@@ -44,10 +44,10 @@
     const params = [];
     
     if (estado) {
-    const estadosArray = estado.split(','); // Convierte "Pendiente,En Proceso" en ["Pendiente", "En Proceso"]
-    const placeholders = estadosArray.map(() => '?').join(','); // Crea "?,?"
+    const estadosArray = estado.split(','); 
+    const placeholders = estadosArray.map(() => '?').join(','); 
     sql += ` AND op.estado IN (${placeholders})`;
-    params.push(...estadosArray); // Agrega cada estado individualmente
+    params.push(...estadosArray); 
 }
     
     if (fecha_inicio) {
@@ -124,16 +124,12 @@
     res.status(500).json({ error: error.message });
   }
 }
-  // =====================================================
-// REEMPLAZAR ESTA FUNCIÓN EN:
-// backend/controllers/ordenes-produccion.controller.js
-// =====================================================
+
 
 export async function getConsumoMaterialesOrden(req, res) {
   try {
     const { id } = req.params;
     
-    // Primero verificar el estado de la orden
     const ordenResult = await executeQuery(
       'SELECT estado, id_receta_producto FROM ordenes_produccion WHERE id_orden = ?',
       [id]
@@ -145,7 +141,6 @@ export async function getConsumoMaterialesOrden(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // Si la orden ya inició, obtener de op_consumo_materiales
     if (orden.estado !== 'Pendiente') {
       const sql = `
         SELECT 
@@ -178,12 +173,10 @@ export async function getConsumoMaterialesOrden(req, res) {
       });
     }
     
-    // Si la orden está Pendiente, obtener de la receta
     let sql = '';
     let params = [];
     
     if (orden.id_receta_producto) {
-      // Orden con receta existente
       sql = `
         SELECT 
           rd.id_detalle AS id_consumo,
@@ -203,7 +196,6 @@ export async function getConsumoMaterialesOrden(req, res) {
       `;
       params = [id, orden.id_receta_producto];
     } else {
-      // Orden con receta provisional
       sql = `
         SELECT 
           rp.id_receta_provisional AS id_consumo,
@@ -234,7 +226,7 @@ export async function getConsumoMaterialesOrden(req, res) {
       success: true,
       data: result.data,
       total: result.data.length,
-      estado: orden.estado // Informativo
+      estado: orden.estado 
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -255,7 +247,6 @@ export async function getConsumoMaterialesOrden(req, res) {
         es_orden_manual 
       } = req.body;
       
-      // Validaciones básicas
       if (!numero_orden || !id_producto_terminado || !cantidad_planificada || !id_supervisor) {
         return res.status(400).json({ 
           error: 'numero_orden, id_producto_terminado, cantidad_planificada e id_supervisor son requeridos' 
@@ -726,7 +717,7 @@ export async function finalizarProduccion(req, res) {
     const { 
       cantidad_producida, 
       observaciones,
-      mermas  // NUEVO: Array de mermas [{id_producto_merma, cantidad, observaciones}]
+      mermas  
     } = req.body;
     
     if (!cantidad_producida || cantidad_producida <= 0) {
@@ -782,7 +773,6 @@ export async function finalizarProduccion(req, res) {
     
     const totalCosto = parseFloat(cantidad_producida) * costoUnitario;
     
-    // Preparar queries base
     const queries = [
       {
         sql: `UPDATE ordenes_produccion 
@@ -807,7 +797,6 @@ export async function finalizarProduccion(req, res) {
       }
     ];
     
-    // Ejecutar primera transacción
     const result1 = await executeTransaction(queries);
     
     if (!result1.success) {
@@ -816,7 +805,6 @@ export async function finalizarProduccion(req, res) {
     
     const idEntrada = result1.data[1].insertId;
     
-    // Preparar queries de productos
     const queries2 = [
       {
         sql: `INSERT INTO detalle_entradas (
@@ -836,12 +824,10 @@ export async function finalizarProduccion(req, res) {
       }
     ];
     
-    // NUEVO: Procesar mermas si existen
     const mermasRegistradas = [];
     if (mermas && Array.isArray(mermas) && mermas.length > 0) {
       for (const merma of mermas) {
         if (merma.id_producto_merma && merma.cantidad && parseFloat(merma.cantidad) > 0) {
-          // Insertar registro de merma
           queries2.push({
             sql: `INSERT INTO mermas_produccion (
               id_orden_produccion, id_producto_merma, cantidad, observaciones
@@ -854,7 +840,6 @@ export async function finalizarProduccion(req, res) {
             ]
           });
           
-          // Agregar merma al stock (las mermas se suman al inventario)
           queries2.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
             params: [parseFloat(merma.cantidad), merma.id_producto_merma]
@@ -868,7 +853,6 @@ export async function finalizarProduccion(req, res) {
       }
     }
     
-    // Ejecutar segunda transacción
     const result2 = await executeTransaction(queries2);
     
     if (!result2.success) {
@@ -893,7 +877,6 @@ export async function finalizarProduccion(req, res) {
   }
 }
 
-// NUEVO: Obtener productos de merma disponibles
 export async function getProductosMerma(req, res) {
   try {
     const result = await executeQuery(
@@ -930,7 +913,6 @@ export async function getProductosMerma(req, res) {
   }
 }
 
-// NUEVO: Obtener mermas de una orden
 export async function getMermasOrden(req, res) {
   try {
     const { id } = req.params;
@@ -1078,7 +1060,6 @@ export async function getMermasOrden(req, res) {
   try {
     const { id } = req.params;
     
-    // 1. Obtener Datos de la Orden (IGUAL QUE ANTES)
     const ordenResult = await executeQuery(`
       SELECT 
         op.*,
@@ -1100,7 +1081,6 @@ export async function getMermasOrden(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // 2. Obtener Materiales (IGUAL QUE ANTES)
     const consumoResult = await executeQuery(`
       SELECT 
         opm.cantidad_requerida,
@@ -1115,8 +1095,6 @@ export async function getMermasOrden(req, res) {
     `, [id]);
     const consumo = consumoResult.success ? consumoResult.data : [];
 
-    // 3. NUEVO: Obtener Mermas (Si existen)
-    // Usamos LEFT JOIN para traer el nombre del producto merma
     const mermasResult = await executeQuery(`
       SELECT 
         mp.cantidad,
@@ -1130,7 +1108,6 @@ export async function getMermasOrden(req, res) {
     `, [id]);
     const mermas = mermasResult.success ? mermasResult.data : [];
     
-    // 4. Generar PDF pasando los 3 objetos
     const pdfBuffer = await generarPDFOrdenProduccion(orden, consumo, mermas);
     
     res.setHeader('Content-Type', 'application/pdf');

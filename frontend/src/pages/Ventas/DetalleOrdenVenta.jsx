@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/DetalleOrdenVenta.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -176,15 +175,15 @@ function DetalleOrdenVenta() {
       icono: Clock, 
       clase: 'badge-warning',
       color: 'border-warning',
-      siguientes: ['Confirmada', 'Cancelada']  // ← Cambiar
+      siguientes: ['Confirmada', 'Cancelada'] 
     },
-    'Confirmada': {  // ← NUEVO
+    'Confirmada': { 
       icono: CheckCircle,
       clase: 'badge-info',
       color: 'border-info',
       siguientes: ['En Preparación', 'Cancelada']
     },
-    'En Preparación': {  // ← Cambiar de "En Proceso"
+    'En Preparación': {  
       icono: Package, 
       clase: 'badge-info',
       color: 'border-info',

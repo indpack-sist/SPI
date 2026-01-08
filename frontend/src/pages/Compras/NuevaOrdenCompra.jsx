@@ -1,4 +1,3 @@
-// frontend/src/pages/Compras/NuevaOrdenCompra.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -19,7 +18,6 @@ function NuevaOrdenCompra() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // ✅ Catálogos REALES
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos] = useState([]);
   const [empleados, setEmpleados] = useState([]);
@@ -54,7 +52,6 @@ function NuevaOrdenCompra() {
     calcularTotales();
   }, [detalle]);
 
-  // ✅ CARGAR CATÁLOGOS REALES
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
@@ -63,7 +60,6 @@ function NuevaOrdenCompra() {
         proveedoresAPI.getAll({ estado: 'Activo' }),
         productosAPI.getAll({ 
           estado: 'Activo',
-          // Materia Prima (1), Insumos (2), Reventa (4)
           id_tipo_inventario: '1,2,4'
         }),
         empleadosAPI.getAll({ 
@@ -100,7 +96,6 @@ function NuevaOrdenCompra() {
     });
     setModalProveedorOpen(false);
     
-    // ✅ Cargar historial de productos comprados a este proveedor
     try {
       const response = await ordenesCompraAPI.getProductosPorProveedor(proveedor.id_proveedor);
       
@@ -120,7 +115,6 @@ function NuevaOrdenCompra() {
       return;
     }
     
-    // Buscar precio promedio si está en el historial
     const historial = productosProveedor.find(p => p.id_producto === producto.id_producto);
     
     const nuevoItem = {
@@ -163,7 +157,6 @@ function NuevaOrdenCompra() {
     setTotales({ subtotal, igv, total });
   };
 
-  // ✅ GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);

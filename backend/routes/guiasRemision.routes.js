@@ -18,7 +18,7 @@ router.get('/', getAllGuiasRemision);
 router.post('/', createGuiaRemision);
 
 router.get('/:id/pdf', descargarPDFGuiaRemision);
-router.post('/:id/despachar', despacharGuiaRemision); // 🔥 GENERA SALIDAS AUTOMÁTICAS
+router.post('/:id/despachar', despacharGuiaRemision);
 router.post('/:id/entregar', marcarEntregadaGuiaRemision);
 router.put('/:id/estado', actualizarEstadoGuiaRemision);
 

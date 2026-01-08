@@ -11,14 +11,9 @@ import {
 
 const router = express.Router();
 
-// ============================================
-// RUTAS ESTÁTICAS (sin parámetros)
-// ============================================
+
 router.get('/estadisticas', getEstadisticasCotizaciones);
 
-// ============================================
-// RUTAS DE COTIZACIONES (base)
-// ============================================
 router.get('/', getAllCotizaciones);
 router.post('/', createCotizacion);
 

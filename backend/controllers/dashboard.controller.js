@@ -95,7 +95,6 @@ export const obtenerResumenGeneral = async (req, res) => {
        AND stock_actual <= stock_minimo`
     );
 
-    // 🔧 QUERY MEJORADO: Calcula CUP desde recetas para Productos Terminados
     const valoracionPorTipoResult = await executeQuery(
       `SELECT 
         ti.id_tipo_inventario,

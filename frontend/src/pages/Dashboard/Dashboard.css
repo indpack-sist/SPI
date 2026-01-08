@@ -4,9 +4,6 @@
   margin: 0 auto;
 }
 
-/* ============================================
-   HEADER CON ACCIONES
-============================================ */
 .dashboard-header {
   display: flex;
   justify-content: space-between;

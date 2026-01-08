@@ -4,21 +4,16 @@ const DECOLECTA_API_URL = 'https://api.decolecta.com/v1';
 const DECOLECTA_API_KEY = process.env.DECOLECTA_API_KEY || 'sk_11943.ewGqJSrbHawn4pFU62tc9H5ApJxiO5VD';
 const API_TIMEOUT = 10000;
 
-// Cache con persistencia en memoria
 let tipoCambioCache = {
   data: null,
   timestamp: null,
-  ttl: 86400000 // 24 horas
+  ttl: 86400000 
 };
 
-/**
- * Obtener tipo de cambio SOLO desde cache
- * NO consume API, retorna valor en cache o valor por defecto
- */
+
 export function obtenerTipoCambioCache() {
   const now = Date.now();
   
-  // Si hay cache válido, retornarlo
   if (tipoCambioCache.data && tipoCambioCache.timestamp) {
     const edad = now - tipoCambioCache.timestamp;
     const horas = Math.floor(edad / 3600000);
@@ -32,7 +27,6 @@ export function obtenerTipoCambioCache() {
     };
   }
   
-  // Si no hay cache, retornar valor por defecto
   console.log('⚠️ No hay tipo de cambio en cache, usando valor por defecto');
   return {
     valido: true,
@@ -85,7 +79,6 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
         moneda_destino: response.data.quote_currency
       };
 
-      // Guardar en cache
       tipoCambioCache = {
         data: tipoCambio,
         timestamp: Date.now()
@@ -113,7 +106,6 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
       status: error.response?.status
     });
 
-    // Si hay cache antiguo, continuar usándolo
     if (tipoCambioCache.data) {
       console.log('⚠️ Error en API, manteniendo cache antiguo');
       return {
@@ -125,7 +117,6 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
       };
     }
 
-    // Si no hay cache, retornar valor por defecto
     const valorDefault = {
       valido: true,
       compra: 3.75,

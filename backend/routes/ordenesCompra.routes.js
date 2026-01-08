@@ -17,7 +17,7 @@ router.get('/', getAllOrdenesCompra);
 router.post('/', createOrdenCompra);
 router.get('/:id/pdf', descargarPDFOrdenCompra);
 router.put('/:id/estado', actualizarEstadoOrdenCompra);
-router.post('/:id/recibir', recibirOrdenCompra); // 🔥 GENERA ENTRADAS Y ACTUALIZA CUP
+router.post('/:id/recibir', recibirOrdenCompra); 
 
 router.get('/proveedor/:id/productos', getProductosPorProveedor);
 

@@ -40,7 +40,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
 
   const cargarMotivos = async () => {
     try {
-      // Método 1: Usando api directamente
       const response = await api.get('/productos/ajustes/motivos');
       
       if (response.data.success) {
@@ -80,7 +79,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
     setError(null);
 
     try {
-      // DEBUG: Verificar que el token exista
       const token = localStorage.getItem('token');
       console.log('🔑 Token presente:', !!token);
       
@@ -88,7 +86,6 @@ function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
         throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
       }
 
-      // Método directo con api
       const response = await api.post('/productos/ajustes/conteo-fisico', {
         id_producto: producto.id_producto,
         stock_fisico: parseFloat(formData.stock_fisico),

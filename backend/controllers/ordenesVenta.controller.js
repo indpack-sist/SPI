@@ -735,7 +735,6 @@ export async function getEstadisticasOrdenesVenta(req, res) {
     });
   }
 }
-// ... (todo tu código existente)
 
 export async function convertirCotizacionAOrden(req, res) {
   try {
@@ -1056,7 +1055,6 @@ export async function descargarPDFOrdenVenta(req, res) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="OrdenVenta-${orden.numero_orden}.pdf"`);
     res.send(pdfBuffer);
-  //prueba
   } catch (error) {
     console.error('Error al generar PDF de orden de venta:', error);
     res.status(500).json({

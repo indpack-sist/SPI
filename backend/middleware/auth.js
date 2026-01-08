@@ -91,8 +91,8 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: false,
-      guiasTransportista: false,
+      guiasRemision: true,
+      guiasTransportista: true,
       ordenesCompra: false
     },
     api: {

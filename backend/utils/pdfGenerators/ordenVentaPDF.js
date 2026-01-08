@@ -34,13 +34,14 @@ export async function generarOrdenVentaPDF(orden) {
       try {
         logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
       } catch (error) {
-        console.error(error);
+        console.error('Error al descargar logo:', error);
       }
 
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
+          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
           doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
           doc.text('IndPack', 60, 55);
@@ -132,7 +133,7 @@ export async function generarOrdenVentaPDF(orden) {
       doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
       
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
+      doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
       doc.font('Helvetica');
       const fechaEmision = new Date(orden.fecha_emision).toLocaleDateString('es-PE');
       doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
@@ -249,7 +250,7 @@ export async function generarOrdenVentaPDF(orden) {
       doc.end();
       
     } catch (error) {
-      console.error(error);
+      console.error('Error al generar PDF:', error);
       reject(error);
     }
   });

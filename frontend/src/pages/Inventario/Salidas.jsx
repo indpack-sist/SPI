@@ -34,6 +34,10 @@ function Salidas() {
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
 
+  const [filtroFecha, setFiltroFecha] = useState('');
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -62,7 +66,7 @@ function Salidas() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtro]);
+  }, [filtro, filtroFecha, fechaInicio, fechaFin]);
 
   const cargarDatos = async () => {
     try {
@@ -321,12 +325,56 @@ function Salidas() {
     }, 0);
   };
 
-  const salidasFiltradas = salidas.filter(s =>
-    (s.productos_resumen && s.productos_resumen.toLowerCase().includes(filtro.toLowerCase())) ||
-    s.tipo_movimiento.toLowerCase().includes(filtro.toLowerCase()) ||
-    (s.cliente && s.cliente.toLowerCase().includes(filtro.toLowerCase())) ||
-    (s.departamento && s.departamento.toLowerCase().includes(filtro.toLowerCase()))
-  );
+  const salidasFiltradas = salidas.filter(s => {
+    const matchText = (s.productos_resumen && s.productos_resumen.toLowerCase().includes(filtro.toLowerCase())) ||
+      s.tipo_movimiento.toLowerCase().includes(filtro.toLowerCase()) ||
+      (s.cliente && s.cliente.toLowerCase().includes(filtro.toLowerCase())) ||
+      (s.departamento && s.departamento.toLowerCase().includes(filtro.toLowerCase()));
+
+    if (!matchText) return false;
+
+    if (filtroFecha) {
+      const fechaMov = new Date(s.fecha_movimiento);
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      
+      const fechaMovNormalized = new Date(fechaMov);
+      fechaMovNormalized.setHours(0, 0, 0, 0);
+
+      switch (filtroFecha) {
+        case 'hoy':
+          return fechaMovNormalized.getTime() === hoy.getTime();
+        case '3dias':
+          const tresDias = new Date(hoy);
+          tresDias.setDate(hoy.getDate() - 3);
+          return fechaMovNormalized >= tresDias;
+        case 'semana':
+          const semana = new Date(hoy);
+          semana.setDate(hoy.getDate() - 7);
+          return fechaMovNormalized >= semana;
+        case 'mes':
+          const mes = new Date(hoy);
+          mes.setMonth(hoy.getMonth() - 1);
+          return fechaMovNormalized >= mes;
+        case 'custom':
+          if (fechaInicio) {
+            const inicio = new Date(fechaInicio);
+            inicio.setHours(0, 0, 0, 0);
+            if (fechaMovNormalized < inicio) return false;
+          }
+          if (fechaFin) {
+            const fin = new Date(fechaFin);
+            fin.setHours(0, 0, 0, 0);
+            if (fechaMovNormalized > fin) return false;
+          }
+          return true;
+        default:
+          return true;
+      }
+    }
+
+    return true;
+  });
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -450,28 +498,76 @@ function Salidas() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="card mb-3">
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <div style={{ position: 'relative' }}>
-            <Search 
-              size={20} 
-              style={{ 
-                position: 'absolute', 
-                left: '0.75rem', 
-                top: '50%', 
-                transform: 'translateY(-50%)',
-                color: 'var(--text-secondary)'
-              }} 
-            />
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Buscar por productos, tipo o cliente..."
-              value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
-              style={{ paddingLeft: '2.5rem' }}
-            />
+      <div className="card mb-3 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+          <div className="md:col-span-4 relative">
+            <label className="form-label text-xs mb-1">Buscar</label>
+            <div style={{ position: 'relative' }}>
+              <Search 
+                size={18} 
+                style={{ 
+                  position: 'absolute', 
+                  left: '0.75rem', 
+                  top: '50%', 
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-secondary)'
+                }} 
+              />
+              <input
+                type="text"
+                className="form-input w-full"
+                placeholder="Buscar por producto, cliente..."
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+                style={{ paddingLeft: '2.5rem' }}
+              />
+            </div>
           </div>
+
+          <div className="md:col-span-3">
+            <label className="form-label text-xs mb-1">Filtrar Fecha</label>
+            <select 
+              className="form-select w-full"
+              value={filtroFecha}
+              onChange={(e) => {
+                setFiltroFecha(e.target.value);
+                if (e.target.value !== 'custom') {
+                  setFechaInicio('');
+                  setFechaFin('');
+                }
+              }}
+            >
+              <option value="">Todas las fechas</option>
+              <option value="hoy">Hoy</option>
+              <option value="3dias">Últimos 3 días</option>
+              <option value="semana">Última semana</option>
+              <option value="mes">Último mes</option>
+              <option value="custom">Rango Personalizado</option>
+            </select>
+          </div>
+
+          {filtroFecha === 'custom' && (
+            <>
+              <div className="md:col-span-2">
+                <label className="form-label text-xs mb-1">Desde</label>
+                <input
+                  type="date"
+                  className="form-input w-full"
+                  value={fechaInicio}
+                  onChange={(e) => setFechaInicio(e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="form-label text-xs mb-1">Hasta</label>
+                <input
+                  type="date"
+                  className="form-input w-full"
+                  value={fechaFin}
+                  onChange={(e) => setFechaFin(e.target.value)}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 

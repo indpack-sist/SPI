@@ -96,9 +96,8 @@ function ProductoDetalle() {
       setDetalleReceta([]);
     }
 
-    // ✅ AGREGAR: Cargar CUP y evolución
     await calcularCUPDesdeReceta();
-    await cargarEvolucionCUP();  // ← NUEVO
+    await cargarEvolucionCUP();
   } catch (err) {
     console.error('Error cargando datos:', err);
     setError(err.error || 'Error al cargar datos del producto');
@@ -369,7 +368,6 @@ const getTendenciaIcono = (tendencia) => {
     width: '70px',
     align: 'center',
     render: (value) => {
-      // ✅ CORREGIDO: Ocultar si es 0 o null
       const orden = parseInt(value || 0);
       return orden > 0 ? (
         <span className="orden-badge">{orden}</span>
@@ -390,7 +388,7 @@ const getTendenciaIcono = (tendencia) => {
     render: (value, row) => (
       <div className="insumo-cell">
         <div className="insumo-nombre">{value}</div>
-        {row.es_critico === 1 && (  // ✅ VERIFICAR si es 1
+        {row.es_critico === 1 && (
           <span className="badge badge-warning badge-critico">
             <AlertTriangle size={12} />
             Crítico

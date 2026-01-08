@@ -178,7 +178,6 @@ export async function createEmpleado(req, res) {
       });
     }
 
-    // Validar longitud de contraseña
     if (password.length < 6) {
       return res.status(400).json({ 
         error: 'La contraseña debe tener al menos 6 caracteres' 
@@ -272,7 +271,6 @@ export async function updateEmpleado(req, res) {
       return res.status(404).json({ error: 'Empleado no encontrado' });
     }
 
-    // Validar email si cambió
     if (email && email !== checkResult.data[0].email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {

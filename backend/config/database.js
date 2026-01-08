@@ -32,7 +32,6 @@ export async function testConnection() {
 
 export async function executeQuery(sql, params = []) {
   try {
-    // 🔍 LOGGING COMPLETO
     console.log('='.repeat(80));
     console.log('EXECUTEQUERY INICIADO');
     console.log('SQL (primeros 300 chars):', sql.substring(0, 300));

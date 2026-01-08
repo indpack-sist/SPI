@@ -20,7 +20,6 @@ import {
   RefreshCw,
   ClipboardList,
   AlertTriangle,
-  // NUEVOS IMPORTES PARA PAGINACIÓN
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -37,22 +36,16 @@ function OrdenesProduccion() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Estados de filtros
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-
-  // ESTADO DE PAGINACIÓN
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
   useEffect(() => {
     cargarDatos();
   }, [filtroEstado, fechaInicio, fechaFin]);
-
-  // EFECTO PARA RESETEAR PAGINACIÓN AL FILTRAR
-  // Si el usuario busca o cambia filtros, volvemos a la pág 1
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, busqueda, fechaInicio, fechaFin]);
@@ -95,7 +88,6 @@ function OrdenesProduccion() {
     };
   };
 
-  // 1. PRIMERO FILTRAMOS (Lógica existente)
   const ordenesFiltradas = ordenes.filter(orden => {
     if (!busqueda) return true;
     const searchTerm = busqueda.toLowerCase();
@@ -107,13 +99,10 @@ function OrdenesProduccion() {
     );
   });
 
-  // 2. LUEGO PAGINAMOS SOBRE EL RESULTADO FILTRADO
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
-
-  // Funciones de control de paginación
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 

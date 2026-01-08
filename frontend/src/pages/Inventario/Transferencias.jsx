@@ -9,7 +9,6 @@ import {
   Loader, 
   AlertCircle, 
   Package,
-  // IMPORTES PARA PAGINACIÓN
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -34,7 +33,6 @@ function Transferencias() {
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
 
-  // ESTADOS DE PAGINACIÓN
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -65,7 +63,6 @@ function Transferencias() {
     }
   }, [formData.id_tipo_inventario_origen]);
 
-  // RESETEAR PÁGINA AL FILTRAR
   useEffect(() => {
     setCurrentPage(1);
   }, [filtro]);

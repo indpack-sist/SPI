@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/DetalleGuiaRemision.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -34,11 +33,9 @@ function DetalleGuiaRemision() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Modales
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalEntregaOpen, setModalEntregaOpen] = useState(false);
   
-  // Fecha de entrega
   const [fechaEntrega, setFechaEntrega] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -50,7 +47,6 @@ function DetalleGuiaRemision() {
       setLoading(true);
       setError(null);
       
-      // TODO: API real
       const mockData = {
         id_guia_remision: 1,
         numero_guia: 'T001-2025-00000001',
@@ -126,14 +122,12 @@ function DetalleGuiaRemision() {
     try {
       setError(null);
       
-      // Si es "Entregada", abrir modal de confirmación
       if (estado === 'Entregada') {
         setModalEstadoOpen(false);
         setModalEntregaOpen(true);
         return;
       }
       
-      // TODO: API real
       console.log('Cambiar estado a:', estado);
       setGuia({ ...guia, estado });
       setSuccess(`Estado actualizado a ${estado}`);
@@ -147,8 +141,6 @@ function DetalleGuiaRemision() {
   const handleConfirmarEntrega = async () => {
     try {
       setError(null);
-      
-      // TODO: API real
       console.log('Confirmar entrega:', fechaEntrega);
       
       setGuia({ 

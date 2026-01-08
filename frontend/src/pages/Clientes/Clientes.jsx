@@ -15,7 +15,6 @@ function Clientes() {
   const [editando, setEditando] = useState(null);
   const [filtro, setFiltro] = useState('');
 
-  // Estados para validación de RUC
   const [validandoRUC, setValidandoRUC] = useState(false);
   const [rucValidado, setRucValidado] = useState(null);
   const [datosSUNAT, setDatosSUNAT] = useState(null);
@@ -88,9 +87,6 @@ function Clientes() {
     setDatosSUNAT(null);
   };
 
-  // ============================================
-  // SOLUCIÓN V2: Validar RUC con SUNAT
-  // ============================================
   const validarRUC = async () => {
     const ruc = formData.ruc.trim();
     
@@ -114,7 +110,6 @@ function Clientes() {
         setRucValidado(true);
         setDatosSUNAT(response.data.datos);
         
-        // Autocompletar campos si están vacíos
         const nuevosValores = { ...formData };
         
         if (!formData.razon_social) {
@@ -134,14 +129,12 @@ function Clientes() {
         
         setFormData(nuevosValores);
         
-        // Mostrar advertencia si ya está registrado
         if (response.data.ya_registrado) {
           setError(`Este RUC ya está registrado: ${response.data.cliente_existente.razon_social}`);
         } else {
           setSuccess('RUC validado correctamente con SUNAT');
         }
         
-        // Advertir si el RUC no está ACTIVO
         if (response.data.datos.estado !== 'ACTIVO') {
           setError(`Advertencia: Este RUC está en estado ${response.data.datos.estado} en SUNAT`);
         }

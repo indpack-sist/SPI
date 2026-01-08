@@ -1,8 +1,5 @@
 import jwt from 'jsonwebtoken';
 
-// Sistema de permisos de dos niveles:
-// - ui: Lo que el usuario VE en el sidebar
-// - api: Lo que el usuario PUEDE CONSUMIR de la API (para llenar selects, combos, etc.)
 
 const PERMISOS_POR_ROL = {
   'Administrador': {
@@ -133,9 +130,9 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,    // Acceso interno para selects
-      flota: true,        // Acceso interno para selects
-      proveedores: true,  // Acceso interno para selects
+      empleados: true,    
+      flota: true,        
+      proveedores: true,  
       clientes: true,
       productos: true,
       entradas: false,
@@ -152,10 +149,10 @@ const PERMISOS_POR_ROL = {
   'Produccion': {
     ui: {
       dashboard: false,
-      empleados: false,       // NO visible en menú
-      flota: false,           // NO visible en menú
-      proveedores: false,     // NO visible en menú
-      clientes: false,        // NO visible en menú
+      empleados: false,       
+      flota: false,           
+      proveedores: false,     
+      clientes: false,        
       productos: true,
       entradas: true,
       salidas: true,
@@ -169,10 +166,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,        // TRUE: Para cargar "Registrado Por"
-      flota: true,            // TRUE: Para cargar vehículos en Salidas/Guías
-      proveedores: true,      // TRUE: Para cargar proveedores en Entradas
-      clientes: true,         // TRUE: Para cargar clientes en Salidas/Ordenes
+      empleados: true,        
+      flota: true,           
+      proveedores: true,      
+      clientes: true,         
       productos: true,
       entradas: true,
       salidas: true,
@@ -205,10 +202,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,      // Acceso interno
-      flota: true,          // Acceso interno
-      proveedores: true,    // Acceso interno
-      clientes: true,       // Acceso interno
+      empleados: true,      
+      flota: true,          
+      proveedores: true,    
+      clientes: true,       
       productos: true,
       entradas: true,
       salidas: true,
@@ -241,7 +238,7 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,      // Acceso interno por si acaso
+      empleados: true,      
       flota: false,
       proveedores: false,
       clientes: false,
@@ -277,10 +274,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,      // Necesario para selects
-      flota: true,          // Necesario para selects
-      proveedores: true,    // Necesario para selects
-      clientes: true,       // Necesario para selects
+      empleados: true,      
+      flota: true,          
+      proveedores: true,    
+      clientes: true,      
       productos: true,
       entradas: true,
       salidas: true,
@@ -465,7 +462,6 @@ export const verificarPermiso = (modulo) => {
         });
       }
       
-      // ✅ CORRECCIÓN: Verifica el permiso en 'api', no en 'ui'
       if (!permisos.api[modulo]) {
         return res.status(403).json({
           success: false,
@@ -497,7 +493,7 @@ export const obtenerPermisos = (req, res) => {
       success: true,
       data: {
         rol,
-        permisos: permisos.ui, // El frontend usa esto para pintar el menú
+        permisos: permisos.ui, 
         permisosApi: permisos.api
       }
     });

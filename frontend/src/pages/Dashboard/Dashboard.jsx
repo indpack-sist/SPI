@@ -85,10 +85,8 @@ function Dashboard() {
     if (response.data.success) {
       setTipoCambio(response.data.data);
       
-      // Mostrar mensaje de éxito
       alert('✅ Tipo de cambio actualizado correctamente');
       
-      // Recargar datos del dashboard con nuevo TC
       await cargarDatos();
     }
     

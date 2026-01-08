@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/DetalleCotizacion.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 

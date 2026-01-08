@@ -155,7 +155,6 @@ export const crearProductoMultiInventario = async (req, res, next) => {
   }
 };
 
-// ✅ FUNCIÓN CORREGIDA - getAllEntradas
 export const getAllEntradas = async (req, res, next) => {
   try {
     const { estado, id_tipo_inventario, fecha_desde, fecha_hasta } = req.query;
@@ -212,7 +211,6 @@ export const getAllEntradas = async (req, res, next) => {
       params.push(fecha_hasta);
     }
     
-    // ✅ CORRECCIÓN: Agregar TODAS las columnas no agregadas al GROUP BY
     query += ` 
       GROUP BY 
         e.id_entrada,

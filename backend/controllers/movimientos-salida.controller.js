@@ -63,7 +63,7 @@ export async function getAllSalidas(req, res) {
             params.push(fecha_fin);
         }
         
-        sql += ' GROUP BY s.id_salida '; // Agrupamos por la cabecera
+        sql += ' GROUP BY s.id_salida '; 
         sql += ' ORDER BY s.fecha_movimiento DESC';
         
         const result = await executeQuery(sql, params);
@@ -176,7 +176,6 @@ export async function createSalidaMultiple(req, res) {
                 });
             }
 
-            // ✅ LÓGICA MEJORADA: Obtener CUP Real (Promedio Ponderado) al momento de la salida
             const productoResult = await executeQuery(
                 `SELECT 
                     p.stock_actual, 
@@ -208,7 +207,6 @@ export async function createSalidaMultiple(req, res) {
                 });
             }
             
-            // ✅ USAR EL COSTO REAL CALCULADO (S/ 48.67)
             const costoUnitario = parseFloat(producto.cup_real);
             
             let precioVentaFinal = null;
@@ -328,7 +326,7 @@ export async function updateSalida(req, res) {
         const { id_tipo_inventario, tipo_movimiento, id_cliente, departamento, moneda, id_vehiculo, observaciones } = req.body;
 
         const salidaActual = await executeQuery(
-            'SELECT * FROM salidas WHERE id_salida = ? AND estado = ?', // CAMBIO DE TABLA
+            'SELECT * FROM salidas WHERE id_salida = ? AND estado = ?', 
             [id, 'Activo']
         );
         
@@ -376,7 +374,7 @@ export async function deleteSalida(req, res) {
         const { id } = req.params;
         
         const cabeceraResult = await executeQuery(
-            'SELECT * FROM salidas WHERE id_salida = ? AND estado = ?', // CAMBIO DE TABLA
+            'SELECT * FROM salidas WHERE id_salida = ? AND estado = ?', 
             [id, 'Activo']
         );
         

@@ -71,7 +71,7 @@ function Navbar({ onToggleSidebar }) {
 
   const formatearTiempo = (fecha) => {
     const ahora = new Date();
-    const diff = Math.floor((ahora - fecha) / 1000); // diferencia en segundos
+    const diff = Math.floor((ahora - fecha) / 1000);
 
     if (diff < 60) return 'hace unos segundos';
     if (diff < 3600) return `hace ${Math.floor(diff / 60)} minutos`;

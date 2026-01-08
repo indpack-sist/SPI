@@ -196,7 +196,6 @@ export function validarNumeroDocumento(numero, patron = /^[A-Z0-9-]+$/) {
 export function validarDatosProductoMovimiento(producto, cantidad, tipoInventario) {
   const errores = [];
   
-  // Validar cantidad
   const validacionCantidad = validarNumeroPositivo(cantidad, 'La cantidad');
   if (!validacionCantidad.valido) {
     errores.push(validacionCantidad.error);

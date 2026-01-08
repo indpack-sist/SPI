@@ -12,7 +12,6 @@ import Modal from '../../components/UI/Modal';
 function CrearOrden() {
   const navigate = useNavigate();
   
-  // REFERENCIA PARA EL DROPDOWN (DETECTAR CLIC FUERA)
   const dropdownRef = useRef(null);
 
   const [productosTerminados, setProductosTerminados] = useState([]);
@@ -26,7 +25,6 @@ function CrearOrden() {
   const [success, setSuccess] = useState(null);
   const [guardando, setGuardando] = useState(false);
   
-  // ESTADOS NUEVOS PARA BUSCADOR Y CORRELATIVO
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
   const [generandoCorrelativo, setGenerandoCorrelativo] = useState(false);
@@ -37,7 +35,7 @@ function CrearOrden() {
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
 
   const [formData, setFormData] = useState({
-    numero_orden: '', // Se llenará automáticamente
+    numero_orden: '', 
     id_producto_terminado: '',
     cantidad_planificada: '',
     id_supervisor: '',
@@ -51,9 +49,8 @@ function CrearOrden() {
 
   useEffect(() => {
     cargarDatos();
-    generarSiguienteCorrelativo(); // Generar número al montar el componente
+    generarSiguienteCorrelativo(); 
 
-    // Evento para cerrar el dropdown si se hace clic fuera
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setMostrarDropdown(false);
@@ -63,22 +60,18 @@ function CrearOrden() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- LÓGICA 1: GENERAR NÚMERO DE ORDEN AUTOMÁTICO ---
   const generarSiguienteCorrelativo = async () => {
     try {
       setGenerandoCorrelativo(true);
       
-      // Obtenemos todas las órdenes para calcular el consecutivo
       const response = await ordenesProduccionAPI.getAll(); 
       const ordenes = response.data.data || [];
       
       const anioActual = new Date().getFullYear();
       const prefijo = `${anioActual}-`;
       
-      // Filtrar órdenes que coincidan con el año actual
       const ordenesDelAnio = ordenes.filter(o => o.numero_orden && o.numero_orden.startsWith(prefijo));
       
-      // Encontrar el número más alto
       let maxCorrelativo = 0;
       ordenesDelAnio.forEach(o => {
         const partes = o.numero_orden.split('-');
@@ -90,7 +83,6 @@ function CrearOrden() {
         }
       });
       
-      // Generar el siguiente (rellenando con ceros: 00001)
       const siguienteNumero = maxCorrelativo + 1;
       const correlativoStr = String(siguienteNumero).padStart(5, '0');
       const nuevoCodigo = `${anioActual}-${correlativoStr}`;
@@ -164,22 +156,16 @@ function CrearOrden() {
     }
   };
 
-  // --- LÓGICA 2: BUSCADOR DE PRODUCTOS (SEARCHABLE DROPDOWN) ---
   
-  // Función para cuando el usuario hace clic en un ítem de la lista
   const handleSeleccionarProducto = (producto) => {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
-    // Ponemos el nombre en el input visual
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
     setMostrarDropdown(false);
-    
-    // Carga de dependencias (igual que en tu código original)
     cargarRecetasProducto(producto.id_producto);
     setRecetaProvisional([]);
     setRendimientoProvisional('1');
   };
 
-  // Función para el botón "X" que limpia la selección
   const handleLimpiarProducto = () => {
     setFormData({ ...formData, id_producto_terminado: '' });
     setBusquedaProducto('');
@@ -187,15 +173,14 @@ function CrearOrden() {
     setRecetaSeleccionada(null);
     setDetalleReceta([]);
     setRecetaProvisional([]);
-    setMostrarDropdown(true); // Abrir lista para que elija de nuevo
+    setMostrarDropdown(true); 
   };
 
-  // Filtrado en tiempo real
   const productosFiltrados = productosTerminados.filter(p => 
     p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
-  // -------------------------------------------------------------
+  
 
   const cambiarModoReceta = (modo) => {
     setModoReceta(modo);
@@ -433,7 +418,7 @@ function CrearOrden() {
                   type="text"
                   className="form-input bg-gray-100 font-mono font-bold"
                   value={formData.numero_orden}
-                  readOnly // Campo de solo lectura
+                  readOnly 
                   placeholder="Generando..."
                 />
                 <button 
@@ -461,14 +446,13 @@ function CrearOrden() {
                   value={busquedaProducto}
                   onChange={(e) => {
                     setBusquedaProducto(e.target.value);
-                    setMostrarDropdown(true); // Al escribir, abrimos la lista
-                    // Si el usuario borra todo, limpiamos la selección
+                    setMostrarDropdown(true); 
                     if (e.target.value === '') {
                         setFormData({ ...formData, id_producto_terminado: '' });
                     }
                   }}
-                  onFocus={() => setMostrarDropdown(true)} // Al hacer clic, mostramos la lista
-                  required={!formData.id_producto_terminado} // Validación HTML si no hay ID
+                  onFocus={() => setMostrarDropdown(true)} 
+                  required={!formData.id_producto_terminado} 
                 />
                 
                 {/* Icono Lupa */}
@@ -493,8 +477,8 @@ function CrearOrden() {
                 <div 
                   className="absolute z-50 w-full mt-1 border border-gray-200 rounded-md shadow-lg overflow-y-auto"
                   style={{ 
-                    maxHeight: '300px', // Altura máxima para el SCROLLBAR
-                    backgroundColor: 'white' // Fondo BLANCO sólido (no transparente)
+                    maxHeight: '300px', 
+                    backgroundColor: 'white'
                   }} 
                 >
                   {productosFiltrados.length > 0 ? (

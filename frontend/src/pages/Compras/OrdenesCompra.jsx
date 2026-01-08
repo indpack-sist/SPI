@@ -1,4 +1,3 @@
-// frontend/src/pages/Compras/OrdenesCompra.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -28,7 +27,6 @@ function OrdenesCompra() {
       setLoading(true);
       setError(null);
       
-      // ✅ INTEGRACIÓN CON API REAL
       const filtros = {};
       if (filtroEstado) {
         filtros.estado = filtroEstado;

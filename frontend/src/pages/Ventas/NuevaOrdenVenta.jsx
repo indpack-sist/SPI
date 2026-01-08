@@ -1,4 +1,3 @@
-// frontend/src/pages/Ventas/NuevaOrdenVenta.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
@@ -23,7 +22,6 @@ function NuevaOrdenVenta() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  // Catálogos
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
@@ -61,12 +59,10 @@ function NuevaOrdenVenta() {
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
 
-  // ✅ CORREGIDO: Cargar catálogos primero
   useEffect(() => {
     cargarCatalogos();
   }, []);
 
-  // ✅ NUEVO: Cargar cotización DESPUÉS de tener catálogos
   useEffect(() => {
     if (idCotizacion && clientes.length > 0 && productos.length > 0) {
       cargarCotizacion(idCotizacion);
@@ -107,7 +103,6 @@ function NuevaOrdenVenta() {
     }
   };
 
-  // ✅ MEJORADO: Cargar cotización con logs y mejor manejo
   const cargarCotizacion = async (id) => {
     try {
       setLoading(true);
@@ -120,7 +115,6 @@ function NuevaOrdenVenta() {
         console.log('✅ Cotización cargada:', cotizacion);
         setCotizacionOrigen(cotizacion);
         
-        // Buscar cliente en el catálogo
         const cliente = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
         console.log('🔍 Cliente encontrado:', cliente);
         
@@ -130,7 +124,6 @@ function NuevaOrdenVenta() {
           console.warn('⚠️ Cliente no encontrado en catálogo');
         }
         
-        // ✅ Auto-llenar formulario con TODOS los campos (igual que cotización)
         setFormCabecera(prev => ({
           ...prev,
           id_cotizacion: id,
@@ -153,7 +146,6 @@ function NuevaOrdenVenta() {
         
         console.log('📋 Formulario actualizado');
         
-        // Cargar detalle de productos
         if (cotizacion.detalle && cotizacion.detalle.length > 0) {
           console.log(`📦 Cargando ${cotizacion.detalle.length} productos`);
           
@@ -394,7 +386,6 @@ function NuevaOrdenVenta() {
     return colors[prioridad] || colors['Media'];
   };
 
-  // Tipos de impuesto (igual que cotizaciones)
   const TIPOS_IMPUESTO = [
     { codigo: 'IGV', nombre: 'IGV', porcentaje: 18.00 },
     { codigo: 'IGV3', nombre: 'IGV 3ra Cat.', porcentaje: 3.00 },

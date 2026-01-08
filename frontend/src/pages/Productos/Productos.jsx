@@ -21,10 +21,8 @@ function Productos() {
   const [filtro, setFiltro] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   
-  // NUEVO: Estado para filtro de stock
   const [filtroStock, setFiltroStock] = useState(false);
 
-  // NUEVO: Estados para Conteo Físico
   const [modalConteoOpen, setModalConteoOpen] = useState(false);
   const [productoConteo, setProductoConteo] = useState(null);
 
@@ -107,18 +105,16 @@ function Productos() {
     setEditando(null);
   };
 
-  // NUEVO: Función para abrir modal de conteo físico
   const abrirModalConteo = (producto) => {
     setProductoConteo(producto);
     setModalConteoOpen(true);
   };
 
-  // NUEVO: Callback cuando se completa el conteo
   const handleConteoSuccess = (data) => {
     setSuccess(
       `${data.tipo_ajuste === 'Positivo' ? '✓' : '⚠'} Ajuste ${data.tipo_ajuste.toLowerCase()} realizado: ${data.diferencia > 0 ? '+' : ''}${data.diferencia} ${productoConteo.unidad_medida}`
     );
-    cargarDatos(); // Recargar productos para mostrar stock actualizado
+    cargarDatos(); 
     setProductoConteo(null);
   };
 
@@ -166,7 +162,6 @@ function Productos() {
     const matchTexto = p.nombre.toLowerCase().includes(filtro.toLowerCase()) ||
                        p.codigo.toLowerCase().includes(filtro.toLowerCase());
     const matchTipo = !filtroTipo || p.id_tipo_inventario == filtroTipo;
-    // NUEVO: Filtro de stock >= 1
     const matchStock = !filtroStock || parseFloat(p.stock_actual) >= 1;
     
     return matchTexto && matchTipo && matchStock;

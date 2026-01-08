@@ -1,20 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
-  Eye, 
-  FileText, 
-  Filter, 
-  Truck, 
-  Clock,
-  CheckCircle, 
-  XCircle, 
-  Package, 
-  TrendingUp,
-  Search,
-  // IMPORTES PARA PAGINACIÓN
-  ChevronLeft,
-  ChevronRight
+  Plus, Eye, FileText, Filter, Truck, Clock,
+  CheckCircle, XCircle, Package, TrendingUp, Search,
+  ChevronLeft, ChevronRight, RefreshCw, MapPin, Calendar
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -27,9 +16,9 @@ function GuiasRemision() {
   const [guias, setGuias] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   
-  // Estados de filtros y paginación
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,14 +28,14 @@ function GuiasRemision() {
     cargarDatos();
   }, [filtroEstado]);
 
-  // Resetear a página 1 cuando cambian los filtros o búsqueda
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, busqueda]);
 
-  const cargarDatos = async () => {
+  const cargarDatos = async (silencioso = false) => {
     try {
-      setLoading(true);
+      if (!silencioso) setLoading(true);
+      setRefreshing(silencioso);
       setError(null);
       
       const filtros = {};
@@ -72,10 +61,10 @@ function GuiasRemision() {
       setError(err.response?.data?.error || 'Error al cargar guías de remisión');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // 1. LÓGICA DE FILTRADO (Texto)
   const guiasFiltradas = guias.filter(guia => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
@@ -87,7 +76,6 @@ function GuiasRemision() {
     );
   });
 
-  // 2. LÓGICA DE PAGINACIÓN
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = guiasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
@@ -109,33 +97,23 @@ function GuiasRemision() {
     const configs = {
       'Emitida': { 
         icono: FileText, 
-        clase: 'badge-info',
-        texto: 'Emitida'
-      },
-      'Pendiente': { 
-        icono: Clock, 
         clase: 'badge-warning',
-        texto: 'Pendiente'
+        color: 'border-warning'
       },
       'En Tránsito': { 
         icono: Truck, 
         clase: 'badge-info',
-        texto: 'En Tránsito'
+        color: 'border-info'
       },
       'Entregada': { 
         icono: CheckCircle, 
         clase: 'badge-success',
-        texto: 'Entregada'
-      },
-      'Cancelada': { 
-        icono: XCircle, 
-        clase: 'badge-danger',
-        texto: 'Cancelada'
+        color: 'border-success'
       },
       'Anulada': { 
         icono: XCircle, 
         clase: 'badge-danger',
-        texto: 'Anulada'
+        color: 'border-danger'
       }
     };
     return configs[estado] || configs['Emitida'];
@@ -148,9 +126,9 @@ function GuiasRemision() {
       width: '180px',
       render: (value, row) => (
         <div>
-          <span className="font-mono font-bold text-sm">{value}</span>
+          <span className="font-mono font-bold text-primary">{value}</span>
           <div className="text-xs text-muted">
-            Orden: {row.numero_orden}
+            OV: {row.numero_orden}
           </div>
         </div>
       )
@@ -158,13 +136,13 @@ function GuiasRemision() {
     {
       header: 'Fecha',
       accessor: 'fecha_emision',
-      width: '110px',
+      width: '120px',
       render: (value, row) => (
         <div>
-          <div>{formatearFecha(value)}</div>
-          {row.fecha_inicio_traslado && (
+          <div className="font-medium">{formatearFecha(value)}</div>
+          {row.fecha_traslado && (
             <div className="text-xs text-muted">
-              Traslado: {formatearFecha(row.fecha_inicio_traslado)}
+              Traslado: {formatearFecha(row.fecha_traslado)}
             </div>
           )}
         </div>
@@ -182,45 +160,41 @@ function GuiasRemision() {
     },
     {
       header: 'Destino',
-      accessor: 'ciudad_llegada',
-      width: '120px',
+      accessor: 'punto_llegada',
+      width: '200px',
       render: (value, row) => (
         <div>
-          <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted">{row.tipo_traslado}</div>
+          <div className="font-medium text-sm">{value || '-'}</div>
+          {row.ciudad_llegada && (
+            <div className="text-xs text-muted flex items-center gap-1">
+              <MapPin size={10} />
+              {row.ciudad_llegada}
+            </div>
+          )}
         </div>
       )
     },
     {
-      header: 'Transporte',
-      accessor: 'modalidad_transporte',
-      width: '100px',
-      align: 'center',
-      render: (value) => (
-        <span className={`badge ${value === 'Privado' ? 'badge-primary' : 'badge-info'}`}>
-          {value}
-        </span>
-      )
-    },
-    {
-      header: 'Items / Bultos',
+      header: 'Items / Peso',
       accessor: 'total_items',
       width: '120px',
       align: 'center',
       render: (value, row) => (
         <div>
           <div className="font-bold">{value || 0} items</div>
-          <div className="text-xs text-muted">{row.numero_bultos || 0} bultos</div>
+          <div className="text-xs text-muted">
+            {parseFloat(row.peso_bruto_kg || 0).toFixed(2)} kg
+          </div>
         </div>
       )
     },
     {
-      header: 'Peso (kg)',
-      accessor: 'peso_bruto_kg',
-      width: '100px',
-      align: 'right',
+      header: 'Bultos',
+      accessor: 'numero_bultos',
+      width: '80px',
+      align: 'center',
       render: (value) => (
-        <span className="font-medium">{parseFloat(value || 0).toFixed(2)}</span>
+        <span className="font-bold text-lg">{value || 0}</span>
       )
     },
     {
@@ -232,9 +206,9 @@ function GuiasRemision() {
         const config = getEstadoConfig(value);
         const Icono = config.icono;
         return (
-          <span className={`badge ${config.clase}`}>
+          <span className={`badge ${config.clase} flex items-center gap-1`}>
             <Icono size={14} />
-            {config.texto}
+            {value}
           </span>
         );
       }
@@ -263,36 +237,42 @@ function GuiasRemision() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileText size={32} />
+            <FileText size={32} className="text-primary" />
             Guías de Remisión
           </h1>
           <p className="text-muted">Gestión de despachos y traslados</p>
         </div>
-        <button 
-          className="btn btn-primary"
-          onClick={() => navigate('/ventas/guias-remision/nueva')}
-        >
-          <Plus size={20} />
-          Nueva Guía de Remisión
-        </button>
+        <div className="flex gap-2">
+          <button 
+            className="btn btn-outline"
+            onClick={() => cargarDatos(true)}
+            disabled={refreshing}
+            title="Actualizar datos"
+          >
+            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/ventas/guias-remision/nueva')}
+          >
+            <Plus size={20} />
+            Nueva Guía
+          </button>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* Estadísticas */}
       {estadisticas && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-5 gap-4 mb-6">
           <div className="card">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Total Guías</p>
-                  <h3 className="text-2xl font-bold">{estadisticas.total_guias || 0}</h3>
-                  <p className="text-xs text-muted">{estadisticas.ordenes_relacionadas || 0} órdenes</p>
+                  <p className="text-xs text-muted uppercase font-semibold">Total Guías</p>
+                  <p className="text-2xl font-bold">{estadisticas.total_guias || 0}</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <FileText size={24} className="text-primary" />
-                </div>
+                <FileText size={32} className="text-muted opacity-20" />
               </div>
             </div>
           </div>
@@ -301,13 +281,10 @@ function GuiasRemision() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Emitidas</p>
-                  <h3 className="text-2xl font-bold text-warning">{estadisticas.emitidas || 0}</h3>
-                  <p className="text-xs text-muted">Por despachar</p>
+                  <p className="text-xs text-muted uppercase font-semibold">Emitidas</p>
+                  <p className="text-2xl font-bold text-warning">{estadisticas.emitidas || 0}</p>
                 </div>
-                <div className="p-3 bg-yellow-100 rounded-lg">
-                  <FileText size={24} className="text-warning" />
-                </div>
+                <FileText size={32} className="text-warning opacity-20" />
               </div>
             </div>
           </div>
@@ -316,13 +293,10 @@ function GuiasRemision() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">En Tránsito</p>
-                  <h3 className="text-2xl font-bold text-info">{estadisticas.en_transito || 0}</h3>
-                  <p className="text-xs text-muted">{estadisticas.bultos_total || 0} bultos</p>
+                  <p className="text-xs text-muted uppercase font-semibold">En Tránsito</p>
+                  <p className="text-2xl font-bold text-info">{estadisticas.en_transito || 0}</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Truck size={24} className="text-info" />
-                </div>
+                <Truck size={32} className="text-info opacity-20" />
               </div>
             </div>
           </div>
@@ -331,28 +305,35 @@ function GuiasRemision() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Peso Total</p>
-                  <h3 className="text-2xl font-bold text-success">
-                    {parseFloat(estadisticas.peso_total || 0).toFixed(2)}
-                  </h3>
-                  <p className="text-xs text-muted">kilogramos</p>
+                  <p className="text-xs text-muted uppercase font-semibold">Entregadas</p>
+                  <p className="text-2xl font-bold text-success">{estadisticas.entregadas || 0}</p>
                 </div>
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <Package size={24} className="text-success" />
+                <CheckCircle size={32} className="text-success opacity-20" />
+              </div>
+            </div>
+          </div>
+
+          <div className="card bg-gradient-to-br from-primary to-blue-600 text-white">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase font-semibold opacity-90">Peso Total</p>
+                  <p className="text-2xl font-bold">
+                    {parseFloat(estadisticas.peso_total || 0).toFixed(0)} kg
+                  </p>
                 </div>
+                <Package size={32} className="opacity-20" />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Filtros y Búsqueda */}
       <div className="card mb-4">
         <div className="card-body">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             
-            {/* Buscador */}
-            <div className="relative w-full md:w-96">
+            <div className="relative flex-1">
               <Search 
                 size={20} 
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
@@ -360,16 +341,15 @@ function GuiasRemision() {
               <input
                 type="text"
                 className="form-input pl-10 w-full"
-                placeholder="Buscar por N° Guía, cliente, RUC..."
+                placeholder="Buscar por N° Guía, cliente, RUC u orden..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
 
-            {/* Filtros de Estado */}
-            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-              <Filter size={20} className="text-muted shrink-0" />
-              <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-muted shrink-0" />
+              <div className="flex gap-2 flex-wrap">
                 <button
                   className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('')}
@@ -377,24 +357,21 @@ function GuiasRemision() {
                   Todos
                 </button>
                 <button
-                  className={`btn btn-sm ${filtroEstado === 'Emitida' ? 'btn-info' : 'btn-outline'}`}
+                  className={`btn btn-sm ${filtroEstado === 'Emitida' ? 'btn-warning' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('Emitida')}
                 >
-                  <FileText size={14} />
                   Emitida
                 </button>
                 <button
                   className={`btn btn-sm ${filtroEstado === 'En Tránsito' ? 'btn-info' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('En Tránsito')}
                 >
-                  <Truck size={14} />
                   En Tránsito
                 </button>
                 <button
                   className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('Entregada')}
                 >
-                  <CheckCircle size={14} />
                   Entregada
                 </button>
               </div>
@@ -403,47 +380,52 @@ function GuiasRemision() {
         </div>
       </div>
 
-      {/* Tabla con Paginación */}
       <div className="card">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
             Lista de Guías de Remisión
-            <span className="badge badge-primary ml-2">{guiasFiltradas.length}</span>
+            {guiasFiltradas.length !== guias.length && (
+              <span className="badge badge-info ml-2">
+                {guiasFiltradas.length} de {guias.length}
+              </span>
+            )}
           </h2>
           <div className="text-sm text-muted">
-             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, guiasFiltradas.length)} de {guiasFiltradas.length}
+            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, guiasFiltradas.length)} de {guiasFiltradas.length}
           </div>
         </div>
         
-        <div className="card-body">
+        <div className="card-body p-0">
           <Table
             columns={columns}
             data={currentItems}
             emptyMessage="No hay guías de remisión registradas"
+            onRowClick={(row) => navigate(`/ventas/guias-remision/${row.id_guia}`)}
           />
         </div>
 
-        {/* Footer de Paginación */}
         {guiasFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToPrevPage}
-                disabled={currentPage === 1}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
             >
-                <ChevronLeft size={16} /> Anterior
+              <ChevronLeft size={16} /> Anterior
             </button>
 
-            <span className="text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">
                 Página {currentPage} de {totalPages}
-            </span>
+              </span>
+            </div>
 
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
             >
-                Siguiente <ChevronRight size={16} />
+              Siguiente <ChevronRight size={16} />
             </button>
           </div>
         )}

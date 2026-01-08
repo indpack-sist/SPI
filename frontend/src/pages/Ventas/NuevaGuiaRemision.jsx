@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Save, FileText, ShoppingCart, MapPin,
-  Truck, Package, Calendar, AlertCircle
+  Truck, Package, Calendar, AlertCircle, Plus
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -20,15 +20,14 @@ function NuevaGuiaRemision() {
   const [orden, setOrden] = useState(null);
   const [productosDisponibles, setProductosDisponibles] = useState([]);
   
-  // ✅ CAMBIO 1: ESTADO INICIAL ACTUALIZADO
   const [formData, setFormData] = useState({
     id_orden_venta: idOrden || '',
     fecha_emision: new Date().toISOString().split('T')[0],
-    fecha_traslado: '',  // Cambiado de fecha_inicio_traslado
-    tipo_traslado: 'Venta',
+    fecha_traslado: new Date().toISOString().split('T')[0],
+    tipo_traslado: 'Privado',
     motivo_traslado: 'Venta',
-    modalidad_transporte: 'Privado',
-    direccion_partida: '',
+    modalidad_transporte: 'Transporte Privado',
+    direccion_partida: 'Almacén Central',
     ubigeo_partida: '150101',
     direccion_llegada: '',
     ubigeo_llegada: '',
@@ -50,7 +49,6 @@ function NuevaGuiaRemision() {
     calcularTotales();
   }, [detalle]);
 
-  // CARGAR ORDEN DESDE API
   const cargarOrden = async (id) => {
     try {
       setLoading(true);
@@ -61,7 +59,11 @@ function NuevaGuiaRemision() {
         const ordenData = response.data.data;
         setOrden(ordenData);
         
-        // Filtrar productos disponibles para despachar
+        if (ordenData.estado !== 'Confirmada' && ordenData.estado !== 'En Preparación') {
+          setError(`Solo se pueden crear guías para órdenes Confirmadas o En Preparación. Estado actual: ${ordenData.estado}`);
+          return;
+        }
+        
         const productosConDisponibilidad = ordenData.detalle.map(item => {
           const cantidadDisponible = parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0);
           return {
@@ -73,13 +75,18 @@ function NuevaGuiaRemision() {
             cantidad_total: parseFloat(item.cantidad),
             cantidad_despachada: parseFloat(item.cantidad_despachada || 0),
             cantidad_disponible: cantidadDisponible,
+            stock_actual: parseFloat(item.stock_disponible || 0),
             peso_unitario_kg: parseFloat(item.peso_unitario_kg || 0)
           };
         }).filter(item => item.cantidad_disponible > 0);
         
+        if (productosConDisponibilidad.length === 0) {
+          setError('No hay productos disponibles para despachar en esta orden');
+          return;
+        }
+        
         setProductosDisponibles(productosConDisponibilidad);
         
-        // Auto-llenar detalle con productos disponibles
         const detalleInicial = productosConDisponibilidad.map(p => ({
           id_detalle_orden: p.id_detalle,
           id_producto: p.id_producto,
@@ -93,7 +100,6 @@ function NuevaGuiaRemision() {
         
         setDetalle(detalleInicial);
         
-        // Auto-llenar dirección
         setFormData(prev => ({
           ...prev,
           id_orden_venta: id,
@@ -120,11 +126,23 @@ function NuevaGuiaRemision() {
     const cantidadNum = parseFloat(cantidad) || 0;
     
     if (cantidadNum > producto.cantidad_disponible) {
-      setError(`Cantidad máxima disponible: ${producto.cantidad_disponible}`);
+      setError(`${producto.producto}: Cantidad máxima disponible ${producto.cantidad_disponible}`);
+      return;
+    }
+    
+    if (cantidadNum > producto.stock_actual) {
+      setError(`${producto.producto}: Stock insuficiente. Disponible: ${producto.stock_actual}`);
       return;
     }
     
     newDetalle[index].cantidad = cantidadNum;
+    setDetalle(newDetalle);
+    setError(null);
+  };
+
+  const handlePesoChange = (index, peso) => {
+    const newDetalle = [...detalle];
+    newDetalle[index].peso_unitario_kg = parseFloat(peso) || 0;
     setDetalle(newDetalle);
   };
 
@@ -135,11 +153,10 @@ function NuevaGuiaRemision() {
     
     setFormData(prev => ({
       ...prev,
-      peso_bruto_kg: pesoTotal
+      peso_bruto_kg: pesoTotal.toFixed(2)
     }));
   };
 
-  // GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -150,31 +167,30 @@ function NuevaGuiaRemision() {
       return;
     }
     
-    if (detalle.length === 0) {
-      setError('Debe agregar al menos un producto');
-      return;
-    }
+    const detalleValido = detalle.filter(item => parseFloat(item.cantidad) > 0);
     
-    if (!formData.direccion_llegada) {
-      setError('Debe especificar la dirección de llegada');
-      return;
-    }
-    
-    // Validar que haya cantidades a despachar
-    const totalCantidad = detalle.reduce((sum, item) => sum + parseFloat(item.cantidad), 0);
-    if (totalCantidad === 0) {
+    if (detalleValido.length === 0) {
       setError('Debe especificar cantidades a despachar');
+      return;
+    }
+    
+    if (!formData.direccion_llegada || formData.direccion_llegada.trim() === '') {
+      setError('La dirección de llegada es obligatoria');
+      return;
+    }
+    
+    if (!formData.fecha_traslado) {
+      setError('La fecha de traslado es obligatoria');
       return;
     }
     
     try {
       setLoading(true);
       
-      // ✅ CAMBIO 5: PAYLOAD ACTUALIZADO
       const payload = {
         id_orden_venta: parseInt(formData.id_orden_venta),
         fecha_emision: formData.fecha_emision,
-        fecha_traslado: formData.fecha_traslado || null, // Cambiado nombre de propiedad
+        fecha_traslado: formData.fecha_traslado,
         tipo_traslado: formData.tipo_traslado,
         motivo_traslado: formData.motivo_traslado,
         modalidad_transporte: formData.modalidad_transporte,
@@ -186,31 +202,29 @@ function NuevaGuiaRemision() {
         peso_bruto_kg: parseFloat(formData.peso_bruto_kg),
         numero_bultos: parseInt(formData.numero_bultos) || 0,
         observaciones: formData.observaciones,
-        detalle: detalle
-          .filter(item => parseFloat(item.cantidad) > 0)
-          .map((item, index) => ({
-            id_detalle_orden: item.id_detalle_orden,
-            id_producto: item.id_producto,
-            cantidad: parseFloat(item.cantidad),
-            descripcion: item.descripcion || item.producto,
-            peso_unitario_kg: parseFloat(item.peso_unitario_kg) || 0,
-            orden: index + 1
-          }))
+        detalle: detalleValido.map(item => ({
+          id_detalle_orden: item.id_detalle_orden,
+          id_producto: item.id_producto,
+          cantidad: parseFloat(item.cantidad),
+          unidad_medida: item.unidad_medida,
+          descripcion: item.descripcion || item.producto,
+          peso_unitario_kg: parseFloat(item.peso_unitario_kg) || 0
+        }))
       };
       
       const response = await guiasRemisionAPI.create(payload);
       
       if (response.data.success) {
-        setSuccess('Guía de remisión creada exitosamente');
+        setSuccess(`Guía creada: ${response.data.data.numero_guia}`);
         setTimeout(() => {
-          navigate('/ventas/guias-remision');
+          navigate(`/ventas/guias-remision/${response.data.data.id_guia}`);
         }, 1500);
       } else {
         setError(response.data.error || 'Error al crear guía de remisión');
       }
       
     } catch (err) {
-      console.error('Error al crear guía de remisión:', err);
+      console.error('Error al crear guía:', err);
       setError(err.response?.data?.error || 'Error al crear guía de remisión');
     } finally {
       setLoading(false);
@@ -247,11 +261,11 @@ function NuevaGuiaRemision() {
         </button>
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileText size={32} />
+            <FileText size={32} className="text-primary" />
             Nueva Guía de Remisión
           </h1>
           <p className="text-muted">
-            Desde orden {orden?.numero_orden}
+            {orden ? `Desde orden ${orden.numero_orden}` : 'Preparando guía...'}
           </p>
         </div>
       </div>
@@ -259,7 +273,6 @@ function NuevaGuiaRemision() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Info Orden */}
       {orden && (
         <div className="card border-l-4 border-primary bg-blue-50 mb-4">
           <div className="card-body">
@@ -273,15 +286,20 @@ function NuevaGuiaRemision() {
                   Cliente: {orden.cliente} ({orden.ruc_cliente})
                 </p>
               </div>
+              <div className="text-right">
+                <p className="text-xs text-blue-700">Estado</p>
+                <span className={`badge ${orden.estado === 'Confirmada' ? 'badge-success' : 'badge-info'}`}>
+                  {orden.estado}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Datos de la Guía */}
         <div className="card mb-4">
-          <div className="card-header">
+          <div className="card-header bg-gradient-to-r from-gray-50 to-white">
             <h2 className="card-title">
               <Calendar size={20} />
               Datos de la Guía
@@ -300,7 +318,6 @@ function NuevaGuiaRemision() {
                 />
               </div>
               
-              {/* ✅ CAMBIO 2: LABEL Y CAMPO DE FECHA DE TRASLADO ACTUALIZADOS */}
               <div className="form-group">
                 <label className="form-label">Fecha de Traslado *</label>
                 <input
@@ -313,6 +330,20 @@ function NuevaGuiaRemision() {
               </div>
               
               <div className="form-group">
+                <label className="form-label">Motivo de Traslado *</label>
+                <select
+                  className="form-select"
+                  value={formData.motivo_traslado}
+                  onChange={(e) => setFormData({ ...formData, motivo_traslado: e.target.value })}
+                  required
+                >
+                  <option value="Venta">Venta</option>
+                  <option value="Traslado entre Almacenes">Traslado entre Almacenes</option>
+                  <option value="Devolución">Devolución</option>
+                </select>
+              </div>
+              
+              <div className="form-group">
                 <label className="form-label">Tipo de Traslado *</label>
                 <select
                   className="form-select"
@@ -320,10 +351,8 @@ function NuevaGuiaRemision() {
                   onChange={(e) => setFormData({ ...formData, tipo_traslado: e.target.value })}
                   required
                 >
-                  <option value="Venta">Venta</option>
-                  <option value="Traslado entre almacenes">Traslado entre almacenes</option>
-                  <option value="Consignación">Consignación</option>
-                  <option value="Otros">Otros</option>
+                  <option value="Privado">Privado</option>
+                  <option value="Público">Público</option>
                 </select>
               </div>
               
@@ -335,8 +364,8 @@ function NuevaGuiaRemision() {
                   onChange={(e) => setFormData({ ...formData, modalidad_transporte: e.target.value })}
                   required
                 >
-                  <option value="Privado">Transporte Privado</option>
-                  <option value="Público">Transporte Público</option>
+                  <option value="Transporte Privado">Transporte Privado</option>
+                  <option value="Transporte Público">Transporte Público</option>
                 </select>
               </div>
               
@@ -350,44 +379,27 @@ function NuevaGuiaRemision() {
                   min="0"
                 />
               </div>
-              
-              {/* ✅ CAMBIO 3: PESO BRUTO EDITABLE CON MENSAJE */}
-              <div className="form-group">
-                <label className="form-label">Peso Bruto (kg)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={formData.peso_bruto_kg}
-                  onChange={(e) => setFormData({ ...formData, peso_bruto_kg: e.target.value })}
-                  min="0"
-                  step="0.01"
-                />
-                <p className="text-xs text-muted mt-1">
-                  Se calcula automáticamente, pero puede modificarse manualmente
-                </p>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Punto de Partida */}
-        <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
-              <MapPin size={20} />
-              Punto de Partida
-            </h2>
-          </div>
-          <div className="card-body">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group col-span-2">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="card">
+            <div className="card-header bg-gradient-to-r from-green-50 to-white">
+              <h2 className="card-title text-green-900">
+                <MapPin size={20} />
+                Punto de Partida
+              </h2>
+            </div>
+            <div className="card-body">
+              <div className="form-group">
                 <label className="form-label">Dirección de Partida</label>
                 <input
                   type="text"
                   className="form-input"
                   value={formData.direccion_partida}
                   onChange={(e) => setFormData({ ...formData, direccion_partida: e.target.value })}
-                  placeholder="Dirección del almacén o punto de origen"
+                  placeholder="Almacén Central"
                 />
               </div>
               
@@ -398,25 +410,22 @@ function NuevaGuiaRemision() {
                   className="form-input"
                   value={formData.ubigeo_partida}
                   onChange={(e) => setFormData({ ...formData, ubigeo_partida: e.target.value })}
-                  placeholder="Código ubigeo (6 dígitos)"
+                  placeholder="150101"
                   maxLength="6"
                 />
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Punto de Llegada */}
-        <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
-              <MapPin size={20} />
-              Punto de Llegada
-            </h2>
-          </div>
-          <div className="card-body">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group col-span-2">
+          <div className="card">
+            <div className="card-header bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="card-title text-blue-900">
+                <MapPin size={20} />
+                Punto de Llegada *
+              </h2>
+            </div>
+            <div className="card-body">
+              <div className="form-group">
                 <label className="form-label">Dirección de Llegada *</label>
                 <input
                   type="text"
@@ -428,63 +437,74 @@ function NuevaGuiaRemision() {
                 />
               </div>
               
-              <div className="form-group">
-                <label className="form-label">Ciudad de Llegada</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formData.ciudad_llegada}
-                  onChange={(e) => setFormData({ ...formData, ciudad_llegada: e.target.value })}
-                  placeholder="Ciudad"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label className="form-label">Ubigeo de Llegada</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formData.ubigeo_llegada}
-                  onChange={(e) => setFormData({ ...formData, ubigeo_llegada: e.target.value })}
-                  placeholder="Código ubigeo (6 dígitos)"
-                  maxLength="6"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="form-label">Ciudad</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formData.ciudad_llegada}
+                    onChange={(e) => setFormData({ ...formData, ciudad_llegada: e.target.value })}
+                    placeholder="Ciudad"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Ubigeo</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formData.ubigeo_llegada}
+                    onChange={(e) => setFormData({ ...formData, ubigeo_llegada: e.target.value })}
+                    placeholder="Código ubigeo"
+                    maxLength="6"
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Detalle de Productos */}
         <div className="card mb-4">
-          <div className="card-header">
+          <div className="card-header bg-gradient-to-r from-gray-50 to-white">
             <h2 className="card-title">
               <Package size={20} />
               Productos a Despachar
+              <span className="badge badge-primary ml-2">{productosDisponibles.length}</span>
             </h2>
           </div>
-          <div className="card-body">
+          <div className="card-body p-0">
             {productosDisponibles.length > 0 ? (
               <>
                 <div className="overflow-x-auto">
                   <table className="table">
                     <thead>
                       <tr>
-                        <th style={{ width: '100px' }}>Código</th>
-                        <th>Descripción</th>
-                        <th style={{ width: '100px' }}>Disponible</th>
-                        <th style={{ width: '100px' }}>Cantidad *</th>
-                        <th style={{ width: '80px' }}>Unidad</th>
-                        <th style={{ width: '100px' }}>Peso Unit.</th>
-                        <th style={{ width: '100px' }}>Peso Total</th>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th className="text-right">Disponible</th>
+                        <th className="text-right">Cantidad *</th>
+                        <th>UM</th>
+                        <th className="text-right">Peso Unit. (kg)</th>
+                        <th className="text-right">Peso Total (kg)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {detalle.map((item, index) => {
                         const producto = productosDisponibles.find(p => p.id_producto === item.id_producto);
+                        const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
+                        
                         return (
                           <tr key={index}>
                             <td className="font-mono text-sm">{item.codigo_producto}</td>
-                            <td className="font-medium">{item.producto}</td>
+                            <td>
+                              <div className="font-medium">{item.producto}</div>
+                              {parseFloat(item.cantidad) > parseFloat(producto?.stock_actual || 0) && (
+                                <div className="text-xs text-danger">
+                                  Stock insuficiente (disponible: {producto?.stock_actual})
+                                </div>
+                              )}
+                            </td>
                             <td className="text-right">
                               <span className="font-bold text-primary">
                                 {parseFloat(producto?.cantidad_disponible || 0).toFixed(2)}
@@ -503,35 +523,27 @@ function NuevaGuiaRemision() {
                               />
                             </td>
                             <td className="text-sm text-muted">{item.unidad_medida}</td>
-                            
-                            {/* ✅ CAMBIO 4: PESO UNITARIO EDITABLE EN TABLA */}
                             <td>
                               <input
                                 type="number"
                                 className="form-input text-right text-sm"
                                 value={item.peso_unitario_kg}
-                                onChange={(e) => {
-                                  const newDetalle = [...detalle];
-                                  newDetalle[index].peso_unitario_kg = parseFloat(e.target.value) || 0;
-                                  setDetalle(newDetalle);
-                                  calcularTotales();
-                                }}
+                                onChange={(e) => handlePesoChange(index, e.target.value)}
                                 min="0"
                                 step="0.01"
                               />
                             </td>
-                            
                             <td className="text-right font-bold">
-                              {(parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg)).toFixed(2)} kg
+                              {pesoTotal.toFixed(2)}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-gray-50">
-                        <td colSpan="6" className="text-right font-bold">PESO TOTAL:</td>
-                        <td className="text-right font-bold text-primary">
+                      <tr className="bg-primary/5">
+                        <td colSpan="6" className="text-right font-bold text-primary">PESO TOTAL:</td>
+                        <td className="text-right font-bold text-primary text-lg">
                           {parseFloat(formData.peso_bruto_kg).toFixed(2)} kg
                         </td>
                       </tr>
@@ -539,30 +551,34 @@ function NuevaGuiaRemision() {
                   </table>
                 </div>
                 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                <div className="bg-yellow-50 border-t border-yellow-200 p-4">
                   <div className="flex items-start gap-2">
-                    <AlertCircle size={20} className="text-warning flex-shrink-0 mt-0.5" />
+                    <AlertCircle size={18} className="text-warning flex-shrink-0 mt-0.5" />
                     <div className="text-sm text-yellow-900">
-                      <p className="font-medium">Importante:</p>
-                      <p>Solo se despacharán los productos con cantidad mayor a 0. Las cantidades no pueden exceder lo disponible en la orden.</p>
+                      <p className="font-medium">Validaciones automáticas:</p>
+                      <ul className="list-disc list-inside mt-1 space-y-1">
+                        <li>Las cantidades no pueden exceder lo disponible en la orden</li>
+                        <li>El stock debe ser suficiente para todas las cantidades</li>
+                        <li>Solo se despacharán productos con cantidad mayor a 0</li>
+                      </ul>
                     </div>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-center gap-2">
-                  <AlertCircle size={20} className="text-warning" />
-                  <p className="text-sm text-yellow-900">
-                    No hay productos disponibles para despachar en esta orden. Todos los productos ya han sido despachados.
-                  </p>
-                </div>
+              <div className="p-8 text-center">
+                <Package size={48} className="mx-auto text-muted opacity-20 mb-4" />
+                <p className="text-muted font-medium">
+                  No hay productos disponibles para despachar
+                </p>
+                <p className="text-sm text-muted">
+                  Todos los productos de esta orden ya han sido despachados
+                </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Observaciones */}
         <div className="card mb-4">
           <div className="card-body">
             <div className="form-group">
@@ -578,7 +594,6 @@ function NuevaGuiaRemision() {
           </div>
         </div>
 
-        {/* Botones */}
         <div className="flex gap-3 justify-end">
           <button
             type="button"

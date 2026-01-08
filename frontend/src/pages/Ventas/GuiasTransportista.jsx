@@ -1,19 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
-  Eye, 
-  Truck, 
-  Filter, 
-  CheckCircle,
-  XCircle, 
-  TrendingUp, 
-  Users, 
-  Car,
-  Search,
-  // IMPORTES PARA PAGINACIÓN
-  ChevronLeft,
-  ChevronRight
+  Plus, Eye, Truck, Filter, CheckCircle, XCircle, Clock,
+  Users, Car, Search, ChevronLeft, ChevronRight, RefreshCw,
+  MapPin, FileText
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -26,9 +16,9 @@ function GuiasTransportista() {
   const [guias, setGuias] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   
-  // Estados de filtros y paginación
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,14 +28,14 @@ function GuiasTransportista() {
     cargarDatos();
   }, [filtroEstado]);
 
-  // Resetear a página 1 cuando cambian los filtros o la búsqueda
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, busqueda]);
 
-  const cargarDatos = async () => {
+  const cargarDatos = async (silencioso = false) => {
     try {
-      setLoading(true);
+      if (!silencioso) setLoading(true);
+      setRefreshing(silencioso);
       setError(null);
       
       const filtros = {};
@@ -71,10 +61,10 @@ function GuiasTransportista() {
       setError(err.response?.data?.error || 'Error al cargar guías de transportista');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // 1. LÓGICA DE FILTRADO (Texto)
   const guiasFiltradas = guias.filter(guia => {
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
@@ -83,11 +73,11 @@ function GuiasTransportista() {
       guia.numero_guia_remision?.toLowerCase().includes(term) ||
       guia.razon_social_transportista?.toLowerCase().includes(term) ||
       guia.nombre_conductor?.toLowerCase().includes(term) ||
-      guia.placa_vehiculo?.toLowerCase().includes(term)
+      guia.placa_vehiculo?.toLowerCase().includes(term) ||
+      guia.cliente?.toLowerCase().includes(term)
     );
   });
 
-  // 2. LÓGICA DE PAGINACIÓN
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = guiasFiltradas.slice(indexOfFirstItem, indexOfLastItem);
@@ -107,35 +97,40 @@ function GuiasTransportista() {
 
   const getEstadoConfig = (estado) => {
     const configs = {
-      'Activa': { 
+      'Pendiente': { 
+        icono: Clock, 
+        clase: 'badge-warning',
+        color: 'border-warning'
+      },
+      'En Tránsito': { 
         icono: Truck, 
         clase: 'badge-info',
-        texto: 'Activa'
+        color: 'border-info'
       },
-      'Finalizada': { 
+      'Entregada': { 
         icono: CheckCircle, 
         clase: 'badge-success',
-        texto: 'Finalizada'
+        color: 'border-success'
       },
       'Cancelada': { 
         icono: XCircle, 
         clase: 'badge-danger',
-        texto: 'Cancelada'
+        color: 'border-danger'
       }
     };
-    return configs[estado] || configs['Activa'];
+    return configs[estado] || configs['Pendiente'];
   };
 
   const columns = [
     {
       header: 'N° Guía',
       accessor: 'numero_guia',
-      width: '140px',
+      width: '160px',
       render: (value, row) => (
         <div>
-          <span className="font-mono font-bold text-sm">{value}</span>
+          <span className="font-mono font-bold text-primary">{value}</span>
           <div className="text-xs text-muted">
-            Remisión: {row.numero_guia_remision}
+            GR: {row.numero_guia_remision}
           </div>
         </div>
       )
@@ -144,7 +139,9 @@ function GuiasTransportista() {
       header: 'Fecha',
       accessor: 'fecha_emision',
       width: '110px',
-      render: (value) => formatearFecha(value)
+      render: (value) => (
+        <div className="font-medium">{formatearFecha(value)}</div>
+      )
     },
     {
       header: 'Transportista',
@@ -159,7 +156,7 @@ function GuiasTransportista() {
     {
       header: 'Conductor',
       accessor: 'nombre_conductor',
-      width: '150px',
+      width: '180px',
       render: (value, row) => (
         <div>
           <div className="font-medium">{value}</div>
@@ -173,36 +170,40 @@ function GuiasTransportista() {
       width: '120px',
       render: (value, row) => (
         <div>
-          <div className="font-bold font-mono">{value}</div>
-          <div className="text-xs text-muted">{row.marca_vehiculo}</div>
+          <div className="font-bold font-mono text-lg">{value}</div>
+          {row.marca_vehiculo && (
+            <div className="text-xs text-muted">{row.marca_vehiculo}</div>
+          )}
         </div>
       )
     },
     {
       header: 'Destino',
-      accessor: 'ciudad_llegada',
-      width: '100px',
+      accessor: 'punto_llegada',
+      width: '150px',
       render: (value, row) => (
         <div>
-          <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted">
-            {parseFloat(row.peso_bruto_kg || 0).toFixed(0)} kg
-          </div>
+          <div className="font-medium text-sm">{value || row.ciudad_llegada || '-'}</div>
+          {row.peso_bruto_kg && (
+            <div className="text-xs text-muted">
+              {parseFloat(row.peso_bruto_kg).toFixed(2)} kg
+            </div>
+          )}
         </div>
       )
     },
     {
       header: 'Estado',
       accessor: 'estado',
-      width: '120px',
+      width: '130px',
       align: 'center',
       render: (value) => {
         const config = getEstadoConfig(value);
         const Icono = config.icono;
         return (
-          <span className={`badge ${config.clase}`}>
+          <span className={`badge ${config.clase} flex items-center gap-1`}>
             <Icono size={14} />
-            {config.texto}
+            {value}
           </span>
         );
       }
@@ -231,53 +232,42 @@ function GuiasTransportista() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Truck size={32} />
+            <Truck size={32} className="text-primary" />
             Guías de Transportista
           </h1>
           <p className="text-muted">Gestión de transportes y conductores</p>
         </div>
-        <button 
-          className="btn btn-primary"
-          onClick={() => navigate('/ventas/guias-transportista/nueva')}
-        >
-          <Plus size={20} />
-          Nueva Guía de Transportista
-        </button>
+        <div className="flex gap-2">
+          <button 
+            className="btn btn-outline"
+            onClick={() => cargarDatos(true)}
+            disabled={refreshing}
+            title="Actualizar datos"
+          >
+            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/ventas/guias-transportista/nueva')}
+          >
+            <Plus size={20} />
+            Nueva Guía
+          </button>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* Estadísticas */}
       {estadisticas && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-5 gap-4 mb-6">
           <div className="card">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Total Guías</p>
-                  <h3 className="text-2xl font-bold">{estadisticas.total_guias || 0}</h3>
-                  <p className="text-xs text-muted">
-                    {estadisticas.transportistas_unicos || 0} transportistas
-                  </p>
+                  <p className="text-xs text-muted uppercase font-semibold">Total Guías</p>
+                  <p className="text-2xl font-bold">{estadisticas.total_guias || 0}</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Truck size={24} className="text-primary" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card border-l-4 border-info">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted">En Tránsito</p>
-                  <h3 className="text-2xl font-bold text-info">{estadisticas.activas || 0}</h3>
-                  <p className="text-xs text-muted">Activas</p>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Truck size={24} className="text-info" />
-                </div>
+                <Truck size={32} className="text-muted opacity-20" />
               </div>
             </div>
           </div>
@@ -286,15 +276,22 @@ function GuiasTransportista() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Conductores</p>
-                  <h3 className="text-2xl font-bold text-warning">
-                    {estadisticas.conductores_unicos || 0}
-                  </h3>
-                  <p className="text-xs text-muted">Registrados</p>
+                  <p className="text-xs text-muted uppercase font-semibold">Pendientes</p>
+                  <p className="text-2xl font-bold text-warning">{estadisticas.pendientes || 0}</p>
                 </div>
-                <div className="p-3 bg-yellow-100 rounded-lg">
-                  <Users size={24} className="text-warning" />
+                <Clock size={32} className="text-warning opacity-20" />
+              </div>
+            </div>
+          </div>
+
+          <div className="card border-l-4 border-info">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted uppercase font-semibold">En Tránsito</p>
+                  <p className="text-2xl font-bold text-info">{estadisticas.en_transito || 0}</p>
                 </div>
+                <Truck size={32} className="text-info opacity-20" />
               </div>
             </div>
           </div>
@@ -303,28 +300,33 @@ function GuiasTransportista() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Vehículos</p>
-                  <h3 className="text-2xl font-bold text-success">
-                    {estadisticas.vehiculos_unicos || 0}
-                  </h3>
-                  <p className="text-xs text-muted">Registrados</p>
+                  <p className="text-xs text-muted uppercase font-semibold">Entregadas</p>
+                  <p className="text-2xl font-bold text-success">{estadisticas.entregadas || 0}</p>
                 </div>
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <Car size={24} className="text-success" />
+                <CheckCircle size={32} className="text-success opacity-20" />
+              </div>
+            </div>
+          </div>
+
+          <div className="card bg-gradient-to-br from-primary to-blue-600 text-white">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase font-semibold opacity-90">Vehículos</p>
+                  <p className="text-2xl font-bold">{estadisticas.vehiculos_unicos || 0}</p>
                 </div>
+                <Car size={32} className="opacity-20" />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Filtros y Búsqueda */}
       <div className="card mb-4">
         <div className="card-body">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             
-            {/* Buscador */}
-            <div className="relative w-full md:w-96">
+            <div className="relative flex-1">
               <Search 
                 size={20} 
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
@@ -332,18 +334,15 @@ function GuiasTransportista() {
               <input
                 type="text"
                 className="form-input pl-10 w-full"
-                placeholder="Buscar por N°, transportista, conductor..."
+                placeholder="Buscar por N°, transportista, conductor, placa..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
 
-            {/* Filtros de Estado */}
-            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-              <Filter size={20} className="text-muted shrink-0" />
-              <span className="font-medium shrink-0">Filtrar por estado:</span>
-              
-              <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-muted shrink-0" />
+              <div className="flex gap-2 flex-wrap">
                 <button
                   className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('')}
@@ -351,18 +350,22 @@ function GuiasTransportista() {
                   Todos
                 </button>
                 <button
-                  className={`btn btn-sm ${filtroEstado === 'Activa' ? 'btn-info' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Activa')}
+                  className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Pendiente')}
                 >
-                  <Truck size={14} />
-                  Activa
+                  Pendiente
                 </button>
                 <button
-                  className={`btn btn-sm ${filtroEstado === 'Finalizada' ? 'btn-success' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Finalizada')}
+                  className={`btn btn-sm ${filtroEstado === 'En Tránsito' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('En Tránsito')}
                 >
-                  <CheckCircle size={14} />
-                  Finalizada
+                  En Tránsito
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Entregada')}
+                >
+                  Entregada
                 </button>
               </div>
             </div>
@@ -370,47 +373,52 @@ function GuiasTransportista() {
         </div>
       </div>
 
-      {/* Tabla con Paginación */}
       <div className="card">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
             Lista de Guías de Transportista
-            <span className="badge badge-primary ml-2">{guiasFiltradas.length}</span>
+            {guiasFiltradas.length !== guias.length && (
+              <span className="badge badge-info ml-2">
+                {guiasFiltradas.length} de {guias.length}
+              </span>
+            )}
           </h2>
           <div className="text-sm text-muted">
-             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, guiasFiltradas.length)} de {guiasFiltradas.length}
+            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, guiasFiltradas.length)} de {guiasFiltradas.length}
           </div>
         </div>
         
-        <div className="card-body">
+        <div className="card-body p-0">
           <Table
             columns={columns}
             data={currentItems}
             emptyMessage="No hay guías de transportista registradas"
+            onRowClick={(row) => navigate(`/ventas/guias-transportista/${row.id_guia_transportista}`)}
           />
         </div>
 
-        {/* Footer de Paginación */}
         {guiasFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToPrevPage}
-                disabled={currentPage === 1}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
             >
-                <ChevronLeft size={16} /> Anterior
+              <ChevronLeft size={16} /> Anterior
             </button>
 
-            <span className="text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">
                 Página {currentPage} de {totalPages}
-            </span>
+              </span>
+            </div>
 
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
             >
-                Siguiente <ChevronRight size={16} />
+              Siguiente <ChevronRight size={16} />
             </button>
           </div>
         )}

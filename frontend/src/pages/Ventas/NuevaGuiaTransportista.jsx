@@ -1,9 +1,8 @@
-// frontend/src/pages/Ventas/NuevaGuiaTransportista.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Truck, FileText, User,
-  Car, Search, AlertCircle
+  Car, Search, AlertCircle, MapPin, Calendar
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -21,7 +20,6 @@ function NuevaGuiaTransportista() {
   
   const [guiaRemision, setGuiaRemision] = useState(null);
   
-  // Catálogos de datos frecuentes
   const [transportistas, setTransportistas] = useState([]);
   const [conductores, setConductores] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
@@ -43,7 +41,10 @@ function NuevaGuiaTransportista() {
     marca_vehiculo: '',
     modelo_vehiculo: '',
     certificado_habilitacion: '',
+    punto_partida: '',
+    punto_llegada: '',
     fecha_inicio_traslado: new Date().toISOString().split('T')[0],
+    fecha_estimada_llegada: '',
     observaciones: ''
   });
 
@@ -54,7 +55,6 @@ function NuevaGuiaTransportista() {
     cargarCatalogos();
   }, [idGuia]);
 
-  // ✅ CARGAR GUÍA DE REMISIÓN
   const cargarGuiaRemision = async (id) => {
     try {
       setLoading(true);
@@ -64,10 +64,23 @@ function NuevaGuiaTransportista() {
       if (response.data.success) {
         const guia = response.data.data;
         setGuiaRemision(guia);
+        
+        if (guia.estado !== 'En Tránsito') {
+          setError(`Solo se pueden crear guías de transportista para guías en estado "En Tránsito". Estado actual: ${guia.estado}`);
+          return;
+        }
+        
+        if (guia.guia_transportista) {
+          setError('Esta guía de remisión ya tiene una guía de transportista asociada');
+          return;
+        }
+        
         setFormData(prev => ({
           ...prev,
           id_guia_remision: id,
-          fecha_inicio_traslado: guia.fecha_inicio_traslado || prev.fecha_inicio_traslado
+          punto_partida: guia.direccion_partida || guia.punto_partida || 'Almacén Central',
+          punto_llegada: guia.direccion_llegada || guia.punto_llegada || '',
+          fecha_inicio_traslado: guia.fecha_traslado || prev.fecha_inicio_traslado
         }));
       } else {
         setError('Guía de remisión no encontrada');
@@ -81,7 +94,6 @@ function NuevaGuiaTransportista() {
     }
   };
 
-  // ✅ CARGAR CATÁLOGOS DE DATOS FRECUENTES
   const cargarCatalogos = async () => {
     try {
       const [transpRes, condRes, vehRes] = await Promise.all([
@@ -104,7 +116,6 @@ function NuevaGuiaTransportista() {
       
     } catch (err) {
       console.error('Error al cargar catálogos:', err);
-      // No mostrar error, los catálogos son opcionales
     }
   };
 
@@ -139,7 +150,6 @@ function NuevaGuiaTransportista() {
     setModalVehiculoOpen(false);
   };
 
-  // ✅ GUARDAR EN API REAL
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -151,17 +161,27 @@ function NuevaGuiaTransportista() {
     }
     
     if (!formData.razon_social_transportista || !formData.ruc_transportista) {
-      setError('Debe especificar el transportista');
+      setError('Los datos del transportista son obligatorios');
+      return;
+    }
+    
+    if (formData.ruc_transportista.length !== 11) {
+      setError('El RUC debe tener 11 dígitos');
       return;
     }
     
     if (!formData.nombre_conductor || !formData.licencia_conducir) {
-      setError('Debe especificar el conductor');
+      setError('Los datos del conductor son obligatorios');
       return;
     }
     
     if (!formData.placa_vehiculo) {
-      setError('Debe especificar el vehículo');
+      setError('La placa del vehículo es obligatoria');
+      return;
+    }
+    
+    if (!formData.punto_partida || !formData.punto_llegada) {
+      setError('Los puntos de partida y llegada son obligatorios');
       return;
     }
     
@@ -177,27 +197,30 @@ function NuevaGuiaTransportista() {
         licencia_conducir: formData.licencia_conducir,
         dni_conductor: formData.dni_conductor || null,
         telefono_conductor: formData.telefono_conductor || null,
-        placa_vehiculo: formData.placa_vehiculo,
+        placa_vehiculo: formData.placa_vehiculo.toUpperCase(),
         marca_vehiculo: formData.marca_vehiculo || null,
         modelo_vehiculo: formData.modelo_vehiculo || null,
         certificado_habilitacion: formData.certificado_habilitacion || null,
+        punto_partida: formData.punto_partida,
+        punto_llegada: formData.punto_llegada,
         fecha_inicio_traslado: formData.fecha_inicio_traslado,
-        observaciones: formData.observaciones
+        fecha_estimada_llegada: formData.fecha_estimada_llegada || null,
+        observaciones: formData.observaciones || null
       };
       
       const response = await guiasTransportistaAPI.create(payload);
       
       if (response.data.success) {
-        setSuccess('Guía de transportista creada exitosamente');
+        setSuccess(`Guía creada: ${response.data.data.numero_guia}`);
         setTimeout(() => {
-          navigate('/ventas/guias-transportista');
+          navigate(`/ventas/guias-transportista/${response.data.data.id_guia_transportista}`);
         }, 1500);
       } else {
         setError(response.data.error || 'Error al crear guía de transportista');
       }
       
     } catch (err) {
-      console.error('Error al crear guía de transportista:', err);
+      console.error('Error al crear guía:', err);
       setError(err.response?.data?.error || 'Error al crear guía de transportista');
     } finally {
       setLoading(false);
@@ -234,11 +257,11 @@ function NuevaGuiaTransportista() {
         </button>
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Truck size={32} />
+            <Truck size={32} className="text-primary" />
             Nueva Guía de Transportista
           </h1>
           <p className="text-muted">
-            Para guía de remisión {guiaRemision?.numero_guia}
+            {guiaRemision ? `Para guía ${guiaRemision.numero_guia}` : 'Preparando formulario...'}
           </p>
         </div>
       </div>
@@ -246,24 +269,30 @@ function NuevaGuiaTransportista() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Info Guía de Remisión */}
       {guiaRemision && (
         <div className="card border-l-4 border-primary bg-blue-50 mb-4">
           <div className="card-body">
             <div className="flex items-center gap-3">
               <FileText size={24} className="text-primary" />
-              <div className="flex-1">
-                <p className="font-medium text-blue-900">
-                  Guía de Remisión: {guiaRemision.numero_guia}
-                </p>
-                <p className="text-sm text-blue-700">
-                  Orden: {guiaRemision.numero_orden} • Cliente: {guiaRemision.cliente}
-                </p>
-                <p className="text-sm text-blue-700">
-                  Destino: {guiaRemision.ciudad_llegada} • 
-                  Peso: {parseFloat(guiaRemision.peso_bruto_kg || 0).toFixed(2)} kg • 
-                  Bultos: {guiaRemision.numero_bultos || 0}
-                </p>
+              <div className="flex-1 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">GUÍA DE REMISIÓN</p>
+                  <p className="font-bold text-blue-900">{guiaRemision.numero_guia}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">ORDEN</p>
+                  <p className="font-bold text-blue-900">{guiaRemision.numero_orden}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">CLIENTE</p>
+                  <p className="font-medium text-blue-900">{guiaRemision.cliente}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">CARGA</p>
+                  <p className="font-medium text-blue-900">
+                    {parseFloat(guiaRemision.peso_bruto_kg || 0).toFixed(2)} kg • {guiaRemision.numero_bultos || 0} bultos
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -271,10 +300,15 @@ function NuevaGuiaTransportista() {
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Fecha */}
         <div className="card mb-4">
+          <div className="card-header bg-gradient-to-r from-gray-50 to-white">
+            <h2 className="card-title">
+              <Calendar size={20} />
+              Fechas
+            </h2>
+          </div>
           <div className="card-body">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="form-group">
                 <label className="form-label">Fecha de Emisión *</label>
                 <input
@@ -296,25 +330,34 @@ function NuevaGuiaTransportista() {
                   required
                 />
               </div>
+
+              <div className="form-group">
+                <label className="form-label">Fecha Estimada Llegada</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={formData.fecha_estimada_llegada}
+                  onChange={(e) => setFormData({ ...formData, fecha_estimada_llegada: e.target.value })}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Transportista */}
         <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
+          <div className="card-header bg-gradient-to-r from-blue-50 to-white">
+            <h2 className="card-title text-blue-900">
               <Truck size={20} />
               Datos del Transportista
             </h2>
           </div>
           <div className="card-body">
             {formData.razon_social_transportista ? (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-bold text-lg">{formData.razon_social_transportista}</p>
-                    <p className="text-sm text-muted">RUC: {formData.ruc_transportista}</p>
+                    <p className="font-bold text-xl text-blue-900">{formData.razon_social_transportista}</p>
+                    <p className="text-sm text-blue-700 mt-1">RUC: {formData.ruc_transportista}</p>
                   </div>
                   <button
                     type="button"
@@ -337,7 +380,7 @@ function NuevaGuiaTransportista() {
                   onClick={() => setModalTransportistaOpen(true)}
                 >
                   <Search size={20} />
-                  Seleccionar Transportista Frecuente
+                  Seleccionar Transportista Frecuente ({transportistas.length})
                 </button>
               )
             )}
@@ -356,13 +399,13 @@ function NuevaGuiaTransportista() {
               </div>
               
               <div className="form-group">
-                <label className="form-label">RUC *</label>
+                <label className="form-label">RUC * (11 dígitos)</label>
                 <input
                   type="text"
-                  className="form-input"
+                  className="form-input font-mono"
                   value={formData.ruc_transportista}
                   onChange={(e) => setFormData({ ...formData, ruc_transportista: e.target.value })}
-                  placeholder="RUC (11 dígitos)"
+                  placeholder="20123456789"
                   maxLength="11"
                   required
                 />
@@ -371,23 +414,23 @@ function NuevaGuiaTransportista() {
           </div>
         </div>
 
-        {/* Conductor */}
         <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
+          <div className="card-header bg-gradient-to-r from-green-50 to-white">
+            <h2 className="card-title text-green-900">
               <User size={20} />
               Datos del Conductor
             </h2>
           </div>
           <div className="card-body">
             {formData.nombre_conductor ? (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-bold text-lg">{formData.nombre_conductor}</p>
-                    <p className="text-sm text-muted">
+                    <p className="font-bold text-xl text-green-900">{formData.nombre_conductor}</p>
+                    <p className="text-sm text-green-700 mt-1">
                       Licencia: {formData.licencia_conducir}
                       {formData.dni_conductor && ` • DNI: ${formData.dni_conductor}`}
+                      {formData.telefono_conductor && ` • Tel: ${formData.telefono_conductor}`}
                     </p>
                   </div>
                   <button
@@ -413,7 +456,7 @@ function NuevaGuiaTransportista() {
                   onClick={() => setModalConductorOpen(true)}
                 >
                   <Search size={20} />
-                  Seleccionar Conductor Frecuente
+                  Seleccionar Conductor Frecuente ({conductores.length})
                 </button>
               )
             )}
@@ -426,7 +469,7 @@ function NuevaGuiaTransportista() {
                   className="form-input"
                   value={formData.nombre_conductor}
                   onChange={(e) => setFormData({ ...formData, nombre_conductor: e.target.value })}
-                  placeholder="Nombre del conductor"
+                  placeholder="Nombre completo del conductor"
                   required
                 />
               </div>
@@ -444,13 +487,13 @@ function NuevaGuiaTransportista() {
               </div>
               
               <div className="form-group">
-                <label className="form-label">DNI</label>
+                <label className="form-label">DNI (8 dígitos)</label>
                 <input
                   type="text"
-                  className="form-input"
+                  className="form-input font-mono"
                   value={formData.dni_conductor}
                   onChange={(e) => setFormData({ ...formData, dni_conductor: e.target.value })}
-                  placeholder="DNI del conductor"
+                  placeholder="12345678"
                   maxLength="8"
                 />
               </div>
@@ -462,28 +505,27 @@ function NuevaGuiaTransportista() {
                   className="form-input"
                   value={formData.telefono_conductor}
                   onChange={(e) => setFormData({ ...formData, telefono_conductor: e.target.value })}
-                  placeholder="Teléfono de contacto"
+                  placeholder="999 999 999"
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Vehículo */}
         <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
+          <div className="card-header bg-gradient-to-r from-yellow-50 to-white">
+            <h2 className="card-title text-yellow-900">
               <Car size={20} />
               Datos del Vehículo
             </h2>
           </div>
           <div className="card-body">
             {formData.placa_vehiculo ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-bold text-lg font-mono">{formData.placa_vehiculo}</p>
-                    <p className="text-sm text-muted">
+                    <p className="font-bold text-2xl font-mono text-yellow-900">{formData.placa_vehiculo}</p>
+                    <p className="text-sm text-yellow-700 mt-1">
                       {formData.marca_vehiculo} {formData.modelo_vehiculo}
                       {formData.certificado_habilitacion && ` • Cert: ${formData.certificado_habilitacion}`}
                     </p>
@@ -511,7 +553,7 @@ function NuevaGuiaTransportista() {
                   onClick={() => setModalVehiculoOpen(true)}
                 >
                   <Search size={20} />
-                  Seleccionar Vehículo Frecuente
+                  Seleccionar Vehículo Frecuente ({vehiculos.length})
                 </button>
               )
             )}
@@ -521,7 +563,7 @@ function NuevaGuiaTransportista() {
                 <label className="form-label">Placa *</label>
                 <input
                   type="text"
-                  className="form-input font-mono"
+                  className="form-input font-mono text-lg"
                   value={formData.placa_vehiculo}
                   onChange={(e) => setFormData({ ...formData, placa_vehiculo: e.target.value.toUpperCase() })}
                   placeholder="ABC-123"
@@ -547,7 +589,7 @@ function NuevaGuiaTransportista() {
                   className="form-input"
                   value={formData.marca_vehiculo}
                   onChange={(e) => setFormData({ ...formData, marca_vehiculo: e.target.value })}
-                  placeholder="Ej: Volvo, Mercedes"
+                  placeholder="Volvo, Mercedes, etc."
                 />
               </div>
               
@@ -565,7 +607,42 @@ function NuevaGuiaTransportista() {
           </div>
         </div>
 
-        {/* Observaciones */}
+        <div className="card mb-4">
+          <div className="card-header bg-gradient-to-r from-purple-50 to-white">
+            <h2 className="card-title text-purple-900">
+              <MapPin size={20} />
+              Puntos de Traslado
+            </h2>
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="form-group">
+                <label className="form-label">Punto de Partida *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={formData.punto_partida}
+                  onChange={(e) => setFormData({ ...formData, punto_partida: e.target.value })}
+                  placeholder="Dirección completa de partida"
+                  required
+                />
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Punto de Llegada *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={formData.punto_llegada}
+                  onChange={(e) => setFormData({ ...formData, punto_llegada: e.target.value })}
+                  placeholder="Dirección completa de llegada"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="card mb-4">
           <div className="card-body">
             <div className="form-group">
@@ -581,7 +658,6 @@ function NuevaGuiaTransportista() {
           </div>
         </div>
 
-        {/* Botones */}
         <div className="flex gap-3 justify-end">
           <button
             type="button"
@@ -601,73 +677,71 @@ function NuevaGuiaTransportista() {
         </div>
       </form>
 
-      {/* Modal Transportistas */}
       <Modal
         isOpen={modalTransportistaOpen}
         onClose={() => setModalTransportistaOpen(false)}
         title="Seleccionar Transportista Frecuente"
         size="md"
       >
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-96 overflow-y-auto">
           {transportistas.map((t, index) => (
             <div
               key={index}
               className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
               onClick={() => handleSelectTransportista(t)}
             >
-              <div className="font-bold">{t.razon_social_transportista}</div>
+              <div className="font-bold text-lg">{t.razon_social_transportista}</div>
               <div className="text-sm text-muted">
-                RUC: {t.ruc_transportista} • {t.total_guias || 0} guías previas
+                RUC: {t.ruc_transportista}
+                {t.total_guias && ` • ${t.total_guias} guías previas`}
               </div>
             </div>
           ))}
         </div>
       </Modal>
 
-      {/* Modal Conductores */}
       <Modal
         isOpen={modalConductorOpen}
         onClose={() => setModalConductorOpen(false)}
         title="Seleccionar Conductor Frecuente"
         size="md"
       >
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-96 overflow-y-auto">
           {conductores.map((c, index) => (
             <div
               key={index}
               className="p-4 border rounded-lg hover:bg-green-50 cursor-pointer transition"
               onClick={() => handleSelectConductor(c)}
             >
-              <div className="font-bold">{c.nombre_conductor}</div>
+              <div className="font-bold text-lg">{c.nombre_conductor}</div>
               <div className="text-sm text-muted">
                 Licencia: {c.licencia_conducir}
                 {c.dni_conductor && ` • DNI: ${c.dni_conductor}`}
-                {c.total_viajes && ` • ${c.total_viajes} viajes previos`}
+                {c.total_viajes && ` • ${c.total_viajes} viajes`}
               </div>
             </div>
           ))}
         </div>
       </Modal>
 
-      {/* Modal Vehículos */}
       <Modal
         isOpen={modalVehiculoOpen}
         onClose={() => setModalVehiculoOpen(false)}
         title="Seleccionar Vehículo Frecuente"
         size="md"
       >
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-96 overflow-y-auto">
           {vehiculos.map((v, index) => (
             <div
               key={index}
               className="p-4 border rounded-lg hover:bg-yellow-50 cursor-pointer transition"
               onClick={() => handleSelectVehiculo(v)}
             >
-              <div className="font-bold font-mono text-lg">{v.placa_vehiculo}</div>
+              <div className="font-bold font-mono text-xl">{v.placa_vehiculo}</div>
               <div className="text-sm text-muted">
                 {v.marca_vehiculo} {v.modelo_vehiculo}
                 {v.certificado_habilitacion && ` • Cert: ${v.certificado_habilitacion}`}
-                {v.total_viajes && ` • ${v.total_viajes} viajes previos`}
+                {v.total_viajes && ` • ${v.total_viajes} viajes`}
               </div>
             </div>
           ))}

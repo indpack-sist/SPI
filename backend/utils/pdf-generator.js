@@ -17,6 +17,101 @@ function descargarImagen(url) {
   });
 }
 
+function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
+  const currentFontSize = doc._fontSize || 12;
+  doc.fontSize(fontSize);
+  const heightOfString = doc.heightOfString(texto || '', {
+    width: ancho,
+    lineGap: 2
+  });
+  doc.fontSize(currentFontSize);
+  return Math.ceil(heightOfString);
+}
+
+function numeroALetras(numero, moneda) {
+  const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
+  const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+  const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+  const especiales = {
+    11: 'ONCE', 12: 'DOCE', 13: 'TRECE', 14: 'CATORCE', 15: 'QUINCE',
+    16: 'DIECISEIS', 17: 'DIECISIETE', 18: 'DIECIOCHO', 19: 'DIECINUEVE'
+  };
+  
+  const entero = Math.floor(numero);
+  const decimales = Math.round((numero - entero) * 100);
+  
+  function convertirNumero(num) {
+    if (num === 0) return 'CERO';
+    if (num < 10) return unidades[num];
+    if (num >= 11 && num <= 19) return especiales[num];
+    if (num < 100) {
+      const d = Math.floor(num / 10);
+      const u = num % 10;
+      if (num === 20) return 'VEINTE';
+      if (num > 20 && num < 30) return 'VEINTI' + unidades[u];
+      return decenas[d] + (u > 0 ? ' Y ' + unidades[u] : '');
+    }
+    if (num < 1000) {
+      const c = Math.floor(num / 100);
+      const resto = num % 100;
+      if (num === 100) return 'CIEN';
+      return centenas[c] + (resto > 0 ? ' ' + convertirNumero(resto) : '');
+    }
+    if (num < 1000000) {
+      const miles = Math.floor(num / 1000);
+      const resto = num % 1000;
+      const textoMiles = miles === 1 ? 'MIL' : convertirNumero(miles) + ' MIL';
+      return textoMiles + (resto > 0 ? ' ' + convertirNumero(resto) : '');
+    }
+    const millones = Math.floor(num / 1000000);
+    const resto = num % 1000000;
+    const textoMillones = millones === 1 ? 'UN MILLON' : convertirNumero(millones) + ' MILLONES';
+    return textoMillones + (resto > 0 ? ' ' + convertirNumero(resto) : '');
+  }
+  
+  const resultado = convertirNumero(entero);
+  const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
+  
+  return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
+}
+
+function generarCabeceraComun(doc, logoBuffer, titulo, numero) {
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
+    } catch (error) {
+      doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
+      doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
+      doc.text('IndPack', 60, 55);
+    }
+  } else {
+    doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
+    doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
+    doc.text('IndPack', 60, 55);
+  }
+
+  doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
+  doc.text('INDPACK S.A.C.', 50, 110);
+  
+  doc.fontSize(8).font('Helvetica');
+  const direccionEmpresa = 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA, Villa el Salvador, Lima - Lima (PE) - Perú';
+  doc.text(direccionEmpresa, 50, 123, { width: 250 });
+  doc.text('Teléfono: 01- 312 7858', 50, 148);
+  doc.text('E-mail: informes@indpackperu.com', 50, 160);
+  doc.text('Web: https://www.indpackperu.com/', 50, 172);
+
+  doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
+  
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+  doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
+  
+  doc.fontSize(12).font('Helvetica-Bold');
+  doc.text(titulo, 385, 65, { align: 'center', width: 155 });
+  
+  doc.fontSize(11).font('Helvetica-Bold');
+  doc.text(`No. ${numero}`, 385, 83, { align: 'center', width: 155 });
+}
+
 export async function generarCotizacionPDF(cotizacion) {
   return new Promise(async (resolve, reject) => {
     try {
@@ -256,43 +351,6 @@ export async function generarCotizacionPDF(cotizacion) {
   });
 }
 
-function generarCabeceraComun(doc, logoBuffer, titulo, numero) {
-  if (logoBuffer) {
-    try {
-      doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
-    } catch (error) {
-      doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-      doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-      doc.text('IndPack', 60, 55);
-    }
-  } else {
-    doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-    doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-    doc.text('IndPack', 60, 55);
-  }
-
-  doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
-  doc.text('INDPACK S.A.C.', 50, 110);
-  
-  doc.fontSize(8).font('Helvetica');
-  const direccionEmpresa = 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA, Villa el Salvador, Lima - Lima (PE) - Perú';
-  doc.text(direccionEmpresa, 50, 123, { width: 250 });
-  doc.text('Teléfono: 01- 312 7858', 50, 148);
-  doc.text('E-mail: informes@indpackperu.com', 50, 160);
-  doc.text('Web: https://www.indpackperu.com/', 50, 172);
-
-  doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
-  
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-  doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
-  
-  doc.fontSize(12).font('Helvetica-Bold');
-  doc.text(titulo, 385, 65, { align: 'center', width: 155 });
-  
-  doc.fontSize(11).font('Helvetica-Bold');
-  doc.text(`No. ${numero}`, 385, 83, { align: 'center', width: 155 });
-}
-
 export async function generarPDFEntrada(datos) {
   return new Promise(async (resolve, reject) => {
     try {
@@ -307,46 +365,56 @@ export async function generarPDFEntrada(datos) {
       
       generarCabeceraComun(doc, logoBuffer, 'ENTRADA ALMACEN', datos.id_entrada || 'N/A');
 
-      doc.roundedRect(33, 195, 529, 85, 3).stroke('#000000');
+      const alturaProv = calcularAlturaTexto(doc, datos.proveedor, 230, 8);
+      const alturaRecuadro = Math.max(85, alturaProv + 50);
+      
+      doc.roundedRect(33, 195, 529, alturaRecuadro, 3).stroke('#000000');
+      
+      let yHeader = 203;
       
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Proveedor:', 40, 203);
+      doc.text('Proveedor:', 40, yHeader);
       doc.font('Helvetica');
-      doc.text(datos.proveedor || '', 100, 203, { width: 230 });
+      doc.text(datos.proveedor || '', 100, yHeader, { width: 230 });
       
       doc.font('Helvetica-Bold');
-      doc.text('Doc. Soporte:', 40, 218);
+      doc.text('Fecha:', 360, yHeader);
       doc.font('Helvetica');
-      doc.text(datos.documento_soporte || 'N/A', 100, 218);
+      doc.text(new Date(datos.fecha_movimiento).toLocaleDateString('es-PE'), 450, yHeader);
+
+      yHeader += Math.max(15, alturaProv + 5);
 
       doc.font('Helvetica-Bold');
-      doc.text('Tipo Inv:', 40, 233);
+      doc.text('Doc. Soporte:', 40, yHeader);
       doc.font('Helvetica');
-      doc.text(datos.tipo_inventario || '', 100, 233);
+      doc.text(datos.documento_soporte || 'N/A', 100, yHeader);
 
       doc.font('Helvetica-Bold');
-      doc.text('Fecha:', 360, 203);
+      doc.text('Estado:', 360, yHeader);
       doc.font('Helvetica');
-      doc.text(new Date(datos.fecha_movimiento).toLocaleDateString('es-PE'), 450, 203);
+      doc.text(datos.estado || '', 450, yHeader);
+
+      yHeader += 15;
 
       doc.font('Helvetica-Bold');
-      doc.text('Estado:', 360, 218);
+      doc.text('Tipo Inv:', 40, yHeader);
       doc.font('Helvetica');
-      doc.text(datos.estado || '', 450, 218);
+      doc.text(datos.tipo_inventario || '', 100, yHeader);
 
       doc.font('Helvetica-Bold');
-      doc.text('Registrado por:', 360, 233);
+      doc.text('Registrado por:', 360, yHeader);
       doc.font('Helvetica');
-      doc.text(datos.registrado_por || '', 450, 233);
+      doc.text(datos.registrado_por || '', 450, yHeader);
 
-      let yPos = 290;
+      let yPos = 195 + alturaRecuadro + 10;
+      
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('CÓDIGO', 40, yPos + 6);
       doc.text('PRODUCTO', 140, yPos + 6);
       doc.text('CANTIDAD', 350, yPos + 6);
       doc.text('COSTO U.', 420, yPos + 6);
-      doc.text('SUBTOTAL', 490, yPos + 6, { align: 'right' });
+      doc.text('SUBTOTAL', 475, yPos + 6, { align: 'right', width: 80 });
       yPos += 20;
 
       const detalles = datos.detalles || [];
@@ -370,7 +438,7 @@ export async function generarPDFEntrada(datos) {
         doc.text(`${parseFloat(det.cantidad).toFixed(2)} ${det.unidad_medida || ''}`, 350, yPos + 5);
         doc.text(`${simboloMoneda} ${parseFloat(det.costo_unitario).toFixed(2)}`, 420, yPos + 5);
         const sub = (det.cantidad || 0) * (det.costo_unitario || 0);
-        doc.text(`${simboloMoneda} ${sub.toFixed(2)}`, 490, yPos + 5, { align: 'right' });
+        doc.text(`${simboloMoneda} ${sub.toFixed(2)}`, 475, yPos + 5, { align: 'right', width: 80 });
         yPos += alturaFila;
       });
 
@@ -389,7 +457,7 @@ export async function generarPDFEntrada(datos) {
         yPos += 30;
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('OBSERVACIONES:', 40, yPos);
-        doc.font('Helvetica').text(datos.observaciones, 40, yPos + 15);
+        doc.font('Helvetica').text(datos.observaciones, 40, yPos + 15, { width: 490 });
       }
 
       doc.end();
@@ -411,36 +479,44 @@ export async function generarPDFSalida(datos) {
 
       generarCabeceraComun(doc, logoBuffer, 'SALIDA ALMACEN', datos.codigo || datos.id_salida || 'N/A');
 
-      doc.roundedRect(33, 195, 529, 85, 3).stroke('#000000');
-      
       const destino = datos.tipo_movimiento === 'Venta' ? datos.cliente : (datos.departamento || datos.tipo_movimiento);
+      const alturaDestino = calcularAlturaTexto(doc, destino, 220, 8);
+      const alturaRecuadro = Math.max(85, alturaDestino + 50);
+
+      doc.roundedRect(33, 195, 529, alturaRecuadro, 3).stroke('#000000');
       
+      let yHeader = 203;
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Destino/Cliente:', 40, 203);
+      doc.text('Destino/Cliente:', 40, yHeader);
       doc.font('Helvetica');
-      doc.text(destino || '', 110, 203, { width: 220 });
+      doc.text(destino || '', 110, yHeader, { width: 220 });
+
+      doc.font('Helvetica-Bold');
+      doc.text('Fecha:', 360, yHeader);
+      doc.font('Helvetica');
+      doc.text(new Date(datos.fecha_movimiento).toLocaleDateString('es-PE'), 450, yHeader);
+
+      yHeader += Math.max(15, alturaDestino + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('Tipo Mov:', 40, 218);
+      doc.text('Tipo Mov:', 40, yHeader);
       doc.font('Helvetica');
-      doc.text(datos.tipo_movimiento || '', 110, 218);
+      doc.text(datos.tipo_movimiento || '', 110, yHeader);
 
       doc.font('Helvetica-Bold');
-      doc.text('Referencia:', 40, 233);
+      doc.text('Estado:', 360, yHeader);
       doc.font('Helvetica');
-      doc.text(datos.vehiculo || '---', 110, 233);
+      doc.text(datos.estado || '', 450, yHeader);
+
+      yHeader += 15;
 
       doc.font('Helvetica-Bold');
-      doc.text('Fecha:', 360, 203);
+      doc.text('Referencia:', 40, yHeader);
       doc.font('Helvetica');
-      doc.text(new Date(datos.fecha_movimiento).toLocaleDateString('es-PE'), 450, 203);
+      doc.text(datos.vehiculo || '---', 110, yHeader);
 
-      doc.font('Helvetica-Bold');
-      doc.text('Estado:', 360, 218);
-      doc.font('Helvetica');
-      doc.text(datos.estado || '', 450, 218);
-
-      let yPos = 290;
+      let yPos = 195 + alturaRecuadro + 10;
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('CÓDIGO', 40, yPos + 6);
@@ -474,7 +550,7 @@ export async function generarPDFSalida(datos) {
         yPos += 20;
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('OBSERVACIONES:', 40, yPos);
-        doc.font('Helvetica').text(datos.observaciones, 40, yPos + 15);
+        doc.font('Helvetica').text(datos.observaciones, 40, yPos + 15, { width: 490 });
       }
 
       doc.end();
@@ -498,18 +574,22 @@ export async function generarPDFTransferencia(datos) {
 
       doc.roundedRect(33, 195, 529, 85, 3).stroke('#000000');
       
+      let yHeader = 203;
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Origen:', 40, 203);
-      doc.font('Helvetica').text(datos.tipo_inventario_origen || '', 110, 203);
+      doc.text('Origen:', 40, yHeader);
+      doc.font('Helvetica').text(datos.tipo_inventario_origen || '', 110, yHeader);
+
+      doc.font('Helvetica-Bold').text('Fecha:', 360, yHeader);
+      doc.font('Helvetica').text(new Date(datos.fecha_transferencia).toLocaleDateString('es-PE'), 450, yHeader);
+
+      yHeader += 15;
       
-      doc.font('Helvetica-Bold').text('Destino:', 40, 218);
-      doc.font('Helvetica').text(datos.tipo_inventario_destino || '', 110, 218);
+      doc.font('Helvetica-Bold').text('Destino:', 40, yHeader);
+      doc.font('Helvetica').text(datos.tipo_inventario_destino || '', 110, yHeader);
 
-      doc.font('Helvetica-Bold').text('Fecha:', 360, 203);
-      doc.font('Helvetica').text(new Date(datos.fecha_transferencia).toLocaleDateString('es-PE'), 450, 203);
-
-      doc.font('Helvetica-Bold').text('Estado:', 360, 218);
-      doc.font('Helvetica').text(datos.estado || '', 450, 218);
+      doc.font('Helvetica-Bold').text('Estado:', 360, yHeader);
+      doc.font('Helvetica').text(datos.estado || '', 450, yHeader);
 
       let yPos = 290;
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
@@ -560,25 +640,35 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
 
       generarCabeceraComun(doc, logoBuffer, 'ORDEN PRODUCCION', datos.numero_orden || 'N/A');
 
-      doc.roundedRect(33, 195, 529, 85, 3).stroke('#000000');
+      const producto = datos.producto || '';
+      const alturaProd = calcularAlturaTexto(doc, producto, 220, 8);
+      const alturaRecuadro = Math.max(85, alturaProd + 50);
+
+      doc.roundedRect(33, 195, 529, alturaRecuadro, 3).stroke('#000000');
       
+      let yHeader = 203;
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Producto:', 40, 203);
-      doc.font('Helvetica').text(datos.producto || '', 100, 203, { width: 220 });
+      doc.text('Producto:', 40, yHeader);
+      doc.font('Helvetica').text(producto, 100, yHeader, { width: 220 });
       
-      doc.font('Helvetica-Bold').text('Código:', 40, 218);
-      doc.font('Helvetica').text(datos.codigo_producto || '', 100, 218);
+      doc.font('Helvetica-Bold').text('Fecha:', 360, yHeader);
+      doc.font('Helvetica').text(new Date(datos.fecha_creacion).toLocaleDateString('es-PE'), 450, yHeader);
 
-      doc.font('Helvetica-Bold').text('Planificado:', 40, 233);
-      doc.font('Helvetica').text(`${datos.cantidad_planificada} ${datos.unidad_medida}`, 100, 233);
+      yHeader += Math.max(15, alturaProd + 5);
 
-      doc.font('Helvetica-Bold').text('Fecha:', 360, 203);
-      doc.font('Helvetica').text(new Date(datos.fecha_creacion).toLocaleDateString('es-PE'), 450, 203);
+      doc.font('Helvetica-Bold').text('Código:', 40, yHeader);
+      doc.font('Helvetica').text(datos.codigo_producto || '', 100, yHeader);
 
-      doc.font('Helvetica-Bold').text('Estado:', 360, 218);
-      doc.font('Helvetica').text(datos.estado || '', 450, 218);
+      doc.font('Helvetica-Bold').text('Estado:', 360, yHeader);
+      doc.font('Helvetica').text(datos.estado || '', 450, yHeader);
 
-      let yPos = 290;
+      yHeader += 15;
+
+      doc.font('Helvetica-Bold').text('Planificado:', 40, yHeader);
+      doc.font('Helvetica').text(`${datos.cantidad_planificada} ${datos.unidad_medida}`, 100, yHeader);
+
+      let yPos = 195 + alturaRecuadro + 15;
       doc.fontSize(10).font('Helvetica-Bold').text('MATERIALES CONSUMIDOS', 40, yPos - 15);
 
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
@@ -586,7 +676,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
       doc.text('INSUMO', 60, yPos + 6);
       doc.text('CANTIDAD', 350, yPos + 6);
       doc.text('COSTO UNIT.', 420, yPos + 6);
-      doc.text('SUBTOTAL', 490, yPos + 6, { align: 'right' });
+      doc.text('SUBTOTAL', 475, yPos + 6, { align: 'right', width: 80 }); 
       yPos += 20;
 
       consumoMateriales.forEach((mat) => {
@@ -605,7 +695,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         doc.text(nombreInsumo, 60, yPos + 5, { width: 280 });
         doc.text(`${mat.cantidad_requerida} ${mat.unidad_medida || ''}`, 350, yPos + 5);
         doc.text(parseFloat(mat.costo_unitario).toFixed(2), 420, yPos + 5);
-        doc.text(parseFloat(mat.costo_total).toFixed(2), 490, yPos + 5, { align: 'right' });
+        doc.text(parseFloat(mat.costo_total).toFixed(2), 475, yPos + 5, { align: 'right', width: 80 });
         yPos += alturaFila;
       });
 
@@ -634,21 +724,27 @@ export async function generarPDFOrdenVenta(orden) {
 
       doc.roundedRect(33, 195, 529, alturaRecuadro, 3).stroke('#000000');
       
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Cliente:', 40, 203);
-      doc.font('Helvetica').text(orden.cliente || '', 100, 203, { width: 230 });
-      
-      doc.font('Helvetica-Bold').text('RUC:', 40, 218);
-      doc.font('Helvetica').text(orden.ruc_cliente || '', 100, 218);
-      
-      doc.font('Helvetica-Bold').text('Dirección:', 40, 233);
-      doc.font('Helvetica').text(direccion, 100, 233, { width: 230 });
+      let yHeader = 203;
 
-      doc.font('Helvetica-Bold').text('Moneda:', 360, 203);
-      doc.font('Helvetica').text(orden.moneda || 'PEN', 450, 203);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('Cliente:', 40, yHeader);
+      doc.font('Helvetica').text(orden.cliente || '', 100, yHeader, { width: 230 });
       
-      doc.font('Helvetica-Bold').text('Fecha:', 360, 218);
-      doc.font('Helvetica').text(new Date(orden.fecha_emision).toLocaleDateString('es-PE'), 450, 218);
+      doc.font('Helvetica-Bold').text('Moneda:', 360, yHeader);
+      doc.font('Helvetica').text(orden.moneda || 'PEN', 450, yHeader);
+
+      yHeader += 15;
+
+      doc.font('Helvetica-Bold').text('RUC:', 40, yHeader);
+      doc.font('Helvetica').text(orden.ruc_cliente || '', 100, yHeader);
+      
+      doc.font('Helvetica-Bold').text('Fecha:', 360, yHeader);
+      doc.font('Helvetica').text(new Date(orden.fecha_emision).toLocaleDateString('es-PE'), 450, yHeader);
+
+      yHeader += 15;
+
+      doc.font('Helvetica-Bold').text('Dirección:', 40, yHeader);
+      doc.font('Helvetica').text(direccion, 100, yHeader, { width: 230 });
 
       let yPos = 195 + alturaRecuadro + 15;
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
@@ -657,7 +753,7 @@ export async function generarPDFOrdenVenta(orden) {
       doc.text('DESCRIPCIÓN', 100, yPos + 6);
       doc.text('CANT.', 350, yPos + 6);
       doc.text('P.U.', 420, yPos + 6);
-      doc.text('TOTAL', 490, yPos + 6, { align: 'right' });
+      doc.text('TOTAL', 475, yPos + 6, { align: 'right', width: 80 }); 
       yPos += 20;
 
       const monedaSimbolo = orden.moneda === 'USD' ? '$' : 'S/';
@@ -680,7 +776,7 @@ export async function generarPDFOrdenVenta(orden) {
         doc.text(parseFloat(item.cantidad).toFixed(2), 350, yPos + 5);
         doc.text(parseFloat(item.precio_unitario).toFixed(2), 420, yPos + 5);
         const totalLinea = item.valor_venta || (item.cantidad * item.precio_unitario);
-        doc.text(`${monedaSimbolo} ${parseFloat(totalLinea).toFixed(2)}`, 490, yPos + 5, { align: 'right' });
+        doc.text(`${monedaSimbolo} ${parseFloat(totalLinea).toFixed(2)}`, 475, yPos + 5, { align: 'right', width: 80 }); 
         yPos += alturaFila;
       });
 
@@ -717,28 +813,43 @@ export async function generarPDFGuiaRemision(guia) {
 
       generarCabeceraComun(doc, logoBuffer, 'GUIA REMISION', guia.numero_guia || 'N/A');
 
-      doc.roundedRect(33, 195, 529, 90, 3).stroke('#000000');
+      const alturaPartida = calcularAlturaTexto(doc, guia.direccion_partida, 220, 8);
+      const alturaLlegada = calcularAlturaTexto(doc, guia.direccion_llegada, 220, 8);
+      const alturaRecuadro = Math.max(90, alturaPartida + alturaLlegada + 50);
+
+      doc.roundedRect(33, 195, 529, alturaRecuadro, 3).stroke('#000000');
       
+      let yHeader = 203;
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Destinatario:', 40, 203);
-      doc.font('Helvetica').text(guia.cliente || '', 110, 203, { width: 220 });
-      doc.font('Helvetica-Bold').text('RUC:', 40, 218);
-      doc.font('Helvetica').text(guia.ruc_cliente || '', 110, 218);
-      
-      doc.font('Helvetica-Bold').text('Punto Partida:', 40, 233);
-      doc.font('Helvetica').text(guia.direccion_partida || '', 110, 233, { width: 220 });
-      
-      doc.font('Helvetica-Bold').text('Punto Llegada:', 40, 258);
-      doc.font('Helvetica').text(guia.direccion_llegada || '', 110, 258, { width: 220 });
+      doc.text('Destinatario:', 40, yHeader);
+      doc.font('Helvetica').text(guia.cliente || '', 110, yHeader, { width: 220 });
 
-      doc.font('Helvetica-Bold').text('Fecha:', 360, 203);
-      doc.font('Helvetica').text(new Date(guia.fecha_emision).toLocaleDateString('es-PE'), 450, 203);
-      doc.font('Helvetica-Bold').text('Motivo:', 360, 218);
-      doc.font('Helvetica').text(guia.motivo_traslado || '', 450, 218);
-      doc.font('Helvetica-Bold').text('Peso Bruto:', 360, 233);
-      doc.font('Helvetica').text(`${guia.peso_bruto_kg} kg`, 450, 233);
+      doc.font('Helvetica-Bold').text('Fecha:', 360, yHeader);
+      doc.font('Helvetica').text(new Date(guia.fecha_emision).toLocaleDateString('es-PE'), 450, yHeader);
+      
+      yHeader += 15;
+      
+      doc.font('Helvetica-Bold').text('RUC:', 40, yHeader);
+      doc.font('Helvetica').text(guia.ruc_cliente || '', 110, yHeader);
 
-      let yPos = 300;
+      doc.font('Helvetica-Bold').text('Motivo:', 360, yHeader);
+      doc.font('Helvetica').text(guia.motivo_traslado || '', 450, yHeader);
+
+      yHeader += 15;
+      
+      doc.font('Helvetica-Bold').text('Punto Partida:', 40, yHeader);
+      doc.font('Helvetica').text(guia.direccion_partida || '', 110, yHeader, { width: 220 });
+      
+      doc.font('Helvetica-Bold').text('Peso Bruto:', 360, yHeader);
+      doc.font('Helvetica').text(`${guia.peso_bruto_kg} kg`, 450, yHeader);
+
+      yHeader += Math.max(15, alturaPartida + 5);
+
+      doc.font('Helvetica-Bold').text('Punto Llegada:', 40, yHeader);
+      doc.font('Helvetica').text(guia.direccion_llegada || '', 110, yHeader, { width: 220 });
+
+      let yPos = 195 + alturaRecuadro + 10;
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('CÓDIGO', 40, yPos + 6);
@@ -788,33 +899,52 @@ export async function generarPDFGuiaTransportista(guia) {
 
       generarCabeceraComun(doc, logoBuffer, 'GUIA TRANSPORTISTA', guia.numero_guia || 'N/A');
 
-      doc.roundedRect(33, 195, 529, 110, 3).stroke('#000000');
+      const alturaPartida = calcularAlturaTexto(doc, guia.direccion_partida, 220, 8);
+      const alturaLlegada = calcularAlturaTexto(doc, guia.direccion_llegada, 220, 8);
+      const alturaRecuadro = Math.max(110, alturaPartida + alturaLlegada + 70);
+
+      doc.roundedRect(33, 195, 529, alturaRecuadro, 3).stroke('#000000');
       
+      let yHeader = 203;
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Transportista:', 40, 203);
-      doc.font('Helvetica').text(guia.razon_social_transportista || '', 110, 203, { width: 220 });
-      doc.font('Helvetica-Bold').text('RUC Trans:', 40, 218);
-      doc.font('Helvetica').text(guia.ruc_transportista || '', 110, 218);
+      doc.text('Transportista:', 40, yHeader);
+      doc.font('Helvetica').text(guia.razon_social_transportista || '', 110, yHeader, { width: 220 });
       
-      doc.font('Helvetica-Bold').text('Conductor:', 40, 233);
-      doc.font('Helvetica').text(guia.nombre_conductor || '', 110, 233);
-      doc.font('Helvetica-Bold').text('Licencia:', 40, 248);
-      doc.font('Helvetica').text(guia.licencia_conducir || '', 110, 248);
+      doc.font('Helvetica-Bold').text('Vehículo Placa:', 360, yHeader);
+      doc.font('Helvetica').text(guia.placa_vehiculo || '', 450, yHeader);
 
-      doc.font('Helvetica-Bold').text('Vehículo Placa:', 360, 203);
-      doc.font('Helvetica').text(guia.placa_vehiculo || '', 450, 203);
-      doc.font('Helvetica-Bold').text('Marca/Modelo:', 360, 218);
-      doc.font('Helvetica').text(`${guia.marca_vehiculo || ''} ${guia.modelo_vehiculo || ''}`, 450, 218);
+      yHeader += 15;
+
+      doc.font('Helvetica-Bold').text('RUC Trans:', 40, yHeader);
+      doc.font('Helvetica').text(guia.ruc_transportista || '', 110, yHeader);
+
+      doc.font('Helvetica-Bold').text('Marca/Modelo:', 360, yHeader);
+      doc.font('Helvetica').text(`${guia.marca_vehiculo || ''} ${guia.modelo_vehiculo || ''}`, 450, yHeader);
+
+      yHeader += 15;
       
-      doc.font('Helvetica-Bold').text('Partida:', 40, 268);
-      doc.font('Helvetica').text(guia.direccion_partida || '', 110, 268, { width: 220 });
-      doc.font('Helvetica-Bold').text('Llegada:', 40, 288);
-      doc.font('Helvetica').text(guia.direccion_llegada || '', 110, 288, { width: 220 });
+      doc.font('Helvetica-Bold').text('Conductor:', 40, yHeader);
+      doc.font('Helvetica').text(guia.nombre_conductor || '', 110, yHeader);
 
-      let yPos = 320;
+      yHeader += 15;
+
+      doc.font('Helvetica-Bold').text('Licencia:', 40, yHeader);
+      doc.font('Helvetica').text(guia.licencia_conducir || '', 110, yHeader);
+      
+      yHeader += 20;
+
+      doc.font('Helvetica-Bold').text('Partida:', 40, yHeader);
+      doc.font('Helvetica').text(guia.direccion_partida || '', 110, yHeader, { width: 220 });
+      yHeader += Math.max(15, alturaPartida + 5);
+
+      doc.font('Helvetica-Bold').text('Llegada:', 40, yHeader);
+      doc.font('Helvetica').text(guia.direccion_llegada || '', 110, yHeader, { width: 220 });
+
+      let yPos = 195 + alturaRecuadro + 15;
       if (guia.observaciones) {
          doc.fontSize(8).font('Helvetica-Bold').text('OBSERVACIONES:', 40, yPos);
-         doc.font('Helvetica').text(guia.observaciones, 130, yPos);
+         doc.font('Helvetica').text(guia.observaciones, 130, yPos, { width: 400 });
       }
 
       doc.end();
@@ -842,22 +972,30 @@ export async function generarPDFOrdenCompra(orden) {
 
       doc.roundedRect(33, 195, 529, alturaRecuadro, 3).stroke('#000000');
       
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Proveedor:', 40, 203);
-      doc.font('Helvetica').text(orden.proveedor || '', 100, 203, { width: 230 });
-      
-      doc.font('Helvetica-Bold').text('RUC:', 40, 218);
-      doc.font('Helvetica').text(orden.ruc_proveedor || '', 100, 218);
-      
-      doc.font('Helvetica-Bold').text('Dirección:', 40, 233);
-      doc.font('Helvetica').text(direccion, 100, 233, { width: 230 });
+      let yHeader = 203;
 
-      doc.font('Helvetica-Bold').text('Moneda:', 360, 203);
-      doc.font('Helvetica').text(orden.moneda || 'PEN', 450, 203);
-      doc.font('Helvetica-Bold').text('Cond. Pago:', 360, 218);
-      doc.font('Helvetica').text(orden.condicion_pago || '', 450, 218);
-      doc.font('Helvetica-Bold').text('Fecha:', 360, 233);
-      doc.font('Helvetica').text(new Date(orden.fecha_pedido).toLocaleDateString('es-PE'), 450, 233);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('Proveedor:', 40, yHeader);
+      doc.font('Helvetica').text(orden.proveedor || '', 100, yHeader, { width: 230 });
+      
+      doc.font('Helvetica-Bold').text('Moneda:', 360, yHeader);
+      doc.font('Helvetica').text(orden.moneda || 'PEN', 450, yHeader);
+
+      yHeader += 15;
+      
+      doc.font('Helvetica-Bold').text('RUC:', 40, yHeader);
+      doc.font('Helvetica').text(orden.ruc_proveedor || '', 100, yHeader);
+      
+      doc.font('Helvetica-Bold').text('Cond. Pago:', 360, yHeader);
+      doc.font('Helvetica').text(orden.condicion_pago || '', 450, yHeader);
+
+      yHeader += 15;
+
+      doc.font('Helvetica-Bold').text('Dirección:', 40, yHeader);
+      doc.font('Helvetica').text(direccion, 100, yHeader, { width: 230 });
+
+      doc.font('Helvetica-Bold').text('Fecha:', 360, yHeader);
+      doc.font('Helvetica').text(new Date(orden.fecha_pedido).toLocaleDateString('es-PE'), 450, yHeader);
 
       let yPos = 195 + alturaRecuadro + 15;
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
@@ -866,7 +1004,7 @@ export async function generarPDFOrdenCompra(orden) {
       doc.text('PRODUCTO', 130, yPos + 6);
       doc.text('CANT.', 350, yPos + 6);
       doc.text('V. UNIT.', 420, yPos + 6);
-      doc.text('TOTAL', 490, yPos + 6, { align: 'right' });
+      doc.text('TOTAL', 475, yPos + 6, { align: 'right', width: 80 });
       yPos += 20;
 
       const monedaSimbolo = orden.moneda === 'USD' ? '$' : 'S/';
@@ -888,7 +1026,7 @@ export async function generarPDFOrdenCompra(orden) {
         doc.text(desc, 130, yPos + 5, { width: 200 });
         doc.text(parseFloat(item.cantidad).toFixed(2), 350, yPos + 5);
         doc.text(parseFloat(item.valor_unitario).toFixed(2), 420, yPos + 5);
-        doc.text(`${monedaSimbolo} ${parseFloat(item.valor_compra).toFixed(2)}`, 490, yPos + 5, { align: 'right' });
+        doc.text(`${monedaSimbolo} ${parseFloat(item.valor_compra).toFixed(2)}`, 475, yPos + 5, { align: 'right', width: 80 });
         yPos += alturaFila;
       });
 
@@ -908,62 +1046,4 @@ export async function generarPDFOrdenCompra(orden) {
       doc.end();
     } catch (e) { reject(e); }
   });
-}
-
-function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
-  const currentFontSize = doc._fontSize || 12;
-  doc.fontSize(fontSize);
-  const heightOfString = doc.heightOfString(texto || '', {
-    width: ancho,
-    lineGap: 2
-  });
-  doc.fontSize(currentFontSize);
-  return Math.ceil(heightOfString);
-}
-
-function numeroALetras(numero, moneda) {
-  const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
-  const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
-  const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
-  const especiales = {
-    11: 'ONCE', 12: 'DOCE', 13: 'TRECE', 14: 'CATORCE', 15: 'QUINCE',
-    16: 'DIECISEIS', 17: 'DIECISIETE', 18: 'DIECIOCHO', 19: 'DIECINUEVE'
-  };
-  
-  const entero = Math.floor(numero);
-  const decimales = Math.round((numero - entero) * 100);
-  
-  function convertirNumero(num) {
-    if (num === 0) return 'CERO';
-    if (num < 10) return unidades[num];
-    if (num >= 11 && num <= 19) return especiales[num];
-    if (num < 100) {
-      const d = Math.floor(num / 10);
-      const u = num % 10;
-      if (num === 20) return 'VEINTE';
-      if (num > 20 && num < 30) return 'VEINTI' + unidades[u];
-      return decenas[d] + (u > 0 ? ' Y ' + unidades[u] : '');
-    }
-    if (num < 1000) {
-      const c = Math.floor(num / 100);
-      const resto = num % 100;
-      if (num === 100) return 'CIEN';
-      return centenas[c] + (resto > 0 ? ' ' + convertirNumero(resto) : '');
-    }
-    if (num < 1000000) {
-      const miles = Math.floor(num / 1000);
-      const resto = num % 1000;
-      const textoMiles = miles === 1 ? 'MIL' : convertirNumero(miles) + ' MIL';
-      return textoMiles + (resto > 0 ? ' ' + convertirNumero(resto) : '');
-    }
-    const millones = Math.floor(num / 1000000);
-    const resto = num % 1000000;
-    const textoMillones = millones === 1 ? 'UN MILLON' : convertirNumero(millones) + ' MILLONES';
-    return textoMillones + (resto > 0 ? ' ' + convertirNumero(resto) : '');
-  }
-  
-  const resultado = convertirNumero(entero);
-  const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
-  
-  return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }

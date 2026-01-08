@@ -34,14 +34,13 @@ export async function generarOrdenVentaPDF(orden) {
       try {
         logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
       } catch (error) {
-        console.error('Error al descargar logo:', error);
+        console.error(error);
       }
 
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
           doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
           doc.text('IndPack', 60, 55);
@@ -82,7 +81,7 @@ export async function generarOrdenVentaPDF(orden) {
                                '';
       
       const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
-      const alturaRecuadroCliente = Math.max(75, alturaDireccion + 60);
+      const alturaRecuadroCliente = Math.max(90, alturaDireccion + 75);
       
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
@@ -101,12 +100,20 @@ export async function generarOrdenVentaPDF(orden) {
       doc.font('Helvetica');
       doc.text(direccionCliente, 100, 233, { width: 230, lineGap: 2 });
       
-      const yPosicionCiudad = 233 + alturaDireccion + 10;
+      const yPosicionCiudad = 233 + alturaDireccion + 5;
       
       doc.font('Helvetica-Bold');
-      doc.text('Ciudad:', 40, yPosicionCiudad);
+      doc.text('Ciudad/Lugar:', 40, yPosicionCiudad);
       doc.font('Helvetica');
-      doc.text(orden.ciudad_entrega || 'Lima - Perú', 100, yPosicionCiudad);
+      const ubicacion = [orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ');
+      doc.text(ubicacion || 'Lima - Perú', 100, yPosicionCiudad, { width: 230 });
+
+      const yPosicionContacto = yPosicionCiudad + 15;
+      doc.font('Helvetica-Bold');
+      doc.text('Contacto:', 40, yPosicionContacto);
+      doc.font('Helvetica');
+      const contactoInfo = [orden.contacto_entrega, orden.telefono_entrega].filter(Boolean).join(' / ');
+      doc.text(contactoInfo || '-', 100, yPosicionContacto, { width: 230 });
 
       doc.font('Helvetica-Bold');
       doc.text('Moneda:', 360, 203);
@@ -124,9 +131,9 @@ export async function generarOrdenVentaPDF(orden) {
       doc.text(orden.forma_pago || '', 450, 233);
       
       doc.font('Helvetica-Bold');
-      doc.text('Orden de Compra', 360, 248);
+      doc.text('O/C Cliente:', 360, 248);
       doc.font('Helvetica');
-      doc.text(orden.orden_compra_cliente || '', 450, 248);
+      doc.text(orden.orden_compra_cliente || '-', 450, 248);
 
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
       
@@ -139,10 +146,10 @@ export async function generarOrdenVentaPDF(orden) {
       doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
 
       doc.font('Helvetica-Bold');
-      doc.text('Comercial:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
+      doc.text('Fecha Entrega Estimada:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
       doc.font('Helvetica');
-      doc.text(orden.comercial || '', 310, yPosRecuadroFechas + 20, { align: 'center', width: 252 });
-      doc.text(orden.email_comercial || '', 310, yPosRecuadroFechas + 30, { align: 'center', width: 252 });
+      const fechaEntrega = orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'Por coordinar';
+      doc.text(fechaEntrega, 310, yPosRecuadroFechas + 25, { align: 'center', width: 252 });
 
       let yPos = yPosRecuadroFechas + 52;
 
@@ -153,17 +160,20 @@ export async function generarOrdenVentaPDF(orden) {
       doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
       doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
       doc.text('DESCRIPCIÓN', 230, yPos + 6);
-      doc.text('V. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
-      doc.text('V. VENTA', 505, yPos + 6, { align: 'right', width: 50 });
+      doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
+      doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
 
       yPos += 20;
 
       const simboloMoneda = orden.moneda === 'USD' ? '$' : 'S/';
       
       orden.detalle.forEach((item, idx) => {
-        const cantidad = parseFloat(item.cantidad).toFixed(5);
+        const cantidad = parseFloat(item.cantidad).toFixed(2);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
-        const valorVenta = parseFloat(item.valor_venta || (item.cantidad * item.precio_unitario)).toFixed(2);
+        
+        const descuento = parseFloat(item.descuento_porcentaje || 0);
+        const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
+        const valorVenta = parseFloat(totalLinea).toFixed(2);
         
         const descripcion = `[${item.codigo_producto}] ${item.producto}`;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
@@ -179,8 +189,8 @@ export async function generarOrdenVentaPDF(orden) {
           doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
           doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
           doc.text('DESCRIPCIÓN', 230, yPos + 6);
-          doc.text('V. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
-          doc.text('V. VENTA', 505, yPos + 6, { align: 'right', width: 50 });
+          doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
+          doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
           yPos += 20;
         }
 
@@ -206,9 +216,20 @@ export async function generarOrdenVentaPDF(orden) {
         doc.text(orden.observaciones, 40, yPos + 15, { width: 330 });
       }
 
+      if (orden.comercial) {
+        doc.fontSize(8).font('Helvetica-Bold');
+        doc.text('Vendedor:', 40, yPos + 40);
+        doc.font('Helvetica');
+        doc.text(orden.comercial, 90, yPos + 40);
+      }
+
       const subtotal = parseFloat(orden.subtotal).toFixed(2);
       const igv = parseFloat(orden.igv).toFixed(2);
       const total = parseFloat(orden.total).toFixed(2);
+      
+      const tipoImpuesto = orden.tipo_impuesto || 'IGV';
+      const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
+      const etiquetaImpuesto = `${tipoImpuesto} (${porcImpuesto}%)`;
 
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -222,7 +243,7 @@ export async function generarOrdenVentaPDF(orden) {
 
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('IGV', 390, yPos + 4);
+      doc.text(etiquetaImpuesto, 390, yPos + 4, { width: 80, align: 'left' });
       
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
@@ -240,6 +261,13 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPos += 25;
 
+      if (orden.tipo_cambio && parseFloat(orden.tipo_cambio) > 1) {
+        doc.fontSize(8).font('Helvetica').fillColor('#666666');
+        doc.text(`T.C. Ref: ${parseFloat(orden.tipo_cambio).toFixed(3)}`, 475, yPos, { align: 'right', width: 80 });
+        yPos += 15;
+        doc.fillColor('#000000');
+      }
+
       doc.fontSize(8).font('Helvetica');
       const totalEnLetras = numeroALetras(parseFloat(total), orden.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
@@ -250,7 +278,7 @@ export async function generarOrdenVentaPDF(orden) {
       doc.end();
       
     } catch (error) {
-      console.error('Error al generar PDF:', error);
+      console.error(error);
       reject(error);
     }
   });

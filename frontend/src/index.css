@@ -1232,7 +1232,502 @@ body {
 .skeleton-text:last-child {
   width: 60%;
 }
+/* =================================================================
+   ESTILOS ADICIONALES PARA GUÍAS DE REMISIÓN Y TRANSPORTISTA
+   Agregar al final de index.css
+   ================================================================= */
 
+/* --- GRADIENTES ESPECÍFICOS PARA CARDS --- */
+.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--from-color), var(--to-color));
+}
+
+.bg-gradient-to-br {
+  background-image: linear-gradient(to bottom right, var(--from-color), var(--to-color));
+}
+
+.from-blue-50 { --from-color: #eff6ff; }
+.to-white { --to-color: #ffffff; }
+.from-green-50 { --from-color: #f0fdf4; }
+.from-yellow-50 { --from-color: #fefce8; }
+.from-purple-50 { --from-color: #faf5ff; }
+.from-gray-50 { --from-color: #f9fafb; }
+.from-primary { --from-color: var(--primary); }
+.to-blue-600 { --to-color: #2563eb; }
+
+/* --- COLORES DE TEXTO ESPECÍFICOS --- */
+.text-blue-900 { color: #1e3a8a; }
+.text-blue-700 { color: #1d4ed8; }
+.text-blue-800 { color: #1e40af; }
+.text-green-900 { color: #14532d; }
+.text-green-700 { color: #15803d; }
+.text-yellow-900 { color: #713f12; }
+.text-yellow-700 { color: #a16207; }
+.text-purple-900 { color: #581c87; }
+
+/* --- BORDES ESPECÍFICOS --- */
+.border-2 {
+  border-width: 2px;
+}
+
+.border-blue-200 { border-color: #bfdbfe; }
+.border-green-200 { border-color: #bbf7d0; }
+.border-yellow-200 { border-color: #fde68a; }
+.border-blue-500 { border-color: #3b82f6; }
+.border-green-500 { border-color: #22c55e; }
+
+/* --- BACKGROUNDS ADICIONALES --- */
+.bg-purple-50 { background-color: #faf5ff; }
+.bg-blue-600 { background-color: #2563eb; }
+.bg-primary\/5 { background-color: rgba(37, 99, 235, 0.05); }
+.bg-primary\/10 { background-color: rgba(37, 99, 235, 0.1); }
+
+/* --- OPACIDAD --- */
+.opacity-20 { opacity: 0.2; }
+.opacity-90 { opacity: 0.9; }
+
+/* --- TAMAÑO DE FUENTE ADICIONAL --- */
+.text-3xl {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+}
+
+/* --- UPPERCASE --- */
+.uppercase {
+  text-transform: uppercase;
+}
+
+/* --- LETTER SPACING --- */
+.tracking-wide {
+  letter-spacing: 0.025em;
+}
+
+/* --- GRID COLS ESPECÍFICO --- */
+.grid-cols-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* --- MAX-WIDTH --- */
+.w-96 {
+  width: 24rem;
+}
+
+/* --- CARD FOOTER --- */
+.card-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background-color: var(--bg-secondary);
+}
+
+/* --- BORDERS EN TABLA --- */
+.border-t {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--border);
+}
+
+.border-border {
+  border-color: var(--border);
+}
+
+/* --- STICKY POSITIONING --- */
+.sticky {
+  position: sticky;
+}
+
+.top-0 {
+  top: 0;
+}
+
+/* --- PADDING BOTTOM --- */
+.pb-2 {
+  padding-bottom: 0.5rem;
+}
+
+.pb-4 {
+  padding-bottom: 1rem;
+}
+
+/* --- PADDING LEFT --- */
+.pl-10 {
+  padding-left: 2.5rem;
+}
+
+/* --- MARGIN LEFT --- */
+.ml-auto {
+  margin-left: auto;
+}
+
+/* --- SHADOW ESPECÍFICA --- */
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+/* --- CARDS DE BODY SIN PADDING (p-0) --- */
+.card-body.p-0 {
+  padding: 0;
+}
+
+/* --- HOVER ESPECÍFICO PARA FILAS DE TABLA CLICKEABLES --- */
+.table tbody tr.clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.table tbody tr.clickable:hover {
+  background-color: #eff6ff;
+}
+
+/* --- FONT-MONO --- */
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* --- FLEX-WRAP --- */
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+/* --- MIN-WIDTH --- */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* --- TRANSFORM --- */
+.transform {
+  transform: translateX(0) translateY(0) rotate(0) skewX(0) skewY(0) scaleX(1) scaleY(1);
+}
+
+.-translate-y-1\/2 {
+  transform: translateY(-50%);
+}
+
+/* --- LEFT POSITIONING --- */
+.left-3 {
+  left: 0.75rem;
+}
+
+/* --- MODAL MEJORADO --- */
+.modal-content {
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* --- SCROLLBAR PARA MODALES --- */
+.max-h-96 {
+  max-height: 24rem;
+}
+
+.max-h-96::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* --- BADGE CON FLEX ITEMS --- */
+.badge.flex {
+  display: inline-flex;
+}
+
+/* --- TEXT COLOR WHITE --- */
+.text-white {
+  color: #ffffff;
+}
+
+/* --- BORDER YELLOW --- */
+.border-yellow-200 {
+  border-color: #fde68a;
+}
+
+/* --- PADDING TOP --- */
+.pt-2 {
+  padding-top: 0.5rem;
+}
+
+.pt-4 {
+  padding-top: 1rem;
+}
+
+/* --- ESTADOS ESPECÍFICOS GUÍAS --- */
+.badge-info.border-info {
+  border: 1px solid #3b82f6;
+}
+
+/* --- GRID ESPECÍFICO PARA INFO --- */
+.grid.gap-6 {
+  gap: 1.5rem;
+}
+
+/* --- SEMIBOLD UPPERCASE --- */
+.font-semibold.uppercase {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* --- BUTTONS CON INFO COLOR --- */
+.btn-info {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+/* --- LOADING STATE PARA REFRESH --- */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- RESPONSIVE: MOBILE FIRST --- */
+@media (max-width: 1024px) {
+  .grid-cols-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  /* Grid cols se vuelven 1 columna */
+  .grid-cols-5,
+  .grid-cols-4,
+  .grid-cols-3,
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Stack de elementos flex */
+  .flex.gap-2,
+  .flex.gap-3,
+  .flex.gap-4 {
+    flex-direction: column;
+  }
+  
+  /* Botones full width en móvil si no están en flex column */
+  .sticky .flex {
+    flex-wrap: wrap;
+  }
+  
+  /* Headers sticky menos padding */
+  .sticky.top-0 {
+    padding-bottom: 0.5rem;
+  }
+  
+  /* Cards con menos padding en móvil */
+  .card {
+    padding: 1rem;
+  }
+  
+  .card-body {
+    padding: 1rem;
+  }
+  
+  /* Tablas con scroll horizontal */
+  .table-container,
+  .overflow-x-auto {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Stats grid ajustado */
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Texto más pequeño en móvil */
+  .text-3xl {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  
+  .text-2xl {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+  
+  /* Badges más pequeños en móvil */
+  .badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.6rem;
+  }
+  
+  /* Botones de paginación más compactos */
+  .card-footer {
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Modales en móvil */
+  .modal-content {
+    max-width: 95%;
+    margin: 1rem;
+  }
+  
+  /* Search input en móvil */
+  .search-input-wrapper {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Ajustes para pantallas muy pequeñas */
+  .text-xl {
+    font-size: 1.125rem;
+  }
+  
+  .text-lg {
+    font-size: 1rem;
+  }
+  
+  /* Padding reducido */
+  .p-6 {
+    padding: 1rem;
+  }
+  
+  /* Cards sin sombra en móvil pequeño */
+  .card {
+    box-shadow: none;
+    border: 1px solid var(--border);
+  }
+  
+  /* Botones stack vertical */
+  .flex.justify-end,
+  .flex.justify-between {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  /* Iconos más pequeños en móvil */
+  .btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* --- UTILITIES ADICIONALES --- */
+
+/* Grid gap específico */
+.gap-6 {
+  gap: 1.5rem;
+}
+
+/* Aspect ratio para iconos */
+.aspect-square {
+  aspect-ratio: 1 / 1;
+}
+
+/* Transition específica */
+.transition-transform {
+  transition: transform 0.2s ease;
+}
+
+/* Hover transform */
+.hover\:scale-105:hover {
+  transform: scale(1.05);
+}
+
+/* Focus ring */
+.focus\:ring-2:focus {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.5);
+}
+
+/* Backdrop blur para modales */
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+}
+
+/* --- MEJORAS PARA DASHBOARD STATS --- */
+.stat-card.border-l-4 {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card.border-l-4:hover {
+  transform: translateX(4px);
+}
+
+/* --- MEJORAS PARA BADGES EN ESTADOS --- */
+.badge.flex.items-center {
+  display: inline-flex;
+  align-items: center;
+}
+
+.badge svg {
+  margin-right: 0.25rem;
+}
+
+/* --- CARD CON GRADIENTE DE HEADER --- */
+.card-header.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--from-color), var(--to-color));
+}
+
+/* --- PROGRESS BAR MEJORADO --- */
+.progress-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill {
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- LINK BUTTONS --- */
+.link-button {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.link-button:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
+}
+
+/* --- DISABLED STATE MEJORADO --- */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- SCROLL BEHAVIOR --- */
+html {
+  scroll-behavior: smooth;
+}
+
+/* --- PRINT OPTIMIZATION --- */
+@media print {
+  .sticky,
+  .modal,
+  button {
+    display: none !important;
+  }
+  
+  .card {
+    break-inside: avoid;
+  }
+}
+
+/* =================================================================
+   FIN DE ESTILOS ADICIONALES
+   ================================================================= */
 /* =================================================================
    FIN DE ESTILOS ADICIONALES
    ================================================================= */

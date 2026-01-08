@@ -1,4 +1,5 @@
 import axios from 'axios';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 const api = axios.create({ 
@@ -27,7 +28,7 @@ api.interceptors.response.use(
   },
   (error) => {
     if (!error.response) {
-      console.error('❌ Error de red:', error.message);
+      console.error('Error de red:', error.message);
       return Promise.reject({
         message: 'Error de conexión con el servidor',
         error: error.message
@@ -37,13 +38,12 @@ api.interceptors.response.use(
     const { status, data } = error.response;
     
     if (status === 401) {
-      console.log('🔒 401 Unauthorized - Sesión expirada');
-      
+      console.log('401 Unauthorized - Sesión expirada');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
       if (!window.location.pathname.includes('/login')) {
-        console.log('🔄 Redirigiendo a login...');
+        console.log('Redirigiendo a login...');
         window.location.replace('/login');
       }
       
@@ -59,7 +59,7 @@ api.interceptors.response.use(
         console.error('Error de validación:', data.error);
         break;
       case 403:
-        console.error('Prohibido (Forbidden):', data.error);
+        console.error('Prohibido:', data.error);
         break;
       case 404:
         console.error('Recurso no encontrado:', data.error);
@@ -366,8 +366,6 @@ export const ordenesProduccionAPI = {
   getNotificaciones: () => api.get('/produccion/ordenes/notificaciones'),
   getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
   getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`)
-
-
 };
 
 export const cotizacionesAPI = {
@@ -382,13 +380,9 @@ export const cotizacionesAPI = {
   },
 
   getById: (id) => api.get(`/cotizaciones/${id}`),
-
   create: (data) => api.post('/cotizaciones', data),
-
   actualizarEstado: (id, estado) => api.put(`/cotizaciones/${id}/estado`, { estado }),
-
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
-
   getEstadisticas: () => api.get('/cotizaciones/estadisticas'),
 
   descargarPDF: async (id) => {
@@ -408,7 +402,6 @@ export const cotizacionesAPI = {
     link.href = url;
     link.download = `cotizacion-${id}.pdf`;
     
-    // FIX: Añadir al DOM y retrasar limpieza
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
@@ -418,9 +411,6 @@ export const cotizacionesAPI = {
   }
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A ORDENES VENTA (PREVENTIVO)
-// ==========================================
 export const ordenesVentaAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -433,8 +423,9 @@ export const ordenesVentaAPI = {
   },
 
   getById: (id) => api.get(`/ordenes-venta/${id}`),
-
   create: (data) => api.post('/ordenes-venta', data),
+  
+  convertirCotizacion: (id, data) => api.post(`/ordenes-venta/cotizacion/${id}/convertir`, data),
 
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 
     api.put(`/ordenes-venta/${id}/estado`, { estado, fecha_entrega_real }),
@@ -469,7 +460,6 @@ export const ordenesVentaAPI = {
       link.href = url;
       link.download = `orden-venta-${id}.pdf`;
       
-      // FIX: Añadir al DOM y retrasar limpieza
       document.body.appendChild(link);
       link.click();
       setTimeout(() => {
@@ -485,9 +475,6 @@ export const ordenesVentaAPI = {
   }
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A GUIAS REMISION (PREVENTIVO)
-// ==========================================
 export const guiasRemisionAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -499,14 +486,13 @@ export const guiasRemisionAPI = {
   },
 
   getById: (id) => api.get(`/guias-remision/${id}`),
-
   create: (data) => api.post('/guias-remision', data),
 
-  despachar: (id, fecha_despacho = null) => 
-    api.post(`/guias-remision/${id}/despachar`, { fecha_despacho }),
+  despachar: (id, data = {}) => 
+    api.post(`/guias-remision/${id}/despachar`, data),
 
-  marcarEntregada: (id, fecha_entrega = null) => 
-    api.post(`/guias-remision/${id}/entregar`, { fecha_entrega }),
+  marcarEntregada: (id, data = {}) => 
+    api.post(`/guias-remision/${id}/entregar`, data),
 
   actualizarEstado: (id, estado) => 
     api.put(`/guias-remision/${id}/estado`, { estado }),
@@ -530,7 +516,6 @@ export const guiasRemisionAPI = {
     link.href = url;
     link.download = `guia-remision-${id}.pdf`;
     
-    // FIX: Añadir al DOM y retrasar limpieza
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
@@ -540,9 +525,6 @@ export const guiasRemisionAPI = {
   }
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A GUIAS TRANSPORTISTA (PREVENTIVO)
-// ==========================================
 export const guiasTransportistaAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -555,6 +537,7 @@ export const guiasTransportistaAPI = {
 
   getById: (id) => api.get(`/guias-transportista/${id}`),
   create: (data) => api.post('/guias-transportista', data),
+  
   actualizarEstado: (id, estado) => 
     api.put(`/guias-transportista/${id}/estado`, { estado }),
 
@@ -581,7 +564,6 @@ export const guiasTransportistaAPI = {
     link.href = url;
     link.download = `guia-transportista-${id}.pdf`;
     
-    // FIX: Añadir al DOM y retrasar limpieza
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
@@ -591,9 +573,6 @@ export const guiasTransportistaAPI = {
   }
 };
 
-// ==========================================
-// CORRECCIÓN APLICADA A ORDENES COMPRA (PREVENTIVO)
-// ==========================================
 export const ordenesCompraAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -605,7 +584,6 @@ export const ordenesCompraAPI = {
   },
 
   getById: (id) => api.get(`/ordenes-compra/${id}`),
-
   create: (data) => api.post('/ordenes-compra', data),
 
   actualizarEstado: (id, estado) => 
@@ -636,7 +614,6 @@ export const ordenesCompraAPI = {
     link.href = url;
     link.download = `orden-compra-${id}.pdf`;
     
-    // FIX: Añadir al DOM y retrasar limpieza
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {

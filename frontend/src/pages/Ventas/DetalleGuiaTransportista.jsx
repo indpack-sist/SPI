@@ -1,10 +1,9 @@
-// frontend/src/pages/Ventas/DetalleGuiaTransportista.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, Truck, CheckCircle,
   XCircle, FileText, Building, User, Car, MapPin,
-  Calendar, Package, ShoppingCart
+  Calendar, Package, ShoppingCart, RefreshCw, Clock
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -17,6 +16,7 @@ function DetalleGuiaTransportista() {
   
   const [guia, setGuia] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
@@ -26,9 +26,10 @@ function DetalleGuiaTransportista() {
     cargarDatos();
   }, [id]);
 
-  const cargarDatos = async () => {
+  const cargarDatos = async (silencioso = false) => {
     try {
-      setLoading(true);
+      if (!silencioso) setLoading(true);
+      setRefreshing(silencioso);
       setError(null);
       
       const response = await guiasTransportistaAPI.getById(id);
@@ -44,6 +45,7 @@ function DetalleGuiaTransportista() {
       setError(err.response?.data?.error || 'Error al cargar la guía de transportista');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -94,26 +96,36 @@ function DetalleGuiaTransportista() {
 
   const getEstadoConfig = (estado) => {
     const configs = {
-      'Activa': { 
+      'Pendiente': { 
+        icono: Clock, 
+        clase: 'badge-warning',
+        color: 'border-warning',
+        bgColor: 'bg-yellow-50',
+        siguientes: ['En Tránsito', 'Cancelada']
+      },
+      'En Tránsito': { 
         icono: Truck, 
         clase: 'badge-info',
         color: 'border-info',
-        siguientes: ['Finalizada', 'Cancelada']
+        bgColor: 'bg-blue-50',
+        siguientes: ['Entregada']
       },
-      'Finalizada': { 
+      'Entregada': { 
         icono: CheckCircle, 
         clase: 'badge-success',
         color: 'border-success',
+        bgColor: 'bg-green-50',
         siguientes: []
       },
       'Cancelada': { 
         icono: XCircle, 
         clase: 'badge-danger',
         color: 'border-danger',
+        bgColor: 'bg-red-50',
         siguientes: []
       }
     };
-    return configs[estado] || configs['Activa'];
+    return configs[estado] || configs['Pendiente'];
   };
 
   if (loading && !guia) return <Loading message="Cargando guía de transportista..." />;
@@ -131,28 +143,28 @@ function DetalleGuiaTransportista() {
 
   const estadoConfig = getEstadoConfig(guia.estado);
   const IconoEstado = estadoConfig.icono;
+  const puedeEditar = guia.estado !== 'Cancelada' && guia.estado !== 'Entregada';
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 sticky top-0 bg-white z-10 pb-4 border-b">
         <div className="flex items-center gap-4">
           <button className="btn btn-outline" onClick={() => navigate('/ventas/guias-transportista')}>
             <ArrowLeft size={20} />
           </button>
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Truck size={32} />
-              Guía de Transportista {guia.numero_guia}
+              <Truck size={32} className="text-primary" />
+              {guia.numero_guia}
             </h1>
             <p className="text-muted">
               Emitida el {formatearFecha(guia.fecha_emision)}
               {guia.numero_guia_remision && (
                 <>
-                  {' • Guía Remisión: '}
+                  {' • GR: '}
                   <button 
-                    className="text-primary hover:underline"
-                    onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia_remision}`)}
+                    className="text-primary hover:underline font-medium"
+                    onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia}`)}
                   >
                     {guia.numero_guia_remision}
                   </button>
@@ -163,11 +175,20 @@ function DetalleGuiaTransportista() {
         </div>
         
         <div className="flex gap-2">
+          <button 
+            className="btn btn-outline"
+            onClick={() => cargarDatos(true)}
+            disabled={refreshing}
+            title="Actualizar"
+          >
+            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+
           <button className="btn btn-outline" onClick={handleDescargarPDF}>
             <Download size={20} /> PDF
           </button>
           
-          {guia.estado !== 'Cancelada' && guia.estado !== 'Finalizada' && (
+          {puedeEditar && (
             <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
               <Edit size={20} /> Estado
             </button>
@@ -178,120 +199,102 @@ function DetalleGuiaTransportista() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Estado */}
-      <div className={`card border-l-4 ${estadoConfig.color} mb-4`}>
+      <div className={`card border-2 ${estadoConfig.color} ${estadoConfig.bgColor} mb-4`}>
         <div className="card-body">
-          <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-lg ${estadoConfig.clase} bg-opacity-10`}>
-              <IconoEstado size={32} />
+          <div className="flex items-center gap-4">
+            <div className={`p-4 rounded-xl bg-white shadow-sm`}>
+              <IconoEstado size={40} className={estadoConfig.clase.replace('badge-', 'text-')} />
             </div>
-            <div>
-              <p className="text-sm text-muted">Estado del Transporte</p>
-              <h3 className="text-xl font-bold">{guia.estado}</h3>
+            <div className="flex-1">
+              <p className="text-sm text-muted mb-1">Estado del Transporte</p>
+              <h3 className="text-3xl font-bold">{guia.estado}</h3>
+              {guia.fecha_inicio_traslado && (
+                <p className="text-sm text-muted mt-1">
+                  Inicio: {formatearFecha(guia.fecha_inicio_traslado)}
+                  {guia.fecha_estimada_llegada && ` • Llegada estimada: ${formatearFecha(guia.fecha_estimada_llegada)}`}
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Fecha de Traslado */}
-      {guia.fecha_inicio_traslado && (
-        <div className="card mb-4">
-          <div className="card-body">
-            <div className="flex items-center gap-3">
-              <Calendar size={20} className="text-muted" />
-              <div>
-                <p className="text-sm text-muted">Fecha de Inicio de Traslado</p>
-                <p className="font-medium">{formatearFecha(guia.fecha_inicio_traslado)}</p>
-              </div>
-            </div>
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="card">
+          <div className="card-header bg-gradient-to-r from-blue-50 to-white">
+            <h2 className="card-title text-blue-900">
+              <Truck size={20} />
+              Transportista
+            </h2>
           </div>
-        </div>
-      )}
-
-      {/* Información del Transportista */}
-      <div className="card mb-4">
-        <div className="card-header">
-          <h2 className="card-title">
-            <Truck size={20} />
-            Datos del Transportista
-          </h2>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="card-body space-y-3">
             <div>
-              <label className="text-sm font-medium text-muted">Razón Social:</label>
+              <label className="text-xs text-muted uppercase font-semibold">Razón Social</label>
               <p className="font-bold text-lg">{guia.razon_social_transportista}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted">RUC:</label>
-              <p className="font-medium">{guia.ruc_transportista}</p>
+              <label className="text-xs text-muted uppercase font-semibold">RUC</label>
+              <p className="font-mono font-medium">{guia.ruc_transportista}</p>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Información del Conductor y Vehículo */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        {/* Conductor */}
         <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">
+          <div className="card-header bg-gradient-to-r from-green-50 to-white">
+            <h2 className="card-title text-green-900">
               <User size={20} />
               Conductor
             </h2>
           </div>
-          <div className="card-body space-y-2">
+          <div className="card-body space-y-3">
             <div>
-              <label className="text-sm font-medium text-muted">Nombre:</label>
+              <label className="text-xs text-muted uppercase font-semibold">Nombre</label>
               <p className="font-bold text-lg">{guia.nombre_conductor}</p>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Licencia:</label>
-              <p className="font-medium">{guia.licencia_conducir}</p>
-            </div>
-            {guia.dni_conductor && (
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-sm font-medium text-muted">DNI:</label>
-                <p>{guia.dni_conductor}</p>
+                <label className="text-xs text-muted uppercase font-semibold">Licencia</label>
+                <p className="font-medium">{guia.licencia_conducir}</p>
               </div>
-            )}
+              {guia.dni_conductor && (
+                <div>
+                  <label className="text-xs text-muted uppercase font-semibold">DNI</label>
+                  <p className="font-mono">{guia.dni_conductor}</p>
+                </div>
+              )}
+            </div>
             {guia.telefono_conductor && (
               <div>
-                <label className="text-sm font-medium text-muted">Teléfono:</label>
+                <label className="text-xs text-muted uppercase font-semibold">Teléfono</label>
                 <p>{guia.telefono_conductor}</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Vehículo */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">
+        <div className="card bg-gradient-to-br from-yellow-50 to-white">
+          <div className="card-header border-yellow-200">
+            <h2 className="card-title text-yellow-900">
               <Car size={20} />
               Vehículo
             </h2>
           </div>
-          <div className="card-body space-y-2">
+          <div className="card-body space-y-3">
             <div>
-              <label className="text-sm font-medium text-muted">Placa:</label>
-              <p className="font-bold text-lg font-mono">{guia.placa_vehiculo}</p>
+              <label className="text-xs text-muted uppercase font-semibold">Placa</label>
+              <p className="font-bold text-2xl font-mono">{guia.placa_vehiculo}</p>
             </div>
-            {guia.marca_vehiculo && (
+            {(guia.marca_vehiculo || guia.modelo_vehiculo) && (
               <div>
-                <label className="text-sm font-medium text-muted">Marca:</label>
-                <p className="font-medium">{guia.marca_vehiculo}</p>
-              </div>
-            )}
-            {guia.modelo_vehiculo && (
-              <div>
-                <label className="text-sm font-medium text-muted">Modelo:</label>
-                <p>{guia.modelo_vehiculo}</p>
+                <label className="text-xs text-muted uppercase font-semibold">Vehículo</label>
+                <p className="font-medium">
+                  {guia.marca_vehiculo} {guia.modelo_vehiculo}
+                </p>
               </div>
             )}
             {guia.certificado_habilitacion && (
               <div>
-                <label className="text-sm font-medium text-muted">Certificado:</label>
+                <label className="text-xs text-muted uppercase font-semibold">Certificado</label>
                 <p className="font-mono text-sm">{guia.certificado_habilitacion}</p>
               </div>
             )}
@@ -299,119 +302,124 @@ function DetalleGuiaTransportista() {
         </div>
       </div>
 
-      {/* Información de la Carga */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="card border-l-4 border-green-500">
+          <div className="card-header bg-gradient-to-r from-green-50 to-white">
+            <h2 className="card-title text-green-900">
+              <MapPin size={20} />
+              Punto de Partida
+            </h2>
+          </div>
+          <div className="card-body space-y-3">
+            <div>
+              <label className="text-xs text-muted uppercase font-semibold">Dirección</label>
+              <p className="font-medium">{guia.punto_partida || guia.direccion_partida || '-'}</p>
+            </div>
+            {guia.ubigeo_partida && (
+              <div>
+                <label className="text-xs text-muted uppercase font-semibold">Ubigeo</label>
+                <p className="font-mono">{guia.ubigeo_partida}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card border-l-4 border-blue-500">
+          <div className="card-header bg-gradient-to-r from-blue-50 to-white">
+            <h2 className="card-title text-blue-900">
+              <MapPin size={20} />
+              Punto de Llegada
+            </h2>
+          </div>
+          <div className="card-body space-y-3">
+            <div>
+              <label className="text-xs text-muted uppercase font-semibold">Dirección</label>
+              <p className="font-medium">{guia.punto_llegada || guia.direccion_llegada || '-'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {guia.ciudad_llegada && (
+                <div>
+                  <label className="text-xs text-muted uppercase font-semibold">Ciudad</label>
+                  <p>{guia.ciudad_llegada}</p>
+                </div>
+              )}
+              {guia.ubigeo_llegada && (
+                <div>
+                  <label className="text-xs text-muted uppercase font-semibold">Ubigeo</label>
+                  <p className="font-mono">{guia.ubigeo_llegada}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="card mb-4">
-        <div className="card-header">
+        <div className="card-header bg-gradient-to-r from-gray-50 to-white">
           <h2 className="card-title">
             <Package size={20} />
             Información de la Carga
           </h2>
         </div>
         <div className="card-body">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-6">
+            {guia.tipo_traslado && (
+              <div>
+                <label className="text-xs text-muted uppercase font-semibold">Tipo de Traslado</label>
+                <p className="font-medium text-lg">{guia.tipo_traslado}</p>
+              </div>
+            )}
             <div>
-              <label className="text-sm font-medium text-muted">Tipo de Traslado:</label>
-              <p className="font-medium">{guia.tipo_traslado || '-'}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Peso Bruto:</label>
-              <p className="font-bold text-lg text-primary">
-                {parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} kg
+              <label className="text-xs text-muted uppercase font-semibold">Peso Bruto</label>
+              <p className="font-bold text-2xl text-primary">
+                {parseFloat(guia.peso_bruto_kg || 0).toFixed(2)} <span className="text-lg">kg</span>
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted">Número de Bultos:</label>
-              <p className="font-bold text-lg">{guia.numero_bultos || 0}</p>
+              <label className="text-xs text-muted uppercase font-semibold">Bultos</label>
+              <p className="font-bold text-2xl">{guia.numero_bultos || 0}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Ruta de Traslado */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        {/* Punto de Partida */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">
-              <MapPin size={20} className="text-warning" />
-              Punto de Partida
-            </h2>
-          </div>
-          <div className="card-body space-y-2">
-            <div>
-              <label className="text-sm font-medium text-muted">Dirección:</label>
-              <p>{guia.direccion_partida || '-'}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Ubigeo:</label>
-              <p className="font-mono">{guia.ubigeo_partida || '-'}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Punto de Llegada */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">
-              <MapPin size={20} className="text-success" />
-              Punto de Llegada
-            </h2>
-          </div>
-          <div className="card-body space-y-2">
-            <div>
-              <label className="text-sm font-medium text-muted">Dirección:</label>
-              <p className="font-medium">{guia.direccion_llegada || '-'}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-sm font-medium text-muted">Ciudad:</label>
-                <p>{guia.ciudad_llegada || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted">Ubigeo:</label>
-                <p className="font-mono">{guia.ubigeo_llegada || '-'}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Documentos Relacionados */}
       <div className="card mb-4">
-        <div className="card-header">
-          <h2 className="card-title">
+        <div className="card-header bg-gradient-to-r from-purple-50 to-white">
+          <h2 className="card-title text-purple-900">
             <FileText size={20} />
             Documentos Relacionados
           </h2>
         </div>
         <div className="card-body">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-6">
             {guia.numero_guia_remision && (
               <div>
-                <label className="text-sm font-medium text-muted">Guía de Remisión:</label>
+                <label className="text-xs text-muted uppercase font-semibold">Guía de Remisión</label>
                 <button
-                  className="text-primary hover:underline font-medium"
-                  onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia_remision}`)}
+                  className="text-primary hover:underline font-bold text-lg flex items-center gap-1"
+                  onClick={() => navigate(`/ventas/guias-remision/${guia.id_guia}`)}
                 >
+                  <FileText size={16} />
                   {guia.numero_guia_remision}
                 </button>
               </div>
             )}
             {guia.numero_orden && (
               <div>
-                <label className="text-sm font-medium text-muted">Orden de Venta:</label>
+                <label className="text-xs text-muted uppercase font-semibold">Orden de Venta</label>
                 <button
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:underline font-bold text-lg flex items-center gap-1"
                   onClick={() => navigate(`/ventas/ordenes/${guia.id_orden_venta}`)}
                 >
+                  <ShoppingCart size={16} />
                   {guia.numero_orden}
                 </button>
               </div>
             )}
             {guia.cliente && (
               <div>
-                <label className="text-sm font-medium text-muted">Cliente:</label>
-                <p className="font-medium">{guia.cliente}</p>
+                <label className="text-xs text-muted uppercase font-semibold">Cliente</label>
+                <p className="font-bold text-lg">{guia.cliente}</p>
                 {guia.ruc_cliente && (
                   <p className="text-sm text-muted">RUC: {guia.ruc_cliente}</p>
                 )}
@@ -421,19 +429,17 @@ function DetalleGuiaTransportista() {
         </div>
       </div>
 
-      {/* Observaciones */}
       {guia.observaciones && (
         <div className="card mb-4">
           <div className="card-header">
             <h3 className="card-title">Observaciones</h3>
           </div>
           <div className="card-body">
-            <p className="whitespace-pre-wrap">{guia.observaciones}</p>
+            <p className="whitespace-pre-wrap text-muted">{guia.observaciones}</p>
           </div>
         </div>
       )}
 
-      {/* Modal Cambiar Estado */}
       <Modal
         isOpen={modalEstadoOpen}
         onClose={() => setModalEstadoOpen(false)}
@@ -441,22 +447,33 @@ function DetalleGuiaTransportista() {
         size="md"
       >
         <div className="space-y-4">
-          <p className="text-muted">Estado actual: <strong>{guia.estado}</strong></p>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-muted">Estado actual:</p>
+            <p className="font-bold text-lg">{guia.estado}</p>
+          </div>
           
           <div className="space-y-2">
-            {estadoConfig.siguientes.map(estado => {
-              const config = getEstadoConfig(estado);
-              const Icono = config.icono;
-              return (
-                <button
-                  key={estado}
-                  className="btn btn-outline w-full justify-start"
-                  onClick={() => handleCambiarEstado(estado)}
-                >
-                  <Icono size={20} /> {estado}
-                </button>
-              );
-            })}
+            {estadoConfig.siguientes.length > 0 ? (
+              estadoConfig.siguientes.map(estado => {
+                const config = getEstadoConfig(estado);
+                const Icono = config.icono;
+                return (
+                  <button
+                    key={estado}
+                    className={`btn w-full justify-start ${config.clase.replace('badge-', 'btn-')}`}
+                    onClick={() => handleCambiarEstado(estado)}
+                  >
+                    <Icono size={20} /> Cambiar a {estado}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-900">
+                  No hay estados disponibles desde el estado actual
+                </p>
+              </div>
+            )}
           </div>
           
           <div className="flex gap-2 justify-end pt-4 border-t">

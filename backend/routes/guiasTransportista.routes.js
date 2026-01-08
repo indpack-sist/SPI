@@ -1,4 +1,5 @@
 import express from 'express';
+import { verificarToken } from '../middleware/auth.js';
 import {
   getAllGuiasTransportista,
   getGuiaTransportistaById,
@@ -13,16 +14,14 @@ import {
 
 const router = express.Router();
 
-router.get('/estadisticas', getEstadisticasGuiasTransportista);
-router.get('/transportistas-frecuentes', getTransportistasFrecuentes);
-router.get('/conductores-frecuentes', getConductoresFrecuentes);
-router.get('/vehiculos-frecuentes', getVehiculosFrecuentes);
-router.get('/', getAllGuiasTransportista);
-router.post('/', createGuiaTransportista);
-
-router.get('/:id/pdf', descargarPDFGuiaTransportista);
-router.put('/:id/estado', actualizarEstadoGuiaTransportista);
-
-router.get('/:id', getGuiaTransportistaById);
+router.get('/estadisticas', verificarToken, getEstadisticasGuiasTransportista);
+router.get('/transportistas-frecuentes', verificarToken, getTransportistasFrecuentes);
+router.get('/conductores-frecuentes', verificarToken, getConductoresFrecuentes);
+router.get('/vehiculos-frecuentes', verificarToken, getVehiculosFrecuentes);
+router.get('/', verificarToken, getAllGuiasTransportista);
+router.post('/', verificarToken, createGuiaTransportista);
+router.get('/:id/pdf', verificarToken, descargarPDFGuiaTransportista);
+router.put('/:id/estado', verificarToken, actualizarEstadoGuiaTransportista);
+router.get('/:id', verificarToken, getGuiaTransportistaById);
 
 export default router;

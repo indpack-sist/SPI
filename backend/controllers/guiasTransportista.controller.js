@@ -9,6 +9,7 @@ export async function getAllGuiasTransportista(req, res) {
         gt.id_guia_transportista,
         gt.numero_guia,
         gt.fecha_emision,
+        gt.fecha_inicio_traslado,
         gt.estado,
         gt.razon_social_transportista,
         gt.ruc_transportista,
@@ -16,6 +17,7 @@ export async function getAllGuiasTransportista(req, res) {
         gt.licencia_conducir,
         gt.placa_vehiculo,
         gt.marca_vehiculo,
+        gt.punto_llegada,
         gr.numero_guia AS numero_guia_remision,
         gr.id_guia,
         gr.ciudad_llegada,
@@ -146,40 +148,65 @@ export async function createGuiaTransportista(req, res) {
       marca_vehiculo,
       modelo_vehiculo,
       certificado_habilitacion,
+      punto_partida,
+      punto_llegada,
       fecha_inicio_traslado,
+      fecha_estimada_llegada,
       observaciones
     } = req.body;
+    
+    const id_creado_por = req.user?.id_empleado || null;
     
     if (!id_guia_remision) {
       return res.status(400).json({
         success: false,
-        error: 'Guía de remisión es obligatoria'
+        error: 'La guía de remisión es obligatoria'
       });
     }
     
     if (!razon_social_transportista || !ruc_transportista) {
       return res.status(400).json({
         success: false,
-        error: 'Datos del transportista son obligatorios'
+        error: 'Los datos del transportista (razón social y RUC) son obligatorios'
+      });
+    }
+    
+    if (ruc_transportista.length !== 11) {
+      return res.status(400).json({
+        success: false,
+        error: 'El RUC debe tener 11 dígitos'
       });
     }
     
     if (!nombre_conductor || !licencia_conducir) {
       return res.status(400).json({
         success: false,
-        error: 'Datos del conductor son obligatorios'
+        error: 'Los datos del conductor (nombre y licencia) son obligatorios'
       });
     }
     
     if (!placa_vehiculo) {
       return res.status(400).json({
         success: false,
-        error: 'Placa del vehículo es obligatoria'
+        error: 'La placa del vehículo es obligatoria'
+      });
+    }
+    
+    if (!punto_partida || !punto_llegada) {
+      return res.status(400).json({
+        success: false,
+        error: 'Los puntos de partida y llegada son obligatorios'
       });
     }
     
     const guiaRemisionResult = await executeQuery(`
-      SELECT id_guia_remision FROM guias_remision WHERE id_guia = ?
+      SELECT 
+        gr.id_guia,
+        gr.estado,
+        gr.direccion_partida,
+        gr.direccion_llegada
+      FROM guias_remision gr
+      WHERE gr.id_guia = ?
     `, [id_guia_remision]);
     
     if (!guiaRemisionResult.success || guiaRemisionResult.data.length === 0) {
@@ -189,10 +216,19 @@ export async function createGuiaTransportista(req, res) {
       });
     }
     
+    const guiaRemision = guiaRemisionResult.data[0];
+    
+    if (guiaRemision.estado !== 'En Tránsito') {
+      return res.status(400).json({
+        success: false,
+        error: `Solo se pueden crear guías de transportista para guías en estado "En Tránsito". Estado actual: ${guiaRemision.estado}`
+      });
+    }
+    
     const guiaExistenteResult = await executeQuery(`
       SELECT id_guia_transportista 
       FROM guias_transportista 
-      WHERE id_guia = ?
+      WHERE id_guia_remision = ?
     `, [id_guia_remision]);
     
     if (guiaExistenteResult.success && guiaExistenteResult.data.length > 0) {
@@ -234,26 +270,34 @@ export async function createGuiaTransportista(req, res) {
         marca_vehiculo,
         modelo_vehiculo,
         certificado_habilitacion,
+        punto_partida,
+        punto_llegada,
         fecha_inicio_traslado,
+        fecha_estimada_llegada,
         observaciones,
+        id_creado_por,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Activa')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
     `, [
       numeroGuia,
       id_guia_remision,
-      fecha_emision,
+      fecha_emision || new Date().toISOString().split('T')[0],
       razon_social_transportista,
       ruc_transportista,
       nombre_conductor,
       licencia_conducir,
       dni_conductor || null,
       telefono_conductor || null,
-      placa_vehiculo,
+      placa_vehiculo.toUpperCase(),
       marca_vehiculo || null,
       modelo_vehiculo || null,
       certificado_habilitacion || null,
-      fecha_inicio_traslado,
-      observaciones
+      punto_partida,
+      punto_llegada,
+      fecha_inicio_traslado || new Date().toISOString().split('T')[0],
+      fecha_estimada_llegada || null,
+      observaciones || null,
+      id_creado_por
     ]);
     
     if (!result.success) {
@@ -286,12 +330,32 @@ export async function actualizarEstadoGuiaTransportista(req, res) {
     const { id } = req.params;
     const { estado } = req.body;
     
-    const estadosValidos = ['Activa', 'Finalizada', 'Cancelada'];
+    const estadosValidos = ['Pendiente', 'En Tránsito', 'Entregada', 'Cancelada'];
     
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
         success: false,
         error: 'Estado no válido'
+      });
+    }
+    
+    const guiaResult = await executeQuery(`
+      SELECT estado FROM guias_transportista WHERE id_guia_transportista = ?
+    `, [id]);
+    
+    if (!guiaResult.success || guiaResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Guía de transportista no encontrada'
+      });
+    }
+    
+    const estadoActual = guiaResult.data[0].estado;
+    
+    if (estado === 'Cancelada' && (estadoActual === 'En Tránsito' || estadoActual === 'Entregada')) {
+      return res.status(400).json({
+        success: false,
+        error: 'No se puede cancelar una guía que ya está en tránsito o entregada'
       });
     }
     
@@ -328,10 +392,11 @@ export async function getTransportistasFrecuentes(req, res) {
       SELECT 
         razon_social_transportista,
         ruc_transportista,
-        COUNT(*) AS total_guias
+        COUNT(*) AS total_guias,
+        MAX(fecha_creacion) AS ultimo_uso
       FROM guias_transportista
       GROUP BY razon_social_transportista, ruc_transportista
-      ORDER BY total_guias DESC
+      ORDER BY total_guias DESC, ultimo_uso DESC
       LIMIT 10
     `);
     
@@ -364,10 +429,12 @@ export async function getConductoresFrecuentes(req, res) {
         licencia_conducir,
         dni_conductor,
         telefono_conductor,
-        COUNT(*) AS total_viajes
+        COUNT(*) AS total_viajes,
+        MAX(fecha_creacion) AS ultimo_uso
       FROM guias_transportista
+      WHERE nombre_conductor IS NOT NULL
       GROUP BY nombre_conductor, licencia_conducir, dni_conductor, telefono_conductor
-      ORDER BY total_viajes DESC
+      ORDER BY total_viajes DESC, ultimo_uso DESC
       LIMIT 15
     `);
     
@@ -400,10 +467,12 @@ export async function getVehiculosFrecuentes(req, res) {
         marca_vehiculo,
         modelo_vehiculo,
         certificado_habilitacion,
-        COUNT(*) AS total_viajes
+        COUNT(*) AS total_viajes,
+        MAX(fecha_creacion) AS ultimo_uso
       FROM guias_transportista
+      WHERE placa_vehiculo IS NOT NULL
       GROUP BY placa_vehiculo, marca_vehiculo, modelo_vehiculo, certificado_habilitacion
-      ORDER BY total_viajes DESC
+      ORDER BY total_viajes DESC, ultimo_uso DESC
       LIMIT 15
     `);
     
@@ -433,8 +502,9 @@ export async function getEstadisticasGuiasTransportista(req, res) {
     const result = await executeQuery(`
       SELECT 
         COUNT(*) AS total_guias,
-        SUM(CASE WHEN estado = 'Activa' THEN 1 ELSE 0 END) AS activas,
-        SUM(CASE WHEN estado = 'Finalizada' THEN 1 ELSE 0 END) AS finalizadas,
+        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
+        SUM(CASE WHEN estado = 'En Tránsito' THEN 1 ELSE 0 END) AS en_transito,
+        SUM(CASE WHEN estado = 'Entregada' THEN 1 ELSE 0 END) AS entregadas,
         SUM(CASE WHEN estado = 'Cancelada' THEN 1 ELSE 0 END) AS canceladas,
         COUNT(DISTINCT razon_social_transportista) AS transportistas_unicos,
         COUNT(DISTINCT nombre_conductor) AS conductores_unicos,
@@ -479,6 +549,7 @@ export async function descargarPDFGuiaTransportista(req, res) {
         gr.peso_bruto_kg,
         gr.numero_bultos,
         gr.tipo_traslado,
+        gr.motivo_traslado,
         ov.numero_orden,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, Download, Filter, FileText, Search,
   ChevronLeft, ChevronRight, RefreshCw, Calendar,
-  TrendingUp, Users, DollarSign
+  TrendingUp, Users, DollarSign, Edit, Copy
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -17,6 +17,7 @@ function Cotizaciones() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
   
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -104,6 +105,39 @@ function Cotizaciones() {
     return badges[estado] || 'badge-secondary';
   };
 
+  const handleDescargarPDF = async (id) => {
+    try {
+      await cotizacionesAPI.descargarPDF(id);
+    } catch (err) {
+      console.error('Error al descargar PDF:', err);
+      setError('Error al descargar el PDF');
+    }
+  };
+
+  const handleDuplicar = async (id, e) => {
+    e.stopPropagation();
+    
+    if (!window.confirm('¿Está seguro de duplicar esta cotización? Se creará una nueva cotización con los mismos datos.')) {
+      return;
+    }
+
+    try {
+      const response = await cotizacionesAPI.duplicar(id);
+      
+      if (response.data.success) {
+        setSuccessMessage(`Cotización duplicada exitosamente: ${response.data.data.numero_cotizacion}`);
+        await cargarDatos(true);
+        
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 5000);
+      }
+    } catch (err) {
+      console.error('Error al duplicar cotización:', err);
+      setError(err.response?.data?.error || 'Error al duplicar la cotización');
+    }
+  };
+
   const columns = [
     {
       header: 'N° Cotización',
@@ -164,9 +198,9 @@ function Cotizaciones() {
     {
       header: 'Acciones',
       accessor: 'id_cotizacion',
-      width: '120px',
+      width: '180px',
       align: 'center',
-      render: (value) => (
+      render: (value, row) => (
         <div className="flex gap-1 justify-center">
           <button
             className="btn btn-sm btn-primary"
@@ -174,6 +208,24 @@ function Cotizaciones() {
             title="Ver detalle"
           >
             <Eye size={14} />
+          </button>
+          <button
+            className="btn btn-sm btn-secondary"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/ventas/cotizaciones/${value}/editar`);
+            }}
+            title="Editar"
+            disabled={row.estado === 'Convertida'}
+          >
+            <Edit size={14} />
+          </button>
+          <button
+            className="btn btn-sm btn-info"
+            onClick={(e) => handleDuplicar(value, e)}
+            title="Duplicar cotización"
+          >
+            <Copy size={14} />
           </button>
           <button
             className="btn btn-sm btn-outline"
@@ -189,15 +241,6 @@ function Cotizaciones() {
       )
     }
   ];
-
-  const handleDescargarPDF = async (id) => {
-    try {
-      await cotizacionesAPI.descargarPDF(id);
-    } catch (err) {
-      console.error('Error al descargar PDF:', err);
-      setError('Error al descargar el PDF');
-    }
-  };
 
   if (loading) return <Loading message="Cargando cotizaciones..." />;
 
@@ -232,6 +275,7 @@ function Cotizaciones() {
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+      {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
       {/* Estadísticas Rápidas */}
       <div className="grid grid-cols-5 gap-4 mb-6">

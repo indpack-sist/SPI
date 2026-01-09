@@ -3,6 +3,8 @@ import {
   getAllCotizaciones,
   getCotizacionById,
   createCotizacion,
+  updateCotizacion,
+  duplicarCotizacion,
   actualizarEstadoCotizacion,
   actualizarPrioridadCotizacion,
   getEstadisticasCotizaciones,
@@ -11,16 +13,17 @@ import {
 
 const router = express.Router();
 
-
 router.get('/estadisticas', getEstadisticasCotizaciones);
 
 router.get('/', getAllCotizaciones);
 router.post('/', createCotizacion);
 
 router.get('/:id/pdf', descargarPDFCotizacion);
+router.post('/:id/duplicar', duplicarCotizacion);
 router.put('/:id/estado', actualizarEstadoCotizacion);
 router.put('/:id/prioridad', actualizarPrioridadCotizacion);
 
 router.get('/:id', getCotizacionById);
+router.put('/:id', updateCotizacion);
 
 export default router;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Save, FileText, ShoppingCart, MapPin,
-  Truck, Package, Calendar, AlertCircle, Plus
+  Truck, Package, Calendar, AlertCircle, Plus, CheckCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -19,6 +19,7 @@ function NuevaGuiaRemision() {
   
   const [orden, setOrden] = useState(null);
   const [productosDisponibles, setProductosDisponibles] = useState([]);
+  const [validacionProductos, setValidacionProductos] = useState({});
   
   const [formData, setFormData] = useState({
     id_orden_venta: idOrden || '',
@@ -47,6 +48,7 @@ function NuevaGuiaRemision() {
 
   useEffect(() => {
     calcularTotales();
+    validarProductos();
   }, [detalle]);
 
   const cargarOrden = async (id) => {
@@ -64,6 +66,7 @@ function NuevaGuiaRemision() {
           return;
         }
         
+        // Mapear productos con toda la información necesaria
         const productosConDisponibilidad = ordenData.detalle.map(item => {
           const cantidadDisponible = parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0);
           return {
@@ -87,6 +90,7 @@ function NuevaGuiaRemision() {
         
         setProductosDisponibles(productosConDisponibilidad);
         
+        // Inicializar detalle con cantidades disponibles
         const detalleInicial = productosConDisponibilidad.map(p => ({
           id_detalle_orden: p.id_detalle,
           id_producto: p.id_producto,
@@ -119,24 +123,57 @@ function NuevaGuiaRemision() {
     }
   };
 
+  // Nueva función: Validar productos
+  const validarProductos = () => {
+    const validaciones = {};
+    
+    detalle.forEach(item => {
+      const producto = productosDisponibles.find(p => p.id_producto === item.id_producto);
+      if (!producto) return;
+      
+      const cantidadSolicitada = parseFloat(item.cantidad || 0);
+      const errores = [];
+      const warnings = [];
+      
+      // Validar cantidad vs disponible en orden
+      if (cantidadSolicitada > producto.cantidad_disponible) {
+        errores.push(`Excede lo disponible en orden: ${producto.cantidad_disponible.toFixed(4)}`);
+      }
+      
+      // Validar cantidad vs stock actual
+      if (cantidadSolicitada > producto.stock_actual) {
+        errores.push(`Stock insuficiente. Disponible: ${producto.stock_actual.toFixed(4)}`);
+      }
+      
+      // Warning si la cantidad es 0
+      if (cantidadSolicitada === 0) {
+        warnings.push('Este producto no se incluirá en la guía');
+      }
+      
+      // Warning si está cerca del límite de stock
+      if (cantidadSolicitada > 0 && cantidadSolicitada === producto.stock_actual && producto.stock_actual < producto.cantidad_disponible) {
+        warnings.push('Usando todo el stock disponible');
+      }
+      
+      validaciones[item.id_producto] = {
+        valido: errores.length === 0,
+        errores,
+        warnings
+      };
+    });
+    
+    setValidacionProductos(validaciones);
+  };
+
   const handleCantidadChange = (index, cantidad) => {
     const newDetalle = [...detalle];
-    const producto = productosDisponibles.find(p => p.id_producto === newDetalle[index].id_producto);
-    
     const cantidadNum = parseFloat(cantidad) || 0;
     
-    if (cantidadNum > producto.cantidad_disponible) {
-      setError(`${producto.producto}: Cantidad máxima disponible ${producto.cantidad_disponible}`);
-      return;
-    }
-    
-    if (cantidadNum > producto.stock_actual) {
-      setError(`${producto.producto}: Stock insuficiente. Disponible: ${producto.stock_actual}`);
-      return;
-    }
-    
+    // Permitir el cambio pero validar después
     newDetalle[index].cantidad = cantidadNum;
     setDetalle(newDetalle);
+    
+    // Limpiar error general si existe
     setError(null);
   };
 
@@ -157,6 +194,30 @@ function NuevaGuiaRemision() {
     }));
   };
 
+  // Validar antes de enviar
+  const validarFormulario = () => {
+    // Verificar que haya productos válidos
+    const detalleValido = detalle.filter(item => {
+      const cantidad = parseFloat(item.cantidad || 0);
+      const validacion = validacionProductos[item.id_producto];
+      return cantidad > 0 && validacion?.valido !== false;
+    });
+    
+    if (detalleValido.length === 0) {
+      setError('No hay productos válidos para despachar. Verifique las cantidades y el stock disponible.');
+      return false;
+    }
+    
+    // Verificar si hay errores en algún producto
+    const hayErrores = Object.values(validacionProductos).some(v => v.errores && v.errores.length > 0);
+    if (hayErrores) {
+      setError('Hay productos con errores. Corrija las cantidades antes de continuar.');
+      return false;
+    }
+    
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -164,13 +225,6 @@ function NuevaGuiaRemision() {
     
     if (!formData.id_orden_venta) {
       setError('Debe seleccionar una orden de venta');
-      return;
-    }
-    
-    const detalleValido = detalle.filter(item => parseFloat(item.cantidad) > 0);
-    
-    if (detalleValido.length === 0) {
-      setError('Debe especificar cantidades a despachar');
       return;
     }
     
@@ -183,6 +237,13 @@ function NuevaGuiaRemision() {
       setError('La fecha de traslado es obligatoria');
       return;
     }
+    
+    // Validar formulario
+    if (!validarFormulario()) {
+      return;
+    }
+    
+    const detalleValido = detalle.filter(item => parseFloat(item.cantidad) > 0);
     
     try {
       setLoading(true);
@@ -215,7 +276,7 @@ function NuevaGuiaRemision() {
       const response = await guiasRemisionAPI.create(payload);
       
       if (response.data.success) {
-        setSuccess(`Guía creada: ${response.data.data.numero_guia}`);
+        setSuccess(`Guía creada exitosamente: ${response.data.data.numero_guia}`);
         setTimeout(() => {
           navigate(`/ventas/guias-remision/${response.data.data.id_guia}`);
         }, 1500);
@@ -225,6 +286,7 @@ function NuevaGuiaRemision() {
       
     } catch (err) {
       console.error('Error al crear guía:', err);
+      // El backend ahora devuelve mensajes de error más específicos
       setError(err.response?.data?.error || 'Error al crear guía de remisión');
     } finally {
       setLoading(false);
@@ -482,42 +544,63 @@ function NuevaGuiaRemision() {
                       <tr>
                         <th>Código</th>
                         <th>Producto</th>
-                        <th className="text-right">Disponible</th>
+                        <th className="text-right">Stock Actual</th>
+                        <th className="text-right">Pendiente Orden</th>
                         <th className="text-right">Cantidad *</th>
                         <th>UM</th>
                         <th className="text-right">Peso Unit. (kg)</th>
                         <th className="text-right">Peso Total (kg)</th>
+                        <th className="text-center">Estado</th>
                       </tr>
                     </thead>
                     <tbody>
                       {detalle.map((item, index) => {
                         const producto = productosDisponibles.find(p => p.id_producto === item.id_producto);
                         const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
+                        const validacion = validacionProductos[item.id_producto] || { valido: true, errores: [], warnings: [] };
+                        const hayError = validacion.errores && validacion.errores.length > 0;
+                        const hayWarning = validacion.warnings && validacion.warnings.length > 0;
                         
                         return (
-                          <tr key={index}>
+                          <tr key={index} className={hayError ? 'bg-red-50' : hayWarning ? 'bg-yellow-50' : ''}>
                             <td className="font-mono text-sm">{item.codigo_producto}</td>
                             <td>
                               <div className="font-medium">{item.producto}</div>
-                              {parseFloat(item.cantidad) > parseFloat(producto?.stock_actual || 0) && (
-                                <div className="text-xs text-danger">
-                                  Stock insuficiente (disponible: {producto?.stock_actual})
+                              {hayError && validacion.errores.map((err, i) => (
+                                <div key={i} className="text-xs text-danger mt-1 flex items-center gap-1">
+                                  <AlertCircle size={12} />
+                                  {err}
                                 </div>
-                              )}
+                              ))}
+                              {!hayError && hayWarning && validacion.warnings.map((warn, i) => (
+                                <div key={i} className="text-xs text-warning mt-1 flex items-center gap-1">
+                                  <AlertCircle size={12} />
+                                  {warn}
+                                </div>
+                              ))}
+                            </td>
+                            <td className="text-right">
+                              <span className={`font-medium ${
+                                parseFloat(item.cantidad) > parseFloat(producto?.stock_actual || 0) 
+                                  ? 'text-danger' 
+                                  : 'text-success'
+                              }`}>
+                                {parseFloat(producto?.stock_actual || 0).toFixed(4)}
+                              </span>
                             </td>
                             <td className="text-right">
                               <span className="font-bold text-primary">
-                                {parseFloat(producto?.cantidad_disponible || 0).toFixed(2)}
+                                {parseFloat(producto?.cantidad_disponible || 0).toFixed(4)}
                               </span>
                             </td>
                             <td>
                               <input
                                 type="number"
-                                className="form-input text-right"
+                                className={`form-input text-right ${hayError ? 'border-danger' : ''}`}
                                 value={item.cantidad}
                                 onChange={(e) => handleCantidadChange(index, e.target.value)}
                                 min="0"
-                                max={producto?.cantidad_disponible || 0}
+                                max={Math.min(producto?.cantidad_disponible || 0, producto?.stock_actual || 0)}
                                 step="0.01"
                                 required
                               />
@@ -536,30 +619,42 @@ function NuevaGuiaRemision() {
                             <td className="text-right font-bold">
                               {pesoTotal.toFixed(2)}
                             </td>
+                            <td className="text-center">
+                              {hayError ? (
+                                <span className="badge badge-danger text-xs">Error</span>
+                              ) : hayWarning ? (
+                                <span className="badge badge-warning text-xs">Aviso</span>
+                              ) : parseFloat(item.cantidad) > 0 ? (
+                                <CheckCircle size={18} className="text-success mx-auto" />
+                              ) : (
+                                <span className="text-muted text-xs">Sin cant.</span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
                       <tr className="bg-primary/5">
-                        <td colSpan="6" className="text-right font-bold text-primary">PESO TOTAL:</td>
+                        <td colSpan="7" className="text-right font-bold text-primary">PESO TOTAL:</td>
                         <td className="text-right font-bold text-primary text-lg">
                           {parseFloat(formData.peso_bruto_kg).toFixed(2)} kg
                         </td>
+                        <td></td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
                 
-                <div className="bg-yellow-50 border-t border-yellow-200 p-4">
+                <div className="bg-blue-50 border-t border-blue-200 p-4">
                   <div className="flex items-start gap-2">
-                    <AlertCircle size={18} className="text-warning flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-yellow-900">
+                    <AlertCircle size={18} className="text-primary flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-900">
                       <p className="font-medium">Validaciones automáticas:</p>
                       <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>Las cantidades no pueden exceder lo disponible en la orden</li>
-                        <li>El stock debe ser suficiente para todas las cantidades</li>
-                        <li>Solo se despacharán productos con cantidad mayor a 0</li>
+                        <li>Las cantidades se validan en tiempo real contra el stock y lo pendiente</li>
+                        <li>Solo se despacharán productos con cantidad mayor a 0 y sin errores</li>
+                        <li>El backend realizará una validación final antes de crear la guía</li>
                       </ul>
                     </div>
                   </div>

@@ -47,7 +47,7 @@ function NuevaCotizacion() {
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
     id_comercial: user?.id_empleado || '',
-    fecha_emision: new Date().toISOString().split('T')[0],
+    fecha_emision: new Date().toLocaleDateString('en-CA'), // <-- NUEVA LÍNEA
     moneda: 'PEN',
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,

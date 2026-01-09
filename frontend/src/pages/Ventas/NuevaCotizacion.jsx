@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
   Calculator, FileText, Building,
@@ -19,7 +19,12 @@ const TIPOS_IMPUESTO = [
 
 function NuevaCotizacion() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const location = useLocation();
   const { user } = useAuth();
+  
+  const modoEdicion = !!id;
+  const modoDuplicar = location.state?.duplicar === true;
   
   const [loading, setLoading] = useState(false);
   const [loadingTC, setLoadingTC] = useState(false);
@@ -65,6 +70,12 @@ function NuevaCotizacion() {
   useEffect(() => {
     cargarCatalogos();
   }, []);
+
+  useEffect(() => {
+    if (modoEdicion || modoDuplicar) {
+      cargarCotizacion();
+    }
+  }, [id, modoEdicion, modoDuplicar]);
 
   useEffect(() => {
     calcularTotales();
@@ -116,6 +127,65 @@ function NuevaCotizacion() {
     } catch (err) {
       console.error('Error al cargar catálogos:', err);
       setError('Error al cargar catálogos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cargarCotizacion = async () => {
+    try {
+      setLoading(true);
+      const response = await cotizacionesAPI.getById(id);
+      
+      if (response.data.success) {
+        const cotizacion = response.data.data;
+        
+        const fechaEmision = modoDuplicar ? new Date().toISOString().split('T')[0] : cotizacion.fecha_emision.split('T')[0];
+        
+        setFormCabecera({
+          id_cliente: cotizacion.id_cliente,
+          id_comercial: cotizacion.id_comercial || user?.id_empleado || '',
+          fecha_emision: fechaEmision,
+          moneda: cotizacion.moneda,
+          tipo_impuesto: cotizacion.tipo_impuesto,
+          porcentaje_impuesto: cotizacion.porcentaje_impuesto,
+          tipo_cambio: cotizacion.tipo_cambio,
+          plazo_pago: cotizacion.plazo_pago || '',
+          forma_pago: cotizacion.forma_pago || '',
+          direccion_entrega: cotizacion.direccion_entrega || '',
+          observaciones: cotizacion.observaciones || '',
+          validez_dias: cotizacion.validez_dias || 7,
+          plazo_entrega: cotizacion.plazo_entrega || '',
+          lugar_entrega: cotizacion.lugar_entrega || ''
+        });
+        
+        const clienteEncontrado = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
+        if (clienteEncontrado) {
+          setClienteSeleccionado(clienteEncontrado);
+        } else {
+          setClienteSeleccionado({
+            id_cliente: cotizacion.id_cliente,
+            razon_social: cotizacion.cliente,
+            ruc: cotizacion.ruc_cliente
+          });
+        }
+        
+        if (cotizacion.detalle && cotizacion.detalle.length > 0) {
+          setDetalle(cotizacion.detalle.map(item => ({
+            id_producto: item.id_producto,
+            codigo_producto: item.codigo_producto,
+            producto: item.producto,
+            unidad_medida: item.unidad_medida,
+            cantidad: parseFloat(item.cantidad),
+            precio_unitario: parseFloat(item.precio_unitario),
+            descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+            stock_actual: item.stock_disponible
+          })));
+        }
+      }
+    } catch (err) {
+      console.error('Error al cargar cotización:', err);
+      setError('Error al cargar la cotización');
     } finally {
       setLoading(false);
     }
@@ -274,16 +344,24 @@ function NuevaCotizacion() {
         }))
       };
       
-      const response = await cotizacionesAPI.create(payload);
-      
-      if (response.data.success) {
-        setSuccess(`Cotización creada: ${response.data.data.numero_cotizacion}`);
-        setTimeout(() => navigate('/ventas/cotizaciones'), 1500);
+      let response;
+      if (modoEdicion) {
+        response = await cotizacionesAPI.update(id, payload);
+        if (response.data.success) {
+          setSuccess('Cotización actualizada exitosamente');
+          setTimeout(() => navigate(`/ventas/cotizaciones/${id}`), 1500);
+        }
+      } else {
+        response = await cotizacionesAPI.create(payload);
+        if (response.data.success) {
+          setSuccess(`Cotización creada: ${response.data.data.numero_cotizacion}`);
+          setTimeout(() => navigate('/ventas/cotizaciones'), 1500);
+        }
       }
       
     } catch (err) {
       console.error('Error:', err);
-      setError(err.response?.data?.error || 'Error al crear cotización');
+      setError(err.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} cotización`);
     } finally {
       setLoading(false);
     }
@@ -308,6 +386,9 @@ function NuevaCotizacion() {
     return <Loading message="Cargando formulario..." />;
   }
 
+  const tituloFormulario = modoEdicion ? 'Editar Cotización' : modoDuplicar ? 'Duplicar Cotización' : 'Nueva Cotización';
+  const subtituloFormulario = modoEdicion ? 'Modificar cotización existente' : modoDuplicar ? 'Crear nueva cotización basada en una existente' : 'Emitir cotización de venta al cliente';
+
   return (
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
@@ -317,9 +398,9 @@ function NuevaCotizacion() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FileText size={32} />
-            Nueva Cotización
+            {tituloFormulario}
           </h1>
-          <p className="text-muted">Emitir cotización de venta al cliente</p>
+          <p className="text-muted">{subtituloFormulario}</p>
         </div>
       </div>
 
@@ -373,7 +454,6 @@ function NuevaCotizacion() {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-3 gap-4">
-              {/* ✅ FECHA DE EMISIÓN - DEFAULT HOY */}
               <div className="form-group">
                 <label className="form-label">Fecha de Emisión *</label>
                 <input
@@ -385,7 +465,6 @@ function NuevaCotizacion() {
                 />
               </div>
               
-              {/* ✅ VALIDEZ EN DÍAS */}
               <div className="form-group">
                 <label className="form-label">Validez (días) *</label>
                 <input
@@ -398,7 +477,6 @@ function NuevaCotizacion() {
                 />
               </div>
               
-              {/* ✅ FECHA VENCIMIENTO - CALCULADA AUTOMÁTICAMENTE */}
               <div className="form-group">
                 <label className="form-label">Fecha de Vencimiento (calculada)</label>
                 <input
@@ -413,7 +491,6 @@ function NuevaCotizacion() {
                 </small>
               </div>
               
-              {/* MONEDA */}
               <div className="form-group">
                 <label className="form-label">Moneda *</label>
                 <select
@@ -427,7 +504,6 @@ function NuevaCotizacion() {
                 </select>
               </div>
               
-              {/* TIPO DE IMPUESTO */}
               <div className="form-group">
                 <label className="form-label">Tipo de Impuesto *</label>
                 <select
@@ -442,7 +518,6 @@ function NuevaCotizacion() {
                 </select>
               </div>
               
-              {/* ✅ TIPO DE CAMBIO - SOLO SI MONEDA = USD */}
               {formCabecera.moneda === 'USD' && (
                 <div className="form-group">
                   <label className="form-label">Tipo de Cambio</label>
@@ -467,7 +542,6 @@ function NuevaCotizacion() {
                 </div>
               )}
               
-              {/* ✅ PLAZO DE PAGO - OBLIGATORIO */}
               <div className="form-group">
                 <label className="form-label">Plazo de Pago * <AlertCircle size={14} className="inline text-warning" /></label>
                 <input
@@ -503,7 +577,6 @@ function NuevaCotizacion() {
                 />
               </div>
               
-              {/* ✅ COMERCIAL - AUTOSELECCIONADO */}
               <div className="form-group col-span-3">
                 <label className="form-label">Vendedor/Comercial</label>
                 <select
@@ -681,7 +754,7 @@ function NuevaCotizacion() {
             disabled={loading || !clienteSeleccionado || detalle.length === 0}
           >
             <Save size={20} />
-            {loading ? 'Guardando...' : 'Guardar Cotización'}
+            {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotización' : 'Guardar Cotización'}
           </button>
         </div>
       </form>

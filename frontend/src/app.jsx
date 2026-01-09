@@ -193,6 +193,22 @@ function App() {
                         } 
                       />
                       <Route 
+                        path="/ventas/cotizaciones/:id/editar" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="cotizaciones">
+                            <NuevaCotizacion />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      <Route 
+                        path="/ventas/cotizaciones/:id/duplicar" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="cotizaciones">
+                            <NuevaCotizacion />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      <Route 
                         path="/ventas/cotizaciones/:id" 
                         element={
                           <ProtectedRouteWithPermiso modulo="cotizaciones">

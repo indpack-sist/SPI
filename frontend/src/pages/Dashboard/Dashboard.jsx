@@ -43,6 +43,7 @@ function Dashboard() {
   const [moneda, setMoneda] = useState('PEN');
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
+
   useEffect(() => {
     cargarDatos();
   }, []);
@@ -71,34 +72,36 @@ function Dashboard() {
       setLoading(false);
     }
   };
+
   const actualizarTipoCambioManual = async () => {
-  try {
-    setLoadingTC(true);
-    setError(null);
-    
-    console.log('🔴 Consumiendo API de tipo de cambio...');
-    
-    const response = await api.dashboard.actualizarTipoCambio({ 
-  currency: 'USD' 
-});
-    
-    if (response.data.success) {
-      setTipoCambio(response.data.data);
+    try {
+      setLoadingTC(true);
+      setError(null);
       
-      alert('✅ Tipo de cambio actualizado correctamente');
+      console.log('🔴 Consumiendo API de tipo de cambio...');
       
-      await cargarDatos();
+      const response = await api.dashboard.actualizarTipoCambio({ 
+        currency: 'USD' 
+      });
+      
+      if (response.data.success) {
+        setTipoCambio(response.data.data);
+        
+        alert('✅ Tipo de cambio actualizado correctamente');
+        
+        await cargarDatos();
+      }
+      
+    } catch (err) {
+      const errorMsg = err.error || 'Error al actualizar tipo de cambio';
+      setError(errorMsg);
+      console.error('Error al actualizar TC:', err);
+      alert('❌ ' + errorMsg);
+    } finally {
+      setLoadingTC(false);
     }
-    
-  } catch (err) {
-    const errorMsg = err.error || 'Error al actualizar tipo de cambio';
-    setError(errorMsg);
-    console.error('Error al actualizar TC:', err);
-    alert('❌ ' + errorMsg);
-  } finally {
-    setLoadingTC(false);
-  }
-};
+  };
+
   const toggleMoneda = () => {
     setMoneda(moneda === 'PEN' ? 'USD' : 'PEN');
   };
@@ -168,8 +171,8 @@ function Dashboard() {
     
     return estadisticas.movimientos_mensuales.map(m => ({
       mes: m.mes_nombre,
-      entradas: moneda === 'PEN' ? m.entradas_pen : m.entradas_usd,
-      salidas: moneda === 'PEN' ? m.salidas_pen : m.salidas_usd
+      entradas: moneda === 'PEN' ? m.entradas_pen_total : m.entradas_usd_total,
+      salidas: moneda === 'PEN' ? m.salidas_pen_total : m.salidas_usd_total
     }));
   };
 
@@ -186,60 +189,59 @@ function Dashboard() {
         </div>
         
         <div className="dashboard-actions">
-  <button 
-    onClick={toggleMoneda} 
-    className="btn btn-currency"
-    title={`Cambiar a ${moneda === 'PEN' ? 'USD' : 'PEN'}`}
-  >
-    <ArrowLeftRight size={18} />
-    <span className="currency-label">{moneda}</span>
-  </button>
+          <button 
+            onClick={toggleMoneda} 
+            className="btn btn-currency"
+            title={`Cambiar a ${moneda === 'PEN' ? 'USD' : 'PEN'}`}
+          >
+            <ArrowLeftRight size={18} />
+            <span className="currency-label">{moneda}</span>
+          </button>
 
-  {tipoCambio && (
-    <div className="tipo-cambio-badge">
-      <DollarSign size={16} />
-      <div className="tipo-cambio-info">
-        <span className="tipo-cambio-value">
-          {tipoCambio.promedio.toFixed(3)}
-        </span>
-        <span className="tipo-cambio-label">USD/PEN</span>
-      </div>
-      {tipoCambio.desde_cache && (
-        <span className="cache-indicator" title="Desde caché">
-          <RefreshCw size={12} />
-        </span>
-      )}
-      {tipoCambio.es_default && (
-        <span className="default-indicator" title="Valor predeterminado">⚠️</span>
-      )}
-    </div>
-  )}
+          {tipoCambio && (
+            <div className="tipo-cambio-badge">
+              <DollarSign size={16} />
+              <div className="tipo-cambio-info">
+                <span className="tipo-cambio-value">
+                  {tipoCambio.promedio.toFixed(3)}
+                </span>
+                <span className="tipo-cambio-label">USD/PEN</span>
+              </div>
+              {tipoCambio.desde_cache && (
+                <span className="cache-indicator" title="Desde caché">
+                  <RefreshCw size={12} />
+                </span>
+              )}
+              {tipoCambio.es_default && (
+                <span className="default-indicator" title="Valor predeterminado">⚠️</span>
+              )}
+            </div>
+          )}
 
-  {/* NUEVO BOTÓN: Actualizar Tipo de Cambio */}
-  <button 
-    onClick={actualizarTipoCambioManual} 
-    className={`btn ${tipoCambio?.es_default ? 'btn-primary' : 'btn-secondary'}`}
-    disabled={loadingTC}
-    title="Actualizar tipo de cambio desde API (consume 1 token)"
-  >
-    {loadingTC ? (
-      <>
-        <RefreshCw size={18} className="spinner" />
-        Actualizando...
-      </>
-    ) : (
-      <>
-        <DollarSign size={18} />
-        {tipoCambio?.es_default ? 'Actualizar TC' : 'Refrescar TC'}
-      </>
-    )}
-  </button>
+          <button 
+            onClick={actualizarTipoCambioManual} 
+            className={`btn ${tipoCambio?.es_default ? 'btn-primary' : 'btn-secondary'}`}
+            disabled={loadingTC}
+            title="Actualizar tipo de cambio desde API (consume 1 token)"
+          >
+            {loadingTC ? (
+              <>
+                <RefreshCw size={18} className="spinner" />
+                Actualizando...
+              </>
+            ) : (
+              <>
+                <DollarSign size={18} />
+                {tipoCambio?.es_default ? 'Actualizar TC' : 'Refrescar TC'}
+              </>
+            )}
+          </button>
 
-  <button onClick={cargarDatos} className="btn btn-secondary" disabled={loading}>
-    <RefreshCw size={18} />
-    Actualizar Dashboard
-  </button>
-</div>
+          <button onClick={cargarDatos} className="btn btn-secondary" disabled={loading}>
+            <RefreshCw size={18} />
+            Actualizar Dashboard
+          </button>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -301,7 +303,6 @@ function Dashboard() {
         </div>
         <div className="card-body">
           <div className="grid grid-cols-2 gap-4">
-            {/* VALOR DE PRODUCCIÓN */}
             <div className="valor-box produccion">
               <div className="valor-icon">
                 <Factory size={20} />
@@ -320,7 +321,6 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* VALOR DE VENTA */}
             <div className="valor-box venta">
               <div className="valor-icon">
                 <TrendingUp size={20} />
@@ -340,7 +340,6 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* MARGEN TOTAL */}
           <div className="margen-total">
             <div className="margen-icon">
               <TrendingDown size={18} />
@@ -361,6 +360,79 @@ function Dashboard() {
           <p className="valor-footer">
             {resumen?.total_productos || 0} productos en {resumen?.valoracion_por_tipo?.length || 0} tipos de inventario
           </p>
+        </div>
+      </div>
+
+      {/* ESTADÍSTICAS DE MOVIMIENTOS - DESGLOSE POR MONEDA */}
+      <div className="card">
+        <div className="card-header">
+          <h3>Movimientos de Inventario - Desglose por Moneda</h3>
+        </div>
+        <div className="card-body">
+          <div className="grid grid-cols-2 gap-6">
+            {/* ENTRADAS */}
+            <div>
+              <h4 className="text-lg font-bold mb-3 flex items-center gap-2">
+                <ArrowDownRight className="text-success" size={20} />
+                Entradas de Inventario
+              </h4>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                  <span className="font-medium">En Soles (PEN):</span>
+                  <span className="font-bold text-lg">{formatearMoneda(estadisticas?.entradas?.valor_pen || 0, 'PEN')}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                  <span className="font-medium">En Dólares (USD):</span>
+                  <span className="font-bold text-lg">{formatearMoneda(estadisticas?.entradas?.valor_usd || 0, 'USD')}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-success/10 rounded border-l-4 border-success">
+                  <span className="font-bold">Total ({moneda}):</span>
+                  <span className="font-bold text-xl text-success">
+                    {formatearMoneda(
+                      moneda === 'PEN' 
+                        ? estadisticas?.entradas?.valor_total_pen 
+                        : estadisticas?.entradas?.valor_total_usd
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SALIDAS */}
+            <div>
+              <h4 className="text-lg font-bold mb-3 flex items-center gap-2">
+                <ArrowUpRight className="text-danger" size={20} />
+                Salidas de Inventario
+              </h4>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                  <span className="font-medium">En Soles (PEN):</span>
+                  <span className="font-bold text-lg">{formatearMoneda(estadisticas?.salidas?.valor_pen || 0, 'PEN')}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                  <span className="font-medium">En Dólares (USD):</span>
+                  <span className="font-bold text-lg">{formatearMoneda(estadisticas?.salidas?.valor_usd || 0, 'USD')}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-danger/10 rounded border-l-4 border-danger">
+                  <span className="font-bold">Total ({moneda}):</span>
+                  <span className="font-bold text-xl text-danger">
+                    {formatearMoneda(
+                      moneda === 'PEN' 
+                        ? estadisticas?.salidas?.valor_total_pen 
+                        : estadisticas?.salidas?.valor_total_usd
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 p-4 bg-blue-50 rounded border border-blue-200">
+            <p className="text-sm text-blue-900">
+              <strong>Nota:</strong> Los totales mostrados incluyen la conversión automática según el tipo de cambio actual 
+              ({tipoCambio?.venta?.toFixed(3) || '3.800'} PEN/USD).
+            </p>
+          </div>
         </div>
       </div>
 
@@ -440,7 +512,6 @@ function Dashboard() {
                   <span className="stat-value-medium">{parseFloat(tipo.stock_total || 0).toFixed(0)}</span>
                 </div>
                 
-                {/* DOS VALORES */}
                 <div className="inventario-valores">
                   <div className="valor-item produccion-item">
                     <span className="valor-label-tiny">Valor Producción</span>
@@ -567,7 +638,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* ACCESOS RÁPIDOS - SIN CAMBIOS */}
+        {/* ACCESOS RÁPIDOS */}
         <div className="card">
           <div className="card-header">
             <h3 className="card-title">Accesos Rápidos</h3>
@@ -585,7 +656,7 @@ function Dashboard() {
               </div>
             </Link>
 
-            <Link to="/inventario/movimientos-salidas" className="action-btn danger">
+            <Link to="/inventario/salidas" className="action-btn danger">
               <div className="action-icon">
                 <ArrowUpRight size={20} />
               </div>

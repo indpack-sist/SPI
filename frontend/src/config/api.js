@@ -381,6 +381,8 @@ export const cotizacionesAPI = {
 
   getById: (id) => api.get(`/cotizaciones/${id}`),
   create: (data) => api.post('/cotizaciones', data),
+  update: (id, data) => api.put(`/cotizaciones/${id}`, data),
+  duplicar: (id) => api.post(`/cotizaciones/${id}/duplicar`),
   actualizarEstado: (id, estado) => api.put(`/cotizaciones/${id}/estado`, { estado }),
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
   getEstadisticas: () => api.get('/cotizaciones/estadisticas'),

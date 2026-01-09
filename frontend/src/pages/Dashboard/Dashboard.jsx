@@ -627,16 +627,6 @@ function Dashboard() {
                 <span className="action-subtitle">Ver y gestionar</span>
               </div>
             </Link>
-
-            <Link to="/inventario/stock" className="action-btn secondary">
-              <div className="action-icon">
-                <DollarSign size={20} />
-              </div>
-              <div className="action-content">
-                <span className="action-title">Stock y Valorización</span>
-                <span className="action-subtitle">Ver inventarios</span>
-              </div>
-            </Link>
           </div>
         </div>
       </div>

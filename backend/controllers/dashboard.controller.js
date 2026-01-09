@@ -397,32 +397,50 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
       params.push(fecha_fin);
     }
 
+    // ENTRADAS - SEPARADAS POR MONEDA
     const entradasResult = await executeQuery(
-      `SELECT COUNT(*) AS total_entradas, COALESCE(SUM(total_costo), 0) AS valor_total_entradas,
-       COUNT(DISTINCT DATE(fecha_movimiento)) AS dias_con_movimiento
-       FROM entradas ${whereClause} AND estado = 'Activo'`, params
+      `SELECT 
+        COUNT(*) AS total_entradas,
+        COALESCE(SUM(CASE WHEN moneda = 'PEN' THEN total_costo ELSE 0 END), 0) AS valor_entradas_pen,
+        COALESCE(SUM(CASE WHEN moneda = 'USD' THEN total_costo ELSE 0 END), 0) AS valor_entradas_usd,
+        COUNT(DISTINCT DATE(fecha_movimiento)) AS dias_con_movimiento
+       FROM entradas ${whereClause} AND estado = 'Activo'`, 
+      params
     );
 
+    // SALIDAS - SEPARADAS POR MONEDA
     const salidasResult = await executeQuery(
-      `SELECT COUNT(*) AS total_salidas, COALESCE(SUM(total_precio), 0) AS valor_total_salidas,
-       COUNT(DISTINCT DATE(fecha_movimiento)) AS dias_con_movimiento
-       FROM salidas ${whereClause} AND estado = 'Activo'`, params
+      `SELECT 
+        COUNT(*) AS total_salidas,
+        COALESCE(SUM(CASE WHEN moneda = 'PEN' THEN total_precio ELSE 0 END), 0) AS valor_salidas_pen,
+        COALESCE(SUM(CASE WHEN moneda = 'USD' THEN total_precio ELSE 0 END), 0) AS valor_salidas_usd,
+        COUNT(DISTINCT DATE(fecha_movimiento)) AS dias_con_movimiento
+       FROM salidas ${whereClause} AND estado = 'Activo'`, 
+      params
     );
 
+    // ENTRADAS MENSUALES - SEPARADAS POR MONEDA
     const entradasMensualesResult = await executeQuery(
-      `SELECT DATE_FORMAT(fecha_movimiento, '%Y-%m') AS mes,
-       DATE_FORMAT(fecha_movimiento, '%b %Y') AS mes_nombre,
-       COALESCE(SUM(total_costo), 0) AS valor_entradas
-       FROM entradas WHERE fecha_movimiento >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND estado = 'Activo'
+      `SELECT 
+        DATE_FORMAT(fecha_movimiento, '%Y-%m') AS mes,
+        DATE_FORMAT(fecha_movimiento, '%b %Y') AS mes_nombre,
+        COALESCE(SUM(CASE WHEN moneda = 'PEN' THEN total_costo ELSE 0 END), 0) AS valor_entradas_pen,
+        COALESCE(SUM(CASE WHEN moneda = 'USD' THEN total_costo ELSE 0 END), 0) AS valor_entradas_usd
+       FROM entradas 
+       WHERE fecha_movimiento >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND estado = 'Activo'
        GROUP BY DATE_FORMAT(fecha_movimiento, '%Y-%m'), DATE_FORMAT(fecha_movimiento, '%b %Y')
        ORDER BY mes DESC`
     );
 
+    // SALIDAS MENSUALES - SEPARADAS POR MONEDA
     const salidasMensualesResult = await executeQuery(
-      `SELECT DATE_FORMAT(fecha_movimiento, '%Y-%m') AS mes,
-       DATE_FORMAT(fecha_movimiento, '%b %Y') AS mes_nombre,
-       COALESCE(SUM(total_precio), 0) AS valor_salidas
-       FROM salidas WHERE fecha_movimiento >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND estado = 'Activo'
+      `SELECT 
+        DATE_FORMAT(fecha_movimiento, '%Y-%m') AS mes,
+        DATE_FORMAT(fecha_movimiento, '%b %Y') AS mes_nombre,
+        COALESCE(SUM(CASE WHEN moneda = 'PEN' THEN total_precio ELSE 0 END), 0) AS valor_salidas_pen,
+        COALESCE(SUM(CASE WHEN moneda = 'USD' THEN total_precio ELSE 0 END), 0) AS valor_salidas_usd
+       FROM salidas 
+       WHERE fecha_movimiento >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND estado = 'Activo'
        GROUP BY DATE_FORMAT(fecha_movimiento, '%Y-%m'), DATE_FORMAT(fecha_movimiento, '%b %Y')
        ORDER BY mes DESC`
     );
@@ -434,11 +452,14 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
         movimientosPorMes[row.mes] = { 
           mes: row.mes, 
           mes_nombre: row.mes_nombre, 
-          entradas_pen: 0, 
-          salidas_pen: 0 
+          entradas_pen: 0,
+          entradas_usd: 0,
+          salidas_pen: 0,
+          salidas_usd: 0
         };
       }
-      movimientosPorMes[row.mes].entradas_pen = parseFloat(row.valor_entradas || 0);
+      movimientosPorMes[row.mes].entradas_pen = parseFloat(row.valor_entradas_pen || 0);
+      movimientosPorMes[row.mes].entradas_usd = parseFloat(row.valor_entradas_usd || 0);
     });
 
     salidasMensualesResult.data.forEach(row => {
@@ -446,47 +467,65 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
         movimientosPorMes[row.mes] = { 
           mes: row.mes, 
           mes_nombre: row.mes_nombre, 
-          entradas_pen: 0, 
-          salidas_pen: 0 
+          entradas_pen: 0,
+          entradas_usd: 0,
+          salidas_pen: 0,
+          salidas_usd: 0
         };
       }
-      movimientosPorMes[row.mes].salidas_pen = parseFloat(row.valor_salidas || 0);
+      movimientosPorMes[row.mes].salidas_pen = parseFloat(row.valor_salidas_pen || 0);
+      movimientosPorMes[row.mes].salidas_usd = parseFloat(row.valor_salidas_usd || 0);
     });
 
     const movimientosMensuales = Object.values(movimientosPorMes)
       .map(m => ({
         mes: m.mes, 
         mes_nombre: m.mes_nombre,
-        entradas_pen: m.entradas_pen, 
+        entradas_pen: m.entradas_pen,
+        entradas_usd: m.entradas_usd,
         salidas_pen: m.salidas_pen,
-        entradas_usd: tipoCambio.valido 
-          ? convertirPENaUSD(m.entradas_pen, tipoCambio) 
-          : m.entradas_pen / 3.765,
-        salidas_usd: tipoCambio.valido 
-          ? convertirPENaUSD(m.salidas_pen, tipoCambio) 
-          : m.salidas_pen / 3.765
+        salidas_usd: m.salidas_usd,
+        // Totales convertidos a una sola moneda para el gráfico
+        entradas_pen_total: m.entradas_pen + (tipoCambio.valido ? m.entradas_usd * tipoCambio.venta : m.entradas_usd * 3.80),
+        salidas_pen_total: m.salidas_pen + (tipoCambio.valido ? m.salidas_usd * tipoCambio.venta : m.salidas_usd * 3.80),
+        entradas_usd_total: (tipoCambio.valido ? convertirPENaUSD(m.entradas_pen, tipoCambio) : m.entradas_pen / 3.80) + m.entradas_usd,
+        salidas_usd_total: (tipoCambio.valido ? convertirPENaUSD(m.salidas_pen, tipoCambio) : m.salidas_pen / 3.80) + m.salidas_usd
       }))
       .sort((a, b) => a.mes.localeCompare(b.mes))
       .slice(-6);
 
-    const valor_total_entradas_pen = parseFloat(entradasResult.data[0].valor_total_entradas);
-    const valor_total_salidas_pen = parseFloat(salidasResult.data[0].valor_total_salidas);
+    const valor_entradas_pen = parseFloat(entradasResult.data[0].valor_entradas_pen);
+    const valor_entradas_usd = parseFloat(entradasResult.data[0].valor_entradas_usd);
+    const valor_salidas_pen = parseFloat(salidasResult.data[0].valor_salidas_pen);
+    const valor_salidas_usd = parseFloat(salidasResult.data[0].valor_salidas_usd);
+
+    // Total convertido a PEN
+    const total_entradas_pen = valor_entradas_pen + (tipoCambio.valido ? valor_entradas_usd * tipoCambio.venta : valor_entradas_usd * 3.80);
+    const total_salidas_pen = valor_salidas_pen + (tipoCambio.valido ? valor_salidas_usd * tipoCambio.venta : valor_salidas_usd * 3.80);
+
+    // Total convertido a USD
+    const total_entradas_usd = (tipoCambio.valido ? convertirPENaUSD(valor_entradas_pen, tipoCambio) : valor_entradas_pen / 3.80) + valor_entradas_usd;
+    const total_salidas_usd = (tipoCambio.valido ? convertirPENaUSD(valor_salidas_pen, tipoCambio) : valor_salidas_pen / 3.80) + valor_salidas_usd;
 
     res.json({
       entradas: {
         total: entradasResult.data[0].total_entradas,
-        valor_total_pen: valor_total_entradas_pen,
-        valor_total_usd: tipoCambio.valido 
-          ? convertirPENaUSD(valor_total_entradas_pen, tipoCambio) 
-          : valor_total_entradas_pen / 3.765,
+        // Valores originales por moneda
+        valor_pen: valor_entradas_pen,
+        valor_usd: valor_entradas_usd,
+        // Totales convertidos
+        valor_total_pen: total_entradas_pen,
+        valor_total_usd: total_entradas_usd,
         dias_activos: entradasResult.data[0].dias_con_movimiento
       },
       salidas: {
         total: salidasResult.data[0].total_salidas,
-        valor_total_pen: valor_total_salidas_pen,
-        valor_total_usd: tipoCambio.valido 
-          ? convertirPENaUSD(valor_total_salidas_pen, tipoCambio) 
-          : valor_total_salidas_pen / 3.765,
+        // Valores originales por moneda
+        valor_pen: valor_salidas_pen,
+        valor_usd: valor_salidas_usd,
+        // Totales convertidos
+        valor_total_pen: total_salidas_pen,
+        valor_total_usd: total_salidas_usd,
         dias_activos: salidasResult.data[0].dias_con_movimiento
       },
       movimientos_mensuales: movimientosMensuales,

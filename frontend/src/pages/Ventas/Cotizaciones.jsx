@@ -128,7 +128,7 @@ function Cotizaciones() {
       <div>
         <span className="font-mono font-bold text-primary">{value}</span>
         <div className="text-xs text-muted">
-          {row.fecha_emision ? new Date(row.fecha_emision + 'T00:00:00').toLocaleDateString('es-PE') : '-'}
+          {row.fecha_emision ? new Date(row.fecha_emision).toLocaleDateString('es-PE', { timeZone: 'America/Lima' }) : '-'}
         </div>
       </div>
     )

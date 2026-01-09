@@ -109,9 +109,12 @@ export async function getGuiaRemisionById(req, res) {
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
-        p.stock_actual
+        p.stock_actual,
+        p.id_tipo_inventario,
+        ti.nombre AS tipo_inventario
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
+      LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE dgr.id_guia = ?
       ORDER BY dgr.id_detalle
     `, [id]);
@@ -198,6 +201,7 @@ export async function createGuiaRemision(req, res) {
       });
     }
     
+    // Obtener información de la orden
     const ordenResult = await executeQuery(`
       SELECT 
         ov.id_cliente,
@@ -223,14 +227,18 @@ export async function createGuiaRemision(req, res) {
       });
     }
     
+    // Validar cada producto del detalle
     for (const item of detalle) {
+      // Validar detalle de orden
       const detalleOrdenResult = await executeQuery(`
         SELECT 
           dov.cantidad,
           dov.cantidad_despachada,
-          p.stock_actual,
+          p.id_producto,
           p.codigo,
-          p.nombre
+          p.nombre,
+          p.stock_actual,
+          p.id_tipo_inventario
         FROM detalle_orden_venta dov
         INNER JOIN productos p ON dov.id_producto = p.id_producto
         WHERE dov.id_detalle = ?
@@ -244,23 +252,38 @@ export async function createGuiaRemision(req, res) {
       }
       
       const detalleOrden = detalleOrdenResult.data[0];
-      const disponible = parseFloat(detalleOrden.cantidad) - parseFloat(detalleOrden.cantidad_despachada || 0);
+      const cantidadOrden = parseFloat(detalleOrden.cantidad);
+      const cantidadDespachada = parseFloat(detalleOrden.cantidad_despachada || 0);
+      const cantidadDisponibleOrden = cantidadOrden - cantidadDespachada;
+      const cantidadSolicitada = parseFloat(item.cantidad);
+      const stockActual = parseFloat(detalleOrden.stock_actual);
       
-      if (parseFloat(item.cantidad) > disponible) {
+      // Validar que no exceda lo pendiente de la orden
+      if (cantidadSolicitada > cantidadDisponibleOrden) {
         return res.status(400).json({
           success: false,
-          error: `${detalleOrden.nombre}: Cantidad a despachar (${item.cantidad}) excede lo disponible (${disponible})`
+          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Cantidad a despachar (${cantidadSolicitada}) excede lo pendiente en la orden (${cantidadDisponibleOrden.toFixed(4)})`
         });
       }
       
-      if (parseFloat(item.cantidad) > parseFloat(detalleOrden.stock_actual)) {
+      // Validar stock disponible
+      if (cantidadSolicitada > stockActual) {
         return res.status(400).json({
           success: false,
-          error: `${detalleOrden.nombre}: Stock insuficiente. Disponible: ${detalleOrden.stock_actual}`
+          error: `${detalleOrden.nombre} (${detalleOrden.codigo}): Stock insuficiente. Disponible: ${stockActual.toFixed(4)}, Requerido: ${cantidadSolicitada.toFixed(4)}`
+        });
+      }
+      
+      // Validar que el id_producto coincida
+      if (item.id_producto !== detalleOrden.id_producto) {
+        return res.status(400).json({
+          success: false,
+          error: `El producto del detalle no coincide con el de la orden`
         });
       }
     }
     
+    // Generar número de guía
     const ultimaResult = await executeQuery(`
       SELECT numero_guia 
       FROM guias_remision 
@@ -278,6 +301,7 @@ export async function createGuiaRemision(req, res) {
     
     const numeroGuia = `T001-${String(numeroSecuencia).padStart(8, '0')}`;
     
+    // Crear la guía
     const result = await executeQuery(`
       INSERT INTO guias_remision (
         numero_guia,
@@ -330,6 +354,7 @@ export async function createGuiaRemision(req, res) {
     
     const idGuia = result.data.insertId;
     
+    // Insertar detalle de la guía
     for (const item of detalle) {
       const pesoTotal = parseFloat(item.cantidad) * parseFloat(item.peso_unitario_kg || 0);
       
@@ -380,6 +405,7 @@ export async function despacharGuiaRemision(req, res) {
     const { fecha_despacho } = req.body;
     const id_usuario = req.user?.id_empleado || null;
     
+    // Obtener información de la guía
     const guiaResult = await executeQuery(`
       SELECT 
         gr.*,
@@ -406,16 +432,20 @@ export async function despacharGuiaRemision(req, res) {
       });
     }
     
+    // Obtener detalle de la guía con información completa del producto
     const detalleResult = await executeQuery(`
       SELECT 
         dgr.*,
         p.id_tipo_inventario,
         p.costo_unitario_promedio,
         p.stock_actual,
-        p.nombre AS producto
+        p.codigo,
+        p.nombre AS producto,
+        p.unidad_medida AS unidad_producto
       FROM detalle_guia_remision dgr
       INNER JOIN productos p ON dgr.id_producto = p.id_producto
       WHERE dgr.id_guia = ?
+      ORDER BY dgr.id_detalle
     `, [id]);
     
     if (!detalleResult.success || detalleResult.data.length === 0) {
@@ -427,17 +457,23 @@ export async function despacharGuiaRemision(req, res) {
     
     const detalle = detalleResult.data;
     
+    // Validar stock actual antes de despachar
     for (const item of detalle) {
-      if (parseFloat(item.stock_actual) < parseFloat(item.cantidad)) {
+      const stockActual = parseFloat(item.stock_actual);
+      const cantidadDespachar = parseFloat(item.cantidad);
+      
+      if (stockActual < cantidadDespachar) {
         return res.status(400).json({
           success: false,
-          error: `Stock insuficiente para ${item.producto}. Disponible: ${item.stock_actual}, Requerido: ${item.cantidad}`
+          error: `Stock insuficiente para ${item.producto} (${item.codigo}). Disponible: ${stockActual.toFixed(4)}, Requerido: ${cantidadDespachar.toFixed(4)}`
         });
       }
     }
     
-    const id_tipo_inventario = detalle[0].id_tipo_inventario || 3;
+    // Usar el tipo de inventario del primer producto (todos deberían ser del mismo tipo en una guía)
+    const id_tipo_inventario = detalle[0].id_tipo_inventario;
     
+    // Calcular totales
     let totalCosto = 0;
     let totalPrecio = 0;
     
@@ -449,6 +485,7 @@ export async function despacharGuiaRemision(req, res) {
       totalPrecio += cantidad * costoUnitario;
     }
     
+    // Crear la salida de inventario
     const salidaResult = await executeQuery(`
       INSERT INTO salidas (
         id_tipo_inventario,
@@ -482,11 +519,13 @@ export async function despacharGuiaRemision(req, res) {
     
     const id_salida = salidaResult.data.insertId;
     
+    // Procesar cada producto
     for (const item of detalle) {
       const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
       const cantidad = parseFloat(item.cantidad);
       
-      await executeQuery(`
+      // Insertar detalle de salida
+      const detalleSalidaResult = await executeQuery(`
         INSERT INTO detalle_salidas (
           id_salida,
           id_producto,
@@ -502,25 +541,50 @@ export async function despacharGuiaRemision(req, res) {
         costoUnitario
       ]);
       
-      await executeQuery(`
+      if (!detalleSalidaResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: `Error al crear detalle de salida para ${item.producto}: ${detalleSalidaResult.error}`
+        });
+      }
+      
+      // Actualizar stock del producto
+      const updateStockResult = await executeQuery(`
         UPDATE productos 
         SET stock_actual = stock_actual - ?
         WHERE id_producto = ?
       `, [cantidad, item.id_producto]);
       
-      await executeQuery(`
+      if (!updateStockResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: `Error al actualizar stock de ${item.producto}: ${updateStockResult.error}`
+        });
+      }
+      
+      // Actualizar cantidad despachada en la orden
+      const updateOrdenResult = await executeQuery(`
         UPDATE detalle_orden_venta
         SET cantidad_despachada = cantidad_despachada + ?
         WHERE id_detalle = ?
       `, [cantidad, item.id_detalle_orden]);
+      
+      if (!updateOrdenResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: `Error al actualizar orden para ${item.producto}: ${updateOrdenResult.error}`
+        });
+      }
     }
     
+    // Actualizar estado de la guía
     await executeQuery(`
       UPDATE guias_remision
       SET estado = 'En Tránsito'
       WHERE id_guia = ?
     `, [id]);
     
+    // Actualizar estado de la orden
     await executeQuery(`
       UPDATE ordenes_venta
       SET estado = 'Despachada'
@@ -532,7 +596,8 @@ export async function despacharGuiaRemision(req, res) {
       message: `Guía despachada exitosamente. Salida ID: ${id_salida}`,
       data: {
         id_salida,
-        productos_despachados: detalle.length
+        productos_despachados: detalle.length,
+        total_costo: totalCosto.toFixed(2)
       }
     });
     
@@ -578,6 +643,7 @@ export async function marcarEntregadaGuiaRemision(req, res) {
       WHERE id_guia = ?
     `, [id]);
     
+    // Verificar si todas las guías de la orden están entregadas
     if (guia.id_orden_venta) {
       const pendientesResult = await executeQuery(`
         SELECT COUNT(*) as pendientes

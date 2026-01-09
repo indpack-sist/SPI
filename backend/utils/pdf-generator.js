@@ -150,12 +150,10 @@ export async function generarPDFEntrada(datos) {
       doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
       doc.text(`Web: ${EMPRESA.web}`, 50, 184);
 
-      // CORRECCIÓN: Ajuste del rectángulo para evitar sobreposición
       doc.roundedRect(380, 40, 165, 75, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`R.U.C. ${EMPRESA.ruc}`, 385, 48, { align: 'center', width: 155 });
       
-      // CORRECCIÓN: Ajuste de posición del título y número
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text('COMPROBANTE DE', 385, 65, { align: 'center', width: 155 });
       doc.text('ENTRADA', 385, 78, { align: 'center', width: 155 });
@@ -223,7 +221,7 @@ export async function generarPDFEntrada(datos) {
         const costoUnitario = parseFloat(item.costo_unitario).toFixed(2);
         const subtotal = parseFloat((item.cantidad || 0) * (item.costo_unitario || 0)).toFixed(2);
         
-        const descripcion = `[${item.codigo_producto}] ${item.producto}`;
+        const descripcion = item.producto;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
@@ -336,7 +334,6 @@ export async function generarPDFSalida(datos) {
       doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
       doc.text(`Web: ${EMPRESA.web}`, 50, 184);
 
-      // CORRECCIÓN: Rectángulo más alto para el título de salida
       doc.roundedRect(380, 40, 165, 75, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`R.U.C. ${EMPRESA.ruc}`, 385, 48, { align: 'center', width: 155 });
@@ -349,7 +346,6 @@ export async function generarPDFSalida(datos) {
         ? datos.cliente 
         : datos.departamento || datos.tipo_movimiento;
 
-      // CORRECCIÓN: Altura dinámica basada en el contenido del destinatario
       const alturaDestino = calcularAlturaTexto(doc, destino || 'N/A', 195, 8);
       const alturaInfoSalida = Math.max(105, alturaDestino + 90);
       
@@ -378,7 +374,6 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica-Bold');
       doc.text('Destinatario/Área:', 40, 273);
       doc.font('Helvetica');
-      // CORRECCIÓN: Texto con ancho limitado y lineGap
       doc.text(destino || 'N/A', 120, 273, { width: 210, lineGap: 2 });
 
       doc.font('Helvetica-Bold');
@@ -406,7 +401,7 @@ export async function generarPDFSalida(datos) {
       const detalles = datos.detalles || [];
       
       detalles.forEach((item, idx) => {
-        const descripcion = `[${item.codigo_producto}] ${item.producto}`;
+        const descripcion = item.producto;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 270, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
@@ -1632,7 +1627,7 @@ export async function generarPDFGuiaTransportista(guia) {
 export async function generarPDFOrdenCompra(orden) {
 return new Promise(async (resolve, reject) => {
 try {
-const doc = new PDFDocument({
+const doc = new PDFDocument({ 
 size: 'A4',
 margins: { top: 30, bottom: 30, left: 30, right: 30 }
 });

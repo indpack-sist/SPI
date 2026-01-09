@@ -114,42 +114,25 @@ function Cotizaciones() {
     }
   };
 
-  const handleDuplicar = async (id, e) => {
-    e.stopPropagation();
-    
-    if (!window.confirm('¿Está seguro de duplicar esta cotización? Se creará una nueva cotización con los mismos datos.')) {
-      return;
-    }
-
-    try {
-      const response = await cotizacionesAPI.duplicar(id);
-      
-      if (response.data.success) {
-        setSuccessMessage(`Cotización duplicada exitosamente: ${response.data.data.numero_cotizacion}`);
-        await cargarDatos(true);
-        
-        setTimeout(() => {
-          setSuccessMessage(null);
-        }, 5000);
-      }
-    } catch (err) {
-      console.error('Error al duplicar cotización:', err);
-      setError(err.response?.data?.error || 'Error al duplicar la cotización');
-    }
-  };
+  const handleDuplicar = (id, e) => {
+  e.stopPropagation();
+  navigate(`/ventas/cotizaciones/${id}/duplicar`);
+};
 
   const columns = [
-    {
-      header: 'N° Cotización',
-      accessor: 'numero_cotizacion',
-      width: '140px',
-      render: (value, row) => (
-        <div>
-          <span className="font-mono font-bold text-primary">{value}</span>
-          <div className="text-xs text-muted">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</div>
+  {
+    header: 'N° Cotización',
+    accessor: 'numero_cotizacion',
+    width: '140px',
+    render: (value, row) => (
+      <div>
+        <span className="font-mono font-bold text-primary">{value}</span>
+        <div className="text-xs text-muted">
+          {row.fecha_emision ? new Date(row.fecha_emision + 'T00:00:00').toLocaleDateString('es-PE') : '-'}
         </div>
-      )
-    },
+      </div>
+    )
+  },
     {
       header: 'Cliente',
       accessor: 'cliente',

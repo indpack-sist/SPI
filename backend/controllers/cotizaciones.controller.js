@@ -8,8 +8,8 @@ export async function getAllCotizaciones(req, res) {
       SELECT 
         c.id_cotizacion,
         c.numero_cotizacion,
-        c.fecha_emision,
-        c.fecha_vencimiento,
+        DATE_FORMAT(c.fecha_emision, '%Y-%m-%d') as fecha_emision,
+        DATE_FORMAT(c.fecha_vencimiento, '%Y-%m-%d') as fecha_vencimiento,
         c.estado,
         c.prioridad,
         c.subtotal,

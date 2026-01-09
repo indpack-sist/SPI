@@ -140,7 +140,8 @@ function NuevaCotizacion() {
       if (response.data.success) {
         const cotizacion = response.data.data;
         
-        const fechaEmision = modoDuplicar ? new Date().toISOString().split('T')[0] : cotizacion.fecha_emision.split('T')[0];
+        const fechaEmision = modoDuplicar ? new Date().toLocaleDateString('en-CA') : cotizacion.fecha_emision.split('T')[0];
+
         
         setFormCabecera({
           id_cliente: cotizacion.id_cliente,

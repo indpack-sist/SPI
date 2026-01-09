@@ -177,7 +177,7 @@ export async function generarCotizacionPDF(cotizacion) {
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
         const valorVenta = parseFloat(item.valor_venta || item.subtotal).toFixed(2);
         
-        const descripcion = `[${item.codigo_producto}] ${item.producto}`;
+        const descripcion = item.producto;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 

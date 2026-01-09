@@ -293,75 +293,7 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* VALORACIÓN TOTAL - DOS VALORES */}
-      <div className="card highlight">
-        <div className="card-header">
-          <h3>
-            <DollarSign size={24} />
-            Valoración Total del Inventario
-          </h3>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="valor-box produccion">
-              <div className="valor-icon">
-                <Factory size={20} />
-              </div>
-              <div className="valor-content">
-                <p className="valor-label">Valor de Producción (Costo)</p>
-                <h2 className="valor-total">
-                  {formatearMoneda(
-                    getValorSegunMoneda(
-                      resumen?.valor_total_produccion_pen,
-                      resumen?.valor_total_produccion_usd
-                    )
-                  )}
-                </h2>
-                <p className="valor-subtitle">Costo real de materiales</p>
-              </div>
-            </div>
 
-            <div className="valor-box venta">
-              <div className="valor-icon">
-                <TrendingUp size={20} />
-              </div>
-              <div className="valor-content">
-                <p className="valor-label">Valor de Venta Potencial</p>
-                <h2 className="valor-total">
-                  {formatearMoneda(
-                    getValorSegunMoneda(
-                      resumen?.valor_total_venta_pen,
-                      resumen?.valor_total_venta_usd
-                    )
-                  )}
-                </h2>
-                <p className="valor-subtitle">Precio de venta total</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="margen-total">
-            <div className="margen-icon">
-              <TrendingDown size={18} />
-            </div>
-            <div>
-              <span className="margen-label">Margen Bruto Potencial:</span>
-              <span className="margen-value">
-                {formatearMoneda(
-                  getValorSegunMoneda(
-                    (resumen?.valor_total_venta_pen || 0) - (resumen?.valor_total_produccion_pen || 0),
-                    (resumen?.valor_total_venta_usd || 0) - (resumen?.valor_total_produccion_usd || 0)
-                  )
-                )}
-              </span>
-            </div>
-          </div>
-
-          <p className="valor-footer">
-            {resumen?.total_productos || 0} productos en {resumen?.valoracion_por_tipo?.length || 0} tipos de inventario
-          </p>
-        </div>
-      </div>
 
       {/* ESTADÍSTICAS DE MOVIMIENTOS - DESGLOSE POR MONEDA */}
       <div className="card">

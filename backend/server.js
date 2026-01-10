@@ -28,6 +28,8 @@ import guiasTransportistaRoutes from './routes/guiasTransportista.routes.js';
 import ordenesCompraRoutes from './routes/ordenesCompra.routes.js';
 
 import dashboardRoutes from './routes/dashboard.routes.js';
+import cuentasPagoRoutes from './routes/cuentas-pago.routes.js';
+import pagosCobranzasRoutes from './routes/pagos-cobranzas.routes.js';
 
 dotenv.config();
 
@@ -97,6 +99,8 @@ app.use('/api/guias-transportista', verificarToken, verificarPermiso('guiasTrans
 app.use('/api/ordenes-compra', verificarToken, verificarPermiso('ordenesCompra'), ordenesCompraRoutes);
 
 app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboardRoutes);
+app.use('/api/cuentas-pago', verificarToken, cuentasPagoRoutes);
+app.use('/api/pagos-cobranzas', verificarToken, pagosCobranzasRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

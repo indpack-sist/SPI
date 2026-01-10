@@ -111,26 +111,18 @@ function OrdenDetalle() {
     }, 0);
   };
 
-  const calcularDiferencias = () => {
-    const diferencias = consumoRealInsumos.map(item => ({
-      ...item,
-      diferencia: item.cantidad_real - item.cantidad_planificada,
-      porcentaje: ((item.cantidad_real - item.cantidad_planificada) / item.cantidad_planificada * 100).toFixed(2)
-    }));
-    
-    const totalPlanificado = diferencias.reduce((sum, i) => sum + (i.cantidad_planificada * i.costo_unitario), 0);
-    const totalReal = diferencias.reduce((sum, i) => sum + (i.cantidad_real * i.costo_unitario), 0);
-    
-    return {
-      items: diferencias,
-      totalPlanificado,
-      totalReal,
-      diferencia: totalReal - totalPlanificado,
-      porcentaje: ((totalReal - totalPlanificado) / totalPlanificado * 100).toFixed(2)
-    };
+  // Helper para procesar éxito parcial
+  const procesarExitoParcial = (response) => {
+    setSuccess(`Producción parcial registrada: ${response.data.data.cantidad_registrada} unidades. Total acumulado: ${response.data.data.cantidad_total_producida}`);
+    setModalParcial(false);
+    setCantidadParcial('');
+    setObservacionesParcial('');
+    setConsumoRealInsumos([]);
+    setMostrarConsumoReal(false);
+    cargarDatos();
   };
 
-  // NUEVO: Handler para registro parcial
+  // NUEVO: Handler para registro parcial con validación de exceso
   const handleRegistroParcial = async (e) => {
     e.preventDefault();
     
@@ -151,24 +143,51 @@ function OrdenDetalle() {
         }));
       }
       
-      const response = await ordenesProduccionAPI.registrarParcial(id, payload);
+      try {
+        // Intento normal
+        const response = await ordenesProduccionAPI.registrarParcial(id, payload);
+        procesarExitoParcial(response);
+      } catch (err) {
+        // Capturar error 409 (Conflicto / Exceso)
+        if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
+          const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea confirmar el registro con este exceso?`);
+          
+          if (confirmar) {
+            // Reintentar con flag de confirmación
+            payload.confirmar_exceso = true;
+            const retryResponse = await ordenesProduccionAPI.registrarParcial(id, payload);
+            procesarExitoParcial(retryResponse);
+            return;
+          }
+        }
+        // Si no es error 409 o el usuario canceló, lanzar el error original
+        throw err;
+      }
       
-      setSuccess(`Producción parcial registrada: ${response.data.data.cantidad_registrada} unidades. Total acumulado: ${response.data.data.cantidad_total_producida}`);
-      setModalParcial(false);
-      setCantidadParcial('');
-      setObservacionesParcial('');
-      setConsumoRealInsumos([]);
-      setMostrarConsumoReal(false);
-      
-      cargarDatos();
     } catch (err) {
-      setError(err.error || 'Error al registrar producción parcial');
+      const errorMsg = err.response?.data?.error || err.error || 'Error al registrar producción parcial';
+      setError(errorMsg);
     } finally {
       setProcesando(false);
     }
   };
 
-  // MODIFICADO: Handler para finalizar con consumo real
+  // Helper para procesar éxito al finalizar
+  const procesarExitoFinalizar = (mermasValidas) => {
+    const mensajeExito = mostrarConsumoReal
+      ? `Producción finalizada con ajustes de consumo real. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`
+      : `Producción finalizada exitosamente. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`;
+    
+    setSuccess(mensajeExito);
+    setModalFinalizar(false);
+    setMermas([]);
+    setMostrarMermas(false);
+    setConsumoRealInsumos([]);
+    setMostrarConsumoReal(false);
+    cargarDatos();
+  };
+
+  // MODIFICADO: Handler para finalizar con consumo real y validación de exceso
   const handleFinalizar = async (e) => {
     e.preventDefault();
     
@@ -192,32 +211,45 @@ function OrdenDetalle() {
         }))
       };
       
-      // Si mostró consumo real, usar endpoint especial
+      // Si mostró consumo real, usar endpoint especial o agregar al payload
       if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
         payload.consumo_real = consumoRealInsumos.map(item => ({
           id_insumo: item.id_insumo,
           cantidad_real: item.cantidad_real
         }));
-        
-        await ordenesProduccionAPI.finalizarConConsumoReal(id, payload);
-      } else {
-        await ordenesProduccionAPI.finalizar(id, payload);
+      }
+
+      // Función auxiliar para llamar a la API correcta
+      const ejecutarFinalizacion = async (data) => {
+        if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
+          return await ordenesProduccionAPI.finalizarConConsumoReal(id, data);
+        } else {
+          return await ordenesProduccionAPI.finalizar(id, data);
+        }
+      };
+      
+      try {
+        // Intento normal
+        await ejecutarFinalizacion(payload);
+        procesarExitoFinalizar(mermasValidas);
+      } catch (err) {
+        // Capturar error 409 (Exceso)
+        if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
+          const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea finalizar la orden con este exceso?`);
+          
+          if (confirmar) {
+            payload.confirmar_exceso = true;
+            await ejecutarFinalizacion(payload);
+            procesarExitoFinalizar(mermasValidas);
+            return;
+          }
+        }
+        throw err;
       }
       
-      const mensajeExito = mostrarConsumoReal
-        ? `Producción finalizada con ajustes de consumo real. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`
-        : `Producción finalizada exitosamente. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`;
-      
-      setSuccess(mensajeExito);
-      setModalFinalizar(false);
-      setMermas([]);
-      setMostrarMermas(false);
-      setConsumoRealInsumos([]);
-      setMostrarConsumoReal(false);
-      
-      cargarDatos();
     } catch (err) {
-      setError(err.error || 'Error al finalizar producción');
+      const errorMsg = err.response?.data?.error || err.error || 'Error al finalizar producción';
+      setError(errorMsg);
     } finally {
       setProcesando(false);
     }
@@ -346,11 +378,6 @@ function OrdenDetalle() {
   const calcularLotesPlanificados = () => {
     if (!orden || !orden.cantidad_planificada || !orden.rendimiento_unidades) return 0;
     return Math.ceil(parseFloat(orden.cantidad_planificada) / parseFloat(orden.rendimiento_unidades));
-  };
-
-  const getNombreMerma = (id_producto) => {
-    const producto = productosMerma.find(p => p.id_producto === parseInt(id_producto));
-    return producto ? `${producto.nombre} (${producto.unidad_medida})` : '';
   };
 
   if (loading) {

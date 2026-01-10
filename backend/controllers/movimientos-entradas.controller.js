@@ -297,10 +297,13 @@ export const createEntrada = async (req, res, next) => {
     
     const {
       id_tipo_inventario,
+      tipo_entrada,
       id_proveedor,
       documento_soporte,
       id_registrado_por,
       moneda,
+      porcentaje_igv,
+      id_cuenta_pago,
       observaciones,
       detalles
     } = req.body;
@@ -309,34 +312,58 @@ export const createEntrada = async (req, res, next) => {
       throw new AppError('Debe agregar al menos un producto', 400);
     }
     
-    
-    const total_costo = detalles.reduce((sum, d) => {
+    const subtotal = detalles.reduce((sum, d) => {
       return sum + (parseFloat(d.cantidad) * parseFloat(d.costo_unitario));
     }, 0);
 
+    const porcentaje = porcentaje_igv !== null && porcentaje_igv !== undefined 
+      ? parseFloat(porcentaje_igv) 
+      : 18.00;
+    
+    const igv = subtotal * (porcentaje / 100);
+    const total = subtotal + igv;
+
     const tipoInventarioPrincipal = id_tipo_inventario || detalles[0].id_tipo_inventario;
+    const tipoEntradaFinal = tipo_entrada || 'Compra';
     
     const [resultEntrada] = await connection.query(`
       INSERT INTO entradas ( 
         id_tipo_inventario,
+        tipo_entrada,
         id_proveedor,
         documento_soporte,
         total_costo,
+        subtotal,
+        igv,
+        total,
+        porcentaje_igv,
         moneda,
+        monto_pagado,
+        estado_pago,
+        id_cuenta_pago,
         id_registrado_por,
         observaciones
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       tipoInventarioPrincipal,
+      tipoEntradaFinal,
       id_proveedor || null,
       documento_soporte || null,
-      total_costo,
+      subtotal,
+      subtotal,
+      igv,
+      total,
+      porcentaje,
       moneda || 'PEN',
+      0,
+      tipoEntradaFinal === 'Compra' ? 'Pendiente' : null,
+      id_cuenta_pago || null,
       id_registrado_por,
       observaciones || null
     ]);
     
     const id_entrada = resultEntrada.insertId;
+    
     for (const detalle of detalles) {
       const { id_producto, cantidad, costo_unitario } = detalle;
 
@@ -357,6 +384,7 @@ export const createEntrada = async (req, res, next) => {
           costo_unitario
         ) VALUES (?, ?, ?, ?)
       `, [id_entrada, id_producto, cantidad, costo_unitario]);
+      
       const stockActual = parseFloat(productoCheck[0].stock_actual);
       const costoActual = parseFloat(productoCheck[0].costo_unitario_promedio);
       const cantidadNueva = parseFloat(cantidad);
@@ -383,7 +411,10 @@ export const createEntrada = async (req, res, next) => {
       data: {
         id_entrada,
         total_productos: detalles.length,
-        total_costo
+        subtotal,
+        igv,
+        total,
+        estado_pago: tipoEntradaFinal === 'Compra' ? 'Pendiente' : null
       }
     });
   } catch (error) {
@@ -403,18 +434,19 @@ export const updateEntrada = async (req, res, next) => {
     const { id } = req.params;
     const {
       id_tipo_inventario,
+      tipo_entrada,
       id_proveedor,
       documento_soporte,
       moneda,
+      porcentaje_igv,
+      id_cuenta_pago,
       observaciones,
       id_registrado_por,
-      id_producto,
-      cantidad,
-      costo_unitario
+      detalles
     } = req.body;
     
     const [entrada] = await connection.query(
-      'SELECT estado FROM entradas WHERE id_entrada = ?',
+      'SELECT estado, tipo_entrada FROM entradas WHERE id_entrada = ?',
       [id]
     );
     
@@ -425,56 +457,76 @@ export const updateEntrada = async (req, res, next) => {
     if (entrada[0].estado === 'Anulado') {
       throw new AppError('No se puede editar una entrada anulada', 400);
     }
-    
-    const [detalles] = await connection.query(
-      'SELECT COUNT(*) as count FROM detalle_entradas WHERE id_entrada = ?',
+
+    const [detallesAnteriores] = await connection.query(
+      'SELECT id_producto, cantidad FROM detalle_entradas WHERE id_entrada = ?',
       [id]
     );
     
-    if (detalles[0].count > 1) {
-      await connection.query(`
-        UPDATE entradas 
-        SET id_tipo_inventario = ?,
-            id_proveedor = ?,
-            documento_soporte = ?,
-            moneda = ?,
-            observaciones = ?,
-            id_registrado_por = ?
-        WHERE id_entrada = ?
-      `, [
-        id_tipo_inventario,
-        id_proveedor || null,
-        documento_soporte || null,
-        moneda || 'PEN',
-        observaciones || null,
-        id_registrado_por,
-        id
-      ]);
-    } else {
-      const [detalleAnterior] = await connection.query(
-        'SELECT id_producto, cantidad, costo_unitario FROM detalle_entradas WHERE id_entrada = ?',
-        [id]
+    for (const detalle of detallesAnteriores) {
+      const [producto] = await connection.query(
+        'SELECT stock_actual FROM productos WHERE id_producto = ?',
+        [detalle.id_producto]
       );
       
-      if (detalleAnterior.length > 0) {
-        const detAnterior = detalleAnterior[0];
+      if (producto.length > 0) {
+        const nuevoStock = parseFloat(producto[0].stock_actual) - parseFloat(detalle.cantidad);
         
-        const [prodAnterior] = await connection.query(
-          'SELECT stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?',
-          [detAnterior.id_producto]
+        await connection.query(
+          'UPDATE productos SET stock_actual = ? WHERE id_producto = ?',
+          [nuevoStock, detalle.id_producto]
         );
-        
-        if (prodAnterior.length > 0) {
-          const nuevoStock = parseFloat(prodAnterior[0].stock_actual) - parseFloat(detAnterior.cantidad);
-          
-          await connection.query(
-            'UPDATE productos SET stock_actual = ? WHERE id_producto = ?',
-            [nuevoStock, detAnterior.id_producto]
-          );
-        }
-        
-        await connection.query('DELETE FROM detalle_entradas WHERE id_entrada = ?', [id]);
       }
+    }
+    
+    await connection.query('DELETE FROM detalle_entradas WHERE id_entrada = ?', [id]);
+    
+    const subtotal = detalles.reduce((sum, d) => {
+      return sum + (parseFloat(d.cantidad) * parseFloat(d.costo_unitario));
+    }, 0);
+
+    const porcentaje = porcentaje_igv !== null && porcentaje_igv !== undefined 
+      ? parseFloat(porcentaje_igv) 
+      : 18.00;
+    
+    const igv = subtotal * (porcentaje / 100);
+    const total = subtotal + igv;
+    
+    await connection.query(`
+      UPDATE entradas 
+      SET id_tipo_inventario = ?,
+          tipo_entrada = ?,
+          id_proveedor = ?,
+          documento_soporte = ?,
+          total_costo = ?,
+          subtotal = ?,
+          igv = ?,
+          total = ?,
+          porcentaje_igv = ?,
+          moneda = ?,
+          id_cuenta_pago = ?,
+          observaciones = ?,
+          id_registrado_por = ?
+      WHERE id_entrada = ?
+    `, [
+      id_tipo_inventario,
+      tipo_entrada || 'Compra',
+      id_proveedor || null,
+      documento_soporte || null,
+      subtotal,
+      subtotal,
+      igv,
+      total,
+      porcentaje,
+      moneda || 'PEN',
+      id_cuenta_pago || null,
+      observaciones || null,
+      id_registrado_por,
+      id
+    ]);
+    
+    for (const detalle of detalles) {
+      const { id_producto, cantidad, costo_unitario } = detalle;
       
       await connection.query(`
         INSERT INTO detalle_entradas (
@@ -506,29 +558,6 @@ export const updateEntrada = async (req, res, next) => {
           [nuevoStock, nuevoCostoPromedio, id_producto]
         );
       }
-      
-      const nuevo_total = parseFloat(cantidad) * parseFloat(costo_unitario);
-      
-      await connection.query(`
-        UPDATE entradas 
-        SET id_tipo_inventario = ?,
-            id_proveedor = ?,
-            documento_soporte = ?,
-            total_costo = ?,
-            moneda = ?,
-            observaciones = ?,
-            id_registrado_por = ?
-        WHERE id_entrada = ?
-      `, [
-        id_tipo_inventario,
-        id_proveedor || null,
-        documento_soporte || null,
-        nuevo_total,
-        moneda || 'PEN',
-        observaciones || null,
-        id_registrado_por,
-        id
-      ]);
     }
     
     await connection.commit();
@@ -554,7 +583,7 @@ export const deleteEntrada = async (req, res, next) => {
     const { id } = req.params;
     
     const [entrada] = await connection.query(
-      'SELECT estado FROM entradas WHERE id_entrada = ?',
+      'SELECT estado, estado_pago FROM entradas WHERE id_entrada = ?',
       [id]
     );
     
@@ -564,6 +593,10 @@ export const deleteEntrada = async (req, res, next) => {
     
     if (entrada[0].estado === 'Anulado') {
       throw new AppError('La entrada ya está anulada', 400);
+    }
+
+    if (entrada[0].estado_pago === 'Parcial' || entrada[0].estado_pago === 'Pagado') {
+      throw new AppError('No se puede anular una entrada con pagos registrados. Primero anule los pagos.', 400);
     }
     
     const [detalles] = await connection.query(
@@ -708,6 +741,254 @@ export const generarPDFEntradaController = async (req, res, next) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="entrada_${id}.pdf"`);
     res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+export const registrarPagoEntrada = async (req, res, next) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { id } = req.params;
+    const {
+      fecha_pago,
+      monto_pagado,
+      metodo_pago,
+      numero_operacion,
+      banco,
+      id_cuenta_destino,
+      observaciones,
+      id_registrado_por
+    } = req.body;
+    
+    const [entrada] = await connection.query(
+      'SELECT total, monto_pagado, estado_pago, tipo_entrada FROM entradas WHERE id_entrada = ?',
+      [id]
+    );
+    
+    if (entrada.length === 0) {
+      throw new AppError('Entrada no encontrada', 404);
+    }
+    
+    if (entrada[0].tipo_entrada !== 'Compra') {
+      throw new AppError('Solo se pueden registrar pagos para entradas de tipo Compra', 400);
+    }
+    
+    const total = parseFloat(entrada[0].total);
+    const montoPagadoActual = parseFloat(entrada[0].monto_pagado || 0);
+    const saldoPendiente = total - montoPagadoActual;
+    
+    if (parseFloat(monto_pagado) > saldoPendiente) {
+      throw new AppError(`El monto excede el saldo pendiente (${saldoPendiente.toFixed(2)})`, 400);
+    }
+    
+    const [ultimoPago] = await connection.query(
+      'SELECT numero_pago FROM pagos_entradas WHERE id_entrada = ? ORDER BY id_pago_entrada DESC LIMIT 1',
+      [id]
+    );
+    
+    let numeroSecuencia = 1;
+    if (ultimoPago.length > 0) {
+      const match = ultimoPago[0].numero_pago.match(/-P(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
+    }
+    
+    const [entradaInfo] = await connection.query(
+      'SELECT documento_soporte FROM entradas WHERE id_entrada = ?',
+      [id]
+    );
+    
+    const numeroPago = `${entradaInfo[0].documento_soporte || `ENT-${id}`}-P${String(numeroSecuencia).padStart(2, '0')}`;
+    
+    await connection.query(`
+      INSERT INTO pagos_entradas (
+        id_entrada,
+        numero_pago,
+        fecha_pago,
+        monto_pagado,
+        metodo_pago,
+        numero_operacion,
+        banco,
+        id_cuenta_destino,
+        observaciones,
+        id_registrado_por
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id,
+      numeroPago,
+      fecha_pago,
+      monto_pagado,
+      metodo_pago,
+      numero_operacion || null,
+      banco || null,
+      id_cuenta_destino || null,
+      observaciones || null,
+      id_registrado_por
+    ]);
+    
+    const nuevoMontoPagado = montoPagadoActual + parseFloat(monto_pagado);
+    const nuevoEstadoPago = nuevoMontoPagado >= total ? 'Pagado' : 
+                           nuevoMontoPagado > 0 ? 'Parcial' : 'Pendiente';
+    
+    await connection.query(
+      'UPDATE entradas SET monto_pagado = ?, estado_pago = ? WHERE id_entrada = ?',
+      [nuevoMontoPagado, nuevoEstadoPago, id]
+    );
+    
+    if (id_cuenta_destino) {
+      await connection.query(
+        'UPDATE cuentas_pago SET saldo_actual = saldo_actual - ? WHERE id_cuenta = ?',
+        [monto_pagado, id_cuenta_destino]
+      );
+    }
+    
+    await connection.commit();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Pago registrado exitosamente',
+      data: {
+        numero_pago: numeroPago,
+        nuevo_estado_pago: nuevoEstadoPago,
+        saldo_pendiente: total - nuevoMontoPagado
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+};
+
+export const getPagosEntrada = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const [pagos] = await pool.query(`
+      SELECT 
+        pe.*,
+        e.nombre_completo AS registrado_por,
+        c.nombre AS cuenta_destino
+      FROM pagos_entradas pe
+      INNER JOIN empleados e ON pe.id_registrado_por = e.id_empleado
+      LEFT JOIN cuentas_pago c ON pe.id_cuenta_destino = c.id_cuenta
+      WHERE pe.id_entrada = ?
+      ORDER BY pe.fecha_pago DESC
+    `, [id]);
+    
+    res.json({
+      success: true,
+      data: pagos
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const anularPagoEntrada = async (req, res, next) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { id, idPago } = req.params;
+    
+    const [pago] = await connection.query(
+      'SELECT * FROM pagos_entradas WHERE id_pago_entrada = ? AND id_entrada = ?',
+      [idPago, id]
+    );
+    
+    if (pago.length === 0) {
+      throw new AppError('Pago no encontrado', 404);
+    }
+    
+    const montoPago = parseFloat(pago[0].monto_pagado);
+    const idCuentaDestino = pago[0].id_cuenta_destino;
+    
+    const [entrada] = await connection.query(
+      'SELECT total, monto_pagado FROM entradas WHERE id_entrada = ?',
+      [id]
+    );
+    
+    const nuevoMontoPagado = parseFloat(entrada[0].monto_pagado) - montoPago;
+    const total = parseFloat(entrada[0].total);
+    const nuevoEstadoPago = nuevoMontoPagado <= 0 ? 'Pendiente' : 
+                           nuevoMontoPagado >= total ? 'Pagado' : 'Parcial';
+    
+    await connection.query(
+      'DELETE FROM pagos_entradas WHERE id_pago_entrada = ?',
+      [idPago]
+    );
+    
+    await connection.query(
+      'UPDATE entradas SET monto_pagado = ?, estado_pago = ? WHERE id_entrada = ?',
+      [nuevoMontoPagado, nuevoEstadoPago, id]
+    );
+    
+    if (idCuentaDestino) {
+      await connection.query(
+        'UPDATE cuentas_pago SET saldo_actual = saldo_actual + ? WHERE id_cuenta = ?',
+        [montoPago, idCuentaDestino]
+      );
+    }
+    
+    await connection.commit();
+    
+    res.json({
+      success: true,
+      message: 'Pago anulado exitosamente',
+      data: {
+        nuevo_estado_pago: nuevoEstadoPago,
+        saldo_pendiente: total - nuevoMontoPagado
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+};
+
+export const getResumenPagosEntrada = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const [entrada] = await connection.query(
+      'SELECT total, monto_pagado, estado_pago FROM entradas WHERE id_entrada = ?',
+      [id]
+    );
+    
+    if (entrada.length === 0) {
+      throw new AppError('Entrada no encontrada', 404);
+    }
+    
+    const total = parseFloat(entrada[0].total);
+    const montoPagado = parseFloat(entrada[0].monto_pagado || 0);
+    const saldoPendiente = total - montoPagado;
+    const porcentajePagado = total > 0 ? ((montoPagado / total) * 100).toFixed(2) : 0;
+    
+    const [totalPagos] = await connection.query(
+      'SELECT COUNT(*) as total FROM pagos_entradas WHERE id_entrada = ?',
+      [id]
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        total_entrada: total,
+        monto_pagado: montoPagado,
+        saldo_pendiente: saldoPendiente,
+        porcentaje_pagado: porcentajePagado,
+        estado_pago: entrada[0].estado_pago,
+        total_pagos: totalPagos[0].total
+      }
+    });
   } catch (error) {
     next(error);
   }

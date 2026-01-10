@@ -166,6 +166,11 @@ export const entradasAPI = {
   validarInventario: (data) => api.post('/inventario/movimientos-entradas/validar-inventario', data),
   crearProductoMultiInventario: (data) => api.post('/inventario/movimientos-entradas/crear-multi-inventario', data),
   
+  registrarPago: (id, data) => api.post(`/inventario/movimientos-entradas/${id}/pagos`, data),
+  getPagos: (id) => api.get(`/inventario/movimientos-entradas/${id}/pagos`),
+  anularPago: (id, idPago) => api.delete(`/inventario/movimientos-entradas/${id}/pagos/${idPago}`),
+  getResumenPagos: (id) => api.get(`/inventario/movimientos-entradas/${id}/pagos/resumen`),
+  
   generarPDF: async (id) => {
     try {
       const response = await fetch(`${API_URL}/inventario/movimientos-entradas/${id}/pdf`, {

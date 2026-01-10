@@ -21,7 +21,8 @@ import {
   ClipboardList,
   AlertTriangle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  List
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -32,6 +33,7 @@ function OrdenesProduccion() {
   const navigate = useNavigate();
   
   const [ordenes, setOrdenes] = useState([]);
+  const [registrosParciales, setRegistrosParciales] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -46,6 +48,7 @@ function OrdenesProduccion() {
   useEffect(() => {
     cargarDatos();
   }, [filtroEstado, fechaInicio, fechaFin]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, busqueda, fechaInicio, fechaFin]);
@@ -61,7 +64,23 @@ function OrdenesProduccion() {
       if (fechaFin) params.fecha_fin = fechaFin;
       
       const response = await ordenesProduccionAPI.getAll(params);
-      setOrdenes(response.data.data || []);
+      const ordenesData = response.data.data || [];
+      setOrdenes(ordenesData);
+      
+      const registrosMap = {};
+      await Promise.all(
+        ordenesData
+          .filter(orden => orden.estado === 'Finalizada' || orden.estado === 'En Curso' || orden.estado === 'En Pausa')
+          .map(async (orden) => {
+            try {
+              const res = await ordenesProduccionAPI.getRegistrosParciales(orden.id_orden);
+              registrosMap[orden.id_orden] = res.data.data?.length || 0;
+            } catch (err) {
+              registrosMap[orden.id_orden] = 0;
+            }
+          })
+      );
+      setRegistrosParciales(registrosMap);
     } catch (err) {
       console.error('Error cargando datos:', err);
       setError(err.error || 'Error al cargar órdenes de producción');
@@ -189,11 +208,12 @@ function OrdenesProduccion() {
       header: 'Progreso',
       accessor: 'cantidad_planificada',
       align: 'left',
-      width: '180px',
+      width: '200px',
       render: (value, row) => {
         const planificada = parseFloat(value);
         const producida = parseFloat(row.cantidad_producida || 0);
         const porcentaje = planificada > 0 ? (producida / planificada * 100).toFixed(0) : 0;
+        const numRegistros = registrosParciales[row.id_orden] || 0;
         
         return (
           <div className="w-full">
@@ -214,8 +234,16 @@ function OrdenesProduccion() {
                 style={{ width: `${Math.min(porcentaje, 100)}%` }}
               />
             </div>
-            <div className="text-xs text-muted mt-1 text-right">
-              Prod: {producida.toFixed(2)}
+            <div className="flex justify-between items-center mt-1">
+              <div className="text-xs text-muted">
+                Prod: {producida.toFixed(2)}
+              </div>
+              {numRegistros > 0 && (
+                <div className="flex items-center gap-1 text-xs text-primary font-medium">
+                  <List size={12} />
+                  {numRegistros} registro{numRegistros !== 1 ? 's' : ''}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -299,7 +327,6 @@ function OrdenesProduccion() {
 
   return (
     <div className="container py-6">
-      {/* Header */}
       <div className="page-header flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2 text-primary-dark">
@@ -317,9 +344,7 @@ function OrdenesProduccion() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Grid de Estadísticas */}
       <div className="stats-grid mb-6">
-        {/* ... (Tus tarjetas de estadísticas se mantienen igual) ... */}
         <div className="stat-card total">
           <div className="stat-icon"><Factory size={24} /></div>
           <div className="stat-content">
@@ -354,7 +379,6 @@ function OrdenesProduccion() {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="card mb-6">
         <div className="card-header flex justify-between items-center">
           <h3 className="card-title text-lg flex items-center gap-2">
@@ -394,12 +418,10 @@ function OrdenesProduccion() {
         </div>
       </div>
 
-      {/* Tabla con Paginación */}
       <div className="card">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">Listado</h2>
           <div className="flex gap-2 items-center text-sm text-muted">
-             {/* Info de conteo */}
              <span>
                 Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
              </span>
@@ -407,11 +429,9 @@ function OrdenesProduccion() {
           </div>
         </div>
         <div className="card-body table-container">
-            {/* CORRECCIÓN: Usamos currentItems en lugar de ordenesFiltradas */}
             <Table columns={columns} data={currentItems} emptyMessage="No hay órdenes registradas" />
         </div>
         
-        {/* Controles de Paginación */}
         {ordenesFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 

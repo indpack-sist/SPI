@@ -13,6 +13,8 @@ import Empleados from './pages/Empleados/Empleados';
 import Flota from './pages/Flota/Flota';
 import Proveedores from './pages/Proveedores/Proveedores';
 import Clientes from './pages/Clientes/Clientes';
+import ClienteDetalle from './pages/Clientes/ClienteDetalle';
+
 
 import Productos from './pages/Productos/Productos';
 import ProductoDetalle from './pages/Productos/ProductoDetalle';
@@ -100,7 +102,14 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
-                      
+                      <Route 
+                        path="/clientes/:id" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="clientes">
+                            <ClienteDetalle />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
                       <Route 
                         path="/productos" 
                         element={

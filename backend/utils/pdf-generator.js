@@ -623,7 +623,7 @@ export async function generarPDFTransferencia(datos) {
   });
 }
 
-export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
+export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], mermas = [], registrosParciales = []) {
   const logoBuffer = await cargarLogoURL();
 
   return new Promise(async (resolve, reject) => {
@@ -759,15 +759,101 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = []) {
         yPos += 10;
       }
 
+      if (registrosParciales && registrosParciales.length > 0) {
+        if (yPos + 80 > 700) {
+          doc.addPage();
+          yPos = 50;
+        }
+
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('REGISTROS PARCIALES DE PRODUCCIÓN', 40, yPos);
+        yPos += 15;
+
+        doc.rect(33, yPos, 529, 18).fill('#E0E0E0');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('FECHA', 40, yPos + 5);
+        doc.text('CANTIDAD', 180, yPos + 5);
+        doc.text('REGISTRADO POR', 270, yPos + 5);
+        doc.text('OBSERVACIONES', 420, yPos + 5);
+
+        yPos += 18;
+
+        registrosParciales.forEach((reg, idx) => {
+          if (yPos + 16 > 750) {
+            doc.addPage();
+            yPos = 50;
+          }
+
+          doc.fontSize(7).font('Helvetica').fillColor('#000000');
+          doc.text(formatearFechaHora(reg.fecha_registro), 40, yPos + 3);
+          doc.text(`${parseFloat(reg.cantidad_registrada).toFixed(2)}`, 180, yPos + 3);
+          doc.text(reg.registrado_por || '-', 270, yPos + 3, { width: 140 });
+          doc.text(reg.observaciones || '-', 420, yPos + 3, { width: 130 });
+
+          yPos += 16;
+        });
+
+        yPos += 10;
+      }
+
+      if (mermas && mermas.length > 0) {
+        if (yPos + 80 > 700) {
+          doc.addPage();
+          yPos = 50;
+        }
+
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('MERMAS GENERADAS', 40, yPos);
+        yPos += 15;
+
+        doc.rect(33, yPos, 529, 18).fill('#FFE0E0');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('CÓDIGO', 40, yPos + 5);
+        doc.text('PRODUCTO MERMA', 120, yPos + 5);
+        doc.text('CANTIDAD', 350, yPos + 5);
+        doc.text('OBSERVACIONES', 450, yPos + 5);
+
+        yPos += 18;
+
+        mermas.forEach((merma, idx) => {
+          if (yPos + 16 > 750) {
+            doc.addPage();
+            yPos = 50;
+          }
+
+          doc.fontSize(7).font('Helvetica').fillColor('#000000');
+          doc.text(merma.codigo || '-', 40, yPos + 3);
+          doc.text(merma.producto_merma || '-', 120, yPos + 3, { width: 220 });
+          doc.text(`${parseFloat(merma.cantidad).toFixed(2)} ${merma.unidad_medida || ''}`, 350, yPos + 3);
+          doc.text(merma.observaciones || '-', 450, yPos + 3, { width: 100 });
+
+          yPos += 16;
+        });
+
+        yPos += 10;
+      }
+
       if (datos.observaciones) {
+        if (yPos + 50 > 700) {
+          doc.addPage();
+          yPos = 50;
+        }
+
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('OBSERVACIONES', 40, yPos);
         
         doc.fontSize(8).font('Helvetica');
         doc.text(datos.observaciones, 40, yPos + 15, { width: 330 });
+        
+        yPos += 50;
       }
 
       if (consumoMateriales.length > 0) {
+        if (yPos + 40 > 750) {
+          doc.addPage();
+          yPos = 50;
+        }
+
         doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
         doc.text('COSTO MATERIALES', 390, yPos + 4);

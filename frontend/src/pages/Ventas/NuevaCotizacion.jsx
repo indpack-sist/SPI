@@ -322,32 +322,39 @@ function NuevaCotizacion() {
       setLoading(true);
       
       const payload = {
-        id_cliente: parseInt(formCabecera.id_cliente),
-        id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
-        fecha_emision: formCabecera.fecha_emision,
-        moneda: formCabecera.moneda,
-        tipo_impuesto: formCabecera.tipo_impuesto,
-        porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto),
-        tipo_cambio: parseFloat(formCabecera.tipo_cambio),
-        plazo_pago: formCabecera.plazo_pago,
-        forma_pago: formCabecera.forma_pago || null,
-        direccion_entrega: formCabecera.direccion_entrega || null,
-        lugar_entrega: formCabecera.lugar_entrega || null,
-        plazo_entrega: formCabecera.plazo_entrega || null,
-        validez_dias: parseInt(formCabecera.validez_dias) || 7,
-        observaciones: formCabecera.observaciones || null,
-        detalle: detalle.map((item, index) => ({
-          id_producto: item.id_producto,
-          cantidad: parseFloat(item.cantidad),
-          precio_unitario: parseFloat(item.precio_unitario),
-          descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
-          orden: index + 1
-        }))
-      };
-      
-      let response;
-      if (modoEdicion) {
-        response = await cotizacionesAPI.update(id, payload);
+  id_cliente: parseInt(formCabecera.id_cliente),
+  id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
+  fecha_emision: formCabecera.fecha_emision,
+  moneda: formCabecera.moneda,
+  tipo_impuesto: formCabecera.tipo_impuesto,
+  porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto),
+  tipo_cambio: parseFloat(formCabecera.tipo_cambio),
+  plazo_pago: formCabecera.plazo_pago,
+  forma_pago: formCabecera.forma_pago || null,
+  direccion_entrega: formCabecera.direccion_entrega || null,
+  lugar_entrega: formCabecera.lugar_entrega || null,
+  plazo_entrega: formCabecera.plazo_entrega || null,
+  validez_dias: parseInt(formCabecera.validez_dias) || 7,
+  observaciones: formCabecera.observaciones || null,
+  detalle: detalle.map((item, index) => ({
+    id_producto: item.id_producto,
+    cantidad: parseFloat(item.cantidad),
+    precio_unitario: parseFloat(item.precio_unitario),
+    descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
+    orden: index + 1
+  }))
+};
+
+console.log('PAYLOAD FRONTEND:', {
+  tipo_impuesto: formCabecera.tipo_impuesto,
+  porcentaje_impuesto_form: formCabecera.porcentaje_impuesto,
+  payload_tipo: payload.tipo_impuesto,
+  payload_porcentaje: payload.porcentaje_impuesto
+});
+
+let response;
+if (modoEdicion) {
+  response = await cotizacionesAPI.update(id, payload);
         if (response.data.success) {
           setSuccess('Cotización actualizada exitosamente');
           setTimeout(() => navigate(`/ventas/cotizaciones/${id}`), 1500);

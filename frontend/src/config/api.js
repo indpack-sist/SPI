@@ -120,7 +120,8 @@ export const clientesAPI = {
   update: (id, data) => api.put(`/clientes/${id}`, data),
   delete: (id) => api.delete(`/clientes/${id}`),
   getHistorialCotizaciones: (id) => api.get(`/clientes/${id}/cotizaciones`),
-  getHistorialOrdenesVenta: (id) => api.get(`/clientes/${id}/ordenes-venta`)
+  getHistorialOrdenesVenta: (id) => api.get(`/clientes/${id}/ordenes-venta`),
+  getEstadoCredito: (id) => api.get(`/clientes/${id}/credito`)
 };
 
 export const productosAPI = {
@@ -444,6 +445,11 @@ export const ordenesVentaAPI = {
 
   actualizarProgreso: (id, data) => 
     api.put(`/ordenes-venta/${id}/progreso`, data),
+
+  registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data),
+  getPagos: (id) => api.get(`/ordenes-venta/${id}/pagos`),
+  anularPago: (id, idPago) => api.delete(`/ordenes-venta/${id}/pagos/${idPago}`),
+  getResumenPagos: (id) => api.get(`/ordenes-venta/${id}/pagos/resumen`),
 
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 

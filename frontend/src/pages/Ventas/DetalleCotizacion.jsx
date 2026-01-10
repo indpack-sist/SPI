@@ -520,22 +520,19 @@ function DetalleCotizacion() {
           <div className="card-body">
             <div className="space-y-3">
               <div className="flex justify-between py-2 border-b">
-                <span className="text-muted">Sub Total:</span>
-                <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
-              </div>
-              <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
-                <span className="font-bold text-xl">TOTAL:</span>
-                <span className="font-bold text-3xl">
-                  {['EXO', 'INA'].includes(cotizacion.tipo_impuesto)
-                    ? formatearMoneda(cotizacion.subtotal) // Si es EXO, el Total es el Subtotal
-                    : formatearMoneda(cotizacion.total)    // Si es IGV, usamos el total normal
-                  }
-                </span>
-              </div>
-              <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
-                <span className="font-bold text-xl">TOTAL:</span>
-                <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
-              </div>
+                  <span className="text-muted">Sub Total:</span>
+                  <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-muted">
+                    {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
+                  </span>
+                  <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
+                </div>
+                <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
+                  <span className="font-bold text-xl">TOTAL:</span>
+                  <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
+                </div>
               
               {/* Conversión de moneda */}
               {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 0) > 1 && (

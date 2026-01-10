@@ -13,7 +13,7 @@ import {
   getPagosOrden,
   anularPagoOrden,
   getResumenPagosOrden
-} from '../controllers/ordenes-venta.controller.js';
+} from '../controllers/ordenesVenta.controller.js';
 
 const router = express.Router();
 

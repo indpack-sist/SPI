@@ -642,7 +642,13 @@ export const ordenesCompraAPI = {
     }, 100);
   }
 };
-
+export const cuentasPagoAPI = {
+  getAll: (params) => api.get('/cuentas-pago', { params }),
+  getById: (id) => api.get(`/cuentas-pago/${id}`),
+  create: (data) => api.post('/cuentas-pago', data),
+  update: (id, data) => api.put(`/cuentas-pago/${id}`, data),
+  delete: (id) => api.delete(`/cuentas-pago/${id}`)
+};
 api.dashboard = dashboard;
 
 export { api };

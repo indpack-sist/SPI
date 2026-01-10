@@ -959,7 +959,7 @@ export const getResumenPagosEntrada = async (req, res, next) => {
   try {
     const { id } = req.params;
     
-    const [entrada] = await connection.query(
+    const [entrada] = await pool.query(
       'SELECT total, monto_pagado, estado_pago FROM entradas WHERE id_entrada = ?',
       [id]
     );
@@ -973,7 +973,7 @@ export const getResumenPagosEntrada = async (req, res, next) => {
     const saldoPendiente = total - montoPagado;
     const porcentajePagado = total > 0 ? ((montoPagado / total) * 100).toFixed(2) : 0;
     
-    const [totalPagos] = await connection.query(
+    const [totalPagos] = await pool.query(
       'SELECT COUNT(*) as total FROM pagos_entradas WHERE id_entrada = ?',
       [id]
     );

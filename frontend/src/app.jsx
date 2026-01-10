@@ -44,7 +44,8 @@ import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
 import OrdenesCompra from './pages/Compras/OrdenesCompra';
 import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
 import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
-
+import CuentasPago from './pages/Finanzas/CuentasPago';
+import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
 function App() {
   return (
     <Router>
@@ -325,7 +326,23 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
-                      
+                      <Route 
+                        path="/finanzas/cuentas-pago" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="cuentasPago">
+                            <CuentasPago />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+
+                      <Route 
+                        path="/finanzas/pagos-cobranzas" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="pagosCobranzas">
+                            <PagosCobranzas />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
                       <Route path="*" element={<RedirectToFirstAvailable />} />
                     </Routes>
                   </Layout>

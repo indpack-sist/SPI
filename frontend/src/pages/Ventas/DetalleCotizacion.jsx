@@ -525,7 +525,11 @@ function DetalleCotizacion() {
               </div>
               <div className="flex justify-between py-2 border-b">
                 <span className="text-muted">{getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:</span>
-                <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
+                <span className="font-bold text-lg">
+                  {['EXO', 'INA'].includes(cotizacion.tipo_impuesto) 
+                    ? formatearMoneda(0) 
+                    : formatearMoneda(cotizacion.igv)}
+                </span>
               </div>
               <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
                 <span className="font-bold text-xl">TOTAL:</span>

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, ShoppingCart, Eye, Download, Building2 } from 'lucide-react';
+import { 
+  ArrowLeft, FileText, ShoppingCart, Eye, Download, Building2, 
+  DollarSign, CreditCard, AlertTriangle, TrendingUp
+} from 'lucide-react';
 import { clientesAPI, cotizacionesAPI, ordenesVentaAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -13,6 +16,7 @@ function ClienteDetalle() {
   const [cliente, setCliente] = useState(null);
   const [cotizaciones, setCotizaciones] = useState([]);
   const [ordenesVenta, setOrdenesVenta] = useState([]);
+  const [estadoCredito, setEstadoCredito] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabActiva, setTabActiva] = useState('cotizaciones');
@@ -26,15 +30,17 @@ function ClienteDetalle() {
       setLoading(true);
       setError(null);
       
-      const [clienteRes, cotizacionesRes, ordenesRes] = await Promise.all([
+      const [clienteRes, cotizacionesRes, ordenesRes, creditoRes] = await Promise.all([
         clientesAPI.getById(id),
         clientesAPI.getHistorialCotizaciones(id),
-        clientesAPI.getHistorialOrdenesVenta(id)
+        clientesAPI.getHistorialOrdenesVenta(id),
+        clientesAPI.getEstadoCredito(id)
       ]);
       
       setCliente(clienteRes.data.data);
       setCotizaciones(cotizacionesRes.data.data);
       setOrdenesVenta(ordenesRes.data.data);
+      setEstadoCredito(creditoRes.data.data);
     } catch (err) {
       setError(err.error || 'Error al cargar datos del cliente');
     } finally {
@@ -47,11 +53,9 @@ function ClienteDetalle() {
     return new Date(fecha).toLocaleDateString('es-PE');
   };
 
-  const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-PE', {
-      style: 'currency',
-      currency: 'PEN'
-    }).format(valor || 0);
+  const formatearMoneda = (valor, moneda = 'PEN') => {
+    const simbolo = moneda === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
   const getEstadoBadge = (estado) => {
@@ -69,6 +73,27 @@ function ClienteDetalle() {
       'Cancelada': 'badge-danger'
     };
     return badges[estado] || 'badge-secondary';
+  };
+
+  const getEstadoPagoBadge = (estadoPago) => {
+    const badges = {
+      'Pendiente': 'badge-warning',
+      'Parcial': 'badge-info',
+      'Pagado': 'badge-success'
+    };
+    return badges[estadoPago] || 'badge-warning';
+  };
+
+  const calcularTotalesPorMoneda = (items, campo = 'total') => {
+    const totalPEN = items
+      .filter(item => item.moneda === 'PEN')
+      .reduce((sum, item) => sum + parseFloat(item[campo] || 0), 0);
+    
+    const totalUSD = items
+      .filter(item => item.moneda === 'USD')
+      .reduce((sum, item) => sum + parseFloat(item[campo] || 0), 0);
+    
+    return { totalPEN, totalUSD };
   };
 
   const columnsCotizaciones = [
@@ -96,7 +121,7 @@ function ClienteDetalle() {
       width: '120px',
       align: 'right',
       render: (value, row) => (
-        <span className="font-bold">{formatearMoneda(value)}</span>
+        <span className="font-bold">{formatearMoneda(value, row.moneda)}</span>
       )
     },
     {
@@ -159,25 +184,53 @@ function ClienteDetalle() {
       render: (value) => formatearFecha(value)
     },
     {
-      header: 'Entrega Est.',
-      accessor: 'fecha_entrega_estimada',
-      width: '110px',
-      render: (value) => formatearFecha(value)
+      header: 'Total / Pagado',
+      accessor: 'total',
+      width: '140px',
+      align: 'right',
+      render: (value, row) => {
+        const total = parseFloat(value);
+        const pagado = parseFloat(row.monto_pagado || 0);
+        const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
+        
+        return (
+          <div>
+            <div className="font-bold">{formatearMoneda(total, row.moneda)}</div>
+            <div className="text-xs text-success">
+              Pagado: {formatearMoneda(pagado, row.moneda)}
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+              <div 
+                className={`h-1.5 rounded-full ${
+                  porcentaje === 100 ? 'bg-success' : 
+                  porcentaje > 0 ? 'bg-info' : 'bg-warning'
+                }`}
+                style={{ width: `${porcentaje}%` }}
+              ></div>
+            </div>
+          </div>
+        );
+      }
     },
     {
-      header: 'Total',
-      accessor: 'total',
+      header: 'Saldo',
+      accessor: 'saldo_pendiente',
       width: '120px',
       align: 'right',
-      render: (value) => (
-        <span className="font-bold">{formatearMoneda(value)}</span>
+      render: (value, row) => (
+        <span className={`font-bold ${parseFloat(value) > 0 ? 'text-warning' : 'text-success'}`}>
+          {formatearMoneda(value, row.moneda)}
+        </span>
       )
     },
     {
-      header: 'Items',
-      accessor: 'total_items',
-      width: '80px',
-      align: 'center'
+      header: 'Estado Pago',
+      accessor: 'estado_pago',
+      width: '110px',
+      align: 'center',
+      render: (value) => (
+        <span className={`badge ${getEstadoPagoBadge(value)}`}>{value}</span>
+      )
     },
     {
       header: 'Estado',
@@ -187,11 +240,6 @@ function ClienteDetalle() {
       render: (value) => (
         <span className={`badge ${getEstadoBadge(value)}`}>{value}</span>
       )
-    },
-    {
-      header: 'O.C. Cliente',
-      accessor: 'orden_compra_cliente',
-      width: '130px'
     },
     {
       header: 'Acciones',
@@ -234,6 +282,10 @@ function ClienteDetalle() {
       </div>
     );
   }
+
+  const totalesCotizaciones = calcularTotalesPorMoneda(cotizaciones);
+  const totalesOrdenes = calcularTotalesPorMoneda(ordenesVenta);
+  const totalesPendientes = calcularTotalesPorMoneda(ordenesVenta, 'saldo_pendiente');
 
   return (
     <div>
@@ -285,6 +337,108 @@ function ClienteDetalle() {
         </div>
       </div>
 
+      {estadoCredito && (
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="card border-l-4 border-primary">
+            <div className="card-header">
+              <h3 className="card-title flex items-center gap-2">
+                <CreditCard size={20} />
+                Línea de Crédito PEN
+              </h3>
+            </div>
+            <div className="card-body">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Límite de Crédito:</span>
+                  <span className="font-bold text-lg">{formatearMoneda(estadoCredito.credito_pen.limite, 'PEN')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Utilizado:</span>
+                  <span className="font-bold text-warning">{formatearMoneda(estadoCredito.credito_pen.utilizado, 'PEN')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Disponible:</span>
+                  <span className="font-bold text-success">{formatearMoneda(estadoCredito.credito_pen.disponible, 'PEN')}</span>
+                </div>
+                
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Porcentaje Utilizado</span>
+                    <span className="font-bold">{estadoCredito.credito_pen.porcentaje_utilizado}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div 
+                      className={`h-3 rounded-full ${
+                        parseFloat(estadoCredito.credito_pen.porcentaje_utilizado) >= 90 ? 'bg-danger' :
+                        parseFloat(estadoCredito.credito_pen.porcentaje_utilizado) >= 70 ? 'bg-warning' :
+                        'bg-success'
+                      }`}
+                      style={{ width: `${Math.min(estadoCredito.credito_pen.porcentaje_utilizado, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {parseFloat(estadoCredito.credito_pen.porcentaje_utilizado) >= 90 && (
+                  <div className="alert alert-danger mt-3">
+                    <AlertTriangle size={16} />
+                    <span className="text-sm">Límite de crédito casi agotado</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="card border-l-4 border-success">
+            <div className="card-header">
+              <h3 className="card-title flex items-center gap-2">
+                <DollarSign size={20} />
+                Línea de Crédito USD
+              </h3>
+            </div>
+            <div className="card-body">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Límite de Crédito:</span>
+                  <span className="font-bold text-lg">{formatearMoneda(estadoCredito.credito_usd.limite, 'USD')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Utilizado:</span>
+                  <span className="font-bold text-warning">{formatearMoneda(estadoCredito.credito_usd.utilizado, 'USD')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Disponible:</span>
+                  <span className="font-bold text-success">{formatearMoneda(estadoCredito.credito_usd.disponible, 'USD')}</span>
+                </div>
+                
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>Porcentaje Utilizado</span>
+                    <span className="font-bold">{estadoCredito.credito_usd.porcentaje_utilizado}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div 
+                      className={`h-3 rounded-full ${
+                        parseFloat(estadoCredito.credito_usd.porcentaje_utilizado) >= 90 ? 'bg-danger' :
+                        parseFloat(estadoCredito.credito_usd.porcentaje_utilizado) >= 70 ? 'bg-warning' :
+                        'bg-success'
+                      }`}
+                      style={{ width: `${Math.min(estadoCredito.credito_usd.porcentaje_utilizado, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {parseFloat(estadoCredito.credito_usd.porcentaje_utilizado) >= 90 && (
+                  <div className="alert alert-danger mt-3">
+                    <AlertTriangle size={16} />
+                    <span className="text-sm">Límite de crédito casi agotado</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="stats-grid mb-4">
         <div className="stat-card">
           <div className="stat-icon">
@@ -295,6 +449,7 @@ function ClienteDetalle() {
             <h2 className="stat-value">{cotizaciones.length}</h2>
           </div>
         </div>
+        
         <div className="stat-card">
           <div className="stat-icon">
             <ShoppingCart size={24} />
@@ -304,26 +459,43 @@ function ClienteDetalle() {
             <h2 className="stat-value">{ordenesVenta.length}</h2>
           </div>
         </div>
+        
         <div className="stat-card">
           <div className="stat-icon">
-            <FileText size={24} />
+            <TrendingUp size={24} />
           </div>
           <div className="stat-content">
             <p className="stat-label">Total Cotizado</p>
-            <h2 className="stat-value text-lg">
-              {formatearMoneda(cotizaciones.reduce((sum, c) => sum + parseFloat(c.total || 0), 0))}
-            </h2>
+            <div className="text-sm space-y-1">
+              <div className="font-bold">{formatearMoneda(totalesCotizaciones.totalPEN, 'PEN')}</div>
+              <div className="font-bold">{formatearMoneda(totalesCotizaciones.totalUSD, 'USD')}</div>
+            </div>
           </div>
         </div>
+        
         <div className="stat-card">
           <div className="stat-icon">
-            <ShoppingCart size={24} />
+            <DollarSign size={24} />
           </div>
           <div className="stat-content">
             <p className="stat-label">Total Facturado</p>
-            <h2 className="stat-value text-lg">
-              {formatearMoneda(ordenesVenta.reduce((sum, o) => sum + parseFloat(o.total || 0), 0))}
-            </h2>
+            <div className="text-sm space-y-1">
+              <div className="font-bold">{formatearMoneda(totalesOrdenes.totalPEN, 'PEN')}</div>
+              <div className="font-bold">{formatearMoneda(totalesOrdenes.totalUSD, 'USD')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-card border-l-4 border-warning">
+          <div className="stat-icon">
+            <AlertTriangle size={24} className="text-warning" />
+          </div>
+          <div className="stat-content">
+            <p className="stat-label">Saldo Pendiente</p>
+            <div className="text-sm space-y-1">
+              <div className="font-bold text-warning">{formatearMoneda(totalesPendientes.totalPEN, 'PEN')}</div>
+              <div className="font-bold text-warning">{formatearMoneda(totalesPendientes.totalUSD, 'USD')}</div>
+            </div>
           </div>
         </div>
       </div>

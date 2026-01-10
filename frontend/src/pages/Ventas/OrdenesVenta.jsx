@@ -17,7 +17,9 @@ import {
   UserCheck,
   Search,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  DollarSign,
+  CreditCard
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -36,6 +38,7 @@ function OrdenesVenta() {
 
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroPrioridad, setFiltroPrioridad] = useState('');
+  const [filtroEstadoPago, setFiltroEstadoPago] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -46,7 +49,7 @@ function OrdenesVenta() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtroEstado, filtroPrioridad, busqueda]);
+  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, busqueda]);
 
   const cargarDatos = async () => {
     try {
@@ -79,6 +82,8 @@ function OrdenesVenta() {
   };
 
   const ordenesFiltradas = ordenes.filter(orden => {
+    if (filtroEstadoPago && orden.estado_pago !== filtroEstadoPago) return false;
+    
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
     return (
@@ -150,10 +155,15 @@ function OrdenesVenta() {
         clase: 'badge-warning',
         texto: 'Pendiente'
       },
-      'En Proceso': { 
+      'Confirmada': {
+        icono: CheckCircle,
+        clase: 'badge-info',
+        texto: 'Confirmada'
+      },
+      'En Preparación': { 
         icono: Package, 
         clase: 'badge-info',
-        texto: 'En Proceso'
+        texto: 'En Preparación'
       },
       'Despachada': { 
         icono: Truck, 
@@ -182,6 +192,15 @@ function OrdenesVenta() {
       'Urgente': { clase: 'badge-danger', color: '#ef4444' }
     };
     return configs[prioridad] || configs['Media'];
+  };
+
+  const getEstadoPagoConfig = (estadoPago) => {
+    const configs = {
+      'Pendiente': { clase: 'badge-warning', icono: Clock, color: '#f59e0b' },
+      'Parcial': { clase: 'badge-info', icono: CreditCard, color: '#3b82f6' },
+      'Pagado': { clase: 'badge-success', icono: CheckCircle, color: '#10b981' }
+    };
+    return configs[estadoPago] || configs['Pendiente'];
   };
 
   const columns = [
@@ -250,13 +269,49 @@ function OrdenesVenta() {
       )
     },
     {
-      header: 'Total',
+      header: 'Total / Pagado',
       accessor: 'total',
       align: 'right',
+      width: '140px',
+      render: (value, row) => {
+        const total = parseFloat(value);
+        const pagado = parseFloat(row.monto_pagado || 0);
+        const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
+        
+        return (
+          <div>
+            <div className="font-bold">{formatearMoneda(total, row.moneda)}</div>
+            <div className="text-xs text-muted">
+              Pagado: {formatearMoneda(pagado, row.moneda)}
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+              <div 
+                className={`h-1.5 rounded-full ${
+                  porcentaje === 100 ? 'bg-success' : 
+                  porcentaje > 0 ? 'bg-info' : 'bg-warning'
+                }`}
+                style={{ width: `${porcentaje}%` }}
+              ></div>
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Estado Pago',
+      accessor: 'estado_pago',
       width: '120px',
-      render: (value, row) => (
-        <span className="font-bold">{formatearMoneda(value, row.moneda)}</span>
-      )
+      align: 'center',
+      render: (value) => {
+        const config = getEstadoPagoConfig(value);
+        const Icono = config.icono;
+        return (
+          <span className={`badge ${config.clase}`}>
+            <Icono size={14} />
+            {value}
+          </span>
+        );
+      }
     },
     {
       header: 'Prioridad',
@@ -343,7 +398,6 @@ function OrdenesVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Estadísticas */}
       {estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="card">
@@ -415,12 +469,10 @@ function OrdenesVenta() {
         </div>
       )}
 
-      {/* Filtros y Buscador */}
       <div className="card mb-4">
         <div className="card-body">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col gap-4">
             
-            {/* Buscador */}
             <div className="relative w-full md:w-80">
               <Search 
                 size={20} 
@@ -435,8 +487,7 @@ function OrdenesVenta() {
               />
             </div>
 
-            {/* Filtros de Estado y Prioridad */}
-            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+            <div className="flex items-center gap-3 w-full overflow-x-auto pb-2">
               <Filter size={20} className="text-muted shrink-0" />
               
               <div className="flex gap-2">
@@ -454,11 +505,18 @@ function OrdenesVenta() {
                   Pendiente
                 </button>
                 <button
-                  className={`btn btn-sm ${filtroEstado === 'En Proceso' ? 'btn-info' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('En Proceso')}
+                  className={`btn btn-sm ${filtroEstado === 'Confirmada' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Confirmada')}
+                >
+                  <CheckCircle size={14} />
+                  Confirmada
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'En Preparación' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('En Preparación')}
                 >
                   <Package size={14} />
-                  En Proceso
+                  En Preparación
                 </button>
                 <button
                   className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`}
@@ -476,22 +534,46 @@ function OrdenesVenta() {
                 </button>
               </div>
 
-              <div className="border-l h-6 mx-2 hidden md:block"></div>
+              <div className="border-l h-6 mx-2"></div>
 
               <div className="flex gap-2">
                 <button
                   className={`btn btn-sm ${filtroPrioridad === 'Urgente' ? 'btn-danger' : 'btn-outline'}`}
                   onClick={() => setFiltroPrioridad(filtroPrioridad === 'Urgente' ? '' : 'Urgente')}
-                  title="Filtrar Urgentes"
                 >
                   Urgente
                 </button>
                 <button
                   className={`btn btn-sm ${filtroPrioridad === 'Alta' ? 'btn-warning' : 'btn-outline'}`}
                   onClick={() => setFiltroPrioridad(filtroPrioridad === 'Alta' ? '' : 'Alta')}
-                  title="Filtrar Alta"
                 >
                   Alta
+                </button>
+              </div>
+
+              <div className="border-l h-6 mx-2"></div>
+
+              <div className="flex gap-2">
+                <button
+                  className={`btn btn-sm ${filtroEstadoPago === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pendiente' ? '' : 'Pendiente')}
+                >
+                  <DollarSign size={14} />
+                  Sin Pagar
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstadoPago === 'Parcial' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Parcial' ? '' : 'Parcial')}
+                >
+                  <CreditCard size={14} />
+                  Pago Parcial
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstadoPago === 'Pagado' ? 'btn-success' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pagado' ? '' : 'Pagado')}
+                >
+                  <CheckCircle size={14} />
+                  Pagado
                 </button>
               </div>
             </div>
@@ -499,7 +581,6 @@ function OrdenesVenta() {
         </div>
       </div>
 
-      {/* Tabla con Paginación */}
       <div className="card">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
@@ -519,7 +600,6 @@ function OrdenesVenta() {
           />
         </div>
 
-        {/* Footer de Paginación */}
         {ordenesFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 

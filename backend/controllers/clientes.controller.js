@@ -126,14 +126,18 @@ export async function createCliente(req, res) {
       telefono,
       email,
       direccion_despacho,
+      limite_credito_pen,
+      limite_credito_usd,
       validar_ruc,
       estado
     } = req.body;
+    
     if (!ruc || !razon_social) {
       return res.status(400).json({ 
         error: 'ruc y razon_social son requeridos' 
       });
     }
+    
     if (validar_ruc) {
       const resultadoValidacion = await validarRUC(ruc);
       
@@ -166,8 +170,9 @@ export async function createCliente(req, res) {
 
     const result = await executeQuery(
       `INSERT INTO clientes (
-        ruc, razon_social, contacto, telefono, email, direccion_despacho, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ruc, razon_social, contacto, telefono, email, direccion_despacho,
+        limite_credito_pen, limite_credito_usd, estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ruc,
         razon_social,
@@ -175,6 +180,8 @@ export async function createCliente(req, res) {
         telefono || null,
         email || null,
         direccion_despacho || null,
+        parseFloat(limite_credito_pen || 0),
+        parseFloat(limite_credito_usd || 0),
         estado || 'Activo'
       ]
     );
@@ -207,6 +214,8 @@ export async function updateCliente(req, res) {
       telefono,
       email,
       direccion_despacho,
+      limite_credito_pen,
+      limite_credito_usd,
       estado
     } = req.body;
     
@@ -239,10 +248,23 @@ export async function updateCliente(req, res) {
         contacto = ?, 
         telefono = ?,
         email = ?, 
-        direccion_despacho = ?,  
+        direccion_despacho = ?,
+        limite_credito_pen = ?,
+        limite_credito_usd = ?,
         estado = ?
       WHERE id_cliente = ?`,
-      [ruc, razon_social, contacto, telefono, email, direccion_despacho, estado, id]
+      [
+        ruc, 
+        razon_social, 
+        contacto, 
+        telefono, 
+        email, 
+        direccion_despacho,
+        parseFloat(limite_credito_pen || 0),
+        parseFloat(limite_credito_usd || 0),
+        estado, 
+        id
+      ]
     );
     
     if (!result.success) {
@@ -385,6 +407,9 @@ export async function getHistorialOrdenesVentaCliente(req, res) {
         ov.tipo_impuesto,
         ov.porcentaje_impuesto,
         ov.orden_compra_cliente,
+        ov.monto_pagado,
+        ov.estado_pago,
+        (ov.total - ov.monto_pagado) as saldo_pendiente,
         e.nombre_completo AS comercial,
         c.numero_cotizacion,
         ov.id_cotizacion,
@@ -412,6 +437,89 @@ export async function getHistorialOrdenesVentaCliente(req, res) {
     
   } catch (error) {
     console.error('Error al obtener historial de órdenes de venta:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function getEstadoCreditoCliente(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const clienteResult = await executeQuery(`
+      SELECT 
+        id_cliente,
+        razon_social,
+        ruc,
+        limite_credito_pen,
+        limite_credito_usd,
+        credito_utilizado_pen,
+        credito_utilizado_usd
+      FROM clientes 
+      WHERE id_cliente = ?
+    `, [id]);
+    
+    if (!clienteResult.success || clienteResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cliente no encontrado'
+      });
+    }
+    
+    const cliente = clienteResult.data[0];
+    
+    const deudaPenResult = await executeQuery(`
+      SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_pen
+      FROM ordenes_venta
+      WHERE id_cliente = ?
+      AND moneda = 'PEN'
+      AND estado NOT IN ('Cancelada', 'Entregada')
+      AND estado_pago != 'Pagado'
+    `, [id]);
+    
+    const deudaUsdResult = await executeQuery(`
+      SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_usd
+      FROM ordenes_venta
+      WHERE id_cliente = ?
+      AND moneda = 'USD'
+      AND estado NOT IN ('Cancelada', 'Entregada')
+      AND estado_pago != 'Pagado'
+    `, [id]);
+    
+    const deudaPen = parseFloat(deudaPenResult.data[0]?.deuda_pen || 0);
+    const deudaUsd = parseFloat(deudaUsdResult.data[0]?.deuda_usd || 0);
+    
+    const limitePen = parseFloat(cliente.limite_credito_pen || 0);
+    const limiteUsd = parseFloat(cliente.limite_credito_usd || 0);
+    
+    const disponiblePen = limitePen - deudaPen;
+    const disponibleUsd = limiteUsd - deudaUsd;
+    
+    res.json({
+      success: true,
+      data: {
+        id_cliente: cliente.id_cliente,
+        razon_social: cliente.razon_social,
+        ruc: cliente.ruc,
+        credito_pen: {
+          limite: limitePen,
+          utilizado: deudaPen,
+          disponible: disponiblePen,
+          porcentaje_utilizado: limitePen > 0 ? (deudaPen / limitePen * 100).toFixed(2) : 0
+        },
+        credito_usd: {
+          limite: limiteUsd,
+          utilizado: deudaUsd,
+          disponible: disponibleUsd,
+          porcentaje_utilizado: limiteUsd > 0 ? (deudaUsd / limiteUsd * 100).toFixed(2) : 0
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener estado de crédito:', error);
     res.status(500).json({
       success: false,
       error: error.message

@@ -19,7 +19,8 @@ import {
   ChevronLeft,
   ChevronRight,
   DollarSign,
-  CreditCard
+  CreditCard,
+  PlayCircle
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -109,26 +110,14 @@ function OrdenesVenta() {
       setDescargandoPDF(idOrden);
       setError(null);
       
-      const response = await ordenesVentaAPI.descargarPDF(idOrden);
+      await ordenesVentaAPI.descargarPDF(idOrden);
       
-      if (response.data) {
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${numeroOrden}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        setSuccess('PDF descargado exitosamente');
-        setTimeout(() => setSuccess(null), 3000);
-      }
+      setSuccess('PDF descargado exitosamente');
+      setTimeout(() => setSuccess(null), 3000);
       
     } catch (err) {
       console.error('Error al descargar PDF:', err);
-      setError(err.response?.data?.error || 'Error al descargar PDF');
+      setError(err.message || 'Error al descargar PDF');
     } finally {
       setDescargandoPDF(null);
     }
@@ -150,20 +139,20 @@ function OrdenesVenta() {
 
   const getEstadoConfig = (estado) => {
     const configs = {
-      'Pendiente': { 
+      'En Espera': { 
         icono: Clock, 
         clase: 'badge-warning',
-        texto: 'Pendiente'
+        texto: 'En Espera'
       },
-      'Confirmada': {
-        icono: CheckCircle,
+      'En Proceso': {
+        icono: PlayCircle,
         clase: 'badge-info',
-        texto: 'Confirmada'
+        texto: 'En Proceso'
       },
-      'En Preparación': { 
+      'Atendido por Producción': { 
         icono: Package, 
-        clase: 'badge-info',
-        texto: 'En Preparación'
+        clase: 'badge-primary',
+        texto: 'Atendido'
       },
       'Despachada': { 
         icono: Truck, 
@@ -181,7 +170,7 @@ function OrdenesVenta() {
         texto: 'Cancelada'
       }
     };
-    return configs[estado] || configs['Pendiente'];
+    return configs[estado] || configs['En Espera'];
   };
 
   const getPrioridadConfig = (prioridad) => {
@@ -419,9 +408,9 @@ function OrdenesVenta() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Pendientes</p>
-                  <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes || 0}</h3>
-                  <p className="text-xs text-muted">Por iniciar</p>
+                  <p className="text-sm text-muted">En Espera</p>
+                  <h3 className="text-2xl font-bold text-warning">{estadisticas.en_espera || 0}</h3>
+                  <p className="text-xs text-muted">Por producir</p>
                 </div>
                 <div className="p-3 bg-yellow-100 rounded-lg">
                   <Clock size={24} className="text-warning" />
@@ -444,7 +433,7 @@ function OrdenesVenta() {
                   )}
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
-                  <Package size={24} className="text-info" />
+                  <PlayCircle size={24} className="text-info" />
                 </div>
               </div>
             </div>
@@ -498,25 +487,25 @@ function OrdenesVenta() {
                   Todos
                 </button>
                 <button
-                  className={`btn btn-sm ${filtroEstado === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Pendiente')}
+                  className={`btn btn-sm ${filtroEstado === 'En Espera' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('En Espera')}
                 >
                   <Clock size={14} />
-                  Pendiente
+                  En Espera
                 </button>
                 <button
-                  className={`btn btn-sm ${filtroEstado === 'Confirmada' ? 'btn-info' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Confirmada')}
+                  className={`btn btn-sm ${filtroEstado === 'En Proceso' ? 'btn-info' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('En Proceso')}
                 >
-                  <CheckCircle size={14} />
-                  Confirmada
+                  <PlayCircle size={14} />
+                  En Proceso
                 </button>
                 <button
-                  className={`btn btn-sm ${filtroEstado === 'En Preparación' ? 'btn-info' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('En Preparación')}
+                  className={`btn btn-sm ${filtroEstado === 'Atendido por Producción' ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Atendido por Producción')}
                 >
                   <Package size={14} />
-                  En Preparación
+                  Atendido
                 </button>
                 <button
                   className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`}

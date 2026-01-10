@@ -3,7 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
   Calculator, FileText, Building,
-  Calendar, RefreshCw, AlertCircle, Info
+  Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -30,6 +30,8 @@ function NuevaCotizacion() {
   const [loadingTC, setLoadingTC] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [cotizacionConvertida, setCotizacionConvertida] = useState(false);
+  const [idOrdenVenta, setIdOrdenVenta] = useState(null);
   
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -47,7 +49,7 @@ function NuevaCotizacion() {
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
     id_comercial: user?.id_empleado || '',
-    fecha_emision: new Date().toLocaleDateString('en-CA'), // <-- NUEVA LÍNEA
+    fecha_emision: new Date().toLocaleDateString('en-CA'),
     moneda: 'PEN',
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
@@ -140,8 +142,13 @@ function NuevaCotizacion() {
       if (response.data.success) {
         const cotizacion = response.data.data;
         
+        // Verificar si está convertida
+        if (modoEdicion && cotizacion.convertida_venta) {
+          setCotizacionConvertida(true);
+          setIdOrdenVenta(cotizacion.id_orden_venta);
+        }
+        
         const fechaEmision = modoDuplicar ? new Date().toLocaleDateString('en-CA') : cotizacion.fecha_emision.split('T')[0];
-
         
         setFormCabecera({
           id_cliente: cotizacion.id_cliente,
@@ -303,6 +310,11 @@ function NuevaCotizacion() {
     e.preventDefault();
     setError(null);
     
+    if (cotizacionConvertida) {
+      setError('No se puede editar una cotización que ya ha sido convertida a Orden de Venta');
+      return;
+    }
+    
     if (!formCabecera.id_cliente) {
       setError('Debe seleccionar un cliente');
       return;
@@ -322,39 +334,32 @@ function NuevaCotizacion() {
       setLoading(true);
       
       const payload = {
-  id_cliente: parseInt(formCabecera.id_cliente),
-  id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
-  fecha_emision: formCabecera.fecha_emision,
-  moneda: formCabecera.moneda,
-  tipo_impuesto: formCabecera.tipo_impuesto,
-  porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto),
-  tipo_cambio: parseFloat(formCabecera.tipo_cambio),
-  plazo_pago: formCabecera.plazo_pago,
-  forma_pago: formCabecera.forma_pago || null,
-  direccion_entrega: formCabecera.direccion_entrega || null,
-  lugar_entrega: formCabecera.lugar_entrega || null,
-  plazo_entrega: formCabecera.plazo_entrega || null,
-  validez_dias: parseInt(formCabecera.validez_dias) || 7,
-  observaciones: formCabecera.observaciones || null,
-  detalle: detalle.map((item, index) => ({
-    id_producto: item.id_producto,
-    cantidad: parseFloat(item.cantidad),
-    precio_unitario: parseFloat(item.precio_unitario),
-    descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
-    orden: index + 1
-  }))
-};
+        id_cliente: parseInt(formCabecera.id_cliente),
+        id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
+        fecha_emision: formCabecera.fecha_emision,
+        moneda: formCabecera.moneda,
+        tipo_impuesto: formCabecera.tipo_impuesto,
+        porcentaje_impuesto: parseFloat(formCabecera.porcentaje_impuesto),
+        tipo_cambio: parseFloat(formCabecera.tipo_cambio),
+        plazo_pago: formCabecera.plazo_pago,
+        forma_pago: formCabecera.forma_pago || null,
+        direccion_entrega: formCabecera.direccion_entrega || null,
+        lugar_entrega: formCabecera.lugar_entrega || null,
+        plazo_entrega: formCabecera.plazo_entrega || null,
+        validez_dias: parseInt(formCabecera.validez_dias) || 7,
+        observaciones: formCabecera.observaciones || null,
+        detalle: detalle.map((item, index) => ({
+          id_producto: item.id_producto,
+          cantidad: parseFloat(item.cantidad),
+          precio_unitario: parseFloat(item.precio_unitario),
+          descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
+          orden: index + 1
+        }))
+      };
 
-console.log('PAYLOAD FRONTEND:', {
-  tipo_impuesto: formCabecera.tipo_impuesto,
-  porcentaje_impuesto_form: formCabecera.porcentaje_impuesto,
-  payload_tipo: payload.tipo_impuesto,
-  payload_porcentaje: payload.porcentaje_impuesto
-});
-
-let response;
-if (modoEdicion) {
-  response = await cotizacionesAPI.update(id, payload);
+      let response;
+      if (modoEdicion) {
+        response = await cotizacionesAPI.update(id, payload);
         if (response.data.success) {
           setSuccess('Cotización actualizada exitosamente');
           setTimeout(() => navigate(`/ventas/cotizaciones/${id}`), 1500);
@@ -407,6 +412,12 @@ if (modoEdicion) {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FileText size={32} />
             {tituloFormulario}
+            {cotizacionConvertida && (
+              <span className="badge badge-primary ml-2">
+                <Lock size={14} className="inline mr-1" />
+                Convertida
+              </span>
+            )}
           </h1>
           <p className="text-muted">{subtituloFormulario}</p>
         </div>
@@ -414,6 +425,25 @@ if (modoEdicion) {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {cotizacionConvertida && (
+        <Alert 
+          type="info" 
+          message={
+            <div className="flex items-center justify-between">
+              <span>Esta cotización ya fue convertida a Orden de Venta y no puede ser editada.</span>
+              {idOrdenVenta && (
+                <button
+                  className="btn btn-sm btn-primary ml-4"
+                  onClick={() => navigate(`/ventas/ordenes/${idOrdenVenta}`)}
+                >
+                  Ver Orden de Venta <ExternalLink size={14} className="inline ml-1" />
+                </button>
+              )}
+            </div>
+          }
+        />
+      )}
 
       <form onSubmit={handleSubmit}>
         {/* CLIENTE */}
@@ -438,13 +468,23 @@ if (modoEdicion) {
                       <p className="font-bold">{clienteSeleccionado.ruc}</p>
                     </div>
                   </div>
-                  <button type="button" className="btn btn-sm btn-outline" onClick={() => setClienteSeleccionado(null)}>
+                  <button 
+                    type="button" 
+                    className="btn btn-sm btn-outline" 
+                    onClick={() => setClienteSeleccionado(null)}
+                    disabled={cotizacionConvertida}
+                  >
                     Cambiar
                   </button>
                 </div>
               </div>
             ) : (
-              <button type="button" className="btn btn-primary btn-lg w-full" onClick={() => setModalClienteOpen(true)}>
+              <button 
+                type="button" 
+                className="btn btn-primary btn-lg w-full" 
+                onClick={() => setModalClienteOpen(true)}
+                disabled={cotizacionConvertida}
+              >
                 <Search size={20} />
                 Seleccionar Cliente
               </button>
@@ -469,6 +509,7 @@ if (modoEdicion) {
                   className="form-input"
                   value={formCabecera.fecha_emision}
                   onChange={(e) => setFormCabecera({ ...formCabecera, fecha_emision: e.target.value })}
+                  disabled={cotizacionConvertida}
                   required
                 />
               </div>
@@ -481,6 +522,7 @@ if (modoEdicion) {
                   value={formCabecera.validez_dias}
                   onChange={(e) => setFormCabecera({ ...formCabecera, validez_dias: e.target.value })}
                   min="1"
+                  disabled={cotizacionConvertida}
                   required
                 />
               </div>
@@ -505,6 +547,7 @@ if (modoEdicion) {
                   className="form-select"
                   value={formCabecera.moneda}
                   onChange={(e) => setFormCabecera({ ...formCabecera, moneda: e.target.value })}
+                  disabled={cotizacionConvertida}
                   required
                 >
                   <option value="PEN">Soles (PEN)</option>
@@ -518,6 +561,7 @@ if (modoEdicion) {
                   className="form-select"
                   value={formCabecera.tipo_impuesto}
                   onChange={(e) => handleTipoImpuestoChange(e.target.value)}
+                  disabled={cotizacionConvertida}
                   required
                 >
                   {TIPOS_IMPUESTO.map(tipo => (
@@ -537,8 +581,14 @@ if (modoEdicion) {
                       onChange={(e) => setFormCabecera({ ...formCabecera, tipo_cambio: e.target.value })}
                       step="0.0001"
                       min="0"
+                      disabled={cotizacionConvertida}
                     />
-                    <button type="button" className="btn btn-primary" onClick={obtenerTipoCambio} disabled={loadingTC}>
+                    <button 
+                      type="button" 
+                      className="btn btn-primary" 
+                      onClick={obtenerTipoCambio} 
+                      disabled={loadingTC || cotizacionConvertida}
+                    >
                       {loadingTC ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} />}
                     </button>
                   </div>
@@ -558,6 +608,7 @@ if (modoEdicion) {
                   value={formCabecera.plazo_pago}
                   onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
                   placeholder="Ej: Contado, 30 días, 60 días"
+                  disabled={cotizacionConvertida}
                   required
                 />
                 <small className="text-warning block mt-1">Define el riesgo de la venta</small>
@@ -571,6 +622,7 @@ if (modoEdicion) {
                   value={formCabecera.forma_pago}
                   onChange={(e) => setFormCabecera({ ...formCabecera, forma_pago: e.target.value })}
                   placeholder="Ej: Transferencia, Efectivo"
+                  disabled={cotizacionConvertida}
                 />
               </div>
               
@@ -582,6 +634,7 @@ if (modoEdicion) {
                   value={formCabecera.plazo_entrega}
                   onChange={(e) => setFormCabecera({ ...formCabecera, plazo_entrega: e.target.value })}
                   placeholder="Ej: 15 días"
+                  disabled={cotizacionConvertida}
                 />
               </div>
               
@@ -591,6 +644,7 @@ if (modoEdicion) {
                   className="form-select"
                   value={formCabecera.id_comercial}
                   onChange={(e) => setFormCabecera({ ...formCabecera, id_comercial: e.target.value })}
+                  disabled={cotizacionConvertida}
                 >
                   <option value="">Seleccione...</option>
                   {comerciales.map(c => (
@@ -613,6 +667,7 @@ if (modoEdicion) {
                 value={formCabecera.lugar_entrega}
                 onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
                 placeholder="Dirección de entrega"
+                disabled={cotizacionConvertida}
               />
             </div>
             
@@ -624,6 +679,7 @@ if (modoEdicion) {
                 onChange={(e) => setFormCabecera({ ...formCabecera, observaciones: e.target.value })}
                 rows={3}
                 placeholder="Observaciones adicionales..."
+                disabled={cotizacionConvertida}
               />
             </div>
           </div>
@@ -637,7 +693,12 @@ if (modoEdicion) {
                 <Calculator size={20} />
                 Productos *
               </h2>
-              <button type="button" className="btn btn-primary" onClick={() => setModalProductoOpen(true)}>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={() => setModalProductoOpen(true)}
+                disabled={cotizacionConvertida}
+              >
                 <Plus size={20} />
                 Agregar Producto
               </button>
@@ -674,6 +735,7 @@ if (modoEdicion) {
                               onChange={(e) => handleCantidadChange(index, e.target.value)}
                               min="0.01"
                               step="0.01"
+                              disabled={cotizacionConvertida}
                               required
                             />
                           </td>
@@ -686,6 +748,7 @@ if (modoEdicion) {
                               onChange={(e) => handlePrecioChange(index, e.target.value)}
                               min="0"
                               step="0.01"
+                              disabled={cotizacionConvertida}
                               required
                             />
                           </td>
@@ -698,11 +761,17 @@ if (modoEdicion) {
                               min="0"
                               max="100"
                               step="0.01"
+                              disabled={cotizacionConvertida}
                             />
                           </td>
                           <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
                           <td>
-                            <button type="button" className="btn btn-sm btn-danger" onClick={() => handleEliminarItem(index)}>
+                            <button 
+                              type="button" 
+                              className="btn btn-sm btn-danger" 
+                              onClick={() => handleEliminarItem(index)}
+                              disabled={cotizacionConvertida}
+                            >
                               <Trash2 size={14} />
                             </button>
                           </td>
@@ -716,7 +785,12 @@ if (modoEdicion) {
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
                 <Calculator size={64} className="mx-auto text-muted mb-4" style={{ opacity: 0.3 }} />
                 <p className="text-muted font-bold mb-2">No hay productos agregados</p>
-                <button type="button" className="btn btn-primary" onClick={() => setModalProductoOpen(true)}>
+                <button 
+                  type="button" 
+                  className="btn btn-primary" 
+                  onClick={() => setModalProductoOpen(true)}
+                  disabled={cotizacionConvertida}
+                >
                   <Plus size={20} />
                   Agregar Primer Producto
                 </button>
@@ -756,14 +830,16 @@ if (modoEdicion) {
           <button type="button" className="btn btn-outline" onClick={() => navigate('/ventas/cotizaciones')}>
             Cancelar
           </button>
-          <button
-            type="submit"
-            className="btn btn-primary btn-lg"
-            disabled={loading || !clienteSeleccionado || detalle.length === 0}
-          >
-            <Save size={20} />
-            {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotización' : 'Guardar Cotización'}
-          </button>
+          {!cotizacionConvertida && (
+            <button
+              type="submit"
+              className="btn btn-primary btn-lg"
+              disabled={loading || !clienteSeleccionado || detalle.length === 0}
+            >
+              <Save size={20} />
+              {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotización' : 'Guardar Cotización'}
+            </button>
+          )}
         </div>
       </form>
 

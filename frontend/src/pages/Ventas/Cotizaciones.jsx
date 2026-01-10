@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, Download, Filter, FileText, Search,
   ChevronLeft, ChevronRight, RefreshCw, Calendar,
-  TrendingUp, Users, DollarSign, Edit, Copy
+  TrendingUp, Users, DollarSign, Edit, Copy, ExternalLink, CheckCircle2
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -115,24 +115,40 @@ function Cotizaciones() {
   };
 
   const handleDuplicar = (id, e) => {
-  e.stopPropagation();
-  navigate(`/ventas/cotizaciones/${id}/duplicar`);
-};
+    e.stopPropagation();
+    navigate(`/ventas/cotizaciones/${id}/duplicar`);
+  };
 
   const columns = [
-  {
-    header: 'N° Cotización',
-    accessor: 'numero_cotizacion',
-    width: '140px',
-    render: (value, row) => (
-      <div>
-        <span className="font-mono font-bold text-primary">{value}</span>
-        <div className="text-xs text-muted">
-          {row.fecha_emision ? new Date(row.fecha_emision).toLocaleDateString('es-PE', { timeZone: 'America/Lima' }) : '-'}
+    {
+      header: 'N° Cotización',
+      accessor: 'numero_cotizacion',
+      width: '160px',
+      render: (value, row) => (
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-bold text-primary">{value}</span>
+            {row.convertida_venta && (
+              <CheckCircle2 size={16} className="text-success" title="Convertida a Orden de Venta" />
+            )}
+          </div>
+          <div className="text-xs text-muted">
+            {row.fecha_emision ? new Date(row.fecha_emision).toLocaleDateString('es-PE', { timeZone: 'America/Lima' }) : '-'}
+          </div>
+          {row.convertida_venta && row.id_orden_venta && (
+            <button
+              className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/ventas/ordenes/${row.id_orden_venta}`);
+              }}
+            >
+              Ver Orden de Venta <ExternalLink size={12} />
+            </button>
+          )}
         </div>
-      </div>
-    )
-  },
+      )
+    },
     {
       header: 'Cliente',
       accessor: 'cliente',
@@ -187,7 +203,10 @@ function Cotizaciones() {
         <div className="flex gap-1 justify-center">
           <button
             className="btn btn-sm btn-primary"
-            onClick={() => navigate(`/ventas/cotizaciones/${value}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/ventas/cotizaciones/${value}`);
+            }}
             title="Ver detalle"
           >
             <Eye size={14} />
@@ -198,8 +217,8 @@ function Cotizaciones() {
               e.stopPropagation();
               navigate(`/ventas/cotizaciones/${value}/editar`);
             }}
-            title="Editar"
-            disabled={row.estado === 'Convertida'}
+            title={row.convertida_venta ? "No se puede editar una cotización convertida" : "Editar"}
+            disabled={row.convertida_venta}
           >
             <Edit size={14} />
           </button>
@@ -305,7 +324,7 @@ function Cotizaciones() {
                 <p className="text-xs text-muted uppercase font-semibold">Convertidas</p>
                 <p className="text-2xl font-bold text-primary">{estadisticas.convertidas}</p>
               </div>
-              <Users size={32} className="text-primary opacity-20" />
+              <CheckCircle2 size={32} className="text-primary opacity-20" />
             </div>
           </div>
         </div>

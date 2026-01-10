@@ -5,6 +5,7 @@ import {
   getOrdenById,
   getConsumoMaterialesOrden,
   createOrden,
+  asignarRecetaYSupervisor,
   iniciarProduccion,
   pausarProduccion,
   reanudarProduccion,
@@ -20,6 +21,7 @@ import {
 } from '../controllers/ordenes-produccion.controller.js';
 
 const router = express.Router();
+
 router.get('/', getAllOrdenes);
 router.post('/', createOrden);
 
@@ -32,6 +34,8 @@ router.get('/:id/pdf', generarPDFOrdenController);
 
 router.get('/:id/registros-parciales', getRegistrosParcialesOrden);
 router.get('/:id/analisis-consumo', getAnalisisConsumoOrden);
+
+router.put('/:id/asignar-receta-supervisor', asignarRecetaYSupervisor);
 
 router.post('/:id/iniciar', iniciarProduccion);
 router.post('/:id/pausar', pausarProduccion);

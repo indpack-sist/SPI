@@ -329,6 +329,8 @@ export const ordenesProduccionAPI = {
   getConsumoMateriales: (id) => api.get(`/produccion/ordenes/${id}/consumo-materiales`),
   create: (data) => api.post('/produccion/ordenes', data),
   
+  asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
+  
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
   reanudar: (id) => api.post(`/produccion/ordenes/${id}/reanudar`),
@@ -440,16 +442,13 @@ export const ordenesVentaAPI = {
   getById: (id) => api.get(`/ordenes-venta/${id}`),
   create: (data) => api.post('/ordenes-venta', data),
   
-  convertirCotizacion: (id, data) => api.post(`/ordenes-venta/cotizacion/${id}/convertir`, data),
+  crearOrdenProduccion: (id, data) => api.post(`/ordenes-venta/${id}/crear-orden-produccion`, data),
 
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 
     api.put(`/ordenes-venta/${id}/estado`, { estado, fecha_entrega_real }),
 
   actualizarPrioridad: (id, prioridad) => 
     api.put(`/ordenes-venta/${id}/prioridad`, { prioridad }),
-
-  actualizarProgreso: (id, data) => 
-    api.put(`/ordenes-venta/${id}/progreso`, data),
 
   registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data),
   getPagos: (id) => api.get(`/ordenes-venta/${id}/pagos`),
@@ -642,6 +641,7 @@ export const ordenesCompraAPI = {
     }, 100);
   }
 };
+
 export const cuentasPagoAPI = {
   getAll: (params) => api.get('/cuentas-pago', { params }),
   getById: (id) => api.get(`/cuentas-pago/${id}`),
@@ -649,10 +649,12 @@ export const cuentasPagoAPI = {
   update: (id, data) => api.put(`/cuentas-pago/${id}`, data),
   delete: (id) => api.delete(`/cuentas-pago/${id}`)
 };
+
 export const pagosCobranzasAPI = {
   getResumen: (params) => api.get('/pagos-cobranzas/resumen', { params }),
   getAll: (params) => api.get('/pagos-cobranzas', { params })
 };
+
 api.dashboard = dashboard;
 
 export { api };

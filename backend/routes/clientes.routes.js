@@ -8,7 +8,8 @@ import {
   updateCliente,
   deleteCliente,
   getHistorialCotizacionesCliente,
-  getHistorialOrdenesVentaCliente
+  getHistorialOrdenesVentaCliente,
+  getEstadoCreditoCliente
 } from '../controllers/clientes.controller.js';
 
 const router = express.Router();
@@ -19,6 +20,7 @@ router.get('/validar-ruc/:ruc', validarRUCCliente);
 router.get('/:id', getClienteById);
 router.get('/:id/cotizaciones', getHistorialCotizacionesCliente);
 router.get('/:id/ordenes-venta', getHistorialOrdenesVentaCliente);
+router.get('/:id/credito', getEstadoCreditoCliente);
 
 router.post('/', createCliente);
 router.put('/:id', updateCliente);

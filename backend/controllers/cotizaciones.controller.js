@@ -494,7 +494,7 @@ export async function updateCotizacion(req, res) {
         igv = ?,
         total = ?
       WHERE id_cotizacion = ?
-    `, [
+    `, [+
       id_cliente,
       comercialFinal,
       fechaEmisionFinal,

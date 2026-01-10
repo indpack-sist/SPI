@@ -649,6 +649,10 @@ export const cuentasPagoAPI = {
   update: (id, data) => api.put(`/cuentas-pago/${id}`, data),
   delete: (id) => api.delete(`/cuentas-pago/${id}`)
 };
+export const pagosCobranzasAPI = {
+  getResumen: (params) => api.get('/pagos-cobranzas/resumen', { params }),
+  getAll: (params) => api.get('/pagos-cobranzas', { params })
+};
 api.dashboard = dashboard;
 
 export { api };

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Building2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Building2, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { clientesAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
@@ -7,6 +8,7 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 
 function Clientes() {
+  const navigate = useNavigate();
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -212,10 +214,17 @@ function Clientes() {
     {
       header: 'Acciones',
       accessor: 'id_cliente',
-      width: '120px',
+      width: '160px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-2 justify-center">
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => navigate(`/clientes/${value}`)}
+            title="Ver historial"
+          >
+            <Eye size={14} />
+          </button>
           <button
             className="btn btn-sm btn-outline"
             onClick={() => abrirModal(row)}
@@ -294,7 +303,6 @@ function Clientes() {
         size="lg"
       >
         <form onSubmit={handleSubmit}>
-          {/* Campo RUC con validación */}
           <div className="form-group">
             <label className="form-label">RUC *</label>
             <div className="flex gap-2">
@@ -333,7 +341,6 @@ function Clientes() {
               </button>
             </div>
             
-            {/* Indicador de validación */}
             {rucValidado === true && (
               <div className="mt-2 flex items-center gap-2 text-sm text-success">
                 <CheckCircle size={16} />
@@ -349,7 +356,6 @@ function Clientes() {
             )}
           </div>
 
-          {/* Mostrar datos de SUNAT si están disponibles */}
           {datosSUNAT && (
             <div className="alert alert-info mb-3">
               <strong>Datos de SUNAT:</strong>

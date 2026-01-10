@@ -210,7 +210,6 @@ export async function updateCliente(req, res) {
       estado
     } = req.body;
     
-    // Verificar si existe
     const checkResult = await executeQuery(
       'SELECT * FROM clientes WHERE id_cliente = ?',
       [id]
@@ -287,5 +286,135 @@ export async function deleteCliente(req, res) {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+}
+
+export async function getHistorialCotizacionesCliente(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const clienteCheck = await executeQuery(
+      'SELECT id_cliente FROM clientes WHERE id_cliente = ?',
+      [id]
+    );
+    
+    if (clienteCheck.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cliente no encontrado'
+      });
+    }
+    
+    const result = await executeQuery(`
+      SELECT 
+        c.id_cotizacion,
+        c.numero_cotizacion,
+        DATE_FORMAT(c.fecha_emision, '%Y-%m-%d') as fecha_emision,
+        DATE_FORMAT(c.fecha_vencimiento, '%Y-%m-%d') as fecha_vencimiento,
+        c.estado,
+        c.prioridad,
+        c.subtotal,
+        c.igv,
+        c.total,
+        c.moneda,
+        c.tipo_impuesto,
+        c.porcentaje_impuesto,
+        e.nombre_completo AS comercial,
+        c.id_orden_venta,
+        ov.numero_orden AS numero_orden_venta,
+        (SELECT COUNT(*) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) AS total_items,
+        c.fecha_creacion
+      FROM cotizaciones c
+      LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
+      LEFT JOIN ordenes_venta ov ON c.id_orden_venta = ov.id_orden_venta
+      WHERE c.id_cliente = ?
+      ORDER BY c.fecha_creacion DESC
+    `, [id]);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener historial de cotizaciones:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function getHistorialOrdenesVentaCliente(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const clienteCheck = await executeQuery(
+      'SELECT id_cliente FROM clientes WHERE id_cliente = ?',
+      [id]
+    );
+    
+    if (clienteCheck.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cliente no encontrado'
+      });
+    }
+    
+    const result = await executeQuery(`
+      SELECT 
+        ov.id_orden_venta,
+        ov.numero_orden,
+        DATE_FORMAT(ov.fecha_emision, '%Y-%m-%d') as fecha_emision,
+        DATE_FORMAT(ov.fecha_entrega_estimada, '%Y-%m-%d') as fecha_entrega_estimada,
+        DATE_FORMAT(ov.fecha_entrega_real, '%Y-%m-%d') as fecha_entrega_real,
+        ov.estado,
+        ov.prioridad,
+        ov.subtotal,
+        ov.igv,
+        ov.total,
+        ov.moneda,
+        ov.tipo_impuesto,
+        ov.porcentaje_impuesto,
+        ov.orden_compra_cliente,
+        e.nombre_completo AS comercial,
+        c.numero_cotizacion,
+        ov.id_cotizacion,
+        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
+        ov.fecha_creacion
+      FROM ordenes_venta ov
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_cliente = ?
+      ORDER BY ov.fecha_creacion DESC
+    `, [id]);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener historial de órdenes de venta:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }

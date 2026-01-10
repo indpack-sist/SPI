@@ -119,6 +119,8 @@ export const clientesAPI = {
   create: (data) => api.post('/clientes', data),
   update: (id, data) => api.put(`/clientes/${id}`, data),
   delete: (id) => api.delete(`/clientes/${id}`),
+  getHistorialCotizaciones: (id) => api.get(`/clientes/${id}/cotizaciones`),
+  getHistorialOrdenesVenta: (id) => api.get(`/clientes/${id}/ordenes-venta`)
 };
 
 export const productosAPI = {

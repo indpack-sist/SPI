@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Edit, Download, Check, FileText, Calendar,
-  Building, Clock, ShoppingCart, AlertCircle,
+  ArrowLeft, Edit, Download, FileText, Calendar,
+  Building, Clock, AlertCircle,
   CheckCircle, XCircle, Calculator, Percent, TrendingUp,
-  AlertTriangle, User, CreditCard, Package, MapPin, Copy
+  AlertTriangle, User, CreditCard, Package, MapPin, Copy, ExternalLink, Lock
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -22,7 +22,6 @@ function DetalleCotizacion() {
   const [success, setSuccess] = useState(null);
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
-  const [modalConvertirOpen, setModalConvertirOpen] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -74,14 +73,24 @@ function DetalleCotizacion() {
       const response = await cotizacionesAPI.actualizarEstado(id, estado);
       
       if (response.data.success) {
-        setCotizacion({ ...cotizacion, estado });
-        setSuccess(`Estado actualizado a ${estado}`);
-        setModalEstadoOpen(false);
+        // Si se aprobó y convirtió, redirigir a la orden de venta
+        if (estado === 'Aprobada' && response.data.data?.id_orden_venta) {
+          setSuccess(`Cotización convertida exitosamente a ${response.data.data.numero_orden}`);
+          setModalEstadoOpen(false);
+          
+          // Redirigir después de 1.5 segundos
+          setTimeout(() => {
+            navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`);
+          }, 1500);
+        } else {
+          setCotizacion({ ...cotizacion, estado });
+          setSuccess(`Estado actualizado a ${estado}`);
+          setModalEstadoOpen(false);
+        }
       }
       
     } catch (err) {
       setError(err.response?.data?.error || 'Error al cambiar estado');
-    } finally {
       setLoading(false);
     }
   };
@@ -104,10 +113,6 @@ function DetalleCotizacion() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleConvertirVenta = async () => {
-    navigate(`/ventas/ordenes/nueva?cotizacion=${id}`);
   };
 
   const formatearFecha = (fecha) => {
@@ -157,7 +162,7 @@ function DetalleCotizacion() {
         badge: 'badge-danger'
       },
       'Convertida': { 
-        icono: Check, 
+        icono: CheckCircle, 
         clase: 'bg-primary/10 text-primary border-primary/20',
         badge: 'badge-primary'
       },
@@ -252,6 +257,7 @@ function DetalleCotizacion() {
   const diasVencimiento = cotizacion.fecha_vencimiento 
     ? Math.ceil((new Date(cotizacion.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
+  const estaConvertida = cotizacion.convertida_venta || cotizacion.estado === 'Convertida';
 
   return (
     <div className="p-6">
@@ -269,10 +275,16 @@ function DetalleCotizacion() {
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <FileText size={32} className="text-primary" />
                 {cotizacion.numero_cotizacion}
+                {estaConvertida && (
+                  <span className="badge badge-primary ml-2">
+                    <Lock size={14} className="inline mr-1" />
+                    Convertida
+                  </span>
+                )}
               </h1>
               <p className="text-sm text-muted">
                 Emitida el {formatearFecha(cotizacion.fecha_emision)}
-                {diasVencimiento !== null && diasVencimiento > 0 && (
+                {diasVencimiento !== null && diasVencimiento > 0 && !estaConvertida && (
                   <span className="ml-2 text-warning">
                     • Vence en {diasVencimiento} día(s)
                   </span>
@@ -290,7 +302,7 @@ function DetalleCotizacion() {
               <Copy size={18} /> Duplicar
             </button>
             
-            {cotizacion.estado !== 'Convertida' && cotizacion.estado !== 'Vencida' && (
+            {!estaConvertida && cotizacion.estado !== 'Vencida' && (
               <>
                 <button 
                   className="btn btn-secondary" 
@@ -302,12 +314,6 @@ function DetalleCotizacion() {
                 <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
                   <Edit size={18} /> Estado
                 </button>
-                
-                {cotizacion.estado === 'Aprobada' && (
-                  <button className="btn btn-success" onClick={() => setModalConvertirOpen(true)}>
-                    <ShoppingCart size={18} /> Convertir a Orden
-                  </button>
-                )}
               </>
             )}
           </div>
@@ -316,6 +322,27 @@ function DetalleCotizacion() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {/* Alert de Conversión */}
+      {estaConvertida && cotizacion.id_orden_venta && (
+        <Alert 
+          type="info"
+          message={
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={20} />
+                <span>Esta cotización fue convertida a Orden de Venta</span>
+              </div>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => navigate(`/ventas/ordenes/${cotizacion.id_orden_venta}`)}
+              >
+                Ver Orden de Venta <ExternalLink size={14} className="inline ml-1" />
+              </button>
+            </div>
+          }
+        />
+      )}
 
       {/* Badge de Estado Grande */}
       <div className={`card border-2 ${estadoConfig.clase} mb-6`}>
@@ -340,7 +367,8 @@ function DetalleCotizacion() {
               <p className="text-sm uppercase font-semibold opacity-70 mb-2">Prioridad</p>
               <button 
                 className={`badge ${cotizacion.prioridad === 'Urgente' ? 'badge-danger' : cotizacion.prioridad === 'Alta' ? 'badge-warning' : 'badge-info'} text-lg px-4 py-2`}
-                onClick={() => cotizacion.estado !== 'Convertida' && cotizacion.estado !== 'Vencida' && setModalPrioridadOpen(true)}
+                onClick={() => !estaConvertida && cotizacion.estado !== 'Vencida' && setModalPrioridadOpen(true)}
+                disabled={estaConvertida || cotizacion.estado === 'Vencida'}
               >
                 {cotizacion.prioridad}
               </button>
@@ -490,7 +518,7 @@ function DetalleCotizacion() {
           <Table
             columns={columns}
             data={cotizacion.detalle || []}
-            emptyMessage="No hay productos en esta cotizacion"
+            emptyMessage="No hay productos en esta cotización"
           />
         </div>
       </div>
@@ -520,19 +548,19 @@ function DetalleCotizacion() {
           <div className="card-body">
             <div className="space-y-3">
               <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted">Sub Total:</span>
-                  <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted">
-                    {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
-                  </span>
-                  <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
-                </div>
-                <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
-                  <span className="font-bold text-xl">TOTAL:</span>
-                  <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
-                </div>
+                <span className="text-muted">Sub Total:</span>
+                <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-muted">
+                  {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
+                </span>
+                <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
+              </div>
+              <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
+                <span className="font-bold text-xl">TOTAL:</span>
+                <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
+              </div>
               
               {/* Conversión de moneda */}
               {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
@@ -567,6 +595,17 @@ function DetalleCotizacion() {
             <p className="text-sm text-muted">Estado actual:</p>
             <p className="font-bold text-lg">{cotizacion.estado}</p>
           </div>
+
+          {/* Mensaje informativo para Aprobada */}
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle size={20} className="text-success mt-0.5" />
+              <div className="text-sm text-green-900">
+                <p className="font-medium mb-1">Nota importante:</p>
+                <p>Al cambiar el estado a <strong>Aprobada</strong>, se creará automáticamente una Orden de Venta y será redirigido a ella.</p>
+              </div>
+            </div>
+          </div>
           
           <div className="space-y-2">
             {['Pendiente', 'Enviada', 'Aprobada', 'Rechazada'].map(estado => {
@@ -577,17 +616,20 @@ function DetalleCotizacion() {
                   key={estado}
                   className={`btn btn-outline w-full justify-start ${cotizacion.estado === estado ? 'opacity-50' : ''}`}
                   onClick={() => handleCambiarEstado(estado)}
-                  disabled={cotizacion.estado === estado}
+                  disabled={cotizacion.estado === estado || loading}
                 >
                   <Icono size={18} className="mr-2" />
                   {estado}
+                  {estado === 'Aprobada' && (
+                    <span className="ml-2 text-xs text-success">→ Convertir a OV</span>
+                  )}
                 </button>
               );
             })}
           </div>
           
           <div className="flex gap-2 justify-end pt-4 border-t">
-            <button className="btn btn-outline" onClick={() => setModalEstadoOpen(false)}>
+            <button className="btn btn-outline" onClick={() => setModalEstadoOpen(false)} disabled={loading}>
               Cancelar
             </button>
           </div>
@@ -622,52 +664,6 @@ function DetalleCotizacion() {
           <div className="flex gap-2 justify-end pt-4 border-t">
             <button className="btn btn-outline" onClick={() => setModalPrioridadOpen(false)}>
               Cancelar
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={modalConvertirOpen}
-        onClose={() => setModalConvertirOpen(false)}
-        title="Convertir a Orden de Venta"
-        size="md"
-      >
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle size={24} className="text-info flex-shrink-0 mt-1" />
-              <div>
-                <p className="font-medium text-blue-900">¿Convertir esta cotización a Orden de Venta?</p>
-                <p className="text-sm text-blue-700 mt-2">
-                  Se creará una nueva orden con todos los datos de esta cotización.
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <h4 className="font-semibold mb-3">Resumen:</h4>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted">Cliente:</span>
-              <span className="font-medium">{cotizacion.cliente}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted">Total:</span>
-              <span className="font-bold text-primary text-lg">{formatearMoneda(cotizacion.total)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted">Productos:</span>
-              <span className="font-medium">{cotizacion.detalle?.length || 0} item(s)</span>
-            </div>
-          </div>
-          
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <button className="btn btn-outline" onClick={() => setModalConvertirOpen(false)}>
-              Cancelar
-            </button>
-            <button className="btn btn-success" onClick={handleConvertirVenta}>
-              <Check size={20} /> Confirmar Conversión
             </button>
           </div>
         </div>

@@ -4,7 +4,8 @@ import {
   ArrowLeft, Play, Pause, Square, CheckCircle, XCircle, 
   Star, Package, Clock, Beaker, FileText, ClipboardList, 
   BarChart, DollarSign, Info, AlertTriangle, Trash2, Plus,
-  Layers, TrendingUp, TrendingDown, Minus, Edit
+  Layers, TrendingUp, TrendingDown, Minus, Edit, ShoppingCart,
+  UserCog, AlertCircle
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -23,17 +24,24 @@ function OrdenDetalle() {
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
   
-  // Modal finalizar (ahora con consumo real)
+  // Modal asignar receta/supervisor (para OPs desde ventas)
+  const [modalAsignar, setModalAsignar] = useState(false);
+  const [recetaSeleccionada, setRecetaSeleccionada] = useState('');
+  const [supervisorSeleccionado, setSupervisorSeleccionado] = useState('');
+  const [recetasDisponibles, setRecetasDisponibles] = useState([]);
+  const [supervisoresDisponibles, setSupervisoresDisponibles] = useState([]);
+  
+  // Modal finalizar
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadProducida, setCantidadProducida] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
   
-  // Modal registro parcial NUEVO
+  // Modal registro parcial
   const [modalParcial, setModalParcial] = useState(false);
   const [cantidadParcial, setCantidadParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
   
-  // Consumo real de insumos NUEVO
+  // Consumo real de insumos
   const [consumoRealInsumos, setConsumoRealInsumos] = useState([]);
   const [mostrarConsumoReal, setMostrarConsumoReal] = useState(false);
   
@@ -89,7 +97,7 @@ function OrdenDetalle() {
       insumo: item.insumo,
       unidad_medida: item.unidad_medida,
       cantidad_planificada: parseFloat(item.cantidad_requerida),
-      cantidad_real: parseFloat(item.cantidad_requerida), // Inicialmente igual
+      cantidad_real: parseFloat(item.cantidad_requerida),
       costo_unitario: parseFloat(item.costo_unitario)
     }));
     setConsumoRealInsumos(consumo);
@@ -111,7 +119,6 @@ function OrdenDetalle() {
     }, 0);
   };
 
-  // Helper para procesar éxito parcial
   const procesarExitoParcial = (response) => {
     setSuccess(`Producción parcial registrada: ${response.data.data.cantidad_registrada} unidades. Total acumulado: ${response.data.data.cantidad_total_producida}`);
     setModalParcial(false);
@@ -122,7 +129,6 @@ function OrdenDetalle() {
     cargarDatos();
   };
 
-  // NUEVO: Handler para registro parcial con validación de exceso
   const handleRegistroParcial = async (e) => {
     e.preventDefault();
     
@@ -135,7 +141,6 @@ function OrdenDetalle() {
         observaciones: observacionesParcial
       };
       
-      // Si mostró consumo real, incluirlo
       if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
         payload.consumo_real = consumoRealInsumos.map(item => ({
           id_insumo: item.id_insumo,
@@ -144,23 +149,19 @@ function OrdenDetalle() {
       }
       
       try {
-        // Intento normal
         const response = await ordenesProduccionAPI.registrarParcial(id, payload);
         procesarExitoParcial(response);
       } catch (err) {
-        // Capturar error 409 (Conflicto / Exceso)
         if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
           const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea confirmar el registro con este exceso?`);
           
           if (confirmar) {
-            // Reintentar con flag de confirmación
             payload.confirmar_exceso = true;
             const retryResponse = await ordenesProduccionAPI.registrarParcial(id, payload);
             procesarExitoParcial(retryResponse);
             return;
           }
         }
-        // Si no es error 409 o el usuario canceló, lanzar el error original
         throw err;
       }
       
@@ -172,7 +173,6 @@ function OrdenDetalle() {
     }
   };
 
-  // Helper para procesar éxito al finalizar
   const procesarExitoFinalizar = (mermasValidas) => {
     const mensajeExito = mostrarConsumoReal
       ? `Producción finalizada con ajustes de consumo real. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`
@@ -187,7 +187,6 @@ function OrdenDetalle() {
     cargarDatos();
   };
 
-  // MODIFICADO: Handler para finalizar con consumo real y validación de exceso
   const handleFinalizar = async (e) => {
     e.preventDefault();
     
@@ -211,7 +210,6 @@ function OrdenDetalle() {
         }))
       };
       
-      // Si mostró consumo real, usar endpoint especial o agregar al payload
       if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
         payload.consumo_real = consumoRealInsumos.map(item => ({
           id_insumo: item.id_insumo,
@@ -219,7 +217,6 @@ function OrdenDetalle() {
         }));
       }
 
-      // Función auxiliar para llamar a la API correcta
       const ejecutarFinalizacion = async (data) => {
         if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
           return await ordenesProduccionAPI.finalizarConConsumoReal(id, data);
@@ -229,11 +226,9 @@ function OrdenDetalle() {
       };
       
       try {
-        // Intento normal
         await ejecutarFinalizacion(payload);
         procesarExitoFinalizar(mermasValidas);
       } catch (err) {
-        // Capturar error 409 (Exceso)
         if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
           const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea finalizar la orden con este exceso?`);
           
@@ -250,6 +245,31 @@ function OrdenDetalle() {
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.error || 'Error al finalizar producción';
       setError(errorMsg);
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleAsignarRecetaSupervisor = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setProcesando(true);
+      setError(null);
+      
+      const payload = {
+        id_receta_producto: parseInt(recetaSeleccionada),
+        id_supervisor: parseInt(supervisorSeleccionado)
+      };
+      
+      await ordenesProduccionAPI.asignarRecetaYSupervisor(id, payload);
+      
+      setSuccess('Receta y supervisor asignados exitosamente. La orden está lista para iniciar.');
+      setModalAsignar(false);
+      cargarDatos();
+      
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al asignar receta y supervisor');
     } finally {
       setProcesando(false);
     }
@@ -361,6 +381,7 @@ function OrdenDetalle() {
 
   const getBadgeEstado = (estado) => {
     const badges = {
+      'Pendiente Asignación': 'badge-warning',
       'Pendiente': 'badge-secondary',
       'En Curso': 'badge-primary',
       'En Pausa': 'badge-warning',
@@ -396,32 +417,70 @@ function OrdenDetalle() {
     );
   }
 
+  const puedeAsignar = orden.estado === 'Pendiente Asignación';
   const puedeIniciar = orden.estado === 'Pendiente';
   const puedePausar = orden.estado === 'En Curso';
   const puedeReanudar = orden.estado === 'En Pausa';
   const puedeFinalizar = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
   const puedeCancelar = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
-  const puedeRegistrarParcial = orden.estado === 'En Curso' || orden.estado === 'En Pausa'; // NUEVO
+  const puedeRegistrarParcial = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
   const esRecetaProvisional = !orden.id_receta_producto;
   const lotesPlanificados = calcularLotesPlanificados();
   const lotesProducidos = calcularLotesProducidos();
-  const tieneReceta = orden.id_receta_producto !== null; // NUEVO
+  const tieneReceta = orden.id_receta_producto !== null;
+  const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
 
   return (
     <div>
       <button className="btn btn-outline mb-4" onClick={() => navigate('/produccion/ordenes')}>
         <ArrowLeft size={20} className="mr-2" />
         Volver a Órdenes
-      </button>
+        </button>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {/* ALERTA ORIGEN ORDEN VENTA */}
+      {desdeOrdenVenta && (
+        <div className="card border-l-4 border-info bg-blue-50 mb-4">
+          <div className="card-body">
+            <div className="flex items-center gap-3">
+              <ShoppingCart size={24} className="text-info" />
+              <div>
+                <p className="font-medium text-blue-900 flex items-center gap-2">
+                  Orden de Producción generada desde Orden de Venta
+                  {orden.numero_orden_venta && (
+                    <span className="badge badge-info">{orden.numero_orden_venta}</span>
+                  )}
+                </p>
+                {orden.id_orden_venta && (
+                  <button
+                    className="text-sm text-blue-700 underline hover:text-blue-900 mt-1"
+                    onClick={() => navigate(`/ventas/ordenes/${orden.id_orden_venta}`)}
+                  >
+                    Ver Orden de Venta →
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="card-title text-2xl font-bold">Orden de Producción: {orden.numero_orden}</h1>
           <div className="flex gap-2 items-center mt-2">
             <span className={`badge ${getBadgeEstado(orden.estado)}`}>{orden.estado}</span>
+            {desdeOrdenVenta ? (
+              <span className="badge badge-info flex items-center gap-1">
+                <ShoppingCart size={14} /> Desde Orden Venta
+              </span>
+            ) : (
+              <span className="badge badge-secondary flex items-center gap-1">
+                <UserCog size={14} /> Creada por Supervisor
+              </span>
+            )}
             {esRecetaProvisional && (
               <span className="badge badge-info flex items-center gap-1">
                 <FileText size={14} /> Receta Provisional
@@ -436,6 +495,18 @@ function OrdenDetalle() {
         </div>
 
         <div className="flex gap-2">
+          {puedeAsignar && (
+            <button 
+              className="btn btn-warning" 
+              onClick={() => {
+                // Cargar recetas y supervisores disponibles
+                setModalAsignar(true);
+              }}
+              disabled={procesando}
+            >
+              <AlertCircle size={18} className="mr-2" /> Asignar Receta y Supervisor
+            </button>
+          )}
           {puedeIniciar && (
             <button className="btn btn-success" onClick={handleIniciar} disabled={procesando}>
               <Play size={18} className="mr-2" /> Iniciar Producción
@@ -451,7 +522,6 @@ function OrdenDetalle() {
               <Play size={18} className="mr-2" /> Reanudar
             </button>
           )}
-          {/* NUEVO BOTÓN: Registrar Parcial */}
           {puedeRegistrarParcial && (
             <button 
               className="btn btn-info" 
@@ -500,7 +570,7 @@ function OrdenDetalle() {
         </div>
       </div>
 
-      {/* INFORMACIÓN DE LA RECETA UTILIZADA */}
+      {/* INFORMACIÓN DE LA RECETA */}
       {(orden.nombre_receta || esRecetaProvisional) && (
         <div className="card mb-4" style={{ 
           background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%)',
@@ -578,12 +648,18 @@ function OrdenDetalle() {
             </div>
             <div>
               <p className="text-xs text-muted uppercase font-semibold">Supervisor</p>
-              <p>{orden.supervisor}</p>
+              <p>{orden.supervisor || '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted uppercase font-semibold">Fecha de Creación</p>
               <p>{formatearFecha(orden.fecha_creacion)}</p>
             </div>
+            {desdeOrdenVenta && orden.numero_orden_venta && (
+              <div>
+                <p className="text-xs text-muted uppercase font-semibold">Orden de Venta</p>
+                <p className="font-mono text-info">{orden.numero_orden_venta}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -660,7 +736,7 @@ function OrdenDetalle() {
         </div>
       </div>
 
-      {/* NUEVO: HISTORIAL DE REGISTROS PARCIALES */}
+      {/* HISTORIAL REGISTROS PARCIALES */}
       {registrosParciales.length > 0 && (
         <div className="card mb-4">
           <div className="card-header flex items-center gap-2">
@@ -707,7 +783,7 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* MATERIALES CONSUMIDOS CON ANÁLISIS */}
+      {/* MATERIALES CONSUMIDOS */}
       {consumoMateriales.length > 0 && (
         <div className="card mb-4">
           <div className="card-header flex items-center gap-2">
@@ -790,9 +866,79 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* ============================================ */}
-      {/* MODAL: Registrar Producción Parcial - NUEVO */}
-      {/* ============================================ */}
+      {/* MODAL: Asignar Receta y Supervisor */}
+      <Modal
+        isOpen={modalAsignar}
+        onClose={() => setModalAsignar(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <AlertCircle className="text-warning" /> Asignar Receta y Supervisor
+          </span>
+        }
+        size="lg"
+      >
+        <form onSubmit={handleAsignarRecetaSupervisor}>
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4 flex gap-3">
+            <AlertCircle className="text-yellow-500 shrink-0" size={20} />
+            <div className="text-sm text-yellow-700">
+              <p><strong>Acción Requerida:</strong> Esta orden fue generada desde una Orden de Venta.</p>
+              <p className="mt-1">Debe asignar una receta y supervisor antes de poder iniciar la producción.</p>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Receta de Producción *</label>
+            <select
+              className="form-select"
+              value={recetaSeleccionada}
+              onChange={(e) => setRecetaSeleccionada(e.target.value)}
+              required
+            >
+              <option value="">Seleccione una receta...</option>
+              {/* TODO: Cargar recetas del producto */}
+            </select>
+            <small className="text-muted block mt-1">
+              Seleccione la receta que se utilizará para producir este producto
+            </small>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Supervisor Responsable *</label>
+            <select
+              className="form-select"
+              value={supervisorSeleccionado}
+              onChange={(e) => setSupervisorSeleccionado(e.target.value)}
+              required
+            >
+              <option value="">Seleccione un supervisor...</option>
+              {/* TODO: Cargar supervisores disponibles */}
+            </select>
+            <small className="text-muted block mt-1">
+              Supervisor que se encargará de esta orden de producción
+            </small>
+          </div>
+
+          <div className="flex gap-2 justify-end mt-6">
+            <button 
+              type="button" 
+              className="btn btn-outline" 
+              onClick={() => setModalAsignar(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-warning"
+              disabled={procesando || !recetaSeleccionada || !supervisorSeleccionado}
+            >
+              {procesando ? 'Procesando...' : 'Asignar y Continuar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL: Registrar Parcial */}
       <Modal
         isOpen={modalParcial}
         onClose={() => setModalParcial(false)}
@@ -849,7 +995,6 @@ function OrdenDetalle() {
             />
           </div>
 
-          {/* Ajuste de consumo real para registro parcial */}
           {tieneReceta && consumoRealInsumos.length > 0 && (
             <div className="border-t border-gray-200 pt-4 mt-4">
               <div className="flex items-center justify-between mb-3">
@@ -919,9 +1064,7 @@ function OrdenDetalle() {
         </form>
       </Modal>
 
-      {/* ============================================ */}
-      {/* MODAL: Finalizar Producción CON CONSUMO REAL */}
-      {/* ============================================ */}
+      {/* MODAL: Finalizar */}
       <Modal
         isOpen={modalFinalizar}
         onClose={() => setModalFinalizar(false)}
@@ -973,7 +1116,6 @@ function OrdenDetalle() {
             </div>
           )}
 
-          {/* NUEVO: AJUSTE DE CONSUMO REAL DE INSUMOS */}
           {tieneReceta && consumoRealInsumos.length > 0 && (
             <div className="border-t border-gray-200 pt-4 mt-4">
               <div className="flex items-center justify-between mb-3">
@@ -1049,7 +1191,6 @@ function OrdenDetalle() {
                     })}
                   </div>
 
-                  {/* Resumen de diferencias */}
                   <div className="bg-white p-4 rounded border-2 border-blue-200 mt-3">
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
@@ -1085,7 +1226,6 @@ function OrdenDetalle() {
             />
           </div>
 
-          {/* SECCIÓN DE MERMAS */}
           <div className="border-t border-gray-200 pt-4 mt-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">

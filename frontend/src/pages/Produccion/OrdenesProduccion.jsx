@@ -22,7 +22,9 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  List
+  List,
+  ShoppingCart,
+  UserCog
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -39,6 +41,7 @@ function OrdenesProduccion() {
   const [success, setSuccess] = useState(null);
   
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroOrigen, setFiltroOrigen] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
@@ -47,11 +50,11 @@ function OrdenesProduccion() {
 
   useEffect(() => {
     cargarDatos();
-  }, [filtroEstado, fechaInicio, fechaFin]);
+  }, [filtroEstado, filtroOrigen, fechaInicio, fechaFin]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtroEstado, busqueda, fechaInicio, fechaFin]);
+  }, [filtroEstado, filtroOrigen, busqueda, fechaInicio, fechaFin]);
 
   const cargarDatos = async () => {
     try {
@@ -60,6 +63,7 @@ function OrdenesProduccion() {
       
       const params = {};
       if (filtroEstado) params.estado = filtroEstado;
+      if (filtroOrigen) params.origen_tipo = filtroOrigen;
       if (fechaInicio) params.fecha_inicio = fechaInicio;
       if (fechaFin) params.fecha_fin = fechaFin;
       
@@ -92,16 +96,21 @@ function OrdenesProduccion() {
   const calcularEstadisticas = () => {
     const total = ordenes.length;
     const pendientes = ordenes.filter(o => o.estado === 'Pendiente').length;
+    const pendientesAsignacion = ordenes.filter(o => o.estado === 'Pendiente Asignación').length;
     const enCurso = ordenes.filter(o => o.estado === 'En Curso').length;
     const finalizadas = ordenes.filter(o => o.estado === 'Finalizada').length;
     const canceladas = ordenes.filter(o => o.estado === 'Cancelada').length;
+    
+    const desdeVentas = ordenes.filter(o => o.origen_tipo === 'Orden de Venta').length;
+    const desdeSupervisor = ordenes.filter(o => o.origen_tipo === 'Supervisor' || !o.origen_tipo).length;
     
     const costoTotal = ordenes.reduce((sum, o) => sum + parseFloat(o.costo_materiales || 0), 0);
     const cantidadTotal = ordenes.reduce((sum, o) => sum + parseFloat(o.cantidad_planificada || 0), 0);
     const productosDiferentes = new Set(ordenes.map(o => o.id_producto_terminado)).size;
     
     return {
-      total, pendientes, enCurso, finalizadas, canceladas,
+      total, pendientes, pendientesAsignacion, enCurso, finalizadas, canceladas,
+      desdeVentas, desdeSupervisor,
       costoTotal, cantidadTotal, productosDiferentes,
       porcentajeCompletado: total > 0 ? ((finalizadas / total) * 100).toFixed(1) : 0
     };
@@ -114,7 +123,8 @@ function OrdenesProduccion() {
       orden.numero_orden?.toLowerCase().includes(searchTerm) ||
       orden.producto?.toLowerCase().includes(searchTerm) ||
       orden.codigo_producto?.toLowerCase().includes(searchTerm) ||
-      orden.supervisor?.toLowerCase().includes(searchTerm)
+      orden.supervisor?.toLowerCase().includes(searchTerm) ||
+      orden.numero_orden_venta?.toLowerCase().includes(searchTerm)
     );
   });
 
@@ -136,6 +146,7 @@ function OrdenesProduccion() {
 
   const getEstadoConfig = (estado) => {
     const configs = {
+      'Pendiente Asignación': { icono: AlertCircle, color: 'text-warning', bg: 'badge-warning', texto: 'Pend. Asignación' },
       'Pendiente': { icono: Clock, color: 'text-warning', bg: 'badge-warning', texto: 'Pendiente' },
       'En Curso': { icono: Factory, color: 'text-primary', bg: 'badge-primary', texto: 'En Curso' },
       'En Pausa': { icono: Pause, color: 'text-info', bg: 'badge-info', texto: 'En Pausa' },
@@ -150,32 +161,36 @@ function OrdenesProduccion() {
   
   const handleDescargarPDF = async (id) => {
     try {
-      const response = await ordenesProduccionAPI.generarPDF(id);
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `orden_produccion_${id}.pdf`;
-      link.click();
-      window.URL.revokeObjectURL(url);
+      await ordenesProduccionAPI.generarPDF(id);
       setSuccess('PDF descargado exitosamente');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError('Error al descargar PDF');
     }
   };
 
   const limpiarFiltros = () => {
-    setFiltroEstado(''); setBusqueda(''); setFechaInicio(''); setFechaFin('');
+    setFiltroEstado(''); 
+    setFiltroOrigen('');
+    setBusqueda(''); 
+    setFechaInicio(''); 
+    setFechaFin('');
   };
 
   const columns = [
     {
       header: 'N° Orden',
       accessor: 'numero_orden',
-      width: '120px',
+      width: '140px',
       render: (value, row) => (
         <div>
           <span className="font-mono font-bold text-primary">{value}</span>
+          {row.numero_orden_venta && (
+            <div className="text-xs text-muted mt-1 flex items-center gap-1">
+              <ShoppingCart size={10} />
+              De: {row.numero_orden_venta}
+            </div>
+          )}
           {row.es_manual === 1 && (
             <div className="badge badge-warning text-xs mt-1">Manual</div>
           )}
@@ -203,6 +218,28 @@ function OrdenesProduccion() {
           )}
         </div>
       )
+    },
+    {
+      header: 'Origen',
+      accessor: 'origen_tipo',
+      width: '120px',
+      align: 'center',
+      render: (value) => {
+        if (value === 'Orden de Venta') {
+          return (
+            <span className="badge badge-info flex items-center gap-1 justify-center">
+              <ShoppingCart size={12} />
+              Orden Venta
+            </span>
+          );
+        }
+        return (
+          <span className="badge badge-secondary flex items-center gap-1 justify-center">
+            <UserCog size={12} />
+            Supervisor
+          </span>
+        );
+      }
     },
     {
       header: 'Progreso',
@@ -256,7 +293,7 @@ function OrdenesProduccion() {
       render: (value) => (
         <div className="flex items-center gap-2">
           <Users size={14} className="text-muted" />
-          <span className="text-sm truncate">{value}</span>
+          <span className="text-sm truncate">{value || '-'}</span>
         </div>
       )
     },
@@ -273,7 +310,7 @@ function OrdenesProduccion() {
       header: 'Estado',
       accessor: 'estado',
       align: 'center',
-      width: '130px',
+      width: '140px',
       render: (value) => {
         const config = getEstadoConfig(value);
         const Icono = config.icono;
@@ -344,37 +381,93 @@ function OrdenesProduccion() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="stats-grid mb-6">
-        <div className="stat-card total">
-          <div className="stat-icon"><Factory size={24} /></div>
-          <div className="stat-content">
-            <p className="stat-label">Total</p>
-            <h2 className="stat-value">{stats.total}</h2>
-            <p className="stat-sublabel">Órdenes generadas</p>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="card">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted">Total</p>
+                <h3 className="text-2xl font-bold">{stats.total}</h3>
+                <p className="text-xs text-muted">{stats.productosDiferentes} productos</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Factory size={24} className="text-primary" />
+              </div>
+            </div>
           </div>
         </div>
-        <div className="stat-card pendientes">
-          <div className="stat-icon"><Clock size={24} /></div>
-          <div className="stat-content">
-            <p className="stat-label">Pendientes</p>
-            <h2 className="stat-value">{stats.pendientes}</h2>
-            <p className="stat-sublabel">Por iniciar</p>
+
+        <div className="card border-l-4 border-warning">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted">Pendientes</p>
+                <h3 className="text-2xl font-bold text-warning">{stats.pendientes}</h3>
+                {stats.pendientesAsignacion > 0 && (
+                  <p className="text-xs text-danger flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {stats.pendientesAsignacion} por asignar
+                  </p>
+                )}
+              </div>
+              <div className="p-3 bg-yellow-100 rounded-lg">
+                <Clock size={24} className="text-warning" />
+              </div>
+            </div>
           </div>
         </div>
-        <div className="stat-card en-curso">
-          <div className="stat-icon"><TrendingUp size={24} /></div>
-          <div className="stat-content">
-            <p className="stat-label">En Curso</p>
-            <h2 className="stat-value">{stats.enCurso}</h2>
-            <p className="stat-sublabel">En proceso</p>
+
+        <div className="card border-l-4 border-primary">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted">En Curso</p>
+                <h3 className="text-2xl font-bold text-primary">{stats.enCurso}</h3>
+                <p className="text-xs text-muted">En proceso</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <TrendingUp size={24} className="text-primary" />
+              </div>
+            </div>
           </div>
         </div>
-        <div className="stat-card finalizadas">
-          <div className="stat-icon"><CheckCircle size={24} /></div>
-          <div className="stat-content">
-            <p className="stat-label">Finalizadas</p>
-            <h2 className="stat-value">{stats.finalizadas}</h2>
-            <p className="stat-sublabel">{stats.porcentajeCompletado}% completado</p>
+
+        <div className="card border-l-4 border-success">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted">Finalizadas</p>
+                <h3 className="text-2xl font-bold text-success">{stats.finalizadas}</h3>
+                <p className="text-xs text-success">{stats.porcentajeCompletado}%</p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <CheckCircle size={24} className="text-success" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card border-l-4 border-info">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted">Por Origen</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-1">
+                    <ShoppingCart size={12} className="text-info" />
+                    <span className="text-sm font-bold">{stats.desdeVentas}</span>
+                  </div>
+                  <div className="border-l h-4"></div>
+                  <div className="flex items-center gap-1">
+                    <UserCog size={12} className="text-muted" />
+                    <span className="text-sm font-bold">{stats.desdeSupervisor}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Package size={24} className="text-info" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -384,35 +477,54 @@ function OrdenesProduccion() {
           <h3 className="card-title text-lg flex items-center gap-2">
             <Filter size={18} /> Filtros
           </h3>
-          {(filtroEstado || busqueda || fechaInicio || fechaFin) && (
+          {(filtroEstado || filtroOrigen || busqueda || fechaInicio || fechaFin) && (
             <button className="btn btn-sm btn-outline text-danger border-danger" onClick={limpiarFiltros}>
               <XCircle size={14} /> Limpiar
             </button>
           )}
         </div>
         <div className="card-body">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div className="search-input-wrapper">
               <Search size={18} className="search-icon" />
               <input
                 type="text"
                 className="form-input search-input"
-                placeholder="Buscar orden, producto..."
+                placeholder="Buscar orden, producto, supervisor..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
             
-            <div className="flex gap-2 flex-wrap lg:col-span-3 items-center">
-               {['Pendiente', 'En Curso', 'Finalizada', 'Cancelada'].map(est => (
-                 <button
-                   key={est}
-                   className={`btn btn-sm ${filtroEstado === est ? 'btn-primary' : 'btn-outline'}`}
-                   onClick={() => setFiltroEstado(filtroEstado === est ? '' : est)}
-                 >
-                   {est}
-                 </button>
-               ))}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-muted">Estado:</span>
+              {['Pendiente Asignación', 'Pendiente', 'En Curso', 'Finalizada', 'Cancelada'].map(est => (
+                <button
+                  key={est}
+                  className={`btn btn-sm ${filtroEstado === est ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado(filtroEstado === est ? '' : est)}
+                >
+                  {est}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-muted">Origen:</span>
+              <button
+                className={`btn btn-sm ${filtroOrigen === 'Orden de Venta' ? 'btn-info' : 'btn-outline'}`}
+                onClick={() => setFiltroOrigen(filtroOrigen === 'Orden de Venta' ? '' : 'Orden de Venta')}
+              >
+                <ShoppingCart size={14} />
+                Desde Órdenes Venta
+              </button>
+              <button
+                className={`btn btn-sm ${filtroOrigen === 'Supervisor' ? 'btn-secondary' : 'btn-outline'}`}
+                onClick={() => setFiltroOrigen(filtroOrigen === 'Supervisor' ? '' : 'Supervisor')}
+              >
+                <UserCog size={14} />
+                Creadas por Supervisor
+              </button>
             </div>
           </div>
         </div>

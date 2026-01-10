@@ -1,4 +1,5 @@
 import { executeQuery } from '../config/database.js';
+import pool from '../config/database.js';
 
 export async function getAllCotizaciones(req, res) {
   try {
@@ -21,6 +22,8 @@ export async function getAllCotizaciones(req, res) {
         c.tipo_cambio,
         c.observaciones,
         c.fecha_creacion,
+        c.convertida_venta,
+        c.id_orden_venta,
         cl.id_cliente,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
@@ -258,15 +261,6 @@ export async function createCotizacion(req, res) {
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
     
-    console.log('DEBUG CREATE:', {
-      tipo_impuesto: tipoImpuestoFinal,
-      porcentaje_impuesto_recibido: porcentaje_impuesto,
-      porcentaje_calculado: porcentaje,
-      subtotal,
-      igv,
-      total
-    });
-    
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
         numero_cotizacion,
@@ -462,15 +456,6 @@ export async function updateCotizacion(req, res) {
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
 
-    console.log('DEBUG UPDATE:', {
-      tipo_impuesto: tipoImpuestoFinal,
-      porcentaje_impuesto_recibido: porcentaje_impuesto,
-      porcentaje_calculado: porcentaje,
-      subtotal,
-      igv,
-      total
-    });
-
     const updateResult = await executeQuery(`
       UPDATE cotizaciones 
       SET 
@@ -494,7 +479,7 @@ export async function updateCotizacion(req, res) {
         igv = ?,
         total = ?
       WHERE id_cotizacion = ?
-    `, [+
+    `, [
       id_cliente,
       comercialFinal,
       fechaEmisionFinal,
@@ -564,6 +549,7 @@ export async function updateCotizacion(req, res) {
     });
   }
 }
+
 export async function duplicarCotizacion(req, res) {
   try {
     const { id } = req.params;
@@ -717,6 +703,8 @@ export async function duplicarCotizacion(req, res) {
 }
 
 export async function actualizarEstadoCotizacion(req, res) {
+  const connection = await pool.getConnection();
+  
   try {
     const { id } = req.params;
     const { estado } = req.body;
@@ -729,31 +717,161 @@ export async function actualizarEstadoCotizacion(req, res) {
         error: 'Estado no válido'
       });
     }
-    
-    const result = await executeQuery(`
-      UPDATE cotizaciones 
-      SET estado = ? 
-      WHERE id_cotizacion = ?
-    `, [estado, id]);
-    
-    if (!result.success) {
-      return res.status(500).json({ 
+
+    await connection.beginTransaction();
+
+    // Obtener cotización actual
+    const [cotizaciones] = await connection.query(`
+      SELECT * FROM cotizaciones WHERE id_cotizacion = ?
+    `, [id]);
+
+    if (cotizaciones.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
         success: false,
-        error: result.error 
+        error: 'Cotización no encontrada'
+      });
+    }
+
+    const cotizacion = cotizaciones[0];
+    const estadoAnterior = cotizacion.estado;
+
+    // Si cambia a "Aprobada" y no está ya convertida, crear Orden de Venta
+    if (estado === 'Aprobada' && estadoAnterior !== 'Aprobada' && !cotizacion.convertida_venta) {
+      
+      // Generar número de orden
+      const [ultimaOrden] = await connection.query(`
+        SELECT numero_orden FROM ordenes_venta 
+        ORDER BY id_orden_venta DESC LIMIT 1
+      `);
+
+      let numeroSecuencia = 1;
+      if (ultimaOrden.length > 0) {
+        const match = ultimaOrden[0].numero_orden.match(/(\d+)$/);
+        if (match) {
+          numeroSecuencia = parseInt(match[1]) + 1;
+        }
+      }
+
+      const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
+
+      // Crear Orden de Venta
+      const [ordenResult] = await connection.query(`
+        INSERT INTO ordenes_venta (
+          numero_orden,
+          id_cotizacion,
+          id_cliente,
+          id_comercial,
+          fecha_emision,
+          prioridad,
+          moneda,
+          tipo_impuesto,
+          porcentaje_impuesto,
+          tipo_cambio,
+          subtotal,
+          igv,
+          total,
+          plazo_pago,
+          forma_pago,
+          direccion_entrega,
+          lugar_entrega,
+          observaciones,
+          id_registrado_por,
+          estado
+        ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+      `, [
+        numeroOrden,
+        cotizacion.id_cotizacion,
+        cotizacion.id_cliente,
+        cotizacion.id_comercial,
+        cotizacion.prioridad || 'Media',
+        cotizacion.moneda || 'PEN',
+        cotizacion.tipo_impuesto || 'IGV',
+        cotizacion.porcentaje_impuesto || 18.00,
+        cotizacion.tipo_cambio || 1.0000,
+        cotizacion.subtotal,
+        cotizacion.igv,
+        cotizacion.total,
+        cotizacion.plazo_pago,
+        cotizacion.forma_pago,
+        cotizacion.direccion_entrega,
+        cotizacion.lugar_entrega,
+        cotizacion.observaciones,
+        req.user?.id_empleado || cotizacion.id_comercial
+      ]);
+
+      const idOrdenVenta = ordenResult.insertId;
+
+      // Copiar detalle de cotización a orden de venta
+      const [detalles] = await connection.query(`
+        SELECT * FROM detalle_cotizacion WHERE id_cotizacion = ? ORDER BY orden
+      `, [id]);
+
+      for (const detalle of detalles) {
+        await connection.query(`
+          INSERT INTO detalle_orden_venta (
+            id_orden_venta,
+            id_producto,
+            cantidad,
+            precio_unitario,
+            descuento_porcentaje,
+            orden
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          idOrdenVenta,
+          detalle.id_producto,
+          detalle.cantidad,
+          detalle.precio_unitario,
+          detalle.descuento_porcentaje || 0,
+          detalle.orden
+        ]);
+      }
+
+      // Actualizar cotización con referencia a la orden
+      await connection.query(`
+        UPDATE cotizaciones 
+        SET estado = 'Convertida',
+            convertida_venta = 1,
+            id_orden_venta = ?
+        WHERE id_cotizacion = ?
+      `, [idOrdenVenta, id]);
+
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: `Cotización aprobada y convertida a Orden de Venta ${numeroOrden}`,
+        data: {
+          id_orden_venta: idOrdenVenta,
+          numero_orden: numeroOrden
+        }
+      });
+
+    } else {
+      // Actualización normal de estado sin conversión
+      await connection.query(`
+        UPDATE cotizaciones 
+        SET estado = ? 
+        WHERE id_cotizacion = ?
+      `, [estado, id]);
+
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: 'Estado actualizado exitosamente'
       });
     }
     
-    res.json({
-      success: true,
-      message: 'Estado actualizado exitosamente'
-    });
-    
   } catch (error) {
+    await connection.rollback();
     console.error('Error al actualizar estado:', error);
     res.status(500).json({
       success: false,
       error: error.message
     });
+  } finally {
+    connection.release();
   }
 }
 

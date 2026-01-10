@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search, Calculator,
   ShoppingCart, Building, Calendar, DollarSign, MapPin,
@@ -9,14 +9,14 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import { 
-  ordenesVentaAPI, cotizacionesAPI, clientesAPI, 
+  ordenesVentaAPI, clientesAPI, 
   productosAPI, empleadosAPI 
 } from '../../config/api';
 
 function NuevaOrdenVenta() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const idCotizacion = searchParams.get('cotizacion');
+  const { id } = useParams();
+  const modoEdicion = !!id;
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -33,7 +33,6 @@ function NuevaOrdenVenta() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
   
   const [formCabecera, setFormCabecera] = useState({
-    id_cotizacion: idCotizacion || '',
     id_cliente: '',
     id_comercial: '',
     fecha_emision: new Date().toISOString().split('T')[0],
@@ -55,7 +54,6 @@ function NuevaOrdenVenta() {
   });
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
-  const [cotizacionOrigen, setCotizacionOrigen] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
 
@@ -64,14 +62,8 @@ function NuevaOrdenVenta() {
   }, []);
 
   useEffect(() => {
-    if (idCotizacion && clientes.length > 0 && productos.length > 0) {
-      cargarCotizacion(idCotizacion);
-    }
-  }, [idCotizacion, clientes.length, productos.length]);
-
-  useEffect(() => {
     calcularTotales();
-  }, [detalle, formCabecera.porcentaje_impuesto]);
+  }, [detalle, formCabecera.porcentaje_impuesto, formCabecera.tipo_impuesto]);
 
   const cargarCatalogos = async () => {
     try {
@@ -98,105 +90,6 @@ function NuevaOrdenVenta() {
     } catch (err) {
       console.error('Error al cargar catálogos:', err);
       setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const cargarCotizacion = async (id) => {
-    try {
-      setLoading(true);
-      console.log('🔄 Cargando cotización:', id);
-      
-      const response = await cotizacionesAPI.getById(id);
-      
-      if (response.data.success) {
-        const cotizacion = response.data.data;
-        console.log('✅ Cotización cargada:', cotizacion);
-        setCotizacionOrigen(cotizacion);
-        
-        const cliente = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
-        console.log('🔍 Cliente encontrado:', cliente);
-        
-        if (cliente) {
-          setClienteSeleccionado(cliente);
-        } else {
-          console.warn('⚠️ Cliente no encontrado en catálogo');
-        }
-        
-        setFormCabecera(prev => ({
-          ...prev,
-          id_cotizacion: id,
-          id_cliente: cotizacion.id_cliente || '',
-          id_comercial: cotizacion.id_comercial || '',
-          moneda: cotizacion.moneda || 'PEN',
-          tipo_cambio: parseFloat(cotizacion.tipo_cambio || 1),
-          tipo_impuesto: cotizacion.tipo_impuesto || 'IGV',
-          porcentaje_impuesto: parseFloat(cotizacion.porcentaje_impuesto || 18),
-          plazo_pago: cotizacion.plazo_pago || '',
-          forma_pago: cotizacion.forma_pago || '',
-          lugar_entrega: cotizacion.lugar_entrega || '',
-          direccion_entrega: cotizacion.direccion_entrega || cotizacion.direccion_cliente || cliente?.direccion_despacho || '',
-          ciudad_entrega: cotizacion.ciudad_entrega || cliente?.ciudad || '',
-          contacto_entrega: cliente?.contacto || '',
-          telefono_entrega: cliente?.telefono || '',
-          observaciones: cotizacion.observaciones || '',
-          orden_compra_cliente: cotizacion.orden_compra_cliente || ''
-        }));
-        
-        console.log('📋 Formulario actualizado');
-        
-        if (cotizacion.detalle && cotizacion.detalle.length > 0) {
-          console.log(`📦 Cargando ${cotizacion.detalle.length} productos`);
-          
-          const detalleConvertido = cotizacion.detalle.map((item, idx) => {
-            const producto = productos.find(p => p.id_producto === item.id_producto);
-            
-            if (!producto) {
-              console.warn(`⚠️ Producto ${item.id_producto} no encontrado en catálogo`);
-            }
-            
-            const cantidad = parseFloat(item.cantidad || 0);
-            const stockActual = parseFloat(producto?.stock_actual || 0);
-            const precioUnitario = parseFloat(item.precio_unitario || 0);
-            const descuento = parseFloat(item.descuento_porcentaje || 0);
-            
-            const valorVenta = cantidad * precioUnitario;
-            const descuentoMonto = valorVenta * (descuento / 100);
-            const subtotal = valorVenta - descuentoMonto;
-            
-            return {
-              id_producto: item.id_producto,
-              codigo_producto: item.codigo_producto || producto?.codigo || '',
-              producto: item.producto || producto?.nombre || 'Producto no encontrado',
-              unidad_medida: item.unidad_medida || producto?.unidad_medida || 'UND',
-              cantidad: cantidad,
-              precio_unitario: precioUnitario,
-              descuento_porcentaje: descuento,
-              stock_actual: stockActual,
-              requiere_produccion: cantidad > stockActual,
-              cantidad_producida: 0,
-              cantidad_despachada: 0,
-              subtotal: subtotal
-            };
-          });
-          
-          console.log('✅ Detalle convertido:', detalleConvertido);
-          setDetalle(detalleConvertido);
-        } else {
-          console.warn('⚠️ Cotización sin detalle');
-        }
-        
-        setSuccess('Cotización cargada exitosamente');
-        setTimeout(() => setSuccess(null), 3000);
-        
-      } else {
-        throw new Error(response.data.error || 'Error al cargar cotización');
-      }
-      
-    } catch (err) {
-      console.error('❌ Error al cargar cotización:', err);
-      setError('Error al cargar cotización: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -233,8 +126,6 @@ function NuevaOrdenVenta() {
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual,
       requiere_produccion: producto.stock_actual < 1,
-      cantidad_producida: 0,
-      cantidad_despachada: 0,
       subtotal: producto.precio_venta || 0
     };
     
@@ -284,7 +175,14 @@ function NuevaOrdenVenta() {
 
   const calcularTotales = () => {
     const subtotal = detalle.reduce((sum, item) => sum + (item.subtotal || 0), 0);
-    const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 18;
+    
+    const tipoImpuesto = formCabecera.tipo_impuesto || 'IGV';
+    let porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 18;
+    
+    if (tipoImpuesto === 'EXO' || tipoImpuesto === 'INA' || tipoImpuesto === 'GRA' || tipoImpuesto === 'EXP') {
+      porcentaje = 0;
+    }
+    
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
     setTotales({ subtotal, impuesto, total });
@@ -316,7 +214,6 @@ function NuevaOrdenVenta() {
       const payload = {
         id_cliente: parseInt(formCabecera.id_cliente),
         id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
-        id_cotizacion: formCabecera.id_cotizacion ? parseInt(formCabecera.id_cotizacion) : null,
         fecha_emision: formCabecera.fecha_emision,
         fecha_entrega_estimada: formCabecera.fecha_entrega_estimada || null,
         moneda: formCabecera.moneda,
@@ -415,37 +312,14 @@ function NuevaOrdenVenta() {
             <ShoppingCart size={32} />
             Nueva Orden de Venta
           </h1>
-          <p className="text-muted">
-            {cotizacionOrigen 
-              ? `Desde cotización ${cotizacionOrigen.numero_cotizacion}` 
-              : 'Crear orden de venta manual'}
-          </p>
+          <p className="text-muted">Crear orden de venta manual</p>
         </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {cotizacionOrigen && (
-        <div className="card border-l-4 border-primary bg-blue-50 mb-4">
-          <div className="card-body">
-            <div className="flex items-center gap-3">
-              <FileText size={24} className="text-primary" />
-              <div>
-                <p className="font-medium text-blue-900">
-                  Orden generada desde cotización {cotizacionOrigen.numero_cotizacion}
-                </p>
-                <p className="text-sm text-blue-700">
-                  Los datos de la cotización se han precargado automáticamente
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit}>
-        {/* Cliente */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -467,15 +341,13 @@ function NuevaOrdenVenta() {
                       <p className="font-bold">{clienteSeleccionado.ruc}</p>
                     </div>
                   </div>
-                  {!cotizacionOrigen && (
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline"
-                      onClick={() => setClienteSeleccionado(null)}
-                    >
-                      Cambiar
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    onClick={() => setClienteSeleccionado(null)}
+                  >
+                    Cambiar
+                  </button>
                 </div>
               </div>
             ) : (
@@ -491,7 +363,6 @@ function NuevaOrdenVenta() {
           </div>
         </div>
 
-        {/* Datos Orden */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -549,7 +420,6 @@ function NuevaOrdenVenta() {
                   value={formCabecera.moneda}
                   onChange={(e) => setFormCabecera({ ...formCabecera, moneda: e.target.value })}
                   required
-                  disabled={!!cotizacionOrigen}
                 >
                   <option value="PEN">Soles (PEN)</option>
                   <option value="USD">Dólares (USD)</option>
@@ -569,7 +439,6 @@ function NuevaOrdenVenta() {
                       porcentaje_impuesto: tipoSeleccionado?.porcentaje || 18
                     });
                   }}
-                  disabled={!!cotizacionOrigen}
                 >
                   {TIPOS_IMPUESTO.map(tipo => (
                     <option key={tipo.codigo} value={tipo.codigo}>
@@ -589,7 +458,7 @@ function NuevaOrdenVenta() {
                   min="0"
                   max="100"
                   step="0.01"
-                  disabled={!!cotizacionOrigen}
+                  readOnly={['EXO', 'INA', 'GRA', 'EXP'].includes(formCabecera.tipo_impuesto)}
                 />
               </div>
               
@@ -645,7 +514,6 @@ function NuevaOrdenVenta() {
           </div>
         </div>
 
-        {/* Datos Entrega */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -725,7 +593,6 @@ function NuevaOrdenVenta() {
           </div>
         </div>
 
-        {/* Detalle */}
         <div className="card mb-4">
           <div className="card-header">
             <div className="flex justify-between items-center">
@@ -733,16 +600,14 @@ function NuevaOrdenVenta() {
                 <Package size={20} />
                 Detalle de Productos
               </h2>
-              {!cotizacionOrigen && (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setModalProductoOpen(true)}
-                >
-                  <Plus size={20} />
-                  Agregar Producto
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setModalProductoOpen(true)}
+              >
+                <Plus size={20} />
+                Agregar Producto
+              </button>
             </div>
           </div>
           <div className="card-body">
@@ -758,7 +623,7 @@ function NuevaOrdenVenta() {
                       <th>P. Unitario</th>
                       <th>Desc. %</th>
                       <th>Subtotal</th>
-                      {!cotizacionOrigen && <th></th>}
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -783,7 +648,6 @@ function NuevaOrdenVenta() {
                             min="0.00001"
                             step="0.00001"
                             required
-                            disabled={!!cotizacionOrigen}
                           />
                         </td>
                         <td className="text-sm text-muted">{item.unidad_medida}</td>
@@ -796,7 +660,6 @@ function NuevaOrdenVenta() {
                             min="0"
                             step="0.01"
                             required
-                            disabled={!!cotizacionOrigen}
                           />
                         </td>
                         <td style={{ width: '100px' }}>
@@ -808,23 +671,20 @@ function NuevaOrdenVenta() {
                             min="0"
                             max="100"
                             step="0.01"
-                            disabled={!!cotizacionOrigen}
                           />
                         </td>
                         <td className="text-right font-bold">
                           {formatearMoneda(item.subtotal)}
                         </td>
-                        {!cotizacionOrigen && (
-                          <td>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-danger"
-                              onClick={() => handleEliminarItem(index)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
-                        )}
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger"
+                            onClick={() => handleEliminarItem(index)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -847,7 +707,6 @@ function NuevaOrdenVenta() {
           </div>
         </div>
 
-        {/* Totales */}
         {detalle.length > 0 && (
           <div className="card mb-4">
             <div className="card-body">
@@ -869,7 +728,6 @@ function NuevaOrdenVenta() {
                     <span className="font-bold text-2xl">{formatearMoneda(totales.total)}</span>
                   </div>
 
-                  {/* Conversión de moneda */}
                   {formCabecera.moneda === 'USD' && parseFloat(formCabecera.tipo_cambio) > 1 && (
                     <div className="flex justify-between py-2 mt-2 bg-blue-50 px-4 rounded-lg border border-blue-200">
                       <span className="text-sm font-medium text-blue-900">
@@ -897,7 +755,6 @@ function NuevaOrdenVenta() {
           </div>
         )}
 
-        {/* Botones */}
         <div className="flex gap-3 justify-end">
           <button
             type="button"
@@ -917,7 +774,6 @@ function NuevaOrdenVenta() {
         </div>
       </form>
 
-      {/* Modal Cliente */}
       <Modal
         isOpen={modalClienteOpen}
         onClose={() => setModalClienteOpen(false)}
@@ -956,7 +812,6 @@ function NuevaOrdenVenta() {
         </div>
       </Modal>
 
-      {/* Modal Producto */}
       <Modal
         isOpen={modalProductoOpen}
         onClose={() => setModalProductoOpen(false)}

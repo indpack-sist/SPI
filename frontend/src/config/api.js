@@ -327,6 +327,11 @@ export const ordenesProduccionAPI = {
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   
+  registrarParcial: (id, data) => api.post(`/produccion/ordenes/${id}/registrar-parcial`, data),
+  finalizarConConsumoReal: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar-con-consumo-real`, data),
+  getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
+  getAnalisisConsumo: (id) => api.get(`/produccion/ordenes/${id}/analisis-consumo`),
+  
   generarPDF: async (id) => {
     try {
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/pdf`, {

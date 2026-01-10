@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
-  AlertCircle, TrendingUp, Calendar, Plus, ShoppingCart, Calculator
+  AlertCircle, TrendingUp, Calendar, Plus, ShoppingCart, Calculator,
+  CreditCard, Trash2
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -16,6 +17,8 @@ function DetalleOrdenVenta() {
   const navigate = useNavigate();
   
   const [orden, setOrden] = useState(null);
+  const [pagos, setPagos] = useState([]);
+  const [resumenPagos, setResumenPagos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -23,8 +26,17 @@ function DetalleOrdenVenta() {
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [modalProgresoOpen, setModalProgresoOpen] = useState(false);
+  const [modalPagoOpen, setModalPagoOpen] = useState(false);
   
   const [progreso, setProgreso] = useState([]);
+  const [pagoForm, setPagoForm] = useState({
+    fecha_pago: new Date().toISOString().split('T')[0],
+    monto_pagado: '',
+    metodo_pago: 'Transferencia',
+    numero_operacion: '',
+    banco: '',
+    observaciones: ''
+  });
 
   useEffect(() => {
     cargarDatos();
@@ -35,23 +47,94 @@ function DetalleOrdenVenta() {
       setLoading(true);
       setError(null);
       
-      const response = await ordenesVentaAPI.getById(id);
+      const [ordenRes, pagosRes, resumenRes] = await Promise.all([
+        ordenesVentaAPI.getById(id),
+        ordenesVentaAPI.getPagos(id),
+        ordenesVentaAPI.getResumenPagos(id)
+      ]);
       
-      if (response.data.success) {
-        const data = response.data.data;
+      if (ordenRes.data.success) {
+        const data = ordenRes.data.data;
         setOrden(data);
         setProgreso(data.detalle.map(d => ({
           id_detalle: d.id_detalle,
           cantidad_producida: d.cantidad_producida || 0,
           cantidad_despachada: d.cantidad_despachada || 0
         })));
-      } else {
-        setError('Orden no encontrada');
+      }
+      
+      if (pagosRes.data.success) {
+        setPagos(pagosRes.data.data);
+      }
+      
+      if (resumenRes.data.success) {
+        setResumenPagos(resumenRes.data.data);
       }
       
     } catch (err) {
-      console.error('Error al cargar la orden de venta:', err);
-      setError(err.response?.data?.error || 'Error al cargar la orden de venta');
+      console.error('Error al cargar datos:', err);
+      setError(err.response?.data?.error || 'Error al cargar datos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegistrarPago = async (e) => {
+    e.preventDefault();
+    
+    if (!pagoForm.monto_pagado || parseFloat(pagoForm.monto_pagado) <= 0) {
+      setError('Ingrese un monto válido');
+      return;
+    }
+    
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const response = await ordenesVentaAPI.registrarPago(id, {
+        ...pagoForm,
+        monto_pagado: parseFloat(pagoForm.monto_pagado)
+      });
+      
+      if (response.data.success) {
+        setSuccess(`Pago registrado: ${response.data.data.numero_pago}`);
+        setModalPagoOpen(false);
+        setPagoForm({
+          fecha_pago: new Date().toISOString().split('T')[0],
+          monto_pagado: '',
+          metodo_pago: 'Transferencia',
+          numero_operacion: '',
+          banco: '',
+          observaciones: ''
+        });
+        await cargarDatos();
+      }
+      
+    } catch (err) {
+      console.error('Error al registrar pago:', err);
+      setError(err.response?.data?.error || 'Error al registrar pago');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnularPago = async (idPago, numeroPago) => {
+    if (!confirm(`¿Está seguro de anular el pago ${numeroPago}?`)) return;
+    
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const response = await ordenesVentaAPI.anularPago(id, idPago);
+      
+      if (response.data.success) {
+        setSuccess('Pago anulado exitosamente');
+        await cargarDatos();
+      }
+      
+    } catch (err) {
+      console.error('Error al anular pago:', err);
+      setError(err.response?.data?.error || 'Error al anular pago');
     } finally {
       setLoading(false);
     }
@@ -72,8 +155,7 @@ function DetalleOrdenVenta() {
         setOrden({ ...orden, estado });
         setSuccess(`Estado actualizado a ${estado}`);
         setModalEstadoOpen(false);
-      } else {
-        setError(response.data.error || 'Error al cambiar estado');
+        await cargarDatos();
       }
       
     } catch (err) {
@@ -95,8 +177,6 @@ function DetalleOrdenVenta() {
         setOrden({ ...orden, prioridad });
         setSuccess(`Prioridad actualizada a ${prioridad}`);
         setModalPrioridadOpen(false);
-      } else {
-        setError(response.data.error || 'Error al cambiar prioridad');
       }
       
     } catch (err) {
@@ -129,8 +209,6 @@ function DetalleOrdenVenta() {
         setOrden({ ...orden, detalle: nuevoDetalle });
         setSuccess('Progreso actualizado exitosamente');
         setModalProgresoOpen(false);
-      } else {
-        setError(response.data.error || 'Error al actualizar progreso');
       }
       
     } catch (err) {
@@ -170,47 +248,46 @@ function DetalleOrdenVenta() {
   };
 
   const getEstadoConfig = (estado) => {
-  const configs = {
-    'Pendiente': { 
-      icono: Clock, 
-      clase: 'badge-warning',
-      color: 'border-warning',
-      siguientes: ['Confirmada', 'Cancelada'] 
-    },
-    'Confirmada': { 
-      icono: CheckCircle,
-      clase: 'badge-info',
-      color: 'border-info',
-      siguientes: ['En Preparación', 'Cancelada']
-    },
-    'En Preparación': {  
-      icono: Package, 
-      clase: 'badge-info',
-      color: 'border-info',
-      siguientes: ['Despachada', 'Cancelada']
-    },
-    'Despachada': { 
-      icono: Truck, 
-      clase: 'badge-primary',
-      color: 'border-primary',
-      siguientes: ['Entregada']
-    },
-    'Entregada': { 
-      icono: CheckCircle, 
-      clase: 'badge-success',
-      color: 'border-success',
-      siguientes: []
-    },
-    'Cancelada': { 
-      icono: XCircle, 
-      clase: 'badge-danger',
-      color: 'border-danger',
-      siguientes: []
-    }
+    const configs = {
+      'Pendiente': { 
+        icono: Clock, 
+        clase: 'badge-warning',
+        color: 'border-warning',
+        siguientes: ['Confirmada', 'Cancelada'] 
+      },
+      'Confirmada': { 
+        icono: CheckCircle,
+        clase: 'badge-info',
+        color: 'border-info',
+        siguientes: ['En Preparación', 'Cancelada']
+      },
+      'En Preparación': {  
+        icono: Package, 
+        clase: 'badge-info',
+        color: 'border-info',
+        siguientes: ['Despachada', 'Cancelada']
+      },
+      'Despachada': { 
+        icono: Truck, 
+        clase: 'badge-primary',
+        color: 'border-primary',
+        siguientes: ['Entregada']
+      },
+      'Entregada': { 
+        icono: CheckCircle, 
+        clase: 'badge-success',
+        color: 'border-success',
+        siguientes: []
+      },
+      'Cancelada': { 
+        icono: XCircle, 
+        clase: 'badge-danger',
+        color: 'border-danger',
+        siguientes: []
+      }
+    };
+    return configs[estado] || configs['Pendiente'];
   };
-  return configs[estado] || configs['Pendiente'];
-};
-
 
   const getPrioridadConfig = (prioridad) => {
     const configs = {
@@ -220,6 +297,15 @@ function DetalleOrdenVenta() {
       'Urgente': { clase: 'badge-danger', icono: '⚠' }
     };
     return configs[prioridad] || configs['Media'];
+  };
+
+  const getEstadoPagoConfig = (estadoPago) => {
+    const configs = {
+      'Pendiente': { clase: 'badge-warning', icono: Clock },
+      'Parcial': { clase: 'badge-info', icono: CreditCard },
+      'Pagado': { clase: 'badge-success', icono: CheckCircle }
+    };
+    return configs[estadoPago] || configs['Pendiente'];
   };
 
   const calcularProgresoPorcentaje = (item) => {
@@ -306,6 +392,65 @@ function DetalleOrdenVenta() {
     }
   ];
 
+  const columnsPagos = [
+    {
+      header: 'N° Pago',
+      accessor: 'numero_pago',
+      width: '140px',
+      render: (value) => <span className="font-mono font-bold text-sm">{value}</span>
+    },
+    {
+      header: 'Fecha',
+      accessor: 'fecha_pago',
+      width: '110px',
+      render: (value) => formatearFecha(value)
+    },
+    {
+      header: 'Monto',
+      accessor: 'monto_pagado',
+      width: '120px',
+      align: 'right',
+      render: (value) => <span className="font-bold text-success">{formatearMoneda(value)}</span>
+    },
+    {
+      header: 'Método',
+      accessor: 'metodo_pago',
+      width: '130px'
+    },
+    {
+      header: 'N° Operación',
+      accessor: 'numero_operacion',
+      width: '140px',
+      render: (value) => value || '-'
+    },
+    {
+      header: 'Banco',
+      accessor: 'banco',
+      width: '130px',
+      render: (value) => value || '-'
+    },
+    {
+      header: 'Registrado por',
+      accessor: 'registrado_por',
+      width: '150px'
+    },
+    {
+      header: 'Acciones',
+      accessor: 'id_pago_orden',
+      width: '100px',
+      align: 'center',
+      render: (value, row) => (
+        <button
+          className="btn btn-sm btn-danger"
+          onClick={() => handleAnularPago(value, row.numero_pago)}
+          title="Anular pago"
+        >
+          <Trash2 size={14} />
+        </button>
+      )
+    }
+  ];
+
   if (loading) return <Loading message="Cargando orden de venta..." />;
   
   if (!orden) {
@@ -322,6 +467,8 @@ function DetalleOrdenVenta() {
   const estadoConfig = getEstadoConfig(orden.estado);
   const IconoEstado = estadoConfig.icono;
   const prioridadConfig = getPrioridadConfig(orden.prioridad);
+  const estadoPagoConfig = getEstadoPagoConfig(orden.estado_pago);
+  const IconoEstadoPago = estadoPagoConfig.icono;
   
   const progresoGeneral = orden.detalle.reduce((sum, item) => 
     sum + calcularProgresoPorcentaje(item), 0
@@ -375,7 +522,7 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-4 gap-4 mb-4">
         <div className={`card border-l-4 ${estadoConfig.color}`}>
           <div className="card-body">
             <div className="flex items-center gap-3">
@@ -400,6 +547,18 @@ function DetalleOrdenVenta() {
           </div>
         </div>
 
+        <div className={`card border-l-4 ${estadoPagoConfig.clase.replace('badge-', 'border-')}`}>
+          <div className="card-body">
+            <div className="flex items-center gap-3">
+              <IconoEstadoPago size={32} />
+              <div>
+                <p className="text-sm text-muted">Estado Pago</p>
+                <span className={`badge ${estadoPagoConfig.clase}`}>{orden.estado_pago}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-muted mb-2">Progreso General</p>
@@ -415,6 +574,64 @@ function DetalleOrdenVenta() {
           </div>
         </div>
       </div>
+
+      {resumenPagos && (
+        <div className="card mb-4 border-l-4 border-primary">
+          <div className="card-header flex justify-between items-center">
+            <h2 className="card-title"><CreditCard size={20} /> Resumen de Pagos</h2>
+            {orden.estado_pago !== 'Pagado' && (
+              <button className="btn btn-sm btn-success" onClick={() => setModalPagoOpen(true)}>
+                <Plus size={16} /> Registrar Pago
+              </button>
+            )}
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-muted">Total Orden</p>
+                <p className="text-2xl font-bold">{formatearMoneda(resumenPagos.total_orden)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted">Monto Pagado</p>
+                <p className="text-2xl font-bold text-success">{formatearMoneda(resumenPagos.monto_pagado)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted">Saldo Pendiente</p>
+                <p className="text-2xl font-bold text-warning">{formatearMoneda(resumenPagos.saldo_pendiente)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted">Progreso</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-200 rounded-full h-3">
+                    <div 
+                      className={`h-3 rounded-full ${
+                        parseFloat(resumenPagos.porcentaje_pagado) === 100 ? 'bg-success' : 
+                        parseFloat(resumenPagos.porcentaje_pagado) > 0 ? 'bg-info' : 'bg-warning'
+                      }`}
+                      style={{ width: `${resumenPagos.porcentaje_pagado}%` }}
+                    ></div>
+                  </div>
+                  <span className="font-bold">{resumenPagos.porcentaje_pagado}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pagos.length > 0 && (
+        <div className="card mb-4">
+          <div className="card-header">
+            <h2 className="card-title">
+              <FileText size={20} /> Historial de Pagos
+              <span className="badge badge-primary ml-2">{pagos.length}</span>
+            </h2>
+          </div>
+          <div className="card-body">
+            <Table columns={columnsPagos} data={pagos} emptyMessage="No hay pagos registrados" />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
@@ -497,7 +714,6 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* Modal Estado */}
       <Modal isOpen={modalEstadoOpen} onClose={() => setModalEstadoOpen(false)} title="Cambiar Estado">
         <div className="space-y-4">
           <p className="text-muted">Estado actual: <strong>{orden.estado}</strong></p>
@@ -519,7 +735,6 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
-      {/* Modal Prioridad */}
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
         <div className="space-y-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
@@ -536,7 +751,6 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
-      {/* Modal Progreso */}
       <Modal isOpen={modalProgresoOpen} onClose={() => setModalProgresoOpen(false)} title="Actualizar Progreso" size="lg">
         <div className="space-y-4">
           <table className="table">
@@ -600,6 +814,109 @@ function DetalleOrdenVenta() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal isOpen={modalPagoOpen} onClose={() => setModalPagoOpen(false)} title="Registrar Pago" size="md">
+        <form onSubmit={handleRegistrarPago}>
+          <div className="space-y-4">
+            {resumenPagos && (
+              <div className="alert alert-info">
+                <strong>Saldo Pendiente:</strong> {formatearMoneda(resumenPagos.saldo_pendiente)}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">Fecha de Pago *</label>
+              <input
+                type="date"
+                className="form-input"
+                value={pagoForm.fecha_pago}
+                onChange={(e) => setPagoForm({ ...pagoForm, fecha_pago: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Monto a Pagar *</label>
+              <input
+                type="number"
+                className="form-input"
+                value={pagoForm.monto_pagado}
+                onChange={(e) => setPagoForm({ ...pagoForm, monto_pagado: e.target.value })}
+                required
+                step="0.01"
+                min="0.01"
+                max={resumenPagos?.saldo_pendiente}
+                placeholder="0.00"
+              />
+              {resumenPagos && (
+                <small className="text-muted">
+                  Máximo: {formatearMoneda(resumenPagos.saldo_pendiente)}
+                </small>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Método de Pago *</label>
+              <select
+                className="form-select"
+                value={pagoForm.metodo_pago}
+                onChange={(e) => setPagoForm({ ...pagoForm, metodo_pago: e.target.value })}
+                required
+              >
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Tarjeta">Tarjeta</option>
+                <option value="Deposito">Depósito</option>
+                <option value="Yape">Yape</option>
+                <option value="Plin">Plin</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">N° Operación</label>
+              <input
+                type="text"
+                className="form-input"
+                value={pagoForm.numero_operacion}
+                onChange={(e) => setPagoForm({ ...pagoForm, numero_operacion: e.target.value })}
+                placeholder="Número de operación o referencia"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Banco</label>
+              <input
+                type="text"
+                className="form-input"
+                value={pagoForm.banco}
+                onChange={(e) => setPagoForm({ ...pagoForm, banco: e.target.value })}
+                placeholder="Nombre del banco"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Observaciones</label>
+              <textarea
+                className="form-textarea"
+                value={pagoForm.observaciones}
+                onChange={(e) => setPagoForm({ ...pagoForm, observaciones: e.target.value })}
+                rows={3}
+                placeholder="Notas adicionales sobre el pago"
+              ></textarea>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-outline" onClick={() => setModalPagoOpen(false)}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-success">
+                <CreditCard size={20} /> Registrar Pago
+              </button>
+            </div>
+          </div>
+        </form>
       </Modal>
     </div>
   );

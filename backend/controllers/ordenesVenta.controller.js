@@ -1063,3 +1063,324 @@ export async function descargarPDFOrdenVenta(req, res) {
     });
   }
 }
+export async function registrarPagoOrden(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      fecha_pago,
+      monto_pagado,
+      metodo_pago,
+      numero_operacion,
+      banco,
+      observaciones
+    } = req.body;
+    
+    const id_registrado_por = req.user?.id_empleado || null;
+    
+    if (!id_registrado_por) {
+      return res.status(401).json({
+        success: false,
+        error: 'Usuario no autenticado'
+      });
+    }
+    
+    if (!fecha_pago || !monto_pagado || monto_pagado <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Fecha de pago y monto son obligatorios'
+      });
+    }
+    
+    const ordenResult = await executeQuery(`
+      SELECT * FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const orden = ordenResult.data[0];
+    const totalOrden = parseFloat(orden.total);
+    const montoPagadoActual = parseFloat(orden.monto_pagado || 0);
+    const montoNuevoPago = parseFloat(monto_pagado);
+    
+    if (montoPagadoActual + montoNuevoPago > totalOrden) {
+      return res.status(400).json({
+        success: false,
+        error: `El monto a pagar (${montoNuevoPago}) excede el saldo pendiente (${totalOrden - montoPagadoActual})`
+      });
+    }
+    
+    const ultimoPagoResult = await executeQuery(`
+      SELECT numero_pago 
+      FROM pagos_ordenes_venta 
+      WHERE id_orden_venta = ?
+      ORDER BY id_pago_orden DESC 
+      LIMIT 1
+    `, [id]);
+    
+    let numeroSecuencia = 1;
+    if (ultimoPagoResult.success && ultimoPagoResult.data.length > 0) {
+      const match = ultimoPagoResult.data[0].numero_pago.match(/(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
+    }
+    
+    const numeroPago = `${orden.numero_orden}-P${String(numeroSecuencia).padStart(2, '0')}`;
+    
+    const pagoResult = await executeQuery(`
+      INSERT INTO pagos_ordenes_venta (
+        id_orden_venta,
+        numero_pago,
+        fecha_pago,
+        monto_pagado,
+        metodo_pago,
+        numero_operacion,
+        banco,
+        observaciones,
+        id_registrado_por
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id,
+      numeroPago,
+      fecha_pago,
+      montoNuevoPago,
+      metodo_pago || 'Transferencia',
+      numero_operacion || null,
+      banco || null,
+      observaciones || null,
+      id_registrado_por
+    ]);
+    
+    if (!pagoResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: pagoResult.error
+      });
+    }
+    
+    const nuevoMontoPagado = montoPagadoActual + montoNuevoPago;
+    let estadoPago = 'Parcial';
+    
+    if (nuevoMontoPagado >= totalOrden) {
+      estadoPago = 'Pagado';
+    } else if (nuevoMontoPagado === 0) {
+      estadoPago = 'Pendiente';
+    }
+    
+    await executeQuery(`
+      UPDATE ordenes_venta 
+      SET monto_pagado = ?,
+          estado_pago = ?
+      WHERE id_orden_venta = ?
+    `, [nuevoMontoPagado, estadoPago, id]);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id_pago_orden: pagoResult.data.insertId,
+        numero_pago: numeroPago,
+        monto_pagado: montoNuevoPago,
+        nuevo_monto_total_pagado: nuevoMontoPagado,
+        saldo_pendiente: totalOrden - nuevoMontoPagado,
+        estado_pago: estadoPago
+      },
+      message: 'Pago registrado exitosamente'
+    });
+    
+  } catch (error) {
+    console.error('Error al registrar pago:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function getPagosOrden(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const ordenCheck = await executeQuery(`
+      SELECT id_orden_venta FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenCheck.success || ordenCheck.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const result = await executeQuery(`
+      SELECT 
+        p.*,
+        e.nombre_completo AS registrado_por
+      FROM pagos_ordenes_venta p
+      LEFT JOIN empleados e ON p.id_registrado_por = e.id_empleado
+      WHERE p.id_orden_venta = ?
+      ORDER BY p.fecha_pago DESC, p.id_pago_orden DESC
+    `, [id]);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener pagos:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function anularPagoOrden(req, res) {
+  try {
+    const { id, idPago } = req.params;
+    const id_usuario = req.user?.id_empleado || null;
+    
+    if (!id_usuario) {
+      return res.status(401).json({
+        success: false,
+        error: 'Usuario no autenticado'
+      });
+    }
+    
+    const pagoResult = await executeQuery(`
+      SELECT * FROM pagos_ordenes_venta 
+      WHERE id_pago_orden = ? AND id_orden_venta = ?
+    `, [idPago, id]);
+    
+    if (!pagoResult.success || pagoResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pago no encontrado'
+      });
+    }
+    
+    const pago = pagoResult.data[0];
+    const montoPago = parseFloat(pago.monto_pagado);
+    
+    const ordenResult = await executeQuery(`
+      SELECT * FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const orden = ordenResult.data[0];
+    const montoPagadoActual = parseFloat(orden.monto_pagado || 0);
+    const totalOrden = parseFloat(orden.total);
+    
+    await executeQuery(`
+      DELETE FROM pagos_ordenes_venta WHERE id_pago_orden = ?
+    `, [idPago]);
+    
+    const nuevoMontoPagado = montoPagadoActual - montoPago;
+    let estadoPago = 'Parcial';
+    
+    if (nuevoMontoPagado >= totalOrden) {
+      estadoPago = 'Pagado';
+    } else if (nuevoMontoPagado === 0) {
+      estadoPago = 'Pendiente';
+    }
+    
+    await executeQuery(`
+      UPDATE ordenes_venta 
+      SET monto_pagado = ?,
+          estado_pago = ?
+      WHERE id_orden_venta = ?
+    `, [nuevoMontoPagado, estadoPago, id]);
+    
+    res.json({
+      success: true,
+      data: {
+        monto_anulado: montoPago,
+        nuevo_monto_total_pagado: nuevoMontoPagado,
+        saldo_pendiente: totalOrden - nuevoMontoPagado,
+        estado_pago: estadoPago
+      },
+      message: 'Pago anulado exitosamente'
+    });
+    
+  } catch (error) {
+    console.error('Error al anular pago:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function getResumenPagosOrden(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const ordenResult = await executeQuery(`
+      SELECT 
+        numero_orden,
+        total,
+        monto_pagado,
+        estado_pago,
+        moneda
+      FROM ordenes_venta 
+      WHERE id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const orden = ordenResult.data[0];
+    const totalOrden = parseFloat(orden.total);
+    const montoPagado = parseFloat(orden.monto_pagado || 0);
+    
+    const pagosResult = await executeQuery(`
+      SELECT COUNT(*) as total_pagos
+      FROM pagos_ordenes_venta
+      WHERE id_orden_venta = ?
+    `, [id]);
+    
+    res.json({
+      success: true,
+      data: {
+        numero_orden: orden.numero_orden,
+        total_orden: totalOrden,
+        monto_pagado: montoPagado,
+        saldo_pendiente: totalOrden - montoPagado,
+        porcentaje_pagado: totalOrden > 0 ? ((montoPagado / totalOrden) * 100).toFixed(2) : 0,
+        estado_pago: orden.estado_pago,
+        moneda: orden.moneda,
+        total_pagos: pagosResult.data[0].total_pagos
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener resumen de pagos:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}

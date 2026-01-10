@@ -523,12 +523,13 @@ function DetalleCotizacion() {
                 <span className="text-muted">Sub Total:</span>
                 <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
               </div>
-              <div className="flex justify-between py-2 border-b">
-                <span className="text-muted">{getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:</span>
-                <span className="font-bold text-lg">
-                  {['EXO', 'INA'].includes(cotizacion.tipo_impuesto) 
-                    ? formatearMoneda(0) 
-                    : formatearMoneda(cotizacion.igv)}
+              <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
+                <span className="font-bold text-xl">TOTAL:</span>
+                <span className="font-bold text-3xl">
+                  {['EXO', 'INA'].includes(cotizacion.tipo_impuesto)
+                    ? formatearMoneda(cotizacion.subtotal) // Si es EXO, el Total es el Subtotal
+                    : formatearMoneda(cotizacion.total)    // Si es IGV, usamos el total normal
+                  }
                 </span>
               </div>
               <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">

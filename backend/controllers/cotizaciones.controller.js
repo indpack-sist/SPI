@@ -247,10 +247,14 @@ export async function createCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    // FIX: Corregido para manejar correctamente porcentaje 0
-    const porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
+    let porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
       ? parseFloat(porcentaje_impuesto) 
       : 18.00;
+
+    if (tipo_impuesto === 'EXO' || tipo_impuesto === 'INA') {
+      porcentaje = 0.00;
+    }
+
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
     
@@ -437,10 +441,14 @@ export async function updateCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
 
-    // FIX: Corregido para manejar correctamente porcentaje 0
-    const porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
+    let porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
       ? parseFloat(porcentaje_impuesto) 
       : 18.00;
+
+    if (tipo_impuesto === 'EXO' || tipo_impuesto === 'INA') {
+      porcentaje = 0.00;
+    }
+
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
 

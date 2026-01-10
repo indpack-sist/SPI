@@ -6,6 +6,13 @@ import https from 'https';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Mapeo de etiquetas de impuesto
+const ETIQUETAS_IMPUESTO = {
+  'IGV': 'IGV (18%)',
+  'EXO': 'EXONERADO (0%)',
+  'INA': 'INAFECTO (0%)'
+};
+
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
     https.get(url, (response) => {
@@ -221,7 +228,10 @@ export async function generarCotizacionPDF(cotizacion) {
       const subtotal = parseFloat(cotizacion.subtotal).toFixed(2);
       const igv = parseFloat(cotizacion.igv).toFixed(2);
       const total = parseFloat(cotizacion.total).toFixed(2);
-      const etiquetaImpuesto = cotizacion.tipo_impuesto || 'IGV';
+      
+      // FIX: Usar el mapeo de etiquetas y manejar correctamente porcentajes 0
+      const tipoImpuesto = cotizacion.tipo_impuesto || 'IGV';
+      const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || tipoImpuesto;
 
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');

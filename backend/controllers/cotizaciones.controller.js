@@ -247,7 +247,10 @@ export async function createCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    const porcentaje = parseFloat(porcentaje_impuesto) || 18.00;
+    // FIX: Corregido para manejar correctamente porcentaje 0
+    const porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
+      ? parseFloat(porcentaje_impuesto) 
+      : 18.00;
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
     
@@ -285,7 +288,7 @@ export async function createCotizacion(req, res) {
       prioridad || 'Media',
       moneda || 'PEN',
       tipo_impuesto || 'IGV',
-      porcentaje || 18.00,
+      porcentaje,  // Usar porcentaje calculado correctamente
       tipoCambioFinal,                   
       plazo_pago,                        
       forma_pago || null,
@@ -434,7 +437,10 @@ export async function updateCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
 
-    const porcentaje = parseFloat(porcentaje_impuesto) || 18.00;
+    // FIX: Corregido para manejar correctamente porcentaje 0
+    const porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
+      ? parseFloat(porcentaje_impuesto) 
+      : 18.00;
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
 
@@ -469,7 +475,7 @@ export async function updateCotizacion(req, res) {
       prioridad || 'Media',
       moneda || 'PEN',
       tipo_impuesto || 'IGV',
-      porcentaje || 18.00,
+      porcentaje,  // Usar porcentaje calculado correctamente
       tipoCambioFinal,
       plazo_pago,
       forma_pago || null,

@@ -211,7 +211,6 @@ export async function createCotizacion(req, res) {
     }
     
     const fechaEmisionFinal = fecha_emision || new Date().toISOString().split('T')[0];
-    
     const validezDiasFinal = parseInt(validez_dias) || 7;
     
     const fechaEmisionDate = new Date(fechaEmisionFinal);
@@ -247,16 +246,26 @@ export async function createCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
     
-    let porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
-      ? parseFloat(porcentaje_impuesto) 
-      : 18.00;
-
-    if (tipo_impuesto === 'EXO' || tipo_impuesto === 'INA') {
+    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    let porcentaje = 18.00;
+    
+    if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') {
       porcentaje = 0.00;
+    } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
+      porcentaje = parseFloat(porcentaje_impuesto);
     }
-
+    
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
+    
+    console.log('DEBUG CREATE:', {
+      tipo_impuesto: tipoImpuestoFinal,
+      porcentaje_impuesto_recibido: porcentaje_impuesto,
+      porcentaje_calculado: porcentaje,
+      subtotal,
+      igv,
+      total
+    });
     
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
@@ -291,8 +300,8 @@ export async function createCotizacion(req, res) {
       fechaVencimientoCalculada,         
       prioridad || 'Media',
       moneda || 'PEN',
-      tipo_impuesto || 'IGV',
-      porcentaje,  // Usar porcentaje calculado correctamente
+      tipoImpuestoFinal,
+      porcentaje,
       tipoCambioFinal,                   
       plazo_pago,                        
       forma_pago || null,
@@ -441,16 +450,26 @@ export async function updateCotizacion(req, res) {
       subtotal += valorVenta - descuentoItem;
     }
 
-    let porcentaje = porcentaje_impuesto !== null && porcentaje_impuesto !== undefined 
-      ? parseFloat(porcentaje_impuesto) 
-      : 18.00;
-
-    if (tipo_impuesto === 'EXO' || tipo_impuesto === 'INA') {
+    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    let porcentaje = 18.00;
+    
+    if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') {
       porcentaje = 0.00;
+    } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
+      porcentaje = parseFloat(porcentaje_impuesto);
     }
 
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
+
+    console.log('DEBUG UPDATE:', {
+      tipo_impuesto: tipoImpuestoFinal,
+      porcentaje_impuesto_recibido: porcentaje_impuesto,
+      porcentaje_calculado: porcentaje,
+      subtotal,
+      igv,
+      total
+    });
 
     const updateResult = await executeQuery(`
       UPDATE cotizaciones 
@@ -482,8 +501,8 @@ export async function updateCotizacion(req, res) {
       fechaVencimientoCalculada,
       prioridad || 'Media',
       moneda || 'PEN',
-      tipo_impuesto || 'IGV',
-      porcentaje,  // Usar porcentaje calculado correctamente
+      tipoImpuestoFinal,
+      porcentaje,
       tipoCambioFinal,
       plazo_pago,
       forma_pago || null,
@@ -545,7 +564,6 @@ export async function updateCotizacion(req, res) {
     });
   }
 }
-
 export async function duplicarCotizacion(req, res) {
   try {
     const { id } = req.params;

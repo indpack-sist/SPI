@@ -7,7 +7,7 @@ import {
   Layers, TrendingUp, TrendingDown, Minus, Edit, ShoppingCart,
   UserCog, AlertCircle
 } from 'lucide-react';
-import { ordenesProduccionAPI } from '../../config/api';
+import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -24,28 +24,23 @@ function OrdenDetalle() {
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
   
-  // Modal asignar receta/supervisor (para OPs desde ventas)
   const [modalAsignar, setModalAsignar] = useState(false);
   const [recetaSeleccionada, setRecetaSeleccionada] = useState('');
   const [supervisorSeleccionado, setSupervisorSeleccionado] = useState('');
   const [recetasDisponibles, setRecetasDisponibles] = useState([]);
   const [supervisoresDisponibles, setSupervisoresDisponibles] = useState([]);
   
-  // Modal finalizar
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadProducida, setCantidadProducida] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
   
-  // Modal registro parcial
   const [modalParcial, setModalParcial] = useState(false);
   const [cantidadParcial, setCantidadParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
   
-  // Consumo real de insumos
   const [consumoRealInsumos, setConsumoRealInsumos] = useState([]);
   const [mostrarConsumoReal, setMostrarConsumoReal] = useState(false);
   
-  // Mermas
   const [productosMerma, setProductosMerma] = useState([]);
   const [mermas, setMermas] = useState([]);
   const [mostrarMermas, setMostrarMermas] = useState(false);
@@ -69,7 +64,6 @@ function OrdenDetalle() {
       setConsumoMateriales(consumoRes.data.data);
       setRegistrosParciales(registrosRes.data.data || []);
       
-      // Si la orden está finalizada, cargar análisis de consumo
       if (ordenRes.data.data.estado === 'Finalizada') {
         const analisisRes = await ordenesProduccionAPI.getAnalisisConsumo(id);
         setAnalisisConsumo(analisisRes.data.data);
@@ -78,6 +72,37 @@ function OrdenDetalle() {
       setError(err.error || 'Error al cargar la orden');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarRecetasYSupervisores = async () => {
+    try {
+      setProcesando(true);
+      
+      const [recetasRes, supervisoresRes] = await Promise.all([
+        productosAPI.getRecetasByProducto(orden.id_producto_terminado),
+        empleadosAPI.getByRol('Supervisor')
+      ]);
+      
+      if (recetasRes.data.success) {
+        const recetasActivas = recetasRes.data.data.filter(r => r.es_activa);
+        setRecetasDisponibles(recetasActivas);
+        
+        const principal = recetasActivas.find(r => r.es_principal);
+        if (principal) {
+          setRecetaSeleccionada(principal.id_receta_producto);
+        }
+      }
+      
+      if (supervisoresRes.data.success) {
+        setSupervisoresDisponibles(supervisoresRes.data.data);
+      }
+      
+    } catch (err) {
+      console.error('Error al cargar datos:', err);
+      setError('Error al cargar recetas y supervisores disponibles');
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -435,12 +460,11 @@ function OrdenDetalle() {
       <button className="btn btn-outline mb-4" onClick={() => navigate('/produccion/ordenes')}>
         <ArrowLeft size={20} className="mr-2" />
         Volver a Órdenes
-        </button>
+      </button>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* ALERTA ORIGEN ORDEN VENTA */}
       {desdeOrdenVenta && (
         <div className="card border-l-4 border-info bg-blue-50 mb-4">
           <div className="card-body">
@@ -454,12 +478,9 @@ function OrdenDetalle() {
                   )}
                 </p>
                 {orden.id_orden_venta && (
-                  <button
-                    className="text-sm text-blue-700 underline hover:text-blue-900 mt-1"
-                    onClick={() => navigate(`/ventas/ordenes/${orden.id_orden_venta}`)}
-                  >
-                    Ver Orden de Venta →
-                  </button>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Orden de Venta: {orden.numero_orden_venta}
+                  </p>
                 )}
               </div>
             </div>
@@ -498,8 +519,8 @@ function OrdenDetalle() {
           {puedeAsignar && (
             <button 
               className="btn btn-warning" 
-              onClick={() => {
-                // Cargar recetas y supervisores disponibles
+              onClick={async () => {
+                await cargarRecetasYSupervisores();
                 setModalAsignar(true);
               }}
               disabled={procesando}
@@ -570,7 +591,6 @@ function OrdenDetalle() {
         </div>
       </div>
 
-      {/* INFORMACIÓN DE LA RECETA */}
       {(orden.nombre_receta || esRecetaProvisional) && (
         <div className="card mb-4" style={{ 
           background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%)',
@@ -630,7 +650,6 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* TARJETAS DE INFORMACIÓN */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
           <div className="card-header flex items-center gap-2">
@@ -736,7 +755,6 @@ function OrdenDetalle() {
         </div>
       </div>
 
-      {/* HISTORIAL REGISTROS PARCIALES */}
       {registrosParciales.length > 0 && (
         <div className="card mb-4">
           <div className="card-header flex items-center gap-2">
@@ -770,7 +788,6 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* OBSERVACIONES */}
       {orden.observaciones && (
         <div className="card mb-4">
           <div className="card-header flex items-center gap-2">
@@ -783,7 +800,6 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* MATERIALES CONSUMIDOS */}
       {consumoMateriales.length > 0 && (
         <div className="card mb-4">
           <div className="card-header flex items-center gap-2">
@@ -866,7 +882,6 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* MODAL: Asignar Receta y Supervisor */}
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
@@ -895,7 +910,13 @@ function OrdenDetalle() {
               required
             >
               <option value="">Seleccione una receta...</option>
-              {/* TODO: Cargar recetas del producto */}
+              {recetasDisponibles.map(receta => (
+                <option key={receta.id_receta_producto} value={receta.id_receta_producto}>
+                  {receta.es_principal && '⭐ '}
+                  {receta.nombre_receta}
+                  {receta.version && ` v${receta.version}`}
+                </option>
+              ))}
             </select>
             <small className="text-muted block mt-1">
               Seleccione la receta que se utilizará para producir este producto
@@ -911,7 +932,11 @@ function OrdenDetalle() {
               required
             >
               <option value="">Seleccione un supervisor...</option>
-              {/* TODO: Cargar supervisores disponibles */}
+              {supervisoresDisponibles.map(supervisor => (
+                <option key={supervisor.id_empleado} value={supervisor.id_empleado}>
+                  {supervisor.nombre_completo}
+                </option>
+              ))}
             </select>
             <small className="text-muted block mt-1">
               Supervisor que se encargará de esta orden de producción
@@ -938,7 +963,6 @@ function OrdenDetalle() {
         </form>
       </Modal>
 
-      {/* MODAL: Registrar Parcial */}
       <Modal
         isOpen={modalParcial}
         onClose={() => setModalParcial(false)}
@@ -1064,7 +1088,6 @@ function OrdenDetalle() {
         </form>
       </Modal>
 
-      {/* MODAL: Finalizar */}
       <Modal
         isOpen={modalFinalizar}
         onClose={() => setModalFinalizar(false)}

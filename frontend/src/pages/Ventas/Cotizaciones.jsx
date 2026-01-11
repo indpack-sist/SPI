@@ -128,14 +128,14 @@ function Cotizaciones() {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-mono font-bold text-primary">{value}</span>
-            {row.convertida_venta && (
+            {!!row.convertida_venta && (
               <CheckCircle2 size={16} className="text-success" title="Convertida a Orden de Venta" />
             )}
           </div>
           <div className="text-xs text-muted">
             {row.fecha_emision ? new Date(row.fecha_emision).toLocaleDateString('es-PE', { timeZone: 'America/Lima' }) : '-'}
           </div>
-          {row.convertida_venta && row.id_orden_venta && (
+          {!!row.convertida_venta && !!row.id_orden_venta && (
             <button
               className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
               onClick={(e) => {
@@ -248,7 +248,6 @@ function Cotizaciones() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -279,7 +278,6 @@ function Cotizaciones() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
-      {/* Estadísticas Rápidas */}
       <div className="grid grid-cols-5 gap-4 mb-6">
         <div className="card">
           <div className="card-body">
@@ -342,12 +340,10 @@ function Cotizaciones() {
         </div>
       </div>
 
-      {/* Filtros y Búsqueda */}
       <div className="card mb-4">
         <div className="card-body">
           <div className="flex flex-col md:flex-row gap-4">
             
-            {/* Buscador */}
             <div className="relative flex-1">
               <Search 
                 size={20} 
@@ -362,7 +358,6 @@ function Cotizaciones() {
               />
             </div>
 
-            {/* Filtros de Estado */}
             <div className="flex items-center gap-2">
               <Filter size={18} className="text-muted shrink-0" />
               <div className="flex gap-2 flex-wrap">
@@ -396,7 +391,6 @@ function Cotizaciones() {
         </div>
       </div>
 
-      {/* Tabla */}
       <div className="card">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">
@@ -421,7 +415,6 @@ function Cotizaciones() {
           />
         </div>
 
-        {/* Paginación */}
         {cotizacionesFiltradas.length > itemsPerPage && (
           <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
             <button 

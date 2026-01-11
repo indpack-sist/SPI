@@ -5,7 +5,7 @@ import {
   Star, Package, Clock, Beaker, FileText, ClipboardList, 
   BarChart, DollarSign, Info, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, Minus, Edit, ShoppingCart,
-  UserCog, AlertCircle
+  UserCog, AlertCircle, Zap
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';

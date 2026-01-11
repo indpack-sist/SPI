@@ -205,7 +205,7 @@ function Productos() {
           <span className={`badge ${value ? 'badge-primary' : 'badge-secondary'}`}>
             {value ? 'Sí' : 'No'}
           </span>
-          {value && row.total_recetas > 0 && (
+          {!!value && row.total_recetas > 0 && (
             <span className="badge badge-info" title={`${row.total_recetas} receta(s) configurada(s)`}>
               {row.total_recetas}
             </span>

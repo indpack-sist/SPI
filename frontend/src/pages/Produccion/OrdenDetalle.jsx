@@ -29,7 +29,15 @@ function OrdenDetalle() {
   const [supervisorSeleccionado, setSupervisorSeleccionado] = useState('');
   const [recetasDisponibles, setRecetasDisponibles] = useState([]);
   const [supervisoresDisponibles, setSupervisoresDisponibles] = useState([]);
-  
+  const [modoReceta, setModoReceta] = useState('seleccionar');
+  const [recetaProvisional, setRecetaProvisional] = useState([]);
+  const [rendimientoProvisional, setRendimientoProvisional] = useState('1');
+  const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
+  const [insumosDisponibles, setInsumosDisponibles] = useState([]);
+  const [nuevoInsumo, setNuevoInsumo] = useState({
+    id_insumo: '',
+    cantidad_requerida: ''
+  });
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadProducida, setCantidadProducida] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
@@ -76,36 +84,92 @@ function OrdenDetalle() {
   };
 
   const cargarRecetasYSupervisores = async () => {
-    try {
-      setProcesando(true);
+  try {
+    setProcesando(true);
+    
+    const [recetasRes, supervisoresRes, insumosRes] = await Promise.all([
+      productosAPI.getRecetasByProducto(orden.id_producto_terminado),
+      empleadosAPI.getByRol('Supervisor'),
+      productosAPI.getAll({ estado: 'Activo' })
+    ]);
+    
+    if (recetasRes.data.success) {
+      const recetasActivas = recetasRes.data.data.filter(r => r.es_activa);
+      setRecetasDisponibles(recetasActivas);
       
-      const [recetasRes, supervisoresRes] = await Promise.all([
-        productosAPI.getRecetasByProducto(orden.id_producto_terminado),
-        empleadosAPI.getByRol('Supervisor')
-      ]);
-      
-      if (recetasRes.data.success) {
-        const recetasActivas = recetasRes.data.data.filter(r => r.es_activa);
-        setRecetasDisponibles(recetasActivas);
-        
-        const principal = recetasActivas.find(r => r.es_principal);
-        if (principal) {
-          setRecetaSeleccionada(principal.id_receta_producto);
-        }
+      const principal = recetasActivas.find(r => r.es_principal);
+      if (principal) {
+        setRecetaSeleccionada(principal.id_receta_producto);
       }
-      
-      if (supervisoresRes.data.success) {
-        setSupervisoresDisponibles(supervisoresRes.data.data);
-      }
-      
-    } catch (err) {
-      console.error('Error al cargar datos:', err);
-      setError('Error al cargar recetas y supervisores disponibles');
-    } finally {
-      setProcesando(false);
     }
-  };
+    
+    if (supervisoresRes.data.success) {
+      setSupervisoresDisponibles(supervisoresRes.data.data);
+    }
+    
+    if (insumosRes.data.success) {
+      const insumosFiltrados = insumosRes.data.data.filter(p => 
+        p.id_tipo_inventario == 1 || p.id_tipo_inventario == 2
+      );
+      setInsumosDisponibles(insumosFiltrados);
+    }
+    
+  } catch (err) {
+    console.error('Error al cargar datos:', err);
+    setError('Error al cargar recetas y supervisores disponibles');
+  } finally {
+    setProcesando(false);
+  }
+};
+const cambiarModoReceta = (modo) => {
+  setModoReceta(modo);
+  if (modo === 'provisional' || modo === 'manual') {
+    setRecetaSeleccionada('');
+  }
+  if (modo !== 'provisional') {
+    setRecetaProvisional([]);
+  }
+};
 
+const abrirModalInsumo = () => {
+  setNuevoInsumo({ id_insumo: '', cantidad_requerida: '' });
+  setModalAgregarInsumo(true);
+};
+
+const agregarInsumoProvisional = () => {
+  if (!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida) {
+    setError('Complete todos los campos del insumo');
+    return;
+  }
+
+  const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumo.id_insumo);
+  if (!insumo) return;
+
+  if (recetaProvisional.find(i => i.id_insumo == nuevoInsumo.id_insumo)) {
+    setError('Este insumo ya está en la receta provisional');
+    return;
+  }
+
+  setRecetaProvisional([
+    ...recetaProvisional,
+    {
+      id_insumo: nuevoInsumo.id_insumo,
+      cantidad_requerida: parseFloat(nuevoInsumo.cantidad_requerida),
+      insumo: insumo.nombre,
+      codigo_insumo: insumo.codigo,
+      unidad_medida: insumo.unidad_medida,
+      costo_unitario_promedio: parseFloat(insumo.costo_unitario_promedio),
+      stock_actual: parseFloat(insumo.stock_actual)
+    }
+  ]);
+
+  setModalAgregarInsumo(false);
+  setNuevoInsumo({ id_insumo: '', cantidad_requerida: '' });
+};
+
+const eliminarInsumoProvisional = (idInsumo) => {
+  setRecetaProvisional(recetaProvisional.filter(i => i.id_insumo != idInsumo));
+};
   const cargarProductosMerma = async () => {
     try {
       const response = await ordenesProduccionAPI.getProductosMerma();
@@ -276,29 +340,41 @@ function OrdenDetalle() {
   };
 
   const handleAsignarRecetaSupervisor = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  try {
+    setProcesando(true);
+    setError(null);
     
-    try {
-      setProcesando(true);
-      setError(null);
-      
-      const payload = {
-        id_receta_producto: parseInt(recetaSeleccionada),
-        id_supervisor: parseInt(supervisorSeleccionado)
-      };
-      
-      await ordenesProduccionAPI.asignarRecetaYSupervisor(id, payload);
-      
-      setSuccess('Receta y supervisor asignados exitosamente. La orden está lista para iniciar.');
-      setModalAsignar(false);
-      cargarDatos();
-      
-    } catch (err) {
-      setError(err.response?.data?.error || 'Error al asignar receta y supervisor');
-    } finally {
-      setProcesando(false);
+    const payload = {
+      id_supervisor: parseInt(supervisorSeleccionado),
+      modo_receta: modoReceta
+    };
+    
+    if (modoReceta === 'seleccionar') {
+      payload.id_receta_producto = parseInt(recetaSeleccionada);
+    } else if (modoReceta === 'provisional') {
+      payload.receta_provisional = recetaProvisional.map(i => ({
+        id_insumo: i.id_insumo,
+        cantidad_requerida: i.cantidad_requerida
+      }));
+      payload.rendimiento_receta = parseFloat(rendimientoProvisional);
+    } else if (modoReceta === 'manual') {
+      payload.es_orden_manual = true;
     }
-  };
+    
+    await ordenesProduccionAPI.asignarRecetaYSupervisor(id, payload);
+    
+    setSuccess('Receta y supervisor asignados exitosamente. La orden está lista para iniciar.');
+    setModalAsignar(false);
+    cargarDatos();
+    
+  } catch (err) {
+    setError(err.response?.data?.error || 'Error al asignar receta y supervisor');
+  } finally {
+    setProcesando(false);
+  }
+};
 
   const handleIniciar = async () => {
     if (!confirm('¿Está seguro de iniciar la producción? Esto consumirá los materiales del inventario.')) return;
@@ -883,24 +959,74 @@ function OrdenDetalle() {
       )}
 
       <Modal
-        isOpen={modalAsignar}
-        onClose={() => setModalAsignar(false)}
-        title={
-          <span className="flex items-center gap-2">
-            <AlertCircle className="text-warning" /> Asignar Receta y Supervisor
-          </span>
-        }
-        size="lg"
-      >
-        <form onSubmit={handleAsignarRecetaSupervisor}>
-          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4 flex gap-3">
-            <AlertCircle className="text-yellow-500 shrink-0" size={20} />
-            <div className="text-sm text-yellow-700">
-              <p><strong>Acción Requerida:</strong> Esta orden fue generada desde una Orden de Venta.</p>
-              <p className="mt-1">Debe asignar una receta y supervisor antes de poder iniciar la producción.</p>
-            </div>
-          </div>
+  isOpen={modalAsignar}
+  onClose={() => setModalAsignar(false)}
+  title={
+    <span className="flex items-center gap-2">
+      <AlertCircle className="text-warning" /> Asignar Receta y Supervisor
+    </span>
+  }
+  size="lg"
+>
+  <form onSubmit={handleAsignarRecetaSupervisor}>
+    <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4 flex gap-3">
+      <AlertCircle className="text-yellow-500 shrink-0" size={20} />
+      <div className="text-sm text-yellow-700">
+        <p><strong>Acción Requerida:</strong> Esta orden fue generada desde una Orden de Venta.</p>
+        <p className="mt-1">Debe asignar una receta y supervisor antes de poder iniciar la producción.</p>
+      </div>
+    </div>
 
+    {/* SELECTOR DE TIPO DE RECETA */}
+    <div className="mb-4">
+      <label className="form-label">Seleccione el Tipo de Receta *</label>
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          className={`btn text-left ${modoReceta === 'seleccionar' ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => cambiarModoReceta('seleccionar')}
+          disabled={recetasDisponibles.length === 0}
+          style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
+        >
+          <Star size={18} style={{ marginRight: '8px' }} />
+          <div>
+            <div className="font-bold">Receta Existente</div>
+            <div className="text-xs opacity-80">Usa receta guardada y consume materiales</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className={`btn text-left ${modoReceta === 'provisional' ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => cambiarModoReceta('provisional')}
+          style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
+        >
+          <Plus size={18} style={{ marginRight: '8px' }} />
+          <div>
+            <div className="font-bold">Receta Provisional</div>
+            <div className="text-xs opacity-80">Crea receta temporal y consume materiales</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className={`btn text-left ${modoReceta === 'manual' ? 'btn-warning' : 'btn-outline'}`}
+          onClick={() => cambiarModoReceta('manual')}
+          style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
+        >
+          <Zap size={18} style={{ marginRight: '8px' }} />
+          <div>
+            <div className="font-bold">Orden Manual</div>
+            <div className="text-xs opacity-80">Sin receta, NO consume materiales</div>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    {/* MODO: Receta Existente */}
+    {modoReceta === 'seleccionar' && (
+      <>
+        {recetasDisponibles.length > 0 ? (
           <div className="form-group">
             <label className="form-label">Receta de Producción *</label>
             <select
@@ -922,46 +1048,230 @@ function OrdenDetalle() {
               Seleccione la receta que se utilizará para producir este producto
             </small>
           </div>
+        ) : (
+          <div className="alert alert-warning">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Sin recetas configuradas</strong>
+              <p className="text-xs mt-1">
+                Este producto no tiene recetas. Use "Receta Provisional" o "Orden Manual".
+              </p>
+            </div>
+          </div>
+        )}
+      </>
+    )}
 
-          <div className="form-group">
-            <label className="form-label">Supervisor Responsable *</label>
-            <select
-              className="form-select"
-              value={supervisorSeleccionado}
-              onChange={(e) => setSupervisorSeleccionado(e.target.value)}
-              required
+    {/* MODO: Receta Provisional */}
+    {modoReceta === 'provisional' && (
+      <>
+        <div className="form-group">
+          <label className="form-label">Rendimiento de la Receta *</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            className="form-input"
+            value={rendimientoProvisional}
+            onChange={(e) => setRendimientoProvisional(e.target.value)}
+            required
+            placeholder="1.00"
+          />
+          <small className="text-muted">
+            ¿Cuántas unidades produce esta receta por lote?
+          </small>
+        </div>
+
+        <div className="mb-3">
+          <div className="flex justify-between items-center mb-2">
+            <label className="form-label" style={{ marginBottom: 0 }}>
+              Insumos ({recetaProvisional.length})
+            </label>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={abrirModalInsumo}
             >
-              <option value="">Seleccione un supervisor...</option>
-              {supervisoresDisponibles.map(supervisor => (
-                <option key={supervisor.id_empleado} value={supervisor.id_empleado}>
-                  {supervisor.nombre_completo}
-                </option>
-              ))}
-            </select>
-            <small className="text-muted block mt-1">
-              Supervisor que se encargará de esta orden de producción
-            </small>
+              <Plus size={16} />
+              Agregar
+            </button>
           </div>
 
-          <div className="flex gap-2 justify-end mt-6">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalAsignar(false)}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-warning"
-              disabled={procesando || !recetaSeleccionada || !supervisorSeleccionado}
-            >
-              {procesando ? 'Procesando...' : 'Asignar y Continuar'}
-            </button>
+          {recetaProvisional.length > 0 ? (
+            <div className="border rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              <table className="table table-sm">
+                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-primary)' }}>
+                  <tr>
+                    <th>Insumo</th>
+                    <th className="text-right">Cantidad</th>
+                    <th style={{ width: '50px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recetaProvisional.map(item => (
+                    <tr key={item.id_insumo}>
+                      <td>
+                        <div className="font-medium text-sm">{item.codigo_insumo}</div>
+                        <div className="text-xs text-muted">{item.insumo}</div>
+                      </td>
+                      <td className="text-right">
+                        <div className="font-bold text-sm">{parseFloat(item.cantidad_requerida).toFixed(4)}</div>
+                        <div className="text-xs text-muted">{item.unidad_medida}</div>
+                      </td>
+                      <td className="text-center">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger"
+                          onClick={() => eliminarInsumoProvisional(item.id_insumo)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="border border-dashed rounded p-3 text-center">
+              <p className="text-muted text-sm">No hay insumos agregados</p>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary mt-2"
+                onClick={abrirModalInsumo}
+              >
+                <Plus size={16} />
+                Agregar Insumo
+              </button>
+            </div>
+          )}
+        </div>
+
+        {recetaProvisional.length > 0 && (
+          <div className="alert alert-info text-sm">
+            <strong>Nota:</strong> Esta receta es temporal y solo se aplicará a esta orden de producción.
           </div>
-        </form>
-      </Modal>
+        )}
+      </>
+    )}
+
+    {/* MODO: Manual */}
+    {modoReceta === 'manual' && (
+      <div className="alert alert-warning">
+        <Zap size={20} />
+        <div>
+          <strong>Orden Manual Seleccionada</strong>
+          <p className="text-xs mt-1">
+            Esta orden NO consumirá materiales del inventario. Solo registrará la producción final.
+          </p>
+        </div>
+      </div>
+    )}
+
+    {/* Supervisor (común para todos los modos) */}
+    <div className="form-group">
+      <label className="form-label">Supervisor Responsable *</label>
+      <select
+        className="form-select"
+        value={supervisorSeleccionado}
+        onChange={(e) => setSupervisorSeleccionado(e.target.value)}
+        required
+      >
+        <option value="">Seleccione un supervisor...</option>
+        {supervisoresDisponibles.map(supervisor => (
+          <option key={supervisor.id_empleado} value={supervisor.id_empleado}>
+            {supervisor.nombre_completo}
+          </option>
+        ))}
+      </select>
+      <small className="text-muted block mt-1">
+        Supervisor que se encargará de esta orden de producción
+      </small>
+    </div>
+
+    <div className="flex gap-2 justify-end mt-6">
+      <button 
+        type="button" 
+        className="btn btn-outline" 
+        onClick={() => setModalAsignar(false)}
+        disabled={procesando}
+      >
+        Cancelar
+      </button>
+      <button 
+        type="submit" 
+        className="btn btn-warning"
+        disabled={procesando || !supervisorSeleccionado || 
+          (modoReceta === 'seleccionar' && !recetaSeleccionada) ||
+          (modoReceta === 'provisional' && recetaProvisional.length === 0)}
+      >
+        {procesando ? 'Procesando...' : 'Asignar y Continuar'}
+      </button>
+    </div>
+  </form>
+</Modal>
+
+{/* MODAL: Agregar Insumo a Receta Provisional */}
+<Modal
+  isOpen={modalAgregarInsumo}
+  onClose={() => setModalAgregarInsumo(false)}
+  title="Agregar Insumo a Receta Provisional"
+  size="md"
+>
+  <div className="form-group">
+    <label className="form-label">Insumo / Material</label>
+    <select
+      className="form-select"
+      value={nuevoInsumo.id_insumo}
+      onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}
+    >
+      <option value="">Seleccione un insumo...</option>
+      {insumosDisponibles
+        .filter(i => !recetaProvisional.find(rp => rp.id_insumo == i.id_producto))
+        .map(insumo => (
+          <option key={insumo.id_producto} value={insumo.id_producto}>
+            {insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(insumo.stock_actual).toFixed(2)} {insumo.unidad_medida})
+          </option>
+        ))}
+    </select>
+    <small className="text-muted">Solo insumos y materia prima</small>
+  </div>
+
+  <div className="form-group">
+    <label className="form-label">Cantidad Requerida</label>
+    <input
+      type="number"
+      step="0.0001"
+      min="0.0001"
+      className="form-input"
+      value={nuevoInsumo.cantidad_requerida}
+      onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, cantidad_requerida: e.target.value })}
+      placeholder="0.0000"
+    />
+    <small className="text-muted">
+      Por cada {rendimientoProvisional} unidad(es) producida(s)
+    </small>
+  </div>
+
+  <div className="flex gap-2 justify-end mt-4">
+    <button 
+      type="button" 
+      className="btn btn-outline" 
+      onClick={() => setModalAgregarInsumo(false)}
+    >
+      Cancelar
+    </button>
+    <button 
+      type="button" 
+      className="btn btn-primary"
+      onClick={agregarInsumoProvisional}
+      disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida}
+    >
+      Agregar Insumo
+    </button>
+  </div>
+</Modal>
 
       <Modal
         isOpen={modalParcial}

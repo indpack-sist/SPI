@@ -229,7 +229,6 @@ function Productos() {
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-2 justify-center">
-          {/* NUEVO: Botón de Conteo Físico */}
           <button
             className="btn btn-sm btn-warning"
             onClick={() => abrirModalConteo(row)}
@@ -353,7 +352,6 @@ function Productos() {
         emptyMessage="No se encontraron productos"
       />
 
-      {/* Modal de Edición/Creación */}
       <Modal
         isOpen={modalOpen}
         onClose={cerrarModal}
@@ -534,7 +532,6 @@ function Productos() {
         </form>
       </Modal>
 
-      {/* NUEVO: Modal de Conteo Físico */}
       <ModalConteoFisico
         isOpen={modalConteoOpen}
         onClose={() => {

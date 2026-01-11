@@ -4,7 +4,7 @@ import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Calendar, Plus, ShoppingCart, Calculator,
-  CreditCard, Trash2
+  CreditCard, Trash2, Factory, AlertTriangle
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -22,13 +22,12 @@ function DetalleOrdenVenta() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [procesando, setProcesando] = useState(false);
   
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
-  const [modalProgresoOpen, setModalProgresoOpen] = useState(false);
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
   
-  const [progreso, setProgreso] = useState([]);
   const [pagoForm, setPagoForm] = useState({
     fecha_pago: new Date().toISOString().split('T')[0],
     monto_pagado: '',
@@ -54,13 +53,7 @@ function DetalleOrdenVenta() {
       ]);
       
       if (ordenRes.data.success) {
-        const data = ordenRes.data.data;
-        setOrden(data);
-        setProgreso(data.detalle.map(d => ({
-          id_detalle: d.id_detalle,
-          cantidad_producida: d.cantidad_producida || 0,
-          cantidad_despachada: d.cantidad_despachada || 0
-        })));
+        setOrden(ordenRes.data.data);
       }
       
       if (pagosRes.data.success) {
@@ -79,6 +72,33 @@ function DetalleOrdenVenta() {
     }
   };
 
+  const handleCrearOrdenProduccion = async (producto) => {
+    if (!confirm(`¿Crear orden de producción para ${producto.cantidad} ${producto.unidad_medida} de ${producto.producto}?`)) {
+      return;
+    }
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.crearOrdenProduccion(id, {
+        id_producto: producto.id_producto,
+        cantidad: producto.cantidad
+      });
+
+      if (response.data.success) {
+        setSuccess(`Orden de producción ${response.data.data.numero_orden_produccion} creada exitosamente`);
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error('Error al crear orden de producción:', err);
+      setError(err.response?.data?.error || 'Error al crear orden de producción');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
     
@@ -89,7 +109,7 @@ function DetalleOrdenVenta() {
     
     try {
       setError(null);
-      setLoading(true);
+      setProcesando(true);
       
       const response = await ordenesVentaAPI.registrarPago(id, {
         ...pagoForm,
@@ -114,7 +134,7 @@ function DetalleOrdenVenta() {
       console.error('Error al registrar pago:', err);
       setError(err.response?.data?.error || 'Error al registrar pago');
     } finally {
-      setLoading(false);
+      setProcesando(false);
     }
   };
 
@@ -123,7 +143,7 @@ function DetalleOrdenVenta() {
     
     try {
       setError(null);
-      setLoading(true);
+      setProcesando(true);
       
       const response = await ordenesVentaAPI.anularPago(id, idPago);
       
@@ -136,14 +156,14 @@ function DetalleOrdenVenta() {
       console.error('Error al anular pago:', err);
       setError(err.response?.data?.error || 'Error al anular pago');
     } finally {
-      setLoading(false);
+      setProcesando(false);
     }
   };
 
   const handleCambiarEstado = async (estado) => {
     try {
       setError(null);
-      setLoading(true);
+      setProcesando(true);
       
       const response = await ordenesVentaAPI.actualizarEstado(
         id, 
@@ -162,14 +182,14 @@ function DetalleOrdenVenta() {
       console.error('Error al cambiar estado:', err);
       setError(err.response?.data?.error || 'Error al cambiar estado');
     } finally {
-      setLoading(false);
+      setProcesando(false);
     }
   };
 
   const handleCambiarPrioridad = async (prioridad) => {
     try {
       setError(null);
-      setLoading(true);
+      setProcesando(true);
       
       const response = await ordenesVentaAPI.actualizarPrioridad(id, prioridad);
       
@@ -183,39 +203,7 @@ function DetalleOrdenVenta() {
       console.error('Error al cambiar prioridad:', err);
       setError(err.response?.data?.error || 'Error al cambiar prioridad');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleActualizarProgreso = async () => {
-    try {
-      setError(null);
-      setLoading(true);
-      
-      const response = await ordenesVentaAPI.actualizarProgreso(id, {
-        detalle: progreso
-      });
-      
-      if (response.data.success) {
-        const nuevoDetalle = orden.detalle.map(item => {
-          const prog = progreso.find(p => p.id_detalle === item.id_detalle);
-          return {
-            ...item,
-            cantidad_producida: prog?.cantidad_producida || item.cantidad_producida,
-            cantidad_despachada: prog?.cantidad_despachada || item.cantidad_despachada
-          };
-        });
-        
-        setOrden({ ...orden, detalle: nuevoDetalle });
-        setSuccess('Progreso actualizado exitosamente');
-        setModalProgresoOpen(false);
-      }
-      
-    } catch (err) {
-      console.error('Error al actualizar progreso:', err);
-      setError(err.response?.data?.error || 'Error al actualizar progreso');
-    } finally {
-      setLoading(false);
+      setProcesando(false);
     }
   };
 
@@ -225,14 +213,14 @@ function DetalleOrdenVenta() {
 
   const handleDescargarPDF = async () => {
     try {
-      setLoading(true);
+      setProcesando(true);
       await ordenesVentaAPI.descargarPDF(id);
       setSuccess('PDF descargado exitosamente');
     } catch (err) {
       console.error('Error al descargar PDF:', err);
       setError('Error al descargar el PDF');
     } finally {
-      setLoading(false);
+      setProcesando(false);
     }
   };
 
@@ -249,22 +237,22 @@ function DetalleOrdenVenta() {
 
   const getEstadoConfig = (estado) => {
     const configs = {
-      'Pendiente': { 
+      'En Espera': { 
         icono: Clock, 
         clase: 'badge-warning',
         color: 'border-warning',
-        siguientes: ['Confirmada', 'Cancelada'] 
+        siguientes: ['En Proceso', 'Cancelada'] 
       },
-      'Confirmada': { 
-        icono: CheckCircle,
+      'En Proceso': { 
+        icono: Factory,
         clase: 'badge-info',
         color: 'border-info',
-        siguientes: ['En Preparación', 'Cancelada']
+        siguientes: ['Atendido por Producción', 'Cancelada']
       },
-      'En Preparación': {  
-        icono: Package, 
-        clase: 'badge-info',
-        color: 'border-info',
+      'Atendido por Producción': {  
+        icono: CheckCircle, 
+        clase: 'badge-primary',
+        color: 'border-primary',
         siguientes: ['Despachada', 'Cancelada']
       },
       'Despachada': { 
@@ -286,7 +274,7 @@ function DetalleOrdenVenta() {
         siguientes: []
       }
     };
-    return configs[estado] || configs['Pendiente'];
+    return configs[estado] || configs['En Espera'];
   };
 
   const getPrioridadConfig = (prioridad) => {
@@ -308,11 +296,13 @@ function DetalleOrdenVenta() {
     return configs[estadoPago] || configs['Pendiente'];
   };
 
-  const calcularProgresoPorcentaje = (item) => {
-    if (!item.requiere_produccion) {
-      return (parseFloat(item.cantidad_despachada || 0) / parseFloat(item.cantidad)) * 100;
+  const puedeDespachar = () => {
+    if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
+      return false;
     }
-    return (parseFloat(item.cantidad_producida || 0) / parseFloat(item.cantidad)) * 100;
+    
+    // Solo puede despachar si está "Atendido por Producción" (productos listos)
+    return orden.estado === 'Atendido por Producción';
   };
 
   const columns = [
@@ -328,11 +318,19 @@ function DetalleOrdenVenta() {
       render: (value, row) => (
         <div>
           <div className="font-medium">{value}</div>
-          {row.requiere_produccion && (
-            <span className="badge badge-warning badge-sm">
-              <AlertCircle size={12} />
-              Requiere producción
-            </span>
+          {row.requiere_receta && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="badge badge-warning badge-sm">
+                <AlertCircle size={12} />
+                Requiere producción
+              </span>
+              {row.stock_disponible < row.cantidad && (
+                <span className="badge badge-danger badge-sm">
+                  <AlertTriangle size={12} />
+                  Stock insuficiente: {parseFloat(row.stock_disponible).toFixed(2)}
+                </span>
+              )}
+            </div>
           )}
         </div>
       )
@@ -357,28 +355,64 @@ function DetalleOrdenVenta() {
       render: (value) => formatearMoneda(value)
     },
     {
-      header: 'Progreso',
-      accessor: 'cantidad_producida',
-      width: '150px',
+      header: 'Estado',
+      accessor: 'tiene_op',
+      width: '180px',
+      align: 'center',
       render: (value, row) => {
-        const porcentaje = calcularProgresoPorcentaje(row);
+        if (!row.requiere_receta) {
+          return (
+            <span className="badge badge-success">
+              <CheckCircle size={12} />
+              Stock disponible
+            </span>
+          );
+        }
+
+        if (value > 0) {
+          return (
+            <span className="badge badge-info">
+              <Factory size={12} />
+              En producción
+            </span>
+          );
+        }
+
         return (
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>
-                {row.requiere_produccion ? 'Producido' : 'Despachado'}: 
-                {' '}{parseFloat(row.requiere_produccion ? row.cantidad_producida : row.cantidad_despachada).toFixed(2)}
-              </span>
-              <span className="font-bold">{porcentaje.toFixed(0)}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className={`h-2 rounded-full ${porcentaje >= 100 ? 'bg-success' : 'bg-primary'}`}
-                style={{ width: `${Math.min(porcentaje, 100)}%` }}
-              ></div>
-            </div>
-          </div>
+          <span className="badge badge-warning">
+            <AlertCircle size={12} />
+            Pendiente OP
+          </span>
         );
+      }
+    },
+    {
+      header: 'Acciones',
+      accessor: 'id_producto',
+      width: '140px',
+      align: 'center',
+      render: (value, row) => {
+        // Solo mostrar botón si requiere producción, no tiene OP, y no está cancelada
+        if (row.requiere_receta && row.tiene_op === 0 && orden?.estado !== 'Cancelada' && orden?.estado !== 'Entregada') {
+          return (
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => handleCrearOrdenProduccion(row)}
+              disabled={procesando}
+            >
+              <Factory size={14} />
+              Crear OP
+            </button>
+          );
+        }
+        
+        if (row.tiene_op > 0) {
+          return (
+            <span className="text-xs text-muted">OP creada</span>
+          );
+        }
+
+        return '-';
       }
     },
     {
@@ -444,6 +478,7 @@ function DetalleOrdenVenta() {
           className="btn btn-sm btn-danger"
           onClick={() => handleAnularPago(value, row.numero_pago)}
           title="Anular pago"
+          disabled={procesando}
         >
           <Trash2 size={14} />
         </button>
@@ -469,10 +504,11 @@ function DetalleOrdenVenta() {
   const prioridadConfig = getPrioridadConfig(orden.prioridad);
   const estadoPagoConfig = getEstadoPagoConfig(orden.estado_pago);
   const IconoEstadoPago = estadoPagoConfig.icono;
-  
-  const progresoGeneral = orden.detalle.reduce((sum, item) => 
-    sum + calcularProgresoPorcentaje(item), 0
-  ) / orden.detalle.length;
+
+  // Verificar si hay productos pendientes de producción
+  const productosRequierenOP = orden.detalle.filter(
+    item => item.requiere_receta && item.tiene_op === 0
+  );
 
   return (
     <div className="p-6">
@@ -494,7 +530,7 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
-          <button className="btn btn-outline" onClick={handleDescargarPDF}>
+          <button className="btn btn-outline" onClick={handleDescargarPDF} disabled={procesando}>
             <Download size={20} /> PDF
           </button>
           
@@ -506,10 +542,7 @@ function DetalleOrdenVenta() {
               <button className="btn btn-outline" onClick={() => setModalPrioridadOpen(true)}>
                 <TrendingUp size={20} /> Prioridad
               </button>
-              <button className="btn btn-info" onClick={() => setModalProgresoOpen(true)}>
-                <Package size={20} /> Progreso
-              </button>
-              {(orden.estado === 'En Preparación' || orden.estado === 'Despachada') && (
+              {puedeDespachar() && (
                 <button className="btn btn-primary" onClick={handleGenerarGuia}>
                   <Plus size={20} /> Guía de Remisión
                 </button>
@@ -521,6 +554,18 @@ function DetalleOrdenVenta() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {/* Alerta si hay productos pendientes de OP */}
+      {productosRequierenOP.length > 0 && orden.estado !== 'Cancelada' && (
+        <div className="alert alert-warning mb-4">
+          <AlertTriangle size={20} />
+          <div>
+            <strong>Atención:</strong> Hay {productosRequierenOP.length} producto(s) que requieren orden de producción.
+            <br />
+            <small>Cree las órdenes de producción necesarias para poder continuar con el despacho.</small>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-4 mb-4">
         <div className={`card border-l-4 ${estadoConfig.color}`}>
@@ -561,15 +606,13 @@ function DetalleOrdenVenta() {
 
         <div className="card">
           <div className="card-body">
-            <p className="text-sm text-muted mb-2">Progreso General</p>
+            <p className="text-sm text-muted mb-2">Productos</p>
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-gray-200 rounded-full h-3">
-                <div 
-                  className={`h-3 rounded-full ${progresoGeneral >= 100 ? 'bg-success' : 'bg-primary'}`}
-                  style={{ width: `${Math.min(progresoGeneral, 100)}%` }}
-                ></div>
+              <Package size={24} />
+              <div>
+                <span className="font-bold text-2xl">{orden.detalle.length}</span>
+                <span className="text-sm text-muted ml-1">items</span>
               </div>
-              <span className="font-bold text-lg">{progresoGeneral.toFixed(0)}%</span>
             </div>
           </div>
         </div>
@@ -714,6 +757,7 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
+      {/* MODAL: Cambiar Estado */}
       <Modal isOpen={modalEstadoOpen} onClose={() => setModalEstadoOpen(false)} title="Cambiar Estado">
         <div className="space-y-4">
           <p className="text-muted">Estado actual: <strong>{orden.estado}</strong></p>
@@ -726,6 +770,7 @@ function DetalleOrdenVenta() {
                   key={estado} 
                   className="btn btn-outline w-full justify-start" 
                   onClick={() => handleCambiarEstado(estado)}
+                  disabled={procesando}
                 >
                   <Icono size={20} /> {estado}
                 </button>
@@ -735,6 +780,7 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
+      {/* MODAL: Cambiar Prioridad */}
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
         <div className="space-y-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
@@ -742,7 +788,7 @@ function DetalleOrdenVenta() {
               key={prioridad} 
               className="btn btn-outline w-full justify-start" 
               onClick={() => handleCambiarPrioridad(prioridad)} 
-              disabled={orden.prioridad === prioridad}
+              disabled={orden.prioridad === prioridad || procesando}
             >
               <span className="text-2xl mr-2">{getPrioridadConfig(prioridad).icono}</span>
               {prioridad}
@@ -751,71 +797,7 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
-      <Modal isOpen={modalProgresoOpen} onClose={() => setModalProgresoOpen(false)} title="Actualizar Progreso" size="lg">
-        <div className="space-y-4">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Total</th>
-                <th>Producida</th>
-                <th>Despachada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orden.detalle.map((item) => {
-                const prog = progreso.find(p => p.id_detalle === item.id_detalle);
-                return (
-                  <tr key={item.id_detalle}>
-                    <td>{item.producto}</td>
-                    <td>{parseFloat(item.cantidad).toFixed(2)}</td>
-                    <td>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        value={prog?.cantidad_producida || 0}
-                        onChange={(e) => {
-                          const newProgreso = [...progreso];
-                          const idx = newProgreso.findIndex(p => p.id_detalle === item.id_detalle);
-                          if (idx >= 0) newProgreso[idx].cantidad_producida = parseFloat(e.target.value) || 0;
-                          setProgreso(newProgreso);
-                        }}
-                        disabled={!item.requiere_produccion}
-                        step="0.01"
-                        min="0"
-                      />
-                    </td>
-                    <td>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        value={prog?.cantidad_despachada || 0}
-                        onChange={(e) => {
-                          const newProgreso = [...progreso];
-                          const idx = newProgreso.findIndex(p => p.id_detalle === item.id_detalle);
-                          if (idx >= 0) newProgreso[idx].cantidad_despachada = parseFloat(e.target.value) || 0;
-                          setProgreso(newProgreso);
-                        }}
-                        step="0.01"
-                        min="0"
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="flex gap-2 justify-end">
-            <button className="btn btn-outline" onClick={() => setModalProgresoOpen(false)}>
-              Cancelar
-            </button>
-            <button className="btn btn-primary" onClick={handleActualizarProgreso}>
-              <CheckCircle size={20} /> Guardar
-            </button>
-          </div>
-        </div>
-      </Modal>
-
+      {/* MODAL: Registrar Pago */}
       <Modal isOpen={modalPagoOpen} onClose={() => setModalPagoOpen(false)} title="Registrar Pago" size="md">
         <form onSubmit={handleRegistrarPago}>
           <div className="space-y-4">
@@ -911,7 +893,7 @@ function DetalleOrdenVenta() {
               <button type="button" className="btn btn-outline" onClick={() => setModalPagoOpen(false)}>
                 Cancelar
               </button>
-              <button type="submit" className="btn btn-success">
+              <button type="submit" className="btn btn-success" disabled={procesando}>
                 <CreditCard size={20} /> Registrar Pago
               </button>
             </div>

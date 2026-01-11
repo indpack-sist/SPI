@@ -145,15 +145,22 @@ export async function getOrdenById(req, res) {
 export async function asignarRecetaYSupervisor(req, res) {
   try {
     const { id } = req.params;
-    const { id_receta_producto, id_supervisor } = req.body;
+    const { 
+      id_supervisor, 
+      modo_receta, 
+      id_receta_producto, 
+      receta_provisional, 
+      rendimiento_receta,
+      es_orden_manual 
+    } = req.body;
     
-    if (!id_receta_producto || !id_supervisor) {
+    if (!id_supervisor) {
       return res.status(400).json({
         success: false,
-        error: 'Receta y supervisor son requeridos'
+        error: 'Supervisor es requerido'
       });
     }
-    
+
     const ordenResult = await executeQuery(`
       SELECT * FROM ordenes_produccion 
       WHERE id_orden = ? AND estado = 'Pendiente Asignación'
@@ -167,40 +174,113 @@ export async function asignarRecetaYSupervisor(req, res) {
     }
     
     const orden = ordenResult.data[0];
-    
-    const recetaResult = await executeQuery(`
-      SELECT 
-        rd.id_insumo,
-        rd.cantidad_requerida,
-        rd.unidad_medida,
-        p.costo_unitario_promedio,
-        p.stock_actual,
-        p.id_tipo_inventario,
-        rp.rendimiento_unidades
-      FROM recetas_detalle rd
-      INNER JOIN recetas_productos rp ON rd.id_receta_producto = rp.id_receta_producto
-      INNER JOIN productos p ON rd.id_insumo = p.id_producto
-      WHERE rd.id_receta_producto = ?
-    `, [id_receta_producto]);
-    
-    if (!recetaResult.success || recetaResult.data.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'La receta seleccionada no tiene insumos configurados'
-      });
-    }
-    
-    const recetaData = recetaResult.data;
-    const rendimientoUnidades = parseFloat(recetaData[0].rendimiento_unidades) || 1;
     const cantidadPlan = parseFloat(orden.cantidad_planificada);
-    const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
     
     let costoMateriales = 0;
-    for (const insumo of recetaData) {
-      const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
-      costoMateriales += cantidadTotal * parseFloat(insumo.costo_unitario_promedio);
+    let rendimientoUnidades = 1;
+    let idRecetaProducto = null;
+
+    // MODO: Orden Manual (sin consumo de materiales)
+    if (modo_receta === 'manual' || es_orden_manual) {
+      const updateResult = await executeQuery(`
+        UPDATE ordenes_produccion 
+        SET id_supervisor = ?,
+            costo_materiales = 0,
+            rendimiento_unidades = 1,
+            es_orden_manual = 1,
+            estado = 'Pendiente'
+        WHERE id_orden = ?
+      `, [id_supervisor, id]);
+      
+      if (!updateResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: updateResult.error
+        });
+      }
+      
+      return res.json({
+        success: true,
+        message: 'Orden manual asignada exitosamente (sin consumo de materiales)',
+        data: {
+          costo_materiales: 0,
+          lotes_necesarios: 0,
+          rendimiento_unidades: 1,
+          estado: 'Pendiente',
+          es_manual: true
+        }
+      });
+    }
+
+    // MODO: Receta Existente
+    if (modo_receta === 'seleccionar' && id_receta_producto) {
+      const recetaResult = await executeQuery(`
+        SELECT 
+          rd.id_insumo,
+          rd.cantidad_requerida,
+          rd.unidad_medida,
+          p.costo_unitario_promedio,
+          p.stock_actual,
+          p.id_tipo_inventario,
+          rp.rendimiento_unidades
+        FROM recetas_detalle rd
+        INNER JOIN recetas_productos rp ON rd.id_receta_producto = rp.id_receta_producto
+        INNER JOIN productos p ON rd.id_insumo = p.id_producto
+        WHERE rd.id_receta_producto = ?
+      `, [id_receta_producto]);
+      
+      if (!recetaResult.success || recetaResult.data.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'La receta seleccionada no tiene insumos configurados'
+        });
+      }
+      
+      const recetaData = recetaResult.data;
+      rendimientoUnidades = parseFloat(recetaData[0].rendimiento_unidades) || 1;
+      const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
+      
+      for (const insumo of recetaData) {
+        const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
+        costoMateriales += cantidadTotal * parseFloat(insumo.costo_unitario_promedio);
+      }
+      
+      idRecetaProducto = id_receta_producto;
     }
     
+    // MODO: Receta Provisional
+    else if (modo_receta === 'provisional' && receta_provisional && receta_provisional.length > 0) {
+      rendimientoUnidades = parseFloat(rendimiento_receta) || 1;
+      const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
+      
+      for (const item of receta_provisional) {
+        const insumoResult = await executeQuery(`
+          SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?
+        `, [item.id_insumo]);
+        
+        if (insumoResult.success && insumoResult.data.length > 0) {
+          const costoUnitario = parseFloat(insumoResult.data[0].costo_unitario_promedio);
+          const cantidadTotal = parseFloat(item.cantidad_requerida) * lotesNecesarios;
+          costoMateriales += cantidadTotal * costoUnitario;
+        }
+      }
+      
+      // Guardar receta provisional en tabla temporal o en JSON
+      await executeQuery(`
+        UPDATE ordenes_produccion 
+        SET receta_provisional = ?
+        WHERE id_orden = ?
+      `, [JSON.stringify(receta_provisional), id]);
+    }
+    
+    else {
+      return res.status(400).json({
+        success: false,
+        error: 'Debe proporcionar una receta existente o una receta provisional'
+      });
+    }
+
+    // Actualizar orden de producción
     const updateResult = await executeQuery(`
       UPDATE ordenes_produccion 
       SET id_receta_producto = ?,
@@ -209,7 +289,7 @@ export async function asignarRecetaYSupervisor(req, res) {
           rendimiento_unidades = ?,
           estado = 'Pendiente'
       WHERE id_orden = ?
-    `, [id_receta_producto, id_supervisor, costoMateriales, rendimientoUnidades, id]);
+    `, [idRecetaProducto, id_supervisor, costoMateriales, rendimientoUnidades, id]);
     
     if (!updateResult.success) {
       return res.status(500).json({
@@ -218,6 +298,8 @@ export async function asignarRecetaYSupervisor(req, res) {
       });
     }
     
+    const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
+    
     res.json({
       success: true,
       message: 'Receta y supervisor asignados exitosamente',
@@ -225,7 +307,8 @@ export async function asignarRecetaYSupervisor(req, res) {
         costo_materiales: costoMateriales,
         lotes_necesarios: lotesNecesarios,
         rendimiento_unidades: rendimientoUnidades,
-        estado: 'Pendiente'
+        estado: 'Pendiente',
+        modo_receta: modo_receta
       }
     });
     

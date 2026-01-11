@@ -658,7 +658,60 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     });
   }
 }
-
+export async function actualizarPrioridadOrdenVenta(req, res) {
+  try {
+    const { id } = req.params;
+    const { prioridad } = req.body;
+    
+    const prioridadesValidas = ['Baja', 'Media', 'Alta', 'Urgente'];
+    
+    if (!prioridadesValidas.includes(prioridad)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Prioridad no válida. Debe ser: Baja, Media, Alta o Urgente'
+      });
+    }
+    
+    const ordenCheck = await executeQuery(`
+      SELECT id_orden_venta FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenCheck.success || ordenCheck.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const result = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET prioridad = ?
+      WHERE id_orden_venta = ?
+    `, [prioridad, id]);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Prioridad actualizada a ${prioridad}`,
+      data: {
+        prioridad
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error al actualizar prioridad:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
 export async function getEstadisticasOrdenesVenta(req, res) {
   try {
     const result = await executeQuery(`

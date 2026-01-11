@@ -231,28 +231,29 @@ function CrearOrden() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    setGuardando(true);
+  e.preventDefault();
+  setError(null);
+  setSuccess(null);
+  setGuardando(true);
 
-    try {
-      const payload = {
-        ...formData,
-        cantidad_planificada: parseFloat(formData.cantidad_planificada)
-      };
+  try {
+    const payload = {
+      ...formData,
+      cantidad_planificada: parseFloat(formData.cantidad_planificada),
+      origen_tipo: 'Supervisor' // AGREGAR ESTA LÍNEA
+    };
 
-      if (modoReceta === 'manual') {
-        payload.es_orden_manual = true;
-        
-        const response = await ordenesProduccionAPI.create(payload);
-        setSuccess('Orden manual creada exitosamente (sin consumo de materiales)');
-        
-        setTimeout(() => {
-          navigate(`/produccion/ordenes/${response.data.data.id_orden}`);
-        }, 1500);
-        return;
-      }
+    if (modoReceta === 'manual') {
+      payload.es_orden_manual = true;
+      
+      const response = await ordenesProduccionAPI.create(payload);
+      setSuccess('Orden manual creada exitosamente (sin consumo de materiales)');
+      
+      setTimeout(() => {
+        navigate(`/produccion/ordenes/${response.data.data.id_orden}`);
+      }, 1500);
+      return;
+    }
 
       if (modoReceta === 'seleccionar' && recetaSeleccionada) {
         payload.id_receta_producto = recetaSeleccionada.id_receta_producto;

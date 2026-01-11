@@ -755,50 +755,49 @@ export async function actualizarEstadoCotizacion(req, res) {
 
       const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
 
-      // Crear Orden de Venta
       const [ordenResult] = await connection.query(`
-        INSERT INTO ordenes_venta (
-          numero_orden,
-          id_cotizacion,
-          id_cliente,
-          id_comercial,
-          fecha_emision,
-          prioridad,
-          moneda,
-          tipo_impuesto,
-          porcentaje_impuesto,
-          tipo_cambio,
-          subtotal,
-          igv,
-          total,
-          plazo_pago,
-          forma_pago,
-          direccion_entrega,
-          lugar_entrega,
-          observaciones,
-          id_registrado_por,
-          estado
-        ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente')
-      `, [
-        numeroOrden,
-        cotizacion.id_cotizacion,
-        cotizacion.id_cliente,
-        cotizacion.id_comercial,
-        cotizacion.prioridad || 'Media',
-        cotizacion.moneda || 'PEN',
-        cotizacion.tipo_impuesto || 'IGV',
-        cotizacion.porcentaje_impuesto || 18.00,
-        cotizacion.tipo_cambio || 1.0000,
-        cotizacion.subtotal,
-        cotizacion.igv,
-        cotizacion.total,
-        cotizacion.plazo_pago,
-        cotizacion.forma_pago,
-        cotizacion.direccion_entrega,
-        cotizacion.lugar_entrega,
-        cotizacion.observaciones,
-        req.user?.id_empleado || cotizacion.id_comercial
-      ]);
+  INSERT INTO ordenes_venta (
+    numero_orden,
+    id_cotizacion,
+    id_cliente,
+    id_comercial,
+    fecha_emision,
+    prioridad,
+    moneda,
+    tipo_impuesto,
+    porcentaje_impuesto,
+    tipo_cambio,
+    subtotal,
+    igv,
+    total,
+    plazo_pago,
+    forma_pago,
+    direccion_entrega,
+    lugar_entrega,
+    observaciones,
+    id_registrado_por,
+    estado
+  ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')  -- CAMBIAR AQUÍ
+`, [
+  numeroOrden,
+  cotizacion.id_cotizacion,
+  cotizacion.id_cliente,
+  cotizacion.id_comercial,
+  cotizacion.prioridad || 'Media',
+  cotizacion.moneda || 'PEN',
+  cotizacion.tipo_impuesto || 'IGV',
+  cotizacion.porcentaje_impuesto || 18.00,
+  cotizacion.tipo_cambio || 1.0000,
+  cotizacion.subtotal,
+  cotizacion.igv,
+  cotizacion.total,
+  cotizacion.plazo_pago,
+  cotizacion.forma_pago,
+  cotizacion.direccion_entrega,
+  cotizacion.lugar_entrega,
+  cotizacion.observaciones,
+  req.user?.id_empleado || cotizacion.id_comercial
+]);
 
       const idOrdenVenta = ordenResult.insertId;
 

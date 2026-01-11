@@ -27,6 +27,10 @@ function DetalleOrdenVenta() {
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
+  const [modalCrearOP, setModalCrearOP] = useState(false);
+  
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [cantidadOP, setCantidadOP] = useState('');
   
   const [pagoForm, setPagoForm] = useState({
     fecha_pago: new Date().toISOString().split('T')[0],
@@ -69,33 +73,6 @@ function DetalleOrdenVenta() {
       setError(err.response?.data?.error || 'Error al cargar datos');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCrearOrdenProduccion = async (producto) => {
-    if (!confirm(`¿Crear orden de producción para ${producto.cantidad} ${producto.unidad_medida} de ${producto.producto}?`)) {
-      return;
-    }
-
-    try {
-      setProcesando(true);
-      setError(null);
-
-      const response = await ordenesVentaAPI.crearOrdenProduccion(id, {
-        id_producto: producto.id_producto,
-        cantidad: producto.cantidad
-      });
-
-      if (response.data.success) {
-        setSuccess(`Orden de producción ${response.data.data.numero_orden_produccion} creada exitosamente`);
-        await cargarDatos();
-      }
-
-    } catch (err) {
-      console.error('Error al crear orden de producción:', err);
-      setError(err.response?.data?.error || 'Error al crear orden de producción');
-    } finally {
-      setProcesando(false);
     }
   };
 
@@ -338,18 +315,10 @@ function DetalleOrdenVenta() {
         <div>
           <div className="font-medium">{value}</div>
           {row.requiere_receta && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="badge badge-warning badge-sm">
-                <AlertCircle size={12} />
-                Requiere producción
-              </span>
-              {row.stock_disponible < row.cantidad && (
-                <span className="badge badge-danger badge-sm">
-                  <AlertTriangle size={12} />
-                  Stock insuficiente: {parseFloat(row.stock_disponible).toFixed(2)}
-                </span>
-              )}
-            </div>
+            <span className="badge badge-warning badge-sm mt-1">
+              <AlertCircle size={12} />
+              Requiere producción
+            </span>
           )}
         </div>
       )
@@ -388,6 +357,9 @@ function DetalleOrdenVenta() {
           );
         }
 
+        const stockDisponible = parseFloat(row.stock_disponible || 0);
+        const cantidadRequerida = parseFloat(row.cantidad);
+
         if (value > 0) {
           return (
             <span className="badge badge-info">
@@ -397,36 +369,69 @@ function DetalleOrdenVenta() {
           );
         }
 
+        if (stockDisponible >= cantidadRequerida) {
+          return (
+            <div className="flex flex-col gap-1">
+              <span className="badge badge-success">
+                <CheckCircle size={12} />
+                Stock disponible
+              </span>
+              <span className="text-xs text-muted">
+                {stockDisponible.toFixed(2)} {row.unidad_medida}
+              </span>
+            </div>
+          );
+        }
+
         return (
-          <span className="badge badge-warning">
-            <AlertCircle size={12} />
-            Pendiente OP
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className="badge badge-warning">
+              <AlertCircle size={12} />
+              Pendiente OP
+            </span>
+            <span className="text-xs text-danger">
+              Falta: {(cantidadRequerida - stockDisponible).toFixed(2)} {row.unidad_medida}
+            </span>
+          </div>
         );
       }
     },
     {
       header: 'Acciones',
       accessor: 'id_producto',
-      width: '140px',
+      width: '160px',
       align: 'center',
       render: (value, row) => {
-        if (row.requiere_receta && row.tiene_op === 0 && orden?.estado !== 'Cancelada' && orden?.estado !== 'Entregada') {
-          return (
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={() => handleCrearOrdenProduccion(row)}
-              disabled={procesando}
-            >
-              <Factory size={14} />
-              Crear OP
-            </button>
-          );
-        }
-        
+        const stockDisponible = parseFloat(row.stock_disponible || 0);
+        const cantidadRequerida = parseFloat(row.cantidad);
+        const stockSuficiente = stockDisponible >= cantidadRequerida;
+
         if (row.tiene_op > 0) {
           return (
             <span className="text-xs text-muted">OP creada</span>
+          );
+        }
+
+        if (orden?.estado === 'Cancelada' || orden?.estado === 'Entregada') {
+          return '-';
+        }
+
+        if (row.requiere_receta) {
+          return (
+            <button
+              className={`btn btn-sm ${stockSuficiente ? 'btn-outline btn-primary' : 'btn-primary'}`}
+              onClick={() => {
+                setProductoSeleccionado(row);
+                const faltante = cantidadRequerida - stockDisponible;
+                setCantidadOP(faltante > 0 ? faltante : cantidadRequerida);
+                setModalCrearOP(true);
+              }}
+              disabled={procesando}
+              title={stockSuficiente ? 'Crear OP adicional' : 'Crear OP requerida'}
+            >
+              <Factory size={14} />
+              {stockSuficiente ? 'Producir más' : 'Crear OP'}
+            </button>
           );
         }
 
@@ -523,9 +528,11 @@ function DetalleOrdenVenta() {
   const estadoPagoConfig = getEstadoPagoConfig(orden.estado_pago);
   const IconoEstadoPago = estadoPagoConfig.icono;
 
-  const productosRequierenOP = orden.detalle.filter(
-    item => item.requiere_receta && item.tiene_op === 0
-  );
+  const productosRequierenOP = orden.detalle.filter(item => {
+    const stockDisponible = parseFloat(item.stock_disponible || 0);
+    const cantidadRequerida = parseFloat(item.cantidad);
+    return item.requiere_receta && item.tiene_op === 0 && stockDisponible < cantidadRequerida;
+  });
 
   return (
     <div className="p-6">
@@ -587,9 +594,9 @@ function DetalleOrdenVenta() {
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
           <div>
-            <strong>Atención:</strong> Hay {productosRequierenOP.length} producto(s) que requieren orden de producción.
+            <strong>Atención:</strong> Hay {productosRequierenOP.length} producto(s) sin stock suficiente que requieren orden de producción.
             <br />
-            <small>Cree las órdenes de producción necesarias para poder continuar con el despacho.</small>
+            <small>Puede crear órdenes de producción para los productos faltantes o producir cantidades adicionales.</small>
           </div>
         </div>
       )}
@@ -934,6 +941,129 @@ function DetalleOrdenVenta() {
             </div>
           </div>
         </form>
+      </Modal>
+
+      <Modal 
+        isOpen={modalCrearOP} 
+        onClose={() => {
+          setModalCrearOP(false);
+          setProductoSeleccionado(null);
+          setCantidadOP('');
+        }} 
+        title="Crear Orden de Producción"
+        size="md"
+      >
+        {productoSeleccionado && (
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            
+            if (!cantidadOP || parseFloat(cantidadOP) <= 0) {
+              setError('Ingrese una cantidad válida');
+              return;
+            }
+
+            try {
+              setProcesando(true);
+              setError(null);
+
+              const response = await ordenesVentaAPI.crearOrdenProduccion(id, {
+                id_producto: productoSeleccionado.id_producto,
+                cantidad: parseFloat(cantidadOP)
+              });
+
+              if (response.data.success) {
+                setSuccess(`Orden de producción ${response.data.data.numero_orden_produccion} creada exitosamente`);
+                setModalCrearOP(false);
+                setProductoSeleccionado(null);
+                setCantidadOP('');
+                await cargarDatos();
+              }
+
+            } catch (err) {
+              console.error('Error al crear orden de producción:', err);
+              setError(err.response?.data?.error || 'Error al crear orden de producción');
+            } finally {
+              setProcesando(false);
+            }
+          }}>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
+                <div className="flex items-start gap-3">
+                  <Factory className="text-blue-500 shrink-0 mt-0.5" size={20} />
+                  <div className="text-sm text-blue-700">
+                    <p className="font-semibold mb-1">Producto: {productoSeleccionado.producto}</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <strong>Código:</strong> {productoSeleccionado.codigo_producto}
+                      </div>
+                      <div>
+                        <strong>Cantidad OV:</strong> {parseFloat(productoSeleccionado.cantidad).toFixed(2)} {productoSeleccionado.unidad_medida}
+                      </div>
+                      <div>
+                        <strong>Stock actual:</strong> {parseFloat(productoSeleccionado.stock_disponible || 0).toFixed(2)} {productoSeleccionado.unidad_medida}
+                      </div>
+                      <div>
+                        <strong>Faltante:</strong> {Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(2)} {productoSeleccionado.unidad_medida}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Cantidad a Producir *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="form-input"
+                  value={cantidadOP}
+                  onChange={(e) => setCantidadOP(e.target.value)}
+                  required
+                  placeholder="0.00"
+                  autoFocus
+                />
+                <small className="text-muted block mt-1">
+                  Puede producir cualquier cantidad. El faltante sugerido es: {Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(2)} {productoSeleccionado.unidad_medida}
+                </small>
+              </div>
+
+              {parseFloat(productoSeleccionado.stock_disponible || 0) >= parseFloat(productoSeleccionado.cantidad) && (
+                <div className="alert alert-info">
+                  <AlertCircle size={18} />
+                  <div>
+                    <strong>Nota:</strong> Ya hay stock suficiente para esta orden.
+                    <br />
+                    <small>Esta orden de producción es adicional y aumentará el inventario.</small>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <button 
+                  type="button" 
+                  className="btn btn-outline" 
+                  onClick={() => {
+                    setModalCrearOP(false);
+                    setProductoSeleccionado(null);
+                    setCantidadOP('');
+                  }}
+                  disabled={procesando}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={procesando || !cantidadOP}
+                >
+                  <Factory size={20} />
+                  {procesando ? 'Creando...' : 'Crear Orden de Producción'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

@@ -529,10 +529,15 @@ function DetalleOrdenVenta() {
   const IconoEstadoPago = estadoPagoConfig.icono;
 
   const productosRequierenOP = orden.detalle.filter(item => {
-    const stockDisponible = parseFloat(item.stock_disponible || 0);
-    const cantidadRequerida = parseFloat(item.cantidad);
-    return item.requiere_receta && item.tiene_op === 0 && stockDisponible < cantidadRequerida;
-  });
+  const stockDisponible = parseFloat(item.stock_disponible || 0);
+  const cantidadRequerida = parseFloat(item.cantidad);
+  return item.requiere_receta && 
+         item.tiene_op === 0 && 
+         stockDisponible < cantidadRequerida &&
+         orden.estado !== 'Cancelada' &&
+         orden.estado !== 'Entregada' &&
+         orden.estado !== 'Despachada'; // Tampoco si ya está despachada
+});
 
   return (
     <div className="p-6">

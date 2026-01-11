@@ -6,35 +6,37 @@ export async function getAllOrdenesVenta(req, res) {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
     
     let sql = `
-      SELECT 
-        ov.id_orden_venta,
-        ov.numero_orden,
-        ov.fecha_emision,
-        ov.fecha_entrega_estimada,
-        ov.fecha_entrega_real,
-        ov.estado,
-        ov.prioridad,
-        ov.subtotal,
-        ov.igv,
-        ov.total,
-        ov.moneda,
-        ov.id_cotizacion,
-        c.numero_cotizacion,
-        cl.id_cliente,
-        cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente,
-        e_comercial.nombre_completo AS comercial,
-        e_registrado.nombre_completo AS registrado_por,
-        ov.id_comercial,
-        ov.id_registrado_por,
-        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
-      FROM ordenes_venta ov
-      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
-      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
-      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
-      WHERE 1=1
-    `;
+  SELECT 
+    ov.id_orden_venta,
+    ov.numero_orden,
+    ov.fecha_emision,
+    ov.fecha_entrega_estimada,
+    ov.fecha_entrega_real,
+    ov.estado,
+    ov.prioridad,
+    ov.subtotal,
+    ov.igv,
+    ov.total,
+    ov.moneda,
+    ov.monto_pagado,              -- AGREGAR ESTA LÍNEA
+    ov.estado_pago,               -- AGREGAR ESTA LÍNEA
+    ov.id_cotizacion,
+    c.numero_cotizacion,
+    cl.id_cliente,
+    cl.razon_social AS cliente,
+    cl.ruc AS ruc_cliente,
+    e_comercial.nombre_completo AS comercial,
+    e_registrado.nombre_completo AS registrado_por,
+    ov.id_comercial,
+    ov.id_registrado_por,
+    (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
+  FROM ordenes_venta ov
+  LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+  LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+  LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+  LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+  WHERE 1=1
+`;
     
     const params = [];
     
@@ -486,11 +488,11 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
     });
   }
 }
-
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { estado, fecha_entrega_real } = req.body;
+    const id_usuario = req.user?.id_empleado || null;
     
     const estadosValidos = ['En Espera', 'En Proceso', 'Atendido por Producción', 'Despachada', 'Entregada', 'Cancelada'];
     
@@ -501,68 +503,155 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       });
     }
     
-    const result = await executeQuery(`
+    // Obtener estado actual y datos de la orden
+    const ordenResult = await executeQuery(`
+      SELECT ov.*, cl.razon_social AS cliente
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const orden = ordenResult.data[0];
+    const estadoAnterior = orden.estado;
+    
+    // Si cambia a "Despachada" y no estaba antes en "Despachada", generar salida automática
+    let idSalida = null;
+    if (estado === 'Despachada' && estadoAnterior !== 'Despachada') {
+      // Obtener detalle de la orden
+      const detalleResult = await executeQuery(`
+        SELECT 
+          dov.id_producto,
+          dov.cantidad,
+          p.codigo AS codigo_producto,
+          p.nombre AS producto,
+          p.costo_unitario_promedio
+        FROM detalle_orden_venta dov
+        INNER JOIN productos p ON dov.id_producto = p.id_producto
+        WHERE dov.id_orden_venta = ?
+      `, [id]);
+      
+      if (detalleResult.success && detalleResult.data.length > 0) {
+        const detalles = detalleResult.data;
+        
+        // Calcular totales
+        let totalCosto = 0;
+        let totalPrecio = 0;
+        
+        for (const item of detalles) {
+          const cantidad = parseFloat(item.cantidad);
+          const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
+          totalCosto += cantidad * costoUnitario;
+          totalPrecio += parseFloat(orden.total);
+        }
+        
+        // Crear salida
+        const salidaResult = await executeQuery(`
+          INSERT INTO salidas (
+            id_tipo_inventario,
+            tipo_movimiento,
+            id_cliente,
+            total_costo,
+            total_precio,
+            moneda,
+            id_registrado_por,
+            observaciones,
+            estado
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          3, // Productos Terminados
+          'Venta',
+          orden.id_cliente,
+          totalCosto,
+          parseFloat(orden.total),
+          orden.moneda || 'PEN',
+          id_usuario,
+          `Salida automática por despacho de ${orden.numero_orden}`,
+          'Activo'
+        ]);
+        
+        if (salidaResult.success) {
+          idSalida = salidaResult.data.insertId;
+          
+          // Insertar detalle de salida y actualizar stock
+          for (const item of detalles) {
+            // Verificar stock disponible
+            const stockCheck = await executeQuery(`
+              SELECT stock_actual FROM productos WHERE id_producto = ?
+            `, [item.id_producto]);
+            
+            const stockActual = parseFloat(stockCheck.data[0].stock_actual);
+            const cantidadSalida = parseFloat(item.cantidad);
+            
+            if (stockActual < cantidadSalida) {
+              return res.status(400).json({
+                success: false,
+                error: `Stock insuficiente para ${item.producto}. Disponible: ${stockActual}, Requerido: ${cantidadSalida}`
+              });
+            }
+            
+            // Insertar detalle
+            await executeQuery(`
+              INSERT INTO detalle_salidas (
+                id_salida,
+                id_producto,
+                cantidad,
+                costo_unitario,
+                precio_unitario
+              ) VALUES (?, ?, ?, ?, ?)
+            `, [
+              idSalida,
+              item.id_producto,
+              cantidadSalida,
+              parseFloat(item.costo_unitario_promedio || 0),
+              parseFloat(orden.subtotal) / detalles.length // Prorratear precio
+            ]);
+            
+            // Descontar stock
+            await executeQuery(`
+              UPDATE productos 
+              SET stock_actual = stock_actual - ? 
+              WHERE id_producto = ?
+            `, [cantidadSalida, item.id_producto]);
+          }
+        }
+      }
+    }
+    
+    // Actualizar estado de la orden
+    const updateResult = await executeQuery(`
       UPDATE ordenes_venta 
       SET estado = ?,
-          fecha_entrega_real = ?
+          fecha_entrega_real = ?,
+          id_salida = ?
       WHERE id_orden_venta = ?
-    `, [estado, fecha_entrega_real || null, id]);
+    `, [estado, fecha_entrega_real || null, idSalida, id]);
     
-    if (!result.success) {
+    if (!updateResult.success) {
       return res.status(500).json({ 
         success: false,
-        error: result.error 
+        error: updateResult.error 
       });
     }
     
     res.json({
       success: true,
-      message: 'Estado actualizado exitosamente'
+      message: estado === 'Despachada' && idSalida
+        ? `Estado actualizado a ${estado}. Salida de inventario #${idSalida} generada automáticamente.`
+        : `Estado actualizado a ${estado}`,
+      data: {
+        id_salida: idSalida
+      }
     });
     
   } catch (error) {
     console.error('Error al actualizar estado:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-}
-
-export async function actualizarPrioridadOrdenVenta(req, res) {
-  try {
-    const { id } = req.params;
-    const { prioridad } = req.body;
-    
-    const prioridadesValidas = ['Baja', 'Media', 'Alta', 'Urgente'];
-    
-    if (!prioridadesValidas.includes(prioridad)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Prioridad no válida'
-      });
-    }
-    
-    const result = await executeQuery(`
-      UPDATE ordenes_venta 
-      SET prioridad = ? 
-      WHERE id_orden_venta = ?
-    `, [prioridad, id]);
-    
-    if (!result.success) {
-      return res.status(500).json({ 
-        success: false,
-        error: result.error 
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Prioridad actualizada exitosamente'
-    });
-    
-  } catch (error) {
-    console.error('Error al actualizar prioridad:', error);
     res.status(500).json({
       success: false,
       error: error.message

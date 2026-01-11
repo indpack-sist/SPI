@@ -4,13 +4,13 @@ import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Calendar, Plus, ShoppingCart, Calculator,
-  CreditCard, Trash2, Factory, AlertTriangle
+  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { ordenesVentaAPI } from '../../config/api';
+import { ordenesVentaAPI, salidasAPI } from '../../config/api';
 
 function DetalleOrdenVenta() {
   const { id } = useParams();
@@ -172,8 +172,7 @@ function DetalleOrdenVenta() {
       );
       
       if (response.data.success) {
-        setOrden({ ...orden, estado });
-        setSuccess(`Estado actualizado a ${estado}`);
+        setSuccess(response.data.message || `Estado actualizado a ${estado}`);
         setModalEstadoOpen(false);
         await cargarDatos();
       }
@@ -214,11 +213,33 @@ function DetalleOrdenVenta() {
   const handleDescargarPDF = async () => {
     try {
       setProcesando(true);
+      setError(null);
       await ordenesVentaAPI.descargarPDF(id);
-      setSuccess('PDF descargado exitosamente');
+      setSuccess('PDF de orden de venta descargado exitosamente');
     } catch (err) {
       console.error('Error al descargar PDF:', err);
-      setError('Error al descargar el PDF');
+      setError('Error al descargar el PDF de orden de venta');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleDescargarPDFSalida = async () => {
+    try {
+      setProcesando(true);
+      setError(null);
+      
+      if (!orden.id_salida) {
+        setError('No hay salida de inventario asociada');
+        return;
+      }
+      
+      await salidasAPI.generarPDF(orden.id_salida);
+      setSuccess('PDF de salida descargado exitosamente');
+      
+    } catch (err) {
+      console.error('Error al descargar PDF de salida:', err);
+      setError(err.message || 'Error al descargar el PDF de salida');
     } finally {
       setProcesando(false);
     }
@@ -300,8 +321,6 @@ function DetalleOrdenVenta() {
     if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
       return false;
     }
-    
-    // Solo puede despachar si está "Atendido por Producción" (productos listos)
     return orden.estado === 'Atendido por Producción';
   };
 
@@ -392,7 +411,6 @@ function DetalleOrdenVenta() {
       width: '140px',
       align: 'center',
       render: (value, row) => {
-        // Solo mostrar botón si requiere producción, no tiene OP, y no está cancelada
         if (row.requiere_receta && row.tiene_op === 0 && orden?.estado !== 'Cancelada' && orden?.estado !== 'Entregada') {
           return (
             <button
@@ -505,7 +523,6 @@ function DetalleOrdenVenta() {
   const estadoPagoConfig = getEstadoPagoConfig(orden.estado_pago);
   const IconoEstadoPago = estadoPagoConfig.icono;
 
-  // Verificar si hay productos pendientes de producción
   const productosRequierenOP = orden.detalle.filter(
     item => item.requiere_receta && item.tiene_op === 0
   );
@@ -531,8 +548,19 @@ function DetalleOrdenVenta() {
         
         <div className="flex gap-2">
           <button className="btn btn-outline" onClick={handleDescargarPDF} disabled={procesando}>
-            <Download size={20} /> PDF
+            <Download size={20} /> PDF Orden
           </button>
+          
+          {orden.estado === 'Despachada' && orden.id_salida && (
+            <button 
+              className="btn btn-success" 
+              onClick={handleDescargarPDFSalida}
+              disabled={procesando}
+              title="Descargar PDF de Salida de Inventario"
+            >
+              <PackageOpen size={20} /> PDF Salida
+            </button>
+          )}
           
           {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
             <>
@@ -555,7 +583,6 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Alerta si hay productos pendientes de OP */}
       {productosRequierenOP.length > 0 && orden.estado !== 'Cancelada' && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
@@ -563,6 +590,17 @@ function DetalleOrdenVenta() {
             <strong>Atención:</strong> Hay {productosRequierenOP.length} producto(s) que requieren orden de producción.
             <br />
             <small>Cree las órdenes de producción necesarias para poder continuar con el despacho.</small>
+          </div>
+        </div>
+      )}
+
+      {orden.estado === 'Despachada' && orden.id_salida && (
+        <div className="alert alert-info mb-4">
+          <PackageOpen size={20} />
+          <div>
+            <strong>Salida de Inventario Generada:</strong> Se ha registrado automáticamente la salida #{orden.id_salida}.
+            <br />
+            <small>Puede descargar el PDF de salida usando el botón "PDF Salida" en la parte superior.</small>
           </div>
         </div>
       )}
@@ -757,7 +795,6 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* MODAL: Cambiar Estado */}
       <Modal isOpen={modalEstadoOpen} onClose={() => setModalEstadoOpen(false)} title="Cambiar Estado">
         <div className="space-y-4">
           <p className="text-muted">Estado actual: <strong>{orden.estado}</strong></p>
@@ -780,7 +817,6 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
-      {/* MODAL: Cambiar Prioridad */}
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
         <div className="space-y-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
@@ -797,7 +833,6 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
-      {/* MODAL: Registrar Pago */}
       <Modal isOpen={modalPagoOpen} onClose={() => setModalPagoOpen(false)} title="Registrar Pago" size="md">
         <form onSubmit={handleRegistrarPago}>
           <div className="space-y-4">

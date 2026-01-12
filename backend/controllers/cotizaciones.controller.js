@@ -261,7 +261,7 @@ export async function createCotizacion(req, res) {
       totalComision += montoComision * item.cantidad;
       sumaComisionPorcentual += porcentajeComision;
     }
-
+    
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
     
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
@@ -834,6 +834,8 @@ export async function actualizarEstadoCotizacion(req, res) {
           subtotal,
           igv,
           total,
+          total_comision,
+          porcentaje_comision_promedio,
           plazo_pago,
           forma_pago,
           direccion_entrega,
@@ -841,7 +843,7 @@ export async function actualizarEstadoCotizacion(req, res) {
           observaciones,
           id_registrado_por,
           estado
-        ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
+        ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
       `, [
         numeroOrden,
         cotizacion.id_cotizacion,
@@ -855,6 +857,8 @@ export async function actualizarEstadoCotizacion(req, res) {
         cotizacion.subtotal,
         cotizacion.igv,
         cotizacion.total,
+        cotizacion.total_comision || 0,
+        cotizacion.porcentaje_comision_promedio || 0,
         cotizacion.plazo_pago,
         cotizacion.forma_pago,
         cotizacion.direccion_entrega,
@@ -876,14 +880,20 @@ export async function actualizarEstadoCotizacion(req, res) {
             id_producto,
             cantidad,
             precio_unitario,
+            precio_base,
+            porcentaje_comision,
+            monto_comision,
             descuento_porcentaje,
             orden
-          ) VALUES (?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           idOrdenVenta,
           detalle.id_producto,
           detalle.cantidad,
           detalle.precio_unitario,
+          detalle.precio_base || detalle.precio_unitario,
+          detalle.porcentaje_comision || 0,
+          detalle.monto_comision || 0,
           detalle.descuento_porcentaje || 0,
           detalle.orden
         ]);

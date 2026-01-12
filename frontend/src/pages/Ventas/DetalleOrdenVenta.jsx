@@ -69,7 +69,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al cargar datos:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar datos');
     } finally {
       setLoading(false);
@@ -108,7 +108,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al registrar pago:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al registrar pago');
     } finally {
       setProcesando(false);
@@ -130,7 +130,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al anular pago:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al anular pago');
     } finally {
       setProcesando(false);
@@ -155,7 +155,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al cambiar estado:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cambiar estado');
     } finally {
       setProcesando(false);
@@ -176,7 +176,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al cambiar prioridad:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cambiar prioridad');
     } finally {
       setProcesando(false);
@@ -194,7 +194,7 @@ function DetalleOrdenVenta() {
       await ordenesVentaAPI.descargarPDF(id);
       setSuccess('PDF de orden de venta descargado exitosamente');
     } catch (err) {
-      console.error('Error al descargar PDF:', err);
+      console.error(err);
       setError('Error al descargar el PDF de orden de venta');
     } finally {
       setProcesando(false);
@@ -215,7 +215,7 @@ function DetalleOrdenVenta() {
       setSuccess('PDF de salida descargado exitosamente');
       
     } catch (err) {
-      console.error('Error al descargar PDF de salida:', err);
+      console.error(err);
       setError(err.message || 'Error al descargar el PDF de salida');
     } finally {
       setProcesando(false);
@@ -230,7 +230,7 @@ function DetalleOrdenVenta() {
   const formatearMoneda = (valor) => {
     if (!orden) return '-';
     const simbolo = orden.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
   const getEstadoConfig = (estado) => {
@@ -305,7 +305,7 @@ function DetalleOrdenVenta() {
     {
       header: 'Código',
       accessor: 'codigo_producto',
-      width: '120px',
+      width: '100px',
       render: (value) => <span className="font-mono text-sm">{value}</span>
     },
     {
@@ -326,26 +326,52 @@ function DetalleOrdenVenta() {
     {
       header: 'Cantidad',
       accessor: 'cantidad',
-      width: '120px',
+      width: '100px',
       align: 'right',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold">{parseFloat(value).toFixed(5)}</div>
+          <div className="font-bold">{parseFloat(value).toFixed(2)}</div>
           <div className="text-xs text-muted">{row.unidad_medida}</div>
         </div>
       )
     },
     {
-      header: 'Precio Unit.',
+      header: 'P. Base',
+      accessor: 'precio_base',
+      width: '110px',
+      align: 'right',
+      render: (value) => (
+        <span className="text-muted font-mono text-sm">{formatearMoneda(value)}</span>
+      )
+    },
+    {
+      header: 'Comisión',
+      width: '110px',
+      align: 'right',
+      render: (_, row) => (
+        <div className="flex flex-col items-end">
+          <span className="text-xs font-medium text-yellow-600">
+            {parseFloat(row.porcentaje_comision || 0).toFixed(2)}%
+          </span>
+          <span className="text-xs text-success">
+            +{formatearMoneda(row.monto_comision)}
+          </span>
+        </div>
+      )
+    },
+    {
+      header: 'P. Final',
       accessor: 'precio_unitario',
       width: '120px',
       align: 'right',
-      render: (value) => formatearMoneda(value)
+      render: (value) => (
+        <span className="font-medium text-primary">{formatearMoneda(value)}</span>
+      )
     },
     {
       header: 'Estado',
       accessor: 'tiene_op',
-      width: '180px',
+      width: '150px',
       align: 'center',
       render: (value, row) => {
         if (!row.requiere_receta) {
@@ -399,7 +425,7 @@ function DetalleOrdenVenta() {
     {
       header: 'Acciones',
       accessor: 'id_producto',
-      width: '160px',
+      width: '140px',
       align: 'center',
       render: (value, row) => {
         const stockDisponible = parseFloat(row.stock_disponible || 0);
@@ -529,15 +555,15 @@ function DetalleOrdenVenta() {
   const IconoEstadoPago = estadoPagoConfig.icono;
 
   const productosRequierenOP = orden.detalle.filter(item => {
-  const stockDisponible = parseFloat(item.stock_disponible || 0);
-  const cantidadRequerida = parseFloat(item.cantidad);
-  return item.requiere_receta && 
-         item.tiene_op === 0 && 
-         stockDisponible < cantidadRequerida &&
-         orden.estado !== 'Cancelada' &&
-         orden.estado !== 'Entregada' &&
-         orden.estado !== 'Despachada'; // Tampoco si ya está despachada
-});
+    const stockDisponible = parseFloat(item.stock_disponible || 0);
+    const cantidadRequerida = parseFloat(item.cantidad);
+    return item.requiere_receta && 
+           item.tiene_op === 0 && 
+           stockDisponible < cantidadRequerida &&
+           orden.estado !== 'Cancelada' &&
+           orden.estado !== 'Entregada' &&
+           orden.estado !== 'Despachada';
+  });
 
   return (
     <div className="p-6">
@@ -795,6 +821,12 @@ function DetalleOrdenVenta() {
               <span>Sub Total:</span>
               <span className="font-bold">{formatearMoneda(orden.subtotal)}</span>
             </div>
+            {orden.total_comision > 0 && (
+              <div className="flex justify-between py-2 border-b text-yellow-600">
+                <span className="font-medium">Total Comisiones ({parseFloat(orden.porcentaje_comision_promedio || 0).toFixed(2)}%):</span>
+                <span className="font-bold">{formatearMoneda(orden.total_comision)}</span>
+              </div>
+            )}
             <div className="flex justify-between py-2 border-b">
               <span>IGV (18%):</span>
               <span className="font-bold">{formatearMoneda(orden.igv)}</span>
@@ -985,7 +1017,7 @@ function DetalleOrdenVenta() {
               }
 
             } catch (err) {
-              console.error('Error al crear orden de producción:', err);
+              console.error(err);
               setError(err.response?.data?.error || 'Error al crear orden de producción');
             } finally {
               setProcesando(false);

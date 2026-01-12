@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, Download, Filter, FileText, Search,
   ChevronLeft, ChevronRight, RefreshCw, Calendar,
-  TrendingUp, Users, DollarSign, Edit, Copy, ExternalLink, CheckCircle2
+  TrendingUp, DollarSign, Edit, Copy, ExternalLink, CheckCircle2
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -50,7 +50,7 @@ function Cotizaciones() {
       }
       
     } catch (err) {
-      console.error('Error al cargar cotizaciones:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar cotizaciones');
     } finally {
       setLoading(false);
@@ -90,7 +90,7 @@ function Cotizaciones() {
 
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
   const getEstadoBadge = (estado) => {
@@ -109,7 +109,7 @@ function Cotizaciones() {
     try {
       await cotizacionesAPI.descargarPDF(id);
     } catch (err) {
-      console.error('Error al descargar PDF:', err);
+      console.error(err);
       setError('Error al descargar el PDF');
     }
   };
@@ -332,7 +332,7 @@ function Cotizaciones() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase font-semibold opacity-90">Monto Total (PEN)</p>
-                <p className="text-2xl font-bold">S/ {estadisticas.montoTotal.toFixed(2)}</p>
+                <p className="text-2xl font-bold">S/ {estadisticas.montoTotal.toFixed(3)}</p>
               </div>
               <DollarSign size={32} className="opacity-20" />
             </div>

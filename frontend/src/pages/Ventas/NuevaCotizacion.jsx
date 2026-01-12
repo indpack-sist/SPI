@@ -27,6 +27,24 @@ const PLAZOS_PAGO = [
   'Crédito 90 Días'
 ];
 
+const FORMAS_PAGO = [
+  'Transferencia Bancaria',
+  'Depósito en Cuenta',
+  'Cheque',
+  'Efectivo',
+  'Letra de Cambio'
+];
+
+const PLAZOS_ENTREGA = [
+  'Inmediata (Stock)',
+  '2 a 3 Días Hábiles',
+  '5 a 7 Días Hábiles',
+  '7 a 10 Días Hábiles',
+  '10 a 15 Días Hábiles',
+  '15 a 20 Días Hábiles',
+  '25 a 30 Días Hábiles'
+];
+
 function NuevaCotizacion() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -667,26 +685,32 @@ function NuevaCotizacion() {
               
               <div className="form-group">
                 <label className="form-label">Forma de Pago</label>
-                <input
-                  type="text"
-                  className="form-input"
+                <select
+                  className="form-select"
                   value={formCabecera.forma_pago}
                   onChange={(e) => setFormCabecera({ ...formCabecera, forma_pago: e.target.value })}
-                  placeholder="Ej: Transferencia, Efectivo"
                   disabled={cotizacionConvertida}
-                />
+                >
+                  <option value="">Seleccione...</option>
+                  {FORMAS_PAGO.map(forma => (
+                    <option key={forma} value={forma}>{forma}</option>
+                  ))}
+                </select>
               </div>
               
               <div className="form-group">
                 <label className="form-label">Plazo de Entrega</label>
-                <input
-                  type="text"
-                  className="form-input"
+                <select
+                  className="form-select"
                   value={formCabecera.plazo_entrega}
                   onChange={(e) => setFormCabecera({ ...formCabecera, plazo_entrega: e.target.value })}
-                  placeholder="Ej: 15 días"
                   disabled={cotizacionConvertida}
-                />
+                >
+                  <option value="">Seleccione...</option>
+                  {PLAZOS_ENTREGA.map(plazo => (
+                    <option key={plazo} value={plazo}>{plazo}</option>
+                  ))}
+                </select>
               </div>
               
               <div className="form-group col-span-3">

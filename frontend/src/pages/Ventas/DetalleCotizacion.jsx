@@ -409,22 +409,62 @@ function DetalleCotizacion() {
             <div className="border-t border-black/10 pt-4 mt-2">
               <p className="text-xs font-bold uppercase opacity-60 mb-3">Cambiar Estado:</p>
               <div className="flex gap-3 flex-wrap">
-                {['Pendiente', 'Enviada', 'Aprobada', 'Rechazada'].map(estado => {
-                  const config = getEstadoConfig(estado);
-                  const Icono = config.icono;
-                  const esActual = cotizacion.estado === estado;
-                  return (
-                    <button
-                      key={estado}
-                      className={`btn btn-sm ${esActual ? 'btn-primary opacity-50 cursor-not-allowed' : 'btn-outline bg-white hover:bg-white/50'}`}
-                      onClick={() => handleCambiarEstado(estado)}
-                      disabled={esActual || loading}
-                    >
-                      <Icono size={16} className="mr-1.5" />
-                      {estado}
-                    </button>
-                  );
-                })}
+                <button
+                  className={`btn btn-sm ${
+                    cotizacion.estado === 'Pendiente' 
+                      ? 'btn-warning cursor-not-allowed opacity-60' 
+                      : 'btn-outline btn-warning hover:btn-warning'
+                  }`}
+                  onClick={() => handleCambiarEstado('Pendiente')}
+                  disabled={cotizacion.estado === 'Pendiente' || loading}
+                >
+                  <Calculator size={16} className="mr-1.5" />
+                  Pendiente
+                </button>
+
+                <button
+                  className={`btn btn-sm ${
+                    cotizacion.estado === 'Enviada' 
+                      ? 'btn-info cursor-not-allowed opacity-60' 
+                      : 'btn-outline btn-info hover:btn-info'
+                  }`}
+                  onClick={() => handleCambiarEstado('Enviada')}
+                  disabled={cotizacion.estado === 'Enviada' || loading}
+                >
+                  <FileText size={16} className="mr-1.5" />
+                  Enviada
+                </button>
+
+                <button
+                  className={`btn btn-sm ${
+                    cotizacion.estado === 'Aprobada' 
+                      ? 'btn-success cursor-not-allowed opacity-60' 
+                      : 'btn-outline btn-success hover:btn-success'
+                  }`}
+                  onClick={() => handleCambiarEstado('Aprobada')}
+                  disabled={cotizacion.estado === 'Aprobada' || loading}
+                >
+                  <CheckCircle size={16} className="mr-1.5" />
+                  Aprobar (→ Nueva OV)
+                </button>
+
+                <button
+                  className={`btn btn-sm ${
+                    cotizacion.estado === 'Rechazada' 
+                      ? 'btn-danger cursor-not-allowed opacity-60' 
+                      : 'btn-outline btn-danger hover:btn-danger'
+                  }`}
+                  onClick={() => handleCambiarEstado('Rechazada')}
+                  disabled={cotizacion.estado === 'Rechazada' || loading}
+                >
+                  <XCircle size={16} className="mr-1.5" />
+                  Rechazar
+                </button>
+              </div>
+
+              <div className="mt-3 text-xs text-muted bg-blue-50 border border-blue-200 rounded p-2">
+                <AlertCircle size={12} className="inline mr-1" />
+                <strong>Nota:</strong> Al aprobar, se abrirá el formulario de Nueva Orden de Venta con los datos de esta cotización precargados.
               </div>
             </div>
           )}

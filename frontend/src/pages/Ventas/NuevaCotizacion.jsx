@@ -17,6 +17,16 @@ const TIPOS_IMPUESTO = [
   { codigo: 'INA', nombre: 'Inafecto 0%', porcentaje: 0.00 }
 ];
 
+const PLAZOS_PAGO = [
+  'Contado',
+  'Crédito 7 Días',
+  'Crédito 15 Días',
+  'Crédito 30 Días',
+  'Crédito 45 Días',
+  'Crédito 60 Días',
+  'Crédito 90 Días'
+];
+
 function NuevaCotizacion() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -640,15 +650,18 @@ function NuevaCotizacion() {
               
               <div className="form-group">
                 <label className="form-label">Plazo de Pago * <AlertCircle size={14} className="inline text-warning" /></label>
-                <input
-                  type="text"
-                  className="form-input"
+                <select
+                  className="form-select"
                   value={formCabecera.plazo_pago}
                   onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
-                  placeholder="Ej: Contado, 30 días, 60 días"
                   disabled={cotizacionConvertida}
                   required
-                />
+                >
+                  <option value="">Seleccione...</option>
+                  {PLAZOS_PAGO.map(plazo => (
+                    <option key={plazo} value={plazo}>{plazo}</option>
+                  ))}
+                </select>
                 <small className="text-warning block mt-1">Define el riesgo de la venta</small>
               </div>
               

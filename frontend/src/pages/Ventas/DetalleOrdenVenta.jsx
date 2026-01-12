@@ -4,7 +4,7 @@ import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Calendar, Plus, ShoppingCart, Calculator,
-  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen
+  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -602,7 +602,6 @@ function DetalleOrdenVenta() {
           
           {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
             <>
-              {/* AQUÍ ESTÁ EL BOTÓN DE EDITAR QUE FALTABA */}
               {orden.estado === 'En Espera' && (
                 <button
                   className="btn btn-secondary"
@@ -653,31 +652,115 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        <div className={`card border-l-4 ${estadoConfig.color}`}>
-          <div className="card-body">
-            <div className="flex items-center gap-3">
-              <IconoEstado size={32} />
+      <div className="card mb-4 border-l-4 border-primary">
+        <div className="card-header">
+          <h2 className="card-title">
+            <TrendingUp size={20} />
+            Estado de la Orden
+          </h2>
+        </div>
+        <div className="card-body">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className={`p-4 rounded-xl bg-gradient-to-br ${
+                orden.estado === 'En Espera' ? 'from-yellow-100 to-yellow-200' :
+                orden.estado === 'En Proceso' ? 'from-blue-100 to-blue-200' :
+                orden.estado === 'Atendido por Producción' ? 'from-green-100 to-green-200' :
+                orden.estado === 'Despachada' ? 'from-purple-100 to-purple-200' :
+                orden.estado === 'Entregada' ? 'from-green-100 to-green-200' :
+                'from-red-100 to-red-200'
+              }`}>
+                <IconoEstado size={40} className={
+                  orden.estado === 'En Espera' ? 'text-yellow-600' :
+                  orden.estado === 'En Proceso' ? 'text-blue-600' :
+                  orden.estado === 'Atendido por Producción' ? 'text-green-600' :
+                  orden.estado === 'Despachada' ? 'text-purple-600' :
+                  orden.estado === 'Entregada' ? 'text-green-600' :
+                  'text-red-600'
+                } />
+              </div>
               <div>
-                <p className="text-sm text-muted">Estado</p>
-                <h3 className="text-xl font-bold">{orden.estado}</h3>
+                <p className="text-sm uppercase font-semibold text-muted mb-1">Estado Actual</p>
+                <h3 className="text-3xl font-bold">{orden.estado}</h3>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-sm uppercase font-semibold text-muted mb-2">Prioridad</p>
+                <button 
+                  className={`badge ${prioridadConfig.clase} text-lg px-4 py-2 cursor-pointer hover:opacity-80 transition-opacity`}
+                  onClick={() => setModalPrioridadOpen(true)}
+                  disabled={orden.estado === 'Cancelada' || orden.estado === 'Entregada'}
+                >
+                  {prioridadConfig.icono} {orden.prioridad}
+                </button>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="card">
-          <div className="card-body">
-            <div className="flex items-center gap-3">
-              <div className="text-3xl">{prioridadConfig.icono}</div>
-              <div>
-                <p className="text-sm text-muted">Prioridad</p>
-                <span className={`badge ${prioridadConfig.clase}`}>{orden.prioridad}</span>
+          {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+            <div className="border-t border-gray-200 pt-4 mt-2">
+              <p className="text-xs font-bold uppercase text-muted mb-3">Cambiar Estado:</p>
+              <div className="flex gap-3 flex-wrap">
+                {estadoConfig.siguientes.map(estado => {
+                  const config = getEstadoConfig(estado);
+                  const Icono = config.icono;
+                  const esActual = orden.estado === estado;
+                  
+                  let colorClases = '';
+                  if (estado === 'En Proceso') {
+                    colorClases = esActual 
+                      ? 'bg-blue-500 text-white cursor-not-allowed opacity-70' 
+                      : 'bg-white text-blue-600 border-2 border-blue-500 hover:bg-blue-500 hover:text-white';
+                  } else if (estado === 'Atendido por Producción') {
+                    colorClases = esActual 
+                      ? 'bg-green-500 text-white cursor-not-allowed opacity-70' 
+                      : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
+                  } else if (estado === 'Despachada') {
+                    colorClases = esActual 
+                      ? 'bg-purple-500 text-white cursor-not-allowed opacity-70' 
+                      : 'bg-white text-purple-600 border-2 border-purple-500 hover:bg-purple-500 hover:text-white';
+                  } else if (estado === 'Entregada') {
+                    colorClases = esActual 
+                      ? 'bg-emerald-500 text-white cursor-not-allowed opacity-70' 
+                      : 'bg-white text-emerald-600 border-2 border-emerald-500 hover:bg-emerald-500 hover:text-white';
+                  } else if (estado === 'Cancelada') {
+                    colorClases = esActual 
+                      ? 'bg-red-500 text-white cursor-not-allowed opacity-70' 
+                      : 'bg-white text-red-600 border-2 border-red-500 hover:bg-red-500 hover:text-white';
+                  } else {
+                     colorClases = 'btn-outline';
+                  }
+
+                  return (
+                    <button
+                      key={estado}
+                      className={`btn btn-sm font-semibold transition-all ${colorClases}`}
+                      onClick={() => handleCambiarEstado(estado)}
+                      disabled={esActual || procesando}
+                    >
+                      <Icono size={16} className="mr-1.5" />
+                      {estado}
+                    </button>
+                  );
+                })}
               </div>
+              
+              {orden.estado === 'Atendido por Producción' && (
+                <div className="mt-3 text-xs bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle size={14} className="text-blue-600 shrink-0 mt-0.5" />
+                  <div className="text-blue-800">
+                    <strong>Importante:</strong> Al cambiar a "Despachada" se generará automáticamente una salida de inventario y se descontará el stock.
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
+      </div>
 
+      <div className="grid grid-cols-3 gap-4 mb-4">
         <div className={`card border-l-4 ${estadoPagoConfig.clase.replace('badge-', 'border-')}`}>
           <div className="card-body">
             <div className="flex items-center gap-3">
@@ -698,6 +781,18 @@ function DetalleOrdenVenta() {
               <div>
                 <span className="font-bold text-2xl">{orden.detalle.length}</span>
                 <span className="text-sm text-muted ml-1">items</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body">
+            <p className="text-sm text-muted mb-2">Comercial</p>
+            <div className="flex items-center gap-2">
+              <User size={24} />
+              <div>
+                <span className="font-bold text-lg">{orden.comercial || 'Sin asignar'}</span>
               </div>
             </div>
           </div>

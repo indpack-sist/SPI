@@ -127,7 +127,7 @@ function NuevaCotizacion() {
       }
       
     } catch (err) {
-      console.error('Error al cargar catálogos:', err);
+      console.error(err);
       setError('Error al cargar catálogos');
     } finally {
       setLoading(false);
@@ -142,7 +142,6 @@ function NuevaCotizacion() {
       if (response.data.success) {
         const cotizacion = response.data.data;
         
-        // Verificar si está convertida
         if (modoEdicion && cotizacion.convertida_venta) {
           setCotizacionConvertida(true);
           setIdOrdenVenta(cotizacion.id_orden_venta);
@@ -179,23 +178,23 @@ function NuevaCotizacion() {
         }
         
         if (cotizacion.detalle && cotizacion.detalle.length > 0) {
-  setDetalle(cotizacion.detalle.map(item => ({
-    id_producto: item.id_producto,
-    codigo_producto: item.codigo_producto,
-    producto: item.producto,
-    unidad_medida: item.unidad_medida,
-    cantidad: parseFloat(item.cantidad),
-    precio_base: parseFloat(item.precio_base || item.precio_unitario), // Retrocompatibilidad
-    porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
-    monto_comision: parseFloat(item.monto_comision || 0),
-    precio_unitario: parseFloat(item.precio_unitario),
-    descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-    stock_actual: item.stock_disponible
-  })));
-}
+          setDetalle(cotizacion.detalle.map(item => ({
+            id_producto: item.id_producto,
+            codigo_producto: item.codigo_producto,
+            producto: item.producto,
+            unidad_medida: item.unidad_medida,
+            cantidad: parseFloat(item.cantidad),
+            precio_base: parseFloat(item.precio_base || item.precio_unitario),
+            porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
+            monto_comision: parseFloat(item.monto_comision || 0),
+            precio_unitario: parseFloat(item.precio_unitario),
+            descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+            stock_actual: item.stock_disponible
+          })));
+        }
       }
     } catch (err) {
-      console.error('Error al cargar cotización:', err);
+      console.error(err);
       setError('Error al cargar la cotización');
     } finally {
       setLoading(false);
@@ -222,7 +221,7 @@ function NuevaCotizacion() {
         }));
       }
     } catch (err) {
-      console.error('Error TC:', err);
+      console.error(err);
       setFormCabecera(prev => ({ ...prev, tipo_cambio: 3.80 }));
     } finally {
       setLoadingTC(false);
@@ -240,72 +239,99 @@ function NuevaCotizacion() {
     setBusquedaCliente('');
   };
 
-  // En la función handleAgregarProducto (línea ~216):
-const handleAgregarProducto = (producto) => {
-  const existe = detalle.find(d => d.id_producto === producto.id_producto);
-  if (existe) {
-    setError('El producto ya está en el detalle');
-    return;
-  }
-  
-  const precioBase = producto.precio_venta || 0;
-  
-  const nuevoItem = {
-    id_producto: producto.id_producto,
-    codigo_producto: producto.codigo,
-    producto: producto.nombre,
-    unidad_medida: producto.unidad_medida,
-    cantidad: 1,
-    precio_base: precioBase,                    // NUEVO
-    porcentaje_comision: 0,                     // NUEVO
-    monto_comision: 0,                          // NUEVO
-    precio_unitario: precioBase,                // Ahora es precio_base + comisión
-    descuento_porcentaje: 0,
-    stock_actual: producto.stock_actual
+  const handleAgregarProducto = (producto) => {
+    const existe = detalle.find(d => d.id_producto === producto.id_producto);
+    if (existe) {
+      setError('El producto ya está en el detalle');
+      return;
+    }
+    
+    const precioBase = producto.precio_venta || 0;
+    
+    const nuevoItem = {
+      id_producto: producto.id_producto,
+      codigo_producto: producto.codigo,
+      producto: producto.nombre,
+      unidad_medida: producto.unidad_medida,
+      cantidad: 1,
+      precio_base: precioBase,
+      porcentaje_comision: 0,
+      monto_comision: 0,
+      precio_unitario: precioBase,
+      descuento_porcentaje: 0,
+      stock_actual: producto.stock_actual
+    };
+    
+    setDetalle([...detalle, nuevoItem]);
+    setModalProductoOpen(false);
+    setBusquedaProducto('');
   };
-  
-  setDetalle([...detalle, nuevoItem]);
-  setModalProductoOpen(false);
-  setBusquedaProducto('');
-};
 
-// NUEVA función para manejar cambio de comisión:
-const handleComisionChange = (index, porcentaje) => {
-  const newDetalle = [...detalle];
-  const item = newDetalle[index];
-  const precioBase = parseFloat(item.precio_base);
-  const porcentajeComision = parseFloat(porcentaje) || 0;
-  
-  // Calcular monto de comisión
-  const montoComision = precioBase * (porcentajeComision / 100);
-  
-  // Precio final = precio base + comisión
-  const precioFinal = precioBase + montoComision;
-  
-  newDetalle[index].porcentaje_comision = porcentajeComision;
-  newDetalle[index].monto_comision = montoComision;
-  newDetalle[index].precio_unitario = precioFinal;
-  
-  setDetalle(newDetalle);
-};
+  const handlePrecioBaseChange = (index, precioBase) => {
+    const newDetalle = [...detalle];
+    const item = newDetalle[index];
+    const nuevoPrecioBase = parseFloat(precioBase) || 0;
+    const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+    
+    const montoComision = nuevoPrecioBase * (porcentajeComision / 100);
+    const precioFinal = nuevoPrecioBase + montoComision;
+    
+    newDetalle[index].precio_base = nuevoPrecioBase;
+    newDetalle[index].monto_comision = montoComision;
+    newDetalle[index].precio_unitario = precioFinal;
+    
+    setDetalle(newDetalle);
+  };
 
-// Actualizar calcularTotales para incluir comisiones:
-const calcularTotales = () => {
-  let subtotal = 0;
-  let totalComisiones = 0;
-  
-  detalle.forEach(item => {
-    const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
-    subtotal += valorVenta;
-    totalComisiones += (item.monto_comision || 0) * item.cantidad;
-  });
-  
-  const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
-  const impuesto = subtotal * (porcentaje / 100);
-  const total = subtotal + impuesto;
-  
-  setTotales({ subtotal, impuesto, total, totalComisiones });
-};
+  const handleComisionChange = (index, porcentaje) => {
+    const newDetalle = [...detalle];
+    const item = newDetalle[index];
+    const precioBase = parseFloat(item.precio_base);
+    const porcentajeComision = parseFloat(porcentaje) || 0;
+    
+    const montoComision = precioBase * (porcentajeComision / 100);
+    const precioFinal = precioBase + montoComision;
+    
+    newDetalle[index].porcentaje_comision = porcentajeComision;
+    newDetalle[index].monto_comision = montoComision;
+    newDetalle[index].precio_unitario = precioFinal;
+    
+    setDetalle(newDetalle);
+  };
+
+  const handleCantidadChange = (index, valor) => {
+    const newDetalle = [...detalle];
+    newDetalle[index].cantidad = parseFloat(valor) || 0;
+    setDetalle(newDetalle);
+  };
+
+  const handleDescuentoChange = (index, valor) => {
+    const newDetalle = [...detalle];
+    newDetalle[index].descuento_porcentaje = parseFloat(valor) || 0;
+    setDetalle(newDetalle);
+  };
+
+  const handleEliminarItem = (index) => {
+    const newDetalle = detalle.filter((_, i) => i !== index);
+    setDetalle(newDetalle);
+  };
+
+  const calcularTotales = () => {
+    let subtotal = 0;
+    let totalComisiones = 0;
+    
+    detalle.forEach(item => {
+      const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
+      subtotal += valorVenta;
+      totalComisiones += (item.monto_comision || 0) * item.cantidad;
+    });
+    
+    const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
+    const impuesto = subtotal * (porcentaje / 100);
+    const total = subtotal + impuesto;
+    
+    setTotales({ subtotal, impuesto, total, totalComisiones });
+  };
 
   const handleTipoImpuestoChange = (codigo) => {
     const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
@@ -361,14 +387,14 @@ const calcularTotales = () => {
         validez_dias: parseInt(formCabecera.validez_dias) || 7,
         observaciones: formCabecera.observaciones || null,
         detalle: detalle.map((item, index) => ({
-  id_producto: item.id_producto,
-  cantidad: parseFloat(item.cantidad),
-  precio_base: parseFloat(item.precio_base),
-  porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
-  precio_unitario: parseFloat(item.precio_unitario),
-  descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
-  orden: index + 1
-}))
+          id_producto: item.id_producto,
+          cantidad: parseFloat(item.cantidad),
+          precio_base: parseFloat(item.precio_base),
+          porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
+          precio_unitario: parseFloat(item.precio_unitario),
+          descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
+          orden: index + 1
+        }))
       };
 
       let response;
@@ -387,7 +413,7 @@ const calcularTotales = () => {
       }
       
     } catch (err) {
-      console.error('Error:', err);
+      console.error(err);
       setError(err.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} cotización`);
     } finally {
       setLoading(false);
@@ -396,7 +422,7 @@ const calcularTotales = () => {
 
   const formatearMoneda = (valor) => {
     const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
   const clientesFiltrados = clientes.filter(c =>
@@ -460,7 +486,6 @@ const calcularTotales = () => {
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* CLIENTE */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -506,7 +531,6 @@ const calcularTotales = () => {
           </div>
         </div>
 
-        {/* DATOS DE LA COTIZACIÓN */}
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
@@ -579,7 +603,7 @@ const calcularTotales = () => {
                   required
                 >
                   {TIPOS_IMPUESTO.map(tipo => (
-                    <option key={tipo.codigo} value={tipo.codigo}>{tipo.nombre}</option>
+                    <option key={tipo.codigo} value={tipo.nombre}>{tipo.nombre}</option>
                   ))}
                 </select>
               </div>
@@ -699,7 +723,6 @@ const calcularTotales = () => {
           </div>
         </div>
 
-        {/* DETALLE DE PRODUCTOS */}
         <div className="card mb-4">
           <div className="card-header">
             <div className="flex justify-between items-center">
@@ -722,96 +745,103 @@ const calcularTotales = () => {
             {detalle.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="table">
-  <thead>
-    <tr>
-      <th>Código</th>
-      <th>Descripción</th>
-      <th className="text-right">Cantidad</th>
-      <th>UM</th>
-      <th className="text-right">P. Base</th>
-      <th className="text-right">% Comis.</th>
-      <th className="text-right">P. Final</th>
-      <th className="text-right">Desc. %</th>
-      <th className="text-right">Subtotal</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {detalle.map((item, index) => {
-      const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
-      return (
-        <tr key={index}>
-          <td className="font-mono text-sm">{item.codigo_producto}</td>
-          <td>{item.producto}</td>
-          <td>
-            <input
-              type="number"
-              className="form-input text-right"
-              value={item.cantidad}
-              onChange={(e) => handleCantidadChange(index, e.target.value)}
-              min="0.01"
-              step="0.01"
-              disabled={cotizacionConvertida}
-              required
-            />
-          </td>
-          <td className="text-sm text-muted">{item.unidad_medida}</td>
-          <td className="text-right">
-            <div className="text-sm font-bold text-muted">
-              {formatearMoneda(item.precio_base)}
-            </div>
-            <div className="text-xs text-muted">Catálogo</div>
-          </td>
-          <td>
-            <input
-              type="number"
-              className="form-input text-right bg-yellow-50"
-              value={item.porcentaje_comision}
-              onChange={(e) => handleComisionChange(index, e.target.value)}
-              min="0"
-              max="100"
-              step="0.01"
-              disabled={cotizacionConvertida}
-              placeholder="0"
-            />
-            <div className="text-xs text-success text-right mt-1">
-              +{formatearMoneda(item.monto_comision || 0)}
-            </div>
-          </td>
-          <td className="text-right">
-            <div className="font-bold text-primary">
-              {formatearMoneda(item.precio_unitario)}
-            </div>
-            <div className="text-xs text-muted">al cliente</div>
-          </td>
-          <td>
-            <input
-              type="number"
-              className="form-input text-right"
-              value={item.descuento_porcentaje}
-              onChange={(e) => handleDescuentoChange(index, e.target.value)}
-              min="0"
-              max="100"
-              step="0.01"
-              disabled={cotizacionConvertida}
-            />
-          </td>
-          <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
-          <td>
-            <button 
-              type="button" 
-              className="btn btn-sm btn-danger" 
-              onClick={() => handleEliminarItem(index)}
-              disabled={cotizacionConvertida}
-            >
-              <Trash2 size={14} />
-            </button>
-          </td>
-        </tr>
-      );
-    })}
-  </tbody>
-</table>
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Descripción</th>
+                      <th className="text-right">Cantidad</th>
+                      <th>UM</th>
+                      <th className="text-right">P. Base</th>
+                      <th className="text-right">% Comis.</th>
+                      <th className="text-right">P. Final</th>
+                      <th className="text-right">Desc. %</th>
+                      <th className="text-right">Subtotal</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalle.map((item, index) => {
+                      const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
+                      return (
+                        <tr key={index}>
+                          <td className="font-mono text-sm">{item.codigo_producto}</td>
+                          <td>{item.producto}</td>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right"
+                              value={item.cantidad}
+                              onChange={(e) => handleCantidadChange(index, e.target.value)}
+                              min="0.001"
+                              step="0.001"
+                              disabled={cotizacionConvertida}
+                              required
+                            />
+                          </td>
+                          <td className="text-sm text-muted">{item.unidad_medida}</td>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right bg-blue-50"
+                              value={item.precio_base}
+                              onChange={(e) => handlePrecioBaseChange(index, e.target.value)}
+                              min="0"
+                              step="0.001"
+                              disabled={cotizacionConvertida}
+                              required
+                            />
+                            <div className="text-xs text-muted text-right mt-1">Editable</div>
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right bg-yellow-50"
+                              value={item.porcentaje_comision}
+                              onChange={(e) => handleComisionChange(index, e.target.value)}
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              disabled={cotizacionConvertida}
+                              placeholder="0"
+                            />
+                            <div className="text-xs text-success text-right mt-1">
+                              +{formatearMoneda(item.monto_comision || 0)}
+                            </div>
+                          </td>
+                          <td className="text-right">
+                            <div className="font-bold text-primary">
+                              {formatearMoneda(item.precio_unitario)}
+                            </div>
+                            <div className="text-xs text-muted">al cliente</div>
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right"
+                              value={item.descuento_porcentaje}
+                              onChange={(e) => handleDescuentoChange(index, e.target.value)}
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              disabled={cotizacionConvertida}
+                            />
+                          </td>
+                          <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
+                          <td>
+                            <button 
+                              type="button" 
+                              className="btn btn-sm btn-danger" 
+                              onClick={() => handleEliminarItem(index)}
+                              disabled={cotizacionConvertida}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
@@ -831,39 +861,37 @@ const calcularTotales = () => {
           </div>
         </div>
 
-        {/* TOTALES */}
         {detalle.length > 0 && (
-  <div className="card mb-4">
-    <div className="card-body">
-      <div className="flex justify-end">
-        <div className="w-80">
-          <div className="flex justify-between py-2 border-b">
-            <span className="font-medium">Sub Total:</span>
-            <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
-          </div>
-          {totales.totalComisiones > 0 && (
-            <div className="flex justify-between py-2 border-b text-success">
-              <span className="font-medium">💰 Mis Comisiones:</span>
-              <span className="font-bold">{formatearMoneda(totales.totalComisiones)}</span>
+          <div className="card mb-4">
+            <div className="card-body">
+              <div className="flex justify-end">
+                <div className="w-80">
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="font-medium">Sub Total:</span>
+                    <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
+                  </div>
+                  {totales.totalComisiones > 0 && (
+                    <div className="flex justify-between py-2 border-b text-success">
+                      <span className="font-medium">💰 Mis Comisiones:</span>
+                      <span className="font-bold">{formatearMoneda(totales.totalComisiones)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="font-medium">
+                      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:
+                    </span>
+                    <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
+                  </div>
+                  <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2">
+                    <span className="font-bold text-lg">TOTAL:</span>
+                    <span className="font-bold text-2xl">{formatearMoneda(totales.total)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-          <div className="flex justify-between py-2 border-b">
-            <span className="font-medium">
-              {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:
-            </span>
-            <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
           </div>
-          <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2">
-            <span className="font-bold text-lg">TOTAL:</span>
-            <span className="font-bold text-2xl">{formatearMoneda(totales.total)}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
-        {/* BOTONES */}
         <div className="flex gap-3 justify-end">
           <button type="button" className="btn btn-outline" onClick={() => navigate('/ventas/cotizaciones')}>
             Cancelar
@@ -881,7 +909,6 @@ const calcularTotales = () => {
         </div>
       </form>
 
-      {/* MODALES */}
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
         <div className="mb-4">
           <input

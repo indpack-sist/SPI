@@ -24,7 +24,6 @@ function DetalleOrdenVenta() {
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
   
-  const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
   const [modalCrearOP, setModalCrearOP] = useState(false);
@@ -69,7 +68,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error(err);
+      console.error('Error al cargar datos:', err);
       setError(err.response?.data?.error || 'Error al cargar datos');
     } finally {
       setLoading(false);
@@ -108,7 +107,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error(err);
+      console.error('Error al registrar pago:', err);
       setError(err.response?.data?.error || 'Error al registrar pago');
     } finally {
       setProcesando(false);
@@ -130,7 +129,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error(err);
+      console.error('Error al anular pago:', err);
       setError(err.response?.data?.error || 'Error al anular pago');
     } finally {
       setProcesando(false);
@@ -150,12 +149,11 @@ function DetalleOrdenVenta() {
       
       if (response.data.success) {
         setSuccess(response.data.message || `Estado actualizado a ${estado}`);
-        setModalEstadoOpen(false);
         await cargarDatos();
       }
       
     } catch (err) {
-      console.error(err);
+      console.error('Error al cambiar estado:', err);
       setError(err.response?.data?.error || 'Error al cambiar estado');
     } finally {
       setProcesando(false);
@@ -176,7 +174,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error(err);
+      console.error('Error al cambiar prioridad:', err);
       setError(err.response?.data?.error || 'Error al cambiar prioridad');
     } finally {
       setProcesando(false);
@@ -194,7 +192,7 @@ function DetalleOrdenVenta() {
       await ordenesVentaAPI.descargarPDF(id);
       setSuccess('PDF de orden de venta descargado exitosamente');
     } catch (err) {
-      console.error(err);
+      console.error('Error al descargar PDF:', err);
       setError('Error al descargar el PDF de orden de venta');
     } finally {
       setProcesando(false);
@@ -215,7 +213,7 @@ function DetalleOrdenVenta() {
       setSuccess('PDF de salida descargado exitosamente');
       
     } catch (err) {
-      console.error(err);
+      console.error('Error al descargar PDF de salida:', err);
       setError(err.message || 'Error al descargar el PDF de salida');
     } finally {
       setProcesando(false);
@@ -438,7 +436,9 @@ function DetalleOrdenVenta() {
           );
         }
 
-        if (orden?.estado === 'Cancelada' || orden?.estado === 'Entregada') {
+        if (orden?.estado === 'Cancelada' || 
+            orden?.estado === 'Entregada' || 
+            orden?.estado === 'Despachada') {
           return '-';
         }
 
@@ -611,12 +611,6 @@ function DetalleOrdenVenta() {
                 </button>
               )}
 
-              <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
-                <Edit size={20} /> Estado
-              </button>
-              <button className="btn btn-outline" onClick={() => setModalPrioridadOpen(true)}>
-                <TrendingUp size={20} /> Prioridad
-              </button>
               {puedeDespachar() && (
                 <button className="btn btn-primary" onClick={handleGenerarGuia}>
                   <Plus size={20} /> Guía de Remisión
@@ -630,7 +624,7 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {productosRequierenOP.length > 0 && orden.estado !== 'Cancelada' && (
+      {productosRequierenOP.length > 0 && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
           <div>
@@ -652,6 +646,7 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
+      {/* CARD GRANDE DE ESTADO CON BOTONES DIRECTOS */}
       <div className="card mb-4 border-l-4 border-primary">
         <div className="card-header">
           <h2 className="card-title">
@@ -667,7 +662,7 @@ function DetalleOrdenVenta() {
                 orden.estado === 'En Proceso' ? 'from-blue-100 to-blue-200' :
                 orden.estado === 'Atendido por Producción' ? 'from-green-100 to-green-200' :
                 orden.estado === 'Despachada' ? 'from-purple-100 to-purple-200' :
-                orden.estado === 'Entregada' ? 'from-green-100 to-green-200' :
+                orden.estado === 'Entregada' ? 'from-emerald-100 to-emerald-200' :
                 'from-red-100 to-red-200'
               }`}>
                 <IconoEstado size={40} className={
@@ -675,7 +670,7 @@ function DetalleOrdenVenta() {
                   orden.estado === 'En Proceso' ? 'text-blue-600' :
                   orden.estado === 'Atendido por Producción' ? 'text-green-600' :
                   orden.estado === 'Despachada' ? 'text-purple-600' :
-                  orden.estado === 'Entregada' ? 'text-green-600' :
+                  orden.estado === 'Entregada' ? 'text-emerald-600' :
                   'text-red-600'
                 } />
               </div>
@@ -684,18 +679,16 @@ function DetalleOrdenVenta() {
                 <h3 className="text-3xl font-bold">{orden.estado}</h3>
               </div>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-sm uppercase font-semibold text-muted mb-2">Prioridad</p>
-                <button 
-                  className={`badge ${prioridadConfig.clase} text-lg px-4 py-2 cursor-pointer hover:opacity-80 transition-opacity`}
-                  onClick={() => setModalPrioridadOpen(true)}
-                  disabled={orden.estado === 'Cancelada' || orden.estado === 'Entregada'}
-                >
-                  {prioridadConfig.icono} {orden.prioridad}
-                </button>
-              </div>
+            
+            <div className="text-right">
+              <p className="text-sm uppercase font-semibold text-muted mb-2">Prioridad</p>
+              <button 
+                className={`badge ${prioridadConfig.clase} text-lg px-4 py-2`}
+                onClick={() => setModalPrioridadOpen(true)}
+                disabled={orden.estado === 'Cancelada' || orden.estado === 'Entregada'}
+              >
+                {prioridadConfig.icono} {orden.prioridad}
+              </button>
             </div>
           </div>
 
@@ -729,8 +722,6 @@ function DetalleOrdenVenta() {
                     colorClases = esActual 
                       ? 'bg-red-500 text-white cursor-not-allowed opacity-70' 
                       : 'bg-white text-red-600 border-2 border-red-500 hover:bg-red-500 hover:text-white';
-                  } else {
-                     colorClases = 'btn-outline';
                   }
 
                   return (
@@ -760,6 +751,7 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
+      {/* CARDS RESUMEN */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className={`card border-l-4 ${estadoPagoConfig.clase.replace('badge-', 'border-')}`}>
           <div className="card-body">
@@ -944,28 +936,6 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      <Modal isOpen={modalEstadoOpen} onClose={() => setModalEstadoOpen(false)} title="Cambiar Estado">
-        <div className="space-y-4">
-          <p className="text-muted">Estado actual: <strong>{orden.estado}</strong></p>
-          <div className="space-y-2">
-            {estadoConfig.siguientes.map(estado => {
-              const config = getEstadoConfig(estado);
-              const Icono = config.icono;
-              return (
-                <button 
-                  key={estado} 
-                  className="btn btn-outline w-full justify-start" 
-                  onClick={() => handleCambiarEstado(estado)}
-                  disabled={procesando}
-                >
-                  <Icono size={20} /> {estado}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </Modal>
-
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
         <div className="space-y-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
@@ -1122,7 +1092,7 @@ function DetalleOrdenVenta() {
               }
 
             } catch (err) {
-              console.error(err);
+              console.error('Error al crear orden de producción:', err);
               setError(err.response?.data?.error || 'Error al crear orden de producción');
             } finally {
               setProcesando(false);

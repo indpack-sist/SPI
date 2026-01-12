@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Eye, 
+  Edit,
   ShoppingCart, 
   Filter, 
   TrendingUp, 
@@ -335,7 +336,7 @@ function OrdenesVenta() {
     {
       header: 'Acciones',
       accessor: 'id_orden_venta',
-      width: '120px',
+      width: '140px', // Aumentado para que quepa el nuevo botón
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-1 justify-center">
@@ -346,6 +347,16 @@ function OrdenesVenta() {
           >
             <Eye size={14} />
           </button>
+          
+          <button
+            className="btn btn-sm btn-secondary"
+            onClick={() => navigate(`/ventas/ordenes/${value}/editar`)}
+            title="Editar orden"
+            disabled={row.estado !== 'En Espera'}
+          >
+            <Edit size={14} />
+          </button>
+
           <button
             className="btn btn-sm btn-outline"
             onClick={() => handleDescargarPDF(value, row.numero_orden)}

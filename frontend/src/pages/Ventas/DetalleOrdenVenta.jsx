@@ -602,6 +602,16 @@ function DetalleOrdenVenta() {
           
           {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
             <>
+              {/* AQUÍ ESTÁ EL BOTÓN DE EDITAR QUE FALTABA */}
+              {orden.estado === 'En Espera' && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
+                >
+                  <Edit size={20} /> Editar
+                </button>
+              )}
+
               <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
                 <Edit size={20} /> Estado
               </button>

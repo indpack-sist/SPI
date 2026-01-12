@@ -60,36 +60,27 @@ function DetalleCotizacion() {
     }
   };
 
-  const handleDuplicar = () => {
-    navigate(`/ventas/cotizaciones/${id}/duplicar`);
-  };
-
-  const handleCambiarEstado = async (estado) => {
+  const handleDuplicar = async () => {
   try {
-    setError(null);
     setLoading(true);
+    setError(null);
     
-    const response = await cotizacionesAPI.actualizarEstado(id, estado);
+    const response = await cotizacionesAPI.duplicar(id);
     
     if (response.data.success) {
-      if (estado === 'Aprobada' && response.data.data?.id_orden_venta) {
-        // Convertida a Orden de Venta - redirigir
-        setSuccess(`Cotización convertida exitosamente a ${response.data.data.numero_orden}`);
-        
-        setTimeout(() => {
-          navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`);
-        }, 1500);
-      } else {
-        // Cambio de estado normal - recargar datos
-        await cargarDatos(); // Recargar todos los datos
-        setSuccess(`Estado actualizado a ${estado}`);
-      }
+      setSuccess(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
+      
+      // Redirigir a la NUEVA cotización duplicada (no a editar)
+      setTimeout(() => {
+        navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
+      }, 1500);
     }
     
   } catch (err) {
-    setError(err.response?.data?.error || 'Error al cambiar estado');
+    console.error('Error al duplicar cotización:', err);
+    setError(err.response?.data?.error || 'Error al duplicar cotización');
   } finally {
-    setLoading(false); // IMPORTANTE: Siempre liberar el loading
+    setLoading(false);
   }
 };
 

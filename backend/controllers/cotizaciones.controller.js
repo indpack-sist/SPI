@@ -162,6 +162,8 @@ export async function getCotizacionById(req, res) {
   }
 }
 
+// En la función createCotizacion, reemplaza el cálculo de subtotal y el insert:
+
 export async function createCotizacion(req, res) {
   try {
     const {
@@ -242,12 +244,25 @@ export async function createCotizacion(req, res) {
     
     const numeroCotizacion = `COT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
+    // NUEVO: Calcular subtotal Y comisiones
     let subtotal = 0;
+    let totalComision = 0;
+    let sumaComisionPorcentual = 0;
+    
     for (const item of detalle) {
-      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      subtotal += valorVenta - descuentoItem;
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
+      
+      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+      subtotal += valorVenta;
+      
+      totalComision += montoComision * item.cantidad;
+      sumaComisionPorcentual += porcentajeComision;
     }
+    
+    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
     
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
@@ -283,9 +298,11 @@ export async function createCotizacion(req, res) {
         subtotal,
         igv,
         total,
+        total_comision,
+        porcentaje_comision_promedio,
         estado,
         id_creado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
     `, [
       numeroCotizacion,
       id_cliente,
@@ -307,6 +324,8 @@ export async function createCotizacion(req, res) {
       subtotal,
       igv,
       total,
+      totalComision,
+      porcentajeComisionPromedio,
       comercialFinal                    
     ]);
     
@@ -319,8 +338,13 @@ export async function createCotizacion(req, res) {
     
     const idCotizacion = result.data.insertId;
     
+    // NUEVO: Insertar detalle con campos de comisión
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
       
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
@@ -328,15 +352,21 @@ export async function createCotizacion(req, res) {
           id_producto,
           cantidad,
           precio_unitario,
+          precio_base,
+          porcentaje_comision,
+          monto_comision,
           descuento_porcentaje,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idCotizacion,
         item.id_producto,
-        item.cantidad,
-        item.precio_unitario,
-        item.descuento_porcentaje || 0,
+        parseFloat(item.cantidad),
+        precioFinal,
+        precioBase,
+        porcentajeComision,
+        montoComision,
+        parseFloat(item.descuento_porcentaje || 0),
         i + 1
       ]);
     }
@@ -346,7 +376,9 @@ export async function createCotizacion(req, res) {
       data: {
         id_cotizacion: idCotizacion,
         numero_cotizacion: numeroCotizacion,
-        fecha_vencimiento: fechaVencimientoCalculada
+        fecha_vencimiento: fechaVencimientoCalculada,
+        total_comision: totalComision,
+        porcentaje_comision_promedio: porcentajeComisionPromedio
       },
       message: 'Cotización creada exitosamente'
     });

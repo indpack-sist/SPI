@@ -65,30 +65,33 @@ function DetalleCotizacion() {
   };
 
   const handleCambiarEstado = async (estado) => {
-    try {
-      setError(null);
-      setLoading(true);
-      
-      const response = await cotizacionesAPI.actualizarEstado(id, estado);
-      
-      if (response.data.success) {
-        if (estado === 'Aprobada' && response.data.data?.id_orden_venta) {
-          setSuccess(`Cotización convertida exitosamente a ${response.data.data.numero_orden}`);
-          
-          setTimeout(() => {
-            navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`);
-          }, 1500);
-        } else {
-          setCotizacion({ ...cotizacion, estado });
-          setSuccess(`Estado actualizado a ${estado}`);
-        }
+  try {
+    setError(null);
+    setLoading(true);
+    
+    const response = await cotizacionesAPI.actualizarEstado(id, estado);
+    
+    if (response.data.success) {
+      if (estado === 'Aprobada' && response.data.data?.id_orden_venta) {
+        // Convertida a Orden de Venta - redirigir
+        setSuccess(`Cotización convertida exitosamente a ${response.data.data.numero_orden}`);
+        
+        setTimeout(() => {
+          navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`);
+        }, 1500);
+      } else {
+        // Cambio de estado normal - recargar datos
+        await cargarDatos(); // Recargar todos los datos
+        setSuccess(`Estado actualizado a ${estado}`);
       }
-      
-    } catch (err) {
-      setError(err.response?.data?.error || 'Error al cambiar estado');
-      setLoading(false);
     }
-  };
+    
+  } catch (err) {
+    setError(err.response?.data?.error || 'Error al cambiar estado');
+  } finally {
+    setLoading(false); // IMPORTANTE: Siempre liberar el loading
+  }
+};
 
   const handleCambiarPrioridad = async (prioridad) => {
     try {

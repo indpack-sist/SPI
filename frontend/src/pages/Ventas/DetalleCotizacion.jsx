@@ -20,7 +20,6 @@ function DetalleCotizacion() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
 
   useEffect(() => {
@@ -75,7 +74,6 @@ function DetalleCotizacion() {
       if (response.data.success) {
         if (estado === 'Aprobada' && response.data.data?.id_orden_venta) {
           setSuccess(`Cotización convertida exitosamente a ${response.data.data.numero_orden}`);
-          setModalEstadoOpen(false);
           
           setTimeout(() => {
             navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`);
@@ -83,7 +81,6 @@ function DetalleCotizacion() {
         } else {
           setCotizacion({ ...cotizacion, estado });
           setSuccess(`Estado actualizado a ${estado}`);
-          setModalEstadoOpen(false);
         }
       }
       
@@ -324,18 +321,12 @@ function DetalleCotizacion() {
             </button>
             
             {!estaConvertida && cotizacion.estado !== 'Vencida' && (
-              <>
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={() => navigate(`/ventas/cotizaciones/${id}/editar`)}
-                >
-                  <Edit size={18} /> Editar
-                </button>
-                
-                <button className="btn btn-outline" onClick={() => setModalEstadoOpen(true)}>
-                  <Edit size={18} /> Estado
-                </button>
-              </>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => navigate(`/ventas/cotizaciones/${id}/editar`)}
+              >
+                <Edit size={18} /> Editar
+              </button>
             )}
           </div>
         </div>
@@ -366,7 +357,7 @@ function DetalleCotizacion() {
 
       <div className={`card border-2 ${estadoConfig.clase} mb-6`}>
         <div className="card-body">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <div className={`p-4 rounded-xl ${estadoConfig.clase}`}>
                 <IconoEstado size={40} />
@@ -393,6 +384,30 @@ function DetalleCotizacion() {
               </button>
             </div>
           </div>
+
+          {!estaConvertida && cotizacion.estado !== 'Vencida' && (
+            <div className="border-t border-black/10 pt-4 mt-2">
+              <p className="text-xs font-bold uppercase opacity-60 mb-3">Cambiar Estado:</p>
+              <div className="flex gap-3 flex-wrap">
+                {['Pendiente', 'Enviada', 'Aprobada', 'Rechazada'].map(estado => {
+                  const config = getEstadoConfig(estado);
+                  const Icono = config.icono;
+                  const esActual = cotizacion.estado === estado;
+                  return (
+                    <button
+                      key={estado}
+                      className={`btn btn-sm ${esActual ? 'btn-primary opacity-50 cursor-not-allowed' : 'btn-outline bg-white hover:bg-white/50'}`}
+                      onClick={() => handleCambiarEstado(estado)}
+                      disabled={esActual || loading}
+                    >
+                      <Icono size={16} className="mr-1.5" />
+                      {estado}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -598,57 +613,6 @@ function DetalleCotizacion() {
           </div>
         </div>
       </div>
-
-      <Modal
-        isOpen={modalEstadoOpen}
-        onClose={() => setModalEstadoOpen(false)}
-        title="Cambiar Estado de Cotización"
-        size="md"
-      >
-        <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-sm text-muted">Estado actual:</p>
-            <p className="font-bold text-lg">{cotizacion.estado}</p>
-          </div>
-
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-            <div className="flex items-start gap-2">
-              <AlertCircle size={20} className="text-success mt-0.5" />
-              <div className="text-sm text-green-900">
-                <p className="font-medium mb-1">Nota importante:</p>
-                <p>Al cambiar el estado a <strong>Aprobada</strong>, se creará automáticamente una Orden de Venta y será redirigido a ella.</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            {['Pendiente', 'Enviada', 'Aprobada', 'Rechazada'].map(estado => {
-              const config = getEstadoConfig(estado);
-              const Icono = config.icono;
-              return (
-                <button
-                  key={estado}
-                  className={`btn btn-outline w-full justify-start ${cotizacion.estado === estado ? 'opacity-50' : ''}`}
-                  onClick={() => handleCambiarEstado(estado)}
-                  disabled={cotizacion.estado === estado || loading}
-                >
-                  <Icono size={18} className="mr-2" />
-                  {estado}
-                  {estado === 'Aprobada' && (
-                    <span className="ml-2 text-xs text-success">→ Convertir a OV</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <button className="btn btn-outline" onClick={() => setModalEstadoOpen(false)} disabled={loading}>
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       <Modal
         isOpen={modalPrioridadOpen}

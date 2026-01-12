@@ -12,6 +12,9 @@ export async function getAllOrdenesVenta(req, res) {
     ov.fecha_emision,
     ov.fecha_entrega_estimada,
     ov.fecha_entrega_real,
+    ov.fecha_vencimiento,
+    ov.tipo_venta,
+    ov.dias_credito,
     ov.estado,
     ov.prioridad,
     ov.subtotal,
@@ -169,11 +172,14 @@ export async function createOrdenVenta(req, res) {
       id_cotizacion,
       fecha_emision,
       fecha_entrega_estimada,
+      fecha_vencimiento,
       prioridad,
       moneda,
       tipo_cambio,
       tipo_impuesto,
       porcentaje_impuesto,
+      tipo_venta,
+      dias_credito,
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -251,6 +257,14 @@ export async function createOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
     
+    // Cálculo de fecha vencimiento si no viene del front (fallback)
+    let fechaVencimientoFinal = fecha_vencimiento;
+    if (!fechaVencimientoFinal) {
+        const fechaBase = new Date(fecha_emision);
+        fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
+        fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
+    }
+    
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
         numero_orden,
@@ -258,11 +272,14 @@ export async function createOrdenVenta(req, res) {
         id_cotizacion,
         fecha_emision,
         fecha_entrega_estimada,
+        fecha_vencimiento,
         prioridad,
         moneda,
         tipo_cambio,
         tipo_impuesto,
         porcentaje_impuesto,
+        tipo_venta,
+        dias_credito,
         plazo_pago,
         forma_pago,
         orden_compra_cliente,
@@ -280,18 +297,21 @@ export async function createOrdenVenta(req, res) {
         total_comision,
         porcentaje_comision_promedio,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
     `, [
       numeroOrden,
       id_cliente,
       id_cotizacion || null,
       fecha_emision,
       fecha_entrega_estimada || null,
+      fechaVencimientoFinal,
       prioridad || 'Media',
       moneda,
       parseFloat(tipo_cambio || 1.0000),
       tipoImpuestoFinal,
       porcentaje,
+      tipo_venta || 'Contado',
+      parseInt(dias_credito || 0),
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -384,11 +404,14 @@ export async function updateOrdenVenta(req, res) {
       id_cliente,
       fecha_emision,
       fecha_entrega_estimada,
+      fecha_vencimiento,
       prioridad,
       moneda,
       tipo_cambio,
       tipo_impuesto,
       porcentaje_impuesto,
+      tipo_venta,
+      dias_credito,
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -445,17 +468,28 @@ export async function updateOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
 
+    // Cálculo fallback
+    let fechaVencimientoFinal = fecha_vencimiento;
+    if (!fechaVencimientoFinal) {
+        const fechaBase = new Date(fecha_emision);
+        fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
+        fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
+    }
+
     const updateResult = await executeQuery(`
       UPDATE ordenes_venta 
       SET 
         id_cliente = ?,
         fecha_emision = ?,
         fecha_entrega_estimada = ?,
+        fecha_vencimiento = ?,
         prioridad = ?,
         moneda = ?,
         tipo_cambio = ?,
         tipo_impuesto = ?,
         porcentaje_impuesto = ?,
+        tipo_venta = ?,
+        dias_credito = ?,
         plazo_pago = ?,
         forma_pago = ?,
         orden_compra_cliente = ?,
@@ -476,11 +510,14 @@ export async function updateOrdenVenta(req, res) {
       id_cliente,
       fecha_emision,
       fecha_entrega_estimada || null,
+      fechaVencimientoFinal,
       prioridad || 'Media',
       moneda,
       parseFloat(tipo_cambio || 1.0000),
       tipoImpuestoFinal,
       porcentaje,
+      tipo_venta || 'Contado',
+      parseInt(dias_credito || 0),
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
@@ -1046,7 +1083,7 @@ export async function registrarPagoOrden(req, res) {
     const montoPagadoActual = parseFloat(orden.monto_pagado || 0);
     const montoNuevoPago = parseFloat(monto_pagado);
     
-    if (montoPagadoActual + montoNuevoPago > totalOrden) {
+    if (montoPagadoActual + montoNuevoPago > totalOrden + 0.1) {
       return res.status(400).json({
         success: false,
         error: `El monto a pagar (${montoNuevoPago}) excede el saldo pendiente (${totalOrden - montoPagadoActual})`
@@ -1105,7 +1142,7 @@ export async function registrarPagoOrden(req, res) {
     const nuevoMontoPagado = montoPagadoActual + montoNuevoPago;
     let estadoPago = 'Parcial';
     
-    if (nuevoMontoPagado >= totalOrden) {
+    if (nuevoMontoPagado >= totalOrden - 0.1) {
       estadoPago = 'Pagado';
     } else if (nuevoMontoPagado === 0) {
       estadoPago = 'Pendiente';
@@ -1236,9 +1273,9 @@ export async function anularPagoOrden(req, res) {
     const nuevoMontoPagado = montoPagadoActual - montoPago;
     let estadoPago = 'Parcial';
     
-    if (nuevoMontoPagado >= totalOrden) {
+    if (nuevoMontoPagado >= totalOrden - 0.1) {
       estadoPago = 'Pagado';
-    } else if (nuevoMontoPagado === 0) {
+    } else if (nuevoMontoPagado <= 0.1) {
       estadoPago = 'Pendiente';
     }
     

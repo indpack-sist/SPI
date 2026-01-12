@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, TrendingUp, TrendingDown, Calendar, 
   Filter, Download, ArrowUpCircle, ArrowDownCircle,
-  CreditCard, Building2, User, FileText
+  CreditCard, Building2, User, FileText, AlertTriangle,
+  Clock, CheckCircle, XCircle, LayoutList, AlertCircle
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -10,13 +12,19 @@ import Loading from '../../components/UI/Loading';
 import { pagosCobranzasAPI, cuentasPagoAPI } from '../../config/api';
 
 function PagosCobranzas() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Estados de datos
   const [movimientos, setMovimientos] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [cuentas, setCuentas] = useState([]);
+  const [cuentasPorCobrar, setCuentasPorCobrar] = useState([]);
   
+  // Control de interfaz
+  const [activeTab, setActiveTab] = useState('movimientos'); // 'movimientos' | 'cobranzas'
+
   const [filtros, setFiltros] = useState({
     tipo: '',
     fecha_inicio: new Date(new Date().setDate(1)).toISOString().split('T')[0],
@@ -30,8 +38,12 @@ function PagosCobranzas() {
   }, []);
 
   useEffect(() => {
-    cargarDatos();
-  }, [filtros]);
+    if (activeTab === 'movimientos') {
+      cargarMovimientos();
+    } else {
+      cargarDeudas();
+    }
+  }, [filtros, activeTab]);
 
   const cargarCuentas = async () => {
     try {
@@ -42,7 +54,7 @@ function PagosCobranzas() {
     }
   };
 
-  const cargarDatos = async () => {
+  const cargarMovimientos = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -55,7 +67,22 @@ function PagosCobranzas() {
       setResumen(resumenRes.data.data);
       setMovimientos(movimientosRes.data.data);
     } catch (err) {
-      setError(err.error || 'Error al cargar datos');
+      setError(err.response?.data?.error || 'Error al cargar movimientos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cargarDeudas = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // Filtros específicos para deudas si es necesario
+      const response = await pagosCobranzasAPI.getCuentasPorCobrar(filtros);
+      setCuentasPorCobrar(response.data.data || []);
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar cuentas por cobrar');
     } finally {
       setLoading(false);
     }
@@ -77,7 +104,7 @@ function PagosCobranzas() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE');
+    return new Date(fecha).toLocaleDateString('es-PE', {timeZone: 'UTC'});
   };
 
   const formatearMoneda = (valor, moneda = 'PEN') => {
@@ -85,38 +112,33 @@ function PagosCobranzas() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
-  const getTipoIcon = (tipo) => {
-    return tipo === 'pago' ? ArrowDownCircle : ArrowUpCircle;
-  };
-
-  const getTipoColor = (tipo) => {
-    return tipo === 'pago' ? 'text-danger' : 'text-success';
-  };
-
-  const columns = [
+  // --- COLUMNAS PARA MOVIMIENTOS (HISTORIAL) ---
+  const columnsMovimientos = [
     {
       header: 'Tipo',
       accessor: 'tipo',
-      width: '100px',
+      width: '120px',
       align: 'center',
       render: (value) => {
-        const Icon = getTipoIcon(value);
-        const color = getTipoColor(value);
+        const isPago = value === 'pago';
         return (
-          <div className="flex items-center gap-2 justify-center">
-            <Icon size={20} className={color} />
-            <span className={`font-medium ${color}`}>
-              {value === 'pago' ? 'Pago' : 'Cobranza'}
-            </span>
+          <div className={`flex items-center gap-2 justify-center ${isPago ? 'text-red-600' : 'text-green-600'}`}>
+            {isPago ? <ArrowDownCircle size={18} /> : <ArrowUpCircle size={18} />}
+            <span className="font-medium">{isPago ? 'Egreso' : 'Ingreso'}</span>
           </div>
         );
       }
     },
     {
-      header: 'N° Operación',
+      header: 'Referencia',
       accessor: 'numero_pago',
       width: '140px',
-      render: (value) => <span className="font-mono font-bold">{value}</span>
+      render: (value, row) => (
+        <div>
+          <div className="font-mono font-bold">{value}</div>
+          <div className="text-xs text-muted">{row.documento_referencia}</div>
+        </div>
+      )
     },
     {
       header: 'Fecha',
@@ -125,13 +147,7 @@ function PagosCobranzas() {
       render: (value) => formatearFecha(value)
     },
     {
-      header: 'Documento',
-      accessor: 'documento_referencia',
-      width: '140px',
-      render: (value) => <span className="font-mono text-sm">{value || '-'}</span>
-    },
-    {
-      header: 'Tercero',
+      header: 'Entidad / Cliente',
       accessor: 'tercero',
       render: (value) => <span className="font-medium">{value || 'Sin especificar'}</span>
     },
@@ -140,85 +156,195 @@ function PagosCobranzas() {
       accessor: 'monto_pagado',
       width: '130px',
       align: 'right',
-      render: (value, row) => {
-        const color = row.tipo === 'pago' ? 'text-danger' : 'text-success';
-        return (
-          <span className={`font-bold text-lg ${color}`}>
-            {formatearMoneda(value, row.moneda)}
-          </span>
-        );
-      }
+      render: (value, row) => (
+        <span className={`font-bold text-lg ${row.tipo === 'pago' ? 'text-red-600' : 'text-green-600'}`}>
+          {row.tipo === 'pago' ? '-' : '+'}{formatearMoneda(value, row.moneda)}
+        </span>
+      )
     },
     {
       header: 'Método',
       accessor: 'metodo_pago',
       width: '120px',
       align: 'center',
-      render: (value) => (
-        <span className="badge badge-info">{value}</span>
-      )
-    },
-    {
-      header: 'Cuenta',
-      accessor: 'cuenta_destino',
-      width: '150px',
-      render: (value) => value || '-'
-    },
-    {
-      header: 'Registrado por',
-      accessor: 'registrado_por',
-      width: '150px',
-      render: (value) => (
-        <div className="flex items-center gap-2">
-          <User size={14} className="text-muted" />
-          <span className="text-sm">{value}</span>
-        </div>
-      )
+      render: (value) => <span className="badge badge-secondary">{value}</span>
     }
   ];
 
-  if (loading && !resumen) {
-    return <Loading message="Cargando pagos y cobranzas..." />;
+  // --- COLUMNAS PARA CUENTAS POR COBRAR (DEUDA) ---
+  const columnsCobranzas = [
+    {
+      header: 'Estado',
+      accessor: 'estado_deuda', // Viene de la Vista SQL
+      width: '160px',
+      align: 'center',
+      render: (value, row) => {
+        let config = { color: 'badge-secondary', icon: Clock, text: value };
+        
+        switch(value) {
+          case 'Vencido':
+            config = { color: 'badge-danger', icon: XCircle, text: 'Vencido' };
+            break;
+          case 'Proximo a Vencer':
+            config = { color: 'badge-warning', icon: AlertTriangle, text: 'Próx. Vencer' };
+            break;
+          case 'Al Dia':
+            config = { color: 'badge-success', icon: CheckCircle, text: 'Al Día' };
+            break;
+          default:
+            config = { color: 'badge-secondary', icon: Clock, text: value };
+        }
+        
+        const Icon = config.icon;
+        
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <span className={`badge ${config.color} flex items-center gap-1`}>
+              <Icon size={14} /> {config.text}
+            </span>
+            <span className={`text-[10px] font-bold ${row.dias_restantes < 0 ? 'text-danger' : 'text-muted'}`}>
+              {row.dias_restantes < 0 
+                ? `${Math.abs(row.dias_restantes)} días atraso` 
+                : `${row.dias_restantes} días restantes`}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Orden Venta',
+      accessor: 'numero_orden',
+      width: '120px',
+      render: (value, row) => (
+        <button 
+          className="font-mono font-bold text-primary hover:underline"
+          onClick={() => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
+        >
+          {value}
+        </button>
+      )
+    },
+    {
+      header: 'Cliente',
+      accessor: 'cliente',
+      render: (value, row) => (
+        <div>
+          <div className="font-bold">{value}</div>
+          <div className="text-xs text-muted flex gap-2">
+            <span>RUC: {row.ruc}</span>
+            {row.telefono && <span>📞 {row.telefono}</span>}
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Vencimiento',
+      accessor: 'fecha_vencimiento',
+      width: '110px',
+      render: (value) => (
+        <div className="font-medium text-gray-700">
+          {formatearFecha(value)}
+        </div>
+      )
+    },
+    {
+      header: 'Total',
+      accessor: 'total',
+      width: '120px',
+      align: 'right',
+      render: (value, row) => formatearMoneda(value, row.moneda)
+    },
+    {
+      header: 'A Cuenta',
+      accessor: 'monto_pagado',
+      width: '120px',
+      align: 'right',
+      render: (value, row) => (
+        <span className="text-success">{formatearMoneda(value, row.moneda)}</span>
+      )
+    },
+    {
+      header: 'Saldo Pendiente',
+      accessor: 'saldo_pendiente',
+      width: '130px',
+      align: 'right',
+      render: (value, row) => (
+        <span className="font-bold text-lg text-danger">
+          {formatearMoneda(value, row.moneda)}
+        </span>
+      )
+    },
+    {
+      header: 'Días Crédito',
+      accessor: 'dias_credito',
+      width: '90px',
+      align: 'center',
+      render: (value) => <span className="badge badge-outline">{value} días</span>
+    }
+  ];
+
+  if (loading && !resumen && activeTab === 'movimientos') {
+    return <Loading message="Cargando información financiera..." />;
   }
 
   return (
     <div className="p-6">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <DollarSign size={32} />
-            Pagos y Cobranzas
+            <DollarSign size={32} className="text-primary" />
+            Finanzas y Cobranzas
           </h1>
-          <p className="text-muted">Control de flujo de efectivo</p>
+          <p className="text-muted">Gestión de flujo de caja y cuentas por cobrar</p>
+        </div>
+        <div className="flex bg-gray-100 p-1 rounded-lg">
+          <button
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'movimientos' 
+                ? 'bg-white text-primary shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setActiveTab('movimientos')}
+          >
+            <div className="flex items-center gap-2">
+              <LayoutList size={16} /> Movimientos
+            </div>
+          </button>
+          <button
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'cobranzas' 
+                ? 'bg-white text-danger shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setActiveTab('cobranzas')}
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} /> Cuentas por Cobrar
+            </div>
+          </button>
         </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {resumen && (
+      {/* DASHBOARD SOLO VISIBLE EN MOVIMIENTOS */}
+      {activeTab === 'movimientos' && resumen && (
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="card border-l-4 border-danger">
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm text-muted">Pagos Realizados</p>
-                  <h3 className="text-2xl font-bold text-danger">
-                    {resumen.pagos.cantidad}
-                  </h3>
+                  <p className="text-sm text-muted">Egresos (Pagos)</p>
+                  <h3 className="text-2xl font-bold text-danger">{resumen.pagos.cantidad}</h3>
                 </div>
                 <div className="p-3 bg-red-100 rounded-lg">
-                  <ArrowDownCircle size={32} className="text-danger" />
+                  <ArrowDownCircle size={24} className="text-danger" />
                 </div>
               </div>
-              <div className="space-y-1">
-                <div className="text-sm">
-                  <span className="text-muted">PEN:</span>
-                  <span className="font-bold ml-2">{formatearMoneda(resumen.pagos.pen, 'PEN')}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-muted">USD:</span>
-                  <span className="font-bold ml-2">{formatearMoneda(resumen.pagos.usd, 'USD')}</span>
-                </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between"><span>PEN:</span> <span className="font-bold">{formatearMoneda(resumen.pagos.pen, 'PEN')}</span></div>
+                <div className="flex justify-between"><span>USD:</span> <span className="font-bold">{formatearMoneda(resumen.pagos.usd, 'USD')}</span></div>
               </div>
             </div>
           </div>
@@ -227,180 +353,113 @@ function PagosCobranzas() {
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm text-muted">Cobranzas Recibidas</p>
-                  <h3 className="text-2xl font-bold text-success">
-                    {resumen.cobranzas.cantidad}
-                  </h3>
+                  <p className="text-sm text-muted">Ingresos (Cobros)</p>
+                  <h3 className="text-2xl font-bold text-success">{resumen.cobranzas.cantidad}</h3>
                 </div>
                 <div className="p-3 bg-green-100 rounded-lg">
-                  <ArrowUpCircle size={32} className="text-success" />
+                  <ArrowUpCircle size={24} className="text-success" />
                 </div>
               </div>
-              <div className="space-y-1">
-                <div className="text-sm">
-                  <span className="text-muted">PEN:</span>
-                  <span className="font-bold ml-2">{formatearMoneda(resumen.cobranzas.pen, 'PEN')}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-muted">USD:</span>
-                  <span className="font-bold ml-2">{formatearMoneda(resumen.cobranzas.usd, 'USD')}</span>
-                </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between"><span>PEN:</span> <span className="font-bold">{formatearMoneda(resumen.cobranzas.pen, 'PEN')}</span></div>
+                <div className="flex justify-between"><span>USD:</span> <span className="font-bold">{formatearMoneda(resumen.cobranzas.usd, 'USD')}</span></div>
               </div>
             </div>
           </div>
 
-          <div className={`card border-l-4 ${resumen.flujo_neto.pen >= 0 ? 'border-success' : 'border-danger'}`}>
-            <div className="card-body">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm text-muted">Flujo Neto PEN</p>
-                  <h3 className={`text-2xl font-bold ${resumen.flujo_neto.pen >= 0 ? 'text-success' : 'text-danger'}`}>
-                    {formatearMoneda(resumen.flujo_neto.pen, 'PEN')}
-                  </h3>
+          {/* Flujo Neto */}
+          {['pen', 'usd'].map((moneda) => (
+            <div key={moneda} className={`card border-l-4 ${resumen.flujo_neto[moneda] >= 0 ? 'border-primary' : 'border-warning'}`}>
+              <div className="card-body">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm text-muted">Flujo Neto {moneda.toUpperCase()}</p>
+                    <h3 className={`text-2xl font-bold ${resumen.flujo_neto[moneda] >= 0 ? 'text-primary' : 'text-warning'}`}>
+                      {formatearMoneda(resumen.flujo_neto[moneda], moneda.toUpperCase())}
+                    </h3>
+                  </div>
+                  <div className={`p-3 rounded-lg ${resumen.flujo_neto[moneda] >= 0 ? 'bg-blue-100' : 'bg-orange-100'}`}>
+                    <TrendingUp size={24} className={resumen.flujo_neto[moneda] >= 0 ? 'text-primary' : 'text-warning'} />
+                  </div>
                 </div>
-                <div className={`p-3 rounded-lg ${resumen.flujo_neto.pen >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                  {resumen.flujo_neto.pen >= 0 ? (
-                    <TrendingUp size={32} className="text-success" />
-                  ) : (
-                    <TrendingDown size={32} className="text-danger" />
-                  )}
-                </div>
+                <p className="text-xs text-muted">Balance del periodo seleccionado</p>
               </div>
-              <p className="text-xs text-muted">
-                {resumen.flujo_neto.pen >= 0 ? 'Flujo positivo' : 'Flujo negativo'}
-              </p>
             </div>
-          </div>
-
-          <div className={`card border-l-4 ${resumen.flujo_neto.usd >= 0 ? 'border-success' : 'border-danger'}`}>
-            <div className="card-body">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm text-muted">Flujo Neto USD</p>
-                  <h3 className={`text-2xl font-bold ${resumen.flujo_neto.usd >= 0 ? 'text-success' : 'text-danger'}`}>
-                    {formatearMoneda(resumen.flujo_neto.usd, 'USD')}
-                  </h3>
-                </div>
-                <div className={`p-3 rounded-lg ${resumen.flujo_neto.usd >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                  {resumen.flujo_neto.usd >= 0 ? (
-                    <TrendingUp size={32} className="text-success" />
-                  ) : (
-                    <TrendingDown size={32} className="text-danger" />
-                  )}
-                </div>
-              </div>
-              <p className="text-xs text-muted">
-                {resumen.flujo_neto.usd >= 0 ? 'Flujo positivo' : 'Flujo negativo'}
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
+      {/* FILTROS GENERALES */}
       <div className="card mb-4">
-        <div className="card-header">
-          <div className="flex items-center justify-between">
-            <h2 className="card-title">
-              <Filter size={20} />
-              Filtros
-            </h2>
-            <div className="flex gap-2">
+        <div className="card-body p-4">
+          <div className="flex flex-wrap items-end gap-4">
+            {activeTab === 'movimientos' && (
+              <div className="w-40">
+                <label className="form-label text-xs">Tipo Movimiento</label>
+                <select className="form-select form-select-sm" value={filtros.tipo} onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}>
+                  <option value="">Todos</option>
+                  <option value="pago">Egresos</option>
+                  <option value="cobranza">Ingresos</option>
+                </select>
+              </div>
+            )}
+            
+            <div className="w-40">
+              <label className="form-label text-xs">Fecha Inicio</label>
+              <input type="date" className="form-input form-input-sm" value={filtros.fecha_inicio} onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })} />
+            </div>
+
+            <div className="w-40">
+              <label className="form-label text-xs">Fecha Fin</label>
+              <input type="date" className="form-input form-input-sm" value={filtros.fecha_fin} onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })} />
+            </div>
+
+            {activeTab === 'movimientos' && (
+              <div className="w-40">
+                <label className="form-label text-xs">Cuenta</label>
+                <select className="form-select form-select-sm" value={filtros.id_cuenta} onChange={(e) => setFiltros({ ...filtros, id_cuenta: e.target.value })}>
+                  <option value="">Todas</option>
+                  {cuentas.map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-2 ml-auto">
               <button className="btn btn-outline btn-sm" onClick={limpiarFiltros}>
-                Limpiar
+                <Filter size={14} className="mr-1"/> Limpiar
               </button>
-              <button className="btn btn-primary btn-sm" onClick={exportarExcel}>
-                <Download size={16} />
-                Exportar
+              <button className="btn btn-success btn-sm" onClick={exportarExcel}>
+                <Download size={14} className="mr-1"/> Exportar
               </button>
-            </div>
-          </div>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-5 gap-4">
-            <div className="form-group">
-              <label className="form-label">Tipo</label>
-              <select
-                className="form-select"
-                value={filtros.tipo}
-                onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}
-              >
-                <option value="">Todos</option>
-                <option value="pago">Pagos</option>
-                <option value="cobranza">Cobranzas</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Fecha Inicio</label>
-              <input
-                type="date"
-                className="form-input"
-                value={filtros.fecha_inicio}
-                onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Fecha Fin</label>
-              <input
-                type="date"
-                className="form-input"
-                value={filtros.fecha_fin}
-                onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Método de Pago</label>
-              <select
-                className="form-select"
-                value={filtros.metodo_pago}
-                onChange={(e) => setFiltros({ ...filtros, metodo_pago: e.target.value })}
-              >
-                <option value="">Todos</option>
-                <option value="Efectivo">Efectivo</option>
-                <option value="Transferencia">Transferencia</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Tarjeta">Tarjeta</option>
-                <option value="Deposito">Depósito</option>
-                <option value="Yape">Yape</option>
-                <option value="Plin">Plin</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Cuenta</label>
-              <select
-                className="form-select"
-                value={filtros.id_cuenta}
-                onChange={(e) => setFiltros({ ...filtros, id_cuenta: e.target.value })}
-              >
-                <option value="">Todas</option>
-                {cuentas.map(cuenta => (
-                  <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                    {cuenta.nombre}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </div>
       </div>
 
+      {/* TABLA PRINCIPAL */}
       <div className="card">
-        <div className="card-header">
+        <div className="card-header border-b-0">
           <h2 className="card-title">
-            <FileText size={20} />
-            Historial de Movimientos
-            <span className="badge badge-primary ml-2">{movimientos.length}</span>
+            {activeTab === 'movimientos' ? 'Historial de Transacciones' : 'Cartera de Clientes (Crédito)'}
+            <span className="badge badge-primary ml-2">
+              {activeTab === 'movimientos' ? movimientos.length : cuentasPorCobrar.length}
+            </span>
           </h2>
         </div>
-        <div className="card-body">
-          <Table
-            columns={columns}
-            data={movimientos}
-            emptyMessage="No hay movimientos en el período seleccionado"
-          />
+        <div className="card-body p-0">
+          {activeTab === 'movimientos' ? (
+            <Table
+              columns={columnsMovimientos}
+              data={movimientos}
+              emptyMessage="No hay movimientos en el período seleccionado"
+            />
+          ) : (
+            <Table
+              columns={columnsCobranzas}
+              data={cuentasPorCobrar}
+              emptyMessage="No hay cuentas por cobrar pendientes (¡Todo al día!)"
+            />
+          )}
         </div>
       </div>
     </div>

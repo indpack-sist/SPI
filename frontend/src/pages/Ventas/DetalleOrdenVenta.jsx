@@ -4,7 +4,7 @@ import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
-  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User
+  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -222,13 +222,26 @@ function DetalleOrdenVenta() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE');
+    return new Date(fecha).toLocaleDateString('es-PE', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
   };
 
   const formatearMoneda = (valor) => {
     if (!orden) return '-';
     const simbolo = orden.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
+  };
+
+  const getTipoImpuestoNombre = (codigo) => {
+    const tipos = {
+      'IGV': 'IGV 18%',
+      'EXO': 'Exonerado 0%',
+      'INA': 'Inafecto 0%'
+    };
+    return tipos[codigo] || 'IGV 18%';
   };
 
   const getEstadoConfig = (estado) => {
@@ -367,6 +380,15 @@ function DetalleOrdenVenta() {
       )
     },
     {
+      header: 'Desc.',
+      accessor: 'descuento_porcentaje',
+      width: '70px',
+      align: 'center',
+      render: (value) => (
+        <span className="text-sm">{parseFloat(value || 0).toFixed(1)}%</span>
+      )
+    },
+    {
       header: 'Estado',
       accessor: 'tiene_op',
       width: '150px',
@@ -465,7 +487,7 @@ function DetalleOrdenVenta() {
       }
     },
     {
-      header: 'Valor Venta',
+      header: 'Subtotal',
       accessor: 'valor_venta',
       width: '120px',
       align: 'right',
@@ -676,6 +698,11 @@ function DetalleOrdenVenta() {
               <div>
                 <p className="text-sm uppercase font-semibold text-muted mb-1">Estado Actual</p>
                 <h3 className="text-3xl font-bold">{orden.estado}</h3>
+                {orden.fecha_vencimiento && (
+                  <p className={`text-sm mt-1 ${new Date(orden.fecha_vencimiento) < new Date() && orden.estado_pago !== 'Pagado' ? 'text-danger font-bold' : 'text-muted'}`}>
+                    Vence: {formatearFecha(orden.fecha_vencimiento)}
+                  </p>
+                )}
               </div>
             </div>
             
@@ -861,21 +888,49 @@ function DetalleOrdenVenta() {
               <label className="text-sm font-medium text-muted">RUC:</label>
               <p>{orden.ruc_cliente}</p>
             </div>
+            {orden.contacto_entrega && (
+              <div>
+                <label className="text-sm font-medium text-muted">Contacto:</label>
+                <p>{orden.contacto_entrega} {orden.telefono_entrega && `(${orden.telefono_entrega})`}</p>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="card">
           <div className="card-header">
-            <h2 className="card-title"><DollarSign size={20} /> Comercial</h2>
+            <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
           </div>
           <div className="card-body space-y-2">
-            <div>
-              <label className="text-sm font-medium text-muted">Moneda:</label>
-              <p>{orden.moneda === 'USD' ? 'Dólares' : 'Soles'}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm font-medium text-muted">Moneda:</label>
+                <p className="font-semibold">{orden.moneda === 'USD' ? 'Dólares' : 'Soles'}</p>
+              </div>
+              {orden.moneda === 'USD' && (
+                <div>
+                  <label className="text-sm font-medium text-muted">T.C.:</label>
+                  <p>{parseFloat(orden.tipo_cambio).toFixed(4)}</p>
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm font-medium text-muted">Tipo Venta:</label>
+                <span className={`badge ${orden.tipo_venta === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
+                  {orden.tipo_venta || 'Contado'}
+                </span>
+              </div>
+              {orden.dias_credito > 0 && (
+                <div>
+                  <label className="text-sm font-medium text-muted">Crédito:</label>
+                  <p>{orden.dias_credito} días</p>
+                </div>
+              )}
             </div>
             <div>
-              <label className="text-sm font-medium text-muted">Plazo:</label>
-              <p>{orden.plazo_pago || '-'}</p>
+              <label className="text-sm font-medium text-muted">Forma Pago:</label>
+              <p>{orden.forma_pago || orden.plazo_pago || '-'}</p>
             </div>
           </div>
         </div>
@@ -884,9 +939,24 @@ function DetalleOrdenVenta() {
           <div className="card-header">
             <h2 className="card-title"><MapPin size={20} /> Entrega</h2>
           </div>
-          <div className="card-body">
-            <label className="text-sm font-medium text-muted">Dirección:</label>
-            <p className="text-sm">{orden.direccion_entrega}</p>
+          <div className="card-body space-y-2">
+            <div>
+              <label className="text-sm font-medium text-muted">Fecha Estimada:</label>
+              <p className="flex items-center gap-1">
+                <Calendar size={14} />
+                {formatearFecha(orden.fecha_entrega_estimada)}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted">Dirección:</label>
+              <p className="text-sm">{orden.direccion_entrega || orden.lugar_entrega || '-'}</p>
+            </div>
+            {orden.ciudad_entrega && (
+              <div>
+                <label className="text-sm font-medium text-muted">Ciudad:</label>
+                <p>{orden.ciudad_entrega}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -904,10 +974,10 @@ function DetalleOrdenVenta() {
         {orden.observaciones && (
           <div className="card">
             <div className="card-header"><h3 className="card-title">Observaciones</h3></div>
-            <div className="card-body"><p>{orden.observaciones}</p></div>
+            <div className="card-body"><p className="whitespace-pre-wrap">{orden.observaciones}</p></div>
           </div>
         )}
-        <div className="card">
+        <div className="card ml-auto w-full">
           <div className="card-header">
             <h3 className="card-title"><Calculator size={20} /> Totales</h3>
           </div>
@@ -923,13 +993,25 @@ function DetalleOrdenVenta() {
               </div>
             )}
             <div className="flex justify-between py-2 border-b">
-              <span>IGV (18%):</span>
+              <span className="flex items-center gap-1">
+                <Percent size={14} />
+                {getTipoImpuestoNombre(orden.tipo_impuesto)}:
+              </span>
               <span className="font-bold">{formatearMoneda(orden.igv)}</span>
             </div>
             <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg">
               <span className="font-bold">TOTAL:</span>
               <span className="font-bold text-xl">{formatearMoneda(orden.total)}</span>
             </div>
+            
+            {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio || 0) > 1 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                <div className="flex justify-between items-center text-blue-900">
+                  <span className="font-medium">Equivalente en Soles:</span>
+                  <span className="font-bold">S/ {(parseFloat(orden.total) * parseFloat(orden.tipo_cambio)).toFixed(3)}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

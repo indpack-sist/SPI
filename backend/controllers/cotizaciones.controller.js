@@ -261,7 +261,7 @@ export async function createCotizacion(req, res) {
       totalComision += montoComision * item.cantidad;
       sumaComisionPorcentual += porcentajeComision;
     }
-    
+
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
     
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';

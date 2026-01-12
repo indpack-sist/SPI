@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, FileText, Calendar,
-  Building, Clock, AlertCircle,
+  Building, AlertCircle,
   CheckCircle, XCircle, Calculator, Percent, TrendingUp,
   AlertTriangle, User, CreditCard, Package, MapPin, Copy, ExternalLink, Lock
 } from 'lucide-react';
@@ -41,7 +41,7 @@ function DetalleCotizacion() {
       }
       
     } catch (err) {
-      console.error('Error al cargar la cotización:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar la cotización');
     } finally {
       setLoading(false);
@@ -54,7 +54,7 @@ function DetalleCotizacion() {
       await cotizacionesAPI.descargarPDF(id);
       setSuccess('PDF descargado exitosamente');
     } catch (err) {
-      console.error('Error al descargar PDF:', err);
+      console.error(err);
       setError('Error al descargar el PDF');
     } finally {
       setLoading(false);
@@ -73,12 +73,10 @@ function DetalleCotizacion() {
       const response = await cotizacionesAPI.actualizarEstado(id, estado);
       
       if (response.data.success) {
-        // Si se aprobó y convirtió, redirigir a la orden de venta
         if (estado === 'Aprobada' && response.data.data?.id_orden_venta) {
           setSuccess(`Cotización convertida exitosamente a ${response.data.data.numero_orden}`);
           setModalEstadoOpen(false);
           
-          // Redirigir después de 1.5 segundos
           setTimeout(() => {
             navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`);
           }, 1500);
@@ -127,7 +125,7 @@ function DetalleCotizacion() {
   const formatearMoneda = (valor) => {
     if (!cotizacion) return '-';
     const simbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
   const getTipoImpuestoNombre = (codigo) => {
@@ -142,7 +140,7 @@ function DetalleCotizacion() {
   const getEstadoConfig = (estado) => {
     const configs = {
       'Pendiente': { 
-        icono: Clock, 
+        icono: Calculator, 
         clase: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         badge: 'badge-warning'
       },
@@ -195,28 +193,52 @@ function DetalleCotizacion() {
     {
       header: 'Cantidad',
       accessor: 'cantidad',
-      width: '140px',
+      width: '100px',
       align: 'right',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold text-lg">{parseFloat(value).toFixed(2)}</div>
+          <div className="font-bold">{parseFloat(value).toFixed(2)}</div>
           <div className="text-xs text-muted">{row.unidad_medida}</div>
         </div>
       )
     },
     {
-      header: 'P. Unitario',
-      accessor: 'precio_unitario',
-      width: '130px',
+      header: 'P. Base',
+      accessor: 'precio_base',
+      width: '110px',
       align: 'right',
       render: (value) => (
-        <span className="font-medium">{formatearMoneda(value)}</span>
+        <span className="text-muted font-mono text-sm">{formatearMoneda(value)}</span>
+      )
+    },
+    {
+      header: 'Comisión',
+      width: '110px',
+      align: 'right',
+      render: (_, row) => (
+        <div className="flex flex-col items-end">
+          <span className="text-xs font-medium text-yellow-600">
+            {parseFloat(row.porcentaje_comision || 0).toFixed(2)}%
+          </span>
+          <span className="text-xs text-success">
+            +{formatearMoneda(row.monto_comision)}
+          </span>
+        </div>
+      )
+    },
+    {
+      header: 'P. Final',
+      accessor: 'precio_unitario',
+      width: '120px',
+      align: 'right',
+      render: (value) => (
+        <span className="font-medium text-primary">{formatearMoneda(value)}</span>
       )
     },
     {
       header: 'Desc.',
       accessor: 'descuento_porcentaje',
-      width: '80px',
+      width: '70px',
       align: 'center',
       render: (value) => (
         <span className="text-sm">{parseFloat(value || 0).toFixed(1)}%</span>
@@ -225,10 +247,10 @@ function DetalleCotizacion() {
     {
       header: 'Subtotal',
       accessor: 'valor_venta',
-      width: '140px',
+      width: '130px',
       align: 'right',
       render: (value) => (
-        <span className="font-bold text-primary text-lg">{formatearMoneda(value)}</span>
+        <span className="font-bold text-lg">{formatearMoneda(value)}</span>
       )
     }
   ];
@@ -261,7 +283,6 @@ function DetalleCotizacion() {
 
   return (
     <div className="p-6">
-      {/* Header Sticky */}
       <div className="sticky top-0 bg-white z-10 pb-4 mb-6 border-b">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -323,7 +344,6 @@ function DetalleCotizacion() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Alert de Conversión */}
       {estaConvertida && cotizacion.id_orden_venta && (
         <Alert 
           type="info"
@@ -344,7 +364,6 @@ function DetalleCotizacion() {
         />
       )}
 
-      {/* Badge de Estado Grande */}
       <div className={`card border-2 ${estadoConfig.clase} mb-6`}>
         <div className="card-body">
           <div className="flex items-center justify-between">
@@ -377,9 +396,7 @@ function DetalleCotizacion() {
         </div>
       </div>
 
-      {/* Información Principal */}
       <div className="grid grid-cols-3 gap-6 mb-6">
-        {/* Cliente */}
         <div className="card">
           <div className="card-header bg-gradient-to-r from-blue-50 to-white">
             <h2 className="card-title text-blue-900">
@@ -416,7 +433,6 @@ function DetalleCotizacion() {
           </div>
         </div>
 
-        {/* Datos Comerciales */}
         <div className="card">
           <div className="card-header bg-gradient-to-r from-green-50 to-white">
             <h2 className="card-title text-green-900">
@@ -468,7 +484,6 @@ function DetalleCotizacion() {
           </div>
         </div>
 
-        {/* Vendedor */}
         <div className="card">
           <div className="card-header bg-gradient-to-r from-purple-50 to-white">
             <h2 className="card-title text-purple-900">
@@ -505,7 +520,6 @@ function DetalleCotizacion() {
         </div>
       </div>
 
-      {/* Detalle de Productos */}
       <div className="card mb-6">
         <div className="card-header bg-gradient-to-r from-gray-50 to-white">
           <h2 className="card-title">
@@ -523,9 +537,7 @@ function DetalleCotizacion() {
         </div>
       </div>
 
-      {/* Observaciones y Totales */}
       <div className="grid grid-cols-3 gap-6">
-        {/* Observaciones */}
         {cotizacion.observaciones && (
           <div className="col-span-2 card">
             <div className="card-header">
@@ -537,7 +549,6 @@ function DetalleCotizacion() {
           </div>
         )}
 
-        {/* Totales */}
         <div className={`card ${!cotizacion.observaciones ? 'col-span-3 ml-auto w-full max-w-md' : ''}`}>
           <div className="card-header bg-gradient-to-r from-primary/5 to-white">
             <h3 className="card-title">
@@ -551,6 +562,12 @@ function DetalleCotizacion() {
                 <span className="text-muted">Sub Total:</span>
                 <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
               </div>
+              {cotizacion.total_comision > 0 && (
+                <div className="flex justify-between py-2 border-b text-yellow-600">
+                  <span className="font-medium">Total Comisiones ({parseFloat(cotizacion.porcentaje_comision_promedio || 0).toFixed(2)}%):</span>
+                  <span className="font-bold">{formatearMoneda(cotizacion.total_comision)}</span>
+                </div>
+              )}
               <div className="flex justify-between py-2 border-b">
                 <span className="text-muted">
                   {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
@@ -562,7 +579,6 @@ function DetalleCotizacion() {
                 <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
               </div>
               
-              {/* Conversión de moneda */}
               {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <div className="flex justify-between items-center">
@@ -570,7 +586,7 @@ function DetalleCotizacion() {
                       Equivalente en Soles:
                     </span>
                     <span className="font-bold text-blue-900 text-lg">
-                      S/ {(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio)).toFixed(2)}
+                      S/ {(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio)).toFixed(3)}
                     </span>
                   </div>
                   <p className="text-xs text-blue-700 mt-1">
@@ -583,7 +599,6 @@ function DetalleCotizacion() {
         </div>
       </div>
 
-      {/* Modales */}
       <Modal
         isOpen={modalEstadoOpen}
         onClose={() => setModalEstadoOpen(false)}
@@ -596,7 +611,6 @@ function DetalleCotizacion() {
             <p className="font-bold text-lg">{cotizacion.estado}</p>
           </div>
 
-          {/* Mensaje informativo para Aprobada */}
           <div className="bg-green-50 border border-green-200 rounded-lg p-3">
             <div className="flex items-start gap-2">
               <AlertCircle size={20} className="text-success mt-0.5" />

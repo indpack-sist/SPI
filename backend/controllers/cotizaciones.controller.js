@@ -787,6 +787,7 @@ export async function actualizarEstadoCotizacion(req, res) {
 
     await connection.beginTransaction();
 
+    // 1. Obtener la cotización
     const [cotizaciones] = await connection.query(`
       SELECT * FROM cotizaciones WHERE id_cotizacion = ?
     `, [id]);
@@ -802,8 +803,10 @@ export async function actualizarEstadoCotizacion(req, res) {
     const cotizacion = cotizaciones[0];
     const estadoAnterior = cotizacion.estado;
 
+    // 2. Si pasa a Aprobada y no está convertida, crear la Orden
     if (estado === 'Aprobada' && estadoAnterior !== 'Aprobada' && !cotizacion.convertida_venta) {
       
+      // Generar número de orden
       const [ultimaOrden] = await connection.query(`
         SELECT numero_orden FROM ordenes_venta 
         ORDER BY id_orden_venta DESC LIMIT 1
@@ -819,6 +822,7 @@ export async function actualizarEstadoCotizacion(req, res) {
 
       const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
 
+      // INSERTAR ENCABEZADO ORDEN DE VENTA (Con Comisiones)
       const [ordenResult] = await connection.query(`
         INSERT INTO ordenes_venta (
           numero_orden,
@@ -834,8 +838,8 @@ export async function actualizarEstadoCotizacion(req, res) {
           subtotal,
           igv,
           total,
-          total_comision,
-          porcentaje_comision_promedio,
+          total_comision,                 -- NUEVO
+          porcentaje_comision_promedio,   -- NUEVO
           plazo_pago,
           forma_pago,
           direccion_entrega,
@@ -857,8 +861,8 @@ export async function actualizarEstadoCotizacion(req, res) {
         cotizacion.subtotal,
         cotizacion.igv,
         cotizacion.total,
-        cotizacion.total_comision || 0,
-        cotizacion.porcentaje_comision_promedio || 0,
+        cotizacion.total_comision || 0,               // NUEVO
+        cotizacion.porcentaje_comision_promedio || 0, // NUEVO
         cotizacion.plazo_pago,
         cotizacion.forma_pago,
         cotizacion.direccion_entrega,
@@ -869,10 +873,12 @@ export async function actualizarEstadoCotizacion(req, res) {
 
       const idOrdenVenta = ordenResult.insertId;
 
+      // Obtener detalles de la cotización
       const [detalles] = await connection.query(`
         SELECT * FROM detalle_cotizacion WHERE id_cotizacion = ? ORDER BY orden
       `, [id]);
 
+      // INSERTAR DETALLES ORDEN DE VENTA (Con Precio Base y Comisiones)
       for (const detalle of detalles) {
         await connection.query(`
           INSERT INTO detalle_orden_venta (
@@ -880,9 +886,9 @@ export async function actualizarEstadoCotizacion(req, res) {
             id_producto,
             cantidad,
             precio_unitario,
-            precio_base,
-            porcentaje_comision,
-            monto_comision,
+            precio_base,          -- NUEVO
+            porcentaje_comision,  -- NUEVO
+            monto_comision,       -- NUEVO
             descuento_porcentaje,
             orden
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -891,14 +897,15 @@ export async function actualizarEstadoCotizacion(req, res) {
           detalle.id_producto,
           detalle.cantidad,
           detalle.precio_unitario,
-          detalle.precio_base || detalle.precio_unitario,
-          detalle.porcentaje_comision || 0,
-          detalle.monto_comision || 0,
+          detalle.precio_base || detalle.precio_unitario, // NUEVO: Si no hay base, usa unitario
+          detalle.porcentaje_comision || 0,               // NUEVO
+          detalle.monto_comision || 0,                    // NUEVO
           detalle.descuento_porcentaje || 0,
           detalle.orden
         ]);
       }
 
+      // Marcar cotización como convertida
       await connection.query(`
         UPDATE cotizaciones 
         SET estado = 'Convertida',
@@ -919,6 +926,7 @@ export async function actualizarEstadoCotizacion(req, res) {
       });
 
     } else {
+      // Cambio de estado normal (sin generar orden)
       await connection.query(`
         UPDATE cotizaciones 
         SET estado = ? 
@@ -935,7 +943,7 @@ export async function actualizarEstadoCotizacion(req, res) {
     
   } catch (error) {
     await connection.rollback();
-    console.error(error);
+    console.error('Error al actualizar estado:', error);
     res.status(500).json({
       success: false,
       error: error.message

@@ -1731,3 +1731,71 @@ html {
 /* =================================================================
    FIN DE ESTILOS ADICIONALES
    ================================================================= */
+   /* =================================================================
+   AGREGAR AL FINAL DE INDEX.CSS - SOPORTE PARA DETALLE ORDEN VENTA
+   ================================================================= */
+
+/* --- 1. Paleta de Colores Extendida (Faltantes en la base) --- */
+.text-yellow-600 { color: #ca8a04; }
+.text-blue-600   { color: #2563eb; }
+.text-green-600  { color: #16a34a; }
+.text-purple-600 { color: #9333ea; }
+.text-emerald-600{ color: #059669; }
+.text-red-600    { color: #dc2626; }
+
+/* Botones sólidos para cambio de estado */
+.bg-blue-500    { background-color: #3b82f6; }
+.bg-green-500   { background-color: #22c55e; }
+.bg-purple-500  { background-color: #a855f7; }
+.bg-emerald-500 { background-color: #10b981; }
+.bg-red-500     { background-color: #ef4444; }
+
+/* Bordes para los botones de estado (outline) */
+.border-blue-500    { border-color: #3b82f6; }
+.border-green-500   { border-color: #22c55e; }
+.border-purple-500  { border-color: #a855f7; }
+.border-emerald-500 { border-color: #10b981; }
+.border-red-500     { border-color: #ef4444; }
+
+/* Fondos pasteles para badges y alertas */
+.bg-emerald-100 { background-color: #d1fae5; }
+.bg-purple-100  { background-color: #f3e8ff; }
+.text-emerald-800 { color: #065f46; } /* Para texto sobre fondo esmeralda */
+
+/* --- 2. Utilidades de Degradados (Gradients) --- */
+/* Tu JSX usa "bg-gradient-to-br" con colores "from-X to-Y" */
+
+.bg-gradient-to-br {
+  background-image: linear-gradient(to bottom right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent));
+}
+
+/* Definición de colores DE (From) */
+.from-yellow-100 { --tw-gradient-from: #fef9c3; --tw-gradient-to: #fef9c3; } /* Fallback */
+.from-blue-100   { --tw-gradient-from: #dbeafe; --tw-gradient-to: #dbeafe; }
+.from-green-100  { --tw-gradient-from: #dcfce7; --tw-gradient-to: #dcfce7; }
+.from-purple-100 { --tw-gradient-from: #f3e8ff; --tw-gradient-to: #f3e8ff; }
+.from-emerald-100{ --tw-gradient-from: #d1fae5; --tw-gradient-to: #d1fae5; }
+.from-red-100    { --tw-gradient-from: #fee2e2; --tw-gradient-to: #fee2e2; }
+
+/* Definición de colores A (To) */
+.to-yellow-200 { --tw-gradient-to: #fef08a; }
+.to-blue-200   { --tw-gradient-to: #bfdbfe; }
+.to-green-200  { --tw-gradient-to: #bbf7d0; }
+.to-purple-200 { --tw-gradient-to: #e9d5ff; }
+.to-emerald-200{ --tw-gradient-to: #a7f3d0; }
+.to-red-200    { --tw-gradient-to: #fecaca; }
+
+/* --- 3. Utilidades de Grid y Layout Específicas --- */
+.shrink-0 {
+  flex-shrink: 0;
+}
+
+.border-2 {
+  border-width: 2px;
+}
+
+/* Badge grande para el modal de prioridad */
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}

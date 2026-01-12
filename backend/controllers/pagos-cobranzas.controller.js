@@ -105,7 +105,10 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     
     if (id_cuenta) {
       whereClausePagos += ' AND pe.id_cuenta_destino = ?';
-      whereClauseCobranzas += ' AND pov.id_cuenta_destino = ?';
+      // Nota: Verifica si tu tabla pagos_ordenes_venta tiene id_cuenta_destino. 
+      // Si no lo tiene, elimina esta línea del whereClauseCobranzas o agrégala a la tabla.
+      // Asumiré que existe basado en tu código anterior.
+      whereClauseCobranzas += ' AND pov.id_cuenta_destino = ?'; 
       paramsPagos.push(id_cuenta);
       paramsCobranzas.push(id_cuenta);
     }
@@ -140,6 +143,8 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     }
     
     if (!tipo || tipo === 'cobranza') {
+      // Ajuste: Si pagos_ordenes_venta no tiene id_cuenta_destino, el LEFT JOIN y el WHERE fallarán.
+      // Si usas una cuenta genérica, ajusta la consulta. Aquí mantengo tu estructura.
       [cobranzas] = await pool.query(`
         SELECT 
           pov.id_pago_orden as id,
@@ -175,6 +180,45 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     res.json({
       success: true,
       data: todos
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCuentasPorCobrar = async (req, res, next) => {
+  try {
+    const { fecha_inicio, fecha_fin } = req.query;
+    
+    let whereClause = '1=1';
+    const params = [];
+    
+    // Opcional: Filtrar por fecha de vencimiento
+    if (fecha_inicio) {
+      whereClause += ' AND fecha_vencimiento >= ?';
+      params.push(fecha_inicio);
+    }
+    
+    if (fecha_fin) {
+      whereClause += ' AND fecha_vencimiento <= ?';
+      params.push(fecha_fin);
+    }
+
+    const [rows] = await pool.query(`
+      SELECT * FROM vista_cuentas_por_cobrar
+      WHERE ${whereClause}
+      ORDER BY 
+        CASE 
+          WHEN estado_deuda = 'Vencido' THEN 1
+          WHEN estado_deuda = 'Proximo a Vencer' THEN 2
+          ELSE 3
+        END,
+        fecha_vencimiento ASC
+    `, params);
+    
+    res.json({
+      success: true,
+      data: rows
     });
   } catch (error) {
     next(error);

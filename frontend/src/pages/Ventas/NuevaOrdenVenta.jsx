@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Calendar, Building, Calculator,
-  User, MapPin, DollarSign, CreditCard, Info
+  User, MapPin, DollarSign, CreditCard, Info, Clock
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -16,6 +16,12 @@ const TIPOS_IMPUESTO = [
   { codigo: 'EXO', nombre: 'Exonerado 0%', porcentaje: 0.00 },
   { codigo: 'INA', nombre: 'Inafecto 0%', porcentaje: 0.00 }
 ];
+
+const FORMAS_PAGO = [
+  'Transferencia', 'Depósito', 'Efectivo', 'Cheque', 'Yape', 'Plin', 'Tarjeta de Crédito', 'Tarjeta de Débito'
+];
+
+const DIAS_CREDITO_OPCIONES = [7, 15, 30, 45, 60, 90];
 
 function NuevaOrdenVenta() {
   const navigate = useNavigate();
@@ -49,13 +55,16 @@ function NuevaOrdenVenta() {
     id_comercial: user?.id_empleado || '',
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_entrega_estimada: '',
+    fecha_vencimiento: new Date().toISOString().split('T')[0], // Nuevo
     moneda: 'PEN',
     tipo_cambio: 1.0000,
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     prioridad: 'Media',
-    plazo_pago: '',
-    forma_pago: '',
+    tipo_venta: 'Contado', // Nuevo: Contado o Crédito
+    dias_credito: 0,       // Nuevo
+    plazo_pago: 'Contado',
+    forma_pago: 'Transferencia',
     orden_compra_cliente: '',
     direccion_entrega: '',
     lugar_entrega: '',
@@ -65,26 +74,47 @@ function NuevaOrdenVenta() {
     observaciones: ''
   });
 
-  // 1. Cargar catálogos al inicio
   useEffect(() => {
     cargarCatalogos();
   }, []);
 
-  // 2. Si es edición, cargar la orden existente (ESTO FALTABA EN TU CÓDIGO)
   useEffect(() => {
     if (modoEdicion) {
       cargarOrden();
     }
   }, [id]);
 
-  // 3. Recalcular totales cuando cambie el detalle
   useEffect(() => {
     calcularTotales();
   }, [detalle, formCabecera.porcentaje_impuesto]);
 
+  // Efecto para recalcular fecha de vencimiento automáticamente
+  useEffect(() => {
+    if (formCabecera.tipo_venta === 'Contado') {
+      setFormCabecera(prev => ({
+        ...prev,
+        dias_credito: 0,
+        fecha_vencimiento: prev.fecha_emision,
+        plazo_pago: 'Contado'
+      }));
+    } else {
+      const fechaEmision = new Date(formCabecera.fecha_emision);
+      // Ajuste de zona horaria simple para evitar desfases por UTC
+      const fechaBase = new Date(fechaEmision.valueOf() + fechaEmision.getTimezoneOffset() * 60000);
+      fechaBase.setDate(fechaBase.getDate() + parseInt(formCabecera.dias_credito || 0));
+      
+      const fechaVencimiento = fechaBase.toISOString().split('T')[0];
+      
+      setFormCabecera(prev => ({
+        ...prev,
+        fecha_vencimiento: fechaVencimiento,
+        plazo_pago: `${prev.dias_credito} Días`
+      }));
+    }
+  }, [formCabecera.tipo_venta, formCabecera.dias_credito, formCabecera.fecha_emision]);
+
   const cargarCatalogos = async () => {
     try {
-      // Cargamos catálogos en paralelo para mayor velocidad
       const [resClientes, resProductos, resEmpleados, resCotizaciones] = await Promise.all([
         clientesAPI.getAll({ estado: 'Activo' }),
         productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: 3 }),
@@ -96,7 +126,6 @@ function NuevaOrdenVenta() {
       if (resProductos.data.success) setProductos(resProductos.data.data || []);
       
       if (resEmpleados.data.success) {
-        // Filtramos solo empleados que pueden vender
         const vendedores = (resEmpleados.data.data || []).filter(e => 
           ['ventas', 'comercial', 'gerencia', 'administrador'].includes(e.rol?.toLowerCase())
         );
@@ -121,18 +150,20 @@ function NuevaOrdenVenta() {
       if (response.data.success) {
         const orden = response.data.data;
         
-        // Llenar cabecera
         setFormCabecera({
           id_cliente: orden.id_cliente,
           id_cotizacion: orden.id_cotizacion || '',
           id_comercial: orden.id_comercial || '',
           fecha_emision: orden.fecha_emision ? orden.fecha_emision.split('T')[0] : '',
           fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : '',
+          fecha_vencimiento: orden.fecha_vencimiento ? orden.fecha_vencimiento.split('T')[0] : '',
           moneda: orden.moneda,
           tipo_cambio: orden.tipo_cambio,
           tipo_impuesto: orden.tipo_impuesto,
           porcentaje_impuesto: orden.porcentaje_impuesto,
           prioridad: orden.prioridad,
+          tipo_venta: orden.tipo_venta || 'Contado',
+          dias_credito: orden.dias_credito || 0,
           plazo_pago: orden.plazo_pago || '',
           forma_pago: orden.forma_pago || '',
           orden_compra_cliente: orden.orden_compra_cliente || '',
@@ -144,8 +175,6 @@ function NuevaOrdenVenta() {
           observaciones: orden.observaciones || ''
         });
 
-        // Establecer cliente seleccionado
-        // Buscamos en el array de clientes cargado, si no está (ej. inactivo), creamos el objeto con los datos de la orden
         const clienteEncontrado = clientes.find(c => c.id_cliente === orden.id_cliente);
         if (clienteEncontrado) {
           setClienteSeleccionado(clienteEncontrado);
@@ -158,7 +187,6 @@ function NuevaOrdenVenta() {
           });
         }
 
-        // Llenar detalle (Mapeo importante para comisiones y 3 decimales)
         if (orden.detalle && orden.detalle.length > 0) {
           setDetalle(orden.detalle.map(item => ({
             id_producto: item.id_producto,
@@ -166,11 +194,10 @@ function NuevaOrdenVenta() {
             producto: item.producto,
             unidad_medida: item.unidad_medida,
             cantidad: parseFloat(item.cantidad),
-            // Si precio_base viene 0 (orden antigua), usamos precio_unitario como fallback
             precio_base: parseFloat(item.precio_base) > 0 ? parseFloat(item.precio_base) : parseFloat(item.precio_unitario),
             porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
             monto_comision: parseFloat(item.monto_comision || 0),
-            precio_unitario: parseFloat(item.precio_unitario), // Este es el precio final
+            precio_unitario: parseFloat(item.precio_unitario),
             descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
             stock_actual: item.stock_disponible
           })));
@@ -206,8 +233,11 @@ function NuevaOrdenVenta() {
           tipo_impuesto: cot.tipo_impuesto,
           porcentaje_impuesto: cot.porcentaje_impuesto,
           tipo_cambio: cot.tipo_cambio,
-          plazo_pago: cot.plazo_pago || '',
-          forma_pago: cot.forma_pago || '',
+          // Por defecto al importar una cotización asumimos Contado, el usuario lo cambia si desea
+          tipo_venta: 'Contado',
+          dias_credito: 0,
+          plazo_pago: 'Contado',
+          forma_pago: cot.forma_pago || 'Transferencia',
           direccion_entrega: cot.direccion_entrega || '',
           lugar_entrega: cot.lugar_entrega || '',
           observaciones: cot.observaciones || ''
@@ -270,7 +300,7 @@ function NuevaOrdenVenta() {
       precio_base: precioBase,
       porcentaje_comision: 0,
       monto_comision: 0,
-      precio_unitario: precioBase, // Inicialmente igual al base
+      precio_unitario: precioBase,
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual
     };
@@ -292,7 +322,6 @@ function NuevaOrdenVenta() {
     const nuevoPrecioBase = parseFloat(precioBase) || 0;
     const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
     
-    // Recalcular monto y precio final
     const montoComision = nuevoPrecioBase * (porcentajeComision / 100);
     const precioFinal = nuevoPrecioBase + montoComision;
     
@@ -309,7 +338,6 @@ function NuevaOrdenVenta() {
     const precioBase = parseFloat(item.precio_base);
     const porcentajeComision = parseFloat(porcentaje) || 0;
     
-    // Recalcular monto y precio final
     const montoComision = precioBase * (porcentajeComision / 100);
     const precioFinal = precioBase + montoComision;
     
@@ -364,11 +392,6 @@ function NuevaOrdenVenta() {
     
     if (detalle.length === 0) {
       setError('Debe agregar al menos un producto');
-      return;
-    }
-
-    if (!formCabecera.plazo_pago) {
-      setError('El plazo de pago es obligatorio');
       return;
     }
     
@@ -445,6 +468,7 @@ function NuevaOrdenVenta() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="md:col-span-2 space-y-6">
             
+            {/* SECCIÓN CLIENTE */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-blue-50 to-white">
                 <h2 className="card-title text-blue-900"><Building size={20} /> Cliente</h2>
@@ -491,6 +515,7 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
+            {/* SECCIÓN PRODUCTOS */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
                 <h2 className="card-title"><Calculator size={20} /> Productos</h2>
@@ -594,6 +619,7 @@ function NuevaOrdenVenta() {
           </div>
 
           <div className="space-y-6">
+            {/* DATOS GENERALES */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-purple-50 to-white">
                 <h2 className="card-title text-purple-900"><Info size={20} /> Datos Generales</h2>
@@ -677,32 +703,77 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
+            {/* SECCIÓN DE PAGO (Aquí está la lógica de créditos y días) */}
             <div className="card">
               <div className="card-header">
-                <h2 className="card-title"><CreditCard size={20} /> Pago y Entrega</h2>
+                <h2 className="card-title"><CreditCard size={20} /> Pago y Crédito</h2>
               </div>
               <div className="card-body space-y-4">
+                
+                {/* SELECTOR TIPO DE VENTA */}
                 <div>
-                  <label className="form-label">Plazo de Pago *</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ej: Contado, 30 días"
-                    value={formCabecera.plazo_pago}
-                    onChange={(e) => setFormCabecera({...formCabecera, plazo_pago: e.target.value})}
-                    required
-                  />
+                  <label className="form-label">Condición de Pago</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className={`btn py-2 ${formCabecera.tipo_venta === 'Contado' ? 'btn-success' : 'btn-outline'}`}
+                      onClick={() => setFormCabecera({...formCabecera, tipo_venta: 'Contado'})}
+                    >
+                      <DollarSign size={18} className="mr-1" /> Contado
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'}`}
+                      onClick={() => setFormCabecera({...formCabecera, tipo_venta: 'Crédito'})}
+                    >
+                      <Clock size={18} className="mr-1" /> Crédito
+                    </button>
+                  </div>
                 </div>
+
+                {/* BOTONES DE DÍAS DE CRÉDITO */}
+                {formCabecera.tipo_venta === 'Crédito' && (
+                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    <label className="form-label text-orange-800">Días de Crédito</label>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      {DIAS_CREDITO_OPCIONES.map(dias => (
+                        <button
+                          key={dias}
+                          type="button"
+                          className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-white hover:bg-orange-100 border-orange-200'}`}
+                          onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
+                        >
+                          {dias} días
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-muted">Otro:</span>
+                      <input 
+                        type="number" 
+                        className="form-input form-input-sm w-20 text-center"
+                        value={formCabecera.dias_credito}
+                        onChange={(e) => setFormCabecera({...formCabecera, dias_credito: e.target.value})}
+                      />
+                      <span className="text-xs font-bold text-orange-700 ml-auto">
+                        Vence: {new Date(formCabecera.fecha_vencimiento).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="form-label">Forma de Pago</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ej: Transferencia"
+                  <select 
+                    className="form-select"
                     value={formCabecera.forma_pago}
                     onChange={(e) => setFormCabecera({...formCabecera, forma_pago: e.target.value})}
-                  />
+                  >
+                    <option value="">Seleccione...</option>
+                    {FORMAS_PAGO.map(fp => <option key={fp} value={fp}>{fp}</option>)}
+                  </select>
                 </div>
+
                 <div>
                   <label className="form-label">Dirección Entrega</label>
                   <textarea 
@@ -715,6 +786,7 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
+            {/* TOTALES */}
             <div className="card bg-gray-50 border-t-4 border-primary">
               <div className="card-body space-y-2">
                 <div className="flex justify-between text-sm">

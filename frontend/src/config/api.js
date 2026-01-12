@@ -653,7 +653,8 @@ export const cuentasPagoAPI = {
 
 export const pagosCobranzasAPI = {
   getResumen: (params) => api.get('/pagos-cobranzas/resumen', { params }),
-  getAll: (params) => api.get('/pagos-cobranzas', { params })
+  getAll: (params) => api.get('/pagos-cobranzas', { params }),
+  getCuentasPorCobrar: (params) => api.get('/pagos-cobranzas/cuentas-por-cobrar', { params }) 
 };
 
 api.dashboard = dashboard;

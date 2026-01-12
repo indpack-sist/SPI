@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
-  ShoppingCart, Calendar, Building, Calculator,
-  User, MapPin, DollarSign, CreditCard, Info, Clock
+  ShoppingCart, Building, Calculator,
+  MapPin, DollarSign, CreditCard, Info, Clock
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -27,6 +27,8 @@ function NuevaOrdenVenta() {
   const navigate = useNavigate();
   const { id } = useParams(); 
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const idCotizacionParam = searchParams.get('cotizacion');
   
   const modoEdicion = !!id;
   
@@ -55,14 +57,14 @@ function NuevaOrdenVenta() {
     id_comercial: user?.id_empleado || '',
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_entrega_estimada: '',
-    fecha_vencimiento: new Date().toISOString().split('T')[0], // Nuevo
+    fecha_vencimiento: new Date().toISOString().split('T')[0], 
     moneda: 'PEN',
     tipo_cambio: 1.0000,
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     prioridad: 'Media',
-    tipo_venta: 'Contado', // Nuevo: Contado o Crédito
-    dias_credito: 0,       // Nuevo
+    tipo_venta: 'Contado', 
+    dias_credito: 0,      
     plazo_pago: 'Contado',
     forma_pago: 'Transferencia',
     orden_compra_cliente: '',
@@ -88,7 +90,6 @@ function NuevaOrdenVenta() {
     calcularTotales();
   }, [detalle, formCabecera.porcentaje_impuesto]);
 
-  // Efecto para recalcular fecha de vencimiento automáticamente
   useEffect(() => {
     if (formCabecera.tipo_venta === 'Contado') {
       setFormCabecera(prev => ({
@@ -99,7 +100,6 @@ function NuevaOrdenVenta() {
       }));
     } else {
       const fechaEmision = new Date(formCabecera.fecha_emision);
-      // Ajuste de zona horaria simple para evitar desfases por UTC
       const fechaBase = new Date(fechaEmision.valueOf() + fechaEmision.getTimezoneOffset() * 60000);
       fechaBase.setDate(fechaBase.getDate() + parseInt(formCabecera.dias_credito || 0));
       
@@ -112,6 +112,12 @@ function NuevaOrdenVenta() {
       }));
     }
   }, [formCabecera.tipo_venta, formCabecera.dias_credito, formCabecera.fecha_emision]);
+
+  useEffect(() => {
+    if (idCotizacionParam && !modoEdicion) {
+      handleImportarCotizacion(idCotizacionParam);
+    }
+  }, [idCotizacionParam, clientes.length]);
 
   const cargarCatalogos = async () => {
     try {
@@ -233,7 +239,6 @@ function NuevaOrdenVenta() {
           tipo_impuesto: cot.tipo_impuesto,
           porcentaje_impuesto: cot.porcentaje_impuesto,
           tipo_cambio: cot.tipo_cambio,
-          // Por defecto al importar una cotización asumimos Contado, el usuario lo cambia si desea
           tipo_venta: 'Contado',
           dias_credito: 0,
           plazo_pago: 'Contado',
@@ -468,7 +473,6 @@ function NuevaOrdenVenta() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="md:col-span-2 space-y-6">
             
-            {/* SECCIÓN CLIENTE */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-blue-50 to-white">
                 <h2 className="card-title text-blue-900"><Building size={20} /> Cliente</h2>
@@ -515,7 +519,6 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
-            {/* SECCIÓN PRODUCTOS */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
                 <h2 className="card-title"><Calculator size={20} /> Productos</h2>
@@ -619,7 +622,6 @@ function NuevaOrdenVenta() {
           </div>
 
           <div className="space-y-6">
-            {/* DATOS GENERALES */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-purple-50 to-white">
                 <h2 className="card-title text-purple-900"><Info size={20} /> Datos Generales</h2>
@@ -703,14 +705,12 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
-            {/* SECCIÓN DE PAGO (Aquí está la lógica de créditos y días) */}
             <div className="card">
               <div className="card-header">
                 <h2 className="card-title"><CreditCard size={20} /> Pago y Crédito</h2>
               </div>
               <div className="card-body space-y-4">
                 
-                {/* SELECTOR TIPO DE VENTA */}
                 <div>
                   <label className="form-label">Condición de Pago</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -731,7 +731,6 @@ function NuevaOrdenVenta() {
                   </div>
                 </div>
 
-                {/* BOTONES DE DÍAS DE CRÉDITO */}
                 {formCabecera.tipo_venta === 'Crédito' && (
                   <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
                     <label className="form-label text-orange-800">Días de Crédito</label>
@@ -786,7 +785,6 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
-            {/* TOTALES */}
             <div className="card bg-gray-50 border-t-4 border-primary">
               <div className="card-body space-y-2">
                 <div className="flex justify-between text-sm">
@@ -822,7 +820,6 @@ function NuevaOrdenVenta() {
         </div>
       </form>
 
-      {/* Modales */}
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
         <div className="mb-4">
           <input

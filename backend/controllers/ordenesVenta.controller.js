@@ -18,8 +18,8 @@ export async function getAllOrdenesVenta(req, res) {
     ov.igv,
     ov.total,
     ov.moneda,
-    ov.monto_pagado,              -- AGREGAR ESTA LÍNEA
-    ov.estado_pago,               -- AGREGAR ESTA LÍNEA
+    ov.monto_pagado,
+    ov.estado_pago,
     ov.id_cotizacion,
     c.numero_cotizacion,
     cl.id_cliente,
@@ -77,7 +77,7 @@ export async function getAllOrdenesVenta(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener órdenes de venta:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -154,7 +154,7 @@ export async function getOrdenVentaById(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener orden de venta:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -221,12 +221,24 @@ export async function createOrdenVenta(req, res) {
     const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     let subtotal = 0;
+    let totalComision = 0;
+    let sumaComisionPorcentual = 0;
+
     for (const item of detalle) {
-      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      subtotal += valorVenta - descuentoItem;
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
+
+      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+      subtotal += valorVenta;
+
+      totalComision += montoComision * item.cantidad;
+      sumaComisionPorcentual += porcentajeComision;
     }
     
+    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
+
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
     
@@ -265,8 +277,10 @@ export async function createOrdenVenta(req, res) {
         subtotal,
         igv,
         total,
+        total_comision,
+        porcentaje_comision_promedio,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
     `, [
       numeroOrden,
       id_cliente,
@@ -291,7 +305,9 @@ export async function createOrdenVenta(req, res) {
       id_registrado_por,
       subtotal,
       impuesto,
-      total
+      total,
+      totalComision,
+      porcentajeComisionPromedio
     ]);
     
     if (!result.success) {
@@ -305,6 +321,10 @@ export async function createOrdenVenta(req, res) {
     
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
       
       await executeQuery(`
         INSERT INTO detalle_orden_venta (
@@ -312,13 +332,19 @@ export async function createOrdenVenta(req, res) {
           id_producto,
           cantidad,
           precio_unitario,
+          precio_base,
+          porcentaje_comision,
+          monto_comision,
           descuento_porcentaje
-        ) VALUES (?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idOrden,
         item.id_producto,
         parseFloat(item.cantidad),
-        parseFloat(item.precio_unitario),
+        precioFinal,
+        precioBase,
+        porcentajeComision,
+        montoComision,
         parseFloat(item.descuento_porcentaje || 0)
       ]);
     }
@@ -488,6 +514,7 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
     });
   }
 }
+
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -503,7 +530,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       });
     }
     
-    // Obtener estado actual y datos de la orden
     const ordenResult = await executeQuery(`
       SELECT ov.*, cl.razon_social AS cliente
       FROM ordenes_venta ov
@@ -521,10 +547,8 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     const orden = ordenResult.data[0];
     const estadoAnterior = orden.estado;
     
-    // Si cambia a "Despachada" y no estaba antes en "Despachada", generar salida automática
     let idSalida = null;
     if (estado === 'Despachada' && estadoAnterior !== 'Despachada') {
-      // Obtener detalle de la orden
       const detalleResult = await executeQuery(`
         SELECT 
           dov.id_producto,
@@ -540,7 +564,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       if (detalleResult.success && detalleResult.data.length > 0) {
         const detalles = detalleResult.data;
         
-        // Calcular totales
         let totalCosto = 0;
         let totalPrecio = 0;
         
@@ -551,7 +574,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
           totalPrecio += parseFloat(orden.total);
         }
         
-        // Crear salida
         const salidaResult = await executeQuery(`
           INSERT INTO salidas (
             id_tipo_inventario,
@@ -565,7 +587,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
             estado
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-          3, // Productos Terminados
+          3,
           'Venta',
           orden.id_cliente,
           totalCosto,
@@ -579,9 +601,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         if (salidaResult.success) {
           idSalida = salidaResult.data.insertId;
           
-          // Insertar detalle de salida y actualizar stock
           for (const item of detalles) {
-            // Verificar stock disponible
             const stockCheck = await executeQuery(`
               SELECT stock_actual FROM productos WHERE id_producto = ?
             `, [item.id_producto]);
@@ -596,7 +616,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
               });
             }
             
-            // Insertar detalle
             await executeQuery(`
               INSERT INTO detalle_salidas (
                 id_salida,
@@ -610,10 +629,9 @@ export async function actualizarEstadoOrdenVenta(req, res) {
               item.id_producto,
               cantidadSalida,
               parseFloat(item.costo_unitario_promedio || 0),
-              parseFloat(orden.subtotal) / detalles.length // Prorratear precio
+              parseFloat(orden.subtotal) / detalles.length
             ]);
             
-            // Descontar stock
             await executeQuery(`
               UPDATE productos 
               SET stock_actual = stock_actual - ? 
@@ -624,7 +642,6 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       }
     }
     
-    // Actualizar estado de la orden
     const updateResult = await executeQuery(`
       UPDATE ordenes_venta 
       SET estado = ?,
@@ -658,6 +675,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     });
   }
 }
+
 export async function actualizarPrioridadOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -712,6 +730,7 @@ export async function actualizarPrioridadOrdenVenta(req, res) {
     });
   }
 }
+
 export async function getEstadisticasOrdenesVenta(req, res) {
   try {
     const result = await executeQuery(`

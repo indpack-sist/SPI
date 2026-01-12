@@ -75,7 +75,7 @@ export async function getAllCotizaciones(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener cotizaciones:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -124,6 +124,9 @@ export async function getCotizacionById(req, res) {
         dc.id_producto,
         dc.cantidad,
         dc.precio_unitario,
+        dc.precio_base,
+        dc.porcentaje_comision,
+        dc.monto_comision,
         dc.descuento_porcentaje,
         dc.valor_venta,
         dc.subtotal,
@@ -154,15 +157,13 @@ export async function getCotizacionById(req, res) {
     });
     
   } catch (error) {
-    console.error('Error en getCotizacionById:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
     });
   }
 }
-
-// En la función createCotizacion, reemplaza el cálculo de subtotal y el insert:
 
 export async function createCotizacion(req, res) {
   try {
@@ -202,7 +203,7 @@ export async function createCotizacion(req, res) {
     if (!plazo_pago || plazo_pago.trim() === '') {
       return res.status(400).json({
         success: false,
-        error: 'Plazo de pago es obligatorio (define el riesgo de la venta)'
+        error: 'Plazo de pago es obligatorio'
       });
     }
     
@@ -244,24 +245,23 @@ export async function createCotizacion(req, res) {
     
     const numeroCotizacion = `COT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // NUEVO: Calcular subtotal Y comisiones
     let subtotal = 0;
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
-    
+
     for (const item of detalle) {
       const precioBase = parseFloat(item.precio_base);
       const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (porcentajeComision / 100);
       const precioFinal = precioBase + montoComision;
-      
+
       const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorVenta;
-      
+
       totalComision += montoComision * item.cantidad;
       sumaComisionPorcentual += porcentajeComision;
     }
-    
+
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
     
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
@@ -338,7 +338,6 @@ export async function createCotizacion(req, res) {
     
     const idCotizacion = result.data.insertId;
     
-    // NUEVO: Insertar detalle con campos de comisión
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const precioBase = parseFloat(item.precio_base);
@@ -384,7 +383,7 @@ export async function createCotizacion(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al crear cotización:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -470,11 +469,23 @@ export async function updateCotizacion(req, res) {
     }
 
     let subtotal = 0;
+    let totalComision = 0;
+    let sumaComisionPorcentual = 0;
+
     for (const item of detalle) {
-      const valorVenta = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-      const descuentoItem = valorVenta * (parseFloat(item.descuento_porcentaje || 0) / 100);
-      subtotal += valorVenta - descuentoItem;
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
+
+      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+      subtotal += valorVenta;
+
+      totalComision += montoComision * item.cantidad;
+      sumaComisionPorcentual += porcentajeComision;
     }
+
+    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
 
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
@@ -509,7 +520,9 @@ export async function updateCotizacion(req, res) {
         lugar_entrega = ?,
         subtotal = ?,
         igv = ?,
-        total = ?
+        total = ?,
+        total_comision = ?,
+        porcentaje_comision_promedio = ?
       WHERE id_cotizacion = ?
     `, [
       id_cliente,
@@ -531,6 +544,8 @@ export async function updateCotizacion(req, res) {
       subtotal,
       igv,
       total,
+      totalComision,
+      porcentajeComisionPromedio,
       id
     ]);
 
@@ -548,6 +563,10 @@ export async function updateCotizacion(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
 
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
@@ -555,14 +574,20 @@ export async function updateCotizacion(req, res) {
           id_producto,
           cantidad,
           precio_unitario,
+          precio_base,
+          porcentaje_comision,
+          monto_comision,
           descuento_porcentaje,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         id,
         item.id_producto,
         item.cantidad,
-        item.precio_unitario,
+        precioFinal,
+        precioBase,
+        porcentajeComision,
+        montoComision,
         item.descuento_porcentaje || 0,
         i + 1
       ]);
@@ -574,7 +599,7 @@ export async function updateCotizacion(req, res) {
     });
 
   } catch (error) {
-    console.error('Error al actualizar cotización:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -657,9 +682,11 @@ export async function duplicarCotizacion(req, res) {
         subtotal,
         igv,
         total,
+        total_comision,
+        porcentaje_comision_promedio,
         estado,
         id_creado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
     `, [
       numeroCotizacion,
       cotizacionOriginal.id_cliente,
@@ -681,6 +708,8 @@ export async function duplicarCotizacion(req, res) {
       cotizacionOriginal.subtotal,
       cotizacionOriginal.igv,
       cotizacionOriginal.total,
+      cotizacionOriginal.total_comision || 0,
+      cotizacionOriginal.porcentaje_comision_promedio || 0,
       req.user?.id_empleado || cotizacionOriginal.id_comercial
     ]);
 
@@ -702,14 +731,20 @@ export async function duplicarCotizacion(req, res) {
           id_producto,
           cantidad,
           precio_unitario,
+          precio_base,
+          porcentaje_comision,
+          monto_comision,
           descuento_porcentaje,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idNuevaCotizacion,
         item.id_producto,
         item.cantidad,
         item.precio_unitario,
+        item.precio_base || item.precio_unitario,
+        item.porcentaje_comision || 0,
+        item.monto_comision || 0,
         item.descuento_porcentaje,
         i + 1
       ]);
@@ -726,7 +761,7 @@ export async function duplicarCotizacion(req, res) {
     });
 
   } catch (error) {
-    console.error('Error al duplicar cotización:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -752,7 +787,6 @@ export async function actualizarEstadoCotizacion(req, res) {
 
     await connection.beginTransaction();
 
-    // Obtener cotización actual
     const [cotizaciones] = await connection.query(`
       SELECT * FROM cotizaciones WHERE id_cotizacion = ?
     `, [id]);
@@ -768,10 +802,8 @@ export async function actualizarEstadoCotizacion(req, res) {
     const cotizacion = cotizaciones[0];
     const estadoAnterior = cotizacion.estado;
 
-    // Si cambia a "Aprobada" y no está ya convertida, crear Orden de Venta
     if (estado === 'Aprobada' && estadoAnterior !== 'Aprobada' && !cotizacion.convertida_venta) {
       
-      // Generar número de orden
       const [ultimaOrden] = await connection.query(`
         SELECT numero_orden FROM ordenes_venta 
         ORDER BY id_orden_venta DESC LIMIT 1
@@ -788,52 +820,51 @@ export async function actualizarEstadoCotizacion(req, res) {
       const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
 
       const [ordenResult] = await connection.query(`
-  INSERT INTO ordenes_venta (
-    numero_orden,
-    id_cotizacion,
-    id_cliente,
-    id_comercial,
-    fecha_emision,
-    prioridad,
-    moneda,
-    tipo_impuesto,
-    porcentaje_impuesto,
-    tipo_cambio,
-    subtotal,
-    igv,
-    total,
-    plazo_pago,
-    forma_pago,
-    direccion_entrega,
-    lugar_entrega,
-    observaciones,
-    id_registrado_por,
-    estado
-  ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')  -- CAMBIAR AQUÍ
-`, [
-  numeroOrden,
-  cotizacion.id_cotizacion,
-  cotizacion.id_cliente,
-  cotizacion.id_comercial,
-  cotizacion.prioridad || 'Media',
-  cotizacion.moneda || 'PEN',
-  cotizacion.tipo_impuesto || 'IGV',
-  cotizacion.porcentaje_impuesto || 18.00,
-  cotizacion.tipo_cambio || 1.0000,
-  cotizacion.subtotal,
-  cotizacion.igv,
-  cotizacion.total,
-  cotizacion.plazo_pago,
-  cotizacion.forma_pago,
-  cotizacion.direccion_entrega,
-  cotizacion.lugar_entrega,
-  cotizacion.observaciones,
-  req.user?.id_empleado || cotizacion.id_comercial
-]);
+        INSERT INTO ordenes_venta (
+          numero_orden,
+          id_cotizacion,
+          id_cliente,
+          id_comercial,
+          fecha_emision,
+          prioridad,
+          moneda,
+          tipo_impuesto,
+          porcentaje_impuesto,
+          tipo_cambio,
+          subtotal,
+          igv,
+          total,
+          plazo_pago,
+          forma_pago,
+          direccion_entrega,
+          lugar_entrega,
+          observaciones,
+          id_registrado_por,
+          estado
+        ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
+      `, [
+        numeroOrden,
+        cotizacion.id_cotizacion,
+        cotizacion.id_cliente,
+        cotizacion.id_comercial,
+        cotizacion.prioridad || 'Media',
+        cotizacion.moneda || 'PEN',
+        cotizacion.tipo_impuesto || 'IGV',
+        cotizacion.porcentaje_impuesto || 18.00,
+        cotizacion.tipo_cambio || 1.0000,
+        cotizacion.subtotal,
+        cotizacion.igv,
+        cotizacion.total,
+        cotizacion.plazo_pago,
+        cotizacion.forma_pago,
+        cotizacion.direccion_entrega,
+        cotizacion.lugar_entrega,
+        cotizacion.observaciones,
+        req.user?.id_empleado || cotizacion.id_comercial
+      ]);
 
       const idOrdenVenta = ordenResult.insertId;
 
-      // Copiar detalle de cotización a orden de venta
       const [detalles] = await connection.query(`
         SELECT * FROM detalle_cotizacion WHERE id_cotizacion = ? ORDER BY orden
       `, [id]);
@@ -858,7 +889,6 @@ export async function actualizarEstadoCotizacion(req, res) {
         ]);
       }
 
-      // Actualizar cotización con referencia a la orden
       await connection.query(`
         UPDATE cotizaciones 
         SET estado = 'Convertida',
@@ -879,7 +909,6 @@ export async function actualizarEstadoCotizacion(req, res) {
       });
 
     } else {
-      // Actualización normal de estado sin conversión
       await connection.query(`
         UPDATE cotizaciones 
         SET estado = ? 
@@ -896,7 +925,7 @@ export async function actualizarEstadoCotizacion(req, res) {
     
   } catch (error) {
     await connection.rollback();
-    console.error('Error al actualizar estado:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -939,7 +968,7 @@ export async function actualizarPrioridadCotizacion(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al actualizar prioridad:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -976,7 +1005,7 @@ export async function getEstadisticasCotizaciones(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -1049,7 +1078,7 @@ export async function descargarPDFCotizacion(req, res) {
     res.send(pdfBuffer);
     
   } catch (error) {
-    console.error('Error al descargar PDF:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message || 'Error al generar PDF'

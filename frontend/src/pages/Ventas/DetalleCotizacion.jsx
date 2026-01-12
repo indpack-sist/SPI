@@ -60,7 +60,7 @@ function DetalleCotizacion() {
     }
   };
 
-  const handleDuplicar = async () => {
+ const handleDuplicar = async () => {
   try {
     setLoading(true);
     setError(null);
@@ -70,7 +70,7 @@ function DetalleCotizacion() {
     if (response.data.success) {
       setSuccess(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
       
-      // Redirigir a la NUEVA cotización duplicada (no a editar)
+      // Redirigir a la cotización duplicada
       setTimeout(() => {
         navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
       }, 1500);

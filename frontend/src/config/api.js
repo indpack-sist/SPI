@@ -441,6 +441,7 @@ export const ordenesVentaAPI = {
 
   getById: (id) => api.get(`/ordenes-venta/${id}`),
   create: (data) => api.post('/ordenes-venta', data),
+  update: (id, data) => api.put(`/ordenes-venta/${id}`, data),
   
   crearOrdenProduccion: (id, data) => api.post(`/ordenes-venta/${id}/crear-orden-produccion`, data),
 

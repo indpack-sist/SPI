@@ -4,6 +4,7 @@ import {
   getAllOrdenesVenta,
   getOrdenVentaById,
   createOrdenVenta,
+  updateOrdenVenta,
   crearOrdenProduccionDesdeVenta,
   actualizarEstadoOrdenVenta,
   actualizarPrioridadOrdenVenta,
@@ -31,6 +32,7 @@ router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionD
 
 router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
 router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
+router.put('/:id', verificarToken, updateOrdenVenta);
 
 router.get('/:id', verificarToken, getOrdenVentaById);
 

@@ -46,6 +46,7 @@ import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
 import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
 import CuentasPago from './pages/Finanzas/CuentasPago';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
+
 function App() {
   return (
     <Router>
@@ -243,6 +244,15 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
+                      {/* ESTA ES LA RUTA NUEVA QUE FALTABA */}
+                      <Route 
+                        path="/ventas/ordenes/:id/editar" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
+                            <NuevaOrdenVenta />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
                       <Route 
                         path="/ventas/ordenes/:id" 
                         element={
@@ -342,7 +352,7 @@ function App() {
                             <PagosCobranzas />
                           </ProtectedRouteWithPermiso>
                         } 
-                      />*
+                      />
                       <Route path="*" element={<RedirectToFirstAvailable />} />
                     </Routes>
                   </Layout>

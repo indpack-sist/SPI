@@ -369,11 +369,177 @@ export async function createOrdenVenta(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al crear orden de venta:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
     });
+  }
+}
+
+export async function updateOrdenVenta(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      id_cliente,
+      fecha_emision,
+      fecha_entrega_estimada,
+      prioridad,
+      moneda,
+      tipo_cambio,
+      tipo_impuesto,
+      porcentaje_impuesto,
+      plazo_pago,
+      forma_pago,
+      orden_compra_cliente,
+      direccion_entrega,
+      lugar_entrega,
+      ciudad_entrega,
+      contacto_entrega,
+      telefono_entrega,
+      observaciones,
+      id_comercial,
+      detalle
+    } = req.body;
+
+    const ordenExistente = await executeQuery(`
+      SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?
+    `, [id]);
+
+    if (!ordenExistente.success || ordenExistente.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
+    }
+
+    if (ordenExistente.data[0].estado !== 'En Espera') {
+      return res.status(400).json({ success: false, error: 'Solo se pueden editar órdenes en estado En Espera' });
+    }
+
+    if (!id_cliente || !detalle || detalle.length === 0) {
+      return res.status(400).json({ success: false, error: 'Cliente y detalle son obligatorios' });
+    }
+
+    let subtotal = 0;
+    let totalComision = 0;
+    let sumaComisionPorcentual = 0;
+
+    for (const item of detalle) {
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
+
+      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+      subtotal += valorVenta;
+
+      totalComision += montoComision * item.cantidad;
+      sumaComisionPorcentual += porcentajeComision;
+    }
+
+    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
+
+    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    let porcentaje = 18.00;
+    if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') porcentaje = 0.00;
+    else if (porcentaje_impuesto !== undefined) porcentaje = parseFloat(porcentaje_impuesto);
+
+    const impuesto = subtotal * (porcentaje / 100);
+    const total = subtotal + impuesto;
+
+    const updateResult = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET 
+        id_cliente = ?,
+        fecha_emision = ?,
+        fecha_entrega_estimada = ?,
+        prioridad = ?,
+        moneda = ?,
+        tipo_cambio = ?,
+        tipo_impuesto = ?,
+        porcentaje_impuesto = ?,
+        plazo_pago = ?,
+        forma_pago = ?,
+        orden_compra_cliente = ?,
+        direccion_entrega = ?,
+        lugar_entrega = ?,
+        ciudad_entrega = ?,
+        contacto_entrega = ?,
+        telefono_entrega = ?,
+        observaciones = ?,
+        id_comercial = ?,
+        subtotal = ?,
+        igv = ?,
+        total = ?,
+        total_comision = ?,
+        porcentaje_comision_promedio = ?
+      WHERE id_orden_venta = ?
+    `, [
+      id_cliente,
+      fecha_emision,
+      fecha_entrega_estimada || null,
+      prioridad || 'Media',
+      moneda,
+      parseFloat(tipo_cambio || 1.0000),
+      tipoImpuestoFinal,
+      porcentaje,
+      plazo_pago,
+      forma_pago,
+      orden_compra_cliente,
+      direccion_entrega,
+      lugar_entrega,
+      ciudad_entrega,
+      contacto_entrega,
+      telefono_entrega,
+      observaciones,
+      id_comercial || null,
+      subtotal,
+      impuesto,
+      total,
+      totalComision,
+      porcentajeComisionPromedio,
+      id
+    ]);
+
+    if (!updateResult.success) {
+      return res.status(500).json({ success: false, error: updateResult.error });
+    }
+
+    await executeQuery('DELETE FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
+
+    for (let i = 0; i < detalle.length; i++) {
+      const item = detalle[i];
+      const precioBase = parseFloat(item.precio_base);
+      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (porcentajeComision / 100);
+      const precioFinal = precioBase + montoComision;
+
+      await executeQuery(`
+        INSERT INTO detalle_orden_venta (
+          id_orden_venta,
+          id_producto,
+          cantidad,
+          precio_unitario,
+          precio_base,
+          porcentaje_comision,
+          monto_comision,
+          descuento_porcentaje
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id,
+        item.id_producto,
+        parseFloat(item.cantidad),
+        precioFinal,
+        precioBase,
+        porcentajeComision,
+        montoComision,
+        parseFloat(item.descuento_porcentaje || 0)
+      ]);
+    }
+
+    res.json({ success: true, message: 'Orden de venta actualizada exitosamente' });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 
@@ -507,7 +673,7 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al crear orden de producción:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -668,7 +834,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al actualizar estado:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -723,7 +889,7 @@ export async function actualizarPrioridadOrdenVenta(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al actualizar prioridad:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -761,7 +927,7 @@ export async function getEstadisticasOrdenesVenta(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -828,7 +994,7 @@ export async function descargarPDFOrdenVenta(req, res) {
     res.setHeader('Content-Disposition', `attachment; filename="OrdenVenta-${orden.numero_orden}.pdf"`);
     res.send(pdfBuffer);
   } catch (error) {
-    console.error('Error al generar PDF de orden de venta:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -966,7 +1132,7 @@ export async function registrarPagoOrden(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al registrar pago:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -1013,7 +1179,7 @@ export async function getPagosOrden(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener pagos:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -1095,7 +1261,7 @@ export async function anularPagoOrden(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al anular pago:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -1150,7 +1316,7 @@ export async function getResumenPagosOrden(req, res) {
     });
     
   } catch (error) {
-    console.error('Error al obtener resumen de pagos:', error);
+    console.error(error);
     res.status(500).json({
       success: false,
       error: error.message

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
-  AlertCircle, TrendingUp, Calendar, Plus, ShoppingCart, Calculator,
+  AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
@@ -68,7 +68,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al cargar datos:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar datos');
     } finally {
       setLoading(false);
@@ -107,7 +107,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al registrar pago:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al registrar pago');
     } finally {
       setProcesando(false);
@@ -129,7 +129,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al anular pago:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al anular pago');
     } finally {
       setProcesando(false);
@@ -153,7 +153,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al cambiar estado:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cambiar estado');
     } finally {
       setProcesando(false);
@@ -174,7 +174,7 @@ function DetalleOrdenVenta() {
       }
       
     } catch (err) {
-      console.error('Error al cambiar prioridad:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cambiar prioridad');
     } finally {
       setProcesando(false);
@@ -192,7 +192,7 @@ function DetalleOrdenVenta() {
       await ordenesVentaAPI.descargarPDF(id);
       setSuccess('PDF de orden de venta descargado exitosamente');
     } catch (err) {
-      console.error('Error al descargar PDF:', err);
+      console.error(err);
       setError('Error al descargar el PDF de orden de venta');
     } finally {
       setProcesando(false);
@@ -213,7 +213,7 @@ function DetalleOrdenVenta() {
       setSuccess('PDF de salida descargado exitosamente');
       
     } catch (err) {
-      console.error('Error al descargar PDF de salida:', err);
+      console.error(err);
       setError(err.message || 'Error al descargar el PDF de salida');
     } finally {
       setProcesando(false);
@@ -646,7 +646,6 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      {/* CARD GRANDE DE ESTADO CON BOTONES DIRECTOS */}
       <div className="card mb-4 border-l-4 border-primary">
         <div className="card-header">
           <h2 className="card-title">
@@ -751,7 +750,6 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* CARDS RESUMEN */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className={`card border-l-4 ${estadoPagoConfig.clase.replace('badge-', 'border-')}`}>
           <div className="card-body">
@@ -1092,7 +1090,7 @@ function DetalleOrdenVenta() {
               }
 
             } catch (err) {
-              console.error('Error al crear orden de producción:', err);
+              console.error(err);
               setError(err.response?.data?.error || 'Error al crear orden de producción');
             } finally {
               setProcesando(false);

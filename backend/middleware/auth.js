@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
 
-
 const PERMISOS_POR_ROL = {
   'Administrador': {
     ui: {
@@ -18,7 +17,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false,
+      ordenesCompra: true,
+      cuentasPago: true,
+      pagoCobranzas: true
     },
     api: {
       dashboard: true,
@@ -35,7 +36,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: true,
+      pagoCobranzas: true
     }
   },
   'Gerencia': {
@@ -54,7 +57,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: true,
+      pagoCobranzas: true
     },
     api: {
       dashboard: true,
@@ -71,7 +76,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: true,
+      pagoCobranzas: true
     }
   },
   'Comercial': {
@@ -90,7 +97,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: true,
+      pagoCobranzas: true
     },
     api: {
       dashboard: true,
@@ -107,7 +116,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: true,
+      pagoCobranzas: true
     }
   },
   'Ventas': {
@@ -126,7 +137,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     api: {
       dashboard: false,
@@ -143,7 +156,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   },
   'Produccion': {
@@ -162,7 +177,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     api: {
       dashboard: false,
@@ -179,7 +196,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   },
   'Supervisor': {
@@ -198,7 +217,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     api: {
       dashboard: false,
@@ -215,7 +236,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   },
   'Operario': {
@@ -234,7 +257,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     api: {
       dashboard: false,
@@ -251,7 +276,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   },
   'Almacenero': {
@@ -270,7 +297,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     api: {
       dashboard: false,
@@ -287,7 +316,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: false,
       guiasTransportista: false,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   },
   'Logistica': {
@@ -306,7 +337,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     api: {
       dashboard: false,
@@ -323,7 +356,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   },
   'Conductor': {
@@ -342,7 +377,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     dashboard: false,
     api: {
@@ -359,7 +396,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: false
+      ordenesCompra: false,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   },
   'Administrativo': {
@@ -378,7 +417,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: false,
+      pagoCobranzas: false
     },
     api: {
       dashboard: true,
@@ -395,7 +436,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       guiasRemision: true,
       guiasTransportista: true,
-      ordenesCompra: true
+      ordenesCompra: true,
+      cuentasPago: false,
+      pagoCobranzas: false
     }
   }
 };

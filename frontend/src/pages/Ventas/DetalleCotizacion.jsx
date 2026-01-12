@@ -70,7 +70,6 @@ function DetalleCotizacion() {
     if (response.data.success) {
       setSuccess(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
       
-      // Redirigir a la cotización duplicada
       setTimeout(() => {
         navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
       }, 1500);
@@ -99,6 +98,33 @@ function DetalleCotizacion() {
       
     } catch (err) {
       setError(err.response?.data?.error || 'Error al cambiar prioridad');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCambiarEstado = async (estado) => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const response = await cotizacionesAPI.actualizarEstado(id, estado);
+      
+      if (response.data.success) {
+        if (estado === 'Aprobada' && response.data.data?.requiere_orden_venta) {
+          setSuccess('Cotización aprobada. Redirigiendo a crear Orden de Venta...');
+          
+          setTimeout(() => {
+            navigate(`/ventas/ordenes/nueva?cotizacion=${id}`);
+          }, 1500);
+        } else {
+          await cargarDatos();
+          setSuccess(`Estado actualizado a ${estado}`);
+        }
+      }
+      
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al cambiar estado');
     } finally {
       setLoading(false);
     }

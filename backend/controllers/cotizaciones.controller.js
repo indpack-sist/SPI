@@ -776,6 +776,9 @@ export async function actualizarEstadoCotizacion(req, res) {
     const { id } = req.params;
     const { estado } = req.body;
     
+    // ============================================
+    // PASO 1: Validar que el estado sea válido
+    // ============================================
     const estadosValidos = ['Pendiente', 'Enviada', 'Aprobada', 'Rechazada', 'Convertida', 'Vencida'];
     
     if (!estadosValidos.includes(estado)) {
@@ -785,9 +788,14 @@ export async function actualizarEstadoCotizacion(req, res) {
       });
     }
 
+    // ============================================
+    // PASO 2: Iniciar transacción
+    // ============================================
     await connection.beginTransaction();
 
-    // 1. Obtener la cotización
+    // ============================================
+    // PASO 3: Verificar que la cotización existe
+    // ============================================
     const [cotizaciones] = await connection.query(`
       SELECT * FROM cotizaciones WHERE id_cotizacion = ?
     `, [id]);
@@ -801,147 +809,41 @@ export async function actualizarEstadoCotizacion(req, res) {
     }
 
     const cotizacion = cotizaciones[0];
-    const estadoAnterior = cotizacion.estado;
 
-    // 2. Si pasa a Aprobada y no está convertida, crear la Orden
-    if (estado === 'Aprobada' && estadoAnterior !== 'Aprobada' && !cotizacion.convertida_venta) {
-      
-      // Generar número de orden
-      const [ultimaOrden] = await connection.query(`
-        SELECT numero_orden FROM ordenes_venta 
-        ORDER BY id_orden_venta DESC LIMIT 1
-      `);
+    // ============================================
+    // PASO 4: Actualizar SOLO el estado
+    // (YA NO se crea OV automáticamente)
+    // ============================================
+    await connection.query(`
+      UPDATE cotizaciones 
+      SET estado = ? 
+      WHERE id_cotizacion = ?
+    `, [estado, id]);
 
-      let numeroSecuencia = 1;
-      if (ultimaOrden.length > 0) {
-        const match = ultimaOrden[0].numero_orden.match(/(\d+)$/);
-        if (match) {
-          numeroSecuencia = parseInt(match[1]) + 1;
-        }
+    // ============================================
+    // PASO 5: Confirmar transacción
+    // ============================================
+    await connection.commit();
+
+    // ============================================
+    // PASO 6: Responder con señal al frontend
+    // ============================================
+    res.json({
+      success: true,
+      message: `Estado actualizado a ${estado}`,
+      data: {
+        id_cotizacion: id,
+        estado: estado,
+        // IMPORTANTE: Esta señal le dice al frontend
+        // que debe redirigir a crear OV manualmente
+        requiere_orden_venta: estado === 'Aprobada'
       }
-
-      const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
-
-      // INSERTAR ENCABEZADO ORDEN DE VENTA (Con Comisiones)
-      const [ordenResult] = await connection.query(`
-        INSERT INTO ordenes_venta (
-          numero_orden,
-          id_cotizacion,
-          id_cliente,
-          id_comercial,
-          fecha_emision,
-          prioridad,
-          moneda,
-          tipo_impuesto,
-          porcentaje_impuesto,
-          tipo_cambio,
-          subtotal,
-          igv,
-          total,
-          total_comision,                 -- NUEVO
-          porcentaje_comision_promedio,   -- NUEVO
-          plazo_pago,
-          forma_pago,
-          direccion_entrega,
-          lugar_entrega,
-          observaciones,
-          id_registrado_por,
-          estado
-        ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
-      `, [
-        numeroOrden,
-        cotizacion.id_cotizacion,
-        cotizacion.id_cliente,
-        cotizacion.id_comercial,
-        cotizacion.prioridad || 'Media',
-        cotizacion.moneda || 'PEN',
-        cotizacion.tipo_impuesto || 'IGV',
-        cotizacion.porcentaje_impuesto || 18.00,
-        cotizacion.tipo_cambio || 1.0000,
-        cotizacion.subtotal,
-        cotizacion.igv,
-        cotizacion.total,
-        cotizacion.total_comision || 0,               // NUEVO
-        cotizacion.porcentaje_comision_promedio || 0, // NUEVO
-        cotizacion.plazo_pago,
-        cotizacion.forma_pago,
-        cotizacion.direccion_entrega,
-        cotizacion.lugar_entrega,
-        cotizacion.observaciones,
-        req.user?.id_empleado || cotizacion.id_comercial
-      ]);
-
-      const idOrdenVenta = ordenResult.insertId;
-
-      // Obtener detalles de la cotización
-      const [detalles] = await connection.query(`
-        SELECT * FROM detalle_cotizacion WHERE id_cotizacion = ? ORDER BY orden
-      `, [id]);
-
-      // INSERTAR DETALLES ORDEN DE VENTA (Con Precio Base y Comisiones)
-      for (const detalle of detalles) {
-        await connection.query(`
-          INSERT INTO detalle_orden_venta (
-            id_orden_venta,
-            id_producto,
-            cantidad,
-            precio_unitario,
-            precio_base,          -- NUEVO
-            porcentaje_comision,  -- NUEVO
-            monto_comision,       -- NUEVO
-            descuento_porcentaje,
-            orden
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-          idOrdenVenta,
-          detalle.id_producto,
-          detalle.cantidad,
-          detalle.precio_unitario,
-          detalle.precio_base || detalle.precio_unitario, // NUEVO: Si no hay base, usa unitario
-          detalle.porcentaje_comision || 0,               // NUEVO
-          detalle.monto_comision || 0,                    // NUEVO
-          detalle.descuento_porcentaje || 0,
-          detalle.orden
-        ]);
-      }
-
-      // Marcar cotización como convertida
-      await connection.query(`
-        UPDATE cotizaciones 
-        SET estado = 'Convertida',
-            convertida_venta = 1,
-            id_orden_venta = ?
-        WHERE id_cotizacion = ?
-      `, [idOrdenVenta, id]);
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: `Cotización aprobada y convertida a Orden de Venta ${numeroOrden}`,
-        data: {
-          id_orden_venta: idOrdenVenta,
-          numero_orden: numeroOrden
-        }
-      });
-
-    } else {
-      // Cambio de estado normal (sin generar orden)
-      await connection.query(`
-        UPDATE cotizaciones 
-        SET estado = ? 
-        WHERE id_cotizacion = ?
-      `, [estado, id]);
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: 'Estado actualizado exitosamente'
-      });
-    }
+    });
     
   } catch (error) {
+    // ============================================
+    // PASO 7: Manejar errores y rollback
+    // ============================================
     await connection.rollback();
     console.error('Error al actualizar estado:', error);
     res.status(500).json({
@@ -949,6 +851,9 @@ export async function actualizarEstadoCotizacion(req, res) {
       error: error.message
     });
   } finally {
+    // ============================================
+    // PASO 8: Liberar conexión
+    // ============================================
     connection.release();
   }
 }

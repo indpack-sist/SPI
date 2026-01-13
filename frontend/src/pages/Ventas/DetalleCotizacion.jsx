@@ -34,7 +34,6 @@ function DetalleCotizacion() {
       const response = await cotizacionesAPI.getById(id);
       
       if (response.data.success) {
-        console.log("Datos cargados:", response.data.data); // Para depuración
         setCotizacion(response.data.data);
       } else {
         setError('Cotización no encontrada');
@@ -146,11 +145,9 @@ function DetalleCotizacion() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
-  // CORRECCIÓN PRINCIPAL AQUÍ
   const getTipoImpuestoNombre = (valor) => {
-    if (!valor) return 'IGV 18%'; // Default si es nulo
+    if (!valor) return 'IGV 18%';
 
-    // Normalizar a mayúsculas y quitar espacios extra
     const codigo = String(valor).toUpperCase().trim();
 
     const tipos = {
@@ -159,11 +156,8 @@ function DetalleCotizacion() {
       'INA': 'Inafecto 0%'
     };
 
-    // 1. Intentar buscar por código exacto (IGV, EXO)
     if (tipos[codigo]) return tipos[codigo];
     
-    // 2. Si el backend guardó el nombre completo ("Exonerado 0%"), devolverlo tal cual
-    // Esto evita que salga "IGV 18%" cuando en realidad es Exonerado pero no coincide la clave
     return valor; 
   };
 
@@ -662,7 +656,7 @@ function DetalleCotizacion() {
                 </span>
                 <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
               </div>
-              <div className="flex justify-between py-4 bg-gradient-to-r from-primary to-blue-600 text-white px-4 rounded-xl">
+              <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
                 <span className="font-bold text-xl">TOTAL:</span>
                 <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
               </div>

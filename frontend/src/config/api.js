@@ -116,6 +116,7 @@ export const clientesAPI = {
   getById: (id) => api.get(`/clientes/${id}`),
   getByRuc: (ruc) => api.get(`/clientes/ruc/${ruc}`),
   validarRUC: (ruc) => api.get(`/clientes/validar-ruc/${ruc}`),
+  validarDNI: (dni) => api.get(`/clientes/validar-dni/${dni}`), // ← NUEVO
   create: (data) => api.post('/clientes', data),
   update: (id, data) => api.put(`/clientes/${id}`, data),
   delete: (id) => api.delete(`/clientes/${id}`),

@@ -305,6 +305,7 @@ export async function generarPDFSalida(datos) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
+      // --- CABECERA Y LOGO ---
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
@@ -445,6 +446,32 @@ export async function generarPDFSalida(datos) {
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`${detalles.length}`, 475, yPos + 4, { align: 'right', width: 80 });
+
+      // ============================================
+      // NUEVA SECCIÓN: FIRMAS
+      // ============================================
+      
+      // Verificamos si hay espacio suficiente (aprox 70px) antes del footer final. 
+      // Si no, añadimos página.
+      if (yPos + 80 > 750) {
+        doc.addPage();
+        yPos = 80; // Margen superior en nueva página
+      } else {
+        yPos += 60; // Espacio entre contenido y firmas
+      }
+
+      // Línea y texto: Despachado por
+      doc.moveTo(60, yPos).lineTo(240, yPos).stroke('#000000'); // Línea
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('DESPACHADO POR', 60, yPos + 5, { width: 180, align: 'center' });
+
+      // Línea y texto: Recibido por
+      doc.moveTo(350, yPos).lineTo(530, yPos).stroke('#000000'); // Línea
+      doc.text('RECIBIDO POR', 350, yPos + 5, { width: 180, align: 'center' });
+
+      // ============================================
+      // FIN SECCIÓN FIRMAS
+      // ============================================
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Documento de Control de Inventario - INDPACK S.A.C.', 50, 770, { align: 'center', width: 495 });

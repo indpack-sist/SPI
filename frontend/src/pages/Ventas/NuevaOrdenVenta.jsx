@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText // ← 1. IMPORTACIÓN AGREGADA
+  FileText
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -52,9 +52,8 @@ function NuevaOrdenVenta() {
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0, totalComisiones: 0 });
   
-  // 2. ACTUALIZACIÓN DEL ESTADO INICIAL
   const [formCabecera, setFormCabecera] = useState({
-    tipo_comprobante: 'Factura', // ← CAMPO AGREGADO AL ESTADO
+    tipo_comprobante: 'Factura',
     id_cliente: '',
     id_cotizacion: '',
     id_comercial: user?.id_empleado || '',
@@ -111,7 +110,7 @@ function NuevaOrdenVenta() {
       setFormCabecera(prev => ({
         ...prev,
         fecha_vencimiento: fechaVencimiento,
-        plazo_pago: `${prev.dias_credito} Días`
+        plazo_pago: `Crédito ${prev.dias_credito} Días`
       }));
     }
   }, [formCabecera.tipo_venta, formCabecera.dias_credito, formCabecera.fecha_emision]);
@@ -160,7 +159,7 @@ function NuevaOrdenVenta() {
         const orden = response.data.data;
         
         setFormCabecera({
-          tipo_comprobante: orden.tipo_comprobante || 'Factura', // Recuperar valor si existe
+          tipo_comprobante: orden.tipo_comprobante || 'Factura',
           id_cliente: orden.id_cliente,
           id_cotizacion: orden.id_cotizacion || '',
           id_comercial: orden.id_comercial || '',
@@ -234,6 +233,15 @@ function NuevaOrdenVenta() {
       if (response.data.success) {
         const cot = response.data.data;
         
+        let tipoVentaCalculado = 'Contado';
+        let diasCreditoCalculado = 0;
+
+        if (cot.plazo_pago && cot.plazo_pago.includes('Crédito')) {
+          tipoVentaCalculado = 'Crédito';
+          const match = cot.plazo_pago.match(/\d+/);
+          diasCreditoCalculado = match ? parseInt(match[0]) : 0;
+        }
+
         setFormCabecera(prev => ({
           ...prev,
           id_cotizacion: cot.id_cotizacion,
@@ -243,9 +251,9 @@ function NuevaOrdenVenta() {
           tipo_impuesto: cot.tipo_impuesto,
           porcentaje_impuesto: cot.porcentaje_impuesto,
           tipo_cambio: cot.tipo_cambio,
-          tipo_venta: 'Contado',
-          dias_credito: 0,
-          plazo_pago: 'Contado',
+          tipo_venta: tipoVentaCalculado,
+          dias_credito: diasCreditoCalculado,
+          plazo_pago: cot.plazo_pago || 'Contado',
           forma_pago: cot.forma_pago || 'Transferencia',
           direccion_entrega: cot.direccion_entrega || '',
           lugar_entrega: cot.lugar_entrega || '',
@@ -491,7 +499,6 @@ function NuevaOrdenVenta() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="md:col-span-2 space-y-6">
             
-            {/* TARJETA CLIENTE */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-blue-50 to-white">
                 <h2 className="card-title text-blue-900"><Building size={20} /> Cliente</h2>
@@ -538,7 +545,6 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
-            {/* 3. SECCIÓN TIPO DE COMPROBANTE AGREGADA */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-green-50 to-white">
                 <h2 className="card-title text-green-900">
@@ -593,7 +599,6 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
-            {/* TARJETA PRODUCTOS */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
                 <h2 className="card-title"><Calculator size={20} /> Productos</h2>
@@ -788,26 +793,26 @@ function NuevaOrdenVenta() {
                 
                 <div>
                   <label className="form-label">Condición de Pago</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      className={`btn py-2 ${formCabecera.tipo_venta === 'Contado' ? 'btn-success' : 'btn-outline'}`}
+                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Contado' ? 'btn-success' : 'btn-outline'}`}
                       onClick={() => setFormCabecera({...formCabecera, tipo_venta: 'Contado'})}
                     >
-                      <DollarSign size={18} className="mr-1" /> Contado
+                      <DollarSign size={18} className="inline mr-1" /> Contado
                     </button>
                     <button
                       type="button"
-                      className={`btn py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'}`}
+                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'}`}
                       onClick={() => setFormCabecera({...formCabecera, tipo_venta: 'Crédito'})}
                     >
-                      <Clock size={18} className="mr-1" /> Crédito
+                      <Clock size={18} className="inline mr-1" /> Crédito
                     </button>
                   </div>
                 </div>
 
                 {formCabecera.tipo_venta === 'Crédito' && (
-                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 animated fade-in">
                     <label className="form-label text-orange-800">Días de Crédito</label>
                     <div className="grid grid-cols-3 gap-2 mb-2">
                       {DIAS_CREDITO_OPCIONES.map(dias => (
@@ -837,7 +842,7 @@ function NuevaOrdenVenta() {
                 )}
 
                 <div>
-                  <label className="form-label">Forma de Pago</label>
+                  <label className="form-label">Medio de Pago</label>
                   <select 
                     className="form-select"
                     value={formCabecera.forma_pago}

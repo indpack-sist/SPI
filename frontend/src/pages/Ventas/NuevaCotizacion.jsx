@@ -769,21 +769,53 @@ function NuevaCotizacion() {
               )}
               
               <div className="form-group">
-                <label className="form-label">Plazo de Pago * <AlertCircle size={14} className="inline text-warning" /></label>
-                <select
-                  className="form-select"
-                  value={formCabecera.plazo_pago}
-                  onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
-                  disabled={cotizacionConvertida}
-                  required
-                >
-                  <option value="">Seleccione...</option>
-                  {PLAZOS_PAGO.map(plazo => (
-                    <option key={plazo} value={plazo}>{plazo}</option>
-                  ))}
-                </select>
-                <small className="text-warning block mt-1">Define el riesgo de la venta</small>
+                <label className="form-label">Condición de Pago *</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`btn flex-1 ${formCabecera.plazo_pago === 'Contado' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setFormCabecera(prev => ({ ...prev, plazo_pago: 'Contado' }))}
+                    disabled={cotizacionConvertida}
+                  >
+                    Contado
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn flex-1 ${formCabecera.plazo_pago !== 'Contado' && formCabecera.plazo_pago !== '' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => {
+                      if (formCabecera.plazo_pago === 'Contado') {
+                        setFormCabecera(prev => ({ ...prev, plazo_pago: '' })); 
+                      }
+                    }}
+                    disabled={cotizacionConvertida}
+                  >
+                    Crédito
+                  </button>
+                </div>
               </div>
+
+              {formCabecera.plazo_pago !== 'Contado' && (
+                <div className="form-group">
+                  <label className="form-label">Días de Crédito * <AlertCircle size={14} className="inline text-warning" /></label>
+                  <select
+                    className={`form-select ${!formCabecera.plazo_pago && formCabecera.plazo_pago !== 'Contado' ? 'border-primary ring-2 ring-primary/20' : ''}`}
+                    value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
+                    onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
+                    disabled={cotizacionConvertida}
+                    required={formCabecera.plazo_pago !== 'Contado'}
+                  >
+                    <option value="">Seleccione los días...</option>
+                    {PLAZOS_PAGO.filter(p => p !== 'Contado').map(plazo => (
+                      <option key={plazo} value={plazo}>{plazo}</option>
+                    ))}
+                  </select>
+                  {!formCabecera.plazo_pago && (
+                    <small className="text-primary block mt-1">
+                      ↑ Por favor seleccione los días de crédito
+                    </small>
+                  )}
+                </div>
+              )}
               
               <div className="form-group">
                 <label className="form-label">Forma de Pago</label>
@@ -1212,4 +1244,4 @@ function NuevaCotizacion() {
   );
 }
 
-export default NuevaCotizacion; 
+export default NuevaCotizacion;

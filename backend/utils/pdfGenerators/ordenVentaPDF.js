@@ -208,21 +208,15 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPos += 10;
 
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('OBSERVACIONES', 40, yPos);
+      // -----------------------------------------------------
+      // INICIO CORRECCIÓN: Separar columnas Izquierda y Derecha
+      // -----------------------------------------------------
       
-      doc.fontSize(8).font('Helvetica');
-      if (orden.observaciones) {
-        doc.text(orden.observaciones, 40, yPos + 15, { width: 330 });
-      }
+      const yBaseFooter = yPos;
+      let yPosLeft = yBaseFooter;
+      let yPosRight = yBaseFooter;
 
-      if (orden.comercial) {
-        doc.fontSize(8).font('Helvetica-Bold');
-        doc.text('Vendedor:', 40, yPos + 40);
-        doc.font('Helvetica');
-        doc.text(orden.comercial, 90, yPos + 40);
-      }
-
+      // --- COLUMNA DERECHA: TOTALES ---
       const subtotal = parseFloat(orden.subtotal).toFixed(2);
       const igv = parseFloat(orden.igv).toFixed(2);
       const total = parseFloat(orden.total).toFixed(2);
@@ -231,43 +225,78 @@ export async function generarOrdenVentaPDF(orden) {
       const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
       const etiquetaImpuesto = `${tipoImpuesto} (${porcImpuesto}%)`;
 
-      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+      // Subtotal
+      doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('SUB TOTAL', 390, yPos + 4);
+      doc.text('SUB TOTAL', 390, yPosRight + 4);
       
-      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+      doc.roundedRect(470, yPosRight, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${subtotal}`, 475, yPos + 4, { align: 'right', width: 80 });
+      doc.text(`${simboloMoneda} ${subtotal}`, 475, yPosRight + 4, { align: 'right', width: 80 });
 
-      yPos += 20;
+      yPosRight += 20;
 
-      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+      // Impuesto
+      doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text(etiquetaImpuesto, 390, yPos + 4, { width: 80, align: 'left' });
+      doc.text(etiquetaImpuesto, 390, yPosRight + 4, { width: 80, align: 'left' });
       
-      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+      doc.roundedRect(470, yPosRight, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${igv}`, 475, yPos + 4, { align: 'right', width: 80 });
+      doc.text(`${simboloMoneda} ${igv}`, 475, yPosRight + 4, { align: 'right', width: 80 });
 
-      yPos += 20;
+      yPosRight += 20;
 
-      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+      // Total
+      doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('TOTAL', 390, yPos + 4);
+      doc.text('TOTAL', 390, yPosRight + 4);
       
-      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+      doc.roundedRect(470, yPosRight, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${total}`, 475, yPos + 4, { align: 'right', width: 80 });
+      doc.text(`${simboloMoneda} ${total}`, 475, yPosRight + 4, { align: 'right', width: 80 });
 
-      yPos += 25;
+      yPosRight += 25;
 
+      // Tipo de cambio
       if (orden.tipo_cambio && parseFloat(orden.tipo_cambio) > 1) {
         doc.fontSize(8).font('Helvetica').fillColor('#666666');
-        doc.text(`T.C. Ref: ${parseFloat(orden.tipo_cambio).toFixed(3)}`, 475, yPos, { align: 'right', width: 80 });
-        yPos += 15;
-        doc.fillColor('#000000');
+        doc.text(`T.C. Ref: ${parseFloat(orden.tipo_cambio).toFixed(3)}`, 475, yPosRight, { align: 'right', width: 80 });
+        yPosRight += 15;
       }
 
+      // --- COLUMNA IZQUIERDA: OBSERVACIONES Y VENDEDOR ---
+      // Calculamos dinámicamente para que no pise al vendedor
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('OBSERVACIONES', 40, yPosLeft);
+      
+      doc.fontSize(8).font('Helvetica');
+      let alturaObservaciones = 0;
+      
+      if (orden.observaciones) {
+        // Medir altura real del texto
+        alturaObservaciones = calcularAlturaTexto(doc, orden.observaciones, 330, 8);
+        doc.text(orden.observaciones, 40, yPosLeft + 15, { width: 330 });
+      } else {
+        alturaObservaciones = 10; // Espacio mínimo si está vacío
+      }
+      
+      // Ajustamos yPosLeft sumando titulo (15) + contenido + margen (10)
+      yPosLeft += (15 + alturaObservaciones + 10);
+
+      if (orden.comercial) {
+        doc.fontSize(8).font('Helvetica-Bold');
+        doc.text('Vendedor:', 40, yPosLeft);
+        doc.font('Helvetica');
+        doc.text(orden.comercial, 90, yPosLeft);
+        yPosLeft += 15;
+      }
+
+      // --- UNIFICACIÓN ---
+      // El nuevo yPos es el máximo entre la izquierda y la derecha para evitar colisión
+      yPos = Math.max(yPosRight, yPosLeft) + 10;
+
+      doc.fillColor('#000000');
       doc.fontSize(8).font('Helvetica');
       const totalEnLetras = numeroALetras(parseFloat(total), orden.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });

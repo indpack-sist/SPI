@@ -335,15 +335,22 @@ export const ordenesProduccionAPI = {
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
   reanudar: (id) => api.post(`/produccion/ordenes/${id}/reanudar`),
+  
+  // CORRECCIÓN: Esta función maneja tanto finalización simple como con consumo real.
+  // Asegúrate de enviar { cantidad_producida, consumo_real: [...] } en el objeto data.
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
+  
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   
   registrarParcial: (id, data) => api.post(`/produccion/ordenes/${id}/registrar-parcial`, data),
-  finalizarConConsumoReal: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar-con-consumo-real`, data),
+  
+  // ELIMINADA: finalizarConConsumoReal (Usar finalizar)
+  
   getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
   getAnalisisConsumo: (id) => api.get(`/produccion/ordenes/${id}/analisis-consumo`),
   
   generarPDF: async (id) => {
+    // ... (Tu código del PDF está bien) ...
     try {
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/pdf`, {
         method: 'GET',
@@ -378,8 +385,6 @@ export const ordenesProduccionAPI = {
       throw error;
     }
   },
-
-  getNotificaciones: () => api.get('/produccion/ordenes/notificaciones'),
   getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
   getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`)
 };

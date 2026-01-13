@@ -291,7 +291,7 @@ export async function generarPDFEntrada(datos) {
 }
 
 export async function generarPDFSalida(datos) {
-  const logoBuffer = await cargarLogoURL();
+  const logoBuffer = await cargarLogoURL(); // Asegúrate de que esta función exista o usa la lógica anterior
 
   return new Promise(async (resolve, reject) => {
     try {
@@ -325,6 +325,19 @@ export async function generarPDFSalida(datos) {
         doc.text('EMBALAJE INDUSTRIAL', 60, 80);
       }
 
+      // Nota: Asumo que el objeto EMPRESA está disponible en el ámbito o importado
+      // Si no, deberás definirlo o usar strings directos como en la función anterior.
+      const EMPRESA = {
+          direccion: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA',
+          distrito: 'Villa el Salvador',
+          departamento: 'Lima',
+          pais: 'Perú',
+          telefono: '01- 312 7858',
+          email: 'informes@indpackperu.com',
+          web: 'https://www.indpackperu.com/',
+          ruc: '20550932297'
+      };
+
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, 110);
       
@@ -355,12 +368,14 @@ export async function generarPDFSalida(datos) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha:', 40, 213);
       doc.font('Helvetica');
-      doc.text(formatearFecha(datos.fecha_movimiento), 100, 213);
+      doc.text(new Date(datos.fecha_movimiento).toLocaleDateString('es-PE'), 100, 213);
       
       doc.font('Helvetica-Bold');
       doc.text('Hora:', 40, 228);
       doc.font('Helvetica');
-      doc.text(formatearHora(datos.fecha_movimiento), 100, 228);
+      // Función simple para hora si no tienes formatearHora
+      const horaStr = new Date(datos.fecha_movimiento).toLocaleTimeString('es-PE', {hour: '2-digit', minute:'2-digit'});
+      doc.text(horaStr, 100, 228);
       
       doc.font('Helvetica-Bold');
       doc.text('Tipo Inventario:', 40, 243);
@@ -448,26 +463,35 @@ export async function generarPDFSalida(datos) {
       doc.text(`${detalles.length}`, 475, yPos + 4, { align: 'right', width: 80 });
 
       // ============================================
-      // NUEVA SECCIÓN: FIRMAS
+      // NUEVA SECCIÓN DE FIRMAS (TIPO PIE DE PÁGINA)
       // ============================================
       
-      // Verificamos si hay espacio suficiente (aprox 70px) antes del footer final. 
-      // Si no, añadimos página.
-      if (yPos + 80 > 750) {
+      // Definimos la posición Y fija para el pie de página
+      let yFirmas = 720;
+      
+      // Si el contenido actual está muy cerca del final (más allá de Y=650),
+      // creamos nueva página para evitar que las firmas se monten o queden cortadas.
+      if (yPos > 650) {
         doc.addPage();
-        yPos = 80; // Margen superior en nueva página
-      } else {
-        yPos += 60; // Espacio entre contenido y firmas
+        // En la nueva página, mantenemos yFirmas al fondo
+        yFirmas = 720;
       }
 
-      // Línea y texto: Despachado por
-      doc.moveTo(60, yPos).lineTo(240, yPos).stroke('#000000'); // Línea
+      // Dibujamos las 3 firmas alineadas horizontalmente
+      const anchoLinea = 135;
+      
+      // 1. DESPACHADO POR (Izquierda) - X aprox 40
+      doc.moveTo(40, yFirmas).lineTo(40 + anchoLinea, yFirmas).stroke('#000000');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('DESPACHADO POR', 60, yPos + 5, { width: 180, align: 'center' });
+      doc.text('DESPACHADO POR', 40, yFirmas + 5, { width: anchoLinea, align: 'center' });
 
-      // Línea y texto: Recibido por
-      doc.moveTo(350, yPos).lineTo(530, yPos).stroke('#000000'); // Línea
-      doc.text('RECIBIDO POR', 350, yPos + 5, { width: 180, align: 'center' });
+      // 2. VERIFICADO POR (Centro) - X aprox 215
+      doc.moveTo(215, yFirmas).lineTo(215 + anchoLinea, yFirmas).stroke('#000000');
+      doc.text('VERIFICADO POR', 215, yFirmas + 5, { width: anchoLinea, align: 'center' });
+
+      // 3. RECIBIDO POR (Derecha) - X aprox 390
+      doc.moveTo(390, yFirmas).lineTo(390 + anchoLinea, yFirmas).stroke('#000000');
+      doc.text('RECIBIDO POR', 390, yFirmas + 5, { width: anchoLinea, align: 'center' });
 
       // ============================================
       // FIN SECCIÓN FIRMAS
@@ -485,6 +509,17 @@ export async function generarPDFSalida(datos) {
   });
 }
 
+// Función auxiliar necesaria si no la tienes importada
+function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
+  const currentFontSize = doc._fontSize || 12;
+  doc.fontSize(fontSize);
+  const heightOfString = doc.heightOfString(texto || '', {
+    width: ancho,
+    lineGap: 2
+  });
+  doc.fontSize(currentFontSize);
+  return Math.ceil(heightOfString);
+}
 export async function generarPDFTransferencia(datos) {
   const logoBuffer = await cargarLogoURL();
 

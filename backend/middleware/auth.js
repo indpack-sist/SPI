@@ -19,7 +19,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: true,
       cuentasPago: true,
-      pagoCobranzas: true
+      pagosCobranzas: true // CORREGIDO: Plural para coincidir con controllers
     },
     api: {
       dashboard: true,
@@ -38,7 +38,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: true,
-      pagoCobranzas: true
+      pagosCobranzas: true // CORREGIDO
     }
   },
   'Gerencia': {
@@ -59,7 +59,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: true,
-      pagoCobranzas: true
+      pagosCobranzas: true
     },
     api: {
       dashboard: true,
@@ -78,7 +78,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: true,
-      pagoCobranzas: true
+      pagosCobranzas: true
     }
   },
   'Comercial': {
@@ -99,7 +99,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: false,
       cuentasPago: true,
-      pagoCobranzas: true
+      pagosCobranzas: true
     },
     api: {
       dashboard: true,
@@ -118,7 +118,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: true,
-      pagoCobranzas: true
+      pagosCobranzas: true
     }
   },
   'Ventas': {
@@ -139,7 +139,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     api: {
       dashboard: false,
@@ -158,7 +158,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   },
   'Produccion': {
@@ -179,7 +179,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     api: {
       dashboard: false,
@@ -198,7 +198,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   },
   'Supervisor': {
@@ -219,7 +219,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     api: {
       dashboard: false,
@@ -238,7 +238,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   },
   'Operario': {
@@ -259,7 +259,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     api: {
       dashboard: false,
@@ -278,7 +278,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   },
   'Almacenero': {
@@ -299,14 +299,14 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     api: {
       dashboard: false,
       empleados: true,      
       flota: true,          
       proveedores: true,    
-      clientes: true,      
+      clientes: true,       
       productos: true,
       entradas: true,
       salidas: true,
@@ -318,7 +318,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: false,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   },
   'Logistica': {
@@ -339,7 +339,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     api: {
       dashboard: false,
@@ -358,7 +358,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   },
   'Conductor': {
@@ -379,7 +379,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     dashboard: false,
     api: {
@@ -398,7 +398,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: false,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   },
   'Administrativo': {
@@ -419,7 +419,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     },
     api: {
       dashboard: true,
@@ -438,7 +438,7 @@ const PERMISOS_POR_ROL = {
       guiasTransportista: true,
       ordenesCompra: true,
       cuentasPago: false,
-      pagoCobranzas: false
+      pagosCobranzas: false
     }
   }
 };
@@ -505,7 +505,10 @@ export const verificarPermiso = (modulo) => {
         });
       }
       
+      // LOG TEMPORAL PARA DEPURAR (Puedes eliminarlo después)
       if (!permisos.api[modulo]) {
+        console.log(`[AUTH] Acceso denegado. Rol: ${rol}, Modulo solicitado: ${modulo}, Permisos:`, permisos.api);
+        
         return res.status(403).json({
           success: false,
           error: 'No tienes permiso para acceder a este módulo',

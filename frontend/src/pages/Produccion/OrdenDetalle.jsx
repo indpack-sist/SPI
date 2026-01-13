@@ -279,6 +279,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
   const handleFinalizar = async (e) => {
     e.preventDefault();
     
+    // 1. Validar mermas
     const mermasValidas = mermas.filter(m => 
       m.id_producto_merma && 
       m.cantidad && 
@@ -289,6 +290,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
       setProcesando(true);
       setError(null);
       
+      // 2. Construir el objeto de datos (Payload)
       const payload = {
         cantidad_producida: cantidadProducida,
         observaciones: observacionesFinal,
@@ -299,31 +301,26 @@ const eliminarInsumoProvisional = (idInsumo) => {
         }))
       };
       
+      // 3. Agregar consumo real si existe (El backend en 'finalizar' ya sabe leer esto)
       if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
         payload.consumo_real = consumoRealInsumos.map(item => ({
           id_insumo: item.id_insumo,
-          cantidad_real: item.cantidad_real
+          cantidad_real_total: item.cantidad_real // Asegúrate que el backend espere 'cantidad_real_total' o 'cantidad_real' y coincidan
         }));
       }
 
-      const ejecutarFinalizacion = async (data) => {
-        if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
-          return await ordenesProduccionAPI.finalizarConConsumoReal(id, data);
-        } else {
-          return await ordenesProduccionAPI.finalizar(id, data);
-        }
-      };
-      
+      // 4. LLAMADA ÚNICA A LA API
       try {
-        await ejecutarFinalizacion(payload);
+        await ordenesProduccionAPI.finalizar(id, payload);
         procesarExitoFinalizar(mermasValidas);
       } catch (err) {
+        // Manejo de confirmación de exceso (lógica existente correcta)
         if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
           const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea finalizar la orden con este exceso?`);
           
           if (confirmar) {
             payload.confirmar_exceso = true;
-            await ejecutarFinalizacion(payload);
+            await ordenesProduccionAPI.finalizar(id, payload);
             procesarExitoFinalizar(mermasValidas);
             return;
           }

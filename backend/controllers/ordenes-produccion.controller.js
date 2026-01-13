@@ -10,6 +10,7 @@ export async function getAllOrdenes(req, res) {
         op.id_orden,
         op.numero_orden,
         op.fecha_programada,
+        op.fecha_programada_fin,
         op.id_producto_terminado,
         p.codigo AS codigo_producto,
         COALESCE(p.nombre, '[PRODUCTO ELIMINADO]') AS producto,
@@ -1585,34 +1586,38 @@ export const generarPDFOrdenController = async (req, res) => {
 export async function updateOrden(req, res) {
   try {
     const { id } = req.params;
-    const { fecha_programada } = req.body;
+    // Ahora aceptamos ambos campos
+    const { fecha_programada, fecha_programada_fin } = req.body;
 
-    // Validamos que venga el dato que queremos actualizar
-    if (!fecha_programada) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Debe proporcionar una fecha_programada' 
-      });
+    // Construimos la query dinámica
+    let sql = 'UPDATE ordenes_produccion SET ';
+    const params = [];
+    const updates = [];
+
+    if (fecha_programada !== undefined) {
+      updates.push('fecha_programada = ?');
+      params.push(fecha_programada);
     }
 
-    // Ejecutamos la actualización
-    const result = await executeQuery(
-      'UPDATE ordenes_produccion SET fecha_programada = ? WHERE id_orden = ?',
-      [fecha_programada, id]
-    );
+    if (fecha_programada_fin !== undefined) {
+      updates.push('fecha_programada_fin = ?');
+      params.push(fecha_programada_fin);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No hay datos para actualizar' });
+    }
+
+    sql += updates.join(', ') + ' WHERE id_orden = ?';
+    params.push(id);
+
+    const result = await executeQuery(sql, params);
 
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error });
     }
 
-    if (result.data.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
-    }
-
-    res.json({
-      success: true,
-      message: 'Fecha programada actualizada exitosamente'
-    });
+    res.json({ success: true, message: 'Programación actualizada' });
 
   } catch (error) {
     console.error('Error al actualizar orden:', error);

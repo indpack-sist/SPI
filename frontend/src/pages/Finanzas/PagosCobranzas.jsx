@@ -189,42 +189,45 @@ function PagosCobranzas() {
       accessor: 'estado_deuda',
       width: '150px',
       align: 'center',
-      render: (estado, row) => {
+      render: (estadoBackend, row) => {
         let estadoConfig = {};
         const dias = row.dias_restantes;
         
-        switch(estado) {
-          case 'Pendiente': 
-            estadoConfig = {
-              color: 'badge-danger',
-              texto: 'Pago Pendiente',
-              icono: AlertCircle,
-              mensaje: 'Saldo por regularizar'
-            };
-            break;
-          case 'Vencido': 
-            estadoConfig = {
-              color: 'badge-danger',
-              texto: 'Vencido',
-              icono: XCircle,
-              mensaje: `${Math.abs(dias)} días de atraso`
-            };
-            break;
-          case 'Proximo a Vencer': 
-            estadoConfig = {
-              color: 'badge-warning',
-              texto: 'Por Vencer',
-              icono: AlertTriangle,
-              mensaje: `Vence en ${dias} días`
-            };
-            break;
-          default: 
-            estadoConfig = {
-              color: 'badge-success',
-              texto: 'Al Día',
-              icono: CheckCircle,
-              mensaje: `Quedan ${dias} días`
-            };
+        // Prioridad: Si es CONTADO, ignoramos lo que diga el backend y forzamos el estado Pendiente
+        if (row.tipo_venta === 'Contado') {
+          estadoConfig = {
+            color: 'badge-danger',
+            texto: 'Pago Pendiente',
+            icono: AlertCircle,
+            mensaje: 'Saldo por regularizar'
+          };
+        } else {
+          // Lógica para CRÉDITO basada en el estado calculado o días
+          switch(estadoBackend) {
+            case 'Vencido': 
+              estadoConfig = {
+                color: 'badge-danger',
+                texto: 'Vencido',
+                icono: XCircle,
+                mensaje: `${Math.abs(dias)} días de atraso`
+              };
+              break;
+            case 'Proximo a Vencer': 
+              estadoConfig = {
+                color: 'badge-warning',
+                texto: 'Por Vencer',
+                icono: AlertTriangle,
+                mensaje: `Vence en ${dias} días`
+              };
+              break;
+            default: // Al Dia u otros
+              estadoConfig = {
+                color: 'badge-success',
+                texto: 'Al Día',
+                icono: CheckCircle,
+                mensaje: `Quedan ${dias} días`
+              };
+          }
         }
 
         const Icon = estadoConfig.icono;
@@ -234,7 +237,7 @@ function PagosCobranzas() {
             <span className={`badge ${estadoConfig.color} flex items-center gap-1 w-full justify-center`}>
               <Icon size={12} /> {estadoConfig.texto}
             </span>
-            <span className={`text-[10px] font-bold ${estado === 'Pendiente' || estado === 'Vencido' ? 'text-red-600' : 'text-green-600'}`}>
+            <span className={`text-[10px] font-bold ${estadoConfig.color === 'badge-success' ? 'text-green-600' : 'text-red-600'}`}>
               {estadoConfig.mensaje}
             </span>
           </div>
@@ -254,12 +257,6 @@ function PagosCobranzas() {
             <FileText size={14} />
             {value}
           </button>
-
-          {row.numero_comprobante && (
-            <div className="text-xs text-gray-500 font-medium mt-0.5 ml-0.5">
-              {row.tipo_comprobante === 'Factura' ? 'Factura' : 'Nota Venta'}: <span className="text-gray-800">{row.numero_comprobante}</span>
-            </div>
-          )}
           
           <div className="text-[10px] text-muted mt-1">
             Emisión: {formatearFecha(row.fecha_emision)}
@@ -334,8 +331,9 @@ function PagosCobranzas() {
     return <Loading message="Cargando información financiera..." />;
   }
 
-  const cuentasContado = cuentasPorCobrar.filter(c => c.estado_deuda === 'Pendiente');
-  const cuentasCredito = cuentasPorCobrar.filter(c => c.estado_deuda !== 'Pendiente');
+  // FILTRADO ESTRICTO: Usamos tipo_venta en lugar de estado_deuda
+  const cuentasContado = cuentasPorCobrar.filter(c => c.tipo_venta === 'Contado');
+  const cuentasCredito = cuentasPorCobrar.filter(c => c.tipo_venta !== 'Contado');
 
   return (
     <div className="p-6">
@@ -515,6 +513,7 @@ function PagosCobranzas() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* TABLA CONTADO */}
           <div className="card border-l-4 border-red-500">
             <div className="card-header border-b-0">
               <h2 className="card-title text-red-700">
@@ -534,6 +533,7 @@ function PagosCobranzas() {
             </div>
           </div>
 
+          {/* TABLA CRÉDITO */}
           <div className="card border-l-4 border-blue-500">
             <div className="card-header border-b-0">
               <h2 className="card-title text-blue-700">

@@ -19,9 +19,10 @@ const TIPOS_IMPUESTO = [
 ];
 
 const FORMAS_PAGO = [
-  'Transferencia', 'Depósito', 'Efectivo', 'Cheque', 'Yape', 'Plin', 'Tarjeta de Crédito', 'Tarjeta de Débito'
+  'Transferencia Bancaria',
+  'Efectivo',
+  'Yape'
 ];
-
 const DIAS_CREDITO_OPCIONES = [7, 15, 30, 45, 60, 90];
 
 function NuevaOrdenVenta() {
@@ -68,7 +69,7 @@ function NuevaOrdenVenta() {
     tipo_venta: 'Contado', 
     dias_credito: 0,      
     plazo_pago: 'Contado',
-    forma_pago: 'Transferencia',
+    forma_pago: '', // Inicializamos vacío
     orden_compra_cliente: '',
     direccion_entrega: '',
     lugar_entrega: '',
@@ -254,7 +255,8 @@ function NuevaOrdenVenta() {
           tipo_venta: tipoVentaCalculado,
           dias_credito: diasCreditoCalculado,
           plazo_pago: cot.plazo_pago || 'Contado',
-          forma_pago: cot.forma_pago || 'Transferencia',
+          // 2. ACTUALIZADO: Aquí se asigna la forma de pago de la cotización
+          forma_pago: cot.forma_pago || '', 
           direccion_entrega: cot.direccion_entrega || '',
           lugar_entrega: cot.lugar_entrega || '',
           observaciones: cot.observaciones || ''
@@ -842,7 +844,7 @@ function NuevaOrdenVenta() {
                 )}
 
                 <div>
-                  <label className="form-label">Medio de Pago</label>
+                  <label className="form-label">Forma de Pago</label>
                   <select 
                     className="form-select"
                     value={formCabecera.forma_pago}

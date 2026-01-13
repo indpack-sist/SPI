@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  FileBadge // Agregado para diferenciar iconos
+  FileBadge
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -16,6 +16,13 @@ import { ordenesVentaAPI, salidasAPI } from '../../config/api';
 function DetalleOrdenVenta() {
   const { id } = useParams();
   const navigate = useNavigate();
+  
+  const getFechaLocal = () => {
+    const fecha = new Date();
+    const offset = fecha.getTimezoneOffset() * 60000;
+    const fechaLocal = new Date(fecha.getTime() - offset);
+    return fechaLocal.toISOString().split('T')[0];
+  };
   
   const [orden, setOrden] = useState(null);
   const [pagos, setPagos] = useState([]);
@@ -33,7 +40,7 @@ function DetalleOrdenVenta() {
   const [cantidadOP, setCantidadOP] = useState('');
   
   const [pagoForm, setPagoForm] = useState({
-    fecha_pago: new Date().toISOString().split('T')[0],
+    fecha_pago: getFechaLocal(),
     monto_pagado: '',
     metodo_pago: 'Transferencia',
     numero_operacion: '',
@@ -79,8 +86,15 @@ function DetalleOrdenVenta() {
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
     
-    if (!pagoForm.monto_pagado || parseFloat(pagoForm.monto_pagado) <= 0) {
+    const monto = parseFloat(pagoForm.monto_pagado);
+
+    if (!monto || monto <= 0) {
       setError('Ingrese un monto válido');
+      return;
+    }
+
+    if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.1) {
+      setError(`El monto no puede ser mayor al saldo pendiente (${formatearMoneda(resumenPagos.saldo_pendiente)})`);
       return;
     }
     
@@ -90,14 +104,14 @@ function DetalleOrdenVenta() {
       
       const response = await ordenesVentaAPI.registrarPago(id, {
         ...pagoForm,
-        monto_pagado: parseFloat(pagoForm.monto_pagado)
+        monto_pagado: monto
       });
       
       if (response.data.success) {
         setSuccess(`Pago registrado: ${response.data.data.numero_pago}`);
         setModalPagoOpen(false);
         setPagoForm({
-          fecha_pago: new Date().toISOString().split('T')[0],
+          fecha_pago: getFechaLocal(),
           monto_pagado: '',
           metodo_pago: 'Transferencia',
           numero_operacion: '',
@@ -145,7 +159,7 @@ function DetalleOrdenVenta() {
       const response = await ordenesVentaAPI.actualizarEstado(
         id, 
         estado,
-        estado === 'Entregada' ? new Date().toISOString().split('T')[0] : null
+        estado === 'Entregada' ? getFechaLocal() : null
       );
       
       if (response.data.success) {
@@ -186,14 +200,11 @@ function DetalleOrdenVenta() {
     navigate(`/ventas/guias-remision/nueva?orden=${id}`);
   };
 
-  // MODIFICADO: Acepta un argumento 'tipo' para distinguir qué descargar
   const handleDescargarPDF = async (tipoDocumento) => {
     try {
       setProcesando(true);
       setError(null);
       
-      // Enviamos el tipo a la API ('orden' o 'comprobante')
-      // Asegúrate de que tu api.js y backend soporten este segundo parámetro
       await ordenesVentaAPI.descargarPDF(id, tipoDocumento);
       
       const nombreArchivo = tipoDocumento === 'comprobante' ? orden.tipo_comprobante : 'Orden de Venta';
@@ -626,7 +637,6 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
-          {/* BOTÓN 1: SIEMPRE VISIBLE - PDF INTERNO DE ORDEN */}
           <button 
             className="btn btn-outline" 
             onClick={() => handleDescargarPDF('orden')} 
@@ -636,7 +646,6 @@ function DetalleOrdenVenta() {
             <FileText size={20} /> PDF Orden
           </button>
 
-          {/* BOTÓN 2: VISIBLE SOLO SI HAY TIPO COMPROBANTE - PDF FISCAL */}
           {orden.tipo_comprobante && (
             <button 
               className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
@@ -683,7 +692,6 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Resto del contenido sigue igual ... */}
       {productosRequierenOP.length > 0 && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />

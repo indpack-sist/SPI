@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, TrendingUp, Calendar, Filter, Download, 
   ArrowUpCircle, ArrowDownCircle, AlertCircle, LayoutList,
-  FileText, CheckCircle, XCircle, AlertTriangle, FileBadge, Clock
+  FileText, CheckCircle, XCircle, AlertTriangle, FileBadge
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -113,7 +113,6 @@ function PagosCobranzas() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
-  // --- COLUMNAS HISTORIAL MOVIMIENTOS ---
   const columnsMovimientos = [
     {
       header: 'Tipo',
@@ -138,7 +137,6 @@ function PagosCobranzas() {
         <div>
           <div className="font-mono font-bold text-gray-800">{value}</div>
           {row.tipo === 'cobranza' ? (
-            // CAMBIO: Redirección usando id_orden (que viene del controller getAllPagosCobranzas)
             <button 
               className="flex items-center gap-1 text-xs text-blue-600 hover:underline hover:text-blue-800 mt-0.5 cursor-pointer bg-transparent border-0 p-0"
               onClick={() => navigate(`/ventas/ordenes/${row.id_orden}`)}
@@ -185,7 +183,6 @@ function PagosCobranzas() {
     }
   ];
 
-  // --- COLUMNAS CUENTAS POR COBRAR ---
   const columnsCobranzas = [
     {
       header: 'Estado Deuda',
@@ -197,7 +194,7 @@ function PagosCobranzas() {
         const dias = row.dias_restantes;
         
         switch(estado) {
-          case 'Pendiente': // CONTADO
+          case 'Pendiente': 
             estadoConfig = {
               color: 'badge-danger',
               texto: 'Pago Pendiente',
@@ -205,7 +202,7 @@ function PagosCobranzas() {
               mensaje: 'Saldo por regularizar'
             };
             break;
-          case 'Vencido': // CRÉDITO VENCIDO
+          case 'Vencido': 
             estadoConfig = {
               color: 'badge-danger',
               texto: 'Vencido',
@@ -213,7 +210,7 @@ function PagosCobranzas() {
               mensaje: `${Math.abs(dias)} días de atraso`
             };
             break;
-          case 'Proximo a Vencer': // CRÉDITO PRÓXIMO
+          case 'Proximo a Vencer': 
             estadoConfig = {
               color: 'badge-warning',
               texto: 'Por Vencer',
@@ -221,7 +218,7 @@ function PagosCobranzas() {
               mensaje: `Vence en ${dias} días`
             };
             break;
-          default: // AL DÍA
+          default: 
             estadoConfig = {
               color: 'badge-success',
               texto: 'Al Día',
@@ -250,7 +247,6 @@ function PagosCobranzas() {
       width: '160px',
       render: (value, row) => (
         <div className="flex flex-col">
-          {/* CAMBIO: Enlace principal a la Orden de Venta */}
           <button 
             className="font-mono font-bold text-blue-600 hover:underline text-sm text-left flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0"
             onClick={() => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
@@ -259,7 +255,6 @@ function PagosCobranzas() {
             {value}
           </button>
 
-          {/* Información secundaria: Comprobante */}
           {row.numero_comprobante && (
             <div className="text-xs text-gray-500 font-medium mt-0.5 ml-0.5">
               {row.tipo_comprobante === 'Factura' ? 'Factura' : 'Nota Venta'}: <span className="text-gray-800">{row.numero_comprobante}</span>
@@ -339,6 +334,9 @@ function PagosCobranzas() {
     return <Loading message="Cargando información financiera..." />;
   }
 
+  const cuentasContado = cuentasPorCobrar.filter(c => c.estado_deuda === 'Pendiente');
+  const cuentasCredito = cuentasPorCobrar.filter(c => c.estado_deuda !== 'Pendiente');
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -376,7 +374,6 @@ function PagosCobranzas() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* DASHBOARD SOLO EN PESTAÑA MOVIMIENTOS */}
       {activeTab === 'movimientos' && resumen && (
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="card border-l-4 border-danger hover:shadow-md transition-shadow">
@@ -448,7 +445,6 @@ function PagosCobranzas() {
         </div>
       )}
 
-      {/* BARRA DE FILTROS */}
       <div className="card mb-4 bg-gray-50 border border-gray-200">
         <div className="card-body p-4">
           <div className="flex flex-wrap items-end gap-4">
@@ -499,32 +495,65 @@ function PagosCobranzas() {
         </div>
       </div>
 
-      {/* TABLA DE RESULTADOS */}
-      <div className="card">
-        <div className="card-header border-b-0">
-          <h2 className="card-title">
-            {activeTab === 'movimientos' ? 'Historial de Transacciones' : 'Cartera de Clientes (Crédito)'}
-            <span className="badge badge-primary ml-2">
-              {activeTab === 'movimientos' ? movimientos.length : cuentasPorCobrar.length}
-            </span>
-          </h2>
-        </div>
-        <div className="card-body p-0">
-          {activeTab === 'movimientos' ? (
+      {activeTab === 'movimientos' ? (
+        <div className="card">
+          <div className="card-header border-b-0">
+            <h2 className="card-title">
+              Historial de Transacciones
+              <span className="badge badge-primary ml-2">
+                {movimientos.length}
+              </span>
+            </h2>
+          </div>
+          <div className="card-body p-0">
             <Table
               columns={columnsMovimientos}
               data={movimientos}
               emptyMessage="No hay movimientos en el período seleccionado"
             />
-          ) : (
-            <Table
-              columns={columnsCobranzas}
-              data={cuentasPorCobrar}
-              emptyMessage="No hay cuentas por cobrar pendientes (¡Todo al día!)"
-            />
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="card border-l-4 border-red-500">
+            <div className="card-header border-b-0">
+              <h2 className="card-title text-red-700">
+                <AlertCircle size={20} />
+                Pendientes de Pago (Contado)
+                <span className="badge badge-danger ml-2">
+                  {cuentasContado.length}
+                </span>
+              </h2>
+            </div>
+            <div className="card-body p-0">
+              <Table
+                columns={columnsCobranzas}
+                data={cuentasContado}
+                emptyMessage="No hay órdenes al contado pendientes de pago"
+              />
+            </div>
+          </div>
+
+          <div className="card border-l-4 border-blue-500">
+            <div className="card-header border-b-0">
+              <h2 className="card-title text-blue-700">
+                <Clock size={20} />
+                Cartera de Crédito
+                <span className="badge badge-info ml-2">
+                  {cuentasCredito.length}
+                </span>
+              </h2>
+            </div>
+            <div className="card-body p-0">
+              <Table
+                columns={columnsCobranzas}
+                data={cuentasCredito}
+                emptyMessage="No hay créditos pendientes de cobro"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

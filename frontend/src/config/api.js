@@ -329,7 +329,7 @@ export const ordenesProduccionAPI = {
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
   getConsumoMateriales: (id) => api.get(`/produccion/ordenes/${id}/consumo-materiales`),
   create: (data) => api.post('/produccion/ordenes', data),
-  
+  update: (id, data) => api.put(`/produccion/ordenes/${id}`, data),
   asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
   
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),

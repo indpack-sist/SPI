@@ -77,7 +77,6 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     let pagos = [];
     let cobranzas = [];
     
-    // ... (configuración de whereClauses y params se mantiene igual) ...
     let whereClausePagos = '1=1';
     let whereClauseCobranzas = '1=1';
     const paramsPagos = [];
@@ -111,7 +110,6 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       paramsCobranzas.push(id_cuenta);
     }
     
-    // --- CORRECCIÓN AQUÍ ---
     if (!tipo || tipo === 'pago') {
       [pagos] = await pool.query(`
         SELECT 
@@ -126,7 +124,6 @@ export const getAllPagosCobranzas = async (req, res, next) => {
           pe.observaciones,
           e.id_entrada,
           e.documento_soporte as documento_referencia,
-          -- SE ELIMINÓ LA LÍNEA: e.tipo_comprobante, (Esta causaba el error)
           e.moneda,
           p.razon_social as tercero,
           emp.nombre_completo as registrado_por,
@@ -143,7 +140,6 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     }
     
     if (!tipo || tipo === 'cobranza') {
-      // Esta parte SÍ funciona porque 'ordenes_venta' tiene los campos nuevos
       [cobranzas] = await pool.query(`
         SELECT 
           pov.id_pago_orden as id,
@@ -157,9 +153,8 @@ export const getAllPagosCobranzas = async (req, res, next) => {
           pov.observaciones,
           ov.id_orden_venta as id_orden,
           ov.numero_orden as documento_referencia,
-          ov.tipo_comprobante,      -- Esto sí existe en ordenes_venta
-          ov.numero_comprobante,    -- Esto sí existe en ordenes_venta
-          ov.serie_correlativo,     
+          ov.tipo_comprobante,
+          ov.numero_comprobante,
           ov.moneda,
           cl.razon_social as tercero,
           emp.nombre_completo as registrado_por,
@@ -195,7 +190,6 @@ export const getCuentasPorCobrar = async (req, res, next) => {
     let whereClause = '1=1';
     const params = [];
     
-    // Opcional: Filtrar por fecha de vencimiento
     if (fecha_inicio) {
       whereClause += ' AND fecha_vencimiento >= ?';
       params.push(fecha_inicio);
@@ -206,8 +200,6 @@ export const getCuentasPorCobrar = async (req, res, next) => {
       params.push(fecha_fin);
     }
 
-    // Nota: Asegúrate de que la vista 'vista_cuentas_por_cobrar' en tu BD 
-    // incluya también tipo_comprobante y numero_comprobante si quieres mostrarlos aquí.
     const [rows] = await pool.query(`
       SELECT * FROM vista_cuentas_por_cobrar
       WHERE ${whereClause}

@@ -325,33 +325,41 @@ export const dashboard = {
 };
 
 export const ordenesProduccionAPI = {
+  // 1. Métodos de Lectura Básicos
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
-  getConsumoMateriales: (id) => api.get(`/produccion/ordenes/${id}/consumo-materiales`),
-  create: (data) => api.post('/produccion/ordenes', data),
-  update: (id, data) => api.put(`/produccion/ordenes/${id}`, data),
-  asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
   
+  // 2. Creación y Edición
+  create: (data) => api.post('/produccion/ordenes', data),
+  
+  // IMPORTANTE: Este método es el que usa el calendario para actualizar la fecha_programada
+  update: (id, data) => api.put(`/produccion/ordenes/${id}`, data), 
+
+  // 3. Gestión del Flujo de Producción
+  asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
   reanudar: (id) => api.post(`/produccion/ordenes/${id}/reanudar`),
   
-  // CORRECCIÓN: Esta función maneja tanto finalización simple como con consumo real.
-  // Asegúrate de enviar { cantidad_producida, consumo_real: [...] } en el objeto data.
+  // Finalización unificada (cantidad + mermas + consumo real opcional)
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
   
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   
+  // 4. Registros Parciales
   registrarParcial: (id, data) => api.post(`/produccion/ordenes/${id}/registrar-parcial`, data),
-  
-  // ELIMINADA: finalizarConConsumoReal (Usar finalizar)
-  
   getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
-  getAnalisisConsumo: (id) => api.get(`/produccion/ordenes/${id}/analisis-consumo`),
   
+  // 5. Consultas Específicas
+  getConsumoMateriales: (id) => api.get(`/produccion/ordenes/${id}/consumo-materiales`),
+  getAnalisisConsumo: (id) => api.get(`/produccion/ordenes/${id}/analisis-consumo`),
+  getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
+  getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`),
+
+  // 6. Generación de PDF
   generarPDF: async (id) => {
-    // ... (Tu código del PDF está bien) ...
     try {
+      // Usamos API_URL que debe estar definida al inicio de tu archivo api.js
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/pdf`, {
         method: 'GET',
         headers: {
@@ -384,11 +392,8 @@ export const ordenesProduccionAPI = {
       console.error('Error al descargar PDF orden producción:', error);
       throw error;
     }
-  },
-  getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
-  getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`)
+  }
 };
-
 export const cotizacionesAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();

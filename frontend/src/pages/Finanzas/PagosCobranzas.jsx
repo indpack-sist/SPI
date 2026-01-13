@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, TrendingUp, Calendar, Filter, Download, 
   ArrowUpCircle, ArrowDownCircle, AlertCircle, LayoutList,
-  FileText, CheckCircle, XCircle, AlertTriangle, FileBadge
+  FileText, CheckCircle, XCircle, AlertTriangle, FileBadge, Clock
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';

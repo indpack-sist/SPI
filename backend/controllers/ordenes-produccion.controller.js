@@ -9,6 +9,7 @@ export async function getAllOrdenes(req, res) {
       SELECT 
         op.id_orden,
         op.numero_orden,
+        op.fecha_programada,
         op.id_producto_terminado,
         p.codigo AS codigo_producto,
         COALESCE(p.nombre, '[PRODUCTO ELIMINADO]') AS producto,
@@ -1579,3 +1580,42 @@ export const generarPDFOrdenController = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// ... (resto de tu código anterior) ...
+
+export async function updateOrden(req, res) {
+  try {
+    const { id } = req.params;
+    const { fecha_programada } = req.body;
+
+    // Validamos que venga el dato que queremos actualizar
+    if (!fecha_programada) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Debe proporcionar una fecha_programada' 
+      });
+    }
+
+    // Ejecutamos la actualización
+    const result = await executeQuery(
+      'UPDATE ordenes_produccion SET fecha_programada = ? WHERE id_orden = ?',
+      [fecha_programada, id]
+    );
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    if (result.data.affectedRows === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Fecha programada actualizada exitosamente'
+    });
+
+  } catch (error) {
+    console.error('Error al actualizar orden:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}

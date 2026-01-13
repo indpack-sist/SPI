@@ -15,9 +15,9 @@ import Proveedores from './pages/Proveedores/Proveedores';
 import Clientes from './pages/Clientes/Clientes';
 import ClienteDetalle from './pages/Clientes/ClienteDetalle';
 
-
 import Productos from './pages/Productos/Productos';
 import ProductoDetalle from './pages/Productos/ProductoDetalle';
+import ListaProductosSimple from './pages/Productos/ListaProductosSimple'; // <-- NUEVA IMPORTACIÓN
 
 import Entradas from './pages/Inventario/Entradas';
 import Salidas from './pages/Inventario/Salidas';
@@ -112,6 +112,8 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
+                      
+                      {/* RUTA MAESTRA DE PRODUCTOS (SOLO PARA QUIENES TENGAN PERMISO 'productos') */}
                       <Route 
                         path="/productos" 
                         element={
@@ -120,6 +122,17 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
+                      
+                      {/* NUEVA RUTA PARA CONSULTA DE STOCK (PARA QUIENES TENGAN PERMISO 'consultarStock') */}
+                      <Route 
+                        path="/productos/consulta-stock" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="consultarStock">
+                            <ListaProductosSimple />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+
                       <Route 
                         path="/productos/:id" 
                         element={
@@ -244,7 +257,6 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
-                      {/* ESTA ES LA RUTA NUEVA QUE FALTABA */}
                       <Route 
                         path="/ventas/ordenes/:id/editar" 
                         element={
@@ -336,7 +348,7 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
-                       <Route 
+                        <Route 
                         path="/finanzas/cuentas-pago" 
                         element={
                           <ProtectedRouteWithPermiso modulo="cuentasPago">

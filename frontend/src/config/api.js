@@ -459,9 +459,14 @@ export const ordenesVentaAPI = {
 
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 
-  descargarPDF: async (id) => {
+  // --- CORRECCIÓN AQUÍ ---
+  descargarPDF: async (id, tipo = 'orden') => { // 1. Aceptamos el parámetro 'tipo'
     try {
-      const response = await fetch(`${API_URL}/ordenes-venta/${id}/pdf`, {
+      // 2. Construimos la URL con el parámetro query ?tipo=...
+      const urlFetch = new URL(`${API_URL}/ordenes-venta/${id}/pdf`);
+      urlFetch.searchParams.append('tipo', tipo);
+
+      const response = await fetch(urlFetch.toString(), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -479,7 +484,10 @@ export const ordenesVentaAPI = {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `orden-venta-${id}.pdf`;
+      
+      // 3. Ajustamos el nombre del archivo según el tipo
+      const prefijo = tipo === 'comprobante' ? 'comprobante' : 'orden-venta';
+      link.download = `${prefijo}-${id}.pdf`;
       
       document.body.appendChild(link);
       link.click();

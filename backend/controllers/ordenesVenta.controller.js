@@ -1,6 +1,7 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
-
+import { generarFacturaPDF } from '../utils/pdfGenerators/FacturaPDF.js';       // <-- Asegúrate que la ruta sea correcta
+import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js'; // <-- Asegúrate que la ruta sea correcta
 export async function getAllOrdenesVenta(req, res) {
   try {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
@@ -1046,7 +1047,8 @@ export async function getEstadisticasOrdenesVenta(req, res) {
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    
+    const { tipo } = req.query; // LEER EL QUERY PARAM
+
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
@@ -1096,11 +1098,32 @@ export async function descargarPDFOrdenVenta(req, res) {
     
     orden.detalle = detalleResult.data;
     
-    const pdfBuffer = await generarOrdenVentaPDF(orden);
+    let pdfBuffer;
+    let filename;
+
+    // DECISIÓN DE DOCUMENTO A GENERAR
+    if (tipo === 'comprobante') {
+      if (orden.tipo_comprobante === 'Factura') {
+        pdfBuffer = await generarFacturaPDF(orden);
+        filename = `Factura-${orden.numero_comprobante || orden.numero_orden}.pdf`;
+      } else if (orden.tipo_comprobante === 'Nota de Venta') {
+        pdfBuffer = await generarNotaVentaPDF(orden);
+        filename = `NotaVenta-${orden.numero_comprobante || orden.numero_orden}.pdf`;
+      } else {
+        // Fallback
+        pdfBuffer = await generarOrdenVentaPDF(orden);
+        filename = `OrdenVenta-${orden.numero_orden}.pdf`;
+      }
+    } else {
+      // Default: Orden de Venta Interna
+      pdfBuffer = await generarOrdenVentaPDF(orden);
+      filename = `OrdenVenta-${orden.numero_orden}.pdf`;
+    }
     
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="OrdenVenta-${orden.numero_orden}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({

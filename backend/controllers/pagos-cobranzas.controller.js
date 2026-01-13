@@ -77,6 +77,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     let pagos = [];
     let cobranzas = [];
     
+    // ... (configuración de whereClauses y params se mantiene igual) ...
     let whereClausePagos = '1=1';
     let whereClauseCobranzas = '1=1';
     const paramsPagos = [];
@@ -105,13 +106,12 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     
     if (id_cuenta) {
       whereClausePagos += ' AND pe.id_cuenta_destino = ?';
-      // Asumiendo que la tabla pagos_ordenes_venta tiene el campo id_cuenta_destino
-      // Si no lo tiene en la BD, esta línea daría error y habría que quitarla o hacer el JOIN adecuado
       whereClauseCobranzas += ' AND pov.id_cuenta_destino = ?'; 
       paramsPagos.push(id_cuenta);
       paramsCobranzas.push(id_cuenta);
     }
     
+    // --- CORRECCIÓN AQUÍ ---
     if (!tipo || tipo === 'pago') {
       [pagos] = await pool.query(`
         SELECT 
@@ -126,7 +126,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
           pe.observaciones,
           e.id_entrada,
           e.documento_soporte as documento_referencia,
-          e.tipo_comprobante, -- Agregado para consistencia (aunque entradas suele usar documento_soporte)
+          -- SE ELIMINÓ LA LÍNEA: e.tipo_comprobante, (Esta causaba el error)
           e.moneda,
           p.razon_social as tercero,
           emp.nombre_completo as registrado_por,
@@ -143,7 +143,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     }
     
     if (!tipo || tipo === 'cobranza') {
-      // AQUÍ SE AGREGARON LOS CAMPOS NUEVOS: tipo_comprobante, numero_comprobante, serie_correlativo
+      // Esta parte SÍ funciona porque 'ordenes_venta' tiene los campos nuevos
       [cobranzas] = await pool.query(`
         SELECT 
           pov.id_pago_orden as id,
@@ -157,9 +157,9 @@ export const getAllPagosCobranzas = async (req, res, next) => {
           pov.observaciones,
           ov.id_orden_venta as id_orden,
           ov.numero_orden as documento_referencia,
-          ov.tipo_comprobante,      -- NUEVO: Factura o Nota de Venta
-          ov.numero_comprobante,    -- NUEVO: F001-XXXX o NV001-XXXX
-          ov.serie_correlativo,     -- NUEVO: Alternativa si usas este campo
+          ov.tipo_comprobante,      -- Esto sí existe en ordenes_venta
+          ov.numero_comprobante,    -- Esto sí existe en ordenes_venta
+          ov.serie_correlativo,     
           ov.moneda,
           cl.razon_social as tercero,
           emp.nombre_completo as registrado_por,

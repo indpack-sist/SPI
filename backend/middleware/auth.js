@@ -9,11 +9,11 @@ const PERMISOS_POR_ROL = {
       proveedores: true,
       clientes: true,
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true, // Acceso a Consulta de Stock
       entradas: true,
       salidas: true,
       transferencias: true,
-      ordenesProduccion: true,
+      ordenesProduccion: true, // Acceso a Órdenes y Calendario
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: false,
@@ -29,7 +29,7 @@ const PERMISOS_POR_ROL = {
       proveedores: true,
       clientes: true,
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
@@ -51,7 +51,7 @@ const PERMISOS_POR_ROL = {
       proveedores: true,
       clientes: true,
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
@@ -71,7 +71,7 @@ const PERMISOS_POR_ROL = {
       proveedores: true,
       clientes: true,
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
@@ -93,10 +93,11 @@ const PERMISOS_POR_ROL = {
       proveedores: true,
       clientes: true,
       productos: true, 
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
-      ordenesProduccion: true,
+      ordenesProduccion: true, // HABILITADO: Para ver el Calendario de Producción
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: false,
@@ -112,11 +113,11 @@ const PERMISOS_POR_ROL = {
       proveedores: true,
       clientes: true,
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
-      ordenesProduccion: true,
+      ordenesProduccion: true, // API Habilitada para leer datos del calendario
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: true,
@@ -134,11 +135,11 @@ const PERMISOS_POR_ROL = {
       proveedores: false,
       clientes: true,
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: false,
       salidas: false,
       transferencias: false,
-      ordenesProduccion: false,
+      ordenesProduccion: false, // Ventas puras no suele ver producción, solo stock
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: true,
@@ -154,7 +155,7 @@ const PERMISOS_POR_ROL = {
       proveedores: true,  
       clientes: true,
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: false,
       salidas: false,
       transferencias: false,
@@ -176,7 +177,7 @@ const PERMISOS_POR_ROL = {
       proveedores: false,     
       clientes: false,        
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
@@ -196,7 +197,7 @@ const PERMISOS_POR_ROL = {
       proveedores: true,      
       clientes: true,         
       productos: true,
-      consultarStock: true, // NUEVO
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
@@ -217,12 +218,12 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
-      productos: false, // <-- CAMBIO IMPORTANTE: No ve el módulo completo
-      consultarStock: true, // <-- CAMBIO IMPORTANTE: Sí ve el listado simple
+      productos: false, // UI FALSE: No ve el módulo "Catálogo de Productos"
+      consultarStock: true, // UI TRUE: Sí ve "Consulta de Stock"
       entradas: false,
       salidas: false,
       transferencias: true,
-      ordenesProduccion: true,
+      ordenesProduccion: true, // UI TRUE: Gestiona el Calendario y Órdenes
       cotizaciones: false,
       ordenesVenta: false,
       guiasRemision: false,
@@ -237,8 +238,8 @@ const PERMISOS_POR_ROL = {
       flota: true,          
       proveedores: true,    
       clientes: true,       
-      productos: true, // API en true para poder consultar datos, pero UI restringida
-      consultarStock: true, // NUEVO
+      productos: true, // API TRUE: Necesario para selects de insumos y mermas
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
@@ -526,9 +527,9 @@ export const verificarPermiso = (modulo) => {
         });
       }
       
-      // LOG TEMPORAL PARA DEPURAR (Puedes eliminarlo después)
+      // Verificación estricta en la API
       if (!permisos.api[modulo]) {
-        console.log(`[AUTH] Acceso denegado. Rol: ${rol}, Modulo solicitado: ${modulo}, Permisos:`, permisos.api);
+        console.log(`[AUTH] Acceso denegado. Rol: ${rol}, Modulo solicitado: ${modulo}`);
         
         return res.status(403).json({
           success: false,

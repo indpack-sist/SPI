@@ -4,7 +4,8 @@ import {
   Package, BarChart3, ArrowDownToLine, ArrowUpFromLine, 
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag,
-  CreditCard, Banknote, Search // Agregado Search para el icono de consulta
+  CreditCard, Banknote, Search, 
+  Calendar // <--- 1. IMPORTADO EL ÍCONO DE CALENDARIO
 } from 'lucide-react';
 import { usePermisos, ConPermiso } from '../../context/PermisosContext';
 import './Sidebar.css';
@@ -36,14 +37,16 @@ function Sidebar({ isOpen, onToggle }) {
       title: 'Productos',
       items: [
         { path: '/productos', icon: Package, label: 'Catálogo de Productos', modulo: 'productos' },
-        // NUEVO ÍTEM AGREGADO AQUÍ
         { path: '/productos/consulta-stock', icon: Search, label: 'Consulta de Stock', modulo: 'consultarStock' }
       ]
     },
     {
       title: 'Producción',
       items: [
-        { path: '/produccion/ordenes', icon: Factory, label: 'Órdenes de Producción', modulo: 'ordenesProduccion' }
+        { path: '/produccion/ordenes', icon: Factory, label: 'Órdenes de Producción', modulo: 'ordenesProduccion' },
+        // --- 2. NUEVA RUTA DE CALENDARIO AGREGADA ---
+        // Uso el mismo módulo 'ordenesProduccion' para que quien vea órdenes, pueda ver el calendario
+        { path: '/produccion/calendario', icon: Calendar, label: 'Calendario', modulo: 'ordenesProduccion' } 
       ]
     },
     {

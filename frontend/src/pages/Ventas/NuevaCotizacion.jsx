@@ -1212,4 +1212,4 @@ function NuevaCotizacion() {
   );
 }
 
-export default NuevaCotizacion;
+export default NuevaCotizacion; 

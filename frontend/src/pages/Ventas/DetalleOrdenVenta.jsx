@@ -189,11 +189,13 @@ function DetalleOrdenVenta() {
     try {
       setProcesando(true);
       setError(null);
+      // El backend debe decidir qué PDF generar basado en el tipo_comprobante de la orden
+      // o puedes tener endpoints separados. Asumo el mismo endpoint.
       await ordenesVentaAPI.descargarPDF(id);
-      setSuccess('PDF de orden de venta descargado exitosamente');
+      setSuccess(`PDF de ${orden.tipo_comprobante || 'Orden'} descargado exitosamente`);
     } catch (err) {
       console.error(err);
-      setError('Error al descargar el PDF de orden de venta');
+      setError('Error al descargar el PDF');
     } finally {
       setProcesando(false);
     }
@@ -599,16 +601,31 @@ function DetalleOrdenVenta() {
               <ShoppingCart size={32} />
               Orden de Venta {orden.numero_orden}
             </h1>
-            <p className="text-muted">
-              Emitida el {formatearFecha(orden.fecha_emision)}
-              {orden.numero_cotizacion && <span> • Desde {orden.numero_cotizacion}</span>}
-            </p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-muted">
+                Emitida el {formatearFecha(orden.fecha_emision)}
+              </p>
+              
+              {/* VISUALIZACIÓN DE TIPO DE COMPROBANTE Y CORRELATIVO */}
+              {orden.tipo_comprobante && (
+                <div className="flex items-center gap-2">
+                  <span className={`badge ${orden.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
+                    {orden.tipo_comprobante}
+                  </span>
+                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
+                    {orden.serie_correlativo || orden.numero_comprobante || 'Pendiente'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
         <div className="flex gap-2">
+          {/* Botón PDF dinámico según tipo de comprobante */}
           <button className="btn btn-outline" onClick={handleDescargarPDF} disabled={procesando}>
-            <Download size={20} /> PDF Orden
+            <Download size={20} /> 
+            PDF {orden.tipo_comprobante ? orden.tipo_comprobante : 'Orden'}
           </button>
           
           {orden.estado === 'Despachada' && orden.id_salida && (
@@ -902,6 +919,19 @@ function DetalleOrdenVenta() {
             <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
           </div>
           <div className="card-body space-y-2">
+            
+            {/* AGREGADO: MOSTRAR TIPO COMPROBANTE EN CONDICIONES */}
+            <div className="grid grid-cols-2 gap-2 pb-2 mb-2 border-b border-gray-100">
+              <div>
+                 <label className="text-sm font-medium text-muted">Tipo Documento:</label>
+                 <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
+              </div>
+              <div>
+                 <label className="text-sm font-medium text-muted">N° Serie:</label>
+                 <p className="font-mono">{orden.serie_correlativo || orden.numero_comprobante || '-'}</p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-sm font-medium text-muted">Moneda:</label>

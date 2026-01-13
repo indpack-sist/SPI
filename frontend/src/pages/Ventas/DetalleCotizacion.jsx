@@ -656,7 +656,7 @@ function DetalleCotizacion() {
                 </span>
                 <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
               </div>
-              <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
+              <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl">
                 <span className="font-bold text-xl">TOTAL:</span>
                 <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
               </div>

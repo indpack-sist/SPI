@@ -923,17 +923,17 @@ export async function finalizarProduccion(req, res) {
     const { 
       cantidad_producida, 
       observaciones,
-      mermas  
+      mermas,
+      consumo_real, 
+      confirmar_exceso 
     } = req.body;
     
-    if (!cantidad_producida || cantidad_producida <= 0) {
-      return res.status(400).json({ 
-        error: 'La cantidad producida es requerida y debe ser mayor a 0' 
-      });
+    if (cantidad_producida === undefined || parseFloat(cantidad_producida) < 0) {
+      return res.status(400).json({ error: 'La cantidad producida es inválida' });
     }
     
     const ordenResult = await executeQuery(
-      `SELECT op.*, p.id_tipo_inventario, p.costo_unitario_promedio AS cup_producto
+      `SELECT op.*, p.id_tipo_inventario 
        FROM ordenes_produccion op
        INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
        WHERE op.id_orden = ? AND op.estado IN (?, ?)`,
@@ -941,65 +941,100 @@ export async function finalizarProduccion(req, res) {
     );
     
     if (ordenResult.data.length === 0) {
-      return res.status(404).json({ 
-        error: 'Orden no encontrada o no está en curso/pausa' 
-      });
+      return res.status(404).json({ error: 'Orden no encontrada para finalizar' });
     }
     
     const orden = ordenResult.data[0];
     
     const cantidadYaProducida = parseFloat(orden.cantidad_producida || 0);
-    const cantidadFinal = parseFloat(cantidad_producida);
-    const cantidadRestante = cantidadFinal - cantidadYaProducida;
+    const cantidadFinalInput = parseFloat(cantidad_producida);
+    const cantidadTotalReal = cantidadYaProducida + cantidadFinalInput;
+    const cantidadPlanificada = parseFloat(orden.cantidad_planificada);
     
-    if (cantidadRestante < 0) {
-      return res.status(400).json({ 
-        error: 'La cantidad final no puede ser menor a la ya producida' 
+    const exceso = cantidadTotalReal - cantidadPlanificada;
+
+    if (exceso > 0 && confirmar_exceso !== true) {
+       return res.status(409).json({ 
+        error: 'Exceso de producción al finalizar',
+        requiere_confirmacion: true,
+        mensaje: `Con este ingreso de ${cantidadFinalInput}, el total producido será ${cantidadTotalReal}, excediendo lo planificado (${cantidadPlanificada}) en ${exceso}. ¿Confirmar ingreso de varianza?`,
+        datos_validacion: {
+          planificado: cantidadPlanificada,
+          acumulado_actual: cantidadYaProducida,
+          nuevo_ingreso: cantidadFinalInput,
+          total_final: cantidadTotalReal,
+          exceso: exceso
+        }
       });
     }
+
+    let costoTotalRealMateriales = 0;
+    const queries = [];
     
-    const fechaInicio = new Date(orden.fecha_inicio);
-    const fechaFin = new Date();
-    const tiempoMinutos = Math.floor((fechaFin - fechaInicio) / (1000 * 60));
-    
-    let costoUnitario = 0;
-    
-    if (parseFloat(orden.costo_materiales) > 0) {
-      costoUnitario = parseFloat(orden.costo_materiales) / cantidadFinal;
-    }
-    else if (orden.id_receta_producto) {
-      const cupRecetaResult = await executeQuery(
-        `SELECT 
-           (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / rp.rendimiento_unidades) AS cup_calculado
-         FROM recetas_productos rp
-         INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
-         INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
-         WHERE rp.id_receta_producto = ?
-         GROUP BY rp.id_receta_producto, rp.rendimiento_unidades`,
-        [orden.id_receta_producto]
-      );
-      
-      if (cupRecetaResult.success && cupRecetaResult.data.length > 0) {
-        costoUnitario = parseFloat(cupRecetaResult.data[0].cup_calculado || 0);
+    if (consumo_real && Array.isArray(consumo_real)) {
+      for (const item of consumo_real) {
+        const insumoInfo = await executeQuery(
+          'SELECT costo_unitario_promedio, stock_actual FROM productos WHERE id_producto = ?', 
+          [item.id_insumo]
+        );
+        const costoInsumoUnitario = insumoInfo.data[0]?.costo_unitario_promedio || 0;
+        
+        costoTotalRealMateriales += (parseFloat(item.cantidad_real_total) * parseFloat(costoInsumoUnitario));
+
+        const planificadoRes = await executeQuery(
+          'SELECT cantidad_requerida FROM op_consumo_materiales WHERE id_orden = ? AND id_insumo = ?',
+          [id, item.id_insumo]
+        );
+        
+        if (planificadoRes.data.length > 0) {
+          const cantidadTeoricaDescontada = parseFloat(planificadoRes.data[0].cantidad_requerida);
+          const diferencia = parseFloat(item.cantidad_real_total) - cantidadTeoricaDescontada;
+
+          queries.push({
+            sql: 'UPDATE op_consumo_materiales SET cantidad_real_consumida = ? WHERE id_orden = ? AND id_insumo = ?',
+            params: [item.cantidad_real_total, id, item.id_insumo]
+          });
+
+          if (Math.abs(diferencia) > 0.0001) {
+            if (diferencia > 0) {
+              queries.push({
+                sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+                params: [diferencia, item.id_insumo]
+              });
+            } else {
+              queries.push({
+                sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+                params: [Math.abs(diferencia), item.id_insumo]
+              });
+            }
+          }
+        }
       }
+    } else {
+        costoTotalRealMateriales = parseFloat(orden.costo_materiales);
     }
-    else if (parseFloat(orden.cup_producto) > 0) {
-      costoUnitario = parseFloat(orden.cup_producto);
-    }
+
+    const costoUnitarioFinal = cantidadTotalReal > 0 ? (costoTotalRealMateriales / cantidadTotalReal) : 0;
+
+    const tiempoMinutos = Math.floor((new Date() - new Date(orden.fecha_inicio)) / 60000);
     
-    const totalCosto = cantidadRestante * costoUnitario;
-    
-    const queries = [
-      {
-        sql: `UPDATE ordenes_produccion 
-              SET estado = ?, cantidad_producida = ?, fecha_fin = NOW(),
-                  tiempo_total_minutos = ?, observaciones = CONCAT(COALESCE(observaciones, ''), '\n', COALESCE(?, ''))
-              WHERE id_orden = ?`,
-        params: ['Finalizada', cantidadFinal, tiempoMinutos, observaciones, id]
-      }
-    ];
-    
-    if (cantidadRestante > 0) {
+    let obsFinal = observaciones || '';
+    if (exceso > 0) obsFinal += `\n[VARIACIÓN POSITIVA] Producción finalizó con exceso de ${exceso} u.`;
+
+    queries.push({
+      sql: `UPDATE ordenes_produccion 
+            SET estado = 'Finalizada', 
+                cantidad_producida = ?, 
+                fecha_fin = NOW(),
+                tiempo_total_minutos = ?, 
+                observaciones = CONCAT(COALESCE(observaciones, ''), '\n', ?)
+            WHERE id_orden = ?`,
+      params: [cantidadTotalReal, tiempoMinutos, obsFinal, id]
+    });
+
+    if (cantidadFinalInput > 0) {
+      const costoTotalIngresoActual = cantidadFinalInput * costoUnitarioFinal;
+
       queries.push({
         sql: `INSERT INTO entradas (
           id_tipo_inventario, documento_soporte, total_costo, moneda,
@@ -1007,147 +1042,72 @@ export async function finalizarProduccion(req, res) {
         ) VALUES (?, ?, ?, ?, ?, ?)`,
         params: [
           orden.id_tipo_inventario,
-          `O.P. ${orden.numero_orden}`,
-          totalCosto,
+          `O.P. ${orden.numero_orden} (Final)`,
+          costoTotalIngresoActual,
           'PEN',
           orden.id_supervisor,
-          `Producción finalizada - O.P. ${orden.numero_orden}. CUP: S/${costoUnitario.toFixed(4)}`
+          `Cierre Producción. CUP Real Ajustado: ${costoUnitarioFinal.toFixed(4)}`
         ]
       });
     }
-    
+
     const result1 = await executeTransaction(queries);
-    
-    if (!result1.success) {
-      return res.status(500).json({ error: result1.error });
+    if (!result1.success) return res.status(500).json({ error: result1.error });
+
+    if (cantidadFinalInput > 0) {
+        const idEntrada = result1.data[result1.data.length - 1].insertId; 
+        
+        const queriesStock = [];
+        queriesStock.push({
+            sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
+            params: [idEntrada, orden.id_producto_terminado, cantidadFinalInput, costoUnitarioFinal]
+        });
+
+        queriesStock.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual + ?, costo_unitario_promedio = ? WHERE id_producto = ?',
+            params: [cantidadFinalInput, costoUnitarioFinal, orden.id_producto_terminado]
+        });
+
+        await executeTransaction(queriesStock);
     }
-    
-    const queries2 = [];
-    
-    if (cantidadRestante > 0) {
-      const idEntrada = result1.data[1].insertId;
-      
-      queries2.push({
-        sql: `INSERT INTO detalle_entradas (
-          id_entrada, id_producto, cantidad, costo_unitario
-        ) VALUES (?, ?, ?, ?)`,
-        params: [idEntrada, orden.id_producto_terminado, cantidadRestante, costoUnitario]
-      });
-      
-      queries2.push({
-        sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-        params: [cantidadRestante, orden.id_producto_terminado]
-      });
-      
-      queries2.push({
-        sql: `UPDATE productos 
-              SET costo_unitario_promedio = ?
-              WHERE id_producto = ? AND (costo_unitario_promedio = 0 OR ? > 0)`,
-        params: [costoUnitario, orden.id_producto_terminado, costoUnitario]
-      });
-    }
-    
-    const mermasRegistradas = [];
-    if (mermas && Array.isArray(mermas) && mermas.length > 0) {
-      for (const merma of mermas) {
-        if (merma.id_producto_merma && merma.cantidad && parseFloat(merma.cantidad) > 0) {
-          queries2.push({
-            sql: `INSERT INTO mermas_produccion (
-              id_orden_produccion, id_producto_merma, cantidad, observaciones
-            ) VALUES (?, ?, ?, ?)`,
-            params: [
-              id,
-              merma.id_producto_merma,
-              parseFloat(merma.cantidad),
-              merma.observaciones || null
-            ]
-          });
-          
-          queries2.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [parseFloat(merma.cantidad), merma.id_producto_merma]
-          });
-          
-          mermasRegistradas.push({
-            id_producto: merma.id_producto_merma,
-            cantidad: parseFloat(merma.cantidad)
-          });
+
+    if (mermas && mermas.length > 0) {
+        const queriesMermas = [];
+        for (const m of mermas) {
+            if (m.cantidad > 0) {
+                queriesMermas.push({
+                    sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
+                    params: [id, m.id_producto_merma, m.cantidad, m.observaciones]
+                });
+                queriesMermas.push({
+                    sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+                    params: [m.cantidad, m.id_producto_merma]
+                });
+            }
         }
-      }
+        if(queriesMermas.length > 0) await executeTransaction(queriesMermas);
     }
-    
+
     if (orden.id_orden_venta_origen) {
-      queries2.push({
-        sql: `UPDATE ordenes_venta 
-              SET estado = 'Atendido por Producción'
-              WHERE id_orden_venta = ?`,
-        params: [orden.id_orden_venta_origen]
-      });
+        await executeQuery(
+            "UPDATE ordenes_venta SET estado = 'Atendido por Producción' WHERE id_orden_venta = ?", 
+            [orden.id_orden_venta_origen]
+        );
     }
-    
-    if (queries2.length > 0) {
-      const result2 = await executeTransaction(queries2);
-      
-      if (!result2.success) {
-        return res.status(500).json({ error: result2.error });
-      }
-    }
-    
+
     res.json({
       success: true,
-      message: cantidadRestante === 0 
-        ? 'Producción finalizada (completada con registros parciales)' 
-        : 'Producción finalizada exitosamente',
+      message: 'Producción finalizada exitosamente con ajustes de consumo real.',
       data: {
-        cantidad_producida: cantidadFinal,
-        cantidad_ya_registrada: cantidadYaProducida,
-        cantidad_agregada_ahora: cantidadRestante,
-        tiempo_total_minutos: tiempoMinutos,
-        costo_unitario: costoUnitario,
-        costo_total: totalCosto,
-        mermas_registradas: mermasRegistradas.length,
-        detalle_mermas: mermasRegistradas
+        total_producido: cantidadTotalReal,
+        varianza_cantidad: exceso,
+        costo_unitario_final: costoUnitarioFinal
       }
     });
+
   } catch (error) {
     console.error('Error al finalizar producción:', error);
     res.status(500).json({ error: error.message });
-  }
-}
-
-export async function getProductosMerma(req, res) {
-  try {
-    const result = await executeQuery(
-      `SELECT 
-        id_producto,
-        codigo,
-        nombre,
-        unidad_medida,
-        stock_actual
-      FROM productos
-      WHERE id_categoria = 10 AND estado = 'Activo'
-      ORDER BY nombre`,
-      []
-    );
-    
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        error: result.error
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: result.data
-    });
-    
-  } catch (error) {
-    console.error('Error al obtener productos de merma:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
   }
 }
 
@@ -1305,13 +1265,11 @@ export async function registrarProduccionParcial(req, res) {
     } = req.body;
     
     if (!cantidad_parcial || cantidad_parcial <= 0) {
-      return res.status(400).json({ 
-        error: 'La cantidad parcial es requerida y debe ser mayor a 0' 
-      });
+      return res.status(400).json({ error: 'La cantidad parcial debe ser mayor a 0' });
     }
     
     const ordenResult = await executeQuery(
-      `SELECT op.*, p.id_tipo_inventario, p.costo_unitario_promedio AS cup_producto
+      `SELECT op.*, p.id_tipo_inventario 
        FROM ordenes_produccion op
        INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
        WHERE op.id_orden = ? AND op.estado IN (?, ?)`,
@@ -1319,101 +1277,42 @@ export async function registrarProduccionParcial(req, res) {
     );
     
     if (ordenResult.data.length === 0) {
-      return res.status(404).json({ 
-        error: 'Orden no encontrada o no está en curso/pausa' 
-      });
+      return res.status(404).json({ error: 'Orden no encontrada o no está en curso' });
     }
     
     const orden = ordenResult.data[0];
     
     const cantidadYaProducida = parseFloat(orden.cantidad_producida || 0);
+    const cantidadPlanificada = parseFloat(orden.cantidad_planificada);
     const cantidadNueva = parseFloat(cantidad_parcial);
     const cantidadTotalProyectada = cantidadYaProducida + cantidadNueva;
-    const cantidadPlanificada = parseFloat(orden.cantidad_planificada);
     
     const exceso = cantidadTotalProyectada - cantidadPlanificada;
 
     if (exceso > 0 && confirmar_exceso !== true) {
       return res.status(409).json({
-        error: 'El registro parcial excede la cantidad planificada',
+        error: 'Exceso de producción detectado',
         requiere_confirmacion: true,
-        mensaje: `Al registrar ${cantidadNueva}, el total (${cantidadTotalProyectada}) superaría lo planificado (${cantidadPlanificada}) en ${exceso} unidades.`,
+        mensaje: `La cantidad ingresada (${cantidadNueva}) hace que el total (${cantidadTotalProyectada}) supere lo planificado (${cantidadPlanificada}) en ${exceso} unidades. ¿Desea continuar?`,
         datos_validacion: {
           planificado: cantidadPlanificada,
           acumulado_actual: cantidadYaProducida,
           nuevo_ingreso: cantidadNueva,
-          total_proyectado: cantidadTotalProyectada,
-          exceso_calculado: exceso
+          exceso: exceso
         }
       });
     }
     
     let costoUnitario = 0;
-    let costoTotalProduccion = 0;
-    
-    const ajustesConsumoExtra = []; 
-    const ajustesAhorro = [];
-    
-    if (consumo_real && Array.isArray(consumo_real) && consumo_real.length > 0) {
-      for (const item of consumo_real) {
-        const insumoResult = await executeQuery(
-          'SELECT costo_unitario_promedio, id_tipo_inventario FROM productos WHERE id_producto = ?',
-          [item.id_insumo]
-        );
-        
-        if (insumoResult.data.length > 0) {
-          const datosInsumo = insumoResult.data[0];
-          const costoInsumoTotal = parseFloat(item.cantidad_real) * parseFloat(datosInsumo.costo_unitario_promedio);
-          costoTotalProduccion += costoInsumoTotal;
-
-          const planificadoResult = await executeQuery(
-            `SELECT cantidad_requerida, costo_unitario 
-             FROM op_consumo_materiales 
-             WHERE id_orden = ? AND id_insumo = ?`,
-            [id, item.id_insumo]
-          );
-
-          if (planificadoResult.data.length > 0) {
-            const planificado = planificadoResult.data[0];
-            
-            const porcentajeAvance = cantidadNueva / cantidadPlanificada;
-            const cantidadTeoricaLote = parseFloat(planificado.cantidad_requerida) * porcentajeAvance;
-            
-            const cantidadReal = parseFloat(item.cantidad_real);
-            const diferencia = cantidadReal - cantidadTeoricaLote;
-
-            if (Math.abs(diferencia) > 0.0001) {
-              const datosAjuste = {
-                id_insumo: item.id_insumo,
-                cantidad_diferencia: Math.abs(diferencia),
-                costo_unitario: datosInsumo.costo_unitario_promedio,
-                id_tipo_inventario: datosInsumo.id_tipo_inventario,
-                cantidad_planificada: cantidadTeoricaLote,
-                cantidad_real: cantidadReal,
-                costo_planificado_original: planificado.costo_unitario
-              };
-
-              if (diferencia > 0) ajustesConsumoExtra.push(datosAjuste);
-              else ajustesAhorro.push(datosAjuste);
-            }
-          }
-        }
-      }
-      costoUnitario = costoTotalProduccion / cantidadNueva;
-
-    } else {
-      if (parseFloat(orden.costo_materiales) > 0) {
+    if (parseFloat(orden.costo_materiales) > 0 && cantidadPlanificada > 0) {
         costoUnitario = parseFloat(orden.costo_materiales) / cantidadPlanificada;
-        costoTotalProduccion = costoUnitario * cantidadNueva;
-      }
     }
-    
+    const costoTotalParcial = costoUnitario * cantidadNueva;
+
     const queries = [];
 
     let obsFinal = observaciones || '';
-    if (exceso > 0) {
-      obsFinal += `\n[ALERTA] Registro parcial con exceso (${exceso} u.) autorizado por usuario.`;
-    }
+    if (exceso > 0) obsFinal += `\n[ALERTA] Parcial con exceso (+${exceso} u.) autorizado.`;
 
     queries.push({
       sql: `UPDATE ordenes_produccion 
@@ -1436,68 +1335,45 @@ export async function registrarProduccionParcial(req, res) {
       ) VALUES (?, ?, ?, ?, ?, ?)`,
       params: [
         orden.id_tipo_inventario,
-        `O.P. ${orden.numero_orden} - Parcial`,
-        costoTotalProduccion,
+        `O.P. ${orden.numero_orden} (Parcial)`,
+        costoTotalParcial,
         'PEN',
         orden.id_supervisor,
-        `Parcial: ${cantidadNueva} u. ${exceso > 0 ? '(Exceso Autorizado)' : ''}`
+        `Ingreso Parcial O.P.`
       ]
     });
 
     const resultBloque1 = await executeTransaction(queries);
     if (!resultBloque1.success) return res.status(500).json({ error: resultBloque1.error });
 
-    const idRegistroProduccion = resultBloque1.data[1].insertId;
-    const idEntradaProducto = resultBloque1.data[2].insertId;
+    const idEntrada = resultBloque1.data[2].insertId;
 
     const queriesBloque2 = [];
-
     queriesBloque2.push({
       sql: `INSERT INTO detalle_entradas (
         id_entrada, id_producto, cantidad, costo_unitario
       ) VALUES (?, ?, ?, ?)`,
-      params: [idEntradaProducto, orden.id_producto_terminado, cantidadNueva, costoUnitario]
+      params: [idEntrada, orden.id_producto_terminado, cantidadNueva, costoUnitario]
     });
 
     queriesBloque2.push({
       sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
       params: [cantidadNueva, orden.id_producto_terminado]
     });
-    
-    for (const ajuste of ajustesConsumoExtra) {
-      queriesBloque2.push({
-        sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-        params: [ajuste.cantidad_diferencia, ajuste.id_insumo]
-      });
-    }
 
-    for (const ajuste of ajustesAhorro) {
-      queriesBloque2.push({
-        sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-        params: [ajuste.cantidad_diferencia, ajuste.id_insumo]
-      });
-    }
-
-    if (queriesBloque2.length > 0) {
-      const resultBloque2 = await executeTransaction(queriesBloque2);
-      if (!resultBloque2.success) return res.status(500).json({ error: resultBloque2.error });
-    }
+    const resultBloque2 = await executeTransaction(queriesBloque2);
+    if (!resultBloque2.success) return res.status(500).json({ error: resultBloque2.error });
     
     res.json({
       success: true,
-      message: exceso > 0 
-        ? 'Registro parcial con EXCESO registrado exitosamente' 
-        : 'Registro parcial guardado exitosamente',
+      message: 'Producción parcial registrada exitosamente',
       data: {
-        id_registro: idRegistroProduccion,
-        cantidad_registrada: cantidadNueva,
-        total_acumulado: cantidadTotalProyectada,
-        exceso_registrado: exceso > 0 ? exceso : 0
+        nueva_cantidad_acumulada: cantidadTotalProyectada
       }
     });
     
   } catch (error) {
-    console.error('Error al registrar producción parcial:', error);
+    console.error('Error al registrar parcial:', error);
     res.status(500).json({ error: error.message });
   }
 }

@@ -19,7 +19,6 @@ const CalendarioProduccion = () => {
   const [loading, setLoading] = useState(true);
   const [draggedOrden, setDraggedOrden] = useState(null);
 
-  // --- Nombres de días y meses (Español) ---
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthNames = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -34,7 +33,6 @@ const CalendarioProduccion = () => {
     try {
       setLoading(true);
       const response = await ordenesProduccionAPI.getAll({});
-      // Aseguramos que sea un array
       const data = Array.isArray(response.data.data) ? response.data.data : [];
       setOrdenes(data);
     } catch (error) {
@@ -45,14 +43,12 @@ const CalendarioProduccion = () => {
     }
   };
 
-  // --- Lógica de Fecha Nativa ---
+  // --- Lógica de Fecha ---
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   
   const getFirstDayOfMonth = (year, month) => {
-    // 0 = Domingo, 1 = Lunes ... 6 = Sábado
     const day = new Date(year, month, 1).getDay();
-    // Ajustar para que Lunes sea 0 y Domingo 6 (para el grid)
-    return day === 0 ? 6 : day - 1;
+    return day === 0 ? 6 : day - 1; 
   };
 
   const changeMonth = (increment) => {
@@ -61,156 +57,110 @@ const CalendarioProduccion = () => {
     setCurrentDate(newDate);
   };
 
-  // Generar array de días para el calendario
   const generateCalendarDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
-    
     const daysInMonth = getDaysInMonth(year, month);
-    const firstDayIndex = getFirstDayOfMonth(year, month); // Días vacíos al inicio
+    const firstDayIndex = getFirstDayOfMonth(year, month);
     
     const days = [];
-    
-    // Días vacíos del mes anterior
+    // Días vacíos previos
     for (let i = 0; i < firstDayIndex; i++) {
-      days.push({ day: null, fullDate: null, isCurrentMonth: false });
+      days.push({ day: null, fullDate: null });
     }
-    
-    // Días del mes actual
+    // Días del mes
     for (let i = 1; i <= daysInMonth; i++) {
-      // Crear fecha segura manejando zona horaria local
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      days.push({ 
-        day: i, 
-        fullDate: dateStr, 
-        isCurrentMonth: true 
-      });
+      days.push({ day: i, fullDate: dateStr });
     }
-
     return days;
   };
 
   const calendarDays = generateCalendarDays();
 
-  // --- Helpers de Fecha ---
+  // --- Helpers ---
   const isToday = (year, month, day) => {
     const today = new Date();
-    return today.getDate() === day && 
-           today.getMonth() === month && 
-           today.getFullYear() === year;
+    return today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
   };
 
   const formatDateShort = (dateString) => {
     if (!dateString) return '';
-    // Asumimos formato YYYY-MM-DD
-    const [year, month, day] = dateString.split('T')[0].split('-');
-    return `${day}/${month}`;
+    const parts = dateString.split('T')[0].split('-');
+    return `${parts[2]}/${parts[1]}`;
   };
 
   // --- Drag & Drop ---
   const handleDragStart = (e, orden) => {
     setDraggedOrden(orden);
-    e.dataTransfer.effectAllowed = 'move';
-    // Firefox requiere setData
     e.dataTransfer.setData('text/plain', JSON.stringify(orden));
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault(); 
-    e.dataTransfer.dropEffect = 'move';
-  };
+  const handleDragOver = (e) => e.preventDefault();
 
   const handleDrop = async (e, dateStr) => {
     e.preventDefault();
     if (!draggedOrden || !dateStr) return;
 
-    // 1. Actualización Optimista
     const ordenesActualizadas = ordenes.map(o => {
       if (o.id_orden === draggedOrden.id_orden) {
         return { ...o, fecha_inicio: dateStr };
       }
       return o;
     });
-    
     setOrdenes(ordenesActualizadas);
     setDraggedOrden(null);
 
-    // 2. Guardar en Backend
-    console.log(`Reprogramando Orden ${draggedOrden.numero_orden} para: ${dateStr}`);
     try {
-      // NOTA: Asegúrate de que tu ordenesProduccionAPI.update exista en api.js
-      await ordenesProduccionAPI.update(draggedOrden.id_orden, { 
-        fecha_inicio: dateStr 
-      });
+      await ordenesProduccionAPI.update(draggedOrden.id_orden, { fecha_inicio: dateStr });
     } catch (err) {
       console.error("Error al guardar fecha", err);
-      // Revertir cambios en caso de error (opcional: recargar datos)
-      cargarOrdenes(); 
-      alert("Error al actualizar la fecha en el servidor");
+      cargarOrdenes();
     }
   };
 
-  // --- Componente Tarjeta ---
+  // --- Componente Tarjeta (Reutilizable) ---
   const OrdenCard = ({ orden, isCompact = false }) => {
-    const verDetalle = (e) => {
-      e.stopPropagation();
-      navigate(`/produccion/ordenes/${orden.id_orden}`);
-    };
-
-    const getEstadoColor = (estado) => {
-      switch (estado) {
-        case 'Pendiente': return 'border-l-4 border-l-gray-400 bg-white';
-        case 'En Curso': return 'border-l-4 border-l-blue-500 bg-blue-50';
-        case 'Finalizada': return 'border-l-4 border-l-green-500 bg-green-50 opacity-75';
-        case 'Cancelada': return 'border-l-4 border-l-red-500 bg-red-50 opacity-60';
-        default: return 'border-l-4 border-l-yellow-500 bg-yellow-50';
+    const isDraggable = orden.estado !== 'Finalizada' && orden.estado !== 'Cancelada';
+    
+    const getBorderColor = () => {
+      switch(orden.estado) {
+        case 'Pendiente': return '#9ca3af'; // gris
+        case 'En Curso': return '#3b82f6'; // azul
+        case 'Finalizada': return '#22c55e'; // verde
+        default: return '#eab308'; // amarillo
       }
     };
-
-    // No permitir arrastrar si está finalizada o cancelada
-    const isDraggable = orden.estado !== 'Finalizada' && orden.estado !== 'Cancelada';
 
     return (
       <div 
         draggable={isDraggable}
         onDragStart={(e) => isDraggable && handleDragStart(e, orden)}
-        className={`
-          relative group p-2 rounded shadow-sm border border-gray-200 
-          ${isDraggable ? 'cursor-grab active:cursor-grabbing hover:shadow-md' : 'cursor-default'} 
-          transition-all
-          ${getEstadoColor(orden.estado)}
-          text-sm mb-2 w-full
-        `}
+        style={{
+          borderLeft: `4px solid ${getBorderColor()}`,
+          backgroundColor: 'white',
+          padding: '6px',
+          marginBottom: '6px',
+          borderRadius: '4px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+          cursor: isDraggable ? 'grab' : 'default',
+          fontSize: isCompact ? '11px' : '13px'
+        }}
       >
-        <div className="flex justify-between items-start w-full">
-          <span className="font-bold text-gray-800 text-xs">{orden.numero_orden}</span>
-          
-          <button 
-            onClick={verDetalle}
-            className="text-gray-400 hover:text-blue-600 p-0.5 rounded hover:bg-gray-100 transition-colors shrink-0"
-            title="Ver Detalle"
-          >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <strong style={{ color: '#1f2937' }}>{orden.numero_orden}</strong>
+          <button onClick={(e) => { e.stopPropagation(); navigate(`/produccion/ordenes/${orden.id_orden}`); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#6b7280' }}>
             <ExternalLink size={14} />
           </button>
         </div>
-        
-        <div className="truncate font-medium mt-1 text-gray-700 text-xs w-full" title={orden.producto}>
+        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px', color: '#4b5563' }} title={orden.producto}>
           {orden.producto}
         </div>
-
         {!isCompact && (
-          <div className="mt-2 text-[10px] text-gray-500 space-y-1">
-            <div className="flex items-center gap-1">
-              <Package size={10} className="shrink-0" /> 
-              <span className="truncate">
-                {parseFloat(orden.cantidad_planificada).toFixed(2)} {orden.unidad_medida}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <User size={10} className="shrink-0" /> 
-              <span className="truncate">
-                {orden.supervisor || 'Sin asignar'}
-              </span>
+          <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '11px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Package size={12} /> 
+              {parseFloat(orden.cantidad_planificada).toFixed(2)} {orden.unidad_medida}
             </div>
           </div>
         )}
@@ -218,60 +168,46 @@ const CalendarioProduccion = () => {
     );
   };
 
-  if (loading) return <Loading message="Cargando calendario..." />;
+  if (loading) return <Loading message="Cargando..." />;
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-100px)] gap-4 p-2 overflow-hidden">
+    <div style={{ display: 'flex', height: 'calc(100vh - 100px)', gap: '16px', padding: '16px', overflow: 'hidden', backgroundColor: '#f3f4f6' }}>
       
-      {/* --- CALENDARIO (IZQUIERDA) --- */}
-      <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-w-0">
+      {/* === SECCIÓN IZQUIERDA: CALENDARIO (OCUPA LA MAYORÍA) === */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
         
-        {/* Header del Calendario */}
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-              <CalendarIcon size={24} />
-            </div>
-            <h2 className="text-xl font-bold capitalize text-gray-800">
+        {/* Header Calendario */}
+        <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CalendarIcon size={24} color="#2563eb" />
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', textTransform: 'capitalize', margin: 0 }}>
               {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h2>
           </div>
-          
-          <div className="flex items-center bg-gray-100 rounded-lg p-1">
-            <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
-              <ChevronLeft size={20} />
-            </button>
-            <button onClick={() => setCurrentDate(new Date())} className="px-3 text-sm font-semibold text-gray-600 hover:text-blue-600">
-              Hoy
-            </button>
-            <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
-              <ChevronRight size={20} />
-            </button>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button onClick={() => changeMonth(-1)} className="btn btn-outline btn-sm"><ChevronLeft size={20} /></button>
+            <button onClick={() => setCurrentDate(new Date())} className="btn btn-outline btn-sm">Hoy</button>
+            <button onClick={() => changeMonth(1)} className="btn btn-outline btn-sm"><ChevronRight size={20} /></button>
           </div>
         </div>
 
-        {/* Días de la semana */}
-        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 shrink-0">
+        {/* Días de la Semana (Header Grid) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
           {daysOfWeek.map(day => (
-            <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <div key={day} style={{ padding: '8px', textAlign: 'center', fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
               {day}
             </div>
           ))}
         </div>
 
-        {/* Celdas del Calendario */}
-        <div className="grid grid-cols-7 flex-1 auto-rows-fr bg-gray-200 gap-px overflow-y-auto">
+        {/* CUADRÍCULA DE DÍAS */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flex: 1, overflowY: 'auto', backgroundColor: '#e5e7eb', gap: '1px' }}>
           {calendarDays.map((dayData, index) => {
             if (!dayData.fullDate) {
-              return <div key={`empty-${index}`} className="bg-gray-50/50 min-h-[100px]"></div>;
+              return <div key={`empty-${index}`} style={{ backgroundColor: '#f9fafb', minHeight: '100px' }}></div>;
             }
 
-            // Filtrar órdenes para este día (Comparación de Strings YYYY-MM-DD)
-            const ordenesDelDia = ordenes.filter(o => {
-               if (!o.fecha_inicio) return false;
-               return o.fecha_inicio.startsWith(dayData.fullDate);
-            });
-
+            const ordenesDelDia = ordenes.filter(o => o.fecha_inicio && o.fecha_inicio.startsWith(dayData.fullDate));
             const isDayToday = isToday(currentDate.getFullYear(), currentDate.getMonth(), dayData.day);
 
             return (
@@ -279,29 +215,31 @@ const CalendarioProduccion = () => {
                 key={dayData.fullDate}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, dayData.fullDate)}
-                className={`
-                  relative flex flex-col min-h-[100px] p-1 transition-colors bg-white
-                  ${isDayToday ? 'bg-blue-50/30' : ''}
-                  hover:bg-gray-50
-                `}
+                style={{ 
+                  backgroundColor: isDayToday ? '#eff6ff' : 'white', 
+                  minHeight: '100px', 
+                  padding: '4px', 
+                  display: 'flex', 
+                  flexDirection: 'column' 
+                }}
               >
-                {/* Número del día */}
-                <div className="flex justify-between items-start mb-1 px-1">
-                  <span className={`
-                    text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full
-                    ${isDayToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700'}
-                  `}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ 
+                    fontSize: '14px', fontWeight: '500', width: '24px', height: '24px', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%',
+                    backgroundColor: isDayToday ? '#2563eb' : 'transparent',
+                    color: isDayToday ? 'white' : '#374151'
+                  }}>
                     {dayData.day}
                   </span>
                   {ordenesDelDia.length > 0 && (
-                    <span className="text-[9px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
+                    <span style={{ fontSize: '10px', backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '999px', fontWeight: 'bold' }}>
                       {ordenesDelDia.length}
                     </span>
                   )}
                 </div>
-
-                {/* Contenedor de Órdenes */}
-                <div className="flex-1 space-y-1 overflow-y-auto max-h-[120px] scrollbar-thin scrollbar-thumb-gray-200 px-1">
+                
+                <div style={{ flex: 1, overflowY: 'auto', maxHeight: '120px' }}>
                   {ordenesDelDia.map(orden => (
                     <OrdenCard key={orden.id_orden} orden={orden} isCompact={true} />
                   ))}
@@ -312,39 +250,41 @@ const CalendarioProduccion = () => {
         </div>
       </div>
 
-      {/* --- LISTA DE ÓRDENES (DERECHA) --- */}
-      <div className="w-full md:w-80 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden shrink-0 h-full">
-        <div className="p-4 border-b border-gray-100 bg-gray-50 shrink-0">
-          <h3 className="font-bold text-gray-800 flex items-center gap-2">
+      {/* === SECCIÓN DERECHA: SIDEBAR (LISTA DE PENDIENTES) === */}
+      <div style={{ width: '320px', display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+        <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
             <Package size={20} />
-            Órdenes
+            Pendientes
           </h3>
-          <p className="text-xs text-gray-500 mt-1">
-            Arrastra al calendario para programar
-          </p>
+          <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>Arrastra al calendario para agendar</p>
         </div>
-        
-        <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-gray-50/50">
-          {ordenes.length === 0 ? (
-             <div className="text-center py-10 text-gray-400">
-               No hay órdenes
-             </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px', backgroundColor: '#f9fafb' }}>
+          {ordenes.filter(o => !o.fecha_inicio).length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>No hay órdenes pendientes de agendar</div>
           ) : (
-             ordenes.map(orden => (
-                <div key={`sidebar-${orden.id_orden}`} className="relative group">
-                   {/* Indicador visual si ya está programada */}
-                   {orden.fecha_inicio && (
-                      <div className="absolute top-[-6px] right-1 z-10 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-blue-200 shadow-sm flex items-center gap-1">
-                        <Clock size={8} />
-                        {formatDateShort(orden.fecha_inicio)}
-                      </div>
-                   )}
-                   <OrdenCard orden={orden} isCompact={false} />
-                </div>
-             ))
+            // FILTRO: Solo mostramos aquí las que NO tienen fecha (Pendientes de agendar)
+            // O mostramos todas si prefieres, aquí he puesto un filtro para que veas las "sin fecha"
+            ordenes.map(orden => (
+              <div key={`sidebar-${orden.id_orden}`} style={{ position: 'relative' }}>
+                {orden.fecha_inicio && (
+                  <div style={{ 
+                    position: 'absolute', top: '-8px', right: '4px', zIndex: 10, 
+                    backgroundColor: '#dbeafe', color: '#1e40af', fontSize: '10px', 
+                    fontWeight: 'bold', padding: '2px 6px', borderRadius: '999px',
+                    border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', gap: '2px'
+                  }}>
+                    <Clock size={10} /> {formatDateShort(orden.fecha_inicio)}
+                  </div>
+                )}
+                <OrdenCard orden={orden} isCompact={false} />
+              </div>
+            ))
           )}
         </div>
       </div>
+
     </div>
   );
 };

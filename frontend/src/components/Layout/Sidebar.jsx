@@ -4,7 +4,7 @@ import {
   Package, BarChart3, ArrowDownToLine, ArrowUpFromLine, 
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag,
-  CreditCard, Banknote // Nuevos íconos importados para Finanzas
+  CreditCard, Banknote 
 } from 'lucide-react';
 import { usePermisos, ConPermiso } from '../../context/PermisosContext';
 import './Sidebar.css';
@@ -60,14 +60,15 @@ function Sidebar({ isOpen, onToggle }) {
       ]
     },
     {
-      title: 'Finanzas', // Nueva Sección Agregada
+      title: 'Finanzas',
       items: [
         { path: '/finanzas/cuentas-pago', icon: CreditCard, label: 'Cuentas por Pagar', modulo: 'cuentasPago' },
-        { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Pagos y Cobranzas', modulo: 'pagoCobranzas' }
+        // CORRECCIÓN AQUÍ: Se cambió 'pagoCobranzas' por 'pagosCobranzas' (plural)
+        { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Pagos y Cobranzas', modulo: 'pagosCobranzas' }
       ]
     },
     {
-      title: 'Inventario', // Movido al final como solicitaste
+      title: 'Inventario',
       items: [
         { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas' },
         { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas' },
@@ -115,10 +116,8 @@ function Sidebar({ isOpen, onToggle }) {
 
         <nav className="sidebar-nav">
           {menuItems.map((section, idx) => {
-            // Filtramos los items según permisos antes de renderizar la sección
             const itemsVisibles = section.items.filter(item => tienePermiso(item.modulo));
             
-            // Si no hay items visibles en esta sección, no renderizamos el título ni la lista
             if (itemsVisibles.length === 0) {
               return null;
             }
@@ -129,8 +128,6 @@ function Sidebar({ isOpen, onToggle }) {
                 <ul className="sidebar-menu">
                   {section.items.map((item) => {
                     const Icon = item.icon;
-                    // Verificamos el permiso (aunque ya filtramos arriba, el map original sigue ahí si no usamos itemsVisibles)
-                    // Usaremos la lógica original tuya para mantener consistencia:
                     const puedeVer = tienePermiso(item.modulo);
                     
                     if (!puedeVer) {

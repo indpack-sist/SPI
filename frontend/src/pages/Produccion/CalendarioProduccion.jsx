@@ -1,21 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  eachDayOfInterval, 
-  isSameDay, 
-  isSameMonth, 
-  addMonths, 
-  subMonths,
-  parseISO,
-  isValid 
-} from 'date-fns';
-import { es } from 'date-fns/locale';
-import { 
   ChevronLeft, 
   ChevronRight, 
   Calendar as CalendarIcon, 
@@ -34,6 +19,13 @@ const CalendarioProduccion = () => {
   const [loading, setLoading] = useState(true);
   const [draggedOrden, setDraggedOrden] = useState(null);
 
+  // --- Nombres de días y meses (Español) ---
+  const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const monthNames = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
   useEffect(() => {
     cargarOrdenes();
   }, []);
@@ -41,31 +33,85 @@ const CalendarioProduccion = () => {
   const cargarOrdenes = async () => {
     try {
       setLoading(true);
-      // Obtenemos todas las órdenes
       const response = await ordenesProduccionAPI.getAll({});
-      setOrdenes(response.data.data);
+      // Aseguramos que sea un array
+      const data = Array.isArray(response.data.data) ? response.data.data : [];
+      setOrdenes(data);
     } catch (error) {
       console.error("Error al cargar órdenes", error);
+      setOrdenes([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Lógica del Calendario ---
-  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
-  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  // --- Lógica de Fecha Nativa ---
+  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  
+  const getFirstDayOfMonth = (year, month) => {
+    // 0 = Domingo, 1 = Lunes ... 6 = Sábado
+    const day = new Date(year, month, 1).getDay();
+    // Ajustar para que Lunes sea 0 y Domingo 6 (para el grid)
+    return day === 0 ? 6 : day - 1;
+  };
 
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const changeMonth = (increment) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + increment);
+    setCurrentDate(newDate);
+  };
 
-  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
+  // Generar array de días para el calendario
+  const generateCalendarDays = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDayIndex = getFirstDayOfMonth(year, month); // Días vacíos al inicio
+    
+    const days = [];
+    
+    // Días vacíos del mes anterior
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push({ day: null, fullDate: null, isCurrentMonth: false });
+    }
+    
+    // Días del mes actual
+    for (let i = 1; i <= daysInMonth; i++) {
+      // Crear fecha segura manejando zona horaria local
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      days.push({ 
+        day: i, 
+        fullDate: dateStr, 
+        isCurrentMonth: true 
+      });
+    }
+
+    return days;
+  };
+
+  const calendarDays = generateCalendarDays();
+
+  // --- Helpers de Fecha ---
+  const isToday = (year, month, day) => {
+    const today = new Date();
+    return today.getDate() === day && 
+           today.getMonth() === month && 
+           today.getFullYear() === year;
+  };
+
+  const formatDateShort = (dateString) => {
+    if (!dateString) return '';
+    // Asumimos formato YYYY-MM-DD
+    const [year, month, day] = dateString.split('T')[0].split('-');
+    return `${day}/${month}`;
+  };
 
   // --- Drag & Drop ---
   const handleDragStart = (e, orden) => {
     setDraggedOrden(orden);
     e.dataTransfer.effectAllowed = 'move';
+    // Firefox requiere setData
     e.dataTransfer.setData('text/plain', JSON.stringify(orden));
   };
 
@@ -74,17 +120,14 @@ const CalendarioProduccion = () => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = async (e, day) => {
+  const handleDrop = async (e, dateStr) => {
     e.preventDefault();
-    if (!draggedOrden) return;
+    if (!draggedOrden || !dateStr) return;
 
-    const nuevaFecha = format(day, 'yyyy-MM-dd');
-
-    // 1. Actualización Optimista en UI
+    // 1. Actualización Optimista
     const ordenesActualizadas = ordenes.map(o => {
       if (o.id_orden === draggedOrden.id_orden) {
-        // Actualizamos la fecha visualmente para programación
-        return { ...o, fecha_inicio: nuevaFecha };
+        return { ...o, fecha_inicio: dateStr };
       }
       return o;
     });
@@ -92,25 +135,25 @@ const CalendarioProduccion = () => {
     setOrdenes(ordenesActualizadas);
     setDraggedOrden(null);
 
-    // 2. Aquí deberías guardar la "fecha programada" en el backend
-    console.log(`Reprogramando Orden ${draggedOrden.numero_orden} para el día: ${nuevaFecha}`);
-    
-    // Ejemplo de llamada API (Descomentar cuando tengas el endpoint de reprogramación)
-    /*
+    // 2. Guardar en Backend
+    console.log(`Reprogramando Orden ${draggedOrden.numero_orden} para: ${dateStr}`);
     try {
-        await ordenesProduccionAPI.reprogramar(draggedOrden.id_orden, { fecha_programada: nuevaFecha });
+      // NOTA: Asegúrate de que tu ordenesProduccionAPI.update exista en api.js
+      await ordenesProduccionAPI.update(draggedOrden.id_orden, { 
+        fecha_inicio: dateStr 
+      });
     } catch (err) {
-        console.error("Error al guardar programación", err);
-        cargarOrdenes(); // Revertir si falla
+      console.error("Error al guardar fecha", err);
+      // Revertir cambios en caso de error (opcional: recargar datos)
+      cargarOrdenes(); 
+      alert("Error al actualizar la fecha en el servidor");
     }
-    */
   };
 
-  // --- Renderizado de Tarjeta de Orden ---
+  // --- Componente Tarjeta ---
   const OrdenCard = ({ orden, isCompact = false }) => {
-    
     const verDetalle = (e) => {
-      e.stopPropagation(); // Evita que el click interfiera con el drag
+      e.stopPropagation();
       navigate(`/produccion/ordenes/${orden.id_orden}`);
     };
 
@@ -124,13 +167,17 @@ const CalendarioProduccion = () => {
       }
     };
 
+    // No permitir arrastrar si está finalizada o cancelada
+    const isDraggable = orden.estado !== 'Finalizada' && orden.estado !== 'Cancelada';
+
     return (
       <div 
-        draggable={orden.estado !== 'Finalizada' && orden.estado !== 'Cancelada'}
-        onDragStart={(e) => handleDragStart(e, orden)}
+        draggable={isDraggable}
+        onDragStart={(e) => isDraggable && handleDragStart(e, orden)}
         className={`
           relative group p-2 rounded shadow-sm border border-gray-200 
-          cursor-grab active:cursor-grabbing hover:shadow-md transition-all
+          ${isDraggable ? 'cursor-grab active:cursor-grabbing hover:shadow-md' : 'cursor-default'} 
+          transition-all
           ${getEstadoColor(orden.estado)}
           ${isCompact ? 'text-xs mb-1' : 'text-sm mb-3'}
         `}
@@ -138,11 +185,10 @@ const CalendarioProduccion = () => {
         <div className="flex justify-between items-start">
           <span className="font-bold text-gray-800">{orden.numero_orden}</span>
           
-          {/* BOTÓN VER DETALLE */}
           <button 
             onClick={verDetalle}
             className="text-gray-400 hover:text-blue-600 p-0.5 rounded hover:bg-gray-100 transition-colors"
-            title="Ver Detalle de Orden"
+            title="Ver Detalle"
           >
             <ExternalLink size={isCompact ? 14 : 16} />
           </button>
@@ -168,10 +214,10 @@ const CalendarioProduccion = () => {
     );
   };
 
-  if (loading) return <Loading message="Cargando programación..." />;
+  if (loading) return <Loading message="Cargando calendario..." />;
 
   return (
-    <div className="flex h-[calc(100vh-100px)] gap-4 p-2"> {/* Ajusta altura según tu layout */}
+    <div className="flex flex-col md:flex-row h-[calc(100vh-100px)] gap-4 p-2">
       
       {/* --- CALENDARIO (IZQUIERDA) --- */}
       <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -183,18 +229,18 @@ const CalendarioProduccion = () => {
               <CalendarIcon size={24} />
             </div>
             <h2 className="text-xl font-bold capitalize text-gray-800">
-              {format(currentDate, 'MMMM yyyy', { locale: es })}
+              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h2>
           </div>
           
           <div className="flex items-center bg-gray-100 rounded-lg p-1">
-            <button onClick={prevMonth} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
+            <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
               <ChevronLeft size={20} />
             </button>
             <button onClick={() => setCurrentDate(new Date())} className="px-3 text-sm font-semibold text-gray-600 hover:text-blue-600">
               Hoy
             </button>
-            <button onClick={nextMonth} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
+            <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
               <ChevronRight size={20} />
             </button>
           </div>
@@ -202,7 +248,7 @@ const CalendarioProduccion = () => {
 
         {/* Días de la semana */}
         <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
-          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
+          {daysOfWeek.map(day => (
             <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               {day}
             </div>
@@ -211,30 +257,27 @@ const CalendarioProduccion = () => {
 
         {/* Celdas del Calendario */}
         <div className="grid grid-cols-7 flex-1 auto-rows-fr bg-gray-200 gap-px overflow-y-auto">
-          {calendarDays.map((day) => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            
-            // Filtramos las órdenes visualmente para este día
-            // NOTA: Usamos fecha_inicio como referencia de programación
+          {calendarDays.map((dayData, index) => {
+            if (!dayData.fullDate) {
+              return <div key={`empty-${index}`} className="bg-gray-50/50 min-h-[100px]"></div>;
+            }
+
+            // Filtrar órdenes para este día (Comparación de Strings YYYY-MM-DD)
             const ordenesDelDia = ordenes.filter(o => {
                if (!o.fecha_inicio) return false;
-               // Parseamos para comparar solo fecha (ignorando hora si viene en ISO)
-               const fechaOrden = format(parseISO(o.fecha_inicio), 'yyyy-MM-dd');
-               return fechaOrden === dateStr;
+               return o.fecha_inicio.startsWith(dayData.fullDate);
             });
 
-            const esHoy = isSameDay(day, new Date());
-            const esMesActual = isSameMonth(day, currentDate);
+            const isDayToday = isToday(currentDate.getFullYear(), currentDate.getMonth(), dayData.day);
 
             return (
               <div
-                key={day.toString()}
+                key={dayData.fullDate}
                 onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, day)}
+                onDrop={(e) => handleDrop(e, dayData.fullDate)}
                 className={`
-                  relative flex flex-col min-h-[100px] p-2 transition-colors
-                  ${esMesActual ? 'bg-white' : 'bg-gray-50/50'}
-                  ${esHoy ? 'bg-blue-50/30' : ''}
+                  relative flex flex-col min-h-[100px] p-2 transition-colors bg-white
+                  ${isDayToday ? 'bg-blue-50/30' : ''}
                   hover:bg-gray-50
                 `}
               >
@@ -242,9 +285,9 @@ const CalendarioProduccion = () => {
                 <div className="flex justify-between items-start mb-2">
                   <span className={`
                     text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                    ${esHoy ? 'bg-blue-600 text-white shadow-sm' : esMesActual ? 'text-gray-700' : 'text-gray-400'}
+                    ${isDayToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700'}
                   `}>
-                    {format(day, 'd')}
+                    {dayData.day}
                   </span>
                   {ordenesDelDia.length > 0 && (
                     <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
@@ -253,7 +296,7 @@ const CalendarioProduccion = () => {
                   )}
                 </div>
 
-                {/* Contenedor de Órdenes (Scroll interno si hay muchas) */}
+                {/* Contenedor de Órdenes */}
                 <div className="flex-1 space-y-1 overflow-y-auto max-h-[120px] scrollbar-thin scrollbar-thumb-gray-200">
                   {ordenesDelDia.map(orden => (
                     <OrdenCard key={orden.id_orden} orden={orden} isCompact={true} />
@@ -266,7 +309,7 @@ const CalendarioProduccion = () => {
       </div>
 
       {/* --- LISTA DE ÓRDENES (DERECHA) --- */}
-      <div className="w-80 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="w-full md:w-80 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-100 bg-gray-50">
           <h3 className="font-bold text-gray-800 flex items-center gap-2">
             <Package size={20} />
@@ -289,9 +332,7 @@ const CalendarioProduccion = () => {
                    {orden.fecha_inicio && (
                       <div className="absolute top-[-8px] right-2 z-10 bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200 shadow-sm flex items-center gap-1">
                         <Clock size={10} />
-                        {isValid(parseISO(orden.fecha_inicio)) 
-                           ? format(parseISO(orden.fecha_inicio), 'dd/MMM') 
-                           : 'Programada'}
+                        {formatDateShort(orden.fecha_inicio)}
                       </div>
                    )}
                    <OrdenCard orden={orden} />

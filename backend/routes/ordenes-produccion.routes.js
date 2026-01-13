@@ -15,7 +15,6 @@ import {
   getProductosMerma, 
   getMermasOrden,
   registrarProduccionParcial,
-  finalizarProduccionConConsumoReal,
   getRegistrosParcialesOrden,
   getAnalisisConsumoOrden
 } from '../controllers/ordenes-produccion.controller.js';
@@ -42,7 +41,6 @@ router.post('/:id/pausar', pausarProduccion);
 router.post('/:id/reanudar', reanudarProduccion);
 
 router.post('/:id/registrar-parcial', registrarProduccionParcial);
-router.post('/:id/finalizar-con-consumo-real', finalizarProduccionConConsumoReal);
 
 router.post('/:id/finalizar', finalizarProduccion);
 

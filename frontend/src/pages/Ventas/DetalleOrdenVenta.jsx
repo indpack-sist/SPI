@@ -999,7 +999,7 @@ function DetalleOrdenVenta() {
               </span>
               <span className="font-bold">{formatearMoneda(orden.igv)}</span>
             </div>
-            <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg">
+            <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
               <span className="font-bold">TOTAL:</span>
               <span className="font-bold text-xl">{formatearMoneda(orden.total)}</span>
             </div>

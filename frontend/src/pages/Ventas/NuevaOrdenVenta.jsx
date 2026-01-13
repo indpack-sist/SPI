@@ -3,7 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
-  MapPin, DollarSign, CreditCard, Info, Clock
+  MapPin, DollarSign, CreditCard, Info, Clock,
+  FileText // ← 1. IMPORTACIÓN AGREGADA
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -51,7 +52,9 @@ function NuevaOrdenVenta() {
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0, totalComisiones: 0 });
   
+  // 2. ACTUALIZACIÓN DEL ESTADO INICIAL
   const [formCabecera, setFormCabecera] = useState({
+    tipo_comprobante: 'Factura', // ← CAMPO AGREGADO AL ESTADO
     id_cliente: '',
     id_cotizacion: '',
     id_comercial: user?.id_empleado || '',
@@ -157,6 +160,7 @@ function NuevaOrdenVenta() {
         const orden = response.data.data;
         
         setFormCabecera({
+          tipo_comprobante: orden.tipo_comprobante || 'Factura', // Recuperar valor si existe
           id_cliente: orden.id_cliente,
           id_cotizacion: orden.id_cotizacion || '',
           id_comercial: orden.id_comercial || '',
@@ -386,60 +390,70 @@ function NuevaOrdenVenta() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
-  const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError(null);
-  
-  if (!clienteSeleccionado) {
-    setError('Debe seleccionar un cliente');
-    return;
-  }
-  
-  if (detalle.length === 0) {
-    setError('Debe agregar al menos un producto');
-    return;
-  }
-  
-  try {
-    setLoading(true);
-    
-    const payload = {
-      ...formCabecera,
-      id_cliente: clienteSeleccionado.id_cliente,
-      detalle: detalle.map((item, index) => ({
-        id_producto: item.id_producto,
-        cantidad: parseFloat(item.cantidad),
-        precio_base: parseFloat(item.precio_base),
-        porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
-        precio_unitario: parseFloat(item.precio_unitario),
-        descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-        orden: index + 1
-      }))
-    };
+  const handleTipoImpuestoChange = (codigo) => {
+    const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
+    if (tipoImpuesto) {
+      setFormCabecera(prev => ({
+        ...prev,
+        tipo_impuesto: codigo,
+        porcentaje_impuesto: tipoImpuesto.porcentaje
+      }));
+    }
+  };
 
-    let response;
-    if (modoEdicion) {
-      response = await ordenesVentaAPI.update(id, payload);
-      if (response.data.success) {
-        setSuccess('Orden actualizada exitosamente');
-        setTimeout(() => navigate(`/ventas/ordenes/${id}`), 1500);
-      }
-    } else {
-      response = await ordenesVentaAPI.create(payload);
-      if (response.data.success) {
-        setSuccess(`Orden creada: ${response.data.data.numero_orden}`);
-        // CAMBIO: Redirigir al detalle de la orden creada
-        setTimeout(() => navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`), 1500);
-      }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    
+    if (!clienteSeleccionado) {
+      setError('Debe seleccionar un cliente');
+      return;
     }
     
-  } catch (err) {
-    console.error(err);
-    setError(err.response?.data?.error || 'Error al guardar la orden de venta');
-  } finally {
-    setLoading(false);
-  }
-};
+    if (detalle.length === 0) {
+      setError('Debe agregar al menos un producto');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const payload = {
+        ...formCabecera,
+        id_cliente: clienteSeleccionado.id_cliente,
+        detalle: detalle.map((item, index) => ({
+          id_producto: item.id_producto,
+          cantidad: parseFloat(item.cantidad),
+          precio_base: parseFloat(item.precio_base),
+          porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
+          precio_unitario: parseFloat(item.precio_unitario),
+          descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+          orden: index + 1
+        }))
+      };
+
+      let response;
+      if (modoEdicion) {
+        response = await ordenesVentaAPI.update(id, payload);
+        if (response.data.success) {
+          setSuccess('Orden actualizada exitosamente');
+          setTimeout(() => navigate(`/ventas/ordenes/${id}`), 1500);
+        }
+      } else {
+        response = await ordenesVentaAPI.create(payload);
+        if (response.data.success) {
+          setSuccess(`Orden creada: ${response.data.data.numero_orden}`);
+          setTimeout(() => navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`), 1500);
+        }
+      }
+      
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al guardar la orden de venta');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const clientesFiltrados = clientes.filter(c =>
     c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) ||
@@ -477,6 +491,7 @@ function NuevaOrdenVenta() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="md:col-span-2 space-y-6">
             
+            {/* TARJETA CLIENTE */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-blue-50 to-white">
                 <h2 className="card-title text-blue-900"><Building size={20} /> Cliente</h2>
@@ -523,6 +538,62 @@ function NuevaOrdenVenta() {
               </div>
             </div>
 
+            {/* 3. SECCIÓN TIPO DE COMPROBANTE AGREGADA */}
+            <div className="card">
+              <div className="card-header bg-gradient-to-r from-green-50 to-white">
+                <h2 className="card-title text-green-900">
+                  <FileText size={20} /> Tipo de Comprobante
+                </h2>
+              </div>
+              <div className="card-body">
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    className={`btn py-6 text-lg ${
+                      formCabecera.tipo_comprobante === 'Factura' 
+                        ? 'btn-success text-white shadow-lg' 
+                        : 'btn-outline hover:bg-green-50'
+                    }`}
+                    onClick={() => setFormCabecera({...formCabecera, tipo_comprobante: 'Factura'})}
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <FileText size={32} />
+                      <div>
+                        <div className="font-bold">FACTURA</div>
+                        <div className="text-xs opacity-80">F001-00000001</div>
+                      </div>
+                    </div>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    className={`btn py-6 text-lg ${
+                      formCabecera.tipo_comprobante === 'Nota de Venta' 
+                        ? 'btn-info text-white shadow-lg' 
+                        : 'btn-outline hover:bg-blue-50'
+                    }`}
+                    onClick={() => setFormCabecera({...formCabecera, tipo_comprobante: 'Nota de Venta'})}
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <FileText size={32} />
+                      <div>
+                        <div className="font-bold">NOTA DE VENTA</div>
+                        <div className="text-xs opacity-80">NV001-00000001</div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                
+                <div className="mt-3 text-sm text-muted bg-blue-50 border border-blue-200 rounded p-3">
+                  <Info size={14} className="inline mr-1" />
+                  {formCabecera.tipo_comprobante === 'Factura' 
+                    ? 'Comprobante fiscal para clientes con RUC. Válido para sustentar gastos.'
+                    : 'Comprobante simple para ventas menores. No válido para sustentar gastos.'}
+                </div>
+              </div>
+            </div>
+
+            {/* TARJETA PRODUCTOS */}
             <div className="card">
               <div className="card-header bg-gradient-to-r from-gray-50 to-white flex justify-between items-center">
                 <h2 className="card-title"><Calculator size={20} /> Productos</h2>
@@ -803,7 +874,20 @@ function NuevaOrdenVenta() {
                 )}
                 <div className="flex justify-between text-sm">
                   <span>
-                    {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre} ({formCabecera.porcentaje_impuesto}%):
+                    <div>
+                      <label className="form-label">Tipo de Impuesto</label>
+                      <select
+                        className="form-select"
+                        value={formCabecera.tipo_impuesto}
+                        onChange={(e) => handleTipoImpuestoChange(e.target.value)}
+                      >
+                        {TIPOS_IMPUESTO.map(tipo => (
+                          <option key={tipo.codigo} value={tipo.codigo}>
+                            {tipo.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </span>
                   <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
                 </div>

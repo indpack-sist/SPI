@@ -3,7 +3,8 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
   Calculator, FileText, Building,
-  Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink
+  Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink,
+  Building2, User, Loader, CheckCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -73,6 +74,12 @@ function NuevaCotizacion() {
   
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
+  
+  const [tabCliente, setTabCliente] = useState('lista');
+  const [nuevoClienteDoc, setNuevoClienteDoc] = useState({ tipo: 'RUC', numero: '' });
+  const [clienteApiData, setClienteApiData] = useState(null);
+  const [loadingApi, setLoadingApi] = useState(false);
+  const [errorApi, setErrorApi] = useState(null);
   
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
@@ -267,6 +274,95 @@ function NuevaCotizacion() {
     setBusquedaCliente('');
   };
 
+  const validarClienteExterno = async () => {
+    const documento = nuevoClienteDoc.numero.trim();
+    const tipo = nuevoClienteDoc.tipo;
+    
+    if (!documento) {
+      setErrorApi(`Ingrese un ${tipo} para validar`);
+      return;
+    }
+
+    if (tipo === 'RUC' && !/^\d{11}$/.test(documento)) {
+      setErrorApi('El RUC debe tener 11 dígitos');
+      return;
+    }
+
+    if (tipo === 'DNI' && !/^\d{8}$/.test(documento)) {
+      setErrorApi('El DNI debe tener 8 dígitos');
+      return;
+    }
+
+    try {
+      setLoadingApi(true);
+      setErrorApi(null);
+      setClienteApiData(null);
+      
+      const response = tipo === 'RUC' 
+        ? await clientesAPI.validarRUC(documento)
+        : await clientesAPI.validarDNI(documento);
+      
+      if (response.data.valido) {
+        setClienteApiData({
+          ...response.data.datos,
+          tipo_documento: tipo,
+          documento: documento
+        });
+        
+        if (response.data.ya_registrado) {
+          setErrorApi(`Este ${tipo} ya está registrado en el sistema`);
+        }
+      } else {
+        setErrorApi(response.data.error || `${tipo} no válido`);
+      }
+    } catch (err) {
+      setErrorApi(err.error || `Error al validar ${tipo}`);
+    } finally {
+      setLoadingApi(false);
+    }
+  };
+
+  const crearYSeleccionarCliente = async () => {
+    if (!clienteApiData) return;
+
+    try {
+      setLoadingApi(true);
+      
+      const direccionCompleta = clienteApiData.direccion 
+        ? [clienteApiData.direccion, clienteApiData.distrito, clienteApiData.provincia, clienteApiData.departamento].filter(Boolean).join(', ')
+        : '';
+
+      const nuevoCliente = {
+        tipo_documento: nuevoClienteDoc.tipo,
+        ruc: nuevoClienteDoc.numero,
+        razon_social: clienteApiData.razon_social || clienteApiData.nombre_completo,
+        direccion_despacho: direccionCompleta,
+        estado: 'Activo',
+        validar_documento: false
+      };
+
+      const response = await clientesAPI.create(nuevoCliente);
+      
+      if (response.data.success) {
+        const clienteCreado = response.data.data;
+        
+        setClientes(prev => [...prev, clienteCreado]);
+        handleSelectCliente(clienteCreado);
+        setSuccess('Cliente creado y seleccionado automáticamente');
+        setModalClienteOpen(false);
+        
+        setTabCliente('lista');
+        setNuevoClienteDoc({ tipo: 'RUC', numero: '' });
+        setClienteApiData(null);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorApi('Error al crear el cliente automáticamente');
+    } finally {
+      setLoadingApi(false);
+    }
+  };
+
   const handleAgregarProducto = (producto) => {
     const existe = detalle.find(d => d.id_producto === producto.id_producto);
     if (existe) {
@@ -362,15 +458,15 @@ function NuevaCotizacion() {
   };
 
   const handleTipoImpuestoChange = (codigo) => {
-  const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
-  if (tipoImpuesto) {
-    setFormCabecera(prev => ({
-      ...prev,
-      tipo_impuesto: codigo, // ← CAMBIADO: guarda el código
-      porcentaje_impuesto: tipoImpuesto.porcentaje
-    }));
-  }
-};
+    const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
+    if (tipoImpuesto) {
+      setFormCabecera(prev => ({
+        ...prev,
+        tipo_impuesto: codigo,
+        porcentaje_impuesto: tipoImpuesto.porcentaje
+      }));
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -549,7 +645,13 @@ function NuevaCotizacion() {
               <button 
                 type="button" 
                 className="btn btn-primary btn-lg w-full" 
-                onClick={() => setModalClienteOpen(true)}
+                onClick={() => {
+                  setModalClienteOpen(true);
+                  setTabCliente('lista');
+                  setNuevoClienteDoc({ tipo: 'RUC', numero: '' });
+                  setClienteApiData(null);
+                  setErrorApi(null);
+                }}
                 disabled={cotizacionConvertida}
               >
                 <Search size={20} />
@@ -622,21 +724,19 @@ function NuevaCotizacion() {
               </div>
               
               <div className="form-group">
-  <label className="form-label">Tipo de Impuesto *</label>
-  <select
-    className="form-select"
-    value={formCabecera.tipo_impuesto}
-    onChange={(e) => handleTipoImpuestoChange(e.target.value)}
-    disabled={cotizacionConvertida}
-    required
-  >
-    {TIPOS_IMPUESTO.map(tipo => (
-      <option key={tipo.codigo} value={tipo.codigo}> {/* ← CAMBIADO: value={tipo.codigo} */}
-        {tipo.nombre}
-      </option>
-    ))}
-  </select>
-</div>
+                <label className="form-label">Tipo de Impuesto *</label>
+                <select
+                  className="form-select"
+                  value={formCabecera.tipo_impuesto}
+                  onChange={(e) => handleTipoImpuestoChange(e.target.value)}
+                  disabled={cotizacionConvertida}
+                  required
+                >
+                  {TIPOS_IMPUESTO.map(tipo => (
+                    <option key={tipo.codigo} value={tipo.codigo}>{tipo.nombre}</option>
+                  ))}
+                </select>
+              </div>
               
               {formCabecera.moneda === 'USD' && (
                 <div className="form-group">
@@ -949,34 +1049,125 @@ function NuevaCotizacion() {
       </form>
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
-        <div className="mb-4">
-          <input
-            type="text"
-            className="form-input"
-            placeholder="Buscar por razón social o RUC..."
-            value={busquedaCliente}
-            onChange={(e) => setBusquedaCliente(e.target.value)}
-            autoFocus
-          />
+        <div className="flex gap-2 mb-4 border-b">
+          <button
+            className={`px-4 py-2 font-medium ${tabCliente === 'lista' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
+            onClick={() => setTabCliente('lista')}
+          >
+            Buscar en Lista
+          </button>
+          <button
+            className={`px-4 py-2 font-medium ${tabCliente === 'nuevo' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
+            onClick={() => setTabCliente('nuevo')}
+          >
+            Nuevo / Validar
+          </button>
         </div>
-        <div className="max-h-96 overflow-y-auto">
-          {clientesFiltrados.length > 0 ? (
-            <div className="space-y-2">
-              {clientesFiltrados.map(cliente => (
-                <div
-                  key={cliente.id_cliente}
-                  className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
-                  onClick={() => handleSelectCliente(cliente)}
-                >
-                  <div className="font-bold">{cliente.razon_social}</div>
-                  <div className="text-sm text-muted">RUC: {cliente.ruc}</div>
-                </div>
-              ))}
+
+        {tabCliente === 'lista' ? (
+          <>
+            <div className="mb-4">
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Buscar por razón social o RUC..."
+                value={busquedaCliente}
+                onChange={(e) => setBusquedaCliente(e.target.value)}
+                autoFocus
+              />
             </div>
-          ) : (
-            <p className="text-center text-muted py-8">No se encontraron clientes</p>
-          )}
-        </div>
+            <div className="max-h-96 overflow-y-auto">
+              {clientesFiltrados.length > 0 ? (
+                <div className="space-y-2">
+                  {clientesFiltrados.map(cliente => (
+                    <div
+                      key={cliente.id_cliente}
+                      className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
+                      onClick={() => handleSelectCliente(cliente)}
+                    >
+                      <div className="font-bold">{cliente.razon_social}</div>
+                      <div className="text-sm text-muted">RUC: {cliente.ruc}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-muted py-8">No se encontraron clientes</p>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`btn flex-1 ${nuevoClienteDoc.tipo === 'RUC' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'RUC', numero: '' })}
+              >
+                <Building2 size={18} className="mr-2" /> Empresa (RUC)
+              </button>
+              <button
+                type="button"
+                className={`btn flex-1 ${nuevoClienteDoc.tipo === 'DNI' ? 'btn-info' : 'btn-outline'}`}
+                onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'DNI', numero: '' })}
+              >
+                <User size={18} className="mr-2" /> Persona (DNI)
+              </button>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{nuevoClienteDoc.tipo}</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoClienteDoc.numero}
+                  onChange={(e) => {
+                    setNuevoClienteDoc({ ...nuevoClienteDoc, numero: e.target.value });
+                    setClienteApiData(null);
+                    setErrorApi(null);
+                  }}
+                  placeholder={nuevoClienteDoc.tipo === 'RUC' ? '20...' : '70...'}
+                  maxLength={nuevoClienteDoc.tipo === 'RUC' ? 11 : 8}
+                />
+                <button 
+                  type="button" 
+                  className="btn btn-outline min-w-[120px]"
+                  onClick={validarClienteExterno}
+                  disabled={loadingApi || !nuevoClienteDoc.numero}
+                >
+                  {loadingApi ? <Loader size={18} className="animate-spin" /> : 'Validar'}
+                </button>
+              </div>
+              {errorApi && <p className="text-danger text-sm mt-1">{errorApi}</p>}
+            </div>
+
+            {clienteApiData && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="text-success mt-1" size={20} />
+                  <div className="flex-1">
+                    <h4 className="font-bold text-success mb-1">Datos Encontrados</h4>
+                    <p className="text-sm"><strong>Razón Social:</strong> {clienteApiData.razon_social || clienteApiData.nombre_completo}</p>
+                    <p className="text-sm"><strong>Dirección:</strong> {clienteApiData.direccion || '-'}</p>
+                    <p className="text-sm"><strong>Estado:</strong> {clienteApiData.estado || 'Activo'}</p>
+                    
+                    <button 
+                      type="button" 
+                      className="btn btn-success w-full mt-3"
+                      onClick={crearYSeleccionarCliente}
+                      disabled={loadingApi}
+                    >
+                      {loadingApi ? 'Registrando...' : 'Registrar y Seleccionar Cliente'}
+                    </button>
+                    <p className="text-xs text-muted text-center mt-2">
+                      Se registrará automáticamente como cliente nuevo.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       <Modal isOpen={modalProductoOpen} onClose={() => setModalProductoOpen(false)} title="Agregar Producto" size="lg">

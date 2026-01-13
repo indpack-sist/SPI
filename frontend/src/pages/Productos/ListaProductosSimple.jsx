@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Package, AlertCircle } from 'lucide-react';
+import { Search, Package, AlertCircle, Filter } from 'lucide-react'; // Importamos Filter
 import { productosAPI } from '../../config/api';
-// Eliminamos los imports de UI components si no los vas a usar
-// OJO: Si tus componentes UI (Table, Modal) ya usan internamente estas clases, úsalos.
-// Aquí asumo que quieres usar HTML puro con tus clases CSS del index.css.
 import Loading from '../../components/UI/Loading';
 
 function ListaProductosSimple() {
@@ -11,6 +8,9 @@ function ListaProductosSimple() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busqueda, setBusqueda] = useState('');
+  
+  // 1. Nuevo estado para el filtro de stock
+  const [soloConStock, setSoloConStock] = useState(false);
 
   useEffect(() => {
     cargarProductos();
@@ -34,21 +34,27 @@ function ListaProductosSimple() {
     }
   };
 
-  const productosFiltrados = productos.filter(p => 
-    p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.codigo.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  // 2. Lógica de filtrado actualizada
+  const productosFiltrados = productos.filter(p => {
+    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+                             p.codigo.toLowerCase().includes(busqueda.toLowerCase());
+    
+    // Si el filtro está activo, validamos que tenga al menos 1 de stock
+    const cumpleStock = soloConStock ? parseFloat(p.stock_actual) >= 1 : true;
+
+    return coincideBusqueda && cumpleStock;
+  });
 
   if (loading) return <Loading message="Cargando inventario..." />;
 
   return (
-    <div className="container py-8"> {/* Usamos .container y padding vertical */}
+    <div className="container py-8">
       
       <div className="card">
-        {/* Encabezado de la Tarjeta */}
+        {/* Encabezado */}
         <div className="card-header border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="card-title text-primary">
+            <h1 className="card-title text-primary flex items-center gap-2">
               <Package size={24} />
               Consulta de Stock
             </h1>
@@ -57,24 +63,44 @@ function ListaProductosSimple() {
             </p>
           </div>
           
-          {/* Contador simple (Badge) */}
           <span className="badge badge-info self-start md:self-center">
             Total: {productos.length} items
           </span>
         </div>
 
         <div className="card-body">
-          {/* Barra de Búsqueda usando tus clases .search-input-wrapper */}
-          <div className="mb-4 search-input-wrapper">
-            <Search size={20} className="search-icon" />
-            <input
-              type="text"
-              className="form-input search-input" // Usamos tus clases de formulario
-              placeholder="Buscar por nombre o código del producto..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              autoFocus
-            />
+          
+          {/* Contenedor Flex para Buscador y Botón de Filtro */}
+          <div className="mb-4 flex flex-col md:flex-row gap-3">
+            
+            {/* Barra de Búsqueda */}
+            <div className="search-input-wrapper flex-1">
+              <Search size={20} className="search-icon" />
+              <input
+                type="text"
+                className="form-input search-input w-full"
+                placeholder="Buscar por nombre o código..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            {/* 3. Botón de Filtro Claro */}
+            <button
+              onClick={() => setSoloConStock(!soloConStock)}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-medium whitespace-nowrap
+                ${soloConStock 
+                  ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' // Estilo Activo (Claro pero distintivo)
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50' // Estilo Inactivo (Muy claro)
+                }
+              `}
+            >
+              <Filter size={18} className={soloConStock ? 'fill-current' : ''} />
+              {soloConStock ? 'Con Stock (>1)' : 'Filtrar Stock'}
+            </button>
+
           </div>
 
           {error && (
@@ -84,7 +110,7 @@ function ListaProductosSimple() {
             </div>
           )}
 
-          {/* Tabla usando tus clases .table y .table-container */}
+          {/* Tabla */}
           <div className="table-container">
             <table className="table">
               <thead>
@@ -130,7 +156,7 @@ function ListaProductosSimple() {
                     <td colSpan="2" className="text-center py-8 text-muted">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Package size={40} className="opacity-20" />
-                        <p>No se encontraron productos</p>
+                        <p>No se encontraron productos {soloConStock && 'con stock disponible'}</p>
                       </div>
                     </td>
                   </tr>

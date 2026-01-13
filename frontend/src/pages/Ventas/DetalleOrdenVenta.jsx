@@ -670,7 +670,7 @@ function DetalleOrdenVenta() {
           
           {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
             <>
-              {orden.estado === 'En Espera' && (
+              {orden.estado !== 'Despachada' && (
                 <button
                   className="btn btn-secondary"
                   onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}

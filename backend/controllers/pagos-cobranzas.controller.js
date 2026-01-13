@@ -82,6 +82,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     const paramsPagos = [];
     const paramsCobranzas = [];
     
+    // Filtros de Fecha
     if (fecha_inicio) {
       whereClausePagos += ' AND DATE(pe.fecha_pago) >= ?';
       whereClauseCobranzas += ' AND DATE(pov.fecha_pago) >= ?';
@@ -96,6 +97,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       paramsCobranzas.push(fecha_fin);
     }
     
+    // Filtro Metodo Pago
     if (metodo_pago) {
       whereClausePagos += ' AND pe.metodo_pago = ?';
       whereClauseCobranzas += ' AND pov.metodo_pago = ?';
@@ -103,13 +105,21 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       paramsCobranzas.push(metodo_pago);
     }
     
+    // Filtro ID Cuenta (SOLO APLICA A PAGOS/EGRESOS)
     if (id_cuenta) {
       whereClausePagos += ' AND pe.id_cuenta_destino = ?';
-      whereClauseCobranzas += ' AND pov.id_cuenta_destino = ?'; 
       paramsPagos.push(id_cuenta);
-      paramsCobranzas.push(id_cuenta);
+      
+      // NOTA: No filtramos cobranzas por cuenta porque la tabla no tiene esa columna
+      // Si el usuario filtra por cuenta específica, no mostraremos cobranzas.
+      if (!tipo || tipo === 'cobranza') {
+         // Truco para que no traiga nada en cobranzas si se filtra por cuenta
+         whereClauseCobranzas += ' AND 1=0'; 
+      }
     }
     
+    // --- 1. CONSULTA DE PAGOS (EGRESOS) ---
+    // Esta tabla (pagos_entradas) SÍ suele tener id_cuenta_destino
     if (!tipo || tipo === 'pago') {
       [pagos] = await pool.query(`
         SELECT 
@@ -139,8 +149,9 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       `, paramsPagos);
     }
     
+    // --- 2. CONSULTA DE COBRANZAS (INGRESOS) ---
+    // Aquí eliminamos la referencia a id_cuenta_destino y el JOIN a cuentas_pago
     if (!tipo || tipo === 'cobranza') {
-      // CORRECCIÓN REALIZADA AQUÍ: Se eliminó ov.serie_correlativo
       [cobranzas] = await pool.query(`
         SELECT 
           pov.id_pago_orden as id,
@@ -159,13 +170,12 @@ export const getAllPagosCobranzas = async (req, res, next) => {
           ov.moneda,
           cl.razon_social as tercero,
           emp.nombre_completo as registrado_por,
-          c.nombre as cuenta_destino,
+          NULL as cuenta_destino, -- Se devuelve NULL porque no existe la columna
           pov.fecha_registro
         FROM pagos_ordenes_venta pov
         INNER JOIN ordenes_venta ov ON pov.id_orden_venta = ov.id_orden_venta
         LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
         INNER JOIN empleados emp ON pov.id_registrado_por = emp.id_empleado
-        LEFT JOIN cuentas_pago c ON pov.id_cuenta_destino = c.id_cuenta
         WHERE ${whereClauseCobranzas}
         ORDER BY pov.fecha_pago DESC
       `, paramsCobranzas);
@@ -201,7 +211,6 @@ export const getCuentasPorCobrar = async (req, res, next) => {
       params.push(fecha_fin);
     }
 
-    // Nota: Asegúrate de que tu vista "vista_cuentas_por_cobrar" esté creada en la BD
     const [rows] = await pool.query(`
       SELECT * FROM vista_cuentas_por_cobrar
       WHERE ${whereClause}

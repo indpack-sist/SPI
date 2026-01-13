@@ -211,13 +211,14 @@ export const getCuentasPorCobrar = async (req, res, next) => {
       params.push(fecha_fin);
     }
 
+    // HEMOS AGREGADO 'COLLATE utf8mb4_unicode_ci' EN EL ORDER BY
     const [rows] = await pool.query(`
       SELECT * FROM vista_cuentas_por_cobrar
       WHERE ${whereClause}
       ORDER BY 
         CASE 
-          WHEN estado_deuda = 'Vencido' THEN 1
-          WHEN estado_deuda = 'Proximo a Vencer' THEN 2
+          WHEN estado_deuda COLLATE utf8mb4_unicode_ci = 'Vencido' THEN 1
+          WHEN estado_deuda COLLATE utf8mb4_unicode_ci = 'Proximo a Vencer' THEN 2
           ELSE 3
         END,
         fecha_vencimiento ASC

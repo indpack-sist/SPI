@@ -387,55 +387,59 @@ function NuevaOrdenVenta() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
+  e.preventDefault();
+  setError(null);
+  
+  if (!clienteSeleccionado) {
+    setError('Debe seleccionar un cliente');
+    return;
+  }
+  
+  if (detalle.length === 0) {
+    setError('Debe agregar al menos un producto');
+    return;
+  }
+  
+  try {
+    setLoading(true);
     
-    if (!clienteSeleccionado) {
-      setError('Debe seleccionar un cliente');
-      return;
-    }
-    
-    if (detalle.length === 0) {
-      setError('Debe agregar al menos un producto');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      
-      const payload = {
-        ...formCabecera,
-        id_cliente: clienteSeleccionado.id_cliente,
-        detalle: detalle.map((item, index) => ({
-          id_producto: item.id_producto,
-          cantidad: parseFloat(item.cantidad),
-          precio_base: parseFloat(item.precio_base),
-          porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
-          precio_unitario: parseFloat(item.precio_unitario),
-          descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-          orden: index + 1
-        }))
-      };
+    const payload = {
+      ...formCabecera,
+      id_cliente: clienteSeleccionado.id_cliente,
+      detalle: detalle.map((item, index) => ({
+        id_producto: item.id_producto,
+        cantidad: parseFloat(item.cantidad),
+        precio_base: parseFloat(item.precio_base),
+        porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
+        precio_unitario: parseFloat(item.precio_unitario),
+        descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+        orden: index + 1
+      }))
+    };
 
-      let response;
-      if (modoEdicion) {
-        response = await ordenesVentaAPI.update(id, payload);
-      } else {
-        response = await ordenesVentaAPI.create(payload);
-      }
-      
+    let response;
+    if (modoEdicion) {
+      response = await ordenesVentaAPI.update(id, payload);
       if (response.data.success) {
-        setSuccess(modoEdicion ? 'Orden actualizada exitosamente' : `Orden creada: ${response.data.data.numero_orden}`);
-        setTimeout(() => navigate('/ventas/ordenes'), 1500);
+        setSuccess('Orden actualizada exitosamente');
+        setTimeout(() => navigate(`/ventas/ordenes/${id}`), 1500);
       }
-      
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || 'Error al guardar la orden de venta');
-    } finally {
-      setLoading(false);
+    } else {
+      response = await ordenesVentaAPI.create(payload);
+      if (response.data.success) {
+        setSuccess(`Orden creada: ${response.data.data.numero_orden}`);
+        // CAMBIO: Redirigir al detalle de la orden creada
+        setTimeout(() => navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`), 1500);
+      }
     }
-  };
+    
+  } catch (err) {
+    console.error(err);
+    setError(err.response?.data?.error || 'Error al guardar la orden de venta');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const clientesFiltrados = clientes.filter(c =>
     c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) ||

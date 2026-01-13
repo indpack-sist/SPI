@@ -179,34 +179,38 @@ const CalendarioProduccion = () => {
           ${isDraggable ? 'cursor-grab active:cursor-grabbing hover:shadow-md' : 'cursor-default'} 
           transition-all
           ${getEstadoColor(orden.estado)}
-          ${isCompact ? 'text-xs mb-1' : 'text-sm mb-3'}
+          text-sm mb-2 w-full
         `}
       >
-        <div className="flex justify-between items-start">
-          <span className="font-bold text-gray-800">{orden.numero_orden}</span>
+        <div className="flex justify-between items-start w-full">
+          <span className="font-bold text-gray-800 text-xs">{orden.numero_orden}</span>
           
           <button 
             onClick={verDetalle}
-            className="text-gray-400 hover:text-blue-600 p-0.5 rounded hover:bg-gray-100 transition-colors"
+            className="text-gray-400 hover:text-blue-600 p-0.5 rounded hover:bg-gray-100 transition-colors shrink-0"
             title="Ver Detalle"
           >
-            <ExternalLink size={isCompact ? 14 : 16} />
+            <ExternalLink size={14} />
           </button>
         </div>
         
-        <div className={`truncate font-medium ${isCompact ? 'mt-0.5' : 'mt-1'} text-gray-700`} title={orden.producto}>
+        <div className="truncate font-medium mt-1 text-gray-700 text-xs w-full" title={orden.producto}>
           {orden.producto}
         </div>
 
         {!isCompact && (
-          <div className="mt-2 text-xs text-gray-500 space-y-1">
+          <div className="mt-2 text-[10px] text-gray-500 space-y-1">
             <div className="flex items-center gap-1">
-              <Package size={12} /> 
-              {parseFloat(orden.cantidad_planificada).toFixed(2)} {orden.unidad_medida}
+              <Package size={10} className="shrink-0" /> 
+              <span className="truncate">
+                {parseFloat(orden.cantidad_planificada).toFixed(2)} {orden.unidad_medida}
+              </span>
             </div>
             <div className="flex items-center gap-1">
-              <User size={12} /> 
-              {orden.supervisor || 'Sin asignar'}
+              <User size={10} className="shrink-0" /> 
+              <span className="truncate">
+                {orden.supervisor || 'Sin asignar'}
+              </span>
             </div>
           </div>
         )}
@@ -217,13 +221,13 @@ const CalendarioProduccion = () => {
   if (loading) return <Loading message="Cargando calendario..." />;
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-100px)] gap-4 p-2">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-100px)] gap-4 p-2 overflow-hidden">
       
       {/* --- CALENDARIO (IZQUIERDA) --- */}
-      <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-w-0">
         
         {/* Header del Calendario */}
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
               <CalendarIcon size={24} />
@@ -247,7 +251,7 @@ const CalendarioProduccion = () => {
         </div>
 
         {/* Días de la semana */}
-        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 shrink-0">
           {daysOfWeek.map(day => (
             <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               {day}
@@ -276,28 +280,28 @@ const CalendarioProduccion = () => {
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, dayData.fullDate)}
                 className={`
-                  relative flex flex-col min-h-[100px] p-2 transition-colors bg-white
+                  relative flex flex-col min-h-[100px] p-1 transition-colors bg-white
                   ${isDayToday ? 'bg-blue-50/30' : ''}
                   hover:bg-gray-50
                 `}
               >
                 {/* Número del día */}
-                <div className="flex justify-between items-start mb-2">
+                <div className="flex justify-between items-start mb-1 px-1">
                   <span className={`
-                    text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
+                    text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full
                     ${isDayToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700'}
                   `}>
                     {dayData.day}
                   </span>
                   {ordenesDelDia.length > 0 && (
-                    <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
                       {ordenesDelDia.length}
                     </span>
                   )}
                 </div>
 
                 {/* Contenedor de Órdenes */}
-                <div className="flex-1 space-y-1 overflow-y-auto max-h-[120px] scrollbar-thin scrollbar-thumb-gray-200">
+                <div className="flex-1 space-y-1 overflow-y-auto max-h-[120px] scrollbar-thin scrollbar-thumb-gray-200 px-1">
                   {ordenesDelDia.map(orden => (
                     <OrdenCard key={orden.id_orden} orden={orden} isCompact={true} />
                   ))}
@@ -309,8 +313,8 @@ const CalendarioProduccion = () => {
       </div>
 
       {/* --- LISTA DE ÓRDENES (DERECHA) --- */}
-      <div className="w-full md:w-80 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50">
+      <div className="w-full md:w-80 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden shrink-0 h-full">
+        <div className="p-4 border-b border-gray-100 bg-gray-50 shrink-0">
           <h3 className="font-bold text-gray-800 flex items-center gap-2">
             <Package size={20} />
             Órdenes
@@ -320,22 +324,22 @@ const CalendarioProduccion = () => {
           </p>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50/50">
+        <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-gray-50/50">
           {ordenes.length === 0 ? (
              <div className="text-center py-10 text-gray-400">
                No hay órdenes
              </div>
           ) : (
              ordenes.map(orden => (
-                <div key={`sidebar-${orden.id_orden}`} className="relative">
+                <div key={`sidebar-${orden.id_orden}`} className="relative group">
                    {/* Indicador visual si ya está programada */}
                    {orden.fecha_inicio && (
-                      <div className="absolute top-[-8px] right-2 z-10 bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200 shadow-sm flex items-center gap-1">
-                        <Clock size={10} />
+                      <div className="absolute top-[-6px] right-1 z-10 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-blue-200 shadow-sm flex items-center gap-1">
+                        <Clock size={8} />
                         {formatDateShort(orden.fecha_inicio)}
                       </div>
                    )}
-                   <OrdenCard orden={orden} />
+                   <OrdenCard orden={orden} isCompact={false} />
                 </div>
              ))
           )}

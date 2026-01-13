@@ -168,6 +168,7 @@ export async function getOrdenVentaById(req, res) {
 export async function createOrdenVenta(req, res) {
   try {
     const {
+      tipo_comprobante, // NUEVO
       id_cliente,
       id_cotizacion,
       fecha_emision,
@@ -209,6 +210,9 @@ export async function createOrdenVenta(req, res) {
       });
     }
     
+    // ============================================
+    // GENERAR NÚMERO DE ORDEN (interno)
+    // ============================================
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_venta 
@@ -226,6 +230,58 @@ export async function createOrdenVenta(req, res) {
     
     const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
+    // ============================================
+    // GENERAR NÚMERO DE COMPROBANTE (según tipo)
+    // ============================================
+    const tipoComp = tipo_comprobante || 'Factura';
+    let numeroComprobante = null;
+
+    if (tipoComp === 'Factura') {
+      // Obtener último número de factura
+      const ultimaFactura = await executeQuery(`
+        SELECT numero_comprobante 
+        FROM ordenes_venta 
+        WHERE tipo_comprobante = 'Factura'
+        AND numero_comprobante IS NOT NULL
+        ORDER BY id_orden_venta DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuenciaFactura = 1;
+      if (ultimaFactura.success && ultimaFactura.data.length > 0 && ultimaFactura.data[0].numero_comprobante) {
+        const match = ultimaFactura.data[0].numero_comprobante.match(/F\d{3}-(\d+)$/);
+        if (match) {
+          numeroSecuenciaFactura = parseInt(match[1]) + 1;
+        }
+      }
+
+      numeroComprobante = `F001-${String(numeroSecuenciaFactura).padStart(8, '0')}`;
+      
+    } else if (tipoComp === 'Nota de Venta') {
+      // Obtener último número de nota de venta
+      const ultimaNota = await executeQuery(`
+        SELECT numero_comprobante 
+        FROM ordenes_venta 
+        WHERE tipo_comprobante = 'Nota de Venta'
+        AND numero_comprobante IS NOT NULL
+        ORDER BY id_orden_venta DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuenciaNota = 1;
+      if (ultimaNota.success && ultimaNota.data.length > 0 && ultimaNota.data[0].numero_comprobante) {
+        const match = ultimaNota.data[0].numero_comprobante.match(/NV\d{3}-(\d+)$/);
+        if (match) {
+          numeroSecuenciaNota = parseInt(match[1]) + 1;
+        }
+      }
+
+      numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
+    }
+    
+    // ============================================
+    // CALCULAR TOTALES
+    // ============================================
     let subtotal = 0;
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
@@ -260,14 +316,19 @@ export async function createOrdenVenta(req, res) {
     // Cálculo de fecha vencimiento si no viene del front (fallback)
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal) {
-        const fechaBase = new Date(fecha_emision);
-        fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
-        fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
+      const fechaBase = new Date(fecha_emision);
+      fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
+      fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
     }
     
+    // ============================================
+    // INSERTAR ORDEN DE VENTA
+    // ============================================
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
         numero_orden,
+        tipo_comprobante,
+        numero_comprobante,
         id_cliente,
         id_cotizacion,
         fecha_emision,
@@ -297,9 +358,11 @@ export async function createOrdenVenta(req, res) {
         total_comision,
         porcentaje_comision_promedio,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
     `, [
       numeroOrden,
+      tipoComp,              // NUEVO
+      numeroComprobante,     // NUEVO
       id_cliente,
       id_cotizacion || null,
       fecha_emision,
@@ -339,6 +402,9 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
+    // ============================================
+    // INSERTAR DETALLES
+    // ============================================
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const precioBase = parseFloat(item.precio_base);
@@ -369,6 +435,9 @@ export async function createOrdenVenta(req, res) {
       ]);
     }
     
+    // ============================================
+    // MARCAR COTIZACIÓN COMO CONVERTIDA
+    // ============================================
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 
@@ -383,7 +452,9 @@ export async function createOrdenVenta(req, res) {
       success: true,
       data: {
         id_orden_venta: idOrden,
-        numero_orden: numeroOrden
+        numero_orden: numeroOrden,
+        tipo_comprobante: tipoComp,        // NUEVO
+        numero_comprobante: numeroComprobante // NUEVO
       },
       message: 'Orden de venta creada exitosamente'
     });

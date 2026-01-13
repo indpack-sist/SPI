@@ -5,7 +5,7 @@ import {
   Star, Package, Clock, Beaker, FileText, ClipboardList, 
   BarChart, DollarSign, Info, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, Minus, Edit, ShoppingCart,
-  UserCog, AlertCircle, Zap
+  UserCog, AlertCircle, Zap, Calendar as CalendarIcon // Importamos el icono Calendar
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -461,13 +461,16 @@ const eliminarInsumoProvisional = (idInsumo) => {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha).toLocaleString('es-PE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Si la fecha incluye 'T', asumimos que es ISO y usamos toLocaleString
+    if (fecha.includes('T')) {
+        return new Date(fecha).toLocaleString('es-PE', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    }
+    // Si es solo fecha YYYY-MM-DD
+    const [year, month, day] = fecha.split('-');
+    return `${day}/${month}/${year}`;
   };
 
   const formatearTiempo = (minutos) => {
@@ -802,8 +805,27 @@ const eliminarInsumoProvisional = (idInsumo) => {
             <h2 className="card-title">Tiempos y Costos</h2>
           </div>
           <div className="p-4 grid gap-3">
+            {/* NUEVO: FECHA PROGRAMADA */}
+            <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                <p className="text-xs text-blue-700 uppercase font-semibold flex items-center gap-1">
+                    <CalendarIcon size={12}/> Programación
+                </p>
+                {orden.fecha_programada ? (
+                    <div>
+                        <p className="text-sm font-medium text-blue-900">
+                            {formatearFecha(orden.fecha_programada)}
+                            {orden.fecha_programada_fin && orden.fecha_programada_fin !== orden.fecha_programada && (
+                                <> al {formatearFecha(orden.fecha_programada_fin)}</>
+                            )}
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-sm text-gray-500 italic">No programada</p>
+                )}
+            </div>
+
             <div>
-              <p className="text-xs text-muted uppercase font-semibold">Fecha Inicio / Fin</p>
+              <p className="text-xs text-muted uppercase font-semibold">Ejecución (Inicio / Fin)</p>
               <p className="text-sm">{formatearFecha(orden.fecha_inicio)}</p>
               <p className="text-sm">{formatearFecha(orden.fecha_fin)}</p>
             </div>
@@ -955,320 +977,317 @@ const eliminarInsumoProvisional = (idInsumo) => {
         </div>
       )}
 
+      {/* --- MODALES (Asignar, Parcial, Finalizar, Insumo) SE MANTIENEN IGUAL --- */}
+      {/* (El código de los modales ya estaba en tu versión y no requiere cambios) */}
+      
       <Modal
-  isOpen={modalAsignar}
-  onClose={() => setModalAsignar(false)}
-  title={
-    <span className="flex items-center gap-2">
-      <AlertCircle className="text-warning" /> Asignar Receta y Supervisor
-    </span>
-  }
-  size="lg"
->
-  <form onSubmit={handleAsignarRecetaSupervisor}>
-    <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4 flex gap-3">
-      <AlertCircle className="text-yellow-500 shrink-0" size={20} />
-      <div className="text-sm text-yellow-700">
-        <p><strong>Acción Requerida:</strong> Esta orden fue generada desde una Orden de Venta.</p>
-        <p className="mt-1">Debe asignar una receta y supervisor antes de poder iniciar la producción.</p>
-      </div>
-    </div>
-
-    {/* SELECTOR DE TIPO DE RECETA */}
-    <div className="mb-4">
-      <label className="form-label">Seleccione el Tipo de Receta *</label>
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          className={`btn text-left ${modoReceta === 'seleccionar' ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => cambiarModoReceta('seleccionar')}
-          disabled={recetasDisponibles.length === 0}
-          style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
-        >
-          <Star size={18} style={{ marginRight: '8px' }} />
-          <div>
-            <div className="font-bold">Receta Existente</div>
-            <div className="text-xs opacity-80">Usa receta guardada y consume materiales</div>
+        isOpen={modalAsignar}
+        onClose={() => setModalAsignar(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <AlertCircle className="text-warning" /> Asignar Receta y Supervisor
+          </span>
+        }
+        size="lg"
+      >
+        <form onSubmit={handleAsignarRecetaSupervisor}>
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4 flex gap-3">
+            <AlertCircle className="text-yellow-500 shrink-0" size={20} />
+            <div className="text-sm text-yellow-700">
+              <p><strong>Acción Requerida:</strong> Esta orden fue generada desde una Orden de Venta.</p>
+              <p className="mt-1">Debe asignar una receta y supervisor antes de poder iniciar la producción.</p>
+            </div>
           </div>
-        </button>
 
-        <button
-          type="button"
-          className={`btn text-left ${modoReceta === 'provisional' ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => cambiarModoReceta('provisional')}
-          style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
-        >
-          <Plus size={18} style={{ marginRight: '8px' }} />
-          <div>
-            <div className="font-bold">Receta Provisional</div>
-            <div className="text-xs opacity-80">Crea receta temporal y consume materiales</div>
+          <div className="mb-4">
+            <label className="form-label">Seleccione el Tipo de Receta *</label>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                className={`btn text-left ${modoReceta === 'seleccionar' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => cambiarModoReceta('seleccionar')}
+                disabled={recetasDisponibles.length === 0}
+                style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
+              >
+                <Star size={18} style={{ marginRight: '8px' }} />
+                <div>
+                  <div className="font-bold">Receta Existente</div>
+                  <div className="text-xs opacity-80">Usa receta guardada y consume materiales</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className={`btn text-left ${modoReceta === 'provisional' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => cambiarModoReceta('provisional')}
+                style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
+              >
+                <Plus size={18} style={{ marginRight: '8px' }} />
+                <div>
+                  <div className="font-bold">Receta Provisional</div>
+                  <div className="text-xs opacity-80">Crea receta temporal y consume materiales</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className={`btn text-left ${modoReceta === 'manual' ? 'btn-warning' : 'btn-outline'}`}
+                onClick={() => cambiarModoReceta('manual')}
+                style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
+              >
+                <Zap size={18} style={{ marginRight: '8px' }} />
+                <div>
+                  <div className="font-bold">Orden Manual</div>
+                  <div className="text-xs opacity-80">Sin receta, NO consume materiales</div>
+                </div>
+              </button>
+            </div>
           </div>
-        </button>
 
-        <button
-          type="button"
-          className={`btn text-left ${modoReceta === 'manual' ? 'btn-warning' : 'btn-outline'}`}
-          onClick={() => cambiarModoReceta('manual')}
-          style={{ justifyContent: 'flex-start', padding: '12px 16px' }}
-        >
-          <Zap size={18} style={{ marginRight: '8px' }} />
-          <div>
-            <div className="font-bold">Orden Manual</div>
-            <div className="text-xs opacity-80">Sin receta, NO consume materiales</div>
-          </div>
-        </button>
-      </div>
-    </div>
+          {modoReceta === 'seleccionar' && (
+            <>
+              {recetasDisponibles.length > 0 ? (
+                <div className="form-group">
+                  <label className="form-label">Receta de Producción *</label>
+                  <select
+                    className="form-select"
+                    value={recetaSeleccionada}
+                    onChange={(e) => setRecetaSeleccionada(e.target.value)}
+                    required
+                  >
+                    <option value="">Seleccione una receta...</option>
+                    {recetasDisponibles.map(receta => (
+                      <option key={receta.id_receta_producto} value={receta.id_receta_producto}>
+                        {receta.es_principal && '⭐ '}
+                        {receta.nombre_receta}
+                        {receta.version && ` v${receta.version}`}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="text-muted block mt-1">
+                    Seleccione la receta que se utilizará para producir este producto
+                  </small>
+                </div>
+              ) : (
+                <div className="alert alert-warning">
+                  <AlertCircle size={20} />
+                  <div>
+                    <strong>Sin recetas configuradas</strong>
+                    <p className="text-xs mt-1">
+                      Este producto no tiene recetas. Use "Receta Provisional" o "Orden Manual".
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
-    {/* MODO: Receta Existente */}
-    {modoReceta === 'seleccionar' && (
-      <>
-        {recetasDisponibles.length > 0 ? (
+          {modoReceta === 'provisional' && (
+            <>
+              <div className="form-group">
+                <label className="form-label">Rendimiento de la Receta *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="form-input"
+                  value={rendimientoProvisional}
+                  onChange={(e) => setRendimientoProvisional(e.target.value)}
+                  required
+                  placeholder="1.00"
+                />
+                <small className="text-muted">
+                  ¿Cuántas unidades produce esta receta por lote?
+                </small>
+              </div>
+
+              <div className="mb-3">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="form-label" style={{ marginBottom: 0 }}>
+                    Insumos ({recetaProvisional.length})
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={abrirModalInsumo}
+                  >
+                    <Plus size={16} />
+                    Agregar
+                  </button>
+                </div>
+
+                {recetaProvisional.length > 0 ? (
+                  <div className="border rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                    <table className="table table-sm">
+                      <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-primary)' }}>
+                        <tr>
+                          <th>Insumo</th>
+                          <th className="text-right">Cantidad</th>
+                          <th style={{ width: '50px' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recetaProvisional.map(item => (
+                          <tr key={item.id_insumo}>
+                            <td>
+                              <div className="font-medium text-sm">{item.codigo_insumo}</div>
+                              <div className="text-xs text-muted">{item.insumo}</div>
+                            </td>
+                            <td className="text-right">
+                              <div className="font-bold text-sm">{parseFloat(item.cantidad_requerida).toFixed(4)}</div>
+                              <div className="text-xs text-muted">{item.unidad_medida}</div>
+                            </td>
+                            <td className="text-center">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-danger"
+                                onClick={() => eliminarInsumoProvisional(item.id_insumo)}
+                                title="Eliminar"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="border border-dashed rounded p-3 text-center">
+                    <p className="text-muted text-sm">No hay insumos agregados</p>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary mt-2"
+                      onClick={abrirModalInsumo}
+                    >
+                      <Plus size={16} />
+                      Agregar Insumo
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {recetaProvisional.length > 0 && (
+                <div className="alert alert-info text-sm">
+                  <strong>Nota:</strong> Esta receta es temporal y solo se aplicará a esta orden de producción.
+                </div>
+              )}
+            </>
+          )}
+
+          {modoReceta === 'manual' && (
+            <div className="alert alert-warning">
+              <Zap size={20} />
+              <div>
+                <strong>Orden Manual Seleccionada</strong>
+                <p className="text-xs mt-1">
+                  Esta orden NO consumirá materiales del inventario. Solo registrará la producción final.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="form-group">
-            <label className="form-label">Receta de Producción *</label>
+            <label className="form-label">Supervisor Responsable *</label>
             <select
               className="form-select"
-              value={recetaSeleccionada}
-              onChange={(e) => setRecetaSeleccionada(e.target.value)}
+              value={supervisorSeleccionado}
+              onChange={(e) => setSupervisorSeleccionado(e.target.value)}
               required
             >
-              <option value="">Seleccione una receta...</option>
-              {recetasDisponibles.map(receta => (
-                <option key={receta.id_receta_producto} value={receta.id_receta_producto}>
-                  {receta.es_principal && '⭐ '}
-                  {receta.nombre_receta}
-                  {receta.version && ` v${receta.version}`}
+              <option value="">Seleccione un supervisor...</option>
+              {supervisoresDisponibles.map(supervisor => (
+                <option key={supervisor.id_empleado} value={supervisor.id_empleado}>
+                  {supervisor.nombre_completo}
                 </option>
               ))}
             </select>
             <small className="text-muted block mt-1">
-              Seleccione la receta que se utilizará para producir este producto
+              Supervisor que se encargará de esta orden de producción
             </small>
           </div>
-        ) : (
-          <div className="alert alert-warning">
-            <AlertCircle size={20} />
-            <div>
-              <strong>Sin recetas configuradas</strong>
-              <p className="text-xs mt-1">
-                Este producto no tiene recetas. Use "Receta Provisional" o "Orden Manual".
-              </p>
-            </div>
-          </div>
-        )}
-      </>
-    )}
 
-    {/* MODO: Receta Provisional */}
-    {modoReceta === 'provisional' && (
-      <>
+          <div className="flex gap-2 justify-end mt-6">
+            <button 
+              type="button" 
+              className="btn btn-outline" 
+              onClick={() => setModalAsignar(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-warning"
+              disabled={procesando || !supervisorSeleccionado || 
+                (modoReceta === 'seleccionar' && !recetaSeleccionada) ||
+                (modoReceta === 'provisional' && recetaProvisional.length === 0)}
+            >
+              {procesando ? 'Procesando...' : 'Asignar y Continuar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={modalAgregarInsumo}
+        onClose={() => setModalAgregarInsumo(false)}
+        title="Agregar Insumo a Receta Provisional"
+        size="md"
+      >
         <div className="form-group">
-          <label className="form-label">Rendimiento de la Receta *</label>
+          <label className="form-label">Insumo / Material</label>
+          <select
+            className="form-select"
+            value={nuevoInsumo.id_insumo}
+            onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}
+          >
+            <option value="">Seleccione un insumo...</option>
+            {insumosDisponibles
+              .filter(i => !recetaProvisional.find(rp => rp.id_insumo == i.id_producto))
+              .map(insumo => (
+                <option key={insumo.id_producto} value={insumo.id_producto}>
+                  {insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(insumo.stock_actual).toFixed(2)} {insumo.unidad_medida})
+                </option>
+              ))}
+          </select>
+          <small className="text-muted">Solo insumos y materia prima</small>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Cantidad Requerida</label>
           <input
             type="number"
-            step="0.01"
-            min="0.01"
+            step="0.0001"
+            min="0.0001"
             className="form-input"
-            value={rendimientoProvisional}
-            onChange={(e) => setRendimientoProvisional(e.target.value)}
-            required
-            placeholder="1.00"
+            value={nuevoInsumo.cantidad_requerida}
+            onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, cantidad_requerida: e.target.value })}
+            placeholder="0.0000"
           />
           <small className="text-muted">
-            ¿Cuántas unidades produce esta receta por lote?
+            Por cada {rendimientoProvisional} unidad(es) producida(s)
           </small>
         </div>
 
-        <div className="mb-3">
-          <div className="flex justify-between items-center mb-2">
-            <label className="form-label" style={{ marginBottom: 0 }}>
-              Insumos ({recetaProvisional.length})
-            </label>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              onClick={abrirModalInsumo}
-            >
-              <Plus size={16} />
-              Agregar
-            </button>
-          </div>
-
-          {recetaProvisional.length > 0 ? (
-            <div className="border rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-              <table className="table table-sm">
-                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-primary)' }}>
-                  <tr>
-                    <th>Insumo</th>
-                    <th className="text-right">Cantidad</th>
-                    <th style={{ width: '50px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recetaProvisional.map(item => (
-                    <tr key={item.id_insumo}>
-                      <td>
-                        <div className="font-medium text-sm">{item.codigo_insumo}</div>
-                        <div className="text-xs text-muted">{item.insumo}</div>
-                      </td>
-                      <td className="text-right">
-                        <div className="font-bold text-sm">{parseFloat(item.cantidad_requerida).toFixed(4)}</div>
-                        <div className="text-xs text-muted">{item.unidad_medida}</div>
-                      </td>
-                      <td className="text-center">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-danger"
-                          onClick={() => eliminarInsumoProvisional(item.id_insumo)}
-                          title="Eliminar"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="border border-dashed rounded p-3 text-center">
-              <p className="text-muted text-sm">No hay insumos agregados</p>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary mt-2"
-                onClick={abrirModalInsumo}
-              >
-                <Plus size={16} />
-                Agregar Insumo
-              </button>
-            </div>
-          )}
+        <div className="flex gap-2 justify-end mt-4">
+          <button 
+            type="button" 
+            className="btn btn-outline" 
+            onClick={() => setModalAgregarInsumo(false)}
+          >
+            Cancelar
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-primary"
+            onClick={agregarInsumoProvisional}
+            disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida}
+          >
+            Agregar Insumo
+          </button>
         </div>
-
-        {recetaProvisional.length > 0 && (
-          <div className="alert alert-info text-sm">
-            <strong>Nota:</strong> Esta receta es temporal y solo se aplicará a esta orden de producción.
-          </div>
-        )}
-      </>
-    )}
-
-    {/* MODO: Manual */}
-    {modoReceta === 'manual' && (
-      <div className="alert alert-warning">
-        <Zap size={20} />
-        <div>
-          <strong>Orden Manual Seleccionada</strong>
-          <p className="text-xs mt-1">
-            Esta orden NO consumirá materiales del inventario. Solo registrará la producción final.
-          </p>
-        </div>
-      </div>
-    )}
-
-    {/* Supervisor (común para todos los modos) */}
-    <div className="form-group">
-      <label className="form-label">Supervisor Responsable *</label>
-      <select
-        className="form-select"
-        value={supervisorSeleccionado}
-        onChange={(e) => setSupervisorSeleccionado(e.target.value)}
-        required
-      >
-        <option value="">Seleccione un supervisor...</option>
-        {supervisoresDisponibles.map(supervisor => (
-          <option key={supervisor.id_empleado} value={supervisor.id_empleado}>
-            {supervisor.nombre_completo}
-          </option>
-        ))}
-      </select>
-      <small className="text-muted block mt-1">
-        Supervisor que se encargará de esta orden de producción
-      </small>
-    </div>
-
-    <div className="flex gap-2 justify-end mt-6">
-      <button 
-        type="button" 
-        className="btn btn-outline" 
-        onClick={() => setModalAsignar(false)}
-        disabled={procesando}
-      >
-        Cancelar
-      </button>
-      <button 
-        type="submit" 
-        className="btn btn-warning"
-        disabled={procesando || !supervisorSeleccionado || 
-          (modoReceta === 'seleccionar' && !recetaSeleccionada) ||
-          (modoReceta === 'provisional' && recetaProvisional.length === 0)}
-      >
-        {procesando ? 'Procesando...' : 'Asignar y Continuar'}
-      </button>
-    </div>
-  </form>
-</Modal>
-
-{/* MODAL: Agregar Insumo a Receta Provisional */}
-<Modal
-  isOpen={modalAgregarInsumo}
-  onClose={() => setModalAgregarInsumo(false)}
-  title="Agregar Insumo a Receta Provisional"
-  size="md"
->
-  <div className="form-group">
-    <label className="form-label">Insumo / Material</label>
-    <select
-      className="form-select"
-      value={nuevoInsumo.id_insumo}
-      onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}
-    >
-      <option value="">Seleccione un insumo...</option>
-      {insumosDisponibles
-        .filter(i => !recetaProvisional.find(rp => rp.id_insumo == i.id_producto))
-        .map(insumo => (
-          <option key={insumo.id_producto} value={insumo.id_producto}>
-            {insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(insumo.stock_actual).toFixed(2)} {insumo.unidad_medida})
-          </option>
-        ))}
-    </select>
-    <small className="text-muted">Solo insumos y materia prima</small>
-  </div>
-
-  <div className="form-group">
-    <label className="form-label">Cantidad Requerida</label>
-    <input
-      type="number"
-      step="0.0001"
-      min="0.0001"
-      className="form-input"
-      value={nuevoInsumo.cantidad_requerida}
-      onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, cantidad_requerida: e.target.value })}
-      placeholder="0.0000"
-    />
-    <small className="text-muted">
-      Por cada {rendimientoProvisional} unidad(es) producida(s)
-    </small>
-  </div>
-
-  <div className="flex gap-2 justify-end mt-4">
-    <button 
-      type="button" 
-      className="btn btn-outline" 
-      onClick={() => setModalAgregarInsumo(false)}
-    >
-      Cancelar
-    </button>
-    <button 
-      type="button" 
-      className="btn btn-primary"
-      onClick={agregarInsumoProvisional}
-      disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida}
-    >
-      Agregar Insumo
-    </button>
-  </div>
-</Modal>
+      </Modal>
 
       <Modal
         isOpen={modalParcial}

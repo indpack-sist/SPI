@@ -31,7 +31,6 @@ const CalendarioProduccion = () => {
       const data = Array.isArray(response.data.data) ? response.data.data : [];
       setOrdenes(data);
     } catch (error) {
-      console.error(error);
       setOrdenes([]);
     } finally { setLoading(false); }
   };
@@ -55,10 +54,26 @@ const CalendarioProduccion = () => {
   const calendarDays = generateCalendarDays();
   const isToday = (d) => d === new Date().toISOString().split('T')[0];
 
+  const getOrderDates = (orden) => {
+    let start, end;
+
+    if (orden.fecha_programada) {
+        start = orden.fecha_programada.split('T')[0];
+        end = (orden.fecha_programada_fin || orden.fecha_programada).split('T')[0];
+    } 
+    else if (orden.fecha_inicio) {
+        start = orden.fecha_inicio.split('T')[0];
+        end = (orden.fecha_fin || orden.fecha_inicio).split('T')[0];
+    } else {
+        return { start: null, end: null };
+    }
+
+    return { start, end };
+  };
+
   const isOrderInDay = (orden, dayDate) => {
-    if (!orden.fecha_programada) return false;
-    const start = orden.fecha_programada;
-    const end = orden.fecha_programada_fin || orden.fecha_programada;
+    const { start, end } = getOrderDates(orden);
+    if (!start) return false;
     return dayDate >= start && dayDate <= end;
   };
 
@@ -205,19 +220,19 @@ const CalendarioProduccion = () => {
             {isScheduled && (isDraggable) && (
                 <button 
                     onClick={(e) => handleDesprogramar(e, orden)}
-                    style={{ border: 'none', background: '#fee2e2', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', padding: '2px' }}
+                    style={{ border: 'none', background: '#fee2e2', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', padding: '4px' }}
                     title="Retornar a pendientes"
                 >
-                    <RotateCcw size={12} />
+                    <RotateCcw size={14} />
                 </button>
             )}
             
             <button 
                 onClick={(e) => { e.stopPropagation(); navigate(`/produccion/ordenes/${orden.id_orden}`); }}
-                style={{ border: 'none', background: '#f3f4f6', borderRadius: '4px', cursor: 'pointer', color: '#4b5563', padding: '2px' }}
+                style={{ border: 'none', background: '#f3f4f6', borderRadius: '4px', cursor: 'pointer', color: '#4b5563', padding: '4px' }}
                 title="Ver detalle completo"
             >
-                <ExternalLink size={12} />
+                <ExternalLink size={14} />
             </button>
           </div>
         </div>
@@ -249,7 +264,10 @@ const CalendarioProduccion = () => {
 
   if (loading) return <Loading message="Cargando calendario..." />;
 
-  const ordenesParaSidebar = ordenes.filter(o => !o.fecha_programada && (o.estado === 'Pendiente' || o.estado === 'Pendiente Asignación'));
+  const ordenesParaSidebar = ordenes.filter(o => 
+    !o.fecha_programada && 
+    (o.estado === 'Pendiente' || o.estado === 'Pendiente Asignación')
+  );
 
   const ordenesDelDiaSeleccionado = selectedDay 
     ? ordenes.filter(o => isOrderInDay(o, selectedDay.fullDate))
@@ -320,7 +338,8 @@ const CalendarioProduccion = () => {
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   {ordenesDelDia.slice(0, 4).map(o => {
-                    const isPart = o.fecha_programada !== o.fecha_programada_fin;
+                    const { start, end } = getOrderDates(o);
+                    const isPart = start !== end;
                     return <OrdenCard key={o.id_orden} orden={o} compact={true} isRangePart={isPart} />;
                   })}
                   {ordenesDelDia.length > 4 && <div style={{ fontSize: '10px', color: '#6b7280', textAlign: 'center' }}>+ {ordenesDelDia.length - 4} más...</div>}
@@ -354,17 +373,20 @@ const CalendarioProduccion = () => {
             </div>
             <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
               {ordenesDelDiaSeleccionado.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>Sin órdenes programadas.</div>
+                <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>Sin órdenes.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {ordenesDelDiaSeleccionado.map(o => (
-                    <div key={o.id_orden} style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '8px', backgroundColor: '#f9fafb' }}>
-                        <OrdenCard orden={o} />
-                        <div style={{fontSize:'11px', marginTop:'4px', color:'#64748b'}}>
-                            <strong>Inicio:</strong> {o.fecha_programada} | <strong>Fin:</strong> {o.fecha_programada_fin || o.fecha_programada}
-                        </div>
-                    </div>
-                  ))}
+                  {ordenesDelDiaSeleccionado.map(o => {
+                    const { start, end } = getOrderDates(o);
+                    return (
+                      <div key={o.id_orden} style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '8px', backgroundColor: '#f9fafb' }}>
+                          <OrdenCard orden={o} />
+                          <div style={{fontSize:'11px', marginTop:'4px', color:'#64748b'}}>
+                              <strong>Inicio:</strong> {start} | <strong>Fin:</strong> {end}
+                          </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

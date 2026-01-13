@@ -75,8 +75,6 @@ function PagosCobranzas() {
     try {
       setLoading(true);
       setError(null);
-      // Nota: Para cuentas por cobrar, a veces queremos ver todo el futuro, no solo el filtro de fecha
-      // Puedes decidir si enviar los filtros o limpiar fechas para ver toda la cartera
       const response = await pagosCobranzasAPI.getCuentasPorCobrar(filtros);
       
       if (response.data.success) {
@@ -106,7 +104,6 @@ function PagosCobranzas() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    // Asegurar compatibilidad de zona horaria
     const parts = fecha.split('T')[0].split('-');
     return `${parts[2]}/${parts[1]}/${parts[0]}`; 
   };
@@ -116,6 +113,7 @@ function PagosCobranzas() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
+  // --- COLUMNAS HISTORIAL MOVIMIENTOS ---
   const columnsMovimientos = [
     {
       header: 'Tipo',
@@ -135,17 +133,21 @@ function PagosCobranzas() {
     {
       header: 'Referencia',
       accessor: 'numero_pago',
-      width: '160px',
+      width: '180px',
       render: (value, row) => (
         <div>
           <div className="font-mono font-bold text-gray-800">{value}</div>
-          {row.tipo === 'cobranza' && row.tipo_comprobante ? (
-            <div className="flex items-center gap-1 text-xs text-primary mt-0.5">
-              <FileBadge size={10} />
+          {row.tipo === 'cobranza' ? (
+            // CAMBIO: Redirección usando id_orden (que viene del controller getAllPagosCobranzas)
+            <button 
+              className="flex items-center gap-1 text-xs text-blue-600 hover:underline hover:text-blue-800 mt-0.5 cursor-pointer bg-transparent border-0 p-0"
+              onClick={() => navigate(`/ventas/ordenes/${row.id_orden}`)}
+            >
+              <FileBadge size={12} />
               <span className="font-semibold">
-                {row.tipo_comprobante === 'Factura' ? 'FAC' : 'NV'}: {row.numero_comprobante || row.serie_correlativo || '-'}
+                Ref: {row.documento_referencia}
               </span>
-            </div>
+            </button>
           ) : (
             <div className="text-xs text-muted">Doc: {row.documento_referencia}</div>
           )}
@@ -183,38 +185,49 @@ function PagosCobranzas() {
     }
   ];
 
-  // COLUMNAS ACTUALIZADAS PARA MOSTRAR ESTADOS Y COLORES
+  // --- COLUMNAS CUENTAS POR COBRAR ---
   const columnsCobranzas = [
     {
       header: 'Estado Deuda',
-      accessor: 'dias_restantes',
+      accessor: 'estado_deuda',
       width: '150px',
       align: 'center',
-      render: (dias, row) => {
+      render: (estado, row) => {
         let estadoConfig = {};
+        const dias = row.dias_restantes;
         
-        // Lógica de colores basada en días restantes
-        if (dias < 0) {
-          estadoConfig = {
-            color: 'badge-danger',
-            texto: 'Vencido',
-            icono: XCircle,
-            mensaje: `${Math.abs(dias)} días de atraso`
-          };
-        } else if (dias <= 5) {
-          estadoConfig = {
-            color: 'badge-warning',
-            texto: 'Por Vencer',
-            icono: AlertTriangle,
-            mensaje: `Vence en ${dias} días`
-          };
-        } else {
-          estadoConfig = {
-            color: 'badge-success',
-            texto: 'Al Día',
-            icono: CheckCircle,
-            mensaje: `Quedan ${dias} días`
-          };
+        switch(estado) {
+          case 'Pendiente': // CONTADO
+            estadoConfig = {
+              color: 'badge-danger',
+              texto: 'Pago Pendiente',
+              icono: AlertCircle,
+              mensaje: 'Saldo por regularizar'
+            };
+            break;
+          case 'Vencido': // CRÉDITO VENCIDO
+            estadoConfig = {
+              color: 'badge-danger',
+              texto: 'Vencido',
+              icono: XCircle,
+              mensaje: `${Math.abs(dias)} días de atraso`
+            };
+            break;
+          case 'Proximo a Vencer': // CRÉDITO PRÓXIMO
+            estadoConfig = {
+              color: 'badge-warning',
+              texto: 'Por Vencer',
+              icono: AlertTriangle,
+              mensaje: `Vence en ${dias} días`
+            };
+            break;
+          default: // AL DÍA
+            estadoConfig = {
+              color: 'badge-success',
+              texto: 'Al Día',
+              icono: CheckCircle,
+              mensaje: `Quedan ${dias} días`
+            };
         }
 
         const Icon = estadoConfig.icono;
@@ -224,7 +237,7 @@ function PagosCobranzas() {
             <span className={`badge ${estadoConfig.color} flex items-center gap-1 w-full justify-center`}>
               <Icon size={12} /> {estadoConfig.texto}
             </span>
-            <span className={`text-[10px] font-bold ${dias < 0 ? 'text-red-600' : 'text-green-600'}`}>
+            <span className={`text-[10px] font-bold ${estado === 'Pendiente' || estado === 'Vencido' ? 'text-red-600' : 'text-green-600'}`}>
               {estadoConfig.mensaje}
             </span>
           </div>
@@ -234,23 +247,26 @@ function PagosCobranzas() {
     {
       header: 'Documento',
       accessor: 'numero_orden',
-      width: '140px',
+      width: '160px',
       render: (value, row) => (
-        <div>
-          {row.numero_comprobante ? (
-            <div className="font-bold text-primary flex items-center gap-1">
-              <FileText size={12} />
-              {row.tipo_comprobante === 'Factura' ? 'F' : 'NV'}: {row.numero_comprobante}
+        <div className="flex flex-col">
+          {/* CAMBIO: Enlace principal a la Orden de Venta */}
+          <button 
+            className="font-mono font-bold text-blue-600 hover:underline text-sm text-left flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0"
+            onClick={() => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
+          >
+            <FileText size={14} />
+            {value}
+          </button>
+
+          {/* Información secundaria: Comprobante */}
+          {row.numero_comprobante && (
+            <div className="text-xs text-gray-500 font-medium mt-0.5 ml-0.5">
+              {row.tipo_comprobante === 'Factura' ? 'Factura' : 'Nota Venta'}: <span className="text-gray-800">{row.numero_comprobante}</span>
             </div>
-          ) : (
-            <button 
-              className="font-mono font-bold text-blue-600 hover:underline text-sm"
-              onClick={() => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
-            >
-              {value}
-            </button>
           )}
-          <div className="text-[10px] text-muted">
+          
+          <div className="text-[10px] text-muted mt-1">
             Emisión: {formatearFecha(row.fecha_emision)}
           </div>
         </div>
@@ -297,7 +313,6 @@ function PagosCobranzas() {
       render: (value, row) => (
         <div className="flex flex-col items-end">
           <span className="text-success text-sm font-medium">{formatearMoneda(value, row.moneda)}</span>
-          {/* Barra de progreso de pago */}
           <div className="w-16 h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
             <div 
               className="h-full bg-success transition-all duration-500" 
@@ -364,7 +379,6 @@ function PagosCobranzas() {
       {/* DASHBOARD SOLO EN PESTAÑA MOVIMIENTOS */}
       {activeTab === 'movimientos' && resumen && (
         <div className="grid grid-cols-4 gap-4 mb-6">
-          {/* Card Egresos */}
           <div className="card border-l-4 border-danger hover:shadow-md transition-shadow">
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
@@ -389,7 +403,6 @@ function PagosCobranzas() {
             </div>
           </div>
 
-          {/* Card Ingresos */}
           <div className="card border-l-4 border-success hover:shadow-md transition-shadow">
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
@@ -414,7 +427,6 @@ function PagosCobranzas() {
             </div>
           </div>
 
-          {/* Cards Flujo Neto */}
           {['pen', 'usd'].map((moneda) => (
             <div key={moneda} className={`card border-l-4 ${resumen.flujo_neto[moneda] >= 0 ? 'border-primary' : 'border-warning'} hover:shadow-md transition-shadow`}>
               <div className="card-body">

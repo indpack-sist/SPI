@@ -4,7 +4,8 @@ import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
-  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar
+  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
+  FileBadge // Agregado para diferenciar iconos
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -185,14 +186,18 @@ function DetalleOrdenVenta() {
     navigate(`/ventas/guias-remision/nueva?orden=${id}`);
   };
 
-  const handleDescargarPDF = async () => {
+  // MODIFICADO: Acepta un argumento 'tipo' para distinguir qué descargar
+  const handleDescargarPDF = async (tipoDocumento) => {
     try {
       setProcesando(true);
       setError(null);
-      // El backend debe decidir qué PDF generar basado en el tipo_comprobante de la orden
-      // o puedes tener endpoints separados. Asumo el mismo endpoint.
-      await ordenesVentaAPI.descargarPDF(id);
-      setSuccess(`PDF de ${orden.tipo_comprobante || 'Orden'} descargado exitosamente`);
+      
+      // Enviamos el tipo a la API ('orden' o 'comprobante')
+      // Asegúrate de que tu api.js y backend soporten este segundo parámetro
+      await ordenesVentaAPI.descargarPDF(id, tipoDocumento);
+      
+      const nombreArchivo = tipoDocumento === 'comprobante' ? orden.tipo_comprobante : 'Orden de Venta';
+      setSuccess(`PDF de ${nombreArchivo} descargado exitosamente`);
     } catch (err) {
       console.error(err);
       setError('Error al descargar el PDF');
@@ -606,7 +611,6 @@ function DetalleOrdenVenta() {
                 Emitida el {formatearFecha(orden.fecha_emision)}
               </p>
               
-              {/* VISUALIZACIÓN DE TIPO DE COMPROBANTE Y CORRELATIVO */}
               {orden.tipo_comprobante && (
                 <div className="flex items-center gap-2">
                   <span className={`badge ${orden.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
@@ -622,11 +626,27 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
-          {/* Botón PDF dinámico según tipo de comprobante */}
-          <button className="btn btn-outline" onClick={handleDescargarPDF} disabled={procesando}>
-            <Download size={20} /> 
-            PDF {orden.tipo_comprobante ? orden.tipo_comprobante : 'Orden'}
+          {/* BOTÓN 1: SIEMPRE VISIBLE - PDF INTERNO DE ORDEN */}
+          <button 
+            className="btn btn-outline" 
+            onClick={() => handleDescargarPDF('orden')} 
+            disabled={procesando}
+            title="Descargar Orden Interna"
+          >
+            <FileText size={20} /> PDF Orden
           </button>
+
+          {/* BOTÓN 2: VISIBLE SOLO SI HAY TIPO COMPROBANTE - PDF FISCAL */}
+          {orden.tipo_comprobante && (
+            <button 
+              className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
+              onClick={() => handleDescargarPDF('comprobante')} 
+              disabled={procesando}
+              title={`Descargar ${orden.tipo_comprobante}`}
+            >
+              <Download size={20} /> PDF {orden.tipo_comprobante}
+            </button>
+          )}
           
           {orden.estado === 'Despachada' && orden.id_salida && (
             <button 
@@ -663,6 +683,7 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      {/* Resto del contenido sigue igual ... */}
       {productosRequierenOP.length > 0 && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
@@ -920,7 +941,6 @@ function DetalleOrdenVenta() {
           </div>
           <div className="card-body space-y-2">
             
-            {/* AGREGADO: MOSTRAR TIPO COMPROBANTE EN CONDICIONES */}
             <div className="grid grid-cols-2 gap-2 pb-2 mb-2 border-b border-gray-100">
               <div>
                  <label className="text-sm font-medium text-muted">Tipo Documento:</label>

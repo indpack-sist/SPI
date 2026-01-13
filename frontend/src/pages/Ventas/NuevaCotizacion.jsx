@@ -362,15 +362,15 @@ function NuevaCotizacion() {
   };
 
   const handleTipoImpuestoChange = (codigo) => {
-    const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
-    if (tipoImpuesto) {
-      setFormCabecera(prev => ({
-        ...prev,
-        tipo_impuesto: codigo,
-        porcentaje_impuesto: tipoImpuesto.porcentaje
-      }));
-    }
-  };
+  const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
+  if (tipoImpuesto) {
+    setFormCabecera(prev => ({
+      ...prev,
+      tipo_impuesto: codigo, // ← CAMBIADO: guarda el código
+      porcentaje_impuesto: tipoImpuesto.porcentaje
+    }));
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -622,19 +622,21 @@ function NuevaCotizacion() {
               </div>
               
               <div className="form-group">
-                <label className="form-label">Tipo de Impuesto *</label>
-                <select
-                  className="form-select"
-                  value={formCabecera.tipo_impuesto}
-                  onChange={(e) => handleTipoImpuestoChange(e.target.value)}
-                  disabled={cotizacionConvertida}
-                  required
-                >
-                  {TIPOS_IMPUESTO.map(tipo => (
-                    <option key={tipo.codigo} value={tipo.nombre}>{tipo.nombre}</option>
-                  ))}
-                </select>
-              </div>
+  <label className="form-label">Tipo de Impuesto *</label>
+  <select
+    className="form-select"
+    value={formCabecera.tipo_impuesto}
+    onChange={(e) => handleTipoImpuestoChange(e.target.value)}
+    disabled={cotizacionConvertida}
+    required
+  >
+    {TIPOS_IMPUESTO.map(tipo => (
+      <option key={tipo.codigo} value={tipo.codigo}> {/* ← CAMBIADO: value={tipo.codigo} */}
+        {tipo.nombre}
+      </option>
+    ))}
+  </select>
+</div>
               
               {formCabecera.moneda === 'USD' && (
                 <div className="form-group">

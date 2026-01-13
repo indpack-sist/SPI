@@ -4,7 +4,7 @@ import {
   Package, BarChart3, ArrowDownToLine, ArrowUpFromLine, 
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag,
-  CreditCard, Banknote 
+  CreditCard, Banknote, Search // Agregado Search para el icono de consulta
 } from 'lucide-react';
 import { usePermisos, ConPermiso } from '../../context/PermisosContext';
 import './Sidebar.css';
@@ -35,7 +35,9 @@ function Sidebar({ isOpen, onToggle }) {
     {
       title: 'Productos',
       items: [
-        { path: '/productos', icon: Package, label: 'Catálogo de Productos', modulo: 'productos' }
+        { path: '/productos', icon: Package, label: 'Catálogo de Productos', modulo: 'productos' },
+        // NUEVO ÍTEM AGREGADO AQUÍ
+        { path: '/productos/consulta-stock', icon: Search, label: 'Consulta de Stock', modulo: 'consultarStock' }
       ]
     },
     {
@@ -63,7 +65,6 @@ function Sidebar({ isOpen, onToggle }) {
       title: 'Finanzas',
       items: [
         { path: '/finanzas/cuentas-pago', icon: CreditCard, label: 'Cuentas por Pagar', modulo: 'cuentasPago' },
-        // CORRECCIÓN AQUÍ: Se cambió 'pagoCobranzas' por 'pagosCobranzas' (plural)
         { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Pagos y Cobranzas', modulo: 'pagosCobranzas' }
       ]
     },

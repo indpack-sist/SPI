@@ -4,8 +4,7 @@ import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
-  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  FileBadge
+  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -321,13 +320,6 @@ function DetalleOrdenVenta() {
       'Pagado': { clase: 'badge-success', icono: CheckCircle }
     };
     return configs[estadoPago] || configs['Pendiente'];
-  };
-
-  const puedeDespachar = () => {
-    if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
-      return false;
-    }
-    return orden.estado === 'Atendido por Producción';
   };
 
   const columns = [
@@ -646,7 +638,7 @@ function DetalleOrdenVenta() {
             <FileText size={20} /> PDF Orden
           </button>
 
-          {orden.tipo_comprobante && (
+          {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
             <button 
               className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
               onClick={() => handleDescargarPDF('comprobante')} 
@@ -676,12 +668,6 @@ function DetalleOrdenVenta() {
                   onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
                 >
                   <Edit size={20} /> Editar
-                </button>
-              )}
-
-              {puedeDespachar() && (
-                <button className="btn btn-primary" onClick={handleGenerarGuia}>
-                  <Plus size={20} /> Guía de Remisión
                 </button>
               )}
             </>

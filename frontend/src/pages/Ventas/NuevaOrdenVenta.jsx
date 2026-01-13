@@ -20,9 +20,16 @@ const TIPOS_IMPUESTO = [
 
 const FORMAS_PAGO = [
   'Transferencia Bancaria',
+  'Depósito en Cuenta',
+  'Cheque',
   'Efectivo',
-  'Yape'
+  'Letra de Cambio',
+  'Yape',
+  'Plin',
+  'Tarjeta de Crédito',
+  'Tarjeta de Débito'
 ];
+
 const DIAS_CREDITO_OPCIONES = [7, 15, 30, 45, 60, 90];
 
 function NuevaOrdenVenta() {
@@ -69,7 +76,7 @@ function NuevaOrdenVenta() {
     tipo_venta: 'Contado', 
     dias_credito: 0,      
     plazo_pago: 'Contado',
-    forma_pago: '', // Inicializamos vacío
+    forma_pago: '',
     orden_compra_cliente: '',
     direccion_entrega: '',
     lugar_entrega: '',
@@ -255,7 +262,6 @@ function NuevaOrdenVenta() {
           tipo_venta: tipoVentaCalculado,
           dias_credito: diasCreditoCalculado,
           plazo_pago: cot.plazo_pago || 'Contado',
-          // 2. ACTUALIZADO: Aquí se asigna la forma de pago de la cotización
           forma_pago: cot.forma_pago || '', 
           direccion_entrega: cot.direccion_entrega || '',
           lugar_entrega: cot.lugar_entrega || '',
@@ -319,7 +325,7 @@ function NuevaOrdenVenta() {
       precio_base: precioBase,
       porcentaje_comision: 0,
       monto_comision: 0,
-      precio_unitario: precioBase,
+      precio_unitario: '',
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual
     };
@@ -329,41 +335,30 @@ function NuevaOrdenVenta() {
     setBusquedaProducto('');
   };
 
+  const handlePrecioVentaChange = (index, valor) => {
+    const newDetalle = [...detalle];
+    newDetalle[index].precio_unitario = valor;
+    
+    const precioVenta = parseFloat(valor);
+    const precioBase = parseFloat(newDetalle[index].precio_base);
+    
+    if (!isNaN(precioVenta) && precioBase > 0) {
+      const ganancia = precioVenta - precioBase;
+      const porcentaje = (ganancia / precioBase) * 100;
+      
+      newDetalle[index].porcentaje_comision = porcentaje;
+      newDetalle[index].monto_comision = ganancia;
+    } else {
+      newDetalle[index].porcentaje_comision = 0;
+      newDetalle[index].monto_comision = 0;
+    }
+    
+    setDetalle(newDetalle);
+  };
+
   const handleCantidadChange = (index, valor) => {
     const newDetalle = [...detalle];
     newDetalle[index].cantidad = parseFloat(valor) || 0;
-    setDetalle(newDetalle);
-  };
-
-  const handlePrecioBaseChange = (index, precioBase) => {
-    const newDetalle = [...detalle];
-    const item = newDetalle[index];
-    const nuevoPrecioBase = parseFloat(precioBase) || 0;
-    const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-    
-    const montoComision = nuevoPrecioBase * (porcentajeComision / 100);
-    const precioFinal = nuevoPrecioBase + montoComision;
-    
-    newDetalle[index].precio_base = nuevoPrecioBase;
-    newDetalle[index].monto_comision = montoComision;
-    newDetalle[index].precio_unitario = precioFinal;
-    
-    setDetalle(newDetalle);
-  };
-
-  const handleComisionChange = (index, porcentaje) => {
-    const newDetalle = [...detalle];
-    const item = newDetalle[index];
-    const precioBase = parseFloat(item.precio_base);
-    const porcentajeComision = parseFloat(porcentaje) || 0;
-    
-    const montoComision = precioBase * (porcentajeComision / 100);
-    const precioFinal = precioBase + montoComision;
-    
-    newDetalle[index].porcentaje_comision = porcentajeComision;
-    newDetalle[index].monto_comision = montoComision;
-    newDetalle[index].precio_unitario = precioFinal;
-    
     setDetalle(newDetalle);
   };
 
@@ -383,7 +378,8 @@ function NuevaOrdenVenta() {
     let totalComisiones = 0;
     
     detalle.forEach(item => {
-      const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
+      const precioVenta = parseFloat(item.precio_unitario) || 0;
+      const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
       subtotal += valorVenta;
       totalComisiones += (item.monto_comision || 0) * item.cantidad;
     });
@@ -397,7 +393,7 @@ function NuevaOrdenVenta() {
 
   const formatearMoneda = (valor) => {
     const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
+    return `${simbolo} ${new Intl.NumberFormat('es-PE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(parseFloat(valor || 0))}`;
   };
 
   const handleTipoImpuestoChange = (codigo) => {
@@ -422,6 +418,12 @@ function NuevaOrdenVenta() {
     
     if (detalle.length === 0) {
       setError('Debe agregar al menos un producto');
+      return;
+    }
+
+    const productosSinPrecio = detalle.some(item => !item.precio_unitario || parseFloat(item.precio_unitario) <= 0);
+    if (productosSinPrecio) {
+      setError('Todos los productos deben tener un precio de venta válido');
       return;
     }
     
@@ -615,8 +617,8 @@ function NuevaOrdenVenta() {
                       <th>Producto</th>
                       <th className="text-right w-24">Cant.</th>
                       <th className="text-right w-28">P. Base</th>
+                      <th className="text-right w-28">P. Venta</th>
                       <th className="text-right w-28">Comisión</th>
-                      <th className="text-right w-28">P. Final</th>
                       <th className="text-center w-20">Desc%</th>
                       <th className="text-right w-28">Subtotal</th>
                       <th className="w-10"></th>
@@ -627,7 +629,8 @@ function NuevaOrdenVenta() {
                       <tr><td colSpan="8" className="text-center py-8 text-muted">No hay productos agregados</td></tr>
                     ) : (
                       detalle.map((item, index) => {
-                        const valorVenta = (item.cantidad * item.precio_unitario) * (1 - item.descuento_porcentaje / 100);
+                        const precioVenta = parseFloat(item.precio_unitario) || 0;
+                        const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
                         return (
                           <tr key={index}>
                             <td>
@@ -644,27 +647,25 @@ function NuevaOrdenVenta() {
                               />
                             </td>
                             <td>
-                              <input 
-                                type="number" 
-                                className="form-input text-right p-1 h-8 bg-blue-50"
-                                value={item.precio_base}
-                                onChange={(e) => handlePrecioBaseChange(index, e.target.value)}
-                                min="0" step="0.001"
-                              />
+                              <div className="form-input text-right bg-gray-100 border-none p-1 h-8 flex items-center justify-end">
+                                {formatearMoneda(item.precio_base)}
+                              </div>
                             </td>
                             <td>
                               <input 
                                 type="number" 
-                                className="form-input text-right p-1 h-8 bg-yellow-50"
-                                value={item.porcentaje_comision}
-                                onChange={(e) => handleComisionChange(index, e.target.value)}
-                                min="0" max="100" step="0.01"
-                                placeholder="%"
+                                className="form-input text-right p-1 h-8 bg-blue-50"
+                                value={item.precio_unitario}
+                                onChange={(e) => handlePrecioVentaChange(index, e.target.value)}
+                                min="0" step="0.001"
+                                placeholder="0.000"
                               />
-                              <div className="text-[10px] text-right text-success">+{formatearMoneda(item.monto_comision)}</div>
                             </td>
-                            <td className="text-right">
-                              <div className="font-bold text-primary">{formatearMoneda(item.precio_unitario)}</div>
+                            <td>
+                              <div className="form-input text-right bg-gray-100 border-none p-1 h-8 flex flex-col justify-center items-end">
+                                <span className="text-xs font-bold">{parseFloat(item.porcentaje_comision).toFixed(2)}%</span>
+                                <span className="text-[10px] text-success">+{formatearMoneda(item.monto_comision)}</span>
+                              </div>
                             </td>
                             <td>
                               <input 
@@ -844,7 +845,7 @@ function NuevaOrdenVenta() {
                 )}
 
                 <div>
-                  <label className="form-label">Forma de Pago</label>
+                  <label className="form-label">Medio de Pago</label>
                   <select 
                     className="form-select"
                     value={formCabecera.forma_pago}

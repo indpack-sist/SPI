@@ -4,7 +4,8 @@ import {
   DollarSign, TrendingUp, TrendingDown, Calendar, 
   Filter, Download, ArrowUpCircle, ArrowDownCircle,
   CreditCard, Building2, User, FileText, AlertTriangle,
-  Clock, CheckCircle, XCircle, LayoutList, AlertCircle
+  Clock, CheckCircle, XCircle, LayoutList, AlertCircle,
+  FileBadge 
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -16,14 +17,12 @@ function PagosCobranzas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Estados de datos
   const [movimientos, setMovimientos] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [cuentas, setCuentas] = useState([]);
   const [cuentasPorCobrar, setCuentasPorCobrar] = useState([]);
   
-  // Control de interfaz
-  const [activeTab, setActiveTab] = useState('movimientos'); // 'movimientos' | 'cobranzas'
+  const [activeTab, setActiveTab] = useState('movimientos');
 
   const [filtros, setFiltros] = useState({
     tipo: '',
@@ -64,8 +63,9 @@ function PagosCobranzas() {
         pagosCobranzasAPI.getAll(filtros)
       ]);
       
-      setResumen(resumenRes.data.data);
-      setMovimientos(movimientosRes.data.data);
+      if (resumenRes.data.success) setResumen(resumenRes.data.data);
+      if (movimientosRes.data.success) setMovimientos(movimientosRes.data.data);
+      
     } catch (err) {
       setError(err.response?.data?.error || 'Error al cargar movimientos');
     } finally {
@@ -77,9 +77,11 @@ function PagosCobranzas() {
     try {
       setLoading(true);
       setError(null);
-      // Filtros específicos para deudas si es necesario
       const response = await pagosCobranzasAPI.getCuentasPorCobrar(filtros);
-      setCuentasPorCobrar(response.data.data || []);
+      
+      if (response.data.success) {
+        setCuentasPorCobrar(response.data.data || []);
+      }
     } catch (err) {
       console.error(err);
       setError('Error al cargar cuentas por cobrar');
@@ -104,7 +106,13 @@ function PagosCobranzas() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE', {timeZone: 'UTC'});
+    const fechaObj = new Date(fecha);
+    return fechaObj.toLocaleDateString('es-PE', {
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
   };
 
   const formatearMoneda = (valor, moneda = 'PEN') => {
@@ -112,19 +120,18 @@ function PagosCobranzas() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
-  // --- COLUMNAS PARA MOVIMIENTOS (HISTORIAL) ---
   const columnsMovimientos = [
     {
       header: 'Tipo',
       accessor: 'tipo',
-      width: '120px',
+      width: '110px',
       align: 'center',
       render: (value) => {
         const isPago = value === 'pago';
         return (
           <div className={`flex items-center gap-2 justify-center ${isPago ? 'text-red-600' : 'text-green-600'}`}>
             {isPago ? <ArrowDownCircle size={18} /> : <ArrowUpCircle size={18} />}
-            <span className="font-medium">{isPago ? 'Egreso' : 'Ingreso'}</span>
+            <span className="font-medium text-xs uppercase">{isPago ? 'Egreso' : 'Ingreso'}</span>
           </div>
         );
       }
@@ -132,24 +139,33 @@ function PagosCobranzas() {
     {
       header: 'Referencia',
       accessor: 'numero_pago',
-      width: '140px',
+      width: '160px',
       render: (value, row) => (
         <div>
-          <div className="font-mono font-bold">{value}</div>
-          <div className="text-xs text-muted">{row.documento_referencia}</div>
+          <div className="font-mono font-bold text-gray-800">{value}</div>
+          {row.tipo === 'cobranza' && row.tipo_comprobante ? (
+            <div className="flex items-center gap-1 text-xs text-primary mt-0.5">
+              <FileBadge size={10} />
+              <span className="font-semibold">
+                {row.tipo_comprobante === 'Factura' ? 'FAC' : 'NV'}: {row.numero_comprobante || row.serie_correlativo || '-'}
+              </span>
+            </div>
+          ) : (
+            <div className="text-xs text-muted">Doc: {row.documento_referencia}</div>
+          )}
         </div>
       )
     },
     {
       header: 'Fecha',
       accessor: 'fecha_pago',
-      width: '110px',
-      render: (value) => formatearFecha(value)
+      width: '100px',
+      render: (value) => <span className="text-sm">{formatearFecha(value)}</span>
     },
     {
       header: 'Entidad / Cliente',
       accessor: 'tercero',
-      render: (value) => <span className="font-medium">{value || 'Sin especificar'}</span>
+      render: (value) => <span className="font-medium text-sm">{value || 'Sin especificar'}</span>
     },
     {
       header: 'Monto',
@@ -157,7 +173,7 @@ function PagosCobranzas() {
       width: '130px',
       align: 'right',
       render: (value, row) => (
-        <span className={`font-bold text-lg ${row.tipo === 'pago' ? 'text-red-600' : 'text-green-600'}`}>
+        <span className={`font-bold text-sm ${row.tipo === 'pago' ? 'text-red-600' : 'text-green-600'}`}>
           {row.tipo === 'pago' ? '-' : '+'}{formatearMoneda(value, row.moneda)}
         </span>
       )
@@ -167,16 +183,15 @@ function PagosCobranzas() {
       accessor: 'metodo_pago',
       width: '120px',
       align: 'center',
-      render: (value) => <span className="badge badge-secondary">{value}</span>
+      render: (value) => <span className="badge badge-secondary badge-sm">{value}</span>
     }
   ];
 
-  // --- COLUMNAS PARA CUENTAS POR COBRAR (DEUDA) ---
   const columnsCobranzas = [
     {
       header: 'Estado',
-      accessor: 'estado_deuda', // Viene de la Vista SQL
-      width: '160px',
+      accessor: 'estado_deuda',
+      width: '140px',
       align: 'center',
       render: (value, row) => {
         let config = { color: 'badge-secondary', icon: Clock, text: value };
@@ -191,18 +206,16 @@ function PagosCobranzas() {
           case 'Al Dia':
             config = { color: 'badge-success', icon: CheckCircle, text: 'Al Día' };
             break;
-          default:
-            config = { color: 'badge-secondary', icon: Clock, text: value };
         }
         
         const Icon = config.icon;
         
         return (
           <div className="flex flex-col items-center gap-1">
-            <span className={`badge ${config.color} flex items-center gap-1`}>
-              <Icon size={14} /> {config.text}
+            <span className={`badge ${config.color} flex items-center gap-1 w-full justify-center`}>
+              <Icon size={12} /> {config.text}
             </span>
-            <span className={`text-[10px] font-bold ${row.dias_restantes < 0 ? 'text-danger' : 'text-muted'}`}>
+            <span className={`text-[10px] font-bold ${row.dias_restantes < 0 ? 'text-danger' : 'text-gray-500'}`}>
               {row.dias_restantes < 0 
                 ? `${Math.abs(row.dias_restantes)} días atraso` 
                 : `${row.dias_restantes} días restantes`}
@@ -212,16 +225,28 @@ function PagosCobranzas() {
       }
     },
     {
-      header: 'Orden Venta',
+      header: 'Documento',
       accessor: 'numero_orden',
-      width: '120px',
+      width: '140px',
       render: (value, row) => (
-        <button 
-          className="font-mono font-bold text-primary hover:underline"
-          onClick={() => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
-        >
-          {value}
-        </button>
+        <div>
+          {row.numero_comprobante ? (
+            <div className="font-bold text-primary flex items-center gap-1">
+              <FileText size={12} />
+              {row.tipo_comprobante === 'Factura' ? 'F' : 'NV'}: {row.numero_comprobante}
+            </div>
+          ) : (
+            <button 
+              className="font-mono font-bold text-blue-600 hover:underline text-sm"
+              onClick={() => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
+            >
+              {value}
+            </button>
+          )}
+          <div className="text-[10px] text-muted">
+            Emisión: {formatearFecha(row.fecha_emision)}
+          </div>
+        </div>
       )
     },
     {
@@ -229,10 +254,9 @@ function PagosCobranzas() {
       accessor: 'cliente',
       render: (value, row) => (
         <div>
-          <div className="font-bold">{value}</div>
+          <div className="font-bold text-sm truncate max-w-[200px]" title={value}>{value}</div>
           <div className="text-xs text-muted flex gap-2">
             <span>RUC: {row.ruc}</span>
-            {row.telefono && <span>📞 {row.telefono}</span>}
           </div>
         </div>
       )
@@ -240,9 +264,9 @@ function PagosCobranzas() {
     {
       header: 'Vencimiento',
       accessor: 'fecha_vencimiento',
-      width: '110px',
+      width: '100px',
       render: (value) => (
-        <div className="font-medium text-gray-700">
+        <div className="font-medium text-gray-700 text-sm">
           {formatearFecha(value)}
         </div>
       )
@@ -250,36 +274,41 @@ function PagosCobranzas() {
     {
       header: 'Total',
       accessor: 'total',
-      width: '120px',
-      align: 'right',
-      render: (value, row) => formatearMoneda(value, row.moneda)
-    },
-    {
-      header: 'A Cuenta',
-      accessor: 'monto_pagado',
-      width: '120px',
+      width: '110px',
       align: 'right',
       render: (value, row) => (
-        <span className="text-success">{formatearMoneda(value, row.moneda)}</span>
-      )
-    },
-    {
-      header: 'Saldo Pendiente',
-      accessor: 'saldo_pendiente',
-      width: '130px',
-      align: 'right',
-      render: (value, row) => (
-        <span className="font-bold text-lg text-danger">
+        <span className="text-gray-600 font-medium text-sm">
           {formatearMoneda(value, row.moneda)}
         </span>
       )
     },
     {
-      header: 'Días Crédito',
-      accessor: 'dias_credito',
-      width: '90px',
-      align: 'center',
-      render: (value) => <span className="badge badge-outline">{value} días</span>
+      header: 'Pagado',
+      accessor: 'monto_pagado',
+      width: '110px',
+      align: 'right',
+      render: (value, row) => (
+        <div className="flex flex-col items-end">
+          <span className="text-success text-sm font-medium">{formatearMoneda(value, row.moneda)}</span>
+          <div className="w-16 h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
+            <div 
+              className="h-full bg-success" 
+              style={{ width: `${Math.min(100, (parseFloat(value)/parseFloat(row.total))*100)}%` }}
+            ></div>
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Saldo',
+      accessor: 'saldo_pendiente',
+      width: '120px',
+      align: 'right',
+      render: (value, row) => (
+        <span className="font-bold text-base text-danger">
+          {formatearMoneda(value, row.moneda)}
+        </span>
+      )
     }
   ];
 
@@ -289,7 +318,6 @@ function PagosCobranzas() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -298,125 +326,131 @@ function PagosCobranzas() {
           </h1>
           <p className="text-muted">Gestión de flujo de caja y cuentas por cobrar</p>
         </div>
+        
         <div className="flex bg-gray-100 p-1 rounded-lg">
           <button
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
               activeTab === 'movimientos' 
                 ? 'bg-white text-primary shadow-sm' 
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             onClick={() => setActiveTab('movimientos')}
           >
-            <div className="flex items-center gap-2">
-              <LayoutList size={16} /> Movimientos
-            </div>
+            <LayoutList size={16} /> Movimientos
           </button>
           <button
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
               activeTab === 'cobranzas' 
                 ? 'bg-white text-danger shadow-sm' 
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             onClick={() => setActiveTab('cobranzas')}
           >
-            <div className="flex items-center gap-2">
-              <AlertCircle size={16} /> Cuentas por Cobrar
-            </div>
+            <AlertCircle size={16} /> Cuentas por Cobrar
           </button>
         </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* DASHBOARD SOLO VISIBLE EN MOVIMIENTOS */}
       {activeTab === 'movimientos' && resumen && (
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="card border-l-4 border-danger">
+          <div className="card border-l-4 border-danger hover:shadow-md transition-shadow">
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm text-muted">Egresos (Pagos)</p>
+                  <p className="text-sm text-muted font-medium uppercase">Egresos (Pagos)</p>
                   <h3 className="text-2xl font-bold text-danger">{resumen.pagos.cantidad}</h3>
                 </div>
-                <div className="p-3 bg-red-100 rounded-lg">
+                <div className="p-3 bg-red-50 rounded-full">
                   <ArrowDownCircle size={24} className="text-danger" />
                 </div>
               </div>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between"><span>PEN:</span> <span className="font-bold">{formatearMoneda(resumen.pagos.pen, 'PEN')}</span></div>
-                <div className="flex justify-between"><span>USD:</span> <span className="font-bold">{formatearMoneda(resumen.pagos.usd, 'USD')}</span></div>
+              <div className="space-y-1 text-sm border-t pt-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">PEN:</span> 
+                  <span className="font-bold text-gray-800">{formatearMoneda(resumen.pagos.pen, 'PEN')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">USD:</span> 
+                  <span className="font-bold text-gray-800">{formatearMoneda(resumen.pagos.usd, 'USD')}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="card border-l-4 border-success">
+          <div className="card border-l-4 border-success hover:shadow-md transition-shadow">
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm text-muted">Ingresos (Cobros)</p>
+                  <p className="text-sm text-muted font-medium uppercase">Ingresos (Cobros)</p>
                   <h3 className="text-2xl font-bold text-success">{resumen.cobranzas.cantidad}</h3>
                 </div>
-                <div className="p-3 bg-green-100 rounded-lg">
+                <div className="p-3 bg-green-50 rounded-full">
                   <ArrowUpCircle size={24} className="text-success" />
                 </div>
               </div>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between"><span>PEN:</span> <span className="font-bold">{formatearMoneda(resumen.cobranzas.pen, 'PEN')}</span></div>
-                <div className="flex justify-between"><span>USD:</span> <span className="font-bold">{formatearMoneda(resumen.cobranzas.usd, 'USD')}</span></div>
+              <div className="space-y-1 text-sm border-t pt-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">PEN:</span> 
+                  <span className="font-bold text-gray-800">{formatearMoneda(resumen.cobranzas.pen, 'PEN')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">USD:</span> 
+                  <span className="font-bold text-gray-800">{formatearMoneda(resumen.cobranzas.usd, 'USD')}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Flujo Neto */}
           {['pen', 'usd'].map((moneda) => (
-            <div key={moneda} className={`card border-l-4 ${resumen.flujo_neto[moneda] >= 0 ? 'border-primary' : 'border-warning'}`}>
+            <div key={moneda} className={`card border-l-4 ${resumen.flujo_neto[moneda] >= 0 ? 'border-primary' : 'border-warning'} hover:shadow-md transition-shadow`}>
               <div className="card-body">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <p className="text-sm text-muted">Flujo Neto {moneda.toUpperCase()}</p>
+                    <p className="text-sm text-muted font-medium uppercase">Flujo Neto {moneda.toUpperCase()}</p>
                     <h3 className={`text-2xl font-bold ${resumen.flujo_neto[moneda] >= 0 ? 'text-primary' : 'text-warning'}`}>
                       {formatearMoneda(resumen.flujo_neto[moneda], moneda.toUpperCase())}
                     </h3>
                   </div>
-                  <div className={`p-3 rounded-lg ${resumen.flujo_neto[moneda] >= 0 ? 'bg-blue-100' : 'bg-orange-100'}`}>
+                  <div className={`p-3 rounded-full ${resumen.flujo_neto[moneda] >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
                     <TrendingUp size={24} className={resumen.flujo_neto[moneda] >= 0 ? 'text-primary' : 'text-warning'} />
                   </div>
                 </div>
-                <p className="text-xs text-muted">Balance del periodo seleccionado</p>
+                <p className="text-xs text-muted mt-4">Balance del periodo seleccionado</p>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* FILTROS GENERALES */}
-      <div className="card mb-4">
+      <div className="card mb-4 bg-gray-50 border border-gray-200">
         <div className="card-body p-4">
           <div className="flex flex-wrap items-end gap-4">
             {activeTab === 'movimientos' && (
               <div className="w-40">
-                <label className="form-label text-xs">Tipo Movimiento</label>
+                <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Tipo Movimiento</label>
                 <select className="form-select form-select-sm" value={filtros.tipo} onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}>
                   <option value="">Todos</option>
-                  <option value="pago">Egresos</option>
-                  <option value="cobranza">Ingresos</option>
+                  <option value="pago">Egresos (Pagos)</option>
+                  <option value="cobranza">Ingresos (Cobros)</option>
                 </select>
               </div>
             )}
             
-            <div className="w-40">
-              <label className="form-label text-xs">Fecha Inicio</label>
+            <div className="w-36">
+              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Fecha Inicio</label>
               <input type="date" className="form-input form-input-sm" value={filtros.fecha_inicio} onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })} />
             </div>
 
-            <div className="w-40">
-              <label className="form-label text-xs">Fecha Fin</label>
+            <div className="w-36">
+              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Fecha Fin</label>
               <input type="date" className="form-input form-input-sm" value={filtros.fecha_fin} onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })} />
             </div>
 
             {activeTab === 'movimientos' && (
               <div className="w-40">
-                <label className="form-label text-xs">Cuenta</label>
+                <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Cuenta</label>
                 <select className="form-select form-select-sm" value={filtros.id_cuenta} onChange={(e) => setFiltros({ ...filtros, id_cuenta: e.target.value })}>
                   <option value="">Todas</option>
                   {cuentas.map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre}</option>)}
@@ -425,10 +459,10 @@ function PagosCobranzas() {
             )}
 
             <div className="flex gap-2 ml-auto">
-              <button className="btn btn-outline btn-sm" onClick={limpiarFiltros}>
+              <button className="btn btn-outline btn-sm bg-white hover:bg-gray-100 text-gray-700 border-gray-300" onClick={limpiarFiltros}>
                 <Filter size={14} className="mr-1"/> Limpiar
               </button>
-              <button className="btn btn-success btn-sm" onClick={exportarExcel}>
+              <button className="btn btn-success btn-sm text-white shadow-sm" onClick={exportarExcel}>
                 <Download size={14} className="mr-1"/> Exportar
               </button>
             </div>
@@ -436,7 +470,6 @@ function PagosCobranzas() {
         </div>
       </div>
 
-      {/* TABLA PRINCIPAL */}
       <div className="card">
         <div className="card-header border-b-0">
           <h2 className="card-title">

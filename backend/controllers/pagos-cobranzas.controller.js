@@ -198,14 +198,13 @@ export const getCuentasPorCobrar = async (req, res, next) => {
   try {
     const { fecha_inicio, fecha_fin, id_cliente } = req.query;
     
-    // Filtramos órdenes que NO estén canceladas y que tengan deuda (saldo > 0.1 para evitar decimales residuales)
+    // Filtramos órdenes que NO estén canceladas y que tengan deuda
     let whereClause = `
       ov.estado != 'Cancelada' 
       AND (ov.total - COALESCE(ov.monto_pagado, 0)) > 0.1
     `;
     const params = [];
     
-    // Filtro opcional por rango de vencimiento
     if (fecha_inicio) {
       whereClause += ' AND ov.fecha_vencimiento >= ?';
       params.push(fecha_inicio);
@@ -230,15 +229,18 @@ export const getCuentasPorCobrar = async (req, res, next) => {
         ov.fecha_emision,
         ov.fecha_vencimiento,
         ov.moneda,
+        ov.tipo_venta,  -- Agregamos este campo
         ov.total,
         COALESCE(ov.monto_pagado, 0) as monto_pagado,
         (ov.total - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
         cl.razon_social as cliente,
         cl.ruc,
-        -- Cálculo de días restantes: (Fecha Vencimiento - Hoy)
         DATEDIFF(ov.fecha_vencimiento, CURDATE()) as dias_restantes,
-        -- Lógica de Estado
+        -- Lógica de Estado Ajustada
         CASE 
+          -- 1. Si es Contado, el estado es 'Pendiente' (sin análisis de días)
+          WHEN ov.tipo_venta = 'Contado' THEN 'Pendiente'
+          -- 2. Si es Crédito, aplicamos lógica de fechas
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 'Vencido'
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 'Proximo a Vencer'
           ELSE 'Al Dia'
@@ -247,8 +249,9 @@ export const getCuentasPorCobrar = async (req, res, next) => {
       INNER JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE ${whereClause}
       ORDER BY 
-        -- Ordenar por urgencia: Vencidos primero, luego próximos, luego al día
+        -- Ordenar por urgencia: Vencidos -> Pendientes(Contado) -> Próximos -> Al día
         CASE 
+          WHEN ov.tipo_venta = 'Contado' THEN 1.5 -- Aparece después de vencidos, antes de próximos
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 1
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 2
           ELSE 3

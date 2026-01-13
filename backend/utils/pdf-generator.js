@@ -509,17 +509,6 @@ export async function generarPDFSalida(datos) {
   });
 }
 
-// Función auxiliar necesaria si no la tienes importada
-function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
-  const currentFontSize = doc._fontSize || 12;
-  doc.fontSize(fontSize);
-  const heightOfString = doc.heightOfString(texto || '', {
-    width: ancho,
-    lineGap: 2
-  });
-  doc.fontSize(currentFontSize);
-  return Math.ceil(heightOfString);
-}
 export async function generarPDFTransferencia(datos) {
   const logoBuffer = await cargarLogoURL();
 

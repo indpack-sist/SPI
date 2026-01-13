@@ -196,33 +196,67 @@ export const getAllPagosCobranzas = async (req, res, next) => {
 
 export const getCuentasPorCobrar = async (req, res, next) => {
   try {
-    const { fecha_inicio, fecha_fin } = req.query;
+    const { fecha_inicio, fecha_fin, id_cliente } = req.query;
     
-    let whereClause = '1=1';
+    // Filtramos órdenes que NO estén canceladas y que tengan deuda (saldo > 0.1 para evitar decimales residuales)
+    let whereClause = `
+      ov.estado != 'Cancelada' 
+      AND (ov.total - COALESCE(ov.monto_pagado, 0)) > 0.1
+    `;
     const params = [];
     
+    // Filtro opcional por rango de vencimiento
     if (fecha_inicio) {
-      whereClause += ' AND fecha_vencimiento >= ?';
+      whereClause += ' AND ov.fecha_vencimiento >= ?';
       params.push(fecha_inicio);
     }
     
     if (fecha_fin) {
-      whereClause += ' AND fecha_vencimiento <= ?';
+      whereClause += ' AND ov.fecha_vencimiento <= ?';
       params.push(fecha_fin);
     }
 
-    // HEMOS AGREGADO 'COLLATE utf8mb4_unicode_ci' EN EL ORDER BY
-    const [rows] = await pool.query(`
-      SELECT * FROM vista_cuentas_por_cobrar
+    if (id_cliente) {
+      whereClause += ' AND ov.id_cliente = ?';
+      params.push(id_cliente);
+    }
+
+    const sql = `
+      SELECT 
+        ov.id_orden_venta,
+        ov.numero_orden,
+        ov.tipo_comprobante,
+        ov.numero_comprobante,
+        ov.fecha_emision,
+        ov.fecha_vencimiento,
+        ov.moneda,
+        ov.total,
+        COALESCE(ov.monto_pagado, 0) as monto_pagado,
+        (ov.total - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
+        cl.razon_social as cliente,
+        cl.ruc,
+        -- Cálculo de días restantes: (Fecha Vencimiento - Hoy)
+        DATEDIFF(ov.fecha_vencimiento, CURDATE()) as dias_restantes,
+        -- Lógica de Estado
+        CASE 
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 'Vencido'
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 'Proximo a Vencer'
+          ELSE 'Al Dia'
+        END as estado_deuda
+      FROM ordenes_venta ov
+      INNER JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE ${whereClause}
       ORDER BY 
+        -- Ordenar por urgencia: Vencidos primero, luego próximos, luego al día
         CASE 
-          WHEN estado_deuda COLLATE utf8mb4_unicode_ci = 'Vencido' THEN 1
-          WHEN estado_deuda COLLATE utf8mb4_unicode_ci = 'Proximo a Vencer' THEN 2
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 1
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 2
           ELSE 3
-        END,
-        fecha_vencimiento ASC
-    `, params);
+        END ASC,
+        ov.fecha_vencimiento ASC
+    `;
+
+    const [rows] = await pool.query(sql, params);
     
     res.json({
       success: true,

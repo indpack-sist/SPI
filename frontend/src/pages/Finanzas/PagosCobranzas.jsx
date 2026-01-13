@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  DollarSign, TrendingUp, TrendingDown, Calendar, 
-  Filter, Download, ArrowUpCircle, ArrowDownCircle,
-  CreditCard, Building2, User, FileText, AlertTriangle,
-  Clock, CheckCircle, XCircle, LayoutList, AlertCircle,
-  FileBadge 
+  DollarSign, TrendingUp, Calendar, Filter, Download, 
+  ArrowUpCircle, ArrowDownCircle, AlertCircle, LayoutList,
+  FileText, CheckCircle, XCircle, AlertTriangle, FileBadge, Clock
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -77,6 +75,8 @@ function PagosCobranzas() {
     try {
       setLoading(true);
       setError(null);
+      // Nota: Para cuentas por cobrar, a veces queremos ver todo el futuro, no solo el filtro de fecha
+      // Puedes decidir si enviar los filtros o limpiar fechas para ver toda la cartera
       const response = await pagosCobranzasAPI.getCuentasPorCobrar(filtros);
       
       if (response.data.success) {
@@ -101,18 +101,14 @@ function PagosCobranzas() {
   };
 
   const exportarExcel = () => {
-    alert('Función de exportar a Excel - Implementar según necesidad');
+    alert('Función de exportar a Excel');
   };
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    const fechaObj = new Date(fecha);
-    return fechaObj.toLocaleDateString('es-PE', {
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric',
-      timeZone: 'UTC'
-    });
+    // Asegurar compatibilidad de zona horaria
+    const parts = fecha.split('T')[0].split('-');
+    return `${parts[2]}/${parts[1]}/${parts[0]}`; 
   };
 
   const formatearMoneda = (valor, moneda = 'PEN') => {
@@ -187,38 +183,49 @@ function PagosCobranzas() {
     }
   ];
 
+  // COLUMNAS ACTUALIZADAS PARA MOSTRAR ESTADOS Y COLORES
   const columnsCobranzas = [
     {
-      header: 'Estado',
-      accessor: 'estado_deuda',
-      width: '140px',
+      header: 'Estado Deuda',
+      accessor: 'dias_restantes',
+      width: '150px',
       align: 'center',
-      render: (value, row) => {
-        let config = { color: 'badge-secondary', icon: Clock, text: value };
+      render: (dias, row) => {
+        let estadoConfig = {};
         
-        switch(value) {
-          case 'Vencido':
-            config = { color: 'badge-danger', icon: XCircle, text: 'Vencido' };
-            break;
-          case 'Proximo a Vencer':
-            config = { color: 'badge-warning', icon: AlertTriangle, text: 'Próx. Vencer' };
-            break;
-          case 'Al Dia':
-            config = { color: 'badge-success', icon: CheckCircle, text: 'Al Día' };
-            break;
+        // Lógica de colores basada en días restantes
+        if (dias < 0) {
+          estadoConfig = {
+            color: 'badge-danger',
+            texto: 'Vencido',
+            icono: XCircle,
+            mensaje: `${Math.abs(dias)} días de atraso`
+          };
+        } else if (dias <= 5) {
+          estadoConfig = {
+            color: 'badge-warning',
+            texto: 'Por Vencer',
+            icono: AlertTriangle,
+            mensaje: `Vence en ${dias} días`
+          };
+        } else {
+          estadoConfig = {
+            color: 'badge-success',
+            texto: 'Al Día',
+            icono: CheckCircle,
+            mensaje: `Quedan ${dias} días`
+          };
         }
-        
-        const Icon = config.icon;
-        
+
+        const Icon = estadoConfig.icono;
+
         return (
           <div className="flex flex-col items-center gap-1">
-            <span className={`badge ${config.color} flex items-center gap-1 w-full justify-center`}>
-              <Icon size={12} /> {config.text}
+            <span className={`badge ${estadoConfig.color} flex items-center gap-1 w-full justify-center`}>
+              <Icon size={12} /> {estadoConfig.texto}
             </span>
-            <span className={`text-[10px] font-bold ${row.dias_restantes < 0 ? 'text-danger' : 'text-gray-500'}`}>
-              {row.dias_restantes < 0 
-                ? `${Math.abs(row.dias_restantes)} días atraso` 
-                : `${row.dias_restantes} días restantes`}
+            <span className={`text-[10px] font-bold ${dias < 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {estadoConfig.mensaje}
             </span>
           </div>
         );
@@ -272,7 +279,7 @@ function PagosCobranzas() {
       )
     },
     {
-      header: 'Total',
+      header: 'Importe Total',
       accessor: 'total',
       width: '110px',
       align: 'right',
@@ -283,16 +290,17 @@ function PagosCobranzas() {
       )
     },
     {
-      header: 'Pagado',
+      header: 'A Cuenta',
       accessor: 'monto_pagado',
       width: '110px',
       align: 'right',
       render: (value, row) => (
         <div className="flex flex-col items-end">
           <span className="text-success text-sm font-medium">{formatearMoneda(value, row.moneda)}</span>
+          {/* Barra de progreso de pago */}
           <div className="w-16 h-1 bg-gray-200 rounded-full mt-1 overflow-hidden">
             <div 
-              className="h-full bg-success" 
+              className="h-full bg-success transition-all duration-500" 
               style={{ width: `${Math.min(100, (parseFloat(value)/parseFloat(row.total))*100)}%` }}
             ></div>
           </div>
@@ -300,12 +308,12 @@ function PagosCobranzas() {
       )
     },
     {
-      header: 'Saldo',
+      header: 'Saldo Pendiente',
       accessor: 'saldo_pendiente',
       width: '120px',
       align: 'right',
       render: (value, row) => (
-        <span className="font-bold text-base text-danger">
+        <span className="font-bold text-base text-red-600">
           {formatearMoneda(value, row.moneda)}
         </span>
       )
@@ -353,8 +361,10 @@ function PagosCobranzas() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
+      {/* DASHBOARD SOLO EN PESTAÑA MOVIMIENTOS */}
       {activeTab === 'movimientos' && resumen && (
         <div className="grid grid-cols-4 gap-4 mb-6">
+          {/* Card Egresos */}
           <div className="card border-l-4 border-danger hover:shadow-md transition-shadow">
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
@@ -379,6 +389,7 @@ function PagosCobranzas() {
             </div>
           </div>
 
+          {/* Card Ingresos */}
           <div className="card border-l-4 border-success hover:shadow-md transition-shadow">
             <div className="card-body">
               <div className="flex items-center justify-between mb-3">
@@ -403,6 +414,7 @@ function PagosCobranzas() {
             </div>
           </div>
 
+          {/* Cards Flujo Neto */}
           {['pen', 'usd'].map((moneda) => (
             <div key={moneda} className={`card border-l-4 ${resumen.flujo_neto[moneda] >= 0 ? 'border-primary' : 'border-warning'} hover:shadow-md transition-shadow`}>
               <div className="card-body">
@@ -424,6 +436,7 @@ function PagosCobranzas() {
         </div>
       )}
 
+      {/* BARRA DE FILTROS */}
       <div className="card mb-4 bg-gray-50 border border-gray-200">
         <div className="card-body p-4">
           <div className="flex flex-wrap items-end gap-4">
@@ -439,12 +452,16 @@ function PagosCobranzas() {
             )}
             
             <div className="w-36">
-              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Fecha Inicio</label>
+              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">
+                {activeTab === 'movimientos' ? 'Fecha Inicio' : 'Vencimiento Desde'}
+              </label>
               <input type="date" className="form-input form-input-sm" value={filtros.fecha_inicio} onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })} />
             </div>
 
             <div className="w-36">
-              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Fecha Fin</label>
+              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">
+                {activeTab === 'movimientos' ? 'Fecha Fin' : 'Vencimiento Hasta'}
+              </label>
               <input type="date" className="form-input form-input-sm" value={filtros.fecha_fin} onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })} />
             </div>
 
@@ -470,6 +487,7 @@ function PagosCobranzas() {
         </div>
       </div>
 
+      {/* TABLA DE RESULTADOS */}
       <div className="card">
         <div className="card-header border-b-0">
           <h2 className="card-title">

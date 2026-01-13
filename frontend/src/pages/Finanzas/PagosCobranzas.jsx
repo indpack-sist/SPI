@@ -193,7 +193,6 @@ function PagosCobranzas() {
         let estadoConfig = {};
         const dias = row.dias_restantes;
         
-        // Prioridad: Si es CONTADO, ignoramos lo que diga el backend y forzamos el estado Pendiente
         if (row.tipo_venta === 'Contado') {
           estadoConfig = {
             color: 'badge-danger',
@@ -202,7 +201,6 @@ function PagosCobranzas() {
             mensaje: 'Saldo por regularizar'
           };
         } else {
-          // Lógica para CRÉDITO basada en el estado calculado o días
           switch(estadoBackend) {
             case 'Vencido': 
               estadoConfig = {
@@ -220,7 +218,7 @@ function PagosCobranzas() {
                 mensaje: `Vence en ${dias} días`
               };
               break;
-            default: // Al Dia u otros
+            default:
               estadoConfig = {
                 color: 'badge-success',
                 texto: 'Al Día',
@@ -331,7 +329,6 @@ function PagosCobranzas() {
     return <Loading message="Cargando información financiera..." />;
   }
 
-  // FILTRADO ESTRICTO: Usamos tipo_venta en lugar de estado_deuda
   const cuentasContado = cuentasPorCobrar.filter(c => c.tipo_venta === 'Contado');
   const cuentasCredito = cuentasPorCobrar.filter(c => c.tipo_venta !== 'Contado');
 
@@ -513,7 +510,6 @@ function PagosCobranzas() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* TABLA CONTADO */}
           <div className="card border-l-4 border-red-500">
             <div className="card-header border-b-0">
               <h2 className="card-title text-red-700">
@@ -533,7 +529,6 @@ function PagosCobranzas() {
             </div>
           </div>
 
-          {/* TABLA CRÉDITO */}
           <div className="card border-l-4 border-blue-500">
             <div className="card-header border-b-0">
               <h2 className="card-title text-blue-700">

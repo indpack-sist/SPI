@@ -90,6 +90,8 @@ function OrdenesVenta() {
     const term = busqueda.toLowerCase();
     return (
       orden.numero_orden?.toLowerCase().includes(term) ||
+      orden.serie_correlativo?.toLowerCase().includes(term) ||
+      orden.numero_comprobante?.toLowerCase().includes(term) ||
       orden.numero_cotizacion?.toLowerCase().includes(term) ||
       orden.cliente?.toLowerCase().includes(term) ||
       orden.ruc_cliente?.toLowerCase().includes(term) ||
@@ -195,15 +197,35 @@ function OrdenesVenta() {
 
   const columns = [
     {
-      header: 'N° Orden',
+      header: 'Comprobante / Orden',
       accessor: 'numero_orden',
-      width: '140px',
+      width: '180px',
       render: (value, row) => (
         <div>
-          <span className="font-mono font-bold">{value}</span>
-          {row.numero_cotizacion && (
-            <div className="text-xs text-muted">De: {row.numero_cotizacion}</div>
-          )}
+          <div className="flex items-center gap-1 mb-1">
+            {row.tipo_comprobante ? (
+              <>
+                <span className={`badge badge-xs ${row.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
+                  {row.tipo_comprobante === 'Factura' ? 'FAC' : 'NV'}
+                </span>
+                <span className="font-mono font-bold text-sm">
+                  {row.serie_correlativo || row.numero_comprobante || '-'}
+                </span>
+              </>
+            ) : (
+              <span className="badge badge-xs badge-secondary">Sin Emitir</span>
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <div className="text-xs text-muted">
+              Ord: <span className="font-mono text-gray-700">{value}</span>
+            </div>
+            {row.numero_cotizacion && (
+              <div className="text-[10px] text-muted">
+                Ref: {row.numero_cotizacion}
+              </div>
+            )}
+          </div>
         </div>
       )
     },
@@ -336,7 +358,7 @@ function OrdenesVenta() {
     {
       header: 'Acciones',
       accessor: 'id_orden_venta',
-      width: '140px', // Aumentado para que quepa el nuevo botón
+      width: '140px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-1 justify-center">

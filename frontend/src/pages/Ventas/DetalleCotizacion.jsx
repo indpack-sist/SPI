@@ -34,6 +34,7 @@ function DetalleCotizacion() {
       const response = await cotizacionesAPI.getById(id);
       
       if (response.data.success) {
+        console.log("Datos cargados:", response.data.data); // Para depuración
         setCotizacion(response.data.data);
       } else {
         setError('Cotización no encontrada');
@@ -145,13 +146,25 @@ function DetalleCotizacion() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
-  const getTipoImpuestoNombre = (codigo) => {
+  // CORRECCIÓN PRINCIPAL AQUÍ
+  const getTipoImpuestoNombre = (valor) => {
+    if (!valor) return 'IGV 18%'; // Default si es nulo
+
+    // Normalizar a mayúsculas y quitar espacios extra
+    const codigo = String(valor).toUpperCase().trim();
+
     const tipos = {
       'IGV': 'IGV 18%',
       'EXO': 'Exonerado 0%',
       'INA': 'Inafecto 0%'
     };
-    return tipos[codigo] || 'IGV 18%';
+
+    // 1. Intentar buscar por código exacto (IGV, EXO)
+    if (tipos[codigo]) return tipos[codigo];
+    
+    // 2. Si el backend guardó el nombre completo ("Exonerado 0%"), devolverlo tal cual
+    // Esto evita que salga "IGV 18%" cuando en realidad es Exonerado pero no coincide la clave
+    return valor; 
   };
 
   const getEstadoConfig = (estado) => {

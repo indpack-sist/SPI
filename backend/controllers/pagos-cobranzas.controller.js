@@ -140,6 +140,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     }
     
     if (!tipo || tipo === 'cobranza') {
+      // CORRECCIÓN REALIZADA AQUÍ: Se eliminó ov.serie_correlativo
       [cobranzas] = await pool.query(`
         SELECT 
           pov.id_pago_orden as id,
@@ -200,6 +201,7 @@ export const getCuentasPorCobrar = async (req, res, next) => {
       params.push(fecha_fin);
     }
 
+    // Nota: Asegúrate de que tu vista "vista_cuentas_por_cobrar" esté creada en la BD
     const [rows] = await pool.query(`
       SELECT * FROM vista_cuentas_por_cobrar
       WHERE ${whereClause}

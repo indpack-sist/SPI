@@ -30,10 +30,8 @@ const PLAZOS_PAGO = [
 
 const FORMAS_PAGO = [
   'Transferencia Bancaria',
-  'Depósito en Cuenta',
-  'Cheque',
   'Efectivo',
-  'Letra de Cambio'
+  'Yape'
 ];
 
 const PLAZOS_ENTREGA = [

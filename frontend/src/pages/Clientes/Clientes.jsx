@@ -66,6 +66,7 @@ function Clientes() {
         direccion_despacho: cliente.direccion_despacho || '',
         limite_credito_pen: parseFloat(cliente.limite_credito_pen || 0),
         limite_credito_usd: parseFloat(cliente.limite_credito_usd || 0),
+        // CORRECCIÓN: Asegurar que se convierta a booleano para el switch
         usar_limite_credito: cliente.usar_limite_credito === 1 || cliente.usar_limite_credito === true,
         validar_documento: false,
         estado: cliente.estado
@@ -179,6 +180,7 @@ function Clientes() {
     setError(null);
     setSuccess(null);
 
+    // CORRECCIÓN: Enviar como 1 o 0 para la base de datos
     const dataToSend = {
       ...formData,
       usar_limite_credito: formData.usar_limite_credito ? 1 : 0
@@ -257,6 +259,7 @@ function Clientes() {
       header: 'Límite Crédito', 
       width: '140px',
       render: (_, row) => (
+        // CORRECCIÓN: Validar ambos tipos de dato (número o booleano) en la tabla
         row.usar_limite_credito === 1 || row.usar_limite_credito === true ? (
           <div className="text-sm">
             <div className="text-success font-medium">S/ {parseFloat(row.limite_credito_pen).toFixed(2)}</div>
@@ -525,7 +528,7 @@ function Clientes() {
                   <input 
                     type="checkbox" 
                     className="sr-only peer"
-                    checked={formData.usar_limite_credito}
+                    checked={!!formData.usar_limite_credito}
                     onChange={(e) => setFormData({ ...formData, usar_limite_credito: e.target.checked })}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>

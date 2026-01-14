@@ -5,7 +5,7 @@ import {
   Star, Package, Clock, Beaker, FileText, ClipboardList, 
   BarChart, DollarSign, Info, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, Minus, Edit, ShoppingCart,
-  UserCog, AlertCircle, Zap, Calendar as CalendarIcon // Importamos el icono Calendar
+  UserCog, AlertCircle, Zap, Calendar as CalendarIcon
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -23,7 +23,7 @@ function OrdenDetalle() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
-  
+   
   const [modalAsignar, setModalAsignar] = useState(false);
   const [recetaSeleccionada, setRecetaSeleccionada] = useState('');
   const [supervisorSeleccionado, setSupervisorSeleccionado] = useState('');
@@ -41,14 +41,14 @@ function OrdenDetalle() {
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadProducida, setCantidadProducida] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
-  
+   
   const [modalParcial, setModalParcial] = useState(false);
   const [cantidadParcial, setCantidadParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
-  
+   
   const [consumoRealInsumos, setConsumoRealInsumos] = useState([]);
   const [mostrarConsumoReal, setMostrarConsumoReal] = useState(false);
-  
+   
   const [productosMerma, setProductosMerma] = useState([]);
   const [mermas, setMermas] = useState([]);
   const [mostrarMermas, setMostrarMermas] = useState(false);
@@ -61,17 +61,17 @@ function OrdenDetalle() {
     try {
       setLoading(true);
       setError(null);
-      
+       
       const [ordenRes, consumoRes, registrosRes] = await Promise.all([
         ordenesProduccionAPI.getById(id),
         ordenesProduccionAPI.getConsumoMateriales(id),
         ordenesProduccionAPI.getRegistrosParciales(id).catch(() => ({ data: { data: [] } }))
       ]);
-      
+       
       setOrden(ordenRes.data.data);
       setConsumoMateriales(consumoRes.data.data);
       setRegistrosParciales(registrosRes.data.data || []);
-      
+       
       if (ordenRes.data.data.estado === 'Finalizada') {
         const analisisRes = await ordenesProduccionAPI.getAnalisisConsumo(id);
         setAnalisisConsumo(analisisRes.data.data);
@@ -84,92 +84,94 @@ function OrdenDetalle() {
   };
 
   const cargarRecetasYSupervisores = async () => {
-  try {
-    setProcesando(true);
-    
-    const [recetasRes, supervisoresRes, insumosRes] = await Promise.all([
-      productosAPI.getRecetasByProducto(orden.id_producto_terminado),
-      empleadosAPI.getByRol('Supervisor'),
-      productosAPI.getAll({ estado: 'Activo' })
-    ]);
-    
-    if (recetasRes.data.success) {
-      const recetasActivas = recetasRes.data.data.filter(r => r.es_activa);
-      setRecetasDisponibles(recetasActivas);
-      
-      const principal = recetasActivas.find(r => r.es_principal);
-      if (principal) {
-        setRecetaSeleccionada(principal.id_receta_producto);
+    try {
+      setProcesando(true);
+       
+      const [recetasRes, supervisoresRes, insumosRes] = await Promise.all([
+        productosAPI.getRecetasByProducto(orden.id_producto_terminado),
+        empleadosAPI.getByRol('Supervisor'),
+        productosAPI.getAll({ estado: 'Activo' })
+      ]);
+       
+      if (recetasRes.data.success) {
+        const recetasActivas = recetasRes.data.data.filter(r => r.es_activa);
+        setRecetasDisponibles(recetasActivas);
+        
+        const principal = recetasActivas.find(r => r.es_principal);
+        if (principal) {
+          setRecetaSeleccionada(principal.id_receta_producto);
+        }
       }
+       
+      if (supervisoresRes.data.success) {
+        setSupervisoresDisponibles(supervisoresRes.data.data);
+      }
+       
+      if (insumosRes.data.success) {
+        const insumosFiltrados = insumosRes.data.data.filter(p => 
+          p.id_tipo_inventario == 1 || p.id_tipo_inventario == 2
+        );
+        setInsumosDisponibles(insumosFiltrados);
+      }
+       
+    } catch (err) {
+      console.error('Error al cargar datos:', err);
+      setError('Error al cargar recetas y supervisores disponibles');
+    } finally {
+      setProcesando(false);
     }
-    
-    if (supervisoresRes.data.success) {
-      setSupervisoresDisponibles(supervisoresRes.data.data);
+  };
+
+  const cambiarModoReceta = (modo) => {
+    setModoReceta(modo);
+    if (modo === 'provisional' || modo === 'manual') {
+      setRecetaSeleccionada('');
     }
-    
-    if (insumosRes.data.success) {
-      const insumosFiltrados = insumosRes.data.data.filter(p => 
-        p.id_tipo_inventario == 1 || p.id_tipo_inventario == 2
-      );
-      setInsumosDisponibles(insumosFiltrados);
+    if (modo !== 'provisional') {
+      setRecetaProvisional([]);
     }
-    
-  } catch (err) {
-    console.error('Error al cargar datos:', err);
-    setError('Error al cargar recetas y supervisores disponibles');
-  } finally {
-    setProcesando(false);
-  }
-};
-const cambiarModoReceta = (modo) => {
-  setModoReceta(modo);
-  if (modo === 'provisional' || modo === 'manual') {
-    setRecetaSeleccionada('');
-  }
-  if (modo !== 'provisional') {
-    setRecetaProvisional([]);
-  }
-};
+  };
 
-const abrirModalInsumo = () => {
-  setNuevoInsumo({ id_insumo: '', cantidad_requerida: '' });
-  setModalAgregarInsumo(true);
-};
+  const abrirModalInsumo = () => {
+    setNuevoInsumo({ id_insumo: '', cantidad_requerida: '' });
+    setModalAgregarInsumo(true);
+  };
 
-const agregarInsumoProvisional = () => {
-  if (!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida) {
-    setError('Complete todos los campos del insumo');
-    return;
-  }
-
-  const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumo.id_insumo);
-  if (!insumo) return;
-
-  if (recetaProvisional.find(i => i.id_insumo == nuevoInsumo.id_insumo)) {
-    setError('Este insumo ya está en la receta provisional');
-    return;
-  }
-
-  setRecetaProvisional([
-    ...recetaProvisional,
-    {
-      id_insumo: nuevoInsumo.id_insumo,
-      cantidad_requerida: parseFloat(nuevoInsumo.cantidad_requerida),
-      insumo: insumo.nombre,
-      codigo_insumo: insumo.codigo,
-      unidad_medida: insumo.unidad_medida,
-      costo_unitario_promedio: parseFloat(insumo.costo_unitario_promedio),
-      stock_actual: parseFloat(insumo.stock_actual)
+  const agregarInsumoProvisional = () => {
+    if (!nuevoInsumo.id_insumo || !nuevoInsumo.cantidad_requerida) {
+      setError('Complete todos los campos del insumo');
+      return;
     }
-  ]);
 
-  setModalAgregarInsumo(false);
-  setNuevoInsumo({ id_insumo: '', cantidad_requerida: '' });
-};
+    const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumo.id_insumo);
+    if (!insumo) return;
 
-const eliminarInsumoProvisional = (idInsumo) => {
-  setRecetaProvisional(recetaProvisional.filter(i => i.id_insumo != idInsumo));
-};
+    if (recetaProvisional.find(i => i.id_insumo == nuevoInsumo.id_insumo)) {
+      setError('Este insumo ya está en la receta provisional');
+      return;
+    }
+
+    setRecetaProvisional([
+      ...recetaProvisional,
+      {
+        id_insumo: nuevoInsumo.id_insumo,
+        cantidad_requerida: parseFloat(nuevoInsumo.cantidad_requerida),
+        insumo: insumo.nombre,
+        codigo_insumo: insumo.codigo,
+        unidad_medida: insumo.unidad_medida,
+        costo_unitario_promedio: parseFloat(insumo.costo_unitario_promedio),
+        stock_actual: parseFloat(insumo.stock_actual)
+      }
+    ]);
+
+    setModalAgregarInsumo(false);
+    setNuevoInsumo({ id_insumo: '', cantidad_requerida: '' });
+  };
+
+  const eliminarInsumoProvisional = (idInsumo) => {
+    setRecetaProvisional(recetaProvisional.filter(i => i.id_insumo != idInsumo));
+  };
+
   const cargarProductosMerma = async () => {
     try {
       const response = await ordenesProduccionAPI.getProductosMerma();
@@ -220,30 +222,30 @@ const eliminarInsumoProvisional = (idInsumo) => {
 
   const handleRegistroParcial = async (e) => {
     e.preventDefault();
-    
+     
     try {
       setProcesando(true);
       setError(null);
-      
+       
       const payload = {
         cantidad_parcial: cantidadParcial,
         observaciones: observacionesParcial
       };
-      
+       
       if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
         payload.consumo_real = consumoRealInsumos.map(item => ({
           id_insumo: item.id_insumo,
           cantidad_real: item.cantidad_real
         }));
       }
-      
+       
       try {
         const response = await ordenesProduccionAPI.registrarParcial(id, payload);
         procesarExitoParcial(response);
       } catch (err) {
         if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
           const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea confirmar el registro con este exceso?`);
-          
+           
           if (confirmar) {
             payload.confirmar_exceso = true;
             const retryResponse = await ordenesProduccionAPI.registrarParcial(id, payload);
@@ -253,7 +255,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
         }
         throw err;
       }
-      
+       
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.error || 'Error al registrar producción parcial';
       setError(errorMsg);
@@ -266,7 +268,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
     const mensajeExito = mostrarConsumoReal
       ? `Producción finalizada con ajustes de consumo real. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`
       : `Producción finalizada exitosamente. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`;
-    
+     
     setSuccess(mensajeExito);
     setModalFinalizar(false);
     setMermas([]);
@@ -278,19 +280,17 @@ const eliminarInsumoProvisional = (idInsumo) => {
 
   const handleFinalizar = async (e) => {
     e.preventDefault();
-    
-    // 1. Validar mermas
+     
     const mermasValidas = mermas.filter(m => 
       m.id_producto_merma && 
       m.cantidad && 
       parseFloat(m.cantidad) > 0
     );
-    
+     
     try {
       setProcesando(true);
       setError(null);
-      
-      // 2. Construir el objeto de datos (Payload)
+       
       const payload = {
         cantidad_producida: cantidadProducida,
         observaciones: observacionesFinal,
@@ -300,24 +300,21 @@ const eliminarInsumoProvisional = (idInsumo) => {
           observaciones: m.observaciones || null
         }))
       };
-      
-      // 3. Agregar consumo real si existe (El backend en 'finalizar' ya sabe leer esto)
+       
       if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
         payload.consumo_real = consumoRealInsumos.map(item => ({
           id_insumo: item.id_insumo,
-          cantidad_real_total: item.cantidad_real // Asegúrate que el backend espere 'cantidad_real_total' o 'cantidad_real' y coincidan
+          cantidad_real: item.cantidad_real
         }));
       }
 
-      // 4. LLAMADA ÚNICA A LA API
       try {
         await ordenesProduccionAPI.finalizar(id, payload);
         procesarExitoFinalizar(mermasValidas);
       } catch (err) {
-        // Manejo de confirmación de exceso (lógica existente correcta)
         if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
           const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea finalizar la orden con este exceso?`);
-          
+           
           if (confirmar) {
             payload.confirmar_exceso = true;
             await ordenesProduccionAPI.finalizar(id, payload);
@@ -327,7 +324,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
         }
         throw err;
       }
-      
+       
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.error || 'Error al finalizar producción';
       setError(errorMsg);
@@ -337,41 +334,41 @@ const eliminarInsumoProvisional = (idInsumo) => {
   };
 
   const handleAsignarRecetaSupervisor = async (e) => {
-  e.preventDefault();
-  
-  try {
-    setProcesando(true);
-    setError(null);
-    
-    const payload = {
-      id_supervisor: parseInt(supervisorSeleccionado),
-      modo_receta: modoReceta
-    };
-    
-    if (modoReceta === 'seleccionar') {
-      payload.id_receta_producto = parseInt(recetaSeleccionada);
-    } else if (modoReceta === 'provisional') {
-      payload.receta_provisional = recetaProvisional.map(i => ({
-        id_insumo: i.id_insumo,
-        cantidad_requerida: i.cantidad_requerida
-      }));
-      payload.rendimiento_receta = parseFloat(rendimientoProvisional);
-    } else if (modoReceta === 'manual') {
-      payload.es_orden_manual = true;
+    e.preventDefault();
+     
+    try {
+      setProcesando(true);
+      setError(null);
+       
+      const payload = {
+        id_supervisor: parseInt(supervisorSeleccionado),
+        modo_receta: modoReceta
+      };
+       
+      if (modoReceta === 'seleccionar') {
+        payload.id_receta_producto = parseInt(recetaSeleccionada);
+      } else if (modoReceta === 'provisional') {
+        payload.receta_provisional = recetaProvisional.map(i => ({
+          id_insumo: i.id_insumo,
+          cantidad_requerida: i.cantidad_requerida
+        }));
+        payload.rendimiento_receta = parseFloat(rendimientoProvisional);
+      } else if (modoReceta === 'manual') {
+        payload.es_orden_manual = true;
+      }
+       
+      await ordenesProduccionAPI.asignarRecetaYSupervisor(id, payload);
+       
+      setSuccess('Receta y supervisor asignados exitosamente. La orden está lista para iniciar.');
+      setModalAsignar(false);
+      cargarDatos();
+       
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al asignar receta y supervisor');
+    } finally {
+      setProcesando(false);
     }
-    
-    await ordenesProduccionAPI.asignarRecetaYSupervisor(id, payload);
-    
-    setSuccess('Receta y supervisor asignados exitosamente. La orden está lista para iniciar.');
-    setModalAsignar(false);
-    cargarDatos();
-    
-  } catch (err) {
-    setError(err.response?.data?.error || 'Error al asignar receta y supervisor');
-  } finally {
-    setProcesando(false);
-  }
-};
+  };
 
   const handleIniciar = async () => {
     if (!confirm('¿Está seguro de iniciar la producción? Esto consumirá los materiales del inventario.')) return;
@@ -452,23 +449,26 @@ const eliminarInsumoProvisional = (idInsumo) => {
     }
   };
 
+  const formatearNumero = (valor) => {
+    return new Intl.NumberFormat('en-US', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(valor);
+  };
+
   const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'PEN'
-    }).format(valor || 0);
+    const simbolo = 'S/';
+    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    // Si la fecha incluye 'T', asumimos que es ISO y usamos toLocaleString
     if (fecha.includes('T')) {
         return new Date(fecha).toLocaleString('es-PE', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit'
         });
     }
-    // Si es solo fecha YYYY-MM-DD
     const [year, month, day] = fecha.split('-');
     return `${day}/${month}/${year}`;
   };
@@ -805,7 +805,6 @@ const eliminarInsumoProvisional = (idInsumo) => {
             <h2 className="card-title">Tiempos y Costos</h2>
           </div>
           <div className="p-4 grid gap-3">
-            {/* NUEVO: FECHA PROGRAMADA */}
             <div className="bg-blue-50 p-2 rounded border border-blue-100">
                 <p className="text-xs text-blue-700 uppercase font-semibold flex items-center gap-1">
                     <CalendarIcon size={12}/> Programación
@@ -928,7 +927,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
                 {consumoMateriales.map((item, idx) => {
                   const analisisItem = analisisConsumo?.detalle.find(a => a.id_insumo === item.id_insumo);
                   const diferencia = analisisItem ? parseFloat(analisisItem.diferencia) : 0;
-                  
+                   
                   return (
                     <tr key={item.id_consumo}>
                       <td className="font-mono text-xs">{item.codigo_insumo}</td>
@@ -976,10 +975,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
           </div>
         </div>
       )}
-
-      {/* --- MODALES (Asignar, Parcial, Finalizar, Insumo) SE MANTIENEN IGUAL --- */}
-      {/* (El código de los modales ya estaba en tu versión y no requiere cambios) */}
-      
+       
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
@@ -1365,7 +1361,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {consumoRealInsumos.map(item => {
                     const proporcional = item.cantidad_planificada * (parseFloat(cantidadParcial || 0) / parseFloat(orden.cantidad_planificada));
-                    
+                     
                     return (
                       <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-2 rounded text-sm">
                         <div className="col-span-4 font-medium">{item.insumo}</div>
@@ -1492,7 +1488,7 @@ const eliminarInsumoProvisional = (idInsumo) => {
                     {consumoRealInsumos.map(item => {
                       const diferencia = item.cantidad_real - item.cantidad_planificada;
                       const porcentajeDif = (diferencia / item.cantidad_planificada * 100).toFixed(1);
-                      
+                       
                       return (
                         <div key={item.id_insumo} className="bg-white p-3 rounded border border-gray-200">
                           <div className="grid grid-cols-12 gap-3 items-center">

@@ -14,6 +14,7 @@ import Flota from './pages/Flota/Flota';
 import Proveedores from './pages/Proveedores/Proveedores';
 import Clientes from './pages/Clientes/Clientes';
 import ClienteDetalle from './pages/Clientes/ClienteDetalle';
+import SolicitudesCredito from './pages/SolicitudesCredito/SolicitudesCredito';
 
 import Productos from './pages/Productos/Productos';
 import ProductoDetalle from './pages/Productos/ProductoDetalle';
@@ -27,7 +28,7 @@ import StockInventario from './pages/Inventario/StockInventario';
 import OrdenesProduccion from './pages/Produccion/OrdenesProduccion';
 import OrdenDetalle from './pages/Produccion/OrdenDetalle';
 import CrearOrden from './pages/Produccion/CrearOrden';
-import CalendarioProduccion from './pages/Produccion/CalendarioProduccion'; // <-- 1. IMPORTACIÓN DEL CALENDARIO
+import CalendarioProduccion from './pages/Produccion/CalendarioProduccion';
 
 import Cotizaciones from './pages/Ventas/Cotizaciones';
 import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
@@ -115,6 +116,15 @@ function App() {
                       />
                       
                       <Route 
+                        path="/solicitudes-credito" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="solicitudesCredito">
+                            <SolicitudesCredito />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+
+                      <Route 
                         path="/productos" 
                         element={
                           <ProtectedRouteWithPermiso modulo="productos">
@@ -174,8 +184,6 @@ function App() {
                         } 
                       />
                       
-                      {/* --- SECCIÓN DE PRODUCCIÓN --- */}
-                      
                       <Route 
                         path="/produccion/ordenes" 
                         element={
@@ -185,7 +193,6 @@ function App() {
                         } 
                       />
                       
-                      {/* 2. NUEVA RUTA PARA EL CALENDARIO DE PRODUCCIÓN */}
                       <Route 
                         path="/produccion/calendario" 
                         element={
@@ -212,8 +219,6 @@ function App() {
                         } 
                       />
                       
-                      {/* --- FIN SECCIÓN DE PRODUCCIÓN --- */}
-
                       <Route 
                         path="/ventas/cotizaciones" 
                         element={
@@ -348,6 +353,14 @@ function App() {
                       />
                       <Route 
                         path="/compras/ordenes/nueva" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="ordenesCompra">
+                            <NuevaOrdenCompra />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      <Route 
+                        path="/compras/ordenes/:id/editar" 
                         element={
                           <ProtectedRouteWithPermiso modulo="ordenesCompra">
                             <NuevaOrdenCompra />

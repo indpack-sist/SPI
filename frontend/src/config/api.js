@@ -116,13 +116,23 @@ export const clientesAPI = {
   getById: (id) => api.get(`/clientes/${id}`),
   getByRuc: (ruc) => api.get(`/clientes/ruc/${ruc}`),
   validarRUC: (ruc) => api.get(`/clientes/validar-ruc/${ruc}`),
-  validarDNI: (dni) => api.get(`/clientes/validar-dni/${dni}`), // ← NUEVO
+  validarDNI: (dni) => api.get(`/clientes/validar-dni/${dni}`),
   create: (data) => api.post('/clientes', data),
   update: (id, data) => api.put(`/clientes/${id}`, data),
   delete: (id) => api.delete(`/clientes/${id}`),
   getHistorialCotizaciones: (id) => api.get(`/clientes/${id}/cotizaciones`),
   getHistorialOrdenesVenta: (id) => api.get(`/clientes/${id}/ordenes-venta`),
   getEstadoCredito: (id) => api.get(`/clientes/${id}/credito`)
+};
+
+export const solicitudesCreditoAPI = {
+  create: (data) => api.post('/solicitudes-credito', data),
+  getAll: (params) => api.get('/solicitudes-credito', { params }),
+  getPendientes: () => api.get('/solicitudes-credito/pendientes'),
+  getById: (id) => api.get(`/solicitudes-credito/${id}`),
+  aprobar: (id, data) => api.put(`/solicitudes-credito/${id}/aprobar`, data),
+  rechazar: (id, data) => api.put(`/solicitudes-credito/${id}/rechazar`, data),
+  getHistorialCliente: (id) => api.get(`/solicitudes-credito/cliente/${id}`)
 };
 
 export const productosAPI = {
@@ -325,41 +335,32 @@ export const dashboard = {
 };
 
 export const ordenesProduccionAPI = {
-  // 1. Métodos de Lectura Básicos
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
   
-  // 2. Creación y Edición
   create: (data) => api.post('/produccion/ordenes', data),
   
-  // IMPORTANTE: Este método es el que usa el calendario para actualizar la fecha_programada
   update: (id, data) => api.put(`/produccion/ordenes/${id}`, data), 
 
-  // 3. Gestión del Flujo de Producción
   asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
   reanudar: (id) => api.post(`/produccion/ordenes/${id}/reanudar`),
   
-  // Finalización unificada (cantidad + mermas + consumo real opcional)
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
   
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   
-  // 4. Registros Parciales
   registrarParcial: (id, data) => api.post(`/produccion/ordenes/${id}/registrar-parcial`, data),
   getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
   
-  // 5. Consultas Específicas
   getConsumoMateriales: (id) => api.get(`/produccion/ordenes/${id}/consumo-materiales`),
   getAnalisisConsumo: (id) => api.get(`/produccion/ordenes/${id}/analisis-consumo`),
   getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
   getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`),
 
-  // 6. Generación de PDF
   generarPDF: async (id) => {
     try {
-      // Usamos API_URL que debe estar definida al inicio de tu archivo api.js
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/pdf`, {
         method: 'GET',
         headers: {
@@ -469,10 +470,8 @@ export const ordenesVentaAPI = {
 
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 
-  // --- CORRECCIÓN AQUÍ ---
-  descargarPDF: async (id, tipo = 'orden') => { // 1. Aceptamos el parámetro 'tipo'
+  descargarPDF: async (id, tipo = 'orden') => {
     try {
-      // 2. Construimos la URL con el parámetro query ?tipo=...
       const urlFetch = new URL(`${API_URL}/ordenes-venta/${id}/pdf`);
       urlFetch.searchParams.append('tipo', tipo);
 
@@ -495,7 +494,6 @@ export const ordenesVentaAPI = {
       const link = document.createElement('a');
       link.href = url;
       
-      // 3. Ajustamos el nombre del archivo según el tipo
       const prefijo = tipo === 'comprobante' ? 'comprobante' : 'orden-venta';
       link.download = `${prefijo}-${id}.pdf`;
       
@@ -616,6 +614,7 @@ export const ordenesCompraAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
     if (filtros.estado) params.append('estado', filtros.estado);
+    if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
     
@@ -623,16 +622,24 @@ export const ordenesCompraAPI = {
   },
 
   getById: (id) => api.get(`/ordenes-compra/${id}`),
+
   create: (data) => api.post('/ordenes-compra', data),
 
-  actualizarEstado: (id, estado) => 
-    api.put(`/ordenes-compra/${id}/estado`, { estado }),
+  update: (id, data) => api.put(`/ordenes-compra/${id}`, data),
 
-  recibirOrden: (id, datos) => 
-    api.post(`/ordenes-compra/${id}/recibir`, datos),
+  actualizarEstado: (id, estado, fecha_entrega_real = null) => 
+    api.put(`/ordenes-compra/${id}/estado`, { estado, fecha_entrega_real }),
 
-  getProductosPorProveedor: (id_proveedor) => 
-    api.get(`/ordenes-compra/proveedor/${id_proveedor}/productos`),
+  actualizarPrioridad: (id, prioridad) => 
+    api.put(`/ordenes-compra/${id}/prioridad`, { prioridad }),
+
+  getPagos: (id) => api.get(`/ordenes-compra/${id}/pagos`),
+
+  registrarPago: (id, data) => api.post(`/ordenes-compra/${id}/pagos`, data),
+
+  getResumenPagos: (id) => api.get(`/ordenes-compra/${id}/pagos/resumen`),
+
+  anularPago: (id, idPago) => api.delete(`/ordenes-compra/${id}/pagos/${idPago}`),
 
   getEstadisticas: () => api.get('/ordenes-compra/estadisticas'),
 

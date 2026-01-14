@@ -3,24 +3,35 @@ import {
   getAllOrdenesCompra,
   getOrdenCompraById,
   createOrdenCompra,
+  updateOrdenCompra,
   actualizarEstadoOrdenCompra,
-  recibirOrdenCompra,
-  getProductosPorProveedor,
+  actualizarPrioridadOrdenCompra,
   getEstadisticasOrdenesCompra,
-  descargarPDFOrdenCompra
+  descargarPDFOrdenCompra,
+  registrarPagoOrdenCompra,
+  getPagosOrdenCompra,
+  anularPagoOrdenCompra,
+  getResumenPagosOrdenCompra
 } from '../controllers/ordenesCompra.controller.js';
 
 const router = express.Router();
 
 router.get('/estadisticas', getEstadisticasOrdenesCompra);
+
 router.get('/', getAllOrdenesCompra);
 router.post('/', createOrdenCompra);
-router.get('/:id/pdf', descargarPDFOrdenCompra);
-router.put('/:id/estado', actualizarEstadoOrdenCompra);
-router.post('/:id/recibir', recibirOrdenCompra); 
-
-router.get('/proveedor/:id/productos', getProductosPorProveedor);
 
 router.get('/:id', getOrdenCompraById);
+router.put('/:id', updateOrdenCompra);
+
+router.put('/:id/estado', actualizarEstadoOrdenCompra);
+router.put('/:id/prioridad', actualizarPrioridadOrdenCompra);
+
+router.get('/:id/pdf', descargarPDFOrdenCompra);
+
+router.get('/:id/pagos', getPagosOrdenCompra);
+router.post('/:id/pagos', registrarPagoOrdenCompra);
+router.get('/:id/pagos/resumen', getResumenPagosOrdenCompra);
+router.delete('/:id/pagos/:idPago', anularPagoOrdenCompra);
 
 export default router;

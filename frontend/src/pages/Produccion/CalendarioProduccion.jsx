@@ -54,6 +54,17 @@ const CalendarioProduccion = () => {
   const calendarDays = generateCalendarDays();
   const isToday = (d) => d === new Date().toISOString().split('T')[0];
 
+  const getStatusColor = (estado) => {
+    switch(estado) {
+        case 'Pendiente': case 'Pendiente Asignación': return '#f59e0b';
+        case 'En Curso': return '#3b82f6';
+        case 'En Pausa': return '#f97316';
+        case 'Finalizada': return '#22c55e';
+        case 'Cancelada': return '#ef4444';
+        default: return '#9ca3af';
+    }
+  };
+
   const getOrderDates = (orden) => {
     let start, end;
 
@@ -175,15 +186,15 @@ const CalendarioProduccion = () => {
     const isDraggable = orden.estado === 'Pendiente' || orden.estado === 'Pendiente Asignación';
     const isScheduled = !!orden.fecha_programada;
     
-    let borderColor = '#9ca3af'; 
+    const borderColor = getStatusColor(orden.estado);
     let IconEstado = AlertCircle;
     
     switch(orden.estado) {
-        case 'Pendiente': case 'Pendiente Asignación': borderColor = '#f59e0b'; IconEstado = Clock; break;
-        case 'En Curso': borderColor = '#3b82f6'; IconEstado = PlayCircle; break;
-        case 'En Pausa': borderColor = '#f97316'; IconEstado = PauseCircle; break;
-        case 'Finalizada': borderColor = '#22c55e'; IconEstado = CheckCircle; break;
-        case 'Cancelada': borderColor = '#ef4444'; IconEstado = XCircle; break;
+        case 'Pendiente': case 'Pendiente Asignación': IconEstado = Clock; break;
+        case 'En Curso': IconEstado = PlayCircle; break;
+        case 'En Pausa': IconEstado = PauseCircle; break;
+        case 'Finalizada': IconEstado = CheckCircle; break;
+        case 'Cancelada': IconEstado = XCircle; break;
     }
 
     return (
@@ -220,7 +231,7 @@ const CalendarioProduccion = () => {
             {isScheduled && (isDraggable) && (
                 <button 
                     onClick={(e) => handleDesprogramar(e, orden)}
-                    style={{ border: 'none', background: '#fee2e2', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', padding: '4px' }}
+                    style={{ border: 'none', background: '#fee2e2', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', padding: '2px' }}
                     title="Retornar a pendientes"
                 >
                     <RotateCcw size={14} />
@@ -229,7 +240,7 @@ const CalendarioProduccion = () => {
             
             <button 
                 onClick={(e) => { e.stopPropagation(); navigate(`/produccion/ordenes/${orden.id_orden}`); }}
-                style={{ border: 'none', background: '#f3f4f6', borderRadius: '4px', cursor: 'pointer', color: '#4b5563', padding: '4px' }}
+                style={{ border: 'none', background: '#f3f4f6', borderRadius: '4px', cursor: 'pointer', color: '#4b5563', padding: '2px' }}
                 title="Ver detalle completo"
             >
                 <ExternalLink size={14} />
@@ -373,16 +384,33 @@ const CalendarioProduccion = () => {
             </div>
             <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
               {ordenesDelDiaSeleccionado.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>Sin órdenes.</div>
+                <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>Sin órdenes programadas.</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {ordenesDelDiaSeleccionado.map(o => {
                     const { start, end } = getOrderDates(o);
+                    const colorEstado = getStatusColor(o.estado);
                     return (
-                      <div key={o.id_orden} style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '8px', backgroundColor: '#f9fafb' }}>
+                      <div key={o.id_orden} style={{ 
+                          border: '1px solid #e5e7eb', 
+                          borderLeft: `4px solid ${colorEstado}`, 
+                          borderRadius: '6px', 
+                          padding: '10px', 
+                          backgroundColor: '#f9fafb' 
+                      }}>
+                          <div style={{ marginBottom: '6px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                              <span style={{ 
+                                  fontSize: '10px', fontWeight: 'bold', color: colorEstado, 
+                                  textTransform: 'uppercase', backgroundColor: 'white', 
+                                  padding: '2px 8px', borderRadius: '4px', border: `1px solid ${colorEstado}` 
+                              }}>
+                                  {o.estado}
+                              </span>
+                          </div>
                           <OrdenCard orden={o} />
-                          <div style={{fontSize:'11px', marginTop:'4px', color:'#64748b'}}>
-                              <strong>Inicio:</strong> {start} | <strong>Fin:</strong> {end}
+                          <div style={{fontSize:'11px', marginTop:'6px', color:'#64748b', display:'flex', gap:'10px', borderTop:'1px solid #e2e8f0', paddingTop:'6px'}}>
+                              <span><strong>Inicio:</strong> {start}</span> 
+                              <span><strong>Fin:</strong> {end}</span>
                           </div>
                       </div>
                     );

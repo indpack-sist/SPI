@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Package, User, ExternalLink, Clock,
-  AlertCircle, PlayCircle, PauseCircle, CheckCircle, XCircle, X, ArrowRight, RotateCcw
+  AlertCircle, PlayCircle, PauseCircle, CheckCircle, XCircle, X, ArrowRight, RotateCcw,
+  ShoppingCart // Importado para el icono de orden de venta
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api'; 
 import Loading from '../../components/UI/Loading'; 
@@ -255,8 +256,16 @@ const CalendarioProduccion = () => {
           {orden.producto}
         </div>
 
+        {/* --- MOSTRAR NUMERO DE ORDEN DE VENTA SI EXISTE --- */}
+        {orden.numero_orden_venta && (
+            <div style={{ fontSize: '9px', color: '#2563eb', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}>
+                <ShoppingCart size={10} /> 
+                Ref: {orden.numero_orden_venta}
+            </div>
+        )}
+
         {!compact && (
-             <div style={{ color: '#64748b', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px' }}>
+             <div style={{ color: '#64748b', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px', marginTop: '4px' }}>
              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                <Package size={10} /> 
                {parseFloat(orden.cantidad_planificada).toFixed(0)} {orden.unidad_medida}
@@ -311,10 +320,17 @@ const CalendarioProduccion = () => {
               {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h2>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => changeMonth(-1)} style={{ padding: '8px', cursor: 'pointer', background: 'white', border: '1px solid #cbd5e1', borderRadius: '4px' }}><ChevronLeft size={20} /></button>
-            <button onClick={() => setCurrentDate(new Date())} style={{ padding: '8px 16px', cursor: 'pointer', background: 'white', border: '1px solid #cbd5e1', borderRadius: '4px', fontWeight: '600' }}>Hoy</button>
-            <button onClick={() => changeMonth(1)} style={{ padding: '8px', cursor: 'pointer', background: 'white', border: '1px solid #cbd5e1', borderRadius: '4px' }}><ChevronRight size={20} /></button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button 
+                onClick={() => setCurrentDate(new Date())} 
+                style={{ padding: '6px 12px', cursor: 'pointer', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: '600', fontSize: '13px', color: '#4b5563' }}
+            >
+                Ir a Hoy
+            </button>
+            <div style={{ display: 'flex', gap: '2px', background: '#f3f4f6', padding: '2px', borderRadius: '6px' }}>
+                <button onClick={() => changeMonth(-1)} style={{ padding: '6px', cursor: 'pointer', background: 'white', border: '1px solid #e5e7eb', borderRadius: '4px', display:'flex', alignItems:'center' }}><ChevronLeft size={18} /></button>
+                <button onClick={() => changeMonth(1)} style={{ padding: '6px', cursor: 'pointer', background: 'white', border: '1px solid #e5e7eb', borderRadius: '4px', display:'flex', alignItems:'center' }}><ChevronRight size={18} /></button>
+            </div>
           </div>
         </div>
 

@@ -25,16 +25,19 @@ function DetalleOrdenVenta() {
   
   const [orden, setOrden] = useState(null);
   const [pagos, setPagos] = useState([]);
+  const [salidas, setSalidas] = useState([]);
   const [resumenPagos, setResumenPagos] = useState(null);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
+  const [descargandoPDF, setDescargandoPDF] = useState(null);
   
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
   const [modalCrearOP, setModalCrearOP] = useState(false);
+  const [modalDespacho, setModalDespacho] = useState(false);
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
@@ -46,6 +49,11 @@ function DetalleOrdenVenta() {
     numero_operacion: '',
     banco: '',
     observaciones: ''
+  });
+
+  const [despachoForm, setDespachoForm] = useState({
+    detalles: [],
+    fecha_despacho: getFechaLocal()
   });
 
   const formatearNumero = (valor) => {
@@ -61,6 +69,15 @@ function DetalleOrdenVenta() {
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
+  const formatearFecha = (fecha) => {
+    if (!fecha) return '-';
+    return new Date(fecha).toLocaleDateString('es-PE', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
+
   useEffect(() => {
     cargarDatos();
   }, [id]);
@@ -70,10 +87,11 @@ function DetalleOrdenVenta() {
       setLoading(true);
       setError(null);
       
-      const [ordenRes, pagosRes, resumenRes] = await Promise.all([
+      const [ordenRes, pagosRes, resumenRes, salidasRes] = await Promise.all([
         ordenesVentaAPI.getById(id),
         ordenesVentaAPI.getPagos(id),
-        ordenesVentaAPI.getResumenPagos(id)
+        ordenesVentaAPI.getResumenPagos(id),
+        ordenesVentaAPI.getSalidas(id).catch(() => ({ data: { success: true, data: [] } }))
       ]);
       
       if (ordenRes.data.success) {
@@ -84,19 +102,92 @@ function DetalleOrdenVenta() {
         }
       }
       
-      if (pagosRes.data.success) {
-        setPagos(pagosRes.data.data);
-      }
-      
-      if (resumenRes.data.success) {
-        setResumenPagos(resumenRes.data.data);
-      }
+      if (pagosRes.data.success) setPagos(pagosRes.data.data);
+      if (resumenRes.data.success) setResumenPagos(resumenRes.data.data);
+      if (salidasRes.data.success) setSalidas(salidasRes.data.data || []);
       
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al cargar datos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAbrirDespacho = () => {
+    const itemsPendientes = orden.detalle
+      .filter(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0)
+      .map(item => ({
+        id_producto: item.id_producto,
+        codigo: item.codigo_producto,
+        producto: item.producto,
+        unidad_medida: item.unidad_medida,
+        cantidad_pendiente: parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0),
+        cantidad_a_despachar: parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0),
+        stock_disponible: parseFloat(item.stock_disponible || 0)
+      }));
+
+    if (itemsPendientes.length === 0) {
+      setError("No hay productos pendientes de despacho.");
+      return;
+    }
+
+    setDespachoForm({
+      fecha_despacho: getFechaLocal(),
+      detalles: itemsPendientes
+    });
+    setModalDespacho(true);
+  };
+
+  const handleCambioCantidadDespacho = (idProducto, valor) => {
+    const nuevosDetalles = [...despachoForm.detalles];
+    let val = parseFloat(valor);
+    if (isNaN(val) || val < 0) val = 0;
+    
+    const index = nuevosDetalles.findIndex(item => item.id_producto === idProducto);
+    if (index !== -1) {
+        if (val > nuevosDetalles[index].cantidad_pendiente) {
+            val = nuevosDetalles[index].cantidad_pendiente;
+        }
+        nuevosDetalles[index].cantidad_a_despachar = val;
+        setDespachoForm({ ...despachoForm, detalles: nuevosDetalles });
+    }
+  };
+
+  const handleRegistrarDespacho = async () => {
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const itemsADespachar = despachoForm.detalles
+        .filter(item => parseFloat(item.cantidad_a_despachar) > 0)
+        .map(item => ({
+          id_producto: item.id_producto,
+          cantidad: parseFloat(item.cantidad_a_despachar)
+        }));
+
+      if (itemsADespachar.length === 0) {
+        setError("Debe seleccionar al menos un producto para despachar");
+        setProcesando(false);
+        return;
+      }
+
+      const response = await ordenesVentaAPI.registrarDespacho(id, {
+        detalles_despacho: itemsADespachar,
+        fecha_despacho: despachoForm.fecha_despacho
+      });
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setModalDespacho(false);
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al registrar despacho');
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -263,13 +354,16 @@ function DetalleOrdenVenta() {
     }
   };
 
-  const formatearFecha = (fecha) => {
-    if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
+  const handleDescargarSalidaEspecificaPDF = async (idSalida) => {
+    try {
+      setDescargandoPDF(idSalida);
+      await salidasAPI.generarPDF(idSalida);
+      setSuccess('Guía de Salida descargada');
+    } catch (err) {
+      setError('Error al descargar la guía de salida');
+    } finally {
+      setDescargandoPDF(null);
+    }
   };
 
   const getTipoImpuestoNombre = (codigo) => {
@@ -346,7 +440,7 @@ function DetalleOrdenVenta() {
     if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
       return false;
     }
-    return orden.estado === 'Atendido por Producción';
+    return true; 
   };
 
   const columns = [
@@ -372,39 +466,37 @@ function DetalleOrdenVenta() {
       )
     },
     {
-      header: 'Cantidad',
+      header: 'Pedido',
       accessor: 'cantidad',
-      width: '100px',
+      width: '90px',
       align: 'right',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold">{parseFloat(value).toFixed(2)}</div>
-          <div className="text-xs text-muted">{row.unidad_medida}</div>
+          <div className="font-bold">{formatearNumero(value)}</div>
+          <div className="text-[10px] text-muted">{row.unidad_medida}</div>
         </div>
       )
     },
     {
-      header: 'P. Base',
-      accessor: 'precio_base',
-      width: '110px',
+      header: 'Despachado',
+      accessor: 'cantidad_despachada',
+      width: '90px',
       align: 'right',
       render: (value) => (
-        <span className="text-muted font-mono text-sm">{formatearMoneda(value)}</span>
+        <span className={`font-bold ${parseFloat(value) > 0 ? 'text-success' : 'text-gray-400'}`}>
+          {formatearNumero(value)}
+        </span>
       )
     },
     {
-      header: 'Comisión',
-      width: '110px',
+      header: 'Pendiente',
+      accessor: 'cantidad_pendiente',
+      width: '90px',
       align: 'right',
-      render: (_, row) => (
-        <div className="flex flex-col items-end">
-          <span className="text-xs font-medium text-yellow-600">
-            {parseFloat(row.porcentaje_comision || 0).toFixed(2)}%
-          </span>
-          <span className="text-xs text-success">
-            +{formatearMoneda(row.monto_comision)}
-          </span>
-        </div>
+      render: (value) => (
+        <span className={`font-bold ${parseFloat(value) > 0 ? 'text-danger' : 'text-success'}`}>
+           {formatearNumero(value)}
+        </span>
       )
     },
     {
@@ -417,26 +509,24 @@ function DetalleOrdenVenta() {
       )
     },
     {
-      header: 'Desc.',
-      accessor: 'descuento_porcentaje',
-      width: '70px',
-      align: 'center',
-      render: (value) => (
-        <span className="text-sm">{parseFloat(value || 0).toFixed(1)}%</span>
-      )
-    },
-    {
       header: 'Estado',
       accessor: 'tiene_op',
-      width: '150px',
+      width: '140px',
       align: 'center',
       render: (value, row) => {
         if (!row.requiere_receta) {
+          const stockDisponible = parseFloat(row.stock_disponible || 0);
+          const pendiente = parseFloat(row.cantidad_pendiente || 0);
+          
+          if (pendiente <= 0) return <span className="badge badge-success"><CheckCircle size={12}/> Completado</span>;
+
           return (
-            <span className="badge badge-success">
-              <CheckCircle size={12} />
-              Stock disponible
-            </span>
+            <div className="flex flex-col gap-1">
+              <span className={`badge ${stockDisponible >= pendiente ? 'badge-success' : 'badge-warning'}`}>
+                {stockDisponible >= pendiente ? 'Stock Disponible' : 'Stock Insuficiente'}
+              </span>
+              <span className="text-xs text-muted">Stock: {stockDisponible.toFixed(2)}</span>
+            </div>
           );
         }
 
@@ -449,20 +539,6 @@ function DetalleOrdenVenta() {
               <Factory size={12} />
               En producción
             </span>
-          );
-        }
-
-        if (stockDisponible >= cantidadRequerida) {
-          return (
-            <div className="flex flex-col gap-1">
-              <span className="badge badge-success">
-                <CheckCircle size={12} />
-                Stock disponible
-              </span>
-              <span className="text-xs text-muted">
-                {stockDisponible.toFixed(2)} {row.unidad_medida}
-              </span>
-            </div>
           );
         }
 
@@ -656,6 +732,17 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
+          {puedeDespachar() && (
+             <button 
+               className="btn btn-primary shadow-lg shadow-primary/20" 
+               onClick={handleAbrirDespacho}
+               disabled={procesando}
+               title="Registrar Despacho Parcial o Total"
+             >
+               <Truck size={20} /> Registrar Despacho
+             </button>
+          )}
+
           <button 
             className="btn btn-outline" 
             onClick={() => handleDescargarPDF('orden')} 
@@ -873,6 +960,24 @@ function DetalleOrdenVenta() {
             </div>
           </div>
         </div>
+
+        <div className="card col-span-3">
+            <div className="card-body">
+                <p className="text-sm text-muted mb-2">Progreso Entrega</p>
+                <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
+                    {(() => {
+                        const totalQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad), 0);
+                        const despachadoQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad_despachada || 0), 0);
+                        const pct = totalQty > 0 ? (despachadoQty / totalQty) * 100 : 0;
+                        return (
+                             <div className="bg-primary h-4 rounded-full text-xs text-white text-center leading-4" style={{ width: `${pct}%` }}>
+                                {pct.toFixed(0)}%
+                             </div>
+                        )
+                    })()}
+                </div>
+            </div>
+        </div>
       </div>
 
       {resumenPagos && (
@@ -1050,6 +1155,31 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
+      {salidas.length > 0 && (
+         <div className="card mb-4 border-l-4 border-info">
+             <div className="card-header flex items-center gap-2">
+                 <Truck size={20} className="text-info"/>
+                 <h2 className="card-title">Historial de Despachos (Guías de Salida)</h2>
+             </div>
+             <div className="card-body">
+                 <Table 
+                     columns={[
+                         { header: 'N° Salida', accessor: 'id_salida', render: val => `SAL-${String(val).padStart(6,'0')}` },
+                         { header: 'Fecha', accessor: 'fecha_salida', render: val => formatearFecha(val) },
+                         { header: 'Observaciones', accessor: 'observaciones' },
+                         { header: 'PDF', accessor: 'id_salida', align:'center', render: (val) => (
+                             <button className="btn btn-sm btn-outline" onClick={() => handleDescargarSalidaEspecificaPDF(val)} disabled={descargandoPDF === val}>
+                                 {descargandoPDF === val ? <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div> : <Download size={14}/>}
+                             </button>
+                         )}
+                     ]} 
+                     data={salidas} 
+                     emptyMessage="No hay despachos registrados"
+                 />
+             </div>
+         </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         {orden.observaciones && (
           <div className="card">
@@ -1160,8 +1290,8 @@ function DetalleOrdenVenta() {
                 onChange={(e) => setPagoForm({ ...pagoForm, metodo_pago: e.target.value })}
                 required
               >
-                <option value="Efectivo">Efectivo</option>
                 <option value="Transferencia">Transferencia</option>
+                <option value="Efectivo">Efectivo</option>
                 <option value="Cheque">Cheque</option>
                 <option value="Tarjeta">Tarjeta</option>
                 <option value="Deposito">Depósito</option>
@@ -1336,6 +1466,89 @@ function DetalleOrdenVenta() {
             </div>
           </form>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={modalDespacho}
+        onClose={() => setModalDespacho(false)}
+        title="Registrar Despacho Parcial/Total"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 p-3 rounded border border-blue-200">
+            <p className="text-sm text-blue-700">
+              Seleccione la cantidad a despachar para cada producto. 
+              Se generará una <strong>Salida de Inventario</strong> automáticamente.
+            </p>
+          </div>
+
+          <div className="table-container max-h-80 overflow-y-auto">
+            <table className="table table-sm">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th className="text-right">Pendiente</th>
+                  <th className="text-right">Stock</th>
+                  <th className="w-32 text-right">Despachar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {despachoForm.detalles.map((item, idx) => (
+                  <tr key={item.id_producto}>
+                    <td>
+                      <div className="font-medium text-sm">{item.producto}</div>
+                      <div className="text-xs text-muted">{item.codigo}</div>
+                    </td>
+                    <td className="text-right font-medium">
+                      {parseFloat(item.cantidad_pendiente).toFixed(2)}
+                    </td>
+                    <td className="text-right text-muted">
+                      {parseFloat(item.stock_disponible).toFixed(2)}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        className="form-input form-input-sm text-right"
+                        min="0"
+                        max={item.cantidad_pendiente}
+                        step="0.01"
+                        value={item.cantidad_a_despachar}
+                        onChange={(e) => handleCambioCantidadDespacho(item.id_producto, e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="form-group mt-4">
+              <label className="form-label">Fecha de Despacho</label>
+              <input 
+                  type="date" 
+                  className="form-input"
+                  value={despachoForm.fecha_despacho}
+                  onChange={(e) => setDespachoForm({...despachoForm, fecha_despacho: e.target.value})}
+              />
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <button
+              className="btn btn-outline"
+              onClick={() => setModalDespacho(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleRegistrarDespacho}
+              disabled={procesando}
+            >
+              {procesando ? 'Procesando...' : 'Confirmar Despacho'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

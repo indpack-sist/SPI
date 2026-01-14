@@ -8,40 +8,40 @@ export async function getAllOrdenesVenta(req, res) {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
     
     let sql = `
-  SELECT 
-    ov.id_orden_venta,
-    ov.numero_orden,
-    ov.fecha_emision,
-    ov.fecha_entrega_estimada,
-    ov.fecha_entrega_real,
-    ov.fecha_vencimiento,
-    ov.tipo_venta,
-    ov.dias_credito,
-    ov.estado,
-    ov.prioridad,
-    ov.subtotal,
-    ov.igv,
-    ov.total,
-    ov.moneda,
-    ov.monto_pagado,
-    ov.estado_pago,
-    ov.id_cotizacion,
-    c.numero_cotizacion,
-    cl.id_cliente,
-    cl.razon_social AS cliente,
-    cl.ruc AS ruc_cliente,
-    e_comercial.nombre_completo AS comercial,
-    e_registrado.nombre_completo AS registrado_por,
-    ov.id_comercial,
-    ov.id_registrado_por,
-    (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
-  FROM ordenes_venta ov
-  LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
-  LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-  LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
-  LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
-  WHERE 1=1
-`;
+      SELECT 
+        ov.id_orden_venta,
+        ov.numero_orden,
+        ov.fecha_emision,
+        ov.fecha_entrega_estimada,
+        ov.fecha_entrega_real,
+        ov.fecha_vencimiento,
+        ov.tipo_venta,
+        ov.dias_credito,
+        ov.estado,
+        ov.prioridad,
+        ov.subtotal,
+        ov.igv,
+        ov.total,
+        ov.moneda,
+        ov.monto_pagado,
+        ov.estado_pago,
+        ov.id_cotizacion,
+        c.numero_cotizacion,
+        cl.id_cliente,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        e_comercial.nombre_completo AS comercial,
+        e_registrado.nombre_completo AS registrado_por,
+        ov.id_comercial,
+        ov.id_registrado_por,
+        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
+      FROM ordenes_venta ov
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+      WHERE 1=1
+    `;
     
     const params = [];
     
@@ -129,6 +129,8 @@ export async function getOrdenVentaById(req, res) {
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
+        dov.cantidad_despachada, 
+        (dov.cantidad - dov.cantidad_despachada) AS cantidad_pendiente,
         dov.subtotal AS valor_venta,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
@@ -803,6 +805,129 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
   }
 }
 
+export async function registrarDespacho(req, res) {
+  try {
+    const { id } = req.params; 
+    const { detalles_despacho, fecha_despacho } = req.body; 
+    const id_usuario = req.user?.id_empleado || null;
+
+    if (!detalles_despacho || detalles_despacho.length === 0) {
+      return res.status(400).json({ success: false, error: 'No se han indicado productos para despachar' });
+    }
+
+    const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenResult.data.length === 0) return res.status(404).json({ error: 'Orden no encontrada' });
+    const orden = ordenResult.data[0];
+
+    const itemsOrden = await executeQuery('SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
+    
+    let totalCosto = 0;
+    const itemsProcesados = [];
+
+    for (const itemDespacho of detalles_despacho) {
+      const itemDb = itemsOrden.data.find(i => i.id_producto === itemDespacho.id_producto);
+      
+      if (!itemDb) return res.status(400).json({ error: `El producto ID ${itemDespacho.id_producto} no pertenece a esta orden` });
+
+      const pendiente = parseFloat(itemDb.cantidad) - parseFloat(itemDb.cantidad_despachada || 0);
+      const cantidadADespachar = parseFloat(itemDespacho.cantidad);
+
+      if (cantidadADespachar > pendiente) {
+        return res.status(400).json({ error: `Exceso de cantidad para el producto ${itemDespacho.id_producto}. Pendiente: ${pendiente}, Solicitado: ${cantidadADespachar}` });
+      }
+
+      const productoStock = await executeQuery('SELECT stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?', [itemDespacho.id_producto]);
+      if (parseFloat(productoStock.data[0].stock_actual) < cantidadADespachar) {
+        return res.status(400).json({ error: `Stock insuficiente para el producto ID ${itemDespacho.id_producto}` });
+      }
+
+      const costoUnitario = parseFloat(productoStock.data[0].costo_unitario_promedio || 0);
+      totalCosto += cantidadADespachar * costoUnitario;
+
+      itemsProcesados.push({
+        ...itemDespacho,
+        costo_unitario: costoUnitario,
+        precio_unitario: itemDb.precio_unitario 
+      });
+    }
+
+    const queries = [];
+
+    queries.push({
+      sql: `INSERT INTO salidas (
+        id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, 
+        total_precio, moneda, id_registrado_por, observaciones, estado, fecha_salida
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        3, 
+        'Venta',
+        orden.id_cliente,
+        totalCosto,
+        0, 
+        orden.moneda,
+        id_usuario,
+        `Despacho Parcial Orden ${orden.numero_orden}`,
+        'Activo',
+        fecha_despacho || new Date()
+      ]
+    });
+
+    const resultTx = await executeTransaction(queries);
+    if (!resultTx.success) return res.status(500).json({ error: resultTx.error });
+
+    const idSalida = resultTx.data[0].insertId;
+    const queriesDetalle = [];
+
+    for (const item of itemsProcesados) {
+      queriesDetalle.push({
+        sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) VALUES (?, ?, ?, ?, ?)`,
+        params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario]
+      });
+
+      queriesDetalle.push({
+        sql: `UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?`,
+        params: [item.cantidad, item.id_producto]
+      });
+
+      queriesDetalle.push({
+        sql: `UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ? WHERE id_orden_venta = ? AND id_producto = ?`,
+        params: [item.cantidad, id, item.id_producto]
+      });
+    }
+
+    await executeTransaction(queriesDetalle);
+
+    const verificacion = await executeQuery(`
+      SELECT 
+        COUNT(*) as total_items,
+        SUM(CASE WHEN cantidad = cantidad_despachada THEN 1 ELSE 0 END) as items_completados
+      FROM detalle_orden_venta WHERE id_orden_venta = ?
+    `, [id]);
+
+    const { total_items, items_completados } = verificacion.data[0];
+    
+    let nuevoEstado = 'En Proceso'; 
+    if (total_items == items_completados) {
+      nuevoEstado = 'Despachada'; 
+    }
+
+    await executeQuery(
+      'UPDATE ordenes_venta SET estado = ?, id_salida = ? WHERE id_orden_venta = ?', 
+      [nuevoEstado, idSalida, id]
+    );
+
+    res.json({
+      success: true,
+      message: `Despacho registrado correctamente. Orden pasó a estado: ${nuevoEstado}`,
+      data: { id_salida, nuevo_estado: nuevoEstado }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -836,95 +961,55 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     const estadoAnterior = orden.estado;
     
     let idSalida = null;
-    if (estado === 'Despachada' && estadoAnterior !== 'Despachada') {
+
+    if (estado === 'Despachada' && estadoAnterior !== 'Despachada' && estadoAnterior !== 'Entregada') {
+      
       const detalleResult = await executeQuery(`
         SELECT 
           dov.id_producto,
-          dov.cantidad,
-          p.codigo AS codigo_producto,
-          p.nombre AS producto,
+          (dov.cantidad - dov.cantidad_despachada) as cantidad_pendiente, 
           p.costo_unitario_promedio
         FROM detalle_orden_venta dov
         INNER JOIN productos p ON dov.id_producto = p.id_producto
-        WHERE dov.id_orden_venta = ?
+        WHERE dov.id_orden_venta = ? AND (dov.cantidad - dov.cantidad_despachada) > 0
       `, [id]);
       
       if (detalleResult.success && detalleResult.data.length > 0) {
-        const detalles = detalleResult.data;
+        const detallesPendientes = detalleResult.data;
         
         let totalCosto = 0;
-        let totalPrecio = 0;
-        
-        for (const item of detalles) {
-          const cantidad = parseFloat(item.cantidad);
-          const costoUnitario = parseFloat(item.costo_unitario_promedio || 0);
-          totalCosto += cantidad * costoUnitario;
-          totalPrecio += parseFloat(orden.total);
+        for (const item of detallesPendientes) {
+           totalCosto += parseFloat(item.cantidad_pendiente) * parseFloat(item.costo_unitario_promedio || 0);
         }
         
         const salidaResult = await executeQuery(`
           INSERT INTO salidas (
-            id_tipo_inventario,
-            tipo_movimiento,
-            id_cliente,
-            total_costo,
-            total_precio,
-            moneda,
-            id_registrado_por,
-            observaciones,
-            estado
+            id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, total_precio, moneda, id_registrado_por, observaciones, estado
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-          3,
-          'Venta',
-          orden.id_cliente,
-          totalCosto,
-          parseFloat(orden.total),
-          orden.moneda || 'PEN',
-          id_usuario,
-          `Salida automática por despacho de ${orden.numero_orden}`,
-          'Activo'
+          3, 'Venta', orden.id_cliente, totalCosto, parseFloat(orden.total), orden.moneda || 'PEN', id_usuario, 
+          `Despacho Automático Final Orden ${orden.numero_orden}`, 'Activo'
         ]);
         
         if (salidaResult.success) {
           idSalida = salidaResult.data.insertId;
           
-          for (const item of detalles) {
-            const stockCheck = await executeQuery(`
-              SELECT stock_actual FROM productos WHERE id_producto = ?
-            `, [item.id_producto]);
-            
-            const stockActual = parseFloat(stockCheck.data[0].stock_actual);
-            const cantidadSalida = parseFloat(item.cantidad);
-            
-            if (stockActual < cantidadSalida) {
-              return res.status(400).json({
-                success: false,
-                error: `Stock insuficiente para ${item.producto}. Disponible: ${stockActual}, Requerido: ${cantidadSalida}`
-              });
+          for (const item of detallesPendientes) {
+            const stockCheck = await executeQuery('SELECT stock_actual FROM productos WHERE id_producto = ?', [item.id_producto]);
+            if (stockCheck.data[0].stock_actual < item.cantidad_pendiente) {
+               return res.status(400).json({ success: false, error: `No hay stock suficiente para completar el despacho del producto ID ${item.id_producto}` });
             }
-            
+
             await executeQuery(`
-              INSERT INTO detalle_salidas (
-                id_salida,
-                id_producto,
-                cantidad,
-                costo_unitario,
-                precio_unitario
-              ) VALUES (?, ?, ?, ?, ?)
-            `, [
-              idSalida,
-              item.id_producto,
-              cantidadSalida,
-              parseFloat(item.costo_unitario_promedio || 0),
-              parseFloat(orden.subtotal) / detalles.length
-            ]);
+              INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) 
+              VALUES (?, ?, ?, ?, 0)
+            `, [idSalida, item.id_producto, item.cantidad_pendiente, item.costo_unitario_promedio]);
             
-            await executeQuery(`
-              UPDATE productos 
-              SET stock_actual = stock_actual - ? 
-              WHERE id_producto = ?
-            `, [cantidadSalida, item.id_producto]);
+            await executeQuery('UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?', 
+              [item.cantidad_pendiente, item.id_producto]);
+
+             await executeQuery('UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ? WHERE id_orden_venta = ? AND id_producto = ?', 
+              [item.cantidad_pendiente, id, item.id_producto]);
           }
         }
       }
@@ -934,7 +1019,7 @@ export async function actualizarEstadoOrdenVenta(req, res) {
       UPDATE ordenes_venta 
       SET estado = ?,
           fecha_entrega_real = ?,
-          id_salida = ?
+          id_salida = COALESCE(?, id_salida) 
       WHERE id_orden_venta = ?
     `, [estado, fecha_entrega_real || null, idSalida, id]);
     
@@ -1060,7 +1145,7 @@ export async function getEstadisticasOrdenesVenta(req, res) {
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    const { tipo } = req.query; // LEER EL QUERY PARAM
+    const { tipo } = req.query; 
 
     const ordenResult = await executeQuery(`
       SELECT 
@@ -1114,7 +1199,6 @@ export async function descargarPDFOrdenVenta(req, res) {
     let pdfBuffer;
     let filename;
 
-    // DECISIÓN DE DOCUMENTO A GENERAR
     if (tipo === 'comprobante') {
       if (orden.tipo_comprobante === 'Factura') {
         pdfBuffer = await generarFacturaPDF(orden);
@@ -1123,12 +1207,10 @@ export async function descargarPDFOrdenVenta(req, res) {
         pdfBuffer = await generarNotaVentaPDF(orden);
         filename = `NotaVenta-${orden.numero_comprobante || orden.numero_orden}.pdf`;
       } else {
-        // Fallback
         pdfBuffer = await generarOrdenVentaPDF(orden);
         filename = `OrdenVenta-${orden.numero_orden}.pdf`;
       }
     } else {
-      // Default: Orden de Venta Interna
       pdfBuffer = await generarOrdenVentaPDF(orden);
       filename = `OrdenVenta-${orden.numero_orden}.pdf`;
     }

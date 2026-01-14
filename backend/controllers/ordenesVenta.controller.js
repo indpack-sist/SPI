@@ -1549,3 +1549,42 @@ export async function getResumenPagosOrden(req, res) {
     });
   }
 }
+export async function getSalidasOrden(req, res) {
+  try {
+    const { id } = req.params;
+    
+    // 1. Obtener el número de orden real
+    const ordenRes = await executeQuery('SELECT numero_orden FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    
+    if (ordenRes.data.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+    
+    const numeroOrden = ordenRes.data[0].numero_orden;
+    
+    // 2. Buscar salidas relacionadas por la observación automática generada en el despacho
+    const sql = `
+      SELECT 
+        s.id_salida, 
+        s.numero_salida, 
+        s.fecha_salida, 
+        s.observaciones
+      FROM salidas s
+      WHERE s.observaciones LIKE ? 
+      AND s.estado = 'Activo'
+      ORDER BY s.fecha_salida DESC
+    `;
+    
+    const result = await executeQuery(sql, [`%${numeroOrden}%`]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}

@@ -8,12 +8,13 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
-      consultarStock: true, // Acceso a Consulta de Stock
+      consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
-      ordenesProduccion: true, // Acceso a Órdenes y Calendario
+      ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: false,
@@ -28,6 +29,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -50,6 +52,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -70,6 +73,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -92,12 +96,13 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO (Ellos solicitan)
       productos: true, 
       consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
-      ordenesProduccion: true, // HABILITADO: Para ver el Calendario de Producción
+      ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: false,
@@ -112,12 +117,13 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
       salidas: true,
       transferencias: true,
-      ordenesProduccion: true, // API Habilitada para leer datos del calendario
+      ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: true,
@@ -134,12 +140,13 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: true,
+      solicitudesCredito: true, // NUEVO (Suelen necesitar pedir crédito)
       productos: true,
       consultarStock: true,
       entradas: false,
       salidas: false,
       transferencias: false,
-      ordenesProduccion: false, // Ventas puras no suele ver producción, solo stock
+      ordenesProduccion: false,
       cotizaciones: true,
       ordenesVenta: true,
       guiasRemision: true,
@@ -154,6 +161,7 @@ const PERMISOS_POR_ROL = {
       flota: true,        
       proveedores: true,  
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: false,
@@ -176,6 +184,7 @@ const PERMISOS_POR_ROL = {
       flota: false,           
       proveedores: false,     
       clientes: false,        
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -196,6 +205,7 @@ const PERMISOS_POR_ROL = {
       flota: true,           
       proveedores: true,      
       clientes: true,         
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -218,12 +228,13 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
-      productos: false, // UI FALSE: No ve el módulo "Catálogo de Productos"
-      consultarStock: true, // UI TRUE: Sí ve "Consulta de Stock"
+      solicitudesCredito: false, // NUEVO
+      productos: false, 
+      consultarStock: true,
       entradas: false,
       salidas: false,
       transferencias: true,
-      ordenesProduccion: true, // UI TRUE: Gestiona el Calendario y Órdenes
+      ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
       guiasRemision: false,
@@ -238,7 +249,8 @@ const PERMISOS_POR_ROL = {
       flota: true,          
       proveedores: true,    
       clientes: true,       
-      productos: true, // API TRUE: Necesario para selects de insumos y mermas
+      solicitudesCredito: false, // NUEVO
+      productos: true, 
       consultarStock: true,
       entradas: true,
       salidas: true,
@@ -260,6 +272,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: false,
@@ -280,6 +293,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: false,
@@ -302,6 +316,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -322,6 +337,7 @@ const PERMISOS_POR_ROL = {
       flota: true,          
       proveedores: true,    
       clientes: true,       
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -344,6 +360,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: false,
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -364,6 +381,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: false, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -386,6 +404,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: false,
       clientes: false,
+      solicitudesCredito: false, // NUEVO
       productos: false,
       consultarStock: false,
       entradas: false,
@@ -406,6 +425,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: false,
       clientes: true,
+      solicitudesCredito: false, // NUEVO
       productos: false,
       consultarStock: false,
       entradas: false,
@@ -428,6 +448,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -448,6 +469,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
+      solicitudesCredito: true, // NUEVO
       productos: true,
       consultarStock: true,
       entradas: true,

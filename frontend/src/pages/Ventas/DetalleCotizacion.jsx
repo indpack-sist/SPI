@@ -145,10 +145,17 @@ function DetalleCotizacion() {
     });
   };
 
+  const formatearNumero = (valor) => {
+    return new Intl.NumberFormat('es-DE', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 3 
+    }).format(valor);
+  };
+
   const formatearMoneda = (valor) => {
     if (!cotizacion) return '-';
     const simbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
+    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
   const getTipoImpuestoNombre = (valor) => {
@@ -420,7 +427,7 @@ function DetalleCotizacion() {
               </button>
             </div>
           </div>
-
+          
           {!estaConvertida && cotizacion.estado !== 'Vencida' && (
             <div className="border-t border-black/10 pt-4 mt-2">
               <p className="text-xs font-bold uppercase opacity-60 mb-3">Cambiar Estado:</p>
@@ -685,7 +692,7 @@ function DetalleCotizacion() {
                       Equivalente en Soles:
                     </span>
                     <span className="font-bold text-blue-900 text-lg">
-                      S/ {(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio)).toFixed(3)}
+                      S/ {formatearNumero(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio))}
                     </span>
                   </div>
                   <p className="text-xs text-blue-700 mt-1">
@@ -704,13 +711,13 @@ function DetalleCotizacion() {
                   <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_pen.disponible) < parseFloat(cotizacion.total) && cotizacion.moneda === 'PEN' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-gray-600">PEN Disponible:</span>
-                      <span className="font-bold text-gray-800">S/ {parseFloat(estadoCredito.credito_pen.disponible).toFixed(2)}</span>
+                      <span className="font-bold text-gray-800">S/ {formatearNumero(parseFloat(estadoCredito.credito_pen.disponible))}</span>
                     </div>
                   </div>
                   <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_usd.disponible) < parseFloat(cotizacion.total) && cotizacion.moneda === 'USD' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-gray-600">USD Disponible:</span>
-                      <span className="font-bold text-gray-800">$ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}</span>
+                      <span className="font-bold text-gray-800">$ {formatearNumero(parseFloat(estadoCredito.credito_usd.disponible))}</span>
                     </div>
                   </div>
                 </div>

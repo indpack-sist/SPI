@@ -87,6 +87,18 @@ function NuevaOrdenVenta() {
     observaciones: ''
   });
 
+  const formatearNumero = (valor) => {
+    return new Intl.NumberFormat('es-DE', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(valor);
+  };
+
+  const formatearMoneda = (valor) => {
+    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+  };
+
   useEffect(() => {
     cargarCatalogos();
   }, []);
@@ -396,11 +408,6 @@ function NuevaOrdenVenta() {
     setTotales({ subtotal, impuesto, total, totalComisiones });
   };
 
-  const formatearMoneda = (valor) => {
-    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${new Intl.NumberFormat('es-PE', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(parseFloat(valor || 0))}`;
-  };
-
   const handleTipoImpuestoChange = (codigo) => {
     const tipoImpuesto = TIPOS_IMPUESTO.find(t => t.codigo === codigo);
     if (tipoImpuesto) {
@@ -545,7 +552,7 @@ function NuevaOrdenVenta() {
                             <CreditCard size={12} /> Disponible PEN
                           </p>
                           <p className={`text-lg font-bold ${estadoCredito.credito_pen.disponible < totales.total && formCabecera.moneda === 'PEN' ? 'text-red-600' : 'text-green-600'}`}>
-                            S/ {parseFloat(estadoCredito.credito_pen.disponible).toFixed(2)}
+                            S/ {formatearNumero(estadoCredito.credito_pen.disponible)}
                           </p>
                         </div>
                         <div className="p-3 border rounded-lg bg-white shadow-sm">
@@ -553,7 +560,7 @@ function NuevaOrdenVenta() {
                             <DollarSign size={12} /> Disponible USD
                           </p>
                           <p className={`text-lg font-bold ${estadoCredito.credito_usd.disponible < totales.total && formCabecera.moneda === 'USD' ? 'text-red-600' : 'text-blue-600'}`}>
-                            $ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}
+                            $ {formatearNumero(estadoCredito.credito_usd.disponible)}
                           </p>
                         </div>
                       </div>

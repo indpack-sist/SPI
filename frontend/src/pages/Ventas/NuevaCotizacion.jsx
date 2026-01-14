@@ -103,6 +103,20 @@ function NuevaCotizacion() {
   
   const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
 
+  // --- FUNCIÓN DE FORMATEO CENTRALIZADA ---
+  const formatearNumero = (valor) => {
+    return new Intl.NumberFormat('es-DE', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 3 
+    }).format(valor);
+  };
+
+  const formatearMonedaGral = (valor) => {
+    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+  };
+  // ----------------------------------------
+
   useEffect(() => {
     cargarCatalogos();
   }, []);
@@ -466,13 +480,10 @@ function NuevaCotizacion() {
         validez_dias: parseInt(formCabecera.validez_dias) || 7,
         observaciones: formCabecera.observaciones || null,
         detalle: detalle.map((item, index) => {
-          // Lógica de seguridad para precios
           const precioVenta = parseFloat(item.precio_unitario);
           let precioBase = parseFloat(item.precio_base);
           let porcentajeComision = parseFloat(item.porcentaje_comision || 0);
 
-          // Si el precio base es 0 o inexistente, usamos el precio de venta como base 
-          // y la comisión como 0 para asegurar que el backend calcule el precio correcto.
           if (!precioBase || precioBase <= 0) {
             precioBase = precioVenta;
             porcentajeComision = 0;
@@ -509,11 +520,6 @@ function NuevaCotizacion() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatearMonedaGral = (valor) => {
-    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
   const clientesFiltrados = clientes.filter(c =>
@@ -619,10 +625,10 @@ function NuevaCotizacion() {
                         <CreditCard size={16}/> LÍNEA DE CRÉDITO PEN
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
-                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">S/ {parseFloat(estadoCredito.credito_pen.limite).toFixed(2)}</span>
-                        <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">S/ {parseFloat(estadoCredito.credito_pen.utilizado).toFixed(2)}</span>
+                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">S/ {formatearNumero(estadoCredito.credito_pen.limite)}</span>
+                        <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">S/ {formatearNumero(estadoCredito.credito_pen.utilizado)}</span>
                         <div className="col-span-2 border-t my-1"></div>
-                        <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">S/ {parseFloat(estadoCredito.credito_pen.disponible).toFixed(2)}</span>
+                        <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">S/ {formatearNumero(estadoCredito.credito_pen.disponible)}</span>
                       </div>
                     </div>
                     <div className="p-3 border rounded-lg bg-white shadow-sm">
@@ -630,10 +636,10 @@ function NuevaCotizacion() {
                         <DollarSign size={16}/> LÍNEA DE CRÉDITO USD
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
-                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">$ {parseFloat(estadoCredito.credito_usd.limite).toFixed(2)}</span>
-                        <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">$ {parseFloat(estadoCredito.credito_usd.utilizado).toFixed(2)}</span>
+                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">$ {formatearNumero(estadoCredito.credito_usd.limite)}</span>
+                        <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">$ {formatearNumero(estadoCredito.credito_usd.utilizado)}</span>
                         <div className="col-span-2 border-t my-1"></div>
-                        <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">$ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}</span>
+                        <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">$ {formatearNumero(estadoCredito.credito_usd.disponible)}</span>
                       </div>
                     </div>
                   </div>
@@ -1026,6 +1032,7 @@ function NuevaCotizacion() {
                     </span>
                     <span className="font-bold">{formatearMonedaGral(totales.impuesto)}</span>
                   </div>
+                  {/* --- CORRECCIÓN DE COLOR AQUÍ: text-gray-800 o white dependiendo del fondo --- */}
                   <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2 shadow-sm">
                     <span className="font-bold text-lg">TOTAL:</span>
                     <span className="font-bold text-2xl">{formatearMonedaGral(totales.total)}</span>
@@ -1077,7 +1084,7 @@ function NuevaCotizacion() {
                         {cliente.usar_limite_credito === 1 ? (
                           <>
                             <div className="flex items-center gap-1 badge badge-success text-[10px] uppercase font-bold py-0.5"><CheckCircle size={10}/> Crédito Activo</div>
-                            <div className="text-[10px] font-bold text-muted">S/ {parseFloat(cliente.limite_credito_pen).toLocaleString()} | $ {parseFloat(cliente.limite_credito_usd).toLocaleString()}</div>
+                            <div className="text-[10px] font-bold text-muted">S/ {formatearNumero(parseFloat(cliente.limite_credito_pen))} | $ {formatearNumero(parseFloat(cliente.limite_credito_usd))}</div>
                           </>
                         ) : (
                           <div className="flex items-center gap-1 badge badge-secondary text-[10px] uppercase font-bold py-0.5"><Lock size={10}/> Solo Contado</div>

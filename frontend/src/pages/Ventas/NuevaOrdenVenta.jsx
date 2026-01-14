@@ -88,14 +88,15 @@ function NuevaOrdenVenta() {
   });
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-DE', { 
+    return new Intl.NumberFormat('es-ES', { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);
   };
 
   const formatearMoneda = (valor) => {
-    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
+    if (!orden && !valor) return '-';
+    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 

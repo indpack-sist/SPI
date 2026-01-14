@@ -48,8 +48,10 @@ function DetalleOrdenVenta() {
     observaciones: ''
   });
 
+  // --- CAMBIO APLICADO AQUÍ ---
+  // Usamos 'es-ES' para forzar el formato: 1.000,00 (Punto miles, Coma decimales)
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-DE', { 
+    return new Intl.NumberFormat('es-ES', { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);

@@ -103,16 +103,16 @@ function NuevaCotizacion() {
   
   const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
 
-  // --- FUNCIÓN DE FORMATEO CENTRALIZADA ---
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-DE', { 
+    return new Intl.NumberFormat('es-ES', { 
       minimumFractionDigits: 2, 
-      maximumFractionDigits: 3 
+      maximumFractionDigits: 2 
     }).format(valor);
   };
 
-  const formatearMonedaGral = (valor) => {
-    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor) => {
+    if (!orden && !valor) return '-';
+    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
   // ----------------------------------------

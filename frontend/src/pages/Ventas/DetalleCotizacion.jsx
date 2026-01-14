@@ -146,18 +146,17 @@ function DetalleCotizacion() {
   };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-DE', { 
+    return new Intl.NumberFormat('es-ES', { 
       minimumFractionDigits: 2, 
-      maximumFractionDigits: 3 
+      maximumFractionDigits: 2 
     }).format(valor);
   };
 
   const formatearMoneda = (valor) => {
-    if (!cotizacion) return '-';
-    const simbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
+    if (!orden && !valor) return '-';
+    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
-
   const getTipoImpuestoNombre = (valor) => {
     if (!valor) return 'IGV 18%';
 

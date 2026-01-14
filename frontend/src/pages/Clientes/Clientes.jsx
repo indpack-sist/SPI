@@ -450,31 +450,6 @@ function Clientes() {
             )}
           </div>
 
-          {datosAPI && (
-            <div className="alert alert-info mb-3">
-              <strong>Datos de {formData.tipo_documento === 'RUC' ? 'SUNAT' : 'RENIEC'}:</strong>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                {formData.tipo_documento === 'RUC' ? (
-                  <>
-                    <div><strong>Razón Social:</strong> {datosAPI.razon_social}</div>
-                    <div>
-                      <strong>Estado:</strong>{' '}
-                      <span className={`badge ${datosAPI.estado === 'ACTIVO' ? 'badge-success' : 'badge-warning'}`}>
-                        {datosAPI.estado}
-                      </span>
-                    </div>
-                    <div><strong>Condición:</strong> {datosAPI.condicion}</div>
-                    {datosAPI.direccion && <div className="col-span-2"><strong>Dirección:</strong> {datosAPI.direccion}</div>}
-                  </>
-                ) : (
-                  <>
-                    <div className="col-span-2"><strong>Nombre:</strong> {datosAPI.nombre_completo}</div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
           <div className="form-group">
             <label className="form-label">
               {formData.tipo_documento === 'RUC' ? 'Razón Social' : 'Nombre Completo'} *
@@ -569,6 +544,7 @@ function Clientes() {
                     onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })}
                     min="0"
                     step="0.01"
+                    placeholder="0.00"
                   />
                 </div>
 
@@ -581,6 +557,7 @@ function Clientes() {
                     onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })}
                     min="0"
                     step="0.01"
+                    placeholder="0.00"
                   />
                 </div>
               </div>

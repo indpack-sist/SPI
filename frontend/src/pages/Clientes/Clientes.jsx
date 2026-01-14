@@ -507,58 +507,55 @@ function Clientes() {
           </div>
 
           <div className="card bg-gray-50 border p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="form-label mb-0 flex items-center gap-2">
-                <CreditCard size={18} className="text-primary" />
-                Configuración de Crédito
-              </label>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">
-                  {formData.usar_limite_credito ? 'Con Límite' : 'Sin Límite'}
-                </span>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only peer"
-                    checked={formData.usar_limite_credito}
-                    onChange={(e) => setFormData({ ...formData, usar_limite_credito: e.target.checked })}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-            </div>
+  <div className="form-group mb-3">
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input 
+        type="checkbox" 
+        checked={formData.usar_limite_credito}
+        onChange={(e) => setFormData({ ...formData, usar_limite_credito: e.target.checked })}
+        className="form-checkbox"
+        style={{ width: '18px', height: '18px' }}
+      />
+      <CreditCard size={18} className="text-primary" />
+      <span className="font-medium">Usar límite de crédito</span>
+    </label>
+    <p className="text-xs text-muted mt-1 ml-6">
+      {formData.usar_limite_credito 
+        ? 'El cliente tiene límites de crédito definidos' 
+        : 'El cliente puede realizar compras sin límite de crédito'}
+    </p>
+  </div>
 
-            {formData.usar_limite_credito && (
-              <div className="grid grid-cols-2 gap-4 animate-fadeIn">
-                <div className="form-group mb-0">
-                  <label className="form-label text-xs">Límite Soles (S/)</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={formData.limite_credito_pen}
-                    onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })}
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                  />
-                </div>
+  {formData.usar_limite_credito && (
+    <div className="grid grid-cols-2 gap-4 pt-3 border-t">
+      <div className="form-group mb-0">
+        <label className="form-label">Límite en Soles (S/)</label>
+        <input
+          type="number"
+          className="form-input"
+          value={formData.limite_credito_pen}
+          onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })}
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+        />
+      </div>
 
-                <div className="form-group mb-0">
-                  <label className="form-label text-xs">Límite Dólares ($)</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={formData.limite_credito_usd}
-                    onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })}
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+      <div className="form-group mb-0">
+        <label className="form-label">Límite en Dólares ($)</label>
+        <input
+          type="number"
+          className="form-input"
+          value={formData.limite_credito_usd}
+          onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })}
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+        />
+      </div>
+    </div>
+  )}
+</div>
 
           <div className="form-group">
             <label className="form-label">Estado *</label>

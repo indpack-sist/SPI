@@ -1471,9 +1471,13 @@ export async function getAnalisisConsumoOrden(req, res) {
   }
 }
 
+// Reemplaza tu función generarPDFOrdenController con esta:
+
 export const generarPDFOrdenController = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // MODIFICADO: Agregado el LEFT JOIN con ordenes_venta para traer el numero_orden_venta
     const ordenResult = await executeQuery(`
       SELECT 
         op.*,
@@ -1481,11 +1485,16 @@ export const generarPDFOrdenController = async (req, res) => {
         p.nombre AS producto,
         p.unidad_medida,
         e.nombre_completo AS supervisor,
-        rp.nombre_receta AS nombre_receta
+        rp.nombre_receta AS nombre_receta,
+        ov.numero_orden AS numero_orden_venta,
+        cl.razon_social AS cliente
       FROM ordenes_produccion op
       INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
       INNER JOIN empleados e ON op.id_supervisor = e.id_empleado
       LEFT JOIN recetas_productos rp ON op.id_receta_producto = rp.id_receta_producto
+      -- Relación con Venta
+      LEFT JOIN ordenes_venta ov ON op.id_orden_venta_origen = ov.id_orden_venta
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE op.id_orden = ?
     `, [id]);
 
@@ -1523,6 +1532,7 @@ export const generarPDFOrdenController = async (req, res) => {
     `, [id]);
     const mermas = mermasResult.success ? mermasResult.data : [];
 
+    // Ahora 'orden' incluye 'numero_orden_venta' y 'cliente' para que salgan en el PDF
     const pdfBuffer = await generarPDFOrdenProduccion(orden, consumo, mermas);
 
     res.setHeader('Content-Type', 'application/pdf');

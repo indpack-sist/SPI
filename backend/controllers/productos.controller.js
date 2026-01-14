@@ -1055,10 +1055,11 @@ export async function recalcularTodosCUP(req, res) {
     const resultados = [];
     
     for (const producto of productos) {
+      // --- CORRECCIÓN AQUÍ ---
       const cupResult = await executeQuery(
         `SELECT 
           COALESCE(
-            SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(rp.rendimiento_unidades, 0),
+            SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0),
             0
           ) AS cup_calculado
          FROM recetas_productos rp
@@ -1066,9 +1067,11 @@ export async function recalcularTodosCUP(req, res) {
          INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
          WHERE rp.id_producto_terminado = ?
          AND rp.es_principal = 1
-         AND rp.es_activa = 1`,
+         AND rp.es_activa = 1
+         GROUP BY rp.id_receta_producto`, // Agregamos GROUP BY explícito
         [producto.id_producto]
       );
+      // -----------------------
       
       const cupCalculado = parseFloat(cupResult.data[0]?.cup_calculado || 0);
       

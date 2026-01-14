@@ -290,8 +290,10 @@ export async function generarPDFEntrada(datos) {
   });
 }
 
+import PDFDocument from 'pdfkit';
+
 export async function generarPDFSalida(datos) {
-  const logoBuffer = await cargarLogoURL(); // Asegúrate de que esta función exista o usa la lógica anterior
+  const logoBuffer = await cargarLogoURL(); // Asegúrate de que esta función exista
 
   return new Promise(async (resolve, reject) => {
     try {
@@ -310,23 +312,14 @@ export async function generarPDFSalida(datos) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
-      // Nota: Asumo que el objeto EMPRESA está disponible en el ámbito o importado
-      // Si no, deberás definirlo o usar strings directos como en la función anterior.
       const EMPRESA = {
           direccion: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA',
           distrito: 'Villa el Salvador',
@@ -348,23 +341,33 @@ export async function generarPDFSalida(datos) {
       doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
       doc.text(`Web: ${EMPRESA.web}`, 50, 184);
 
+      // --- CUADRO RUC Y NUMERO ---
       doc.roundedRect(380, 40, 165, 75, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`R.U.C. ${EMPRESA.ruc}`, 385, 48, { align: 'center', width: 155 });
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text('CONSTANCIA DE SALIDA', 385, 65, { align: 'center', width: 155 });
-      doc.fontSize(10).font('Helvetica-Bold');
-      doc.text(`No. ${datos.codigo || datos.id_salida || 'N/A'}`, 385, 95, { align: 'center', width: 155 });
+      doc.fontSize(14).fillColor('#cc0000'); // Destacar el número en rojo
+      doc.text(`No. ${datos.codigo || datos.id_salida || 'N/A'}`, 385, 90, { align: 'center', width: 155 });
 
+      // --- INFORMACIÓN DEL MOVIMIENTO (MODIFICADO AQUÍ) ---
       const destino = datos.tipo_movimiento === 'Venta' 
-        ? datos.cliente 
-        : datos.departamento || datos.tipo_movimiento;
+        ? (datos.cliente || datos.destinatario_nombre) 
+        : (datos.departamento || datos.tipo_movimiento);
+
+      // Función auxiliar para calcular altura
+      const calcularAlturaTexto = (doc, text, width, fontSize) => {
+        doc.fontSize(fontSize);
+        return doc.heightOfString(text, { width: width });
+      };
 
       const alturaDestino = calcularAlturaTexto(doc, destino || 'N/A', 195, 8);
-      const alturaInfoSalida = Math.max(105, alturaDestino + 90);
+      // Aumentamos ligeramente la altura mínima base (de 105 a 115) para acomodar los nuevos campos
+      const alturaInfoSalida = Math.max(115, alturaDestino + 90);
       
       doc.roundedRect(33, 205, 529, alturaInfoSalida, 3).stroke('#000000');
       
+      // COLUMNA IZQUIERDA
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha:', 40, 213);
       doc.font('Helvetica');
@@ -373,7 +376,6 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica-Bold');
       doc.text('Hora:', 40, 228);
       doc.font('Helvetica');
-      // Función simple para hora si no tienes formatearHora
       const horaStr = new Date(datos.fecha_movimiento).toLocaleTimeString('es-PE', {hour: '2-digit', minute:'2-digit'});
       doc.text(horaStr, 100, 228);
       
@@ -392,16 +394,37 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica');
       doc.text(destino || 'N/A', 120, 273, { width: 210, lineGap: 2 });
 
+      // COLUMNA DERECHA (AGREGADOS DOCUMENTOS ASOCIADOS)
       doc.font('Helvetica-Bold');
-      doc.text('Estado:', 360, 213);
+      doc.text('Estado:', 340, 213);
       doc.font('Helvetica');
-      doc.text(datos.estado || 'N/A', 410, 213);
+      doc.text(datos.estado || 'N/A', 430, 213);
       
+      // Vehículo (Etiqueta y valor en líneas separadas o compactas)
       doc.font('Helvetica-Bold');
-      doc.text('Referencia/Vehículo:', 360, 228);
+      doc.text('Referencia/Vehículo:', 340, 228);
       doc.font('Helvetica');
-      doc.text(datos.vehiculo || '---', 360, 243, { width: 195 });
+      // Ajustamos para que el texto del vehículo no se monte si es largo, cortándolo si es necesario
+      doc.text(datos.vehiculo || '---', 430, 228, { width: 120, height: 10, ellipsis: true });
 
+      // === NUEVO: ORDEN DE VENTA ===
+      doc.font('Helvetica-Bold');
+      doc.text('Orden de Venta:', 340, 243);
+      doc.font('Helvetica');
+      // Muestra el código de orden de venta si existe, sino un guión
+      const ordenVentaTexto = datos.codigo_orden_venta || datos.orden_venta || '---';
+      doc.text(ordenVentaTexto, 430, 243);
+
+      // === NUEVO: COTIZACIÓN ===
+      doc.font('Helvetica-Bold');
+      doc.text('Cotización:', 340, 258);
+      doc.font('Helvetica');
+      // Muestra el código de cotización si existe, sino un guión
+      const cotizacionTexto = datos.codigo_cotizacion || datos.cotizacion || '---';
+      doc.text(cotizacionTexto, 430, 258);
+
+
+      // --- TABLA DE ITEMS ---
       let yPos = 205 + alturaInfoSalida + 10;
 
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
@@ -421,6 +444,7 @@ export async function generarPDFSalida(datos) {
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 270, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
+        // Control de salto de página
         if (yPos + alturaFila > 700) {
           doc.addPage();
           yPos = 50;
@@ -432,6 +456,11 @@ export async function generarPDFSalida(datos) {
           doc.text('CANTIDAD', 420, yPos + 6, { width: 60, align: 'center' });
           doc.text('UNIDAD', 485, yPos + 6, { width: 50, align: 'center' });
           yPos += 20;
+        }
+
+        // Fila cebra (opcional, ayuda a la lectura)
+        if (idx % 2 === 0) {
+            doc.rect(33, yPos, 529, alturaFila).fillOpacity(0.1).fill('#f0f0f0').fillOpacity(1);
         }
 
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
@@ -446,6 +475,7 @@ export async function generarPDFSalida(datos) {
 
       yPos += 10;
 
+      // --- OBSERVACIONES Y TOTALES ---
       if (datos.observaciones) {
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('OBSERVACIONES', 40, yPos);
@@ -462,40 +492,28 @@ export async function generarPDFSalida(datos) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`${detalles.length}`, 475, yPos + 4, { align: 'right', width: 80 });
 
-      // ============================================
-      // NUEVA SECCIÓN DE FIRMAS (TIPO PIE DE PÁGINA)
-      // ============================================
-      
-      // Definimos la posición Y fija para el pie de página
+      // --- FIRMAS (PIE DE PÁGINA) ---
       let yFirmas = 720;
       
-      // Si el contenido actual está muy cerca del final (más allá de Y=650),
-      // creamos nueva página para evitar que las firmas se monten o queden cortadas.
       if (yPos > 650) {
         doc.addPage();
-        // En la nueva página, mantenemos yFirmas al fondo
         yFirmas = 720;
       }
 
-      // Dibujamos las 3 firmas alineadas horizontalmente
       const anchoLinea = 135;
       
-      // 1. DESPACHADO POR (Izquierda) - X aprox 40
+      // 1. DESPACHADO POR
       doc.moveTo(40, yFirmas).lineTo(40 + anchoLinea, yFirmas).stroke('#000000');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('DESPACHADO POR', 40, yFirmas + 5, { width: anchoLinea, align: 'center' });
 
-      // 2. VERIFICADO POR (Centro) - X aprox 215
+      // 2. VERIFICADO POR
       doc.moveTo(215, yFirmas).lineTo(215 + anchoLinea, yFirmas).stroke('#000000');
       doc.text('VERIFICADO POR', 215, yFirmas + 5, { width: anchoLinea, align: 'center' });
 
-      // 3. RECIBIDO POR (Derecha) - X aprox 390
+      // 3. RECIBIDO POR
       doc.moveTo(390, yFirmas).lineTo(390 + anchoLinea, yFirmas).stroke('#000000');
       doc.text('RECIBIDO POR', 390, yFirmas + 5, { width: anchoLinea, align: 'center' });
-
-      // ============================================
-      // FIN SECCIÓN FIRMAS
-      // ============================================
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Documento de Control de Inventario - INDPACK S.A.C.', 50, 770, { align: 'center', width: 495 });

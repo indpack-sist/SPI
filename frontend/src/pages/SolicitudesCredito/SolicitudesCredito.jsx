@@ -72,23 +72,30 @@ function SolicitudesCredito() {
       setProcesando(true);
       setError(null);
 
+      // CORRECCIÓN AQUÍ:
+      // 1. Pasamos el ID como primer argumento.
+      // 2. Pasamos un objeto con la clave exacta 'comentario_aprobador' que espera el backend.
+      
+      const dataToSend = { comentario_aprobador: comentario };
+
       if (accion === 'aprobar') {
-        await solicitudesCreditoAPI.aprobar({
-            id_solicitud: solicitudSeleccionada.id_solicitud,
-            comentario
-        });
+        await solicitudesCreditoAPI.aprobar(
+          solicitudSeleccionada.id_solicitud, // 1er argumento: ID
+          dataToSend                          // 2do argumento: Body
+        );
         setSuccess('Solicitud aprobada exitosamente');
       } else {
-        await solicitudesCreditoAPI.rechazar({
-            id_solicitud: solicitudSeleccionada.id_solicitud,
-            comentario
-        });
+        await solicitudesCreditoAPI.rechazar(
+          solicitudSeleccionada.id_solicitud, // 1er argumento: ID
+          dataToSend                          // 2do argumento: Body
+        );
         setSuccess('Solicitud rechazada');
       }
 
       cerrarModalAccion();
       cargarSolicitudes();
     } catch (err) {
+      console.error(err);
       setError(err.error || `Error al ${accion} solicitud`);
     } finally {
       setProcesando(false);

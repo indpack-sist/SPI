@@ -6,7 +6,7 @@ import {
   Eye, 
   Filter, 
   TrendingUp,
-  AlertCircle
+  User // Agregamos icono de usuario
 } from 'lucide-react';
 import { solicitudesCreditoAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -72,30 +72,19 @@ function SolicitudesCredito() {
       setProcesando(true);
       setError(null);
 
-      // CORRECCIÓN AQUÍ:
-      // 1. Pasamos el ID como primer argumento.
-      // 2. Pasamos un objeto con la clave exacta 'comentario_aprobador' que espera el backend.
-      
       const dataToSend = { comentario_aprobador: comentario };
 
       if (accion === 'aprobar') {
-        await solicitudesCreditoAPI.aprobar(
-          solicitudSeleccionada.id_solicitud, // 1er argumento: ID
-          dataToSend                          // 2do argumento: Body
-        );
+        await solicitudesCreditoAPI.aprobar(solicitudSeleccionada.id_solicitud, dataToSend);
         setSuccess('Solicitud aprobada exitosamente');
       } else {
-        await solicitudesCreditoAPI.rechazar(
-          solicitudSeleccionada.id_solicitud, // 1er argumento: ID
-          dataToSend                          // 2do argumento: Body
-        );
+        await solicitudesCreditoAPI.rechazar(solicitudSeleccionada.id_solicitud, dataToSend);
         setSuccess('Solicitud rechazada');
       }
 
       cerrarModalAccion();
       cargarSolicitudes();
     } catch (err) {
-      console.error(err);
       setError(err.error || `Error al ${accion} solicitud`);
     } finally {
       setProcesando(false);
@@ -113,6 +102,12 @@ function SolicitudesCredito() {
     const dif = valSolicitado - valAnterior;
     const porcentaje = valAnterior > 0 ? ((dif / valAnterior) * 100).toFixed(1) : 100;
     return { dif, porcentaje };
+  };
+
+  const formatearFecha = (fecha) => {
+    if (!fecha) return '-';
+    const date = new Date(fecha);
+    return isNaN(date.getTime()) ? '-' : date.toLocaleString('es-PE');
   };
 
   const solicitudesFiltradas = solicitudes.filter(s => 
@@ -146,14 +141,28 @@ function SolicitudesCredito() {
       header: 'Cliente',
       render: (_, row) => (
         <div>
-          <div className="font-medium">{row.razon_social || row.cliente_razon_social}</div>
-          <div className="text-xs text-muted">{row.ruc || row.cliente_ruc}</div>
+          <div className="font-medium">{row.cliente_razon_social || row.razon_social}</div>
+          <div className="text-xs text-muted">{row.cliente_ruc || row.ruc}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Solicitante', // NUEVA COLUMNA
+      render: (_, row) => (
+        <div className="flex items-center gap-2">
+          <div className="bg-gray-100 p-1 rounded-full">
+            <User size={14} className="text-gray-600"/>
+          </div>
+          <div>
+            <div className="font-medium text-sm">{row.solicitante || 'Desconocido'}</div>
+            <div className="text-xs text-muted">{row.cargo_solicitante || 'Comercial'}</div>
+          </div>
         </div>
       )
     },
     {
       header: 'Límites Solicitados',
-      width: '200px',
+      width: '180px',
       render: (_, row) => {
         const cambioPEN = calcularCambio(row.limite_credito_pen_anterior, row.limite_credito_pen_solicitado);
         const cambioUSD = calcularCambio(row.limite_credito_usd_anterior, row.limite_credito_usd_solicitado);
@@ -186,7 +195,7 @@ function SolicitudesCredito() {
       header: 'Fecha',
       accessor: 'fecha_solicitud',
       width: '100px',
-      render: (value) => new Date(value).toLocaleDateString('es-PE')
+      render: (value) => formatearFecha(value).split(',')[0] // Solo fecha
     },
     {
       header: 'Acciones',
@@ -310,8 +319,8 @@ function SolicitudesCredito() {
           <form onSubmit={handleAccion}>
             <div className="mb-4">
               <div className="card bg-gray-50">
-                <h3 className="font-medium mb-1">{solicitudSeleccionada.razon_social || solicitudSeleccionada.cliente_razon_social}</h3>
-                <p className="text-sm text-muted mb-3">RUC: {solicitudSeleccionada.ruc || solicitudSeleccionada.cliente_ruc}</p>
+                <h3 className="font-medium mb-1">{solicitudSeleccionada.cliente_razon_social || solicitudSeleccionada.razon_social}</h3>
+                <p className="text-sm text-muted mb-3">RUC: {solicitudSeleccionada.cliente_ruc || solicitudSeleccionada.ruc}</p>
                 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -388,24 +397,19 @@ function SolicitudesCredito() {
           <div>
             <div className="card bg-gray-50 mb-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium">{solicitudSeleccionada.razon_social || solicitudSeleccionada.cliente_razon_social}</h3>
-                <span className={`badge ${
-                  solicitudSeleccionada.estado === 'Pendiente' ? 'badge-warning' :
-                  solicitudSeleccionada.estado === 'Aprobada' ? 'badge-success' :
-                  'badge-danger'
-                }`}>
-                  {solicitudSeleccionada.estado}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <span className="text-muted">RUC:</span>
-                  <span className="ml-2 font-medium">{solicitudSeleccionada.ruc || solicitudSeleccionada.cliente_ruc}</span>
+                  <h3 className="font-medium">{solicitudSeleccionada.cliente_razon_social || solicitudSeleccionada.razon_social}</h3>
+                  <p className="text-sm text-muted">RUC: {solicitudSeleccionada.cliente_ruc || solicitudSeleccionada.ruc}</p>
                 </div>
-                <div>
-                  <span className="text-muted">ID Solicitud:</span>
-                  <span className="ml-2 font-medium">#{solicitudSeleccionada.id_solicitud}</span>
+                <div className="text-right">
+                  <span className={`badge ${
+                    solicitudSeleccionada.estado === 'Pendiente' ? 'badge-warning' :
+                    solicitudSeleccionada.estado === 'Aprobada' ? 'badge-success' :
+                    'badge-danger'
+                  }`}>
+                    {solicitudSeleccionada.estado}
+                  </span>
+                  <div className="text-xs text-muted mt-1">ID Solicitud: #{solicitudSeleccionada.id_solicitud}</div>
                 </div>
               </div>
             </div>
@@ -439,40 +443,47 @@ function SolicitudesCredito() {
               </div>
             </div>
 
-            {solicitudSeleccionada.justificacion && (
-              <div className="mb-4">
-                <h4 className="font-medium mb-2">Justificación del Comercial</h4>
-                <div className="card bg-blue-50">
-                  <p className="text-sm italic">"{solicitudSeleccionada.justificacion}"</p>
+            <div className="mb-4 grid grid-cols-2 gap-4">
+              {solicitudSeleccionada.justificacion && (
+                <div>
+                  <h4 className="font-medium mb-2">Justificación del Comercial</h4>
+                  <div className="card bg-blue-50 h-full">
+                    <p className="text-sm italic">"{solicitudSeleccionada.justificacion}"</p>
+                  </div>
                 </div>
-              </div>
-            )}
-
-            <div className="mb-4">
-              <h4 className="font-medium mb-2">Historial</h4>
-              <div className="card bg-gray-50 text-sm space-y-2">
-                <div className="flex justify-between border-b pb-2">
-                  <span className="text-muted">Solicitado:</span>
-                  <span>{new Date(solicitudSeleccionada.fecha_solicitud).toLocaleString('es-PE')}</span>
-                </div>
-                {solicitudSeleccionada.estado !== 'Pendiente' && (
-                  <>
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-muted">Resuelto por:</span>
-                      <span className="font-medium">{solicitudSeleccionada.aprobador || 'Administrador'}</span>
-                    </div>
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-muted">Fecha Resolución:</span>
-                      <span>{new Date(solicitudSeleccionada.fecha_resolucion).toLocaleString('es-PE')}</span>
-                    </div>
-                    {solicitudSeleccionada.comentario_aprobador && (
-                      <div className="pt-2">
-                        <span className="text-muted block mb-1">Comentario Resolución:</span>
-                        <p className="text-gray-800 bg-white p-2 rounded border">{solicitudSeleccionada.comentario_aprobador}</p>
+              )}
+              
+              <div>
+                <h4 className="font-medium mb-2">Historial</h4>
+                <div className="card bg-gray-50 text-sm space-y-2 h-full">
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted">Solicitado por:</span>
+                    <span className="font-medium">{solicitudSeleccionada.solicitante}</span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted">Fecha:</span>
+                    <span>{formatearFecha(solicitudSeleccionada.fecha_solicitud)}</span>
+                  </div>
+                  {solicitudSeleccionada.estado !== 'Pendiente' && (
+                    <>
+                      <div className="flex justify-between border-b pb-2">
+                        <span className="text-muted">Resuelto por:</span>
+                        <span className="font-medium">{solicitudSeleccionada.aprobador || 'Administrador'}</span>
                       </div>
-                    )}
-                  </>
-                )}
+                      <div className="flex justify-between border-b pb-2">
+                        <span className="text-muted">Fecha Resolución:</span>
+                        {/* AQUÍ SE APLICA EL FORMATEO SEGURO */}
+                        <span>{formatearFecha(solicitudSeleccionada.fecha_respuesta)}</span>
+                      </div>
+                      {solicitudSeleccionada.comentario_aprobador && (
+                        <div className="pt-2">
+                          <span className="text-muted block mb-1">Comentario Resolución:</span>
+                          <p className="text-gray-800 bg-white p-2 rounded border">{solicitudSeleccionada.comentario_aprobador}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -470,10 +470,9 @@ export const ordenesVentaAPI = {
 
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 
-  // --- CORRECCIÓN AQUÍ (Usar 'api' y ruta consistente) ---
+  // Funciones para Despacho Parcial
   getSalidas: (id) => api.get(`/ordenes-venta/${id}/salidas`),
   registrarDespacho: (id, data) => api.post(`/ordenes-venta/${id}/despacho`, data),
-  // -------------------------------------------------------
 
   descargarPDF: async (id, tipo = 'orden') => {
     try {

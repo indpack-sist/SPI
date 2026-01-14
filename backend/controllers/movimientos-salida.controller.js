@@ -458,6 +458,7 @@ export const generarPDFSalidaController = async (req, res, next) => {
   try {
     const { id } = req.params;
     
+    // MODIFICACIÓN: Agregamos los JOINs a ordenes_venta y cotizaciones
     const salidasResult = await executeQuery(`
       SELECT 
         s.*,
@@ -465,12 +466,19 @@ export const generarPDFSalidaController = async (req, res, next) => {
         c.razon_social AS cliente,
         c.ruc AS cliente_ruc,
         emp.nombre_completo AS registrado_por,
-        v.placa AS vehiculo
+        v.placa AS vehiculo,
+        -- Nuevos campos para el PDF
+        ov.numero_orden AS codigo_orden_venta,
+        cot.numero_cotizacion AS codigo_cotizacion
       FROM salidas s
       INNER JOIN tipos_inventario ti ON s.id_tipo_inventario = ti.id_tipo_inventario
       LEFT JOIN clientes c ON s.id_cliente = c.id_cliente
       INNER JOIN empleados emp ON s.id_registrado_por = emp.id_empleado
       LEFT JOIN flota v ON s.id_vehiculo = v.id_vehiculo
+      -- BUSCAMOS LA ORDEN QUE TIENE ESTA SALIDA ASIGNADA
+      LEFT JOIN ordenes_venta ov ON ov.id_salida = s.id_salida
+      -- Y LA COTIZACIÓN ASOCIADA A ESA ORDEN
+      LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
       WHERE s.id_salida = ?
     `, [id]);
     

@@ -64,8 +64,8 @@ function Clientes() {
         telefono: cliente.telefono || '',
         email: cliente.email || '',
         direccion_despacho: cliente.direccion_despacho || '',
-        limite_credito_pen: cliente.limite_credito_pen || 0,
-        limite_credito_usd: cliente.limite_credito_usd || 0,
+        limite_credito_pen: parseFloat(cliente.limite_credito_pen || 0),
+        limite_credito_usd: parseFloat(cliente.limite_credito_usd || 0),
         usar_limite_credito: cliente.usar_limite_credito === 1 || cliente.usar_limite_credito === true,
         validar_documento: false,
         estado: cliente.estado
@@ -257,7 +257,7 @@ function Clientes() {
       header: 'Límite Crédito', 
       width: '140px',
       render: (_, row) => (
-        row.usar_limite_credito ? (
+        row.usar_limite_credito === 1 || row.usar_limite_credito === true ? (
           <div className="text-sm">
             <div className="text-success font-medium">S/ {parseFloat(row.limite_credito_pen).toFixed(2)}</div>
             <div className="text-primary font-medium">$ {parseFloat(row.limite_credito_usd).toFixed(2)}</div>

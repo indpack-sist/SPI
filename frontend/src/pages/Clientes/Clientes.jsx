@@ -31,7 +31,7 @@ function Clientes() {
     direccion_despacho: '',
     limite_credito_pen: 0,
     limite_credito_usd: 0,
-    usar_limite_credito: false, // NUEVO: Switch para activar límite
+    usar_limite_credito: false,
     validar_documento: true, 
     estado: 'Activo'
   });
@@ -66,7 +66,7 @@ function Clientes() {
         direccion_despacho: cliente.direccion_despacho || '',
         limite_credito_pen: cliente.limite_credito_pen || 0,
         limite_credito_usd: cliente.limite_credito_usd || 0,
-        usar_limite_credito: Boolean(cliente.usar_limite_credito), // Cargar estado del switch
+        usar_limite_credito: cliente.usar_limite_credito === 1 || cliente.usar_limite_credito === true,
         validar_documento: false,
         estado: cliente.estado
       });
@@ -84,7 +84,7 @@ function Clientes() {
         direccion_despacho: '',
         limite_credito_pen: 0,
         limite_credito_usd: 0,
-        usar_limite_credito: false, // Default apagado
+        usar_limite_credito: false,
         validar_documento: true,
         estado: 'Activo'
       });
@@ -135,7 +135,7 @@ function Clientes() {
         const nuevosValores = { ...formData };
         
         if (!formData.razon_social) {
-          nuevosValores.razon_social = response.data.datos.razon_social;
+          nuevosValores.razon_social = response.data.datos.razon_social || response.data.datos.nombre_completo;
         }
         
         if (tipo === 'RUC' && !formData.direccion_despacho && response.data.datos.direccion) {
@@ -179,12 +179,17 @@ function Clientes() {
     setError(null);
     setSuccess(null);
 
+    const dataToSend = {
+      ...formData,
+      usar_limite_credito: formData.usar_limite_credito ? 1 : 0
+    };
+
     try {
       if (editando) {
-        await clientesAPI.update(editando.id_cliente, formData);
+        await clientesAPI.update(editando.id_cliente, dataToSend);
         setSuccess('Cliente actualizado exitosamente');
       } else {
-        await clientesAPI.create(formData);
+        await clientesAPI.create(dataToSend);
         setSuccess('Cliente creado exitosamente');
       }
       cerrarModal();
@@ -460,13 +465,10 @@ function Clientes() {
                     </div>
                     <div><strong>Condición:</strong> {datosAPI.condicion}</div>
                     {datosAPI.direccion && <div className="col-span-2"><strong>Dirección:</strong> {datosAPI.direccion}</div>}
-                    {datosAPI.actividad_economica && (
-                      <div className="col-span-2"><strong>Actividad:</strong> {datosAPI.actividad_economica}</div>
-                    )}
                   </>
                 ) : (
                   <>
-                    <div className="col-span-2"><strong>Nombre:</strong> {datosAPI.razon_social || datosAPI.nombre_completo}</div>
+                    <div className="col-span-2"><strong>Nombre:</strong> {datosAPI.nombre_completo}</div>
                   </>
                 )}
               </div>
@@ -485,11 +487,6 @@ function Clientes() {
               required
               placeholder={formData.tipo_documento === 'RUC' ? 'Cliente S.A.' : 'Juan Pérez García'}
             />
-            {datosAPI && (
-              <small className="text-muted">
-                Autocompletado desde {formData.tipo_documento === 'RUC' ? 'SUNAT' : 'RENIEC'}. Puede modificarlo si es necesario.
-              </small>
-            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -536,11 +533,6 @@ function Clientes() {
               placeholder="Av. Principal 123, Lima"
               rows={3}
             />
-            {datosAPI && formData.tipo_documento === 'RUC' && datosAPI.direccion && (
-              <small className="text-muted">
-                Dirección fiscal de SUNAT autocompletada. Puede modificarla para el despacho.
-              </small>
-            )}
           </div>
 
           <div className="card bg-gray-50 border p-4 mb-4">
@@ -577,7 +569,6 @@ function Clientes() {
                     onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })}
                     min="0"
                     step="0.01"
-                    placeholder="0.00"
                   />
                 </div>
 
@@ -590,7 +581,6 @@ function Clientes() {
                     onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })}
                     min="0"
                     step="0.01"
-                    placeholder="0.00"
                   />
                 </div>
               </div>

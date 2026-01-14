@@ -152,7 +152,7 @@ function Productos() {
   };
 
   const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-PE', {
+    return new Intl.NumberFormat('es-ES', {
       style: 'currency',
       currency: 'PEN'
     }).format(valor || 0);

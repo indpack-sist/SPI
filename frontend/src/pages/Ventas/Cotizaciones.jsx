@@ -88,17 +88,16 @@ function Cotizaciones() {
     }, 0)
   };
 
-  // Función corregida para el formateo numérico solicitado
-  // Ejemplo: 4.125,354
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-DE', { 
-      minimumFractionDigits: 3, 
-      maximumFractionDigits: 3 
+    return new Intl.NumberFormat('es-ES', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
     }).format(valor);
   };
 
-  const formatearMoneda = (valor, moneda) => {
-    const simbolo = moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor) => {
+    if (!orden && !valor) return '-';
+    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 

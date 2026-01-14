@@ -136,14 +136,15 @@ function OrdenesVenta() {
   };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-DE', { 
+    return new Intl.NumberFormat('es-ES', { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);
   };
 
-  const formatearMoneda = (valor, moneda) => {
-    const simbolo = moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor) => {
+    if (!orden && !valor) return '-';
+    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 

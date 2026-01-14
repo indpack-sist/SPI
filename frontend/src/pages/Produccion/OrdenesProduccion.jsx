@@ -141,7 +141,7 @@ function OrdenesProduccion() {
   };
 
   const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(valor || 0);
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'PEN' }).format(valor || 0);
   };
 
   const getEstadoConfig = (estado) => {

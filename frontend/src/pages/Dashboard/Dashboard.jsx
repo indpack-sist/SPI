@@ -116,7 +116,7 @@ function Dashboard() {
       }).format(valor || 0);
     }
     
-    return new Intl.NumberFormat('es-PE', {
+    return new Intl.NumberFormat('es-ES', {
       style: 'currency',
       currency: 'PEN'
     }).format(valor || 0);

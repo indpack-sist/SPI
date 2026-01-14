@@ -290,8 +290,6 @@ export async function generarPDFEntrada(datos) {
   });
 }
 
-import PDFDocument from 'pdfkit';
-
 export async function generarPDFSalida(datos) {
   const logoBuffer = await cargarLogoURL(); // Asegúrate de que esta función exista
 

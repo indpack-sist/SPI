@@ -465,15 +465,29 @@ function NuevaCotizacion() {
         plazo_entrega: formCabecera.plazo_entrega || null,
         validez_dias: parseInt(formCabecera.validez_dias) || 7,
         observaciones: formCabecera.observaciones || null,
-        detalle: detalle.map((item, index) => ({
-          id_producto: item.id_producto,
-          cantidad: parseFloat(item.cantidad),
-          precio_base: parseFloat(item.precio_base),
-          porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
-          precio_unitario: parseFloat(item.precio_unitario),
-          descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
-          orden: index + 1
-        }))
+        detalle: detalle.map((item, index) => {
+          // Lógica de seguridad para precios
+          const precioVenta = parseFloat(item.precio_unitario);
+          let precioBase = parseFloat(item.precio_base);
+          let porcentajeComision = parseFloat(item.porcentaje_comision || 0);
+
+          // Si el precio base es 0 o inexistente, usamos el precio de venta como base 
+          // y la comisión como 0 para asegurar que el backend calcule el precio correcto.
+          if (!precioBase || precioBase <= 0) {
+            precioBase = precioVenta;
+            porcentajeComision = 0;
+          }
+
+          return {
+            id_producto: item.id_producto,
+            cantidad: parseFloat(item.cantidad),
+            precio_base: precioBase,
+            porcentaje_comision: porcentajeComision,
+            precio_unitario: precioVenta,
+            descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
+            orden: index + 1
+          };
+        })
       };
       let response;
       if (modoEdicion) {

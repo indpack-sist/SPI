@@ -9,6 +9,7 @@ import empleadosRoutes from './routes/empleados.routes.js';
 import flotaRoutes from './routes/flota.routes.js';
 import proveedoresRoutes from './routes/proveedores.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
+import solicitudesCreditoRoutes from './routes/solicitudes-credito.routes.js';
 
 import productosRoutes from './routes/productos.routes.js';
 import ajustesRoutes from './routes/ajustes.routes.js';
@@ -54,7 +55,7 @@ app.get('/', (req, res) => {
     version: '2.1.0',
     status: 'online',
     modules: {
-      base: ['auth', 'empleados', 'flota', 'proveedores', 'clientes'],
+      base: ['auth', 'empleados', 'flota', 'proveedores', 'clientes', 'solicitudes-credito'],
       productos: ['productos', 'recetas', 'ajustes'],
       inventario: ['entradas', 'salidas', 'transferencias'],
       produccion: ['ordenes'],
@@ -80,6 +81,7 @@ app.use('/api/empleados', verificarToken, verificarPermiso('empleados'), emplead
 app.use('/api/flota', verificarToken, verificarPermiso('flota'), flotaRoutes);
 app.use('/api/proveedores', verificarToken, verificarPermiso('proveedores'), proveedoresRoutes);
 app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesRoutes);
+app.use('/api/solicitudes-credito', verificarToken, verificarPermiso('solicitudesCredito'), solicitudesCreditoRoutes);
 
 app.use('/api/productos', verificarToken, verificarPermiso('productos'), productosRoutes);
 app.use('/api/ajustes', verificarToken, verificarPermiso('productos'), ajustesRoutes);
@@ -196,11 +198,11 @@ async function startServer() {
       console.log('   - /api/flota [flota]');
       console.log('   - /api/proveedores [proveedores]');
       console.log('   - /api/clientes [clientes]');
+      console.log('   - /api/solicitudes-credito [solicitudesCredito]');
       console.log('');
       console.log('PRODUCTOS Y AJUSTES:');
       console.log('   - /api/productos [productos]');
-      console.log('   - /api/productos/ajustes/conteo-fisico [productos]');
-      console.log('   - /api/ajustes [productos - reportes]');
+      console.log('   - /api/ajustes [productos]');
       console.log('');
       console.log('INVENTARIO:');
       console.log('   - /api/inventario/movimientos-entradas [entradas]');
@@ -223,26 +225,10 @@ async function startServer() {
       console.log('ANALYTICS:');
       console.log('   - /api/dashboard [dashboard]');
       console.log('');
-      console.log('='.repeat(80));
-      console.log('SISTEMA DE ROLES ACTIVO');
-      console.log('Roles disponibles: Administrador, Gerencia, Comercial, Ventas,');
-      console.log('                   Produccion, Supervisor, Operario, Almacenero,');
-      console.log('                   Logistica, Conductor, Administrativo');
-      console.log('='.repeat(80));
-      console.log('GUÍAS DE REMISIÓN - ENDPOINTS ACTUALIZADOS:');
-      console.log('   POST   /api/guias-remision/:id/despachar');
-      console.log('   POST   /api/guias-remision/:id/entregar');
-      console.log('   GET    /api/guias-remision/estadisticas');
+      console.log('FINANZAS:');
+      console.log('   - /api/cuentas-pago');
+      console.log('   - /api/pagos-cobranzas');
       console.log('');
-      console.log('GUÍAS DE TRANSPORTISTA - ENDPOINTS COMPLETOS:');
-      console.log('   GET    /api/guias-transportista/transportistas-frecuentes');
-      console.log('   GET    /api/guias-transportista/conductores-frecuentes');
-      console.log('   GET    /api/guias-transportista/vehiculos-frecuentes');
-      console.log('   GET    /api/guias-transportista/estadisticas');
-      console.log('   PUT    /api/guias-transportista/:id/estado');
-      console.log('');
-      console.log('ÓRDENES DE VENTA - CONVERSIÓN:');
-      console.log('   POST   /api/ordenes-venta/cotizacion/:id/convertir');
       console.log('='.repeat(80));
       console.log('SISTEMA LISTO PARA RECIBIR PETICIONES');
       console.log('='.repeat(80));

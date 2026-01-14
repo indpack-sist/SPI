@@ -211,7 +211,7 @@ function OrdenDetalle() {
   };
 
   const procesarExitoParcial = (response) => {
-    setSuccess(`Producción parcial registrada: ${response.data.data.cantidad_registrada} unidades. Total acumulado: ${response.data.data.cantidad_total_producida}`);
+    setSuccess(`Producción parcial registrada: ${response.data.data.cantidad_registrada} unidades. Total acumulado: ${response.data.data.total_acumulado}`);
     setModalParcial(false);
     setCantidadParcial('');
     setObservacionesParcial('');

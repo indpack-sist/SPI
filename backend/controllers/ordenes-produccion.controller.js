@@ -920,7 +920,7 @@ export async function registrarProduccionParcial(req, res) {
     const { 
       cantidad_parcial,
       observaciones,
-      consumo_real, // Array esperado: [{ id_insumo, cantidad_real }]
+      consumo_real, 
       confirmar_exceso
     } = req.body;
     
@@ -928,7 +928,6 @@ export async function registrarProduccionParcial(req, res) {
       return res.status(400).json({ error: 'La cantidad parcial debe ser mayor a 0' });
     }
     
-    // 1. Obtener datos de la orden
     const ordenResult = await executeQuery(
       `SELECT op.*, p.id_tipo_inventario 
        FROM ordenes_produccion op
@@ -943,7 +942,6 @@ export async function registrarProduccionParcial(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // 2. Validar exceso en producto terminado (Misma lógica que tenías)
     const cantidadYaProducida = parseFloat(orden.cantidad_producida || 0);
     const cantidadPlanificada = parseFloat(orden.cantidad_planificada);
     const cantidadNueva = parseFloat(cantidad_parcial);
@@ -964,17 +962,14 @@ export async function registrarProduccionParcial(req, res) {
       });
     }
     
-    // 3. Preparar Transacción
     const queries = [];
     let costoTotalProduccionParcial = 0;
 
-    // 4. Procesar INSUMOS (Lógica cambiada: Descuento Directo y Acumulativo)
     if (consumo_real && Array.isArray(consumo_real) && consumo_real.length > 0) {
       for (const item of consumo_real) {
         const cantidadGastada = parseFloat(item.cantidad_real);
 
         if (cantidadGastada > 0) {
-          // A. Obtener costo actual del insumo para valorizar esta producción parcial
           const insumoInfo = await executeQuery(
             'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?',
             [item.id_insumo]
@@ -983,14 +978,11 @@ export async function registrarProduccionParcial(req, res) {
           const costoInsumo = insumoInfo.data.length > 0 ? parseFloat(insumoInfo.data[0].costo_unitario_promedio) : 0;
           costoTotalProduccionParcial += (cantidadGastada * costoInsumo);
 
-          // B. Descontar del Stock de Insumos (Salida física)
           queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
             params: [cantidadGastada, item.id_insumo]
           });
 
-          // C. Acumular en la tabla de consumo de la orden (Para saber cuánto vamos gastando del total)
-          // Esto permite que al final el total sea mayor o menor a lo planificado sin problemas.
           queries.push({
             sql: `UPDATE op_consumo_materiales 
                   SET cantidad_real_consumida = COALESCE(cantidad_real_consumida, 0) + ? 
@@ -1000,17 +992,14 @@ export async function registrarProduccionParcial(req, res) {
         }
       }
     } else {
-      // Si es manual y no manda consumo, costo 0 o estimado simple (manteniendo tu lógica fallback)
       if (parseFloat(orden.costo_materiales) > 0) {
         const costoUnitarioEstimado = parseFloat(orden.costo_materiales) / cantidadPlanificada;
         costoTotalProduccionParcial = costoUnitarioEstimado * cantidadNueva;
       }
     }
 
-    // Calcular costo unitario de ESTE lote parcial
     const costoUnitarioProductoTerminado = cantidadNueva > 0 ? (costoTotalProduccionParcial / cantidadNueva) : 0;
 
-    // 5. Actualizar Orden (Sumar producto terminado)
     let obsFinal = observaciones || '';
     if (exceso > 0) obsFinal += `\n[ALERTA] Parcial con exceso (+${exceso} u.) autorizado.`;
 
@@ -1021,7 +1010,6 @@ export async function registrarProduccionParcial(req, res) {
       params: [cantidadNueva, id]
     });
 
-    // 6. Registrar en Bitácora
     queries.push({
       sql: `INSERT INTO op_registros_produccion (
         id_orden, cantidad_registrada, observaciones, id_registrado_por
@@ -1029,8 +1017,6 @@ export async function registrarProduccionParcial(req, res) {
       params: [id, cantidadNueva, obsFinal || null, orden.id_supervisor]
     });
 
-    // 7. Generar Entrada de Producto Terminado (Kardex)
-    // Primero la cabecera de la entrada
     queries.push({
       sql: `INSERT INTO entradas (
         id_tipo_inventario, documento_soporte, total_costo, moneda,
@@ -1045,11 +1031,6 @@ export async function registrarProduccionParcial(req, res) {
         `Ingreso Parcial O.P. - Costo real insumos: ${costoTotalProduccionParcial.toFixed(2)}`
       ]
     });
-
-    // Ejecutar hasta aquí para obtener el ID de la entrada creada
-    // Nota: Si usas executeTransaction con array, necesitas una forma de pasar el insertId. 
-    // Si tu executeTransaction no soporta dependencias entre queries, debemos dividir la lógica.
-    // Asumiendo que executeTransaction ejecuta en orden y devuelve resultados:
     
     const resultTransaccion = await executeTransaction(queries);
     
@@ -1057,12 +1038,8 @@ export async function registrarProduccionParcial(req, res) {
       return res.status(500).json({ error: resultTransaccion.error });
     }
 
-    // El ID de la entrada es el resultado del 3er insert en el array (índice 2, pero ajusta según tu lógica de array)
-    // El orden fue: 1.Update prod, 2.Update consumo, 3.Update orden, 4.Insert bitacora, 5.Insert entrada
-    // Nota: El loop de insumos genera queries variables. Es más seguro recuperar el ID así:
     const idEntrada = resultTransaccion.data[resultTransaccion.data.length - 1].insertId;
 
-    // 8. Queries finales dependientes del ID de entrada (Detalle Entrada y Stock PT)
     const queriesFinales = [];
 
     queriesFinales.push({
@@ -1080,8 +1057,6 @@ export async function registrarProduccionParcial(req, res) {
     const resultFinal = await executeTransaction(queriesFinales);
 
     if (!resultFinal.success) {
-       // Aquí idealmente deberías hacer rollback manual si tu DB no lo maneja completo, 
-       // pero asumiendo transacciones ACID, esto completa el ciclo.
        return res.status(500).json({ error: 'Error al actualizar stock de producto terminado', det: resultFinal.error });
     }
     
@@ -1091,7 +1066,7 @@ export async function registrarProduccionParcial(req, res) {
         ? 'Registro parcial con EXCESO registrado exitosamente' 
         : 'Registro parcial guardado exitosamente',
       data: {
-        id_registro: resultTransaccion.data[resultTransaccion.data.length - 2].insertId, // ID de bitácora
+        id_registro: resultTransaccion.data[resultTransaccion.data.length - 2].insertId,
         cantidad_registrada: cantidadNueva,
         total_acumulado: cantidadTotalProyectada,
         costo_asignado: costoTotalProduccionParcial
@@ -1108,19 +1083,17 @@ export async function finalizarProduccion(req, res) {
   try {
     const { id } = req.params;
     const { 
-      cantidad_producida, // Cantidad producida en ESTE cierre (no el total acumulado)
+      cantidad_producida, 
       observaciones,
       mermas,
-      consumo_real, // Array: [{ id_insumo, cantidad_real }] (Lo gastado en ESTE cierre)
+      consumo_real, 
       confirmar_exceso 
     } = req.body;
     
-    // Validar cantidad
     if (cantidad_producida === undefined || parseFloat(cantidad_producida) < 0) {
       return res.status(400).json({ error: 'La cantidad producida es inválida' });
     }
     
-    // 1. Obtener datos de la orden
     const ordenResult = await executeQuery(
       `SELECT op.*, p.id_tipo_inventario 
        FROM ordenes_produccion op
@@ -1135,10 +1108,9 @@ export async function finalizarProduccion(req, res) {
     
     const orden = ordenResult.data[0];
     
-    // 2. Validar Excesos (Sumando lo acumulado + lo nuevo)
     const cantidadYaProducida = parseFloat(orden.cantidad_producida || 0);
     const cantidadFinalInput = parseFloat(cantidad_producida);
-    const cantidadTotalReal = cantidadYaProducida + cantidadFinalInput; // Total histórico
+    const cantidadTotalReal = cantidadYaProducida + cantidadFinalInput; 
     const cantidadPlanificada = parseFloat(orden.cantidad_planificada);
     
     const exceso = cantidadTotalReal - cantidadPlanificada;
@@ -1158,7 +1130,6 @@ export async function finalizarProduccion(req, res) {
       });
     }
 
-    // 3. Procesar Consumo de Materiales del Cierre (Lógica Acumulativa)
     let costoTotalMaterialesCierre = 0;
     const queries = [];
     
@@ -1167,7 +1138,6 @@ export async function finalizarProduccion(req, res) {
         const cantidadGastadaCierre = parseFloat(item.cantidad_real);
 
         if (cantidadGastadaCierre > 0) {
-            // A. Obtener costo actual para valorizar
             const insumoInfo = await executeQuery(
               'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?', 
               [item.id_insumo]
@@ -1176,13 +1146,11 @@ export async function finalizarProduccion(req, res) {
             
             costoTotalMaterialesCierre += (cantidadGastadaCierre * costoInsumoUnitario);
 
-            // B. Descontar stock Físico (Kardex)
             queries.push({
                 sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
                 params: [cantidadGastadaCierre, item.id_insumo]
             });
 
-            // C. ACUMULAR en la orden (Suma lo del cierre a lo que ya traía de los parciales)
             queries.push({
                 sql: `UPDATE op_consumo_materiales 
                       SET cantidad_real_consumida = COALESCE(cantidad_real_consumida, 0) + ? 
@@ -1192,23 +1160,19 @@ export async function finalizarProduccion(req, res) {
         }
       }
     } else {
-        // Fallback si no mandan consumo: Usar costo teórico proporcional solo para este cierre
         if (parseFloat(orden.costo_materiales) > 0) {
             const costoUnitarioTeorico = parseFloat(orden.costo_materiales) / cantidadPlanificada;
             costoTotalMaterialesCierre = costoUnitarioTeorico * cantidadFinalInput;
         }
     }
 
-    // Calcular costo unitario de ESTE lote final
     const costoUnitarioProductoTerminado = cantidadFinalInput > 0 ? (costoTotalMaterialesCierre / cantidadFinalInput) : 0;
 
-    // 4. Calcular tiempo y observaciones
     const tiempoMinutos = Math.floor((new Date() - new Date(orden.fecha_inicio)) / 60000);
     
     let obsFinal = observaciones || '';
     if (exceso > 0) obsFinal += `\n[VARIACIÓN POSITIVA] Producción finalizó con exceso total de ${exceso} u.`;
 
-    // 5. Actualizar Orden (Estado Finalizada + Sumar cantidad)
     queries.push({
       sql: `UPDATE ordenes_produccion 
             SET estado = 'Finalizada', 
@@ -1220,7 +1184,6 @@ export async function finalizarProduccion(req, res) {
       params: [cantidadFinalInput, tiempoMinutos, obsFinal, id]
     });
 
-    // 6. Generar Entrada de Producto Terminado (Solo por la cantidad producida en el cierre)
     if (cantidadFinalInput > 0) {
       queries.push({
         sql: `INSERT INTO entradas (
@@ -1238,16 +1201,10 @@ export async function finalizarProduccion(req, res) {
       });
     }
 
-    // Ejecutar Transacción Principal
     const result1 = await executeTransaction(queries);
     if (!result1.success) return res.status(500).json({ error: result1.error });
 
-    // 7. Queries dependientes del ID de Entrada (Si hubo producción en el cierre)
     if (cantidadFinalInput > 0) {
-        // El ID de entrada es el último insert del array (Ajustar índice según inserts previos)
-        // Orden inserts: 0 (si no hubo updates stock), varía según updates.
-        // Método seguro: recuperar ID del resultado específico.
-        // Como el número de updates de stock es variable, usamos el index relativo al final.
         const idEntrada = result1.data[result1.data.length - 1].insertId; 
         
         const queriesStock = [];
@@ -1264,7 +1221,6 @@ export async function finalizarProduccion(req, res) {
         await executeTransaction(queriesStock);
     }
 
-    // 8. Procesar Mermas (Si hubieran)
     if (mermas && mermas.length > 0) {
         const queriesMermas = [];
         for (const m of mermas) {
@@ -1282,7 +1238,6 @@ export async function finalizarProduccion(req, res) {
         if(queriesMermas.length > 0) await executeTransaction(queriesMermas);
     }
 
-    // 9. Actualizar Orden de Venta si existe
     if (orden.id_orden_venta_origen) {
         await executeQuery(
             "UPDATE ordenes_venta SET estado = 'Atendido por Producción' WHERE id_orden_venta = ?", 
@@ -1578,15 +1533,12 @@ export const generarPDFOrdenController = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-// ... (resto de tu código anterior) ...
 
 export async function updateOrden(req, res) {
   try {
     const { id } = req.params;
-    // Ahora aceptamos ambos campos
     const { fecha_programada, fecha_programada_fin } = req.body;
 
-    // Construimos la query dinámica
     let sql = 'UPDATE ordenes_produccion SET ';
     const params = [];
     const updates = [];

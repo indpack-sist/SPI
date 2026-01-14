@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText
+  FileText, Lock, CheckCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -57,6 +57,7 @@ function NuevaOrdenVenta() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [estadoCredito, setEstadoCredito] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0, totalComisiones: 0 });
   
@@ -124,7 +125,7 @@ function NuevaOrdenVenta() {
   }, [formCabecera.tipo_venta, formCabecera.dias_credito, formCabecera.fecha_emision]);
 
   useEffect(() => {
-    if (idCotizacionParam && !modoEdicion) {
+    if (idCotizacionParam && !modoEdicion && clientes.length > 0) {
       handleImportarCotizacion(idCotizacionParam);
     }
   }, [idCotizacionParam, clientes.length]);
@@ -192,16 +193,9 @@ function NuevaOrdenVenta() {
           observaciones: orden.observaciones || ''
         });
 
-        const clienteEncontrado = clientes.find(c => c.id_cliente === orden.id_cliente);
-        if (clienteEncontrado) {
-          setClienteSeleccionado(clienteEncontrado);
-        } else {
-          setClienteSeleccionado({
-            id_cliente: orden.id_cliente,
-            razon_social: orden.cliente,
-            ruc: orden.ruc_cliente,
-            direccion_despacho: orden.direccion_entrega
-          });
+        const resCli = await clientesAPI.getById(orden.id_cliente);
+        if (resCli.data.success) {
+          handleSelectCliente(resCli.data.data);
         }
 
         if (orden.detalle && orden.detalle.length > 0) {
@@ -269,7 +263,7 @@ function NuevaOrdenVenta() {
         }));
 
         const cliente = clientes.find(c => c.id_cliente === cot.id_cliente);
-        if (cliente) setClienteSeleccionado(cliente);
+        if (cliente) handleSelectCliente(cliente);
 
         if (cot.detalle) {
           setDetalle(cot.detalle.map(item => ({
@@ -295,14 +289,25 @@ function NuevaOrdenVenta() {
     }
   };
 
-  const handleSelectCliente = (cliente) => {
+  const handleSelectCliente = async (cliente) => {
     setClienteSeleccionado(cliente);
     setFormCabecera(prev => ({
       ...prev,
       id_cliente: cliente.id_cliente,
       direccion_entrega: cliente.direccion_despacho || '',
-      lugar_entrega: cliente.direccion_despacho || ''
+      lugar_entrega: cliente.direccion_despacho || '',
+      tipo_venta: 'Contado'
     }));
+
+    try {
+      const resCredito = await clientesAPI.getEstadoCredito(cliente.id_cliente);
+      if (resCredito.data.success) {
+        setEstadoCredito(resCredito.data.data);
+      }
+    } catch (err) {
+      console.error('Error al cargar crédito:', err);
+    }
+
     setModalClienteOpen(false);
     setBusquedaCliente('');
   };
@@ -314,7 +319,7 @@ function NuevaOrdenVenta() {
       return;
     }
     
-    const precioBase = producto.precio_venta || 0;
+    const precioBase = producto.precio_venta_soles || producto.precio_venta || 0;
     
     const nuevoItem = {
       id_producto: producto.id_producto,
@@ -426,6 +431,14 @@ function NuevaOrdenVenta() {
       setError('Todos los productos deben tener un precio de venta válido');
       return;
     }
+
+    if (estadoCredito?.usar_limite_credito && formCabecera.tipo_venta === 'Crédito') {
+      const disponible = formCabecera.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible;
+      if (totales.total > disponible) {
+        setError(`Límite de crédito excedido. Disponible: ${formatearMoneda(disponible)}. Total de Orden: ${formatearMoneda(totales.total)}`);
+        return;
+      }
+    }
     
     try {
       setLoading(true);
@@ -509,19 +522,42 @@ function NuevaOrdenVenta() {
               </div>
               <div className="card-body">
                 {clienteSeleccionado ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
-                        <p className="text-muted text-sm">RUC: {clienteSeleccionado.ruc}</p>
-                        {clienteSeleccionado.direccion_despacho && (
-                          <p className="text-xs text-muted mt-1"><MapPin size={12} className="inline"/> {clienteSeleccionado.direccion_despacho}</p>
-                        )}
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
+                          <p className="text-muted text-sm">RUC: {clienteSeleccionado.ruc}</p>
+                          {clienteSeleccionado.direccion_despacho && (
+                            <p className="text-xs text-muted mt-1"><MapPin size={12} className="inline"/> {clienteSeleccionado.direccion_despacho}</p>
+                          )}
+                        </div>
+                        <button type="button" className="btn btn-sm btn-outline" onClick={() => { setClienteSeleccionado(null); setEstadoCredito(null); }}>
+                          Cambiar
+                        </button>
                       </div>
-                      <button type="button" className="btn btn-sm btn-outline" onClick={() => setClienteSeleccionado(null)}>
-                        Cambiar
-                      </button>
                     </div>
+
+                    {estadoCredito && estadoCredito.usar_limite_credito && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 border rounded-lg bg-white shadow-sm">
+                          <p className="text-[10px] text-muted uppercase font-bold mb-1 flex items-center gap-1">
+                            <CreditCard size={12} /> Disponible PEN
+                          </p>
+                          <p className={`text-lg font-bold ${estadoCredito.credito_pen.disponible < totales.total && formCabecera.moneda === 'PEN' ? 'text-red-600' : 'text-green-600'}`}>
+                            S/ {parseFloat(estadoCredito.credito_pen.disponible).toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="p-3 border rounded-lg bg-white shadow-sm">
+                          <p className="text-[10px] text-muted uppercase font-bold mb-1 flex items-center gap-1">
+                            <DollarSign size={12} /> Disponible USD
+                          </p>
+                          <p className={`text-lg font-bold ${estadoCredito.credito_usd.disponible < totales.total && formCabecera.moneda === 'USD' ? 'text-red-600' : 'text-blue-600'}`}>
+                            $ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <button type="button" className="btn btn-primary w-full py-4" onClick={() => setModalClienteOpen(true)}>
@@ -806,10 +842,11 @@ function NuevaOrdenVenta() {
                     </button>
                     <button
                       type="button"
-                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'}`}
-                      onClick={() => setFormCabecera({...formCabecera, tipo_venta: 'Crédito'})}
+                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'} ${!estadoCredito?.usar_limite_credito ? 'opacity-50' : ''}`}
+                      onClick={() => estadoCredito?.usar_limite_credito && setFormCabecera({...formCabecera, tipo_venta: 'Crédito'})}
+                      disabled={!estadoCredito?.usar_limite_credito}
                     >
-                      <Clock size={18} className="inline mr-1" /> Crédito
+                      {!estadoCredito?.usar_limite_credito ? <Lock size={18} className="inline mr-1" /> : <Clock size={18} className="inline mr-1" />} Crédito
                     </button>
                   </div>
                 </div>
@@ -929,9 +966,22 @@ function NuevaOrdenVenta() {
         </div>
         <div className="max-h-96 overflow-y-auto space-y-2">
           {clientesFiltrados.map(c => (
-            <div key={c.id_cliente} className="p-3 border rounded hover:bg-gray-50 cursor-pointer" onClick={() => handleSelectCliente(c)}>
-              <div className="font-bold">{c.razon_social}</div>
-              <div className="text-sm text-muted">{c.ruc}</div>
+            <div key={c.id_cliente} className="p-3 border rounded hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => handleSelectCliente(c)}>
+              <div>
+                <div className="font-bold">{c.razon_social}</div>
+                <div className="text-sm text-muted">{c.ruc}</div>
+              </div>
+              <div className="text-right">
+                {c.usar_limite_credito === 1 ? (
+                   <span className="badge badge-success flex items-center gap-1 text-[10px]">
+                     <CheckCircle size={10} /> Crédito Habilitado
+                   </span>
+                ) : (
+                   <span className="badge badge-secondary flex items-center gap-1 text-[10px]">
+                     <Lock size={10} /> Solo Contado
+                   </span>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -956,7 +1006,7 @@ function NuevaOrdenVenta() {
                 <div className="text-sm text-muted">{p.codigo}</div>
               </div>
               <div className="text-right">
-                <div className="font-bold text-primary">{formatearMoneda(p.precio_venta)}</div>
+                <div className="font-bold text-primary">{formatearMoneda(p.precio_venta_soles || p.precio_venta)}</div>
                 <div className="text-xs text-muted">Stock: {parseFloat(p.stock_actual).toFixed(2)}</div>
               </div>
             </div>

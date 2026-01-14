@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   Calculator, FileText, Building,
   Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink,
-  Building2, User, Loader, CheckCircle
+  Building2, User, Loader, CheckCircle, CreditCard, DollarSign
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -87,7 +87,7 @@ function NuevaCotizacion() {
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     tipo_cambio: 1.0000,
-    plazo_pago: '',
+    plazo_pago: 'Contado',
     forma_pago: '',
     direccion_entrega: '',
     observaciones: '',
@@ -97,6 +97,7 @@ function NuevaCotizacion() {
   });
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [estadoCredito, setEstadoCredito] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
   
@@ -137,12 +138,10 @@ function NuevaCotizacion() {
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
-      
       const resClientes = await clientesAPI.getAll({ estado: 'Activo' });
       if (resClientes.data.success) {
         setClientes(resClientes.data.data || []);
       }
-      
       const resProductos = await productosAPI.getAll({ 
         id_tipo_inventario: 3,
         estado: 'Activo'
@@ -150,7 +149,6 @@ function NuevaCotizacion() {
       if (resProductos.data.success) {
         setProductos(resProductos.data.data || []);
       }
-      
       const resComerciales = await empleadosAPI.getAll({ estado: 'Activo' });
       if (resComerciales.data.success) {
         const vendedores = (resComerciales.data.data || []).filter(
@@ -158,7 +156,6 @@ function NuevaCotizacion() {
         );
         setComerciales(vendedores);
       }
-      
     } catch (err) {
       console.error(err);
       setError('Error al cargar catálogos');
@@ -171,17 +168,13 @@ function NuevaCotizacion() {
     try {
       setLoading(true);
       const response = await cotizacionesAPI.getById(id);
-      
       if (response.data.success) {
         const cotizacion = response.data.data;
-        
         if (modoEdicion && cotizacion.convertida_venta) {
           setCotizacionConvertida(true);
           setIdOrdenVenta(cotizacion.id_orden_venta);
         }
-        
         const fechaEmision = modoDuplicar ? new Date().toLocaleDateString('en-CA') : cotizacion.fecha_emision.split('T')[0];
-        
         setFormCabecera({
           id_cliente: cotizacion.id_cliente,
           id_comercial: cotizacion.id_comercial || user?.id_empleado || '',
@@ -190,7 +183,7 @@ function NuevaCotizacion() {
           tipo_impuesto: cotizacion.tipo_impuesto,
           porcentaje_impuesto: cotizacion.porcentaje_impuesto,
           tipo_cambio: cotizacion.tipo_cambio,
-          plazo_pago: cotizacion.plazo_pago || '',
+          plazo_pago: cotizacion.plazo_pago || 'Contado',
           forma_pago: cotizacion.forma_pago || '',
           direccion_entrega: cotizacion.direccion_entrega || '',
           observaciones: cotizacion.observaciones || '',
@@ -198,18 +191,10 @@ function NuevaCotizacion() {
           plazo_entrega: cotizacion.plazo_entrega || '',
           lugar_entrega: cotizacion.lugar_entrega || ''
         });
-        
-        const clienteEncontrado = clientes.find(c => c.id_cliente === cotizacion.id_cliente);
-        if (clienteEncontrado) {
-          setClienteSeleccionado(clienteEncontrado);
-        } else {
-          setClienteSeleccionado({
-            id_cliente: cotizacion.id_cliente,
-            razon_social: cotizacion.cliente,
-            ruc: cotizacion.ruc_cliente
-          });
+        const resCli = await clientesAPI.getById(cotizacion.id_cliente);
+        if (resCli.data.success) {
+          handleSelectCliente(resCli.data.data);
         }
-        
         if (cotizacion.detalle && cotizacion.detalle.length > 0) {
           setDetalle(cotizacion.detalle.map(item => ({
             id_producto: item.id_producto,
@@ -237,12 +222,10 @@ function NuevaCotizacion() {
   const obtenerTipoCambio = async () => {
     try {
       setLoadingTC(true);
-      
       const response = await dashboard.actualizarTipoCambio({
         currency: 'USD',
         date: formCabecera.fecha_emision
       });
-      
       if (response.data.success && response.data.data) {
         const tc = response.data.data;
         const valorTC = tc.venta || tc.compra || tc.tipo_cambio || 3.80;
@@ -261,13 +244,22 @@ function NuevaCotizacion() {
     }
   };
 
-  const handleSelectCliente = (cliente) => {
+  const handleSelectCliente = async (cliente) => {
     setClienteSeleccionado(cliente);
     setFormCabecera(prev => ({
       ...prev,
       id_cliente: cliente.id_cliente,
-      lugar_entrega: cliente.direccion_despacho || ''
+      lugar_entrega: cliente.direccion_despacho || '',
+      plazo_pago: 'Contado'
     }));
+    try {
+      const resCredito = await clientesAPI.getEstadoCredito(cliente.id_cliente);
+      if (resCredito.data.success) {
+        setEstadoCredito(resCredito.data.data);
+      }
+    } catch (err) {
+      console.error('Error al cargar estado de crédito:', err);
+    }
     setModalClienteOpen(false);
     setBusquedaCliente('');
   };
@@ -275,38 +267,31 @@ function NuevaCotizacion() {
   const validarClienteExterno = async () => {
     const documento = nuevoClienteDoc.numero.trim();
     const tipo = nuevoClienteDoc.tipo;
-    
     if (!documento) {
       setErrorApi(`Ingrese un ${tipo} para validar`);
       return;
     }
-
     if (tipo === 'RUC' && !/^\d{11}$/.test(documento)) {
       setErrorApi('El RUC debe tener 11 dígitos');
       return;
     }
-
     if (tipo === 'DNI' && !/^\d{8}$/.test(documento)) {
       setErrorApi('El DNI debe tener 8 dígitos');
       return;
     }
-
     try {
       setLoadingApi(true);
       setErrorApi(null);
       setClienteApiData(null);
-      
       const response = tipo === 'RUC' 
         ? await clientesAPI.validarRUC(documento)
         : await clientesAPI.validarDNI(documento);
-      
       if (response.data.valido) {
         setClienteApiData({
           ...response.data.datos,
           tipo_documento: tipo,
           documento: documento
         });
-        
         if (response.data.ya_registrado) {
           setErrorApi(`Este ${tipo} ya está registrado en el sistema`);
         }
@@ -322,14 +307,11 @@ function NuevaCotizacion() {
 
   const crearYSeleccionarCliente = async () => {
     if (!clienteApiData) return;
-
     try {
       setLoadingApi(true);
-      
       const direccionCompleta = clienteApiData.direccion 
         ? [clienteApiData.direccion, clienteApiData.distrito, clienteApiData.provincia, clienteApiData.departamento].filter(Boolean).join(', ')
         : '';
-
       const nuevoCliente = {
         tipo_documento: nuevoClienteDoc.tipo,
         ruc: nuevoClienteDoc.numero,
@@ -338,17 +320,13 @@ function NuevaCotizacion() {
         estado: 'Activo',
         validar_documento: false
       };
-
       const response = await clientesAPI.create(nuevoCliente);
-      
       if (response.data.success) {
         const clienteCreado = response.data.data;
-        
         setClientes(prev => [...prev, clienteCreado]);
         handleSelectCliente(clienteCreado);
         setSuccess('Cliente creado y seleccionado automáticamente');
         setModalClienteOpen(false);
-        
         setTabCliente('lista');
         setNuevoClienteDoc({ tipo: 'RUC', numero: '' });
         setClienteApiData(null);
@@ -367,9 +345,7 @@ function NuevaCotizacion() {
       setError('El producto ya está en el detalle');
       return;
     }
-    
     const precioBase = producto.precio_venta || 0;
-    
     const nuevoItem = {
       id_producto: producto.id_producto,
       codigo_producto: producto.codigo,
@@ -383,7 +359,6 @@ function NuevaCotizacion() {
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual
     };
-    
     setDetalle([...detalle, nuevoItem]);
     setModalProductoOpen(false);
     setBusquedaProducto('');
@@ -392,21 +367,17 @@ function NuevaCotizacion() {
   const handlePrecioVentaChange = (index, valor) => {
     const newDetalle = [...detalle];
     newDetalle[index].precio_unitario = valor;
-    
     const precioVenta = parseFloat(valor);
     const precioBase = parseFloat(newDetalle[index].precio_base);
-    
     if (!isNaN(precioVenta) && precioBase > 0) {
       const ganancia = precioVenta - precioBase;
       const porcentaje = (ganancia / precioBase) * 100;
-      
       newDetalle[index].porcentaje_comision = porcentaje;
       newDetalle[index].monto_comision = ganancia;
     } else {
       newDetalle[index].porcentaje_comision = 0;
       newDetalle[index].monto_comision = 0;
     }
-    
     setDetalle(newDetalle);
   };
 
@@ -430,18 +401,15 @@ function NuevaCotizacion() {
   const calcularTotales = () => {
     let subtotal = 0;
     let totalComisiones = 0;
-    
     detalle.forEach(item => {
       const precioVenta = parseFloat(item.precio_unitario) || 0;
       const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
       subtotal += valorVenta;
       totalComisiones += (item.monto_comision || 0) * item.cantidad;
     });
-    
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
-    
     setTotales({ subtotal, impuesto, total, totalComisiones });
   };
 
@@ -459,36 +427,29 @@ function NuevaCotizacion() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    
     if (cotizacionConvertida) {
       setError('No se puede editar una cotización que ya ha sido convertida a Orden de Venta');
       return;
     }
-    
     if (!formCabecera.id_cliente) {
       setError('Debe seleccionar un cliente');
       return;
     }
-    
     if (detalle.length === 0) {
       setError('Debe agregar al menos un producto');
       return;
     }
-    
     const productosSinPrecio = detalle.some(item => !item.precio_unitario || parseFloat(item.precio_unitario) <= 0);
     if (productosSinPrecio) {
       setError('Todos los productos deben tener un precio de venta válido');
       return;
     }
-    
     if (!formCabecera.plazo_pago || formCabecera.plazo_pago.trim() === '') {
       setError('Plazo de pago es obligatorio (define el riesgo de la venta)');
       return;
     }
-    
     try {
       setLoading(true);
-      
       const payload = {
         id_cliente: parseInt(formCabecera.id_cliente),
         id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
@@ -514,7 +475,6 @@ function NuevaCotizacion() {
           orden: index + 1
         }))
       };
-
       let response;
       if (modoEdicion) {
         response = await cotizacionesAPI.update(id, payload);
@@ -529,7 +489,6 @@ function NuevaCotizacion() {
           setTimeout(() => navigate('/ventas/cotizaciones'), 1500);
         }
       }
-      
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} cotización`);
@@ -538,7 +497,7 @@ function NuevaCotizacion() {
     }
   };
 
-  const formatearMoneda = (valor) => {
+  const formatearMonedaGral = (valor) => {
     const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
@@ -613,27 +572,58 @@ function NuevaCotizacion() {
           </div>
           <div className="card-body">
             {clienteSeleccionado ? (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-muted">Cliente:</label>
-                      <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
+              <div className="flex flex-col gap-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-muted">Cliente:</label>
+                        <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted">RUC:</label>
+                        <p className="font-bold">{clienteSeleccionado.ruc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-muted">RUC:</label>
-                      <p className="font-bold">{clienteSeleccionado.ruc}</p>
+                    <button 
+                      type="button" 
+                      className="btn btn-sm btn-outline" 
+                      onClick={() => {
+                        setClienteSeleccionado(null);
+                        setEstadoCredito(null);
+                      }}
+                      disabled={cotizacionConvertida}
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                </div>
+                {estadoCredito && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 border rounded-lg bg-white shadow-sm">
+                      <div className="flex items-center gap-2 mb-2 text-primary font-bold text-sm">
+                        <CreditCard size={16}/> LÍNEA DE CRÉDITO PEN
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">S/ {parseFloat(estadoCredito.credito_pen.limite).toFixed(2)}</span>
+                        <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">S/ {parseFloat(estadoCredito.credito_pen.utilizado).toFixed(2)}</span>
+                        <div className="col-span-2 border-t my-1"></div>
+                        <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">S/ {parseFloat(estadoCredito.credito_pen.disponible).toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="p-3 border rounded-lg bg-white shadow-sm">
+                      <div className="flex items-center gap-2 mb-2 text-blue-600 font-bold text-sm">
+                        <DollarSign size={16}/> LÍNEA DE CRÉDITO USD
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">$ {parseFloat(estadoCredito.credito_usd.limite).toFixed(2)}</span>
+                        <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">$ {parseFloat(estadoCredito.credito_usd.utilizado).toFixed(2)}</span>
+                        <div className="col-span-2 border-t my-1"></div>
+                        <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">$ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
-                  <button 
-                    type="button" 
-                    className="btn btn-sm btn-outline" 
-                    onClick={() => setClienteSeleccionado(null)}
-                    disabled={cotizacionConvertida}
-                  >
-                    Cambiar
-                  </button>
-                </div>
+                )}
               </div>
             ) : (
               <button 
@@ -675,7 +665,6 @@ function NuevaCotizacion() {
                   required
                 />
               </div>
-              
               <div className="form-group">
                 <label className="form-label">Validez (días) *</label>
                 <input
@@ -688,7 +677,6 @@ function NuevaCotizacion() {
                   required
                 />
               </div>
-              
               <div className="form-group">
                 <label className="form-label">Fecha de Vencimiento (calculada)</label>
                 <input
@@ -702,7 +690,6 @@ function NuevaCotizacion() {
                   <Info size={12} className="inline" /> Se calcula automáticamente
                 </small>
               </div>
-              
               <div className="form-group">
                 <label className="form-label">Moneda *</label>
                 <select
@@ -716,7 +703,6 @@ function NuevaCotizacion() {
                   <option value="USD">Dólares (USD)</option>
                 </select>
               </div>
-              
               <div className="form-group">
                 <label className="form-label">Tipo de Impuesto *</label>
                 <select
@@ -731,7 +717,6 @@ function NuevaCotizacion() {
                   ))}
                 </select>
               </div>
-              
               {formCabecera.moneda === 'USD' && (
                 <div className="form-group">
                   <label className="form-label">Tipo de Cambio</label>
@@ -761,7 +746,6 @@ function NuevaCotizacion() {
                   )}
                 </div>
               )}
-              
               <div className="form-group">
                 <label className="form-label">Condición de Pago *</label>
                 <div className="flex gap-2">
@@ -777,22 +761,23 @@ function NuevaCotizacion() {
                     type="button"
                     className={`btn flex-1 ${formCabecera.plazo_pago !== 'Contado' && formCabecera.plazo_pago !== '' ? 'btn-primary' : 'btn-outline'}`}
                     onClick={() => {
-                      if (formCabecera.plazo_pago === 'Contado') {
-                        setFormCabecera(prev => ({ ...prev, plazo_pago: '' })); 
+                      if (estadoCredito?.usar_limite_credito) {
+                        setFormCabecera(prev => ({ ...prev, plazo_pago: '' }));
                       }
                     }}
-                    disabled={cotizacionConvertida}
+                    disabled={cotizacionConvertida || !estadoCredito?.usar_limite_credito}
+                    title={!estadoCredito?.usar_limite_credito ? "Este cliente no tiene crédito habilitado" : ""}
                   >
+                    {!estadoCredito?.usar_limite_credito && <Lock size={14} className="mr-1" />}
                     Crédito
                   </button>
                 </div>
               </div>
-
               {formCabecera.plazo_pago !== 'Contado' && (
-                <div className="form-group">
-                  <label className="form-label">Días de Crédito * <AlertCircle size={14} className="inline text-warning" /></label>
+                <div className="form-group animate-fadeIn">
+                  <label className="form-label">Días de Crédito *</label>
                   <select
-                    className={`form-select ${!formCabecera.plazo_pago && formCabecera.plazo_pago !== 'Contado' ? 'border-primary ring-2 ring-primary/20' : ''}`}
+                    className="form-select border-primary"
                     value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
                     onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
                     disabled={cotizacionConvertida}
@@ -803,14 +788,8 @@ function NuevaCotizacion() {
                       <option key={plazo} value={plazo}>{plazo}</option>
                     ))}
                   </select>
-                  {!formCabecera.plazo_pago && (
-                    <small className="text-primary block mt-1">
-                      ↑ Por favor seleccione los días de crédito
-                    </small>
-                  )}
                 </div>
               )}
-              
               <div className="form-group">
                 <label className="form-label">Forma de Pago</label>
                 <select
@@ -825,7 +804,6 @@ function NuevaCotizacion() {
                   ))}
                 </select>
               </div>
-              
               <div className="form-group">
                 <label className="form-label">Plazo de Entrega</label>
                 <select
@@ -840,7 +818,6 @@ function NuevaCotizacion() {
                   ))}
                 </select>
               </div>
-              
               <div className="form-group col-span-3">
                 <label className="form-label">Vendedor/Comercial</label>
                 <select
@@ -856,12 +833,8 @@ function NuevaCotizacion() {
                     </option>
                   ))}
                 </select>
-                <small className="text-muted block mt-1">
-                  <Info size={12} className="inline" /> Por defecto se asigna al usuario actual
-                </small>
               </div>
             </div>
-            
             <div className="form-group mt-4">
               <label className="form-label">Lugar de Entrega</label>
               <input
@@ -873,7 +846,6 @@ function NuevaCotizacion() {
                 disabled={cotizacionConvertida}
               />
             </div>
-            
             <div className="form-group">
               <label className="form-label">Observaciones</label>
               <textarea
@@ -892,8 +864,7 @@ function NuevaCotizacion() {
           <div className="card-header">
             <div className="flex justify-between items-center">
               <h2 className="card-title">
-                <Calculator size={20} />
-                Productos *
+                <Calculator size={20} /> Productos *
               </h2>
               <button 
                 type="button" 
@@ -901,8 +872,7 @@ function NuevaCotizacion() {
                 onClick={() => setModalProductoOpen(true)}
                 disabled={cotizacionConvertida}
               >
-                <Plus size={20} />
-                Agregar Producto
+                <Plus size={20} /> Agregar Producto
               </button>
             </div>
           </div>
@@ -947,7 +917,7 @@ function NuevaCotizacion() {
                           <td className="text-sm text-muted">{item.unidad_medida}</td>
                           <td className="text-right">
                             <div className="form-input text-right bg-gray-100 border-none">
-                              {formatearMoneda(item.precio_base)}
+                              {formatearMonedaGral(item.precio_base)}
                             </div>
                           </td>
                           <td>
@@ -972,7 +942,7 @@ function NuevaCotizacion() {
                               disabled
                             />
                             <div className="text-xs text-success text-right mt-1">
-                              +{formatearMoneda(item.monto_comision || 0)}
+                              +{formatearMonedaGral(item.monto_comision || 0)}
                             </div>
                           </td>
                           <td>
@@ -987,7 +957,7 @@ function NuevaCotizacion() {
                               disabled={cotizacionConvertida}
                             />
                           </td>
-                          <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
+                          <td className="text-right font-bold">{formatearMonedaGral(valorVenta)}</td>
                           <td>
                             <button 
                               type="button" 
@@ -1014,8 +984,7 @@ function NuevaCotizacion() {
                   onClick={() => setModalProductoOpen(true)}
                   disabled={cotizacionConvertida}
                 >
-                  <Plus size={20} />
-                  Agregar Primer Producto
+                  <Plus size={20} /> Agregar Primer Producto
                 </button>
               </div>
             )}
@@ -1029,23 +998,23 @@ function NuevaCotizacion() {
                 <div className="w-80">
                   <div className="flex justify-between py-2 border-b">
                     <span className="font-medium">Sub Total:</span>
-                    <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
+                    <span className="font-bold">{formatearMonedaGral(totales.subtotal)}</span>
                   </div>
                   {totales.totalComisiones > 0 && (
                     <div className="flex justify-between py-2 border-b text-success">
                       <span className="font-medium">💰 Mis Comisiones:</span>
-                      <span className="font-bold">{formatearMoneda(totales.totalComisiones)}</span>
+                      <span className="font-bold">{formatearMonedaGral(totales.totalComisiones)}</span>
                     </div>
                   )}
                   <div className="flex justify-between py-2 border-b">
                     <span className="font-medium">
                       {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:
                     </span>
-                    <span className="font-bold">{formatearMoneda(totales.impuesto)}</span>
+                    <span className="font-bold">{formatearMonedaGral(totales.impuesto)}</span>
                   </div>
-                  <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2">
+                  <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2 shadow-sm">
                     <span className="font-bold text-lg">TOTAL:</span>
-                    <span className="font-bold text-2xl">{formatearMoneda(totales.total)}</span>
+                    <span className="font-bold text-2xl">{formatearMonedaGral(totales.total)}</span>
                   </div>
                 </div>
               </div>
@@ -1072,43 +1041,34 @@ function NuevaCotizacion() {
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
         <div className="flex gap-2 mb-4 border-b">
-          <button
-            className={`px-4 py-2 font-medium ${tabCliente === 'lista' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
-            onClick={() => setTabCliente('lista')}
-          >
-            Buscar en Lista
-          </button>
-          <button
-            className={`px-4 py-2 font-medium ${tabCliente === 'nuevo' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
-            onClick={() => setTabCliente('nuevo')}
-          >
-            Nuevo / Validar
-          </button>
+          <button className={`px-4 py-2 font-medium ${tabCliente === 'lista' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`} onClick={() => setTabCliente('lista')}>Buscar en Lista</button>
+          <button className={`px-4 py-2 font-medium ${tabCliente === 'nuevo' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`} onClick={() => setTabCliente('nuevo')}>Nuevo / Validar</button>
         </div>
-
         {tabCliente === 'lista' ? (
           <>
-            <div className="mb-4">
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Buscar por razón social o RUC..."
-                value={busquedaCliente}
-                onChange={(e) => setBusquedaCliente(e.target.value)}
-                autoFocus
-              />
+            <div className="mb-4 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input type="text" className="form-input pl-10" placeholder="Buscar por razón social o RUC..." value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} autoFocus />
             </div>
             <div className="max-h-96 overflow-y-auto">
               {clientesFiltrados.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 pr-2">
                   {clientesFiltrados.map(cliente => (
-                    <div
-                      key={cliente.id_cliente}
-                      className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
-                      onClick={() => handleSelectCliente(cliente)}
-                    >
-                      <div className="font-bold">{cliente.razon_social}</div>
-                      <div className="text-sm text-muted">RUC: {cliente.ruc}</div>
+                    <div key={cliente.id_cliente} className="p-4 border rounded-lg hover:border-primary hover:bg-blue-50 cursor-pointer transition flex justify-between items-center group" onClick={() => handleSelectCliente(cliente)}>
+                      <div>
+                        <div className="font-bold text-gray-800 group-hover:text-primary transition-colors">{cliente.razon_social}</div>
+                        <div className="text-sm text-muted font-mono">{cliente.ruc}</div>
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-1">
+                        {cliente.usar_limite_credito === 1 ? (
+                          <>
+                            <div className="flex items-center gap-1 badge badge-success text-[10px] uppercase font-bold py-0.5"><CheckCircle size={10}/> Crédito Activo</div>
+                            <div className="text-[10px] font-bold text-muted">S/ {parseFloat(cliente.limite_credito_pen).toLocaleString()} | $ {parseFloat(cliente.limite_credito_usd).toLocaleString()}</div>
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-1 badge badge-secondary text-[10px] uppercase font-bold py-0.5"><Lock size={10}/> Solo Contado</div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1120,70 +1080,26 @@ function NuevaCotizacion() {
         ) : (
           <div className="space-y-4">
             <div className="flex gap-2">
-              <button
-                type="button"
-                className={`btn flex-1 ${nuevoClienteDoc.tipo === 'RUC' ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'RUC', numero: '' })}
-              >
-                <Building2 size={18} className="mr-2" /> Empresa (RUC)
-              </button>
-              <button
-                type="button"
-                className={`btn flex-1 ${nuevoClienteDoc.tipo === 'DNI' ? 'btn-info' : 'btn-outline'}`}
-                onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'DNI', numero: '' })}
-              >
-                <User size={18} className="mr-2" /> Persona (DNI)
-              </button>
+              <button type="button" className={`btn flex-1 ${nuevoClienteDoc.tipo === 'RUC' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'RUC', numero: '' })}><Building2 size={18} className="mr-2" /> Empresa (RUC)</button>
+              <button type="button" className={`btn flex-1 ${nuevoClienteDoc.tipo === 'DNI' ? 'btn-info' : 'btn-outline'}`} onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'DNI', numero: '' })}><User size={18} className="mr-2" /> Persona (DNI)</button>
             </div>
-
             <div className="form-group">
               <label className="form-label">{nuevoClienteDoc.tipo}</label>
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  className="form-input"
-                  value={nuevoClienteDoc.numero}
-                  onChange={(e) => {
-                    setNuevoClienteDoc({ ...nuevoClienteDoc, numero: e.target.value });
-                    setClienteApiData(null);
-                    setErrorApi(null);
-                  }}
-                  placeholder={nuevoClienteDoc.tipo === 'RUC' ? '20...' : '70...'}
-                  maxLength={nuevoClienteDoc.tipo === 'RUC' ? 11 : 8}
-                />
-                <button 
-                  type="button" 
-                  className="btn btn-outline min-w-[120px]"
-                  onClick={validarClienteExterno}
-                  disabled={loadingApi || !nuevoClienteDoc.numero}
-                >
-                  {loadingApi ? <Loader size={18} className="animate-spin" /> : 'Validar'}
-                </button>
+                <input type="text" className="form-input" value={nuevoClienteDoc.numero} onChange={(e) => { setNuevoClienteDoc({ ...nuevoClienteDoc, numero: e.target.value }); setClienteApiData(null); setErrorApi(null); }} placeholder={nuevoClienteDoc.tipo === 'RUC' ? '20...' : '70...'} maxLength={nuevoClienteDoc.tipo === 'RUC' ? 11 : 8} />
+                <button type="button" className="btn btn-outline min-w-[120px]" onClick={validarClienteExterno} disabled={loadingApi || !nuevoClienteDoc.numero}>{loadingApi ? <Loader size={18} className="animate-spin" /> : 'Validar'}</button>
               </div>
               {errorApi && <p className="text-danger text-sm mt-1">{errorApi}</p>}
             </div>
-
             {clienteApiData && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 animate-fadeIn">
                 <div className="flex items-start gap-3">
                   <CheckCircle className="text-success mt-1" size={20} />
                   <div className="flex-1">
                     <h4 className="font-bold text-success mb-1">Datos Encontrados</h4>
                     <p className="text-sm"><strong>Razón Social:</strong> {clienteApiData.razon_social || clienteApiData.nombre_completo}</p>
                     <p className="text-sm"><strong>Dirección:</strong> {clienteApiData.direccion || '-'}</p>
-                    <p className="text-sm"><strong>Estado:</strong> {clienteApiData.estado || 'Activo'}</p>
-                    
-                    <button 
-                      type="button" 
-                      className="btn btn-success w-full mt-3"
-                      onClick={crearYSeleccionarCliente}
-                      disabled={loadingApi}
-                    >
-                      {loadingApi ? 'Registrando...' : 'Registrar y Seleccionar Cliente'}
-                    </button>
-                    <p className="text-xs text-muted text-center mt-2">
-                      Se registrará automáticamente como cliente nuevo.
-                    </p>
+                    <button type="button" className="btn btn-success w-full mt-3" onClick={crearYSeleccionarCliente} disabled={loadingApi}>Registrar y Seleccionar Cliente</button>
                   </div>
                 </div>
               </div>
@@ -1194,33 +1110,20 @@ function NuevaCotizacion() {
 
       <Modal isOpen={modalProductoOpen} onClose={() => setModalProductoOpen(false)} title="Agregar Producto" size="lg">
         <div className="mb-4">
-          <input
-            type="text"
-            className="form-input"
-            placeholder="Buscar por código o nombre..."
-            value={busquedaProducto}
-            onChange={(e) => setBusquedaProducto(e.target.value)}
-            autoFocus
-          />
+          <input type="text" className="form-input" placeholder="Buscar por código o nombre..." value={busquedaProducto} onChange={(e) => setBusquedaProducto(e.target.value)} autoFocus />
         </div>
         <div className="max-h-96 overflow-y-auto">
           {productosFiltrados.length > 0 ? (
             <div className="space-y-2">
               {productosFiltrados.map(producto => (
-                <div
-                  key={producto.id_producto}
-                  className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
-                  onClick={() => handleAgregarProducto(producto)}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="font-bold">{producto.nombre}</div>
-                      <div className="text-sm text-muted">Código: {producto.codigo}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-primary text-lg">{formatearMoneda(producto.precio_venta)}</div>
-                      <div className="text-sm text-muted">por {producto.unidad_medida}</div>
-                    </div>
+                <div key={producto.id_producto} className="p-4 border rounded-lg hover:border-primary hover:bg-blue-50 cursor-pointer transition flex justify-between items-start group" onClick={() => handleAgregarProducto(producto)}>
+                  <div className="flex-1">
+                    <div className="font-bold text-gray-800 group-hover:text-primary transition-colors">{producto.nombre}</div>
+                    <div className="text-sm text-muted font-mono">{producto.codigo}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-primary text-lg">{formatearMonedaGral(producto.precio_venta)}</div>
+                    <div className="text-xs text-muted font-bold uppercase">{producto.unidad_medida}</div>
                   </div>
                 </div>
               ))}

@@ -1,7 +1,8 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
-import { generarFacturaPDF } from '../utils/pdfGenerators/FacturaPDF.js';       // <-- Asegúrate que la ruta sea correcta
-import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js'; // <-- Asegúrate que la ruta sea correcta
+import { generarFacturaPDF } from '../utils/pdfGenerators/FacturaPDF.js';
+import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
+
 export async function getAllOrdenesVenta(req, res) {
   try {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
@@ -169,7 +170,7 @@ export async function getOrdenVentaById(req, res) {
 export async function createOrdenVenta(req, res) {
   try {
     const {
-      tipo_comprobante, // NUEVO
+      tipo_comprobante,
       id_cliente,
       id_cotizacion,
       fecha_emision,
@@ -211,78 +212,6 @@ export async function createOrdenVenta(req, res) {
       });
     }
     
-    // ============================================
-    // GENERAR NÚMERO DE ORDEN (interno)
-    // ============================================
-    const ultimaResult = await executeQuery(`
-      SELECT numero_orden 
-      FROM ordenes_venta 
-      ORDER BY id_orden_venta DESC 
-      LIMIT 1
-    `);
-    
-    let numeroSecuencia = 1;
-    if (ultimaResult.success && ultimaResult.data.length > 0) {
-      const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
-      if (match) {
-        numeroSecuencia = parseInt(match[1]) + 1;
-      }
-    }
-    
-    const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
-    
-    // ============================================
-    // GENERAR NÚMERO DE COMPROBANTE (según tipo)
-    // ============================================
-    const tipoComp = tipo_comprobante || 'Factura';
-    let numeroComprobante = null;
-
-    if (tipoComp === 'Factura') {
-      // Obtener último número de factura
-      const ultimaFactura = await executeQuery(`
-        SELECT numero_comprobante 
-        FROM ordenes_venta 
-        WHERE tipo_comprobante = 'Factura'
-        AND numero_comprobante IS NOT NULL
-        ORDER BY id_orden_venta DESC 
-        LIMIT 1
-      `);
-
-      let numeroSecuenciaFactura = 1;
-      if (ultimaFactura.success && ultimaFactura.data.length > 0 && ultimaFactura.data[0].numero_comprobante) {
-        const match = ultimaFactura.data[0].numero_comprobante.match(/F\d{3}-(\d+)$/);
-        if (match) {
-          numeroSecuenciaFactura = parseInt(match[1]) + 1;
-        }
-      }
-
-      numeroComprobante = `F001-${String(numeroSecuenciaFactura).padStart(8, '0')}`;
-      
-    } else if (tipoComp === 'Nota de Venta') {
-      // Obtener último número de nota de venta
-      const ultimaNota = await executeQuery(`
-        SELECT numero_comprobante 
-        FROM ordenes_venta 
-        WHERE tipo_comprobante = 'Nota de Venta'
-        AND numero_comprobante IS NOT NULL
-        ORDER BY id_orden_venta DESC 
-        LIMIT 1
-      `);
-
-      let numeroSecuenciaNota = 1;
-      if (ultimaNota.success && ultimaNota.data.length > 0 && ultimaNota.data[0].numero_comprobante) {
-        const match = ultimaNota.data[0].numero_comprobante.match(/NV\d{3}-(\d+)$/);
-        if (match) {
-          numeroSecuenciaNota = parseInt(match[1]) + 1;
-        }
-      }
-
-      numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
-    }
-    
-    // ============================================
-    // CALCULAR TOTALES
-    // ============================================
     let subtotal = 0;
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
@@ -314,7 +243,101 @@ export async function createOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
     
-    // Cálculo de fecha vencimiento si no viene del front (fallback)
+    const clienteInfo = await executeQuery('SELECT usar_limite_credito, limite_credito_pen, limite_credito_usd FROM clientes WHERE id_cliente = ?', [id_cliente]);
+    
+    if (clienteInfo.success && clienteInfo.data.length > 0) {
+      const cliente = clienteInfo.data[0];
+
+      if (cliente.usar_limite_credito === 1) {
+        
+        const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_credito_usd || 0) : parseFloat(cliente.limite_credito_pen || 0);
+        
+        const deudaResult = await executeQuery(`
+          SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
+          FROM ordenes_venta
+          WHERE id_cliente = ? 
+          AND moneda = ? 
+          AND estado != 'Cancelada' 
+          AND estado_pago != 'Pagado'
+        `, [id_cliente, moneda]);
+
+        const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
+        const nuevaDeudaTotal = deudaActual + total;
+
+        if (nuevaDeudaTotal > limiteAsignado) {
+          return res.status(400).json({
+            success: false,
+            error: `Límite de crédito excedido. 
+                    Límite: ${moneda} ${limiteAsignado.toFixed(2)}. 
+                    Deuda actual: ${moneda} ${deudaActual.toFixed(2)}. 
+                    Nueva orden: ${moneda} ${total.toFixed(2)}. 
+                    Total proyectado: ${moneda} ${nuevaDeudaTotal.toFixed(2)}.`
+          });
+        }
+      }
+    }
+    
+    const ultimaResult = await executeQuery(`
+      SELECT numero_orden 
+      FROM ordenes_venta 
+      ORDER BY id_orden_venta DESC 
+      LIMIT 1
+    `);
+    
+    let numeroSecuencia = 1;
+    if (ultimaResult.success && ultimaResult.data.length > 0) {
+      const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
+    }
+    
+    const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
+    
+    const tipoComp = tipo_comprobante || 'Factura';
+    let numeroComprobante = null;
+
+    if (tipoComp === 'Factura') {
+      const ultimaFactura = await executeQuery(`
+        SELECT numero_comprobante 
+        FROM ordenes_venta 
+        WHERE tipo_comprobante = 'Factura'
+        AND numero_comprobante IS NOT NULL
+        ORDER BY id_orden_venta DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuenciaFactura = 1;
+      if (ultimaFactura.success && ultimaFactura.data.length > 0 && ultimaFactura.data[0].numero_comprobante) {
+        const match = ultimaFactura.data[0].numero_comprobante.match(/F\d{3}-(\d+)$/);
+        if (match) {
+          numeroSecuenciaFactura = parseInt(match[1]) + 1;
+        }
+      }
+
+      numeroComprobante = `F001-${String(numeroSecuenciaFactura).padStart(8, '0')}`;
+      
+    } else if (tipoComp === 'Nota de Venta') {
+      const ultimaNota = await executeQuery(`
+        SELECT numero_comprobante 
+        FROM ordenes_venta 
+        WHERE tipo_comprobante = 'Nota de Venta'
+        AND numero_comprobante IS NOT NULL
+        ORDER BY id_orden_venta DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuenciaNota = 1;
+      if (ultimaNota.success && ultimaNota.data.length > 0 && ultimaNota.data[0].numero_comprobante) {
+        const match = ultimaNota.data[0].numero_comprobante.match(/NV\d{3}-(\d+)$/);
+        if (match) {
+          numeroSecuenciaNota = parseInt(match[1]) + 1;
+        }
+      }
+
+      numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
+    }
+    
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal) {
       const fechaBase = new Date(fecha_emision);
@@ -322,9 +345,6 @@ export async function createOrdenVenta(req, res) {
       fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
     }
     
-    // ============================================
-    // INSERTAR ORDEN DE VENTA
-    // ============================================
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
         numero_orden,
@@ -362,8 +382,8 @@ export async function createOrdenVenta(req, res) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera')
     `, [
       numeroOrden,
-      tipoComp,              // NUEVO
-      numeroComprobante,     // NUEVO
+      tipoComp,
+      numeroComprobante,
       id_cliente,
       id_cotizacion || null,
       fecha_emision,
@@ -403,9 +423,6 @@ export async function createOrdenVenta(req, res) {
     
     const idOrden = result.data.insertId;
     
-    // ============================================
-    // INSERTAR DETALLES
-    // ============================================
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const precioBase = parseFloat(item.precio_base);
@@ -436,9 +453,6 @@ export async function createOrdenVenta(req, res) {
       ]);
     }
     
-    // ============================================
-    // MARCAR COTIZACIÓN COMO CONVERTIDA
-    // ============================================
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 
@@ -454,8 +468,8 @@ export async function createOrdenVenta(req, res) {
       data: {
         id_orden_venta: idOrden,
         numero_orden: numeroOrden,
-        tipo_comprobante: tipoComp,        // NUEVO
-        numero_comprobante: numeroComprobante // NUEVO
+        tipo_comprobante: tipoComp,
+        numero_comprobante: numeroComprobante
       },
       message: 'Orden de venta creada exitosamente'
     });
@@ -540,7 +554,6 @@ export async function updateOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
 
-    // Cálculo fallback
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal) {
         const fechaBase = new Date(fecha_emision);

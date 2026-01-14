@@ -501,16 +501,16 @@ function ClienteDetalle() {
       </div>
 
       <div className="card">
-        <div className="tabs">
+        <div className="tabs-navigation mb-4">
           <button
-            className={`tab ${tabActiva === 'cotizaciones' ? 'active' : ''}`}
+            className={`tab-item ${tabActiva === 'cotizaciones' ? 'active' : ''}`}
             onClick={() => setTabActiva('cotizaciones')}
           >
             <FileText size={18} />
             Cotizaciones ({cotizaciones.length})
           </button>
           <button
-            className={`tab ${tabActiva === 'ordenes' ? 'active' : ''}`}
+            className={`tab-item ${tabActiva === 'ordenes' ? 'active' : ''}`}
             onClick={() => setTabActiva('ordenes')}
           >
             <ShoppingCart size={18} />

@@ -22,7 +22,7 @@ function Clientes() {
   const [datosAPI, setDatosAPI] = useState(null);
 
   const [formData, setFormData] = useState({
-    tipo_documento: 'RUC', // NUEVO: 'RUC' o 'DNI'
+    tipo_documento: 'RUC', 
     ruc: '',
     razon_social: '',
     contacto: '',
@@ -31,7 +31,8 @@ function Clientes() {
     direccion_despacho: '',
     limite_credito_pen: 0,
     limite_credito_usd: 0,
-    validar_documento: true, // NUEVO: reemplaza validar_ruc
+    usar_limite_credito: false, // NUEVO: Switch para activar límite
+    validar_documento: true, 
     estado: 'Activo'
   });
 
@@ -65,6 +66,7 @@ function Clientes() {
         direccion_despacho: cliente.direccion_despacho || '',
         limite_credito_pen: cliente.limite_credito_pen || 0,
         limite_credito_usd: cliente.limite_credito_usd || 0,
+        usar_limite_credito: Boolean(cliente.usar_limite_credito), // Cargar estado del switch
         validar_documento: false,
         estado: cliente.estado
       });
@@ -82,6 +84,7 @@ function Clientes() {
         direccion_despacho: '',
         limite_credito_pen: 0,
         limite_credito_usd: 0,
+        usar_limite_credito: false, // Default apagado
         validar_documento: true,
         estado: 'Activo'
       });
@@ -98,9 +101,6 @@ function Clientes() {
     setDatosAPI(null);
   };
 
-  // ============================================
-  // NUEVA FUNCIÓN: Validar documento (RUC o DNI)
-  // ============================================
   const validarDocumento = async () => {
     const documento = formData.ruc.trim();
     const tipo = formData.tipo_documento;
@@ -110,7 +110,6 @@ function Clientes() {
       return;
     }
 
-    // Validar formato según tipo
     if (tipo === 'RUC' && !/^\d{11}$/.test(documento)) {
       setError('El RUC debe tener 11 dígitos');
       return;
@@ -125,7 +124,6 @@ function Clientes() {
       setValidandoDocumento(true);
       setError(null);
       
-      // Llamar a la API correspondiente
       const response = tipo === 'RUC' 
         ? await clientesAPI.validarRUC(documento)
         : await clientesAPI.validarDNI(documento);
@@ -136,12 +134,10 @@ function Clientes() {
         
         const nuevosValores = { ...formData };
         
-        // Autocompletar razón social / nombre
         if (!formData.razon_social) {
           nuevosValores.razon_social = response.data.datos.razon_social;
         }
         
-        // Autocompletar dirección (solo para RUC)
         if (tipo === 'RUC' && !formData.direccion_despacho && response.data.datos.direccion) {
           const direccionCompleta = [
             response.data.datos.direccion,
@@ -161,7 +157,6 @@ function Clientes() {
           setSuccess(`${tipo} validado correctamente con ${tipo === 'RUC' ? 'SUNAT' : 'RENIEC'}`);
         }
         
-        // Advertencia de estado (solo para RUC)
         if (tipo === 'RUC' && response.data.datos.estado !== 'ACTIVO') {
           setError(`Advertencia: Este RUC está en estado ${response.data.datos.estado} en SUNAT`);
         }
@@ -212,14 +207,11 @@ function Clientes() {
     }
   };
 
-  // ============================================
-  // NUEVA FUNCIÓN: Manejar cambio de tipo de documento
-  // ============================================
   const handleTipoDocumentoChange = (nuevoTipo) => {
     setFormData({
       ...formData,
       tipo_documento: nuevoTipo,
-      ruc: '' // Limpiar el campo al cambiar tipo
+      ruc: '' 
     });
     setDocumentoValidado(null);
     setDatosAPI(null);
@@ -257,9 +249,18 @@ function Clientes() {
     { header: 'Contacto', accessor: 'contacto' },
     { header: 'Teléfono', accessor: 'telefono' },
     { 
-      header: 'Dirección', 
-      accessor: 'direccion_despacho',
-      render: (value) => value ? (value.length > 50 ? value.substring(0, 50) + '...' : value) : '-'
+      header: 'Límite Crédito', 
+      width: '140px',
+      render: (_, row) => (
+        row.usar_limite_credito ? (
+          <div className="text-sm">
+            <div className="text-success font-medium">S/ {parseFloat(row.limite_credito_pen).toFixed(2)}</div>
+            <div className="text-primary font-medium">$ {parseFloat(row.limite_credito_usd).toFixed(2)}</div>
+          </div>
+        ) : (
+          <span className="badge badge-secondary">Sin Límite</span>
+        )
+      )
     },
     {
       header: 'Estado',
@@ -365,7 +366,6 @@ function Clientes() {
       >
         <form onSubmit={handleSubmit}>
           
-          {/* SELECTOR DE TIPO DE DOCUMENTO */}
           <div className="form-group">
             <label className="form-label">Tipo de Documento *</label>
             <div className="grid grid-cols-2 gap-3">
@@ -373,7 +373,7 @@ function Clientes() {
                 type="button"
                 className={`btn ${formData.tipo_documento === 'RUC' ? 'btn-primary' : 'btn-outline'}`}
                 onClick={() => handleTipoDocumentoChange('RUC')}
-                disabled={editando} // No permitir cambio en edición
+                disabled={editando} 
               >
                 <Building2 size={18} className="mr-2" />
                 Empresa (RUC)
@@ -382,7 +382,7 @@ function Clientes() {
                 type="button"
                 className={`btn ${formData.tipo_documento === 'DNI' ? 'btn-info' : 'btn-outline'}`}
                 onClick={() => handleTipoDocumentoChange('DNI')}
-                disabled={editando} // No permitir cambio en edición
+                disabled={editando} 
               >
                 <User size={18} className="mr-2" />
                 Persona Natural (DNI)
@@ -390,7 +390,6 @@ function Clientes() {
             </div>
           </div>
 
-          {/* CAMPO DE DOCUMENTO */}
           <div className="form-group">
             <label className="form-label">
               {formData.tipo_documento === 'RUC' ? 'RUC' : 'DNI'} *
@@ -446,7 +445,6 @@ function Clientes() {
             )}
           </div>
 
-          {/* DATOS DE LA API */}
           {datosAPI && (
             <div className="alert alert-info mb-3">
               <strong>Datos de {formData.tipo_documento === 'RUC' ? 'SUNAT' : 'RENIEC'}:</strong>
@@ -475,7 +473,6 @@ function Clientes() {
             </div>
           )}
 
-          {/* RAZÓN SOCIAL / NOMBRE */}
           <div className="form-group">
             <label className="form-label">
               {formData.tipo_documento === 'RUC' ? 'Razón Social' : 'Nombre Completo'} *
@@ -495,7 +492,6 @@ function Clientes() {
             )}
           </div>
 
-          {/* CONTACTO Y TELÉFONO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
               <label className="form-label">Contacto</label>
@@ -520,7 +516,6 @@ function Clientes() {
             </div>
           </div>
 
-          {/* EMAIL */}
           <div className="form-group">
             <label className="form-label">Email</label>
             <input
@@ -532,7 +527,6 @@ function Clientes() {
             />
           </div>
 
-          {/* DIRECCIÓN */}
           <div className="form-group">
             <label className="form-label">Dirección de Despacho</label>
             <textarea
@@ -549,42 +543,60 @@ function Clientes() {
             )}
           </div>
 
-          {/* LÍMITES DE CRÉDITO */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
-              <label className="form-label">Límite Crédito (S/)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">S/</span>
-                <input
-                  type="number"
-                  className="form-input pl-10"
-                  value={formData.limite_credito_pen}
-                  onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                />
+          <div className="card bg-gray-50 border p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <label className="form-label mb-0 flex items-center gap-2">
+                <CreditCard size={18} className="text-primary" />
+                Configuración de Crédito
+              </label>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">
+                  {formData.usar_limite_credito ? 'Con Límite' : 'Sin Límite'}
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={formData.usar_limite_credito}
+                    onChange={(e) => setFormData({ ...formData, usar_limite_credito: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Límite Crédito ($)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-                <input
-                  type="number"
-                  className="form-input pl-10"
-                  value={formData.limite_credito_usd}
-                  onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                />
+            {formData.usar_limite_credito && (
+              <div className="grid grid-cols-2 gap-4 animate-fadeIn">
+                <div className="form-group mb-0">
+                  <label className="form-label text-xs">Límite Soles (S/)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formData.limite_credito_pen}
+                    onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })}
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="form-group mb-0">
+                  <label className="form-label text-xs">Límite Dólares ($)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formData.limite_credito_usd}
+                    onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })}
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* ESTADO */}
           <div className="form-group">
             <label className="form-label">Estado *</label>
             <select
@@ -598,7 +610,6 @@ function Clientes() {
             </select>
           </div>
 
-          {/* BOTONES */}
           <div className="flex gap-2 justify-end mt-4">
             <button type="button" className="btn btn-outline" onClick={cerrarModal}>
               Cancelar

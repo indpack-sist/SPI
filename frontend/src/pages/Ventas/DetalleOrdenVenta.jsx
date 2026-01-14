@@ -10,7 +10,7 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { ordenesVentaAPI, salidasAPI } from '../../config/api';
+import { ordenesVentaAPI, salidasAPI, clientesAPI } from '../../config/api';
 
 function DetalleOrdenVenta() {
   const { id } = useParams();
@@ -26,6 +26,7 @@ function DetalleOrdenVenta() {
   const [orden, setOrden] = useState(null);
   const [pagos, setPagos] = useState([]);
   const [resumenPagos, setResumenPagos] = useState(null);
+  const [estadoCredito, setEstadoCredito] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -64,6 +65,10 @@ function DetalleOrdenVenta() {
       
       if (ordenRes.data.success) {
         setOrden(ordenRes.data.data);
+        const creditoRes = await clientesAPI.getEstadoCredito(ordenRes.data.data.id_cliente);
+        if (creditoRes.data.success) {
+          setEstadoCredito(creditoRes.data.data);
+        }
       }
       
       if (pagosRes.data.success) {
@@ -151,6 +156,14 @@ function DetalleOrdenVenta() {
   };
 
   const handleCambiarEstado = async (estado) => {
+    if (estado !== 'Cancelada' && orden.tipo_venta === 'Crédito' && estadoCredito?.usar_limite_credito) {
+      const disponible = orden.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible;
+      const deudaPropiaDeEstaOrden = parseFloat(orden.total) - parseFloat(orden.monto_pagado || 0);
+      if (deudaPropiaDeEstaOrden > disponible + 0.1) {
+        setError(`Acción bloqueada: El cliente ha excedido su límite de crédito disponible (${formatearMoneda(disponible)}).`);
+        return;
+      }
+    }
     try {
       setError(null);
       setProcesando(true);
@@ -320,6 +333,13 @@ function DetalleOrdenVenta() {
       'Pagado': { clase: 'badge-success', icono: CheckCircle }
     };
     return configs[estadoPago] || configs['Pendiente'];
+  };
+
+  const puedeDespachar = () => {
+    if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
+      return false;
+    }
+    return orden.estado === 'Atendido por Producción';
   };
 
   const columns = [
@@ -920,11 +940,20 @@ function DetalleOrdenVenta() {
               <label className="text-sm font-medium text-muted">RUC:</label>
               <p>{orden.ruc_cliente}</p>
             </div>
-            {orden.contacto_entrega && (
-              <div>
-                <label className="text-sm font-medium text-muted">Contacto:</label>
-                <p>{orden.contacto_entrega} {orden.telefono_entrega && `(${orden.telefono_entrega})`}</p>
-              </div>
+            {estadoCredito?.usar_limite_credito && (
+                <div className="pt-3 mt-2 border-t border-gray-100">
+                    <p className="text-xs font-bold text-primary uppercase flex items-center gap-1"><CreditCard size={14}/> Crédito Disponible</p>
+                    <div className="grid grid-cols-1 gap-1 mt-2 text-sm">
+                        <div className="flex justify-between">
+                            <span className="text-muted">PEN:</span>
+                            <span className="font-bold text-green-600">{formatearMoneda(estadoCredito.credito_pen.disponible, 'PEN')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-muted">USD:</span>
+                            <span className="font-bold text-blue-600">$ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
             )}
           </div>
         </div>

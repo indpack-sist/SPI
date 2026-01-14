@@ -89,15 +89,14 @@ function Cotizaciones() {
   };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-ES', { 
+    return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);
   };
 
-  const formatearMoneda = (valor) => {
-    if (!orden && !valor) return '-';
-    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor, moneda) => {
+    const simbolo = moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 

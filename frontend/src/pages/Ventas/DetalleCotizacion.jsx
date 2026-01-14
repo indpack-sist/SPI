@@ -146,17 +146,18 @@ function DetalleCotizacion() {
   };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-ES', { 
+    return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);
   };
 
   const formatearMoneda = (valor) => {
-    if (!orden && !valor) return '-';
-    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
+    if (!cotizacion) return '-';
+    const simbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
+
   const getTipoImpuestoNombre = (valor) => {
     if (!valor) return 'IGV 18%';
 
@@ -685,11 +686,9 @@ function DetalleCotizacion() {
               </div>
               
               {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-blue-900 font-medium">
-                      Equivalente en Soles:
-                    </span>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                  <div className="flex justify-between items-center text-blue-900">
+                    <span className="font-medium">Equivalente en Soles:</span>
                     <span className="font-bold text-blue-900 text-lg">
                       S/ {formatearNumero(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio))}
                     </span>

@@ -60,6 +60,7 @@ function DetalleOrdenVenta() {
   const formatearMoneda = (valor) => {
     if (!orden && !valor) return '-';
     const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
+    // Se concatena el símbolo con el número ya formateado al estilo europeo
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 

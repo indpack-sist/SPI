@@ -104,7 +104,7 @@ function NuevaCotizacion() {
   const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-ES', { 
+    return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);
@@ -115,7 +115,11 @@ function NuevaCotizacion() {
     const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
-  // ----------------------------------------
+
+  const formatearMonedaGral = (valor) => {
+    const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+  };
 
   useEffect(() => {
     cargarCatalogos();
@@ -1032,7 +1036,6 @@ function NuevaCotizacion() {
                     </span>
                     <span className="font-bold">{formatearMonedaGral(totales.impuesto)}</span>
                   </div>
-                  {/* --- CORRECCIÓN DE COLOR AQUÍ: text-gray-800 o white dependiendo del fondo --- */}
                   <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2 shadow-sm">
                     <span className="font-bold text-lg">TOTAL:</span>
                     <span className="font-bold text-2xl">{formatearMonedaGral(totales.total)}</span>

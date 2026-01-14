@@ -48,6 +48,19 @@ function DetalleOrdenVenta() {
     observaciones: ''
   });
 
+  const formatearNumero = (valor) => {
+    return new Intl.NumberFormat('es-DE', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(valor);
+  };
+
+  const formatearMoneda = (valor) => {
+    if (!orden && !valor) return '-';
+    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+  };
+
   useEffect(() => {
     cargarDatos();
   }, [id]);
@@ -257,12 +270,6 @@ function DetalleOrdenVenta() {
       month: '2-digit',
       day: '2-digit'
     });
-  };
-
-  const formatearMoneda = (valor) => {
-    if (!orden) return '-';
-    const simbolo = orden.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
   };
 
   const getTipoImpuestoNombre = (codigo) => {
@@ -1081,7 +1088,7 @@ function DetalleOrdenVenta() {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
                 <div className="flex justify-between items-center text-blue-900">
                   <span className="font-medium">Equivalente en Soles:</span>
-                  <span className="font-bold">S/ {(parseFloat(orden.total) * parseFloat(orden.tipo_cambio)).toFixed(3)}</span>
+                  <span className="font-bold">S/ {formatearNumero(parseFloat(orden.total) * parseFloat(orden.tipo_cambio))}</span>
                 </div>
               </div>
             )}

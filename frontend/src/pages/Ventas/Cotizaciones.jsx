@@ -88,9 +88,18 @@ function Cotizaciones() {
     }, 0)
   };
 
+  // Función corregida para el formateo numérico solicitado
+  // Ejemplo: 4.125,354
+  const formatearNumero = (valor) => {
+    return new Intl.NumberFormat('es-DE', { 
+      minimumFractionDigits: 3, 
+      maximumFractionDigits: 3 
+    }).format(valor);
+  };
+
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(3)}`;
+    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
   const getEstadoBadge = (estado) => {
@@ -115,30 +124,28 @@ function Cotizaciones() {
   };
 
   const handleDuplicar = async (id, e) => {
-  e.stopPropagation();
-  
-  try {
-    setError(null);
+    e.stopPropagation();
     
-    const response = await cotizacionesAPI.duplicar(id);
-    
-    if (response.data.success) {
-      setSuccessMessage(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
+    try {
+      setError(null);
       
-      // Recargar listado para mostrar la nueva cotización
-      await cargarDatos(true);
+      const response = await cotizacionesAPI.duplicar(id);
       
-      // Redirigir a la cotización duplicada
-      setTimeout(() => {
-        navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
-      }, 1500);
+      if (response.data.success) {
+        setSuccessMessage(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
+        
+        await cargarDatos(true);
+        
+        setTimeout(() => {
+          navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
+        }, 1500);
+      }
+      
+    } catch (err) {
+      console.error('Error al duplicar cotización:', err);
+      setError(err.response?.data?.error || 'Error al duplicar cotización');
     }
-    
-  } catch (err) {
-    console.error('Error al duplicar cotización:', err);
-    setError(err.response?.data?.error || 'Error al duplicar cotización');
-  }
-};
+  };
 
   const columns = [
     {
@@ -190,7 +197,7 @@ function Cotizaciones() {
           <div className="font-bold text-lg">{formatearMoneda(value, row.moneda)}</div>
           {row.moneda === 'USD' && parseFloat(row.tipo_cambio || 0) > 1 && (
             <div className="text-xs text-muted">
-              TC: S/ {parseFloat(row.tipo_cambio).toFixed(4)}
+              TC: S/ {formatearNumero(parseFloat(row.tipo_cambio))}
             </div>
           )}
         </div>
@@ -353,7 +360,7 @@ function Cotizaciones() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase font-semibold opacity-90">Monto Total (PEN)</p>
-                <p className="text-2xl font-bold">S/ {estadisticas.montoTotal.toFixed(3)}</p>
+                <p className="text-2xl font-bold">S/ {formatearNumero(estadisticas.montoTotal)}</p>
               </div>
               <DollarSign size={32} className="opacity-20" />
             </div>

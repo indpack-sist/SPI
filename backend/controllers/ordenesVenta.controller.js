@@ -875,7 +875,7 @@ export async function registrarDespacho(req, res) {
     const resultTx = await executeTransaction(queries);
     if (!resultTx.success) return res.status(500).json({ error: resultTx.error });
 
-    const idSalida = resultTx.data[0].insertId;
+    const idSalida = resultTx.data[0].insertId; // Aquí definimos la variable como idSalida
     const queriesDetalle = [];
 
     for (const item of itemsProcesados) {
@@ -919,7 +919,10 @@ export async function registrarDespacho(req, res) {
     res.json({
       success: true,
       message: `Despacho registrado correctamente. Orden pasó a estado: ${nuevoEstado}`,
-      data: { id_salida, nuevo_estado: nuevoEstado }
+      data: { 
+        id_salida: idSalida, // CORREGIDO AQUÍ: Asignamos idSalida a la clave id_salida
+        nuevo_estado: nuevoEstado 
+      }
     });
 
   } catch (error) {

@@ -853,11 +853,10 @@ export async function registrarDespacho(req, res) {
 
     const queries = [];
 
-    // CAMBIO IMPORTANTE: Usamos fecha_creacion en lugar de fecha_salida
     queries.push({
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, 
-        total_precio, moneda, id_registrado_por, observaciones, estado, fecha_creacion
+        total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
         3, 
@@ -985,11 +984,11 @@ export async function actualizarEstadoOrdenVenta(req, res) {
         
         const salidaResult = await executeQuery(`
           INSERT INTO salidas (
-            id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, total_precio, moneda, id_registrado_por, observaciones, estado
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           3, 'Venta', orden.id_cliente, totalCosto, parseFloat(orden.total), orden.moneda || 'PEN', id_usuario, 
-          `Despacho Automático Final Orden ${orden.numero_orden}`, 'Activo'
+          `Despacho Automático Final Orden ${orden.numero_orden}`, 'Activo', new Date()
         ]);
         
         if (salidaResult.success) {
@@ -1155,7 +1154,7 @@ export async function descargarPDFOrdenVenta(req, res) {
         cl.ruc AS ruc_cliente,
         cl.direccion_despacho AS direccion_cliente,
         cl.telefono AS telefono_cliente,
-        e_comercial.nombre_completo AS comercial,
+        e.nombre_completo AS comercial,
         e_comercial.email AS email_comercial,
         e_registrado.nombre_completo AS registrado_por,
         c.numero_cotizacion
@@ -1567,12 +1566,12 @@ export async function getSalidasOrden(req, res) {
       SELECT 
         s.id_salida, 
         s.id_salida as numero_salida, 
-        s.fecha_creacion as fecha_salida, 
+        s.fecha_movimiento as fecha_salida, 
         s.observaciones
       FROM salidas s
       WHERE s.observaciones LIKE ? 
       AND s.estado = 'Activo'
-      ORDER BY s.fecha_creacion DESC
+      ORDER BY s.fecha_movimiento DESC
     `;
     
     const result = await executeQuery(sql, [`%${numeroOrden}%`]);

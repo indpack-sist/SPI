@@ -102,11 +102,9 @@ export const obtenerResumenGeneral = async (req, res) => {
         COUNT(p.id_producto) AS total_productos,
         COALESCE(SUM(p.stock_actual), 0) AS stock_total,
         
-        -- VALOR DE PRODUCCIÓN (COSTO REAL)
         COALESCE(
           SUM(
             p.stock_actual * COALESCE(
-              /* PRIORIDAD 1: Promedio Ponderado Real (Órdenes Finalizadas con costo > 0) */
               (
                 SELECT SUM(op.costo_materiales) / SUM(op.cantidad_producida)
                 FROM ordenes_produccion op
@@ -115,18 +113,16 @@ export const obtenerResumenGeneral = async (req, res) => {
                 AND op.cantidad_producida > 0 
                 AND op.costo_materiales > 0
               ),
-              /* PRIORIDAD 2: Costo Teórico de Receta */
               (
-                SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / MAX(rp.rendimiento_unidades)
+                SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
                 FROM recetas_productos rp
                 INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
                 INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
                 WHERE rp.id_producto_terminado = p.id_producto 
                 AND rp.es_principal = 1 
                 AND rp.es_activa = 1
-                GROUP BY rp.id_producto_terminado
+                GROUP BY rp.id_receta_producto
               ),
-              /* PRIORIDAD 3: Costo manual de la tabla */
               p.costo_unitario_promedio,
               0
             )
@@ -134,7 +130,6 @@ export const obtenerResumenGeneral = async (req, res) => {
           0
         ) AS valor_produccion,
         
-        -- VALOR DE VENTA (PT y Reventa)
         COALESCE(
           SUM(
             CASE 
@@ -238,30 +233,29 @@ export const obtenerInventarioValorizado = async (req, res) => {
         CASE 
           WHEN p.costo_unitario_promedio > 0 THEN p.costo_unitario_promedio
           WHEN p.requiere_receta = 1 THEN COALESCE((
-            SELECT (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / 
-                   MAX(rp.rendimiento_unidades))
+            SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
             FROM recetas_productos rp
             INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
             INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
             WHERE rp.id_producto_terminado = p.id_producto 
             AND rp.es_principal = 1 
             AND rp.es_activa = 1
+            GROUP BY rp.id_receta_producto
           ), 0)
           WHEN p.precio_venta > 0 THEN p.precio_venta
           ELSE 0
         END AS costo_efectivo,
-        (p.stock_actual * 
-          CASE 
+        (p.stock_actual * CASE 
             WHEN p.costo_unitario_promedio > 0 THEN p.costo_unitario_promedio
             WHEN p.requiere_receta = 1 THEN COALESCE((
-              SELECT (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / 
-                     MAX(rp.rendimiento_unidades))
+              SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
               FROM recetas_productos rp
               INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
               INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
               WHERE rp.id_producto_terminado = p.id_producto 
               AND rp.es_principal = 1 
               AND rp.es_activa = 1
+              GROUP BY rp.id_receta_producto
             ), 0)
             WHEN p.precio_venta > 0 THEN p.precio_venta
             ELSE 0
@@ -279,14 +273,14 @@ export const obtenerInventarioValorizado = async (req, res) => {
             CASE 
               WHEN p.costo_unitario_promedio > 0 THEN p.costo_unitario_promedio
               WHEN p.requiere_receta = 1 THEN COALESCE((
-                SELECT (SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / 
-                       MAX(rp.rendimiento_unidades))
+                SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
                 FROM recetas_productos rp
                 INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
                 INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
                 WHERE rp.id_producto_terminado = p.id_producto 
                 AND rp.es_principal = 1 
                 AND rp.es_activa = 1
+                GROUP BY rp.id_receta_producto
               ), 0)
               ELSE p.precio_venta
             END
@@ -397,7 +391,6 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
       params.push(fecha_fin);
     }
 
-    // ENTRADAS - SEPARADAS POR MONEDA
     const entradasResult = await executeQuery(
       `SELECT 
         COUNT(*) AS total_entradas,
@@ -408,7 +401,6 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
       params
     );
 
-    // SALIDAS - SEPARADAS POR MONEDA
     const salidasResult = await executeQuery(
       `SELECT 
         COUNT(*) AS total_salidas,
@@ -419,7 +411,6 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
       params
     );
 
-    // ENTRADAS MENSUALES - SEPARADAS POR MONEDA
     const entradasMensualesResult = await executeQuery(
       `SELECT 
         DATE_FORMAT(fecha_movimiento, '%Y-%m') AS mes,
@@ -432,7 +423,6 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
        ORDER BY mes DESC`
     );
 
-    // SALIDAS MENSUALES - SEPARADAS POR MONEDA
     const salidasMensualesResult = await executeQuery(
       `SELECT 
         DATE_FORMAT(fecha_movimiento, '%Y-%m') AS mes,
@@ -485,7 +475,6 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
         entradas_usd: m.entradas_usd,
         salidas_pen: m.salidas_pen,
         salidas_usd: m.salidas_usd,
-        // Totales convertidos a una sola moneda para el gráfico
         entradas_pen_total: m.entradas_pen + (tipoCambio.valido ? m.entradas_usd * tipoCambio.venta : m.entradas_usd * 3.80),
         salidas_pen_total: m.salidas_pen + (tipoCambio.valido ? m.salidas_usd * tipoCambio.venta : m.salidas_usd * 3.80),
         entradas_usd_total: (tipoCambio.valido ? convertirPENaUSD(m.entradas_pen, tipoCambio) : m.entradas_pen / 3.80) + m.entradas_usd,
@@ -499,31 +488,25 @@ export const obtenerEstadisticasMovimientos = async (req, res) => {
     const valor_salidas_pen = parseFloat(salidasResult.data[0].valor_salidas_pen);
     const valor_salidas_usd = parseFloat(salidasResult.data[0].valor_salidas_usd);
 
-    // Total convertido a PEN
     const total_entradas_pen = valor_entradas_pen + (tipoCambio.valido ? valor_entradas_usd * tipoCambio.venta : valor_entradas_usd * 3.80);
     const total_salidas_pen = valor_salidas_pen + (tipoCambio.valido ? valor_salidas_usd * tipoCambio.venta : valor_salidas_usd * 3.80);
 
-    // Total convertido a USD
     const total_entradas_usd = (tipoCambio.valido ? convertirPENaUSD(valor_entradas_pen, tipoCambio) : valor_entradas_pen / 3.80) + valor_entradas_usd;
     const total_salidas_usd = (tipoCambio.valido ? convertirPENaUSD(valor_salidas_pen, tipoCambio) : valor_salidas_pen / 3.80) + valor_salidas_usd;
 
     res.json({
       entradas: {
         total: entradasResult.data[0].total_entradas,
-        // Valores originales por moneda
         valor_pen: valor_entradas_pen,
         valor_usd: valor_entradas_usd,
-        // Totales convertidos
         valor_total_pen: total_entradas_pen,
         valor_total_usd: total_entradas_usd,
         dias_activos: entradasResult.data[0].dias_con_movimiento
       },
       salidas: {
         total: salidasResult.data[0].total_salidas,
-        // Valores originales por moneda
         valor_pen: valor_salidas_pen,
         valor_usd: valor_salidas_usd,
-        // Totales convertidos
         valor_total_pen: total_salidas_pen,
         valor_total_usd: total_salidas_usd,
         dias_activos: salidasResult.data[0].dias_con_movimiento

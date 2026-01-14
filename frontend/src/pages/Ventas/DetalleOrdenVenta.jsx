@@ -119,7 +119,7 @@ function DetalleOrdenVenta() {
       .filter(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0)
       .map(item => ({
         id_producto: item.id_producto,
-        codigo: item.codigo_producto,
+        codigo_producto: item.codigo_producto,
         producto: item.producto,
         unidad_medida: item.unidad_medida,
         cantidad_pendiente: parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0),
@@ -440,14 +440,15 @@ function DetalleOrdenVenta() {
     if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
       return false;
     }
-    return true; 
+    const pendientes = orden.detalle.some(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0);
+    return pendientes;
   };
 
   const columns = [
     {
       header: 'Código',
       accessor: 'codigo_producto',
-      width: '100px',
+      width: '90px',
       render: (value) => <span className="font-mono text-sm">{value}</span>
     },
     {
@@ -458,8 +459,7 @@ function DetalleOrdenVenta() {
           <div className="font-medium">{value}</div>
           {row.requiere_receta && (
             <span className="badge badge-warning badge-sm mt-1">
-              <AlertCircle size={12} />
-              Requiere producción
+              <AlertCircle size={10} /> Prod
             </span>
           )}
         </div>
@@ -480,29 +480,32 @@ function DetalleOrdenVenta() {
     {
       header: 'Despachado',
       accessor: 'cantidad_despachada',
-      width: '90px',
+      width: '100px',
       align: 'right',
       render: (value) => (
         <span className={`font-bold ${parseFloat(value) > 0 ? 'text-success' : 'text-gray-400'}`}>
-          {formatearNumero(value)}
+          {formatearNumero(value || 0)}
         </span>
       )
     },
     {
       header: 'Pendiente',
       accessor: 'cantidad_pendiente',
-      width: '90px',
+      width: '100px',
       align: 'right',
-      render: (value) => (
-        <span className={`font-bold ${parseFloat(value) > 0 ? 'text-danger' : 'text-success'}`}>
-           {formatearNumero(value)}
-        </span>
-      )
+      render: (value) => {
+        const pendiente = parseFloat(value);
+        return (
+          <span className={`font-bold ${pendiente > 0 ? 'text-danger' : 'text-success'}`}>
+             {formatearNumero(pendiente || 0)}
+          </span>
+        );
+      }
     },
     {
       header: 'P. Final',
       accessor: 'precio_unitario',
-      width: '120px',
+      width: '100px',
       align: 'right',
       render: (value) => (
         <span className="font-medium text-primary">{formatearMoneda(value)}</span>
@@ -1164,7 +1167,7 @@ function DetalleOrdenVenta() {
              <div className="card-body">
                  <Table 
                      columns={[
-                         { header: 'N° Salida', accessor: 'id_salida', render: val => `SAL-${String(val).padStart(6,'0')}` },
+                         { header: 'N° Salida', accessor: 'numero_salida', render: val => `SAL-${String(val).padStart(6,'0')}` },
                          { header: 'Fecha', accessor: 'fecha_salida', render: val => formatearFecha(val) },
                          { header: 'Observaciones', accessor: 'observaciones' },
                          { header: 'PDF', accessor: 'id_salida', align:'center', render: (val) => (
@@ -1290,8 +1293,8 @@ function DetalleOrdenVenta() {
                 onChange={(e) => setPagoForm({ ...pagoForm, metodo_pago: e.target.value })}
                 required
               >
-                <option value="Transferencia">Transferencia</option>
                 <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
                 <option value="Cheque">Cheque</option>
                 <option value="Tarjeta">Tarjeta</option>
                 <option value="Deposito">Depósito</option>
@@ -1497,7 +1500,7 @@ function DetalleOrdenVenta() {
                   <tr key={item.id_producto}>
                     <td>
                       <div className="font-medium text-sm">{item.producto}</div>
-                      <div className="text-xs text-muted">{item.codigo}</div>
+                      <div className="text-xs text-muted">{item.codigo_producto}</div>
                     </td>
                     <td className="text-right font-medium">
                       {parseFloat(item.cantidad_pendiente).toFixed(2)}

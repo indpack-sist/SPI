@@ -20,14 +20,14 @@ export async function getResumenStockInventario(_req, res) {
                 AND op.costo_materiales > 0
               ),
               (
-                SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / MAX(rp.rendimiento_unidades)
+                SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
                 FROM recetas_productos rp
                 INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
                 INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
                 WHERE rp.id_producto_terminado = p.id_producto 
                 AND rp.es_principal = 1 
                 AND rp.es_activa = 1
-                GROUP BY rp.id_producto_terminado
+                GROUP BY rp.id_receta_producto
               ),
               p.costo_unitario_promedio,
               0

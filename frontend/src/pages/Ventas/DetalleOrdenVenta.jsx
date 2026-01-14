@@ -48,10 +48,8 @@ function DetalleOrdenVenta() {
     observaciones: ''
   });
 
-  // --- CAMBIO APLICADO AQUÍ ---
-  // Usamos 'es-ES' para forzar el formato: 1.000,00 (Punto miles, Coma decimales)
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('es-ES', { 
+    return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);
@@ -60,7 +58,6 @@ function DetalleOrdenVenta() {
   const formatearMoneda = (valor) => {
     if (!orden && !valor) return '-';
     const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
-    // Se concatena el símbolo con el número ya formateado al estilo europeo
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 

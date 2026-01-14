@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, TrendingUp, Calendar, Filter, Download, 
   ArrowUpCircle, ArrowDownCircle, AlertCircle, LayoutList,
-  FileText, CheckCircle, XCircle, AlertTriangle, FileBadge, Clock
+  FileText, CheckCircle, XCircle, AlertTriangle, FileBadge, Clock,
+  Truck, Package
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -111,6 +112,19 @@ function PagosCobranzas() {
   const formatearMoneda = (valor, moneda = 'PEN') => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+  };
+
+  // Helper para el color y estilo del estado de la orden
+  const getOrderStateConfig = (estado) => {
+    switch (estado) {
+      case 'En Espera': return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock };
+      case 'En Proceso': return { bg: 'bg-blue-100', text: 'text-blue-800', icon: Package };
+      case 'Atendido por Producción': return { bg: 'bg-indigo-100', text: 'text-indigo-800', icon: CheckCircle };
+      case 'Despachada': return { bg: 'bg-purple-100', text: 'text-purple-800', icon: Truck };
+      case 'Entregada': return { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle };
+      case 'Cancelada': return { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle };
+      default: return { bg: 'bg-gray-100', text: 'text-gray-800', icon: FileText };
+    }
   };
 
   const columnsMovimientos = [
@@ -277,12 +291,27 @@ function PagosCobranzas() {
     {
       header: 'Vencimiento',
       accessor: 'fecha_vencimiento',
-      width: '100px',
-      render: (value) => (
-        <div className="font-medium text-gray-700 text-sm">
-          {formatearFecha(value)}
-        </div>
-      )
+      width: '140px', // Aumentado para dar espacio al estado
+      align: 'center',
+      render: (value, row) => {
+        const orderState = getOrderStateConfig(row.estado); // Usamos el helper
+        
+        return (
+          <div 
+            className="flex flex-col items-center cursor-pointer group relative"
+            title={`Estado de la Orden: ${row.estado}`} // Tooltip nativo
+          >
+            <div className="font-medium text-gray-700 text-sm">
+              {formatearFecha(value)}
+            </div>
+            
+            {/* Estado de la Orden Notorio */}
+            <div className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${orderState.bg} ${orderState.text} border-transparent group-hover:border-current transition-all`}>
+              {row.estado}
+            </div>
+          </div>
+        );
+      }
     },
     {
       header: 'Importe Total',

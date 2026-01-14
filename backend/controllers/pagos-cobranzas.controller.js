@@ -198,27 +198,16 @@ export const getCuentasPorCobrar = async (req, res, next) => {
   try {
     const { fecha_inicio, fecha_fin, id_cliente } = req.query;
     
-    // Filtramos órdenes que NO estén canceladas y que tengan deuda
     let whereClause = `
       ov.estado != 'Cancelada' 
       AND (ov.total - COALESCE(ov.monto_pagado, 0)) > 0.1
     `;
     const params = [];
     
-    if (fecha_inicio) {
-      whereClause += ' AND ov.fecha_vencimiento >= ?';
-      params.push(fecha_inicio);
-    }
-    
-    if (fecha_fin) {
-      whereClause += ' AND ov.fecha_vencimiento <= ?';
-      params.push(fecha_fin);
-    }
-
-    if (id_cliente) {
-      whereClause += ' AND ov.id_cliente = ?';
-      params.push(id_cliente);
-    }
+    // ... (lógica de filtros fecha_inicio, fecha_fin, id_cliente igual que antes) ...
+    if (fecha_inicio) { whereClause += ' AND ov.fecha_vencimiento >= ?'; params.push(fecha_inicio); }
+    if (fecha_fin) { whereClause += ' AND ov.fecha_vencimiento <= ?'; params.push(fecha_fin); }
+    if (id_cliente) { whereClause += ' AND ov.id_cliente = ?'; params.push(id_cliente); }
 
     const sql = `
       SELECT 
@@ -229,18 +218,16 @@ export const getCuentasPorCobrar = async (req, res, next) => {
         ov.fecha_emision,
         ov.fecha_vencimiento,
         ov.moneda,
-        ov.tipo_venta,  -- Agregamos este campo
+        ov.tipo_venta,
+        ov.estado,          -- <<<< AGREGAR ESTE CAMPO AQUÍ
         ov.total,
         COALESCE(ov.monto_pagado, 0) as monto_pagado,
         (ov.total - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
         cl.razon_social as cliente,
         cl.ruc,
         DATEDIFF(ov.fecha_vencimiento, CURDATE()) as dias_restantes,
-        -- Lógica de Estado Ajustada
         CASE 
-          -- 1. Si es Contado, el estado es 'Pendiente' (sin análisis de días)
           WHEN ov.tipo_venta = 'Contado' THEN 'Pendiente'
-          -- 2. Si es Crédito, aplicamos lógica de fechas
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 'Vencido'
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 'Proximo a Vencer'
           ELSE 'Al Dia'
@@ -249,9 +236,8 @@ export const getCuentasPorCobrar = async (req, res, next) => {
       INNER JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE ${whereClause}
       ORDER BY 
-        -- Ordenar por urgencia: Vencidos -> Pendientes(Contado) -> Próximos -> Al día
         CASE 
-          WHEN ov.tipo_venta = 'Contado' THEN 1.5 -- Aparece después de vencidos, antes de próximos
+          WHEN ov.tipo_venta = 'Contado' THEN 1.5
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 1
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 2
           ELSE 3
@@ -260,11 +246,7 @@ export const getCuentasPorCobrar = async (req, res, next) => {
     `;
 
     const [rows] = await pool.query(sql, params);
-    
-    res.json({
-      success: true,
-      data: rows
-    });
+    res.json({ success: true, data: rows });
   } catch (error) {
     next(error);
   }

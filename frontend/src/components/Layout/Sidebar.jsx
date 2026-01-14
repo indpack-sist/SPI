@@ -5,17 +5,14 @@ import {
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag,
   CreditCard, Banknote, Search, 
-  Calendar // <--- 1. IMPORTADO EL ÍCONO DE CALENDARIO
+  Calendar, FileInput
 } from 'lucide-react';
-import { usePermisos, ConPermiso } from '../../context/PermisosContext';
+import { usePermisos } from '../../context/PermisosContext';
 import './Sidebar.css';
 
 function Sidebar({ isOpen, onToggle }) {
   const location = useLocation();
-  const { rol, permisos, tienePermiso } = usePermisos();
-
-  console.log('🔐 Sidebar - Rol:', rol);
-  console.log('🔐 Sidebar - Permisos:', permisos);
+  const { rol, tienePermiso } = usePermisos();
 
   const menuItems = [
     {
@@ -44,8 +41,6 @@ function Sidebar({ isOpen, onToggle }) {
       title: 'Producción',
       items: [
         { path: '/produccion/ordenes', icon: Factory, label: 'Órdenes de Producción', modulo: 'ordenesProduccion' },
-        // --- 2. NUEVA RUTA DE CALENDARIO AGREGADA ---
-        // Uso el mismo módulo 'ordenesProduccion' para que quien vea órdenes, pueda ver el calendario
         { path: '/produccion/calendario', icon: Calendar, label: 'Calendario', modulo: 'ordenesProduccion' } 
       ]
     },
@@ -68,7 +63,8 @@ function Sidebar({ isOpen, onToggle }) {
       title: 'Finanzas',
       items: [
         { path: '/finanzas/cuentas-pago', icon: CreditCard, label: 'Cuentas por Pagar', modulo: 'cuentasPago' },
-        { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Pagos y Cobranzas', modulo: 'pagosCobranzas' }
+        { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Pagos y Cobranzas', modulo: 'pagosCobranzas' },
+        { path: '/solicitudes-credito', icon: FileInput, label: 'Solicitudes de Crédito', modulo: 'solicitudesCredito' }
       ]
     },
     {

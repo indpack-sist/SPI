@@ -10,7 +10,7 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { cotizacionesAPI } from '../../config/api';
+import { cotizacionesAPI, clientesAPI } from '../../config/api';
 
 function DetalleCotizacion() {
   const { id } = useParams();
@@ -21,6 +21,7 @@ function DetalleCotizacion() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
+  const [estadoCredito, setEstadoCredito] = useState(null);
 
   useEffect(() => {
     cargarDatos();
@@ -35,6 +36,11 @@ function DetalleCotizacion() {
       
       if (response.data.success) {
         setCotizacion(response.data.data);
+        
+        const creditoRes = await clientesAPI.getEstadoCredito(response.data.data.id_cliente);
+        if (creditoRes.data.success) {
+          setEstadoCredito(creditoRes.data.data);
+        }
       } else {
         setError('Cotización no encontrada');
       }
@@ -305,6 +311,9 @@ function DetalleCotizacion() {
     : null;
   const estaConvertida = cotizacion.convertida_venta || cotizacion.estado === 'Convertida';
 
+  const disponible = estadoCredito ? (cotizacion.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible) : 0;
+  const creditoInsuficiente = estadoCredito?.usar_limite_credito && cotizacion.plazo_pago !== 'Contado' && parseFloat(cotizacion.total) > parseFloat(disponible);
+
   return (
     <div className="p-6">
       <div className="sticky top-0 bg-white z-10 pb-4 mb-6 border-b">
@@ -444,14 +453,15 @@ function DetalleCotizacion() {
 
                 <button
                   className={`btn btn-sm ${
-                    cotizacion.estado === 'Aprobada' 
+                    cotizacion.estado === 'Aprobada' || creditoInsuficiente
                       ? 'btn-success cursor-not-allowed opacity-60' 
                       : 'btn-outline btn-success hover:btn-success'
                   }`}
-                  onClick={() => handleCambiarEstado('Aprobada')}
-                  disabled={cotizacion.estado === 'Aprobada' || loading}
+                  onClick={() => !creditoInsuficiente && handleCambiarEstado('Aprobada')}
+                  disabled={cotizacion.estado === 'Aprobada' || loading || creditoInsuficiente}
+                  title={creditoInsuficiente ? "Crédito insuficiente para aprobar" : ""}
                 >
-                  <CheckCircle size={16} className="mr-1.5" />
+                  {creditoInsuficiente ? <Lock size={16} className="mr-1.5" /> : <CheckCircle size={16} className="mr-1.5" />}
                   Aprobar (→ Nueva OV)
                 </button>
 
@@ -469,10 +479,17 @@ function DetalleCotizacion() {
                 </button>
               </div>
 
-              <div className="mt-3 text-xs text-muted bg-blue-50 border border-blue-200 rounded p-2">
-                <AlertCircle size={12} className="inline mr-1" />
-                <strong>Nota:</strong> Al aprobar, se abrirá el formulario de Nueva Orden de Venta con los datos de esta cotización precargados.
-              </div>
+              {creditoInsuficiente ? (
+                <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 flex items-center gap-2">
+                  <AlertTriangle size={14} />
+                  <strong>Bloqueado:</strong> El total de la cotización excede el crédito disponible del cliente. No se puede aprobar.
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-muted bg-blue-50 border border-blue-200 rounded p-2">
+                  <AlertCircle size={12} className="inline mr-1" />
+                  <strong>Nota:</strong> Al aprobar, se abrirá el formulario de Nueva Orden de Venta con los datos de esta cotización precargados.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -656,7 +673,7 @@ function DetalleCotizacion() {
                 </span>
                 <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
               </div>
-              <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl">
+              <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl shadow-inner">
                 <span className="font-bold text-xl">TOTAL:</span>
                 <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
               </div>
@@ -677,6 +694,33 @@ function DetalleCotizacion() {
                 </div>
               )}
             </div>
+
+            {estadoCredito && estadoCredito.usar_limite_credito && (
+              <div className="mt-6 pt-4 border-t">
+                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                  <CreditCard size={14} /> Saldo de Crédito del Cliente
+                </h4>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_pen.disponible) < parseFloat(cotizacion.total) && cotizacion.moneda === 'PEN' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium text-gray-600">PEN Disponible:</span>
+                      <span className="font-bold text-gray-800">S/ {parseFloat(estadoCredito.credito_pen.disponible).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_usd.disponible) < parseFloat(cotizacion.total) && cotizacion.moneda === 'USD' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium text-gray-600">USD Disponible:</span>
+                      <span className="font-bold text-gray-800">$ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+                {creditoInsuficiente && (
+                  <p className="text-[10px] text-red-600 mt-2 font-bold flex items-center gap-1">
+                    <AlertTriangle size={10} /> No podrá convertirse a OV: saldo insuficiente.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

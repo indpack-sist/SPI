@@ -175,7 +175,7 @@ export async function generarOrdenVentaPDF(orden) {
         const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
         const valorVenta = parseFloat(totalLinea).toFixed(2);
         
-        const descripcion = `[${item.codigo_producto}] ${item.producto}`;
+        const descripcion = item.producto;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
@@ -207,16 +207,11 @@ export async function generarOrdenVentaPDF(orden) {
       });
 
       yPos += 10;
-
-      // -----------------------------------------------------
-      // INICIO CORRECCIÓN: Separar columnas Izquierda y Derecha
-      // -----------------------------------------------------
       
       const yBaseFooter = yPos;
       let yPosLeft = yBaseFooter;
       let yPosRight = yBaseFooter;
 
-      // --- COLUMNA DERECHA: TOTALES ---
       const subtotal = parseFloat(orden.subtotal).toFixed(2);
       const igv = parseFloat(orden.igv).toFixed(2);
       const total = parseFloat(orden.total).toFixed(2);
@@ -225,7 +220,6 @@ export async function generarOrdenVentaPDF(orden) {
       const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
       const etiquetaImpuesto = `${tipoImpuesto} (${porcImpuesto}%)`;
 
-      // Subtotal
       doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
       doc.text('SUB TOTAL', 390, yPosRight + 4);
@@ -236,7 +230,6 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPosRight += 20;
 
-      // Impuesto
       doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
       doc.text(etiquetaImpuesto, 390, yPosRight + 4, { width: 80, align: 'left' });
@@ -247,7 +240,6 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPosRight += 20;
 
-      // Total
       doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
       doc.text('TOTAL', 390, yPosRight + 4);
@@ -258,15 +250,12 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPosRight += 25;
 
-      // Tipo de cambio
       if (orden.tipo_cambio && parseFloat(orden.tipo_cambio) > 1) {
         doc.fontSize(8).font('Helvetica').fillColor('#666666');
         doc.text(`T.C. Ref: ${parseFloat(orden.tipo_cambio).toFixed(3)}`, 475, yPosRight, { align: 'right', width: 80 });
         yPosRight += 15;
       }
 
-      // --- COLUMNA IZQUIERDA: OBSERVACIONES Y VENDEDOR ---
-      // Calculamos dinámicamente para que no pise al vendedor
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('OBSERVACIONES', 40, yPosLeft);
       
@@ -274,14 +263,12 @@ export async function generarOrdenVentaPDF(orden) {
       let alturaObservaciones = 0;
       
       if (orden.observaciones) {
-        // Medir altura real del texto
         alturaObservaciones = calcularAlturaTexto(doc, orden.observaciones, 330, 8);
         doc.text(orden.observaciones, 40, yPosLeft + 15, { width: 330 });
       } else {
-        alturaObservaciones = 10; // Espacio mínimo si está vacío
+        alturaObservaciones = 10;
       }
       
-      // Ajustamos yPosLeft sumando titulo (15) + contenido + margen (10)
       yPosLeft += (15 + alturaObservaciones + 10);
 
       if (orden.comercial) {
@@ -292,8 +279,6 @@ export async function generarOrdenVentaPDF(orden) {
         yPosLeft += 15;
       }
 
-      // --- UNIFICACIÓN ---
-      // El nuevo yPos es el máximo entre la izquierda y la derecha para evitar colisión
       yPos = Math.max(yPosRight, yPosLeft) + 10;
 
       doc.fillColor('#000000');

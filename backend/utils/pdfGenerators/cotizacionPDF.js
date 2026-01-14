@@ -6,7 +6,6 @@ import https from 'https';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Mapeo de etiquetas de impuesto
 const ETIQUETAS_IMPUESTO = {
   'IGV': 'IGV (18%)',
   'EXO': 'EXONERADO (0%)',
@@ -101,7 +100,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica-Bold');
       doc.text('RUC:', 40, 218);
       doc.font('Helvetica');
-      doc.text(cotizacion.ruc_cliente || '', 100, 218);
+      doc.text(cotizacion.ruc_cliente || cotizacion.ruc || '', 100, 218);
       
       doc.font('Helvetica-Bold');
       doc.text('Dirección:', 40, 233);
@@ -229,7 +228,6 @@ export async function generarCotizacionPDF(cotizacion) {
       const igv = parseFloat(cotizacion.igv).toFixed(2);
       const total = parseFloat(cotizacion.total).toFixed(2);
       
-      // FIX: Usar el mapeo de etiquetas y manejar correctamente porcentajes 0
       const tipoImpuesto = cotizacion.tipo_impuesto || 'IGV';
       const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || tipoImpuesto;
 

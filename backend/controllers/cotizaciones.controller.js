@@ -414,15 +414,25 @@ export async function updateCotizacion(req, res) {
     } = req.body;
 
     const cotizacionExistente = await executeQuery(`
-      SELECT id_cotizacion, estado 
-      FROM cotizaciones 
-      WHERE id_cotizacion = ?
+      SELECT c.id_cotizacion, c.estado, c.convertida_venta, cl.usar_limite_credito, cl.limite_credito_pen, cl.limite_credito_usd
+      FROM cotizaciones c
+      INNER JOIN clientes cl ON c.id_cliente = cl.id_cliente
+      WHERE c.id_cotizacion = ?
     `, [id]);
 
     if (!cotizacionExistente.success || cotizacionExistente.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Cotización no encontrada'
+      });
+    }
+
+    const cotActual = cotizacionExistente.data[0];
+
+    if (cotActual.estado === 'Aprobada' || cotActual.estado === 'Convertida' || cotActual.convertida_venta === 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'No se puede editar una cotización que ya ha sido aprobada o convertida'
       });
     }
 
@@ -498,6 +508,24 @@ export async function updateCotizacion(req, res) {
 
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
+
+    if (cotActual.usar_limite_credito === 1 && plazo_pago !== 'Contado') {
+      const deudaRes = await executeQuery(`
+        SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
+        FROM ordenes_venta
+        WHERE id_cliente = ? AND moneda = ? AND estado != 'Cancelada' AND estado_pago != 'Pagado'
+      `, [id_cliente, moneda]);
+
+      const limite = moneda === 'USD' ? cotActual.limite_credito_usd : cotActual.limite_credito_pen;
+      const deudaActual = parseFloat(deudaRes.data[0].deuda_actual);
+
+      if ((deudaActual + total) > parseFloat(limite)) {
+        return res.status(400).json({
+          success: false,
+          error: `Límite de crédito excedido. Disponible: ${moneda} ${(limite - deudaActual).toFixed(2)}`
+        });
+      }
+    }
 
     const updateResult = await executeQuery(`
       UPDATE cotizaciones 

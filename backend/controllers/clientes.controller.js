@@ -83,9 +83,6 @@ export async function getClienteByRuc(req, res) {
   }
 }
 
-// ============================================
-// NUEVA FUNCIÓN: Validar RUC
-// ============================================
 export async function validarRUCCliente(req, res) {
   try {
     const { ruc } = req.params;
@@ -122,9 +119,6 @@ export async function validarRUCCliente(req, res) {
   }
 }
 
-// ============================================
-// NUEVA FUNCIÓN: Validar DNI
-// ============================================
 export async function validarDNICliente(req, res) {
   try {
     const { dni } = req.params;
@@ -151,7 +145,6 @@ export async function validarDNICliente(req, res) {
       tipo_documento: 'DNI',
       datos: {
         ...resultadoValidacion.datos,
-        // Mapear nombre completo a razón social para personas naturales
         razon_social: resultadoValidacion.datos.nombre_completo
       },
       ya_registrado: yaRegistrado,
@@ -169,7 +162,7 @@ export async function createCliente(req, res) {
   try {
     const {
       ruc,
-      tipo_documento, // NUEVO: 'RUC' o 'DNI'
+      tipo_documento,
       razon_social,
       contacto,
       telefono,
@@ -177,7 +170,8 @@ export async function createCliente(req, res) {
       direccion_despacho,
       limite_credito_pen,
       limite_credito_usd,
-      validar_documento, // NUEVO: reemplaza validar_ruc
+      usar_limite_credito,
+      validar_documento,
       estado
     } = req.body;
     
@@ -187,12 +181,8 @@ export async function createCliente(req, res) {
       });
     }
     
-    // ============================================
-    // VALIDACIÓN SEGÚN TIPO DE DOCUMENTO
-    // ============================================
     if (validar_documento) {
       if (tipo_documento === 'DNI') {
-        // Validar DNI (8 dígitos)
         const resultadoValidacion = await validarDNI(ruc);
         
         if (!resultadoValidacion.valido) {
@@ -208,7 +198,6 @@ export async function createCliente(req, res) {
           console.warn(`Advertencia: Nombre ingresado (${nombreIngresado}) no coincide con RENIEC (${nombreRENIEC})`);
         }
       } else {
-        // Validar RUC (11 dígitos)
         const resultadoValidacion = await validarRUC(ruc);
         
         if (!resultadoValidacion.valido) {
@@ -230,7 +219,6 @@ export async function createCliente(req, res) {
       }
     }
 
-    // Verificar duplicados
     const checkRUC = await executeQuery(
       'SELECT * FROM clientes WHERE ruc = ?',
       [ruc]
@@ -242,7 +230,6 @@ export async function createCliente(req, res) {
       });
     }
 
-    // Insertar cliente
     const result = await executeQuery(
       `INSERT INTO clientes (
         ruc, 
@@ -254,11 +241,12 @@ export async function createCliente(req, res) {
         direccion_despacho,
         limite_credito_pen, 
         limite_credito_usd, 
+        usar_limite_credito,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ruc,
-        tipo_documento || 'RUC', // NUEVO
+        tipo_documento || 'RUC',
         razon_social,
         contacto || null,
         telefono || null,
@@ -266,6 +254,7 @@ export async function createCliente(req, res) {
         direccion_despacho || null,
         parseFloat(limite_credito_pen || 0),
         parseFloat(limite_credito_usd || 0),
+        usar_limite_credito ? 1 : 0,
         estado || 'Activo'
       ]
     );
@@ -294,7 +283,7 @@ export async function updateCliente(req, res) {
     const { id } = req.params;
     const {
       ruc,
-      tipo_documento, // NUEVO
+      tipo_documento,
       razon_social,
       contacto,
       telefono,
@@ -302,6 +291,7 @@ export async function updateCliente(req, res) {
       direccion_despacho,
       limite_credito_pen,
       limite_credito_usd,
+      usar_limite_credito,
       estado
     } = req.body;
     
@@ -338,11 +328,12 @@ export async function updateCliente(req, res) {
         direccion_despacho = ?,
         limite_credito_pen = ?,
         limite_credito_usd = ?,
+        usar_limite_credito = ?,
         estado = ?
       WHERE id_cliente = ?`,
       [
         ruc,
-        tipo_documento || 'RUC', // NUEVO
+        tipo_documento || 'RUC',
         razon_social, 
         contacto, 
         telefono, 
@@ -350,6 +341,7 @@ export async function updateCliente(req, res) {
         direccion_despacho,
         parseFloat(limite_credito_pen || 0),
         parseFloat(limite_credito_usd || 0),
+        usar_limite_credito ? 1 : 0,
         estado, 
         id
       ]
@@ -544,6 +536,7 @@ export async function getEstadoCreditoCliente(req, res) {
         tipo_documento,
         limite_credito_pen,
         limite_credito_usd,
+        usar_limite_credito,
         credito_utilizado_pen,
         credito_utilizado_usd
       FROM clientes 
@@ -593,6 +586,7 @@ export async function getEstadoCreditoCliente(req, res) {
         razon_social: cliente.razon_social,
         ruc: cliente.ruc,
         tipo_documento: cliente.tipo_documento,
+        usar_limite_credito: cliente.usar_limite_credito === 1,
         credito_pen: {
           limite: limitePen,
           utilizado: deudaPen,

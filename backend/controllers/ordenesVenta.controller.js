@@ -853,10 +853,11 @@ export async function registrarDespacho(req, res) {
 
     const queries = [];
 
+    // CAMBIO IMPORTANTE: Usamos fecha_creacion en lugar de fecha_salida
     queries.push({
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, 
-        total_precio, moneda, id_registrado_por, observaciones, estado, fecha_salida
+        total_precio, moneda, id_registrado_por, observaciones, estado, fecha_creacion
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
         3, 
@@ -1549,11 +1550,11 @@ export async function getResumenPagosOrden(req, res) {
     });
   }
 }
+
 export async function getSalidasOrden(req, res) {
   try {
     const { id } = req.params;
     
-    // 1. Obtener el número de orden real
     const ordenRes = await executeQuery('SELECT numero_orden FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
     
     if (ordenRes.data.length === 0) {
@@ -1562,17 +1563,16 @@ export async function getSalidasOrden(req, res) {
     
     const numeroOrden = ordenRes.data[0].numero_orden;
     
-    // 2. Buscar salidas relacionadas por la observación automática generada en el despacho
     const sql = `
       SELECT 
         s.id_salida, 
-        s.numero_salida, 
-        s.fecha_salida, 
+        s.id_salida as numero_salida, 
+        s.fecha_creacion as fecha_salida, 
         s.observaciones
       FROM salidas s
       WHERE s.observaciones LIKE ? 
       AND s.estado = 'Activo'
-      ORDER BY s.fecha_salida DESC
+      ORDER BY s.fecha_creacion DESC
     `;
     
     const result = await executeQuery(sql, [`%${numeroOrden}%`]);

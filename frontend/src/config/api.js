@@ -611,38 +611,41 @@ export const guiasTransportistaAPI = {
 };
 
 export const ordenesCompraAPI = {
+  // Listado y filtros
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
     if (filtros.estado) params.append('estado', filtros.estado);
     if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
+    if (filtros.tipo_pago) params.append('tipo_pago', filtros.tipo_pago);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+    if (filtros.alertas) params.append('alertas', filtros.alertas);
     
     return api.get(`/ordenes-compra?${params.toString()}`);
   },
 
+  // CRUD básico
   getById: (id) => api.get(`/ordenes-compra/${id}`),
-
   create: (data) => api.post('/ordenes-compra', data),
-
   update: (id, data) => api.put(`/ordenes-compra/${id}`, data),
+  cancelar: (id, motivo_cancelacion) => 
+    api.post(`/ordenes-compra/${id}/cancelar`, { motivo_cancelacion }),
 
-  actualizarEstado: (id, estado, fecha_entrega_real = null) => 
-    api.put(`/ordenes-compra/${id}/estado`, { estado, fecha_entrega_real }),
-
-  actualizarPrioridad: (id, prioridad) => 
-    api.put(`/ordenes-compra/${id}/prioridad`, { prioridad }),
-
-  getPagos: (id) => api.get(`/ordenes-compra/${id}/pagos`),
-
-  registrarPago: (id, data) => api.post(`/ordenes-compra/${id}/pagos`, data),
-
-  getResumenPagos: (id) => api.get(`/ordenes-compra/${id}/pagos/resumen`),
-
-  anularPago: (id, idPago) => api.delete(`/ordenes-compra/${id}/pagos/${idPago}`),
-
+  // Estadísticas y alertas
   getEstadisticas: () => api.get('/ordenes-compra/estadisticas'),
+  getAlertas: () => api.get('/ordenes-compra/alertas'),
 
+  // Gestión de pagos y resumen
+  getResumenPagos: (id) => api.get(`/ordenes-compra/${id}/pagos/resumen`),
+  getHistorialPagos: (id) => api.get(`/ordenes-compra/${id}/pagos/historial`),
+
+  // Gestión de cuotas
+  getCuotas: (id, params) => api.get(`/ordenes-compra/${id}/cuotas`, { params }),
+  getCuotaById: (id, idCuota) => api.get(`/ordenes-compra/${id}/cuotas/${idCuota}`),
+  pagarCuota: (id, idCuota, data) => 
+    api.post(`/ordenes-compra/${id}/cuotas/${idCuota}/pagar`, data),
+
+  // Descargar PDF
   descargarPDF: async (id) => {
     const response = await fetch(`${API_URL}/ordenes-compra/${id}/pdf`, {
       method: 'GET',
@@ -670,11 +673,22 @@ export const ordenesCompraAPI = {
 };
 
 export const cuentasPagoAPI = {
+  // Gestión de cuentas
   getAll: (params) => api.get('/cuentas-pago', { params }),
   getById: (id) => api.get(`/cuentas-pago/${id}`),
   create: (data) => api.post('/cuentas-pago', data),
   update: (id, data) => api.put(`/cuentas-pago/${id}`, data),
-  delete: (id) => api.delete(`/cuentas-pago/${id}`)
+  delete: (id) => api.delete(`/cuentas-pago/${id}`),
+  
+  // Resumen de cuenta
+  getResumen: (id) => api.get(`/cuentas-pago/${id}/resumen`),
+  
+  // Movimientos
+  registrarMovimiento: (id, data) => api.post(`/cuentas-pago/${id}/movimientos`, data),
+  getMovimientos: (id, params) => api.get(`/cuentas-pago/${id}/movimientos`, { params }),
+  
+  // Transferencias entre cuentas
+  transferir: (data) => api.post('/cuentas-pago/transferencias', data)
 };
 
 export const pagosCobranzasAPI = {

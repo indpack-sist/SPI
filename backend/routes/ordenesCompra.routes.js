@@ -4,34 +4,42 @@ import {
   getOrdenCompraById,
   createOrdenCompra,
   updateOrdenCompra,
-  actualizarEstadoOrdenCompra,
-  actualizarPrioridadOrdenCompra,
-  getEstadisticasOrdenesCompra,
+  cancelarOrdenCompra,
   descargarPDFOrdenCompra,
-  registrarPagoOrdenCompra,
-  getPagosOrdenCompra,
-  anularPagoOrdenCompra,
-  getResumenPagosOrdenCompra
+  getCuotasOrdenCompra,
+  getCuotaById,
+  pagarCuota,
+  getResumenPagosOrden,
+  getHistorialPagosOrden,
+  getAlertasCompras,
+  getEstadisticasOrdenesCompra
 } from '../controllers/ordenesCompra.controller.js';
 
 const router = express.Router();
 
+// Rutas de estadísticas y alertas (deben ir primero)
 router.get('/estadisticas', getEstadisticasOrdenesCompra);
+router.get('/alertas', getAlertasCompras);
 
+// Rutas generales
 router.get('/', getAllOrdenesCompra);
 router.post('/', createOrdenCompra);
 
+// Rutas específicas por ID
 router.get('/:id', getOrdenCompraById);
 router.put('/:id', updateOrdenCompra);
+router.post('/:id/cancelar', cancelarOrdenCompra);
 
-router.put('/:id/estado', actualizarEstadoOrdenCompra);
-router.put('/:id/prioridad', actualizarPrioridadOrdenCompra);
-
+// PDF
 router.get('/:id/pdf', descargarPDFOrdenCompra);
 
-router.get('/:id/pagos', getPagosOrdenCompra);
-router.post('/:id/pagos', registrarPagoOrdenCompra);
-router.get('/:id/pagos/resumen', getResumenPagosOrdenCompra);
-router.delete('/:id/pagos/:idPago', anularPagoOrdenCompra);
+// Gestión de pagos y resumen
+router.get('/:id/pagos/resumen', getResumenPagosOrden);
+router.get('/:id/pagos/historial', getHistorialPagosOrden);
+
+// Gestión de cuotas
+router.get('/:id/cuotas', getCuotasOrdenCompra);
+router.get('/:id/cuotas/:idCuota', getCuotaById);
+router.post('/:id/cuotas/:idCuota/pagar', pagarCuota);
 
 export default router;

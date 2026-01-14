@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PermisosProvider } from './context/PermisosContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -7,7 +7,7 @@ import { RedirectToFirstAvailable } from './components/RedirectToFirstAvailable'
 import Login from './pages/Auth/Login';
 import Layout from './components/Layout/Layout';
 
-import Dashboard from "./pages/Dashboard/Dashboard";
+import Dashboard from './pages/Dashboard/Dashboard';
 
 import Empleados from './pages/Empleados/Empleados';
 import Flota from './pages/Flota/Flota';
@@ -46,6 +46,7 @@ import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
 import OrdenesCompra from './pages/Compras/OrdenesCompra';
 import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
 import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
+
 import CuentasPago from './pages/Finanzas/CuentasPago';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
 
@@ -375,7 +376,8 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
-                        <Route 
+
+                      <Route 
                         path="/finanzas/cuentas-pago" 
                         element={
                           <ProtectedRouteWithPermiso modulo="cuentasPago">
@@ -392,6 +394,7 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
+
                       <Route path="*" element={<RedirectToFirstAvailable />} />
                     </Routes>
                   </Layout>

@@ -61,7 +61,8 @@ app.get('/', (req, res) => {
       produccion: ['ordenes'],
       ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista'],
       compras: ['ordenes-compra'],
-      analytics: ['dashboard']
+      analytics: ['dashboard'],
+      finanzas: ['cuentas-pago', 'pagos-cobranzas']
     }
   });
 });
@@ -101,8 +102,10 @@ app.use('/api/guias-transportista', verificarToken, verificarPermiso('guiasTrans
 app.use('/api/ordenes-compra', verificarToken, verificarPermiso('ordenesCompra'), ordenesCompraRoutes);
 
 app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboardRoutes);
-app.use('/api/cuentas-pago', verificarToken, cuentasPagoRoutes);
-app.use('/api/pagos-cobranzas', verificarToken, pagosCobranzasRoutes);
+
+// SECCIÓN FINANZAS ACTUALIZADA CON SEGURIDAD
+app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cuentasPagoRoutes);
+app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -226,8 +229,8 @@ async function startServer() {
       console.log('   - /api/dashboard [dashboard]');
       console.log('');
       console.log('FINANZAS:');
-      console.log('   - /api/cuentas-pago');
-      console.log('   - /api/pagos-cobranzas');
+      console.log('   - /api/cuentas-pago [cuentasPago]');
+      console.log('   - /api/pagos-cobranzas [pagosCobranzas]');
       console.log('');
       console.log('='.repeat(80));
       console.log('SISTEMA LISTO PARA RECIBIR PETICIONES');

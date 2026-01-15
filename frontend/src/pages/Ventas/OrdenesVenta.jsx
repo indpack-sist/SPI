@@ -206,25 +206,30 @@ function OrdenesVenta() {
       header: 'Comprobante / Orden',
       accessor: 'numero_orden',
       width: '180px',
-      render: (value, row) => (
-        <div>
-          <div className="flex items-center gap-1 mb-1">
-            <span className={`badge badge-xs ${row.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
-              {row.tipo_comprobante === 'Factura' ? 'Factura' : 'Nota de Venta'}
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <div className="text-xs text-muted">
-              Ord: <span className="font-mono text-gray-700">{value}</span>
+      render: (value, row) => {
+        const tipoComprobante = row.tipo_comprobante || 'Factura'; // Default a Factura si no existe
+        const esFactura = tipoComprobante === 'Factura';
+        
+        return (
+          <div>
+            <div className="flex items-center gap-1 mb-1">
+              <span className={`badge badge-xs ${esFactura ? 'badge-success' : 'badge-info'}`}>
+                {esFactura ? 'Factura' : 'Nota de Venta'}
+              </span>
             </div>
-            {row.numero_cotizacion && (
-              <div className="text-[10px] text-muted">
-                Ref: {row.numero_cotizacion}
+            <div className="flex flex-col gap-0.5">
+              <div className="text-xs text-muted">
+                Ord: <span className="font-mono text-gray-700">{value}</span>
               </div>
-            )}
+              {row.numero_cotizacion && (
+                <div className="text-[10px] text-muted">
+                  Ref: {row.numero_cotizacion}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )
+        );
+      }
     },
     {
       header: 'Fecha',

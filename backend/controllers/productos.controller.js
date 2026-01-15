@@ -95,14 +95,12 @@ export async function getAllProductosConCosto(req, res) {
   try {
     const { estado, id_tipo_inventario } = req.query;
     
-    // CORRECCIÓN: Se eliminó el GROUP BY interno problemático y se usan funciones de agregación
     let sql = `
       SELECT 
         p.*,
         ti.nombre AS tipo_inventario,
         c.nombre AS categoria,
         COALESCE(
-          /* PRIORIDAD 1: Promedio Ponderado de Producciones Reales */
           (
             SELECT SUM(op.costo_materiales) / SUM(op.cantidad_producida)
             FROM ordenes_produccion op
@@ -111,19 +109,17 @@ export async function getAllProductosConCosto(req, res) {
             AND op.cantidad_producida > 0 
             AND op.costo_materiales > 0
           ),
-          /* PRIORIDAD 2: Costo Teórico de Receta Principal Activa */
-          /* AQUÍ ESTABA EL ERROR: Agregamos MAX() a rendimiento_unidades */
           (
             SELECT 
-              SUM(rd.cantidad_requerida * i.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
+              SUM(rd.cantidad_requerida * i.costo_unitario_promedio) / MAX(rp.rendimiento_unidades)
             FROM recetas_productos rp
             INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
             INNER JOIN productos i ON rd.id_insumo = i.id_producto
             WHERE rp.id_producto_terminado = p.id_producto 
             AND rp.es_principal = 1 
             AND rp.es_activa = 1
+            GROUP BY rp.id_receta_producto
           ),
-          /* PRIORIDAD 3: Costo manual de la tabla */
           p.costo_unitario_promedio,
           0
         ) AS costo_produccion_calculado

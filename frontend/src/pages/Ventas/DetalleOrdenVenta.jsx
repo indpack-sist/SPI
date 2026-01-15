@@ -420,28 +420,25 @@ function DetalleOrdenVenta() {
       setProcesando(true);
       setError(null);
       
-      // 1. Obtenemos la respuesta completa (headers + data)
+      // 1. Llamada a la API (ahora devuelve el blob directo gracias a api.js)
       const response = await ordenesVentaAPI.descargarPDF(id, tipoDocumento);
       
-      // 2. Crear un Blob con los datos binarios
-      // IMPORTANTE: Asegúrate de que tu API devuelve response.data como Blob
+      // 2. Crear Blob y URL temporal
       const blob = new Blob([response.data], { type: 'application/pdf' });
-      
-      // 3. Crear una URL temporal para el blob
       const url = window.URL.createObjectURL(blob);
       
-      // 4. Crear un elemento <a> invisible
+      // 3. Crear elemento enlace invisible
       const link = document.createElement('a');
       link.href = url;
       
-      // 5. Definir nombre del archivo
+      // 4. Definir nombre del archivo según el tipo
       const nombreArchivo = tipoDocumento === 'comprobante' 
-        ? `${orden.tipo_comprobante || 'Documento'}-${orden.numero_comprobante || orden.numero_orden}.pdf` 
+        ? `${orden.tipo_comprobante || 'Doc'}-${orden.numero_comprobante || orden.numero_orden}.pdf` 
         : `OrdenVenta-${orden.numero_orden}.pdf`;
         
       link.setAttribute('download', nombreArchivo);
       
-      // 6. Añadir al DOM, hacer click y remover
+      // 5. Simular clic y limpiar
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
@@ -466,13 +463,16 @@ function DetalleOrdenVenta() {
         return;
       }
       
+      // Asegúrate que salidasAPI.generarPDF también tenga responseType: 'blob' en api.js
       const response = await salidasAPI.generarPDF(orden.id_salida);
       
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
+      
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `Salida-${orden.id_salida}.pdf`);
+      
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
@@ -490,10 +490,31 @@ function DetalleOrdenVenta() {
 
   const handleDescargarSalidaEspecificaPDF = async (idSalida) => {
     try {
-      setDescargandoPDF(idSalida);
-      await ordenesVentaAPI.descargarPDFDespacho(id, idSalida);
+      setDescargandoPDF(idSalida); // Activa el spinner específico de esa fila
+      
+      // 1. Obtener datos
+      const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida);
+      
+      // 2. Crear Blob (ESTO FALTABA EN TU CÓDIGO ANTERIOR)
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // 3. Crear enlace
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // 4. Nombre descriptivo: Guia-Orden-IdSalida.pdf
+      link.setAttribute('download', `GuiaRemision-${orden.numero_orden}-${idSalida}.pdf`);
+      
+      // 5. Descargar
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
       setSuccess('Guía de Salida descargada');
     } catch (err) {
+      console.error(err);
       setError('Error al descargar la guía de salida');
     } finally {
       setDescargandoPDF(null);

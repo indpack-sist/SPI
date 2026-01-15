@@ -113,14 +113,36 @@ function OrdenesVenta() {
       setDescargandoPDF(idOrden);
       setError(null);
       
-      await ordenesVentaAPI.descargarPDF(idOrden);
+      // 1. Obtener la respuesta (que contiene el blob)
+      const response = await ordenesVentaAPI.descargarPDF(idOrden);
+      
+      // 2. Crear el archivo en memoria
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // 3. Crear el enlace invisible
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // 4. Usar el numeroOrden para el nombre del archivo
+      // Si numeroOrden viene null, usamos el ID como respaldo
+      const nombreArchivo = `OrdenVenta-${numeroOrden || idOrden}.pdf`;
+      link.setAttribute('download', nombreArchivo);
+      
+      // 5. Forzar la descarga
+      document.body.appendChild(link);
+      link.click();
+      
+      // 6. Limpiar memoria
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
       setSuccess('PDF descargado exitosamente');
       setTimeout(() => setSuccess(null), 3000);
       
     } catch (err) {
       console.error('Error al descargar PDF:', err);
-      setError(err.message || 'Error al descargar PDF');
+      setError('Error al descargar el PDF. Intente nuevamente.');
     } finally {
       setDescargandoPDF(null);
     }

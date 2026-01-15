@@ -120,40 +120,14 @@ function Cotizaciones() {
   };
 
   const handleDescargarPDF = async (id) => {
-  try {
-    // 1. Llamamos a la API asegurándonos de recibir la respuesta completa (incluyendo headers)
-    const response = await cotizacionesAPI.descargarPDF(id);
-
-    // 2. Extraer el nombre del archivo desde el header 'content-disposition'
-    const contentDisposition = response.headers['content-disposition'];
-    let nombreArchivo = `cotizacion-${id}.pdf`; // Nombre por defecto por si falla algo
-
-    if (contentDisposition) {
-      // Busca el valor dentro de filename="..."
-      const match = contentDisposition.match(/filename="(.+)"/);
-      if (match && match[1]) {
-        nombreArchivo = match[1];
-      }
+    try {
+      await cotizacionesAPI.descargarPDF(id);
+    } catch (err) {
+      console.error(err);
+      setError('Error al descargar el PDF');
     }
+  };
 
-    // 3. Crear un link temporal para forzar la descarga
-    // Asumiendo que response.data es el Blob (si usas axios con responseType: 'blob')
-    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', nombreArchivo); // <--- AQUÍ se asigna el nombre dinámico
-    document.body.appendChild(link);
-    link.click();
-
-    // 4. Limpieza
-    link.parentNode.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-  } catch (err) {
-    console.error('Error al descargar el PDF:', err);
-    setError('Error al descargar el PDF');
-  }
-};
   const handleDuplicar = async (id, e) => {
     e.stopPropagation();
     

@@ -43,9 +43,9 @@ import GuiasTransportista from './pages/Ventas/GuiasTransportista';
 import NuevaGuiaTransportista from './pages/Ventas/NuevaGuiaTransportista';
 import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
 
-import OrdenesCompra from './pages/Compras/OrdenesCompra';
-import NuevaOrdenCompra from './pages/Compras/NuevaOrdenCompra';
-import DetalleOrdenCompra from './pages/Compras/DetalleOrdenCompra';
+import Compras from './pages/Compras/Compras';
+import NuevaCompra from './pages/Compras/NuevaCompra';
+import DetalleCompra from './pages/Compras/DetalleCompra';
 
 import CuentasPago from './pages/Finanzas/CuentasPago';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
@@ -345,34 +345,34 @@ function App() {
                       />
                       
                       <Route 
-                        path="/compras/ordenes" 
+                        path="/compras" 
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesCompra">
-                            <OrdenesCompra />
+                          <ProtectedRouteWithPermiso modulo="compras">
+                            <Compras />
                           </ProtectedRouteWithPermiso>
                         } 
                       />
                       <Route 
-                        path="/compras/ordenes/nueva" 
+                        path="/compras/nueva" 
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesCompra">
-                            <NuevaOrdenCompra />
+                          <ProtectedRouteWithPermiso modulo="compras">
+                            <NuevaCompra />
                           </ProtectedRouteWithPermiso>
                         } 
                       />
                       <Route 
-                        path="/compras/ordenes/:id/editar" 
+                        path="/compras/:id/editar" 
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesCompra">
-                            <NuevaOrdenCompra />
+                          <ProtectedRouteWithPermiso modulo="compras">
+                            <NuevaCompra />
                           </ProtectedRouteWithPermiso>
                         } 
                       />
                       <Route 
-                        path="/compras/ordenes/:id" 
+                        path="/compras/:id" 
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesCompra">
-                            <DetalleOrdenCompra />
+                          <ProtectedRouteWithPermiso modulo="compras">
+                            <DetalleCompra />
                           </ProtectedRouteWithPermiso>
                         } 
                       />

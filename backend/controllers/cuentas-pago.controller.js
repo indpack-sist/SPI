@@ -11,7 +11,9 @@ export const getAllCuentasPago = async (req, res) => {
         cp.*,
         (SELECT COUNT(*) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta) as total_movimientos,
         (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Ingreso') as total_ingresos,
-        (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_egresos
+        (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_egresos,
+        (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta) as total_compras,
+        (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta AND estado_pago != 'Pagado') as compras_pendientes
       FROM cuentas_pago cp
       WHERE 1=1
     `;
@@ -45,13 +47,14 @@ export const getAllCuentasPago = async (req, res) => {
     
     res.json({
       success: true,
-      data: result.data
+      data: result.data,
+      total: result.data.length
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -63,7 +66,8 @@ export const getCuentaPagoById = async (req, res) => {
     const result = await executeQuery(`
       SELECT 
         cp.*,
-        (SELECT COUNT(*) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta) as total_movimientos
+        (SELECT COUNT(*) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta) as total_movimientos,
+        (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta) as total_compras
       FROM cuentas_pago cp
       WHERE cp.id_cuenta = ?
     `, [id]);
@@ -90,7 +94,7 @@ export const getCuentaPagoById = async (req, res) => {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -115,19 +119,19 @@ export const createCuentaPago = async (req, res) => {
       });
     }
     
-    const tiposValidos = ['Banco', 'Efectivo', 'Billetera Digital', 'Cuenta Personal'];
+    const tiposValidos = ['Banco', 'Caja', 'Tarjeta'];
     if (!tiposValidos.includes(tipo)) {
       return res.status(400).json({
         success: false,
-        error: 'Tipo de cuenta no válido'
+        error: 'Tipo de cuenta no válido. Debe ser: Banco, Caja o Tarjeta'
       });
     }
     
-    const monedasValidas = ['PEN', 'USD', 'EUR'];
+    const monedasValidas = ['PEN', 'USD'];
     if (!monedasValidas.includes(moneda)) {
       return res.status(400).json({
         success: false,
-        error: 'Moneda no válida'
+        error: 'Moneda no válida. Debe ser: PEN o USD'
       });
     }
     
@@ -141,21 +145,15 @@ export const createCuentaPago = async (req, res) => {
         banco,
         moneda,
         saldo_actual,
-        saldo_inicial,
-        descripcion,
-        titular,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Activo')
+      ) VALUES (?, ?, ?, ?, ?, ?, 'Activo')
     `, [
       nombre,
       tipo,
       numero_cuenta || null,
       banco || null,
       moneda,
-      saldoInicial,
-      saldoInicial,
-      descripcion || null,
-      titular || null
+      saldoInicial
     ]);
     
     if (!result.success) {
@@ -191,7 +189,7 @@ export const createCuentaPago = async (req, res) => {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -236,8 +234,6 @@ export const updateCuentaPago = async (req, res) => {
           numero_cuenta = ?,
           banco = ?,
           moneda = ?,
-          descripcion = ?,
-          titular = ?,
           estado = ?
       WHERE id_cuenta = ?
     `, [
@@ -246,8 +242,6 @@ export const updateCuentaPago = async (req, res) => {
       numero_cuenta || null,
       banco || null,
       moneda,
-      descripcion || null,
-      titular || null,
       estado || 'Activo',
       id
     ]);
@@ -267,7 +261,7 @@ export const updateCuentaPago = async (req, res) => {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -324,7 +318,7 @@ export const deleteCuentaPago = async (req, res) => {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -352,7 +346,7 @@ export const registrarMovimiento = async (req, res) => {
       });
     }
     
-    const tiposValidos = ['Ingreso', 'Egreso', 'Transferencia'];
+    const tiposValidos = ['Ingreso', 'Egreso'];
     if (!tiposValidos.includes(tipo_movimiento)) {
       return res.status(400).json({
         success: false,
@@ -448,7 +442,7 @@ export const registrarMovimiento = async (req, res) => {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -456,7 +450,7 @@ export const registrarMovimiento = async (req, res) => {
 export const getMovimientosCuenta = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fecha_inicio, fecha_fin, tipo_movimiento } = req.query;
+    const { fecha_inicio, fecha_fin, tipo_movimiento, mes, anio } = req.query;
     
     let sql = `
       SELECT 
@@ -482,6 +476,14 @@ export const getMovimientosCuenta = async (req, res) => {
       params.push(fecha_fin);
     }
     
+    if (mes && anio) {
+      sql += ' AND MONTH(mc.fecha_movimiento) = ? AND YEAR(mc.fecha_movimiento) = ?';
+      params.push(mes, anio);
+    } else if (anio) {
+      sql += ' AND YEAR(mc.fecha_movimiento) = ?';
+      params.push(anio);
+    }
+    
     if (tipo_movimiento) {
       sql += ' AND mc.tipo_movimiento = ?';
       params.push(tipo_movimiento);
@@ -500,13 +502,14 @@ export const getMovimientosCuenta = async (req, res) => {
     
     res.json({
       success: true,
-      data: result.data
+      data: result.data,
+      total: result.data.length
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -514,6 +517,7 @@ export const getMovimientosCuenta = async (req, res) => {
 export const getResumenCuenta = async (req, res) => {
   try {
     const { id } = req.params;
+    const { mes, anio } = req.query;
     
     const cuentaResult = await executeQuery(`
       SELECT * FROM cuentas_pago WHERE id_cuenta = ?
@@ -533,16 +537,28 @@ export const getResumenCuenta = async (req, res) => {
       });
     }
     
+    let whereClause = 'WHERE id_cuenta = ?';
+    const params = [id];
+    
+    if (mes && anio) {
+      whereClause += ' AND MONTH(fecha_movimiento) = ? AND YEAR(fecha_movimiento) = ?';
+      params.push(mes, anio);
+    } else if (anio) {
+      whereClause += ' AND YEAR(fecha_movimiento) = ?';
+      params.push(anio);
+    }
+    
     const movimientosResult = await executeQuery(`
       SELECT 
         COUNT(*) as total_movimientos,
         SUM(CASE WHEN tipo_movimiento = 'Ingreso' THEN monto ELSE 0 END) as total_ingresos,
         SUM(CASE WHEN tipo_movimiento = 'Egreso' THEN monto ELSE 0 END) as total_egresos,
         SUM(CASE WHEN tipo_movimiento = 'Ingreso' THEN 1 ELSE 0 END) as cantidad_ingresos,
-        SUM(CASE WHEN tipo_movimiento = 'Egreso' THEN 1 ELSE 0 END) as cantidad_egresos
+        SUM(CASE WHEN tipo_movimiento = 'Egreso' THEN 1 ELSE 0 END) as cantidad_egresos,
+        MAX(fecha_movimiento) as ultimo_movimiento
       FROM movimientos_cuentas
-      WHERE id_cuenta = ?
-    `, [id]);
+      ${whereClause}
+    `, params);
     
     if (!movimientosResult.success) {
       return res.status(500).json({
@@ -551,18 +567,29 @@ export const getResumenCuenta = async (req, res) => {
       });
     }
     
+    // Obtener compras asociadas
+    const comprasResult = await executeQuery(`
+      SELECT 
+        COUNT(*) as total_compras,
+        SUM(total) as monto_total_compras,
+        COUNT(CASE WHEN estado_pago != 'Pagado' THEN 1 END) as compras_pendientes
+      FROM ordenes_compra
+      WHERE id_cuenta_pago = ?
+    `, [id]);
+    
     res.json({
       success: true,
       data: {
         cuenta: cuentaResult.data[0],
-        resumen: movimientosResult.data[0]
+        resumen_movimientos: movimientosResult.data[0],
+        resumen_compras: comprasResult.data[0]
       }
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
     });
   }
 };
@@ -682,6 +709,8 @@ export const transferirEntreCuentas = async (req, res) => {
       
       return {
         id_movimiento_egreso: resultEgreso.insertId,
+        cuenta_origen: cuentaOrigen[0].nombre,
+        cuenta_destino: cuentaDestino[0].nombre,
         saldo_origen_anterior: saldoOrigenAnterior,
         saldo_origen_nuevo: saldoOrigenNuevo,
         saldo_destino_anterior: saldoDestinoAnterior,
@@ -707,7 +736,60 @@ export const transferirEntreCuentas = async (req, res) => {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: error
+      error: error.message
+    });
+  }
+};
+
+// ==================== ESTADÍSTICAS ====================
+
+export const getEstadisticasCuentas = async (req, res) => {
+  try {
+    const { mes, anio } = req.query;
+    
+    let whereClause = '';
+    const params = [];
+    
+    if (mes && anio) {
+      whereClause = ' AND MONTH(mc.fecha_movimiento) = ? AND YEAR(mc.fecha_movimiento) = ?';
+      params.push(mes, anio);
+    } else if (anio) {
+      whereClause = ' AND YEAR(mc.fecha_movimiento) = ?';
+      params.push(anio);
+    }
+    
+    const result = await executeQuery(`
+      SELECT 
+        cp.tipo AS tipo_cuenta,
+        cp.moneda,
+        COUNT(DISTINCT cp.id_cuenta) AS total_cuentas,
+        SUM(cp.saldo_actual) AS saldo_total,
+        COUNT(mc.id_movimiento) AS total_movimientos,
+        SUM(CASE WHEN mc.tipo_movimiento = 'Ingreso' THEN mc.monto ELSE 0 END) AS total_ingresos,
+        SUM(CASE WHEN mc.tipo_movimiento = 'Egreso' THEN mc.monto ELSE 0 END) AS total_egresos
+      FROM cuentas_pago cp
+      LEFT JOIN movimientos_cuentas mc ON cp.id_cuenta = mc.id_cuenta ${whereClause}
+      WHERE cp.estado = 'Activo'
+      GROUP BY cp.tipo, cp.moneda
+      ORDER BY cp.tipo, cp.moneda
+    `, params);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 };

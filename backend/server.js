@@ -17,7 +17,7 @@ import ajustesRoutes from './routes/ajustes.routes.js';
 import entradasRoutes from './routes/movimientos-entradas.routes.js';
 import salidasRoutes from './routes/movimientos-salidas.routes.js';
 import transferenciasRoutes from './routes/transferencias.routes.js';
-import inventarioRoutes from './routes/inventario.routes.js';
+import inventarioRoutes from './routes/inventario.js';
 
 import ordenesProduccionRoutes from './routes/ordenes-produccion.routes.js';
 
@@ -26,7 +26,7 @@ import ordenesVentaRoutes from './routes/ordenesVenta.routes.js';
 import guiasRemisionRoutes from './routes/guiasRemision.routes.js';
 import guiasTransportistaRoutes from './routes/guiasTransportista.routes.js';
 
-import ordenesCompraRoutes from './routes/ordenesCompra.routes.js';
+import comprasRoutes from './routes/compras.routes.js';
 
 import dashboardRoutes from './routes/dashboard.routes.js';
 import cuentasPagoRoutes from './routes/cuentas-pago.routes.js';
@@ -39,8 +39,10 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true
+  credentials: true,
+  exposedHeaders: ['Content-Disposition']
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -60,7 +62,7 @@ app.get('/', (req, res) => {
       inventario: ['entradas', 'salidas', 'transferencias'],
       produccion: ['ordenes'],
       ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista'],
-      compras: ['ordenes-compra'],
+      compras: ['compras'],
       analytics: ['dashboard'],
       finanzas: ['cuentas-pago', 'pagos-cobranzas']
     }
@@ -99,11 +101,10 @@ app.use('/api/ordenes-venta', verificarToken, verificarPermiso('ordenesVenta'), 
 app.use('/api/guias-remision', verificarToken, verificarPermiso('guiasRemision'), guiasRemisionRoutes);
 app.use('/api/guias-transportista', verificarToken, verificarPermiso('guiasTransportista'), guiasTransportistaRoutes);
 
-app.use('/api/ordenes-compra', verificarToken, verificarPermiso('ordenesCompra'), ordenesCompraRoutes);
+app.use('/api/compras', verificarToken, verificarPermiso('compras'), comprasRoutes);
 
 app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboardRoutes);
 
-// SECCIÓN FINANZAS ACTUALIZADA CON SEGURIDAD
 app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cuentasPagoRoutes);
 app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);
 
@@ -223,7 +224,7 @@ async function startServer() {
       console.log('   - /api/guias-transportista [guiasTransportista]');
       console.log('');
       console.log('COMPRAS:');
-      console.log('   - /api/ordenes-compra [ordenesCompra]');
+      console.log('   - /api/compras [compras]');
       console.log('');
       console.log('ANALYTICS:');
       console.log('   - /api/dashboard [dashboard]');

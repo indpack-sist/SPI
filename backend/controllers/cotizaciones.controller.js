@@ -962,11 +962,11 @@ export async function getEstadisticasCotizaciones(req, res) {
     });
   }
 }
-
 export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
-    
+
+    // 1. Obtener cabecera de la cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
@@ -982,16 +982,17 @@ export async function descargarPDFCotizacion(req, res) {
       LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
       WHERE c.id_cotizacion = ?
     `, [id]);
-    
+
     if (!cotizacionResult.success || cotizacionResult.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Cotización no encontrada'
       });
     }
-    
+
     const cotizacion = cotizacionResult.data[0];
-    
+
+    // 2. Obtener detalle de la cotización
     const detalleResult = await executeQuery(`
       SELECT 
         dc.id_detalle,
@@ -1008,27 +1009,49 @@ export async function descargarPDFCotizacion(req, res) {
       WHERE dc.id_cotizacion = ?
       ORDER BY dc.orden
     `, [id]);
-    
+
     if (!detalleResult.success) {
       return res.status(500).json({
         success: false,
         error: 'Error al obtener detalle de cotización'
       });
     }
-    
+
     cotizacion.detalle = detalleResult.data;
-    
+
+    // 3. Generar el Buffer del PDF
     const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
     const pdfBuffer = await generarCotizacionPDF(cotizacion);
+
+    // --- LÓGICA DE NOMBRE DINÁMICO ---
     
+    // Extraemos la fecha en formato YYYY-MM-DD
+    const fecha = new Date(cotizacion.fecha_emision).toISOString().split('T')[0];
+    
+    // Limpiamos el nombre del cliente: quitamos tildes, caracteres especiales y pasamos a mayúsculas
+    const clienteSanitizado = cotizacion.cliente
+      ? cotizacion.cliente
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "") // Quita tildes
+          .replace(/[^a-zA-Z0-9]/g, "_")   // Cambia símbolos por guion bajo
+          .toUpperCase()
+      : 'CLIENTE';
+
+    const nroCot = cotizacion.numero_cotizacion || id;
+    
+    // Resultado: 2024-05-22_COTIZACION_NOMBRE_CLIENTE_123.pdf
+    const nombreArchivo = `${fecha}_COTIZACION_${clienteSanitizado}_${nroCot}.pdf`;
+
+    // 4. Configurar headers y enviar
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Cotizacion-${cotizacion.numero_cotizacion}.pdf`);
+    // Es importante usar comillas en el filename por si hay espacios
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
-    
+
     res.send(pdfBuffer);
-    
+
   } catch (error) {
-    console.error(error);
+    console.error('Error en descargarPDFCotizacion:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Error al generar PDF'

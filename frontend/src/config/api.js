@@ -722,6 +722,7 @@ export const comprasAPI = {
     }, 100);
   }
 };
+
 export const cuentasPagoAPI = {
   getAll: (params) => api.get('/cuentas-pago', { params }),
   getById: (id) => api.get(`/cuentas-pago/${id}`),
@@ -737,3 +738,5 @@ export const cuentasPagoAPI = {
   
   transferir: (data) => api.post('/cuentas-pago/transferencias', data)
 };
+
+export default api;

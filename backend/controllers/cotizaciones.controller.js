@@ -1,6 +1,11 @@
 import { executeQuery } from '../config/database.js';
 import pool from '../config/database.js';
 
+function getFechaPeru() {
+  const now = new Date();
+  return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+}
+
 export async function getAllCotizaciones(req, res) {
   try {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
@@ -216,10 +221,18 @@ export async function createCotizacion(req, res) {
       });
     }
     
-    const fechaEmisionFinal = fecha_emision || new Date().toISOString().split('T')[0];
+    let fechaEmisionFinal = fecha_emision;
+    if (!fechaEmisionFinal) {
+        const peruDate = getFechaPeru();
+        const year = peruDate.getFullYear();
+        const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+        const day = String(peruDate.getDate()).padStart(2, '0');
+        fechaEmisionFinal = `${year}-${month}-${day}`;
+    }
+
     const validezDiasFinal = parseInt(validez_dias) || 7;
     
-    const fechaEmisionDate = new Date(fechaEmisionFinal);
+    const fechaEmisionDate = new Date(fechaEmisionFinal + 'T12:00:00');
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
     
@@ -243,7 +256,7 @@ export async function createCotizacion(req, res) {
       }
     }
     
-    const numeroCotizacion = `COT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
+    const numeroCotizacion = `COT-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     let subtotal = 0;
     let totalComision = 0;
@@ -466,10 +479,18 @@ export async function updateCotizacion(req, res) {
       });
     }
 
-    const fechaEmisionFinal = fecha_emision || new Date().toISOString().split('T')[0];
+    let fechaEmisionFinal = fecha_emision;
+    if (!fechaEmisionFinal) {
+        const peruDate = getFechaPeru();
+        const year = peruDate.getFullYear();
+        const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+        const day = String(peruDate.getDate()).padStart(2, '0');
+        fechaEmisionFinal = `${year}-${month}-${day}`;
+    }
+
     const validezDiasFinal = parseInt(validez_dias) || 7;
 
-    const fechaEmisionDate = new Date(fechaEmisionFinal);
+    const fechaEmisionDate = new Date(fechaEmisionFinal + 'T12:00:00');
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
 
@@ -664,10 +685,15 @@ export async function duplicarCotizacion(req, res) {
       });
     }
 
-    const fechaEmisionFinal = new Date().toISOString().split('T')[0];
+    const peruDate = getFechaPeru();
+    const year = peruDate.getFullYear();
+    const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+    const day = String(peruDate.getDate()).padStart(2, '0');
+    const fechaEmisionFinal = `${year}-${month}-${day}`;
+
     const validezDiasFinal = parseInt(cotizacionOriginal.validez_dias) || 7;
 
-    const fechaEmisionDate = new Date(fechaEmisionFinal);
+    const fechaEmisionDate = new Date(fechaEmisionFinal + 'T12:00:00');
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
 
@@ -686,7 +712,7 @@ export async function duplicarCotizacion(req, res) {
       }
     }
 
-    const numeroCotizacion = `COT-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
+    const numeroCotizacion = `COT-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
 
     const insertResult = await executeQuery(`
       INSERT INTO cotizaciones (
@@ -804,9 +830,6 @@ export async function actualizarEstadoCotizacion(req, res) {
     const { id } = req.params;
     const { estado } = req.body;
     
-    // ============================================
-    // PASO 1: Validar que el estado sea válido
-    // ============================================
     const estadosValidos = ['Pendiente', 'Enviada', 'Aprobada', 'Rechazada', 'Convertida', 'Vencida'];
     
     if (!estadosValidos.includes(estado)) {
@@ -816,14 +839,8 @@ export async function actualizarEstadoCotizacion(req, res) {
       });
     }
 
-    // ============================================
-    // PASO 2: Iniciar transacción
-    // ============================================
     await connection.beginTransaction();
 
-    // ============================================
-    // PASO 3: Verificar que la cotización existe
-    // ============================================
     const [cotizaciones] = await connection.query(`
       SELECT * FROM cotizaciones WHERE id_cotizacion = ?
     `, [id]);
@@ -838,40 +855,25 @@ export async function actualizarEstadoCotizacion(req, res) {
 
     const cotizacion = cotizaciones[0];
 
-    // ============================================
-    // PASO 4: Actualizar SOLO el estado
-    // (YA NO se crea OV automáticamente)
-    // ============================================
     await connection.query(`
       UPDATE cotizaciones 
       SET estado = ? 
       WHERE id_cotizacion = ?
     `, [estado, id]);
 
-    // ============================================
-    // PASO 5: Confirmar transacción
-    // ============================================
     await connection.commit();
 
-    // ============================================
-    // PASO 6: Responder con señal al frontend
-    // ============================================
     res.json({
       success: true,
       message: `Estado actualizado a ${estado}`,
       data: {
         id_cotizacion: id,
         estado: estado,
-        // IMPORTANTE: Esta señal le dice al frontend
-        // que debe redirigir a crear OV manualmente
         requiere_orden_venta: estado === 'Aprobada'
       }
     });
     
   } catch (error) {
-    // ============================================
-    // PASO 7: Manejar errores y rollback
-    // ============================================
     await connection.rollback();
     console.error('Error al actualizar estado:', error);
     res.status(500).json({
@@ -879,9 +881,6 @@ export async function actualizarEstadoCotizacion(req, res) {
       error: error.message
     });
   } finally {
-    // ============================================
-    // PASO 8: Liberar conexión
-    // ============================================
     connection.release();
   }
 }

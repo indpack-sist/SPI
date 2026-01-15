@@ -21,7 +21,8 @@ import {
   ChevronRight,
   DollarSign,
   CreditCard,
-  PlayCircle
+  PlayCircle,
+  Factory
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -53,52 +54,35 @@ function OrdenesVenta() {
     setCurrentPage(1);
   }, [filtroEstado, filtroPrioridad, filtroEstadoPago, busqueda]);
 
-  // Reemplaza la función cargarDatos en tu archivo OrdenesVenta.jsx
-
-const cargarDatos = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    
-    const filtros = {};
-    if (filtroEstado) filtros.estado = filtroEstado;
-    if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
-    
-    const [ordenesRes, statsRes] = await Promise.all([
-      ordenesVentaAPI.getAll(filtros),
-      ordenesVentaAPI.getEstadisticas()
-    ]);
-    
-    if (ordenesRes.data.success) {
-      const ordenes = ordenesRes.data.data || [];
+  const cargarDatos = async () => {
+    try {
+      setLoading(true);
+      setError(null);
       
-      // DEBUG: Ver qué valores tiene tipo_comprobante
-      console.log('=== DEBUG ORDENES ===');
-      ordenes.slice(0, 5).forEach(orden => {
-        console.log(`Orden ${orden.numero_orden}:`, {
-          tipo_comprobante: orden.tipo_comprobante,
-          tipo: typeof orden.tipo_comprobante,
-          valor_real: JSON.stringify(orden.tipo_comprobante),
-          serie_correlativo: orden.serie_correlativo,
-          numero_comprobante: orden.numero_comprobante
-        });
-      });
-      console.log('====================');
+      const filtros = {};
+      if (filtroEstado) filtros.estado = filtroEstado;
+      if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
       
-      setOrdenes(ordenes);
+      const [ordenesRes, statsRes] = await Promise.all([
+        ordenesVentaAPI.getAll(filtros),
+        ordenesVentaAPI.getEstadisticas()
+      ]);
+      
+      if (ordenesRes.data.success) {
+        setOrdenes(ordenesRes.data.data || []);
+      }
+      
+      if (statsRes.data.success) {
+        setEstadisticas(statsRes.data.data || null);
+      }
+      
+    } catch (err) {
+      console.error('Error al cargar órdenes de venta:', err);
+      setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
+    } finally {
+      setLoading(false);
     }
-    
-    if (statsRes.data.success) {
-      setEstadisticas(statsRes.data.data || null);
-    }
-    
-  } catch (err) {
-    console.error('Error al cargar órdenes de venta:', err);
-    setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const ordenesFiltradas = ordenes.filter(orden => {
     if (filtroEstadoPago && orden.estado_pago !== filtroEstadoPago) return false;
@@ -107,7 +91,6 @@ const cargarDatos = async () => {
     const term = busqueda.toLowerCase();
     return (
       orden.numero_orden?.toLowerCase().includes(term) ||
-      orden.serie_correlativo?.toLowerCase().includes(term) ||
       orden.numero_comprobante?.toLowerCase().includes(term) ||
       orden.numero_cotizacion?.toLowerCase().includes(term) ||
       orden.cliente?.toLowerCase().includes(term) ||
@@ -176,9 +159,14 @@ const cargarDatos = async () => {
         texto: 'En Proceso'
       },
       'Atendido por Producción': { 
-        icono: Package, 
+        icono: Factory, 
         clase: 'badge-primary',
         texto: 'Atendido'
+      },
+      'Despacho Parcial': {
+        icono: Truck,
+        clase: 'badge-warning',
+        texto: 'Desp. Parcial'
       },
       'Despachada': { 
         icono: Truck, 
@@ -219,28 +207,33 @@ const cargarDatos = async () => {
   };
 
   const columns = [
-     {
+    {
       header: 'Comprobante / Orden',
       accessor: 'numero_orden',
-      width: '180px',
+      width: '200px',
       render: (value, row) => {
-        const tipoComprobante = row.tipo_comprobante || 'Factura'; // Default a Factura si no existe
+        const tipoComprobante = row.tipo_comprobante;
         const esFactura = tipoComprobante === 'Factura';
         
         return (
           <div>
-            <div className="flex items-center gap-1 mb-1">
+            <div className="flex items-center gap-1 mb-1.5">
               <span className={`badge badge-xs ${esFactura ? 'badge-success' : 'badge-info'}`}>
-                {esFactura ? 'Factura' : 'Nota de Venta'}
+                {tipoComprobante || 'Factura'}
               </span>
+              {!esFactura && row.numero_comprobante && (
+                <span className="font-mono text-xs text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
+                  {row.numero_comprobante}
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-0.5">
               <div className="text-xs text-muted">
-                Ord: <span className="font-mono text-gray-700">{value}</span>
+                Ord: <span className="font-mono text-gray-700 font-medium">{value}</span>
               </div>
               {row.numero_cotizacion && (
                 <div className="text-[10px] text-muted">
-                  Ref: {row.numero_cotizacion}
+                  Ref: <span className="font-mono">{row.numero_cotizacion}</span>
                 </div>
               )}
             </div>
@@ -440,7 +433,7 @@ const cargarDatos = async () => {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       {estadisticas && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <div className="card shadow-sm">
             <div className="card-body">
               <div className="flex items-center justify-between">
@@ -486,6 +479,21 @@ const cargarDatos = async () => {
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <PlayCircle size={24} className="text-info" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border-l-4 border-orange-400">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted">Desp. Parcial</p>
+                  <h3 className="text-2xl font-bold text-orange-600">{estadisticas.despacho_parcial || 0}</h3>
+                  <p className="text-xs text-muted">Pendientes</p>
+                </div>
+                <div className="p-3 bg-orange-100 rounded-lg">
+                  <Truck size={24} className="text-orange-600" />
                 </div>
               </div>
             </div>
@@ -556,8 +564,15 @@ const cargarDatos = async () => {
                   className={`btn btn-sm ${filtroEstado === 'Atendido por Producción' ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('Atendido por Producción')}
                 >
-                  <Package size={14} />
+                  <Factory size={14} />
                   Atendido
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroEstado === 'Despacho Parcial' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroEstado('Despacho Parcial')}
+                >
+                  <Truck size={14} />
+                  Desp. Parcial
                 </button>
                 <button
                   className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`}

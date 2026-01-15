@@ -5,7 +5,7 @@ import {
   getOrdenById,
   getConsumoMaterialesOrden,
   createOrden,
-  updateOrden, // <--- 1. IMPORTACIÓN AGREGADA
+  updateOrden,
   asignarRecetaYSupervisor,
   iniciarProduccion,
   pausarProduccion,
@@ -27,11 +27,8 @@ router.post('/', createOrden);
 
 router.get('/auxiliar/productos-merma', getProductosMerma);
 
-// --- Rutas por ID ---
 router.get('/:id', getOrdenById);
-
-// 2. RUTA AGREGADA (Para actualizar fecha_programada desde el calendario)
-router.put('/:id', updateOrden); 
+router.put('/:id', updateOrden);
 
 router.get('/:id/consumo-materiales', getConsumoMaterialesOrden);
 router.get('/:id/mermas', getMermasOrden);

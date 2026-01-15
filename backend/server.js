@@ -17,6 +17,7 @@ import ajustesRoutes from './routes/ajustes.routes.js';
 import entradasRoutes from './routes/movimientos-entradas.routes.js';
 import salidasRoutes from './routes/movimientos-salidas.routes.js';
 import transferenciasRoutes from './routes/transferencias.routes.js';
+import inventarioRoutes from './routes/inventario.routes.js';
 
 import ordenesProduccionRoutes from './routes/ordenes-produccion.routes.js';
 

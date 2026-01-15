@@ -10,7 +10,7 @@ import {
   getResumenCuenta,
   transferirEntreCuentas,
   getEstadisticasCuentas
-} from '../controllers/cuentasPagoController.js';
+} from '../controllers/cuentas-pago.controller.js';
 
 const router = express.Router();
 

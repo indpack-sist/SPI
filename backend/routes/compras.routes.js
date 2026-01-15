@@ -14,7 +14,7 @@ import {
   getHistorialPagosCompra,
   descargarPDFCompra,
   getComprasPorCuenta
-} from '../controllers/comprasController.js';
+} from '../controllers/compras.controller.js';
 
 const router = express.Router();
 

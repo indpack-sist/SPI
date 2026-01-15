@@ -17,7 +17,7 @@ function descargarImagen(url) {
   });
 }
 
-export async function generarOrdenCompraPDF(orden) {
+export async function generarCompraPDF(orden){
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ 

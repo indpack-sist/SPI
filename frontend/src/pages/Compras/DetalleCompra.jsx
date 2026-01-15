@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
   XCircle, Clock, AlertCircle, Building, Calendar,
-  MapPin, CreditCard, Wallet, Package, DollarSign
+  MapPin, CreditCard, Wallet, Package, DollarSign, Plus
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -15,15 +15,18 @@ function DetalleCompra() {
   const navigate = useNavigate();
   
   const [compra, setCompra] = useState(null);
-  const [cuotas, setCuotas] = useState([]);
   const [resumenPagos, setResumenPagos] = useState(null);
+  const [cuotas, setCuotas] = useState([]);
+  const [historialPagos, setHistorialPagos] = useState([]);
+  const [cuentasPago, setCuentasPago] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
+  const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
   const [modalPagarCuotaOpen, setModalPagarCuotaOpen] = useState(false);
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState(null);
-  const [cuentasPago, setCuentasPago] = useState([]);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
   
   const [datosPago, setDatosPago] = useState({
     id_cuenta_pago: '',
@@ -43,9 +46,10 @@ function DetalleCompra() {
       setLoading(true);
       setError(null);
       
-      const [compraRes, resumenRes] = await Promise.all([
+      const [compraRes, resumenRes, cuentasRes] = await Promise.all([
         comprasAPI.getById(id),
-        comprasAPI.getResumenPagos(id)
+        comprasAPI.getResumenPagos(id),
+        cuentasPagoAPI.getAll({ estado: 'Activo' })
       ]);
       
       if (compraRes.data.success) {
@@ -57,12 +61,19 @@ function DetalleCompra() {
             setCuotas(cuotasRes.data.data || []);
           }
         }
-      } else {
-        setError('Compra no encontrada');
+
+        const historialRes = await comprasAPI.getHistorialPagos(id);
+        if (historialRes.data.success) {
+          setHistorialPagos(historialRes.data.data || []);
+        }
       }
 
       if (resumenRes.data.success) {
         setResumenPagos(resumenRes.data.data);
+      }
+
+      if (cuentasRes.data.success) {
+        setCuentasPago(cuentasRes.data.data || []);
       }
       
     } catch (err) {
@@ -73,23 +84,34 @@ function DetalleCompra() {
     }
   };
 
-  const cargarCuentasPago = async (moneda) => {
+  const handleCancelar = async () => {
     try {
-      const response = await cuentasPagoAPI.getAll({ estado: 'Activo', moneda });
+      setError(null);
+      setLoading(true);
+      
+      const response = await comprasAPI.cancelar(id, motivoCancelacion);
+      
       if (response.data.success) {
-        setCuentasPago(response.data.data || []);
+        setCompra({ ...compra, estado: 'Cancelada' });
+        setSuccess('Compra cancelada exitosamente');
+        setModalCancelarOpen(false);
+      } else {
+        setError(response.data.error || 'Error al cancelar compra');
       }
+      
     } catch (err) {
-      console.error('Error al cargar cuentas:', err);
+      console.error('Error al cancelar:', err);
+      setError(err.response?.data?.error || 'Error al cancelar compra');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleAbrirPagarCuota = async (cuota) => {
+  const handleAbrirModalPago = async (cuota) => {
     setCuotaSeleccionada(cuota);
-    await cargarCuentasPago(compra.moneda);
     setDatosPago({
       id_cuenta_pago: compra.id_cuenta_pago || '',
-      monto_pagado: (cuota.monto_cuota - (cuota.monto_pagado || 0)).toFixed(2),
+      monto_pagado: (parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0)).toFixed(2),
       fecha_pago: new Date().toISOString().split('T')[0],
       metodo_pago: 'Transferencia',
       referencia: '',
@@ -106,7 +128,7 @@ function DetalleCompra() {
       const response = await comprasAPI.pagarCuota(id, cuotaSeleccionada.id_cuota, datosPago);
       
       if (response.data.success) {
-        setSuccess(`Pago de cuota ${cuotaSeleccionada.numero_cuota} registrado exitosamente`);
+        setSuccess(`Pago registrado exitosamente. Nuevo saldo: ${formatearMoneda(response.data.data.nuevo_saldo_cuenta, compra.moneda)}`);
         setModalPagarCuotaOpen(false);
         await cargarDatos();
       } else {
@@ -143,41 +165,50 @@ function DetalleCompra() {
     });
   };
 
-  const formatearMoneda = (valor) => {
-    if (!compra) return '-';
-    const simbolo = compra.moneda === 'USD' ? '$' : 'S/';
+  const formatearFechaHora = (fecha) => {
+    if (!fecha) return '-';
+    return new Date(fecha).toLocaleString('es-PE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatearMoneda = (valor, moneda) => {
+    if (valor === null || valor === undefined) return '-';
+    const simbolo = moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
   };
 
-  const getEstadoPagoConfig = (estado) => {
-    const configs = {
-      'Pendiente': { 
-        icono: Clock, 
-        clase: 'badge-warning',
-        color: 'border-warning'
-      },
-      'Parcial': { 
-        icono: AlertCircle, 
-        clase: 'badge-info',
-        color: 'border-info'
-      },
-      'Pagado': { 
-        icono: CheckCircle, 
-        clase: 'badge-success',
-        color: 'border-success'
-      }
+  const getEstadoPagoClase = (estado) => {
+    const clases = {
+      'Pendiente': 'badge-warning',
+      'Parcial': 'badge-info',
+      'Pagado': 'badge-success'
     };
-    return configs[estado] || configs['Pendiente'];
+    return clases[estado] || 'badge-warning';
   };
 
   const getNivelAlertaClase = (nivel) => {
     const clases = {
-      'success': 'text-success',
-      'info': 'text-info',
-      'warning': 'text-warning',
-      'danger': 'text-danger'
+      'success': 'border-success',
+      'info': 'border-info',
+      'warning': 'border-warning',
+      'danger': 'border-danger'
     };
-    return clases[nivel] || 'text-muted';
+    return clases[nivel] || 'border-info';
+  };
+
+  const getCuotaEstadoClase = (estado) => {
+    const clases = {
+      'Pendiente': 'badge-warning',
+      'Parcial': 'badge-info',
+      'Pagada': 'badge-success',
+      'Cancelada': 'badge-danger'
+    };
+    return clases[estado] || 'badge-warning';
   };
 
   if (loading && !compra) return <Loading message="Cargando compra..." />;
@@ -192,9 +223,6 @@ function DetalleCompra() {
       </div>
     );
   }
-
-  const estadoPagoConfig = getEstadoPagoConfig(compra.estado_pago);
-  const IconoEstadoPago = estadoPagoConfig.icono;
 
   return (
     <div className="p-6">
@@ -220,11 +248,8 @@ function DetalleCompra() {
           </button>
           
           {compra.estado !== 'Cancelada' && compra.estado_pago !== 'Pagado' && (
-            <button 
-              className="btn btn-outline" 
-              onClick={() => navigate(`/compras/${id}/editar`)}
-            >
-              <Edit size={20} /> Editar
+            <button className="btn btn-outline btn-danger" onClick={() => setModalCancelarOpen(true)}>
+              <XCircle size={20} /> Cancelar
             </button>
           )}
         </div>
@@ -233,54 +258,83 @@ function DetalleCompra() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className={`card border-l-4 ${estadoPagoConfig.color} mb-4`}>
+      <div className={`card border-l-4 ${getNivelAlertaClase(compra.nivel_alerta)} mb-4`}>
         <div className="card-body">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`p-3 rounded-lg ${estadoPagoConfig.clase} bg-opacity-10`}>
-                <IconoEstadoPago size={32} />
-              </div>
-              <div>
-                <p className="text-sm text-muted">Estado de Pago</p>
-                <h3 className="text-xl font-bold">{compra.estado_pago}</h3>
+              <div className="flex gap-2">
+                <span className={`badge ${getEstadoPagoClase(compra.estado_pago)}`}>
+                  {compra.estado_pago}
+                </span>
+                <span className={`badge ${compra.tipo_compra === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
+                  {compra.tipo_compra === 'Contado' ? <Wallet size={14} /> : <CreditCard size={14} />}
+                  {compra.tipo_compra}
+                </span>
               </div>
             </div>
+            
+            {compra.dias_para_vencer !== null && compra.estado_pago !== 'Pagado' && (
+              <div className="text-right">
+                <p className="text-sm text-muted">Vencimiento</p>
+                <p className={`font-bold ${
+                  compra.dias_para_vencer < 0 ? 'text-danger' : 
+                  compra.dias_para_vencer <= 7 ? 'text-warning' : 
+                  'text-muted'
+                }`}>
+                  {compra.dias_para_vencer < 0 
+                    ? `Vencido hace ${Math.abs(compra.dias_para_vencer)} días`
+                    : `${compra.dias_para_vencer} días`
+                  }
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-            <div>
+      {resumenPagos && compra.tipo_compra === 'Credito' && (
+        <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="card">
+            <div className="card-body">
               <p className="text-sm text-muted">Total Compra</p>
-              <h3 className="text-xl font-bold text-primary">{formatearMoneda(compra.total)}</h3>
-            </div>
-
-            <div>
-              <p className="text-sm text-muted">Monto Pagado</p>
-              <h3 className="text-xl font-bold text-success">{formatearMoneda(compra.monto_pagado || 0)}</h3>
-            </div>
-
-            <div>
-              <p className="text-sm text-muted">Saldo Pendiente</p>
-              <h3 className="text-xl font-bold text-danger">
-                {formatearMoneda(compra.total - (compra.monto_pagado || 0))}
+              <h3 className="text-xl font-bold text-primary">
+                {formatearMoneda(resumenPagos.total_compra, compra.moneda)}
               </h3>
             </div>
           </div>
 
-          {compra.dias_para_vencer !== null && compra.estado_pago !== 'Pagado' && (
-            <div className={`mt-3 p-3 rounded-lg ${
-              compra.dias_para_vencer < 0 ? 'bg-red-50' : 
-              compra.dias_para_vencer <= 7 ? 'bg-yellow-50' : 'bg-blue-50'
-            }`}>
-              <p className={`text-sm font-medium ${getNivelAlertaClase(compra.nivel_alerta)}`}>
-                {compra.dias_para_vencer < 0 ? 
-                  `⚠️ Vencida hace ${Math.abs(compra.dias_para_vencer)} días` :
-                  compra.dias_para_vencer === 0 ?
-                  `⚠️ Vence hoy` :
-                  `Vence en ${compra.dias_para_vencer} días`
-                }
-              </p>
+          <div className="card border-l-4 border-success">
+            <div className="card-body">
+              <p className="text-sm text-muted">Monto Pagado</p>
+              <h3 className="text-xl font-bold text-success">
+                {formatearMoneda(resumenPagos.monto_pagado, compra.moneda)}
+              </h3>
+              <p className="text-xs text-muted">{resumenPagos.porcentaje_pagado}% pagado</p>
             </div>
-          )}
+          </div>
+
+          <div className="card border-l-4 border-warning">
+            <div className="card-body">
+              <p className="text-sm text-muted">Saldo Pendiente</p>
+              <h3 className="text-xl font-bold text-warning">
+                {formatearMoneda(resumenPagos.saldo_pendiente, compra.moneda)}
+              </h3>
+            </div>
+          </div>
+
+          <div className="card border-l-4 border-info">
+            <div className="card-body">
+              <p className="text-sm text-muted">Cuotas</p>
+              <h3 className="text-xl font-bold text-info">
+                {resumenPagos.cuotas?.cuotas_pagadas || 0} / {resumenPagos.cuotas?.total_cuotas || 0}
+              </h3>
+              {resumenPagos.cuotas?.cuotas_vencidas > 0 && (
+                <p className="text-xs text-danger">{resumenPagos.cuotas.cuotas_vencidas} vencidas</p>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
@@ -334,41 +388,27 @@ function DetalleCompra() {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
-              <CreditCard size={20} />
-              Tipo de Compra
+              <Calendar size={20} />
+              Fechas
             </h2>
           </div>
           <div className="card-body space-y-2">
             <div>
-              <label className="text-sm font-medium text-muted">Modalidad:</label>
-              <p className="font-medium">
-                {compra.tipo_compra === 'Contado' ? (
-                  <span className="badge badge-success">
-                    <Wallet size={14} /> Contado
-                  </span>
-                ) : (
-                  <span className="badge badge-warning">
-                    <CreditCard size={14} /> Crédito
-                  </span>
-                )}
-              </p>
+              <label className="text-sm font-medium text-muted">Emisión:</label>
+              <p className="font-medium">{formatearFecha(compra.fecha_emision)}</p>
             </div>
-            {compra.tipo_compra === 'Credito' && (
-              <>
-                <div>
-                  <label className="text-sm font-medium text-muted">Cuotas:</label>
-                  <p className="font-medium">{compra.numero_cuotas} cuotas</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted">Días entre cuotas:</label>
-                  <p className="font-medium">{compra.dias_entre_cuotas} días</p>
-                </div>
-              </>
+            {compra.fecha_entrega_estimada && (
+              <div>
+                <label className="text-sm font-medium text-muted">Entrega Estimada:</label>
+                <p className="font-medium">{formatearFecha(compra.fecha_entrega_estimada)}</p>
+              </div>
             )}
-            <div>
-              <label className="text-sm font-medium text-muted">Prioridad:</label>
-              <p className="font-medium">{compra.prioridad}</p>
-            </div>
+            {compra.fecha_vencimiento && compra.tipo_compra === 'Credito' && (
+              <div>
+                <label className="text-sm font-medium text-muted">Vencimiento:</label>
+                <p className="font-medium">{formatearFecha(compra.fecha_vencimiento)}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -377,7 +417,7 @@ function DetalleCompra() {
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
-              <DollarSign size={20} />
+              <CreditCard size={20} />
               Cuotas de Pago
             </h2>
           </div>
@@ -386,13 +426,13 @@ function DetalleCompra() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ width: '80px' }}>Cuota</th>
+                    <th style={{ width: '80px' }}>N° Cuota</th>
                     <th style={{ width: '120px' }}>Monto</th>
                     <th style={{ width: '120px' }}>Pagado</th>
                     <th style={{ width: '120px' }}>Saldo</th>
-                    <th style={{ width: '120px' }}>Vencimiento</th>
-                    <th style={{ width: '100px' }}>Días</th>
+                    <th style={{ width: '140px' }}>Vencimiento</th>
                     <th style={{ width: '100px' }}>Estado</th>
+                    <th style={{ width: '80px' }}>Alerta</th>
                     <th style={{ width: '100px' }}>Acción</th>
                   </tr>
                 </thead>
@@ -400,32 +440,31 @@ function DetalleCompra() {
                   {cuotas.map((cuota) => (
                     <tr key={cuota.id_cuota}>
                       <td className="font-bold">#{cuota.numero_cuota}</td>
-                      <td className="font-mono">{formatearMoneda(cuota.monto_cuota)}</td>
-                      <td className="font-mono text-success">{formatearMoneda(cuota.monto_pagado || 0)}</td>
-                      <td className="font-mono text-danger">
-                        {formatearMoneda(cuota.monto_cuota - (cuota.monto_pagado || 0))}
+                      <td className="font-mono">{formatearMoneda(cuota.monto_cuota, compra.moneda)}</td>
+                      <td className="font-mono text-success">{formatearMoneda(cuota.monto_pagado || 0, compra.moneda)}</td>
+                      <td className="font-mono text-warning">
+                        {formatearMoneda(parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0), compra.moneda)}
                       </td>
                       <td>{formatearFecha(cuota.fecha_vencimiento)}</td>
                       <td>
-                        <span className={getNivelAlertaClase(cuota.nivel_alerta)}>
-                          {cuota.dias_para_vencer < 0 ? `Vencida` : `${cuota.dias_para_vencer}d`}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${
-                          cuota.estado === 'Pagada' ? 'badge-success' :
-                          cuota.estado === 'Parcial' ? 'badge-info' :
-                          'badge-warning'
-                        }`}>
+                        <span className={`badge ${getCuotaEstadoClase(cuota.estado)}`}>
                           {cuota.estado}
                         </span>
                       </td>
+                      <td className="text-center">
+                        {cuota.nivel_alerta !== 'success' && (
+                          <span className={`badge ${getNivelAlertaClase(cuota.nivel_alerta).replace('border-', 'badge-')}`}>
+                            <AlertCircle size={14} />
+                          </span>
+                        )}
+                      </td>
                       <td>
-                        {cuota.estado !== 'Pagada' && (
+                        {cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && (
                           <button
                             className="btn btn-sm btn-primary"
-                            onClick={() => handleAbrirPagarCuota(cuota)}
+                            onClick={() => handleAbrirModalPago(cuota)}
                           >
+                            <DollarSign size={14} />
                             Pagar
                           </button>
                         )}
@@ -439,16 +478,52 @@ function DetalleCompra() {
         </div>
       )}
 
-      {compra.direccion_entrega && (
+      {historialPagos.length > 0 && (
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
-              <MapPin size={20} />
-              Dirección de Entrega
+              <Clock size={20} />
+              Historial de Pagos
             </h2>
           </div>
           <div className="card-body">
-            <p className="font-medium">{compra.direccion_entrega}</p>
+            <div className="overflow-x-auto">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Cuenta</th>
+                    <th>Cuota</th>
+                    <th className="text-right">Monto</th>
+                    <th>Registrado por</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historialPagos.map((pago) => (
+                    <tr key={pago.id_movimiento}>
+                      <td className="text-sm">{formatearFechaHora(pago.fecha_movimiento)}</td>
+                      <td>{pago.concepto}</td>
+                      <td>
+                        <div className="text-sm">{pago.cuenta_pago}</div>
+                        <div className="text-xs text-muted">{pago.tipo_cuenta}</div>
+                      </td>
+                      <td>
+                        {pago.numero_cuota ? (
+                          <span className="badge badge-info">Cuota #{pago.numero_cuota}</span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="text-right font-bold text-success">
+                        {formatearMoneda(pago.monto, compra.moneda)}
+                      </td>
+                      <td className="text-sm">{pago.registrado_por_nombre || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -470,7 +545,7 @@ function DetalleCompra() {
                   <th style={{ width: '120px' }} className="text-right">Cantidad</th>
                   <th style={{ width: '60px' }} className="text-center">Unidad</th>
                   <th style={{ width: '120px' }} className="text-right">Precio</th>
-                  <th style={{ width: '80px' }} className="text-right">Desc.</th>
+                  <th style={{ width: '80px' }} className="text-right">Desc. %</th>
                   <th style={{ width: '120px' }} className="text-right">Subtotal</th>
                 </tr>
               </thead>
@@ -480,34 +555,23 @@ function DetalleCompra() {
                     <td className="font-mono text-sm">{item.codigo_producto}</td>
                     <td>
                       <div className="font-medium">{item.producto}</div>
-                      <div className="text-xs text-muted">{item.tipo_inventario}</div>
                     </td>
                     <td className="text-right font-mono">
                       {parseFloat(item.cantidad).toFixed(2)}
                     </td>
                     <td className="text-center text-sm text-muted">{item.unidad_medida}</td>
                     <td className="text-right font-mono">
-                      {formatearMoneda(item.precio_unitario)}
+                      {formatearMoneda(item.precio_unitario, compra.moneda)}
                     </td>
-                    <td className="text-right text-sm">
+                    <td className="text-right">
                       {item.descuento_porcentaje > 0 ? `${item.descuento_porcentaje}%` : '-'}
                     </td>
                     <td className="text-right font-bold text-primary">
-                      {formatearMoneda(item.subtotal)}
+                      {formatearMoneda(item.subtotal, compra.moneda)}
                     </td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="bg-gray-50 font-bold">
-                  <td colSpan="6" className="text-right">
-                    Total Items: {compra.detalle?.length || 0}
-                  </td>
-                  <td className="text-right text-primary">
-                    {formatearMoneda(compra.subtotal)}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>
@@ -519,15 +583,15 @@ function DetalleCompra() {
             <div className="w-80">
               <div className="flex justify-between py-2">
                 <span className="font-medium">Subtotal:</span>
-                <span className="font-bold">{formatearMoneda(compra.subtotal)}</span>
+                <span className="font-bold">{formatearMoneda(compra.subtotal, compra.moneda)}</span>
               </div>
               <div className="flex justify-between py-2 border-t">
                 <span className="font-medium">{compra.tipo_impuesto} ({compra.porcentaje_impuesto}%):</span>
-                <span className="font-bold">{formatearMoneda(compra.igv)}</span>
+                <span className="font-bold">{formatearMoneda(compra.igv, compra.moneda)}</span>
               </div>
               <div className="flex justify-between py-3 border-t bg-primary text-white px-3 rounded">
                 <span className="font-bold text-lg">TOTAL:</span>
-                <span className="font-bold text-xl">{formatearMoneda(compra.total)}</span>
+                <span className="font-bold text-xl">{formatearMoneda(compra.total, compra.moneda)}</span>
               </div>
             </div>
           </div>
@@ -546,6 +610,58 @@ function DetalleCompra() {
       )}
 
       <Modal
+        isOpen={modalCancelarOpen}
+        onClose={() => setModalCancelarOpen(false)}
+        title="Cancelar Compra"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={20} className="text-danger mt-1" />
+              <div>
+                <p className="font-bold text-red-900">Advertencia</p>
+                <p className="text-sm text-red-800 mt-1">
+                  Esta acción cancelará la compra y no se puede deshacer. 
+                  Solo se pueden cancelar compras sin pagos realizados.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Motivo de Cancelación *</label>
+            <textarea
+              className="form-textarea"
+              value={motivoCancelacion}
+              onChange={(e) => setMotivoCancelacion(e.target.value)}
+              rows={3}
+              placeholder="Explique el motivo de la cancelación..."
+              required
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4 border-t">
+            <button 
+              className="btn btn-outline" 
+              onClick={() => setModalCancelarOpen(false)}
+              disabled={loading}
+            >
+              Cerrar
+            </button>
+            <button 
+              className="btn btn-danger" 
+              onClick={handleCancelar}
+              disabled={loading || !motivoCancelacion.trim()}
+            >
+              <XCircle size={20} />
+              {loading ? 'Cancelando...' : 'Confirmar Cancelación'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={modalPagarCuotaOpen}
         onClose={() => setModalPagarCuotaOpen(false)}
         title={`Pagar Cuota #${cuotaSeleccionada?.numero_cuota}`}
@@ -554,24 +670,20 @@ function DetalleCompra() {
         {cuotaSeleccionada && (
           <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-muted">Monto Cuota:</p>
-                  <p className="font-bold text-lg">{formatearMoneda(cuotaSeleccionada.monto_cuota)}</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Monto Cuota:</span>
+                  <span className="font-bold">{formatearMoneda(cuotaSeleccionada.monto_cuota, compra.moneda)}</span>
                 </div>
-                <div>
-                  <p className="text-muted">Ya Pagado:</p>
-                  <p className="font-bold text-success">{formatearMoneda(cuotaSeleccionada.monto_pagado || 0)}</p>
+                <div className="flex justify-between">
+                  <span className="text-muted">Ya Pagado:</span>
+                  <span className="text-success">{formatearMoneda(cuotaSeleccionada.monto_pagado || 0, compra.moneda)}</span>
                 </div>
-                <div>
-                  <p className="text-muted">Saldo Pendiente:</p>
-                  <p className="font-bold text-danger">
-                    {formatearMoneda(cuotaSeleccionada.monto_cuota - (cuotaSeleccionada.monto_pagado || 0))}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted">Vencimiento:</p>
-                  <p className="font-medium">{formatearFecha(cuotaSeleccionada.fecha_vencimiento)}</p>
+                <div className="flex justify-between border-t pt-2">
+                  <span className="font-medium">Saldo Pendiente:</span>
+                  <span className="font-bold text-warning">
+                    {formatearMoneda(parseFloat(cuotaSeleccionada.monto_cuota) - parseFloat(cuotaSeleccionada.monto_pagado || 0), compra.moneda)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -585,9 +697,9 @@ function DetalleCompra() {
                 required
               >
                 <option value="">Seleccionar cuenta...</option>
-                {cuentasPago.map(cuenta => (
+                {cuentasPago.filter(c => c.moneda === compra.moneda).map(cuenta => (
                   <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                    {cuenta.nombre} - Saldo: {formatearMoneda(cuenta.saldo_actual)}
+                    {cuenta.nombre} - {cuenta.tipo} - Saldo: {formatearMoneda(cuenta.saldo_actual, compra.moneda)}
                   </option>
                 ))}
               </select>
@@ -613,6 +725,7 @@ function DetalleCompra() {
                 className="form-input"
                 value={datosPago.fecha_pago}
                 onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })}
+                max={new Date().toISOString().split('T')[0]}
                 required
               />
             </div>
@@ -627,6 +740,8 @@ function DetalleCompra() {
                 <option value="Transferencia">Transferencia</option>
                 <option value="Efectivo">Efectivo</option>
                 <option value="Cheque">Cheque</option>
+                <option value="Tarjeta">Tarjeta</option>
+                <option value="Deposito">Depósito</option>
                 <option value="Yape">Yape</option>
                 <option value="Plin">Plin</option>
               </select>
@@ -639,7 +754,7 @@ function DetalleCompra() {
                 className="form-input"
                 value={datosPago.referencia}
                 onChange={(e) => setDatosPago({ ...datosPago, referencia: e.target.value })}
-                placeholder="N° de operación, cheque, etc."
+                placeholder="Número de operación, voucher, etc."
               />
             </div>
 
@@ -663,9 +778,9 @@ function DetalleCompra() {
                 Cancelar
               </button>
               <button 
-                className="btn btn-primary" 
+                className="btn btn-success" 
                 onClick={handlePagarCuota}
-                disabled={loading}
+                disabled={loading || !datosPago.id_cuenta_pago || !datosPago.monto_pagado}
               >
                 <DollarSign size={20} />
                 {loading ? 'Procesando...' : 'Registrar Pago'}

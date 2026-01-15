@@ -456,7 +456,7 @@ function DetalleOrdenVenta() {
   const handleDescargarSalidaEspecificaPDF = async (idSalida) => {
     try {
       setDescargandoPDF(idSalida);
-      await salidasAPI.generarPDF(idSalida);
+      await ordenesVentaAPI.descargarPDFDespacho(id, idSalida);
       setSuccess('Guía de Salida descargada');
     } catch (err) {
       setError('Error al descargar la guía de salida');
@@ -549,6 +549,12 @@ function DetalleOrdenVenta() {
     return pendientes;
   };
 
+  const puedeReservarStock = () => {
+    if (!orden) return false;
+    const estadosNoPermitidos = ['Despacho Parcial', 'Despachada', 'Entregada', 'Cancelada'];
+    return !orden.stock_reservado && !estadosNoPermitidos.includes(orden.estado);
+  };
+
   const columns = [
     {
       header: 'Código',
@@ -626,6 +632,9 @@ function DetalleOrdenVenta() {
         
         if (pendiente <= 0) return <span className="badge badge-success"><CheckCircle size={12}/> Completado</span>;
 
+        const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
+        const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
+
         if (orden.stock_reservado === 1) {
             return (
                 <div className="flex flex-col gap-1">
@@ -638,6 +647,10 @@ function DetalleOrdenVenta() {
 
         if (!row.requiere_receta) {
           const stockDisponible = parseFloat(row.stock_disponible || 0);
+          
+          if (!mostrarAlertaStock) {
+            return <span className="badge badge-info">En despacho</span>;
+          }
           
           return (
             <div className="flex flex-col gap-1">
@@ -669,14 +682,16 @@ function DetalleOrdenVenta() {
               <AlertCircle size={12} />
               Pendiente OP
             </span>
-            {faltante > 0 ? (
+            {mostrarAlertaStock && (
+              faltante > 0 ? (
                 <span className="text-xs text-danger">
                   Falta: {faltante.toFixed(2)} {row.unidad_medida}
                 </span>
-            ) : (
+              ) : (
                 <span className="text-xs text-success">
                   Stock Cubierto
                 </span>
+              )
             )}
           </div>
         );
@@ -816,8 +831,12 @@ function DetalleOrdenVenta() {
   const estadoPagoConfig = getEstadoPagoConfig(orden.estado_pago);
   const IconoEstadoPago = estadoPagoConfig.icono;
 
+  const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
+  const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
+
   const productosRequierenOP = orden.detalle.filter(item => {
     if(orden.stock_reservado === 1) return false;
+    if(!mostrarAlertaStock) return false;
 
     const stockDisponible = parseFloat(item.stock_disponible || 0);
     const cantidadRequerida = parseFloat(item.cantidad);
@@ -889,7 +908,7 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
-          {!orden.stock_reservado && orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+          {puedeReservarStock() && (
             <button
               className="btn btn-warning border-yellow-400 text-yellow-800 hover:bg-yellow-100"
               onClick={handleReservarStock}

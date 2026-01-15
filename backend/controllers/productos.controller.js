@@ -95,7 +95,7 @@ export async function getAllProductosConCosto(req, res) {
   try {
     const { estado, id_tipo_inventario } = req.query;
     
-    // CORRECCIÓN: Se eliminó el GROUP BY interno y se usa MAX en el rendimiento para cumplir con only_full_group_by
+    // CORRECCIÓN: Se eliminó el GROUP BY interno problemático y se usan funciones de agregación
     let sql = `
       SELECT 
         p.*,
@@ -111,9 +111,11 @@ export async function getAllProductosConCosto(req, res) {
             AND op.cantidad_producida > 0 
             AND op.costo_materiales > 0
           ),
-          /* PRIORIDAD 2: Costo Teórico de Receta */
+          /* PRIORIDAD 2: Costo Teórico de Receta Principal Activa */
+          /* AQUÍ ESTABA EL ERROR: Agregamos MAX() a rendimiento_unidades */
           (
-            SELECT SUM(rd.cantidad_requerida * i.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
+            SELECT 
+              SUM(rd.cantidad_requerida * i.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
             FROM recetas_productos rp
             INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
             INNER JOIN productos i ON rd.id_insumo = i.id_producto

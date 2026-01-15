@@ -53,35 +53,52 @@ function OrdenesVenta() {
     setCurrentPage(1);
   }, [filtroEstado, filtroPrioridad, filtroEstadoPago, busqueda]);
 
-  const cargarDatos = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Reemplaza la función cargarDatos en tu archivo OrdenesVenta.jsx
+
+const cargarDatos = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    const filtros = {};
+    if (filtroEstado) filtros.estado = filtroEstado;
+    if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
+    
+    const [ordenesRes, statsRes] = await Promise.all([
+      ordenesVentaAPI.getAll(filtros),
+      ordenesVentaAPI.getEstadisticas()
+    ]);
+    
+    if (ordenesRes.data.success) {
+      const ordenes = ordenesRes.data.data || [];
       
-      const filtros = {};
-      if (filtroEstado) filtros.estado = filtroEstado;
-      if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
+      // DEBUG: Ver qué valores tiene tipo_comprobante
+      console.log('=== DEBUG ORDENES ===');
+      ordenes.slice(0, 5).forEach(orden => {
+        console.log(`Orden ${orden.numero_orden}:`, {
+          tipo_comprobante: orden.tipo_comprobante,
+          tipo: typeof orden.tipo_comprobante,
+          valor_real: JSON.stringify(orden.tipo_comprobante),
+          serie_correlativo: orden.serie_correlativo,
+          numero_comprobante: orden.numero_comprobante
+        });
+      });
+      console.log('====================');
       
-      const [ordenesRes, statsRes] = await Promise.all([
-        ordenesVentaAPI.getAll(filtros),
-        ordenesVentaAPI.getEstadisticas()
-      ]);
-      
-      if (ordenesRes.data.success) {
-        setOrdenes(ordenesRes.data.data || []);
-      }
-      
-      if (statsRes.data.success) {
-        setEstadisticas(statsRes.data.data || null);
-      }
-      
-    } catch (err) {
-      console.error('Error al cargar órdenes de venta:', err);
-      setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
-    } finally {
-      setLoading(false);
+      setOrdenes(ordenes);
     }
-  };
+    
+    if (statsRes.data.success) {
+      setEstadisticas(statsRes.data.data || null);
+    }
+    
+  } catch (err) {
+    console.error('Error al cargar órdenes de venta:', err);
+    setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const ordenesFiltradas = ordenes.filter(orden => {
     if (filtroEstadoPago && orden.estado_pago !== filtroEstadoPago) return false;

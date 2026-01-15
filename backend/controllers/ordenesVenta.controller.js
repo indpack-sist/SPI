@@ -2,6 +2,7 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarFacturaPDF } from '../utils/pdfGenerators/FacturaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
+import { generarPDFSalida } from '../utils/pdfGenerators/salidaPDF.js';
 
 function getFechaPeru() {
   const now = new Date();
@@ -141,6 +142,9 @@ export async function getOrdenVentaById(req, res) {
     
     const orden = ordenResult.data[0];
     
+    const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
+    const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
+    
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
@@ -169,6 +173,7 @@ export async function getOrdenVentaById(req, res) {
     }
     
     orden.detalle = detalleResult.data;
+    orden.mostrar_alerta_stock = mostrarAlertaStock;
     
     res.json({
       success: true,
@@ -200,7 +205,8 @@ export async function reservarStockOrden(req, res) {
       return res.status(400).json({ success: false, error: 'Esta orden ya tiene stock reservado' });
     }
 
-    if (orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
+    const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
+    if (estadosNoPermitidos.includes(orden.estado)) {
       return res.status(400).json({ success: false, error: 'No se puede reservar stock en el estado actual de la orden' });
     }
 
@@ -1614,6 +1620,97 @@ export async function descargarPDFOrdenVenta(req, res) {
       filename = `OrdenVenta-${orden.numero_orden}.pdf`;
     }
     
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function descargarPDFDespacho(req, res) {
+  try {
+    const { id, idSalida } = req.params;
+
+    const ordenResult = await executeQuery(`
+      SELECT 
+        ov.numero_orden,
+        ov.estado,
+        ov.moneda,
+        ov.id_cliente,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        c.numero_cotizacion
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+
+    const orden = ordenResult.data[0];
+
+    const salidaResult = await executeQuery(`
+      SELECT * FROM salidas 
+      WHERE id_salida = ? AND observaciones LIKE ?
+    `, [idSalida, `%${orden.numero_orden}%`]);
+
+    if (!salidaResult.success || salidaResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Salida no encontrada'
+      });
+    }
+
+    const salida = salidaResult.data[0];
+
+    const detalleResult = await executeQuery(`
+      SELECT 
+        ds.cantidad,
+        ds.costo_unitario,
+        ds.precio_unitario,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida
+      FROM detalle_salidas ds
+      INNER JOIN productos p ON ds.id_producto = p.id_producto
+      WHERE ds.id_salida = ?
+    `, [idSalida]);
+
+    if (!detalleResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalle de la salida'
+      });
+    }
+
+    const datosPDF = {
+      id_salida: salida.id_salida,
+      numero_orden: orden.numero_orden,
+      numero_cotizacion: orden.numero_cotizacion,
+      fecha_movimiento: salida.fecha_movimiento,
+      tipo_movimiento: salida.tipo_movimiento,
+      estado: salida.estado,
+      observaciones: salida.observaciones,
+      moneda: orden.moneda,
+      cliente: orden.cliente,
+      detalles: detalleResult.data
+    };
+
+    const pdfBuffer = await generarPDFSalida(datosPDF);
+    const filename = `Despacho-${orden.numero_orden}-Salida-${salida.id_salida}.pdf`;
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);

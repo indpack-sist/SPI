@@ -8,7 +8,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -17,9 +17,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: true,
       pagosCobranzas: true
     },
@@ -29,7 +27,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -38,9 +36,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: true,
       pagosCobranzas: true
     }
@@ -52,7 +48,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -61,9 +57,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: true,
       pagosCobranzas: true
     },
@@ -73,7 +67,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -82,9 +76,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: true,
       pagosCobranzas: true
     }
@@ -96,7 +88,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO (Ellos solicitan)
+      solicitudesCredito: true,
       productos: true, 
       consultarStock: true,
       entradas: true,
@@ -105,9 +97,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: true,
       pagosCobranzas: true
     },
@@ -117,7 +107,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -126,9 +116,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: true,
       pagosCobranzas: true
     }
@@ -140,7 +128,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: true,
-      solicitudesCredito: true, // NUEVO (Suelen necesitar pedir crédito)
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: false,
@@ -149,9 +137,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -161,7 +147,7 @@ const PERMISOS_POR_ROL = {
       flota: true,        
       proveedores: true,  
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: false,
@@ -170,9 +156,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -184,7 +168,7 @@ const PERMISOS_POR_ROL = {
       flota: false,           
       proveedores: false,     
       clientes: false,        
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -193,9 +177,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -205,7 +187,7 @@ const PERMISOS_POR_ROL = {
       flota: true,           
       proveedores: true,      
       clientes: true,         
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -214,9 +196,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -228,7 +208,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: false, 
       consultarStock: true,
       entradas: false,
@@ -237,9 +217,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -249,7 +227,7 @@ const PERMISOS_POR_ROL = {
       flota: true,          
       proveedores: true,    
       clientes: true,       
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true, 
       consultarStock: true,
       entradas: true,
@@ -258,9 +236,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -272,7 +248,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: false,
@@ -281,9 +257,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -293,7 +267,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: false,
@@ -302,9 +276,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -316,7 +288,7 @@ const PERMISOS_POR_ROL = {
       flota: false,
       proveedores: false,
       clientes: false,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -325,9 +297,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -337,7 +307,7 @@ const PERMISOS_POR_ROL = {
       flota: true,          
       proveedores: true,    
       clientes: true,       
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -346,9 +316,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: false,
-      guiasTransportista: false,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -360,7 +328,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: false,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -369,9 +337,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -381,7 +347,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -390,9 +356,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -404,7 +368,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: false,
       clientes: false,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: false,
       consultarStock: false,
       entradas: false,
@@ -413,9 +377,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -425,7 +387,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: false,
       clientes: true,
-      solicitudesCredito: false, // NUEVO
+      solicitudesCredito: false,
       productos: false,
       consultarStock: false,
       entradas: false,
@@ -434,9 +396,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: false,
       ordenesVenta: false,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: false,
+      compras: false,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -448,7 +408,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -457,9 +417,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: false,
       pagosCobranzas: false
     },
@@ -469,7 +427,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: true, // NUEVO
+      solicitudesCredito: true,
       productos: true,
       consultarStock: true,
       entradas: true,
@@ -478,9 +436,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: false,
       cotizaciones: true,
       ordenesVenta: true,
-      guiasRemision: true,
-      guiasTransportista: true,
-      ordenesCompra: true,
+      compras: true,
       cuentasPago: false,
       pagosCobranzas: false
     }
@@ -549,7 +505,6 @@ export const verificarPermiso = (modulo) => {
         });
       }
       
-      // Verificación estricta en la API
       if (!permisos.api[modulo]) {
         console.log(`[AUTH] Acceso denegado. Rol: ${rol}, Modulo solicitado: ${modulo}`);
         

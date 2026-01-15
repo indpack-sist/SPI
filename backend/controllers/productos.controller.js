@@ -95,6 +95,7 @@ export async function getAllProductosConCosto(req, res) {
   try {
     const { estado, id_tipo_inventario } = req.query;
     
+    // CORRECCIÓN: Se eliminó el GROUP BY interno y se usa MAX en el rendimiento para cumplir con only_full_group_by
     let sql = `
       SELECT 
         p.*,
@@ -110,7 +111,7 @@ export async function getAllProductosConCosto(req, res) {
             AND op.cantidad_producida > 0 
             AND op.costo_materiales > 0
           ),
-          /* PRIORIDAD 2: Costo Teórico de Receta (CORREGIDO PARA ONLY_FULL_GROUP_BY) */
+          /* PRIORIDAD 2: Costo Teórico de Receta */
           (
             SELECT SUM(rd.cantidad_requerida * i.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
             FROM recetas_productos rp
@@ -119,7 +120,6 @@ export async function getAllProductosConCosto(req, res) {
             WHERE rp.id_producto_terminado = p.id_producto 
             AND rp.es_principal = 1 
             AND rp.es_activa = 1
-            GROUP BY rp.id_receta_producto
           ),
           /* PRIORIDAD 3: Costo manual de la tabla */
           p.costo_unitario_promedio,
@@ -1055,7 +1055,7 @@ export async function recalcularTodosCUP(req, res) {
     const resultados = [];
     
     for (const producto of productos) {
-      // --- CORRECCIÓN AQUÍ ---
+      // CORRECCIÓN: Agregado GROUP BY y uso de MAX para compatibilidad con only_full_group_by
       const cupResult = await executeQuery(
         `SELECT 
           COALESCE(
@@ -1068,10 +1068,9 @@ export async function recalcularTodosCUP(req, res) {
          WHERE rp.id_producto_terminado = ?
          AND rp.es_principal = 1
          AND rp.es_activa = 1
-         GROUP BY rp.id_receta_producto`, // Agregamos GROUP BY explícito
+         GROUP BY rp.id_receta_producto`,
         [producto.id_producto]
       );
-      // -----------------------
       
       const cupCalculado = parseFloat(cupResult.data[0]?.cup_calculado || 0);
       
@@ -1114,6 +1113,7 @@ export async function verCUPPorRecetas(req, res) {
   try {
     const { id } = req.params;
     
+    // CORRECCIÓN: Uso de MAX en ORDER BY para columnas no agregadas
     const result = await executeQuery(
       `SELECT 
         rp.id_receta_producto,
@@ -1140,11 +1140,10 @@ export async function verCUPPorRecetas(req, res) {
        LEFT JOIN productos insumo ON rd.id_insumo = insumo.id_producto
        WHERE rp.id_producto_terminado = ?
        GROUP BY rp.id_receta_producto
-       ORDER BY es_principal DESC, es_activa DESC, MAX(rp.fecha_creacion) DESC`,
+       ORDER BY MAX(rp.es_principal) DESC, MAX(rp.es_activa) DESC, MAX(rp.fecha_creacion) DESC`,
       [id]
     );
     
-    // Convertimos a números para evitar problemas de strings en el frontend
     res.json({
       success: true,
       data: result.data.map(r => ({
@@ -1161,6 +1160,7 @@ export async function verCUPPorRecetas(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
 export async function calcularCUPDesdeReceta(req, res) {
   try {
     const { id } = req.params;
@@ -1311,6 +1311,7 @@ export async function calcularCUPDesdeReceta(req, res) {
     });
   }
 }
+
 export async function calcularEvolucionCUP(req, res) {
   try {
     const { id } = req.params;

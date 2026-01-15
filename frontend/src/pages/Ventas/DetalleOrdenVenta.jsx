@@ -420,34 +420,59 @@ function DetalleOrdenVenta() {
       setProcesando(true);
       setError(null);
       
-      // 1. Llamada a la API (ahora devuelve el blob directo gracias a api.js)
+      console.log("Solicitando PDF para ID:", id, "Tipo:", tipoDocumento); // 🔍 DEBUG
+
+      // 1. Llamada a la API
       const response = await ordenesVentaAPI.descargarPDF(id, tipoDocumento);
       
-      // 2. Crear Blob y URL temporal
+      // 2. Verificar que lo que llegó es realmente un PDF y no un JSON de error
+      // A veces el status es 200 pero el contenido es JSON si el backend no maneja bien los status code
+      if (response.data.type === 'application/json') {
+          // Si el tipo es json, es un error que pasó como éxito
+          const errorText = await response.data.text();
+          const errorJson = JSON.parse(errorText);
+          throw new Error(errorJson.error || "Error generado por el servidor");
+      }
+
+      // 3. Crear Blob y descargar
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
-      // 3. Crear elemento enlace invisible
       const link = document.createElement('a');
       link.href = url;
       
-      // 4. Definir nombre del archivo según el tipo
       const nombreArchivo = tipoDocumento === 'comprobante' 
         ? `${orden.tipo_comprobante || 'Doc'}-${orden.numero_comprobante || orden.numero_orden}.pdf` 
         : `OrdenVenta-${orden.numero_orden}.pdf`;
         
       link.setAttribute('download', nombreArchivo);
-      
-      // 5. Simular clic y limpiar
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url); // Liberar memoria
+      window.URL.revokeObjectURL(url);
       
       setSuccess(`PDF descargado exitosamente`);
+
     } catch (err) {
-      console.error(err);
-      setError('Error al descargar el PDF');
+      console.error("Error al descargar:", err);
+
+      // --- BLOQUE MÁGICO PARA LEER EL ERROR DEL BLOB ---
+      if (err.response && err.response.data instanceof Blob && err.response.data.type === 'application/json') {
+        try {
+            // Leemos el blob como texto
+            const errorText = await err.response.data.text();
+            const errorJson = JSON.parse(errorText);
+            // Mostramos el error real que viene del backend
+            setError(errorJson.error || 'Error desconocido del servidor');
+            console.error("Contenido del error Blob:", errorJson);
+        } catch (e) {
+            setError('Error al procesar la respuesta del servidor');
+        }
+      } else {
+        // Error estándar o de red
+        setError(err.message || 'Error de conexión al descargar PDF');
+      }
+      // ------------------------------------------------
     } finally {
       setProcesando(false);
     }

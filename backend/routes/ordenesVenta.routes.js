@@ -16,45 +16,44 @@ import {
   getResumenPagosOrden,
   registrarDespacho,
   getSalidasOrden,
-  anularDespacho,      // <--- NUEVO
-  anularOrdenVenta     // <--- NUEVO
+  anularDespacho,
+  anularOrdenVenta
 } from '../controllers/ordenesVenta.controller.js';
 
 const router = express.Router();
 
-// Estadísticas
+// --- RUTAS GLOBALES (Sin ID de orden) ---
+// Es importante que 'estadisticas' vaya antes de '/:id' para que no confunda la palabra con un ID
 router.get('/estadisticas', verificarToken, getEstadisticasOrdenesVenta);
-
-// Listado y creación
 router.get('/', verificarToken, getAllOrdenesVenta);
 router.post('/', verificarToken, createOrdenVenta);
 
-// Rutas de PDF
+// --- OPERACIONES SOBRE UNA ORDEN ESPECÍFICA ---
 router.get('/:id/pdf', verificarToken, descargarPDFOrdenVenta);
+router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionDesdeVenta);
 
-// Rutas de Pagos
+// Actualizaciones parciales
+router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
+router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
+
+// Anulación
+router.delete('/:id/anular', verificarToken, anularOrdenVenta);
+
+// --- GESTIÓN DE DESPACHOS Y SALIDAS ---
+router.post('/:id/despacho', verificarToken, registrarDespacho);
+router.get('/:id/salidas', verificarToken, getSalidasOrden);
+// Nota: Aquí usamos dos parámetros dinámicos (:id de la orden y :idSalida de la salida)
+router.delete('/:id/salidas/:idSalida', verificarToken, anularDespacho);
+
+// --- GESTIÓN DE PAGOS ---
 router.get('/:id/pagos/resumen', verificarToken, getResumenPagosOrden);
 router.get('/:id/pagos', verificarToken, getPagosOrden);
 router.post('/:id/pagos', verificarToken, registrarPagoOrden);
 router.delete('/:id/pagos/:idPago', verificarToken, anularPagoOrden);
 
-// Rutas de Despachos
-router.post('/:id/despacho', verificarToken, registrarDespacho);
-router.get('/:id/salidas', verificarToken, getSalidasOrden);
-router.delete('/:id/salidas/:idSalida', verificarToken, anularDespacho);  // <--- NUEVO
-
-// Rutas de Producción
-router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionDesdeVenta);
-
-// Rutas de Actualización
-router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
-router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
+// --- OPERACIONES CRUD BÁSICAS POR ID ---
+// Esta debe ir al final o casi al final para no interceptar rutas específicas anteriores
 router.put('/:id', verificarToken, updateOrdenVenta);
-
-// Anular orden completa
-router.delete('/:id/anular', verificarToken, anularOrdenVenta);  // <--- NUEVO
-
-// Detalle de orden (debe ir al final para evitar conflictos)
 router.get('/:id', verificarToken, getOrdenVentaById);
 
 export default router;

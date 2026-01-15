@@ -202,25 +202,16 @@ function OrdenesVenta() {
   };
 
   const columns = [
-    {
+     {
       header: 'Comprobante / Orden',
       accessor: 'numero_orden',
       width: '180px',
       render: (value, row) => (
         <div>
           <div className="flex items-center gap-1 mb-1">
-            {row.tipo_comprobante ? (
-              <>
-                <span className={`badge badge-xs ${row.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
-                  {row.tipo_comprobante === 'Factura' ? 'FAC' : 'NV'}
-                </span>
-                <span className="font-mono font-bold text-sm">
-                  {row.serie_correlativo || row.numero_comprobante || '-'}
-                </span>
-              </>
-            ) : (
-              <span className="badge badge-xs badge-secondary">Sin Emitir</span>
-            )}
+            <span className={`badge badge-xs ${row.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
+              {row.tipo_comprobante === 'Factura' ? 'Factura' : 'Nota de Venta'}
+            </span>
           </div>
           <div className="flex flex-col gap-0.5">
             <div className="text-xs text-muted">

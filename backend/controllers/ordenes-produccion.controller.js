@@ -163,19 +163,19 @@ export async function asignarRecetaYSupervisor(req, res) {
       });
     }
 
-    const ordenResult = await executeQuery(`
+    const ordenExistente = await executeQuery(`
       SELECT * FROM ordenes_produccion 
       WHERE id_orden = ? AND estado = 'Pendiente Asignación'
     `, [id]);
     
-    if (!ordenResult.success || ordenResult.data.length === 0) {
+    if (!ordenExistente.success || ordenExistente.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Orden no encontrada o no está en estado Pendiente Asignación'
       });
     }
     
-    const orden = ordenResult.data[0];
+    const orden = ordenExistente.data[0];
     const cantidadPlan = parseFloat(orden.cantidad_planificada);
     
     let costoMateriales = 0;
@@ -247,7 +247,6 @@ export async function asignarRecetaYSupervisor(req, res) {
       
       idRecetaProducto = id_receta_producto;
     }
-    
     else if (modo_receta === 'provisional' && receta_provisional && receta_provisional.length > 0) {
       rendimientoUnidades = parseFloat(rendimiento_receta) || 1;
       const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
@@ -270,7 +269,6 @@ export async function asignarRecetaYSupervisor(req, res) {
         WHERE id_orden = ?
       `, [JSON.stringify(receta_provisional), id]);
     }
-    
     else {
       return res.status(400).json({
         success: false,
@@ -318,6 +316,83 @@ export async function asignarRecetaYSupervisor(req, res) {
   }
 }
 
+export async function updateOrden(req, res) {
+  try {
+    const { id } = req.params;
+    const { 
+      cantidad_planificada,
+      id_supervisor,
+      observaciones,
+      fecha_programada, 
+      fecha_programada_fin 
+    } = req.body;
+
+    const ordenExistente = await executeQuery(`
+      SELECT * FROM ordenes_produccion WHERE id_orden = ?
+    `, [id]);
+
+    if (!ordenExistente.success || ordenExistente.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenExistente.data[0];
+
+    if (!['Pendiente Asignación', 'Pendiente'].includes(orden.estado)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Solo se pueden editar órdenes en estado Pendiente Asignación o Pendiente' 
+      });
+    }
+
+    const updates = [];
+    const params = [];
+
+    if (cantidad_planificada !== undefined) {
+      updates.push('cantidad_planificada = ?');
+      params.push(parseFloat(cantidad_planificada));
+    }
+
+    if (id_supervisor !== undefined) {
+      updates.push('id_supervisor = ?');
+      params.push(id_supervisor);
+    }
+
+    if (observaciones !== undefined) {
+      updates.push('observaciones = ?');
+      params.push(observaciones);
+    }
+
+    if (fecha_programada !== undefined) {
+      updates.push('fecha_programada = ?');
+      params.push(fecha_programada);
+    }
+
+    if (fecha_programada_fin !== undefined) {
+      updates.push('fecha_programada_fin = ?');
+      params.push(fecha_programada_fin);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'No hay datos para actualizar' });
+    }
+
+    const sql = `UPDATE ordenes_produccion SET ${updates.join(', ')} WHERE id_orden = ?`;
+    params.push(id);
+
+    const result = await executeQuery(sql, params);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, message: 'Orden actualizada exitosamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar orden:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function getConsumoMaterialesOrden(req, res) {
   try {
     const { id } = req.params;
@@ -343,6 +418,7 @@ export async function getConsumoMaterialesOrden(req, res) {
           p.nombre AS insumo,
           p.unidad_medida,
           cm.cantidad_requerida,
+          cm.cantidad_real_consumida,
           cm.costo_unitario,
           cm.costo_total,
           cm.fecha_consumo
@@ -378,6 +454,7 @@ export async function getConsumoMaterialesOrden(req, res) {
           p.nombre AS insumo,
           p.unidad_medida,
           rd.cantidad_requerida,
+          NULL AS cantidad_real_consumida,
           p.costo_unitario_promedio AS costo_unitario,
           (rd.cantidad_requerida * p.costo_unitario_promedio) AS costo_total,
           NULL AS fecha_consumo
@@ -397,6 +474,7 @@ export async function getConsumoMaterialesOrden(req, res) {
           p.nombre AS insumo,
           p.unidad_medida,
           rp.cantidad_requerida,
+          NULL AS cantidad_real_consumida,
           p.costo_unitario_promedio AS costo_unitario,
           (rp.cantidad_requerida * p.costo_unitario_promedio) AS costo_total,
           NULL AS fecha_consumo
@@ -730,42 +808,6 @@ export async function iniciarProduccion(req, res) {
       recetaData = recetaResult.data;
     }
     
-    const insumosInsuficientes = [];
-    for (const insumo of recetaData) {
-      const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
-      if (parseFloat(insumo.stock_actual) < cantidadTotal) {
-        insumosInsuficientes.push({
-          id_insumo: insumo.id_insumo,
-          requerido: cantidadTotal,
-          disponible: insumo.stock_actual
-        });
-      }
-    }
-    
-    if (insumosInsuficientes.length > 0) {
-      return res.status(400).json({ 
-        error: 'Stock insuficiente de insumos',
-        detalles: insumosInsuficientes
-      });
-    }
-    
-    let totalCosto = 0;
-    const detallesSalida = [];
-    
-    for (const insumo of recetaData) {
-      const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
-      const costoUnitario = parseFloat(insumo.costo_unitario_promedio);
-      
-      totalCosto += cantidadTotal * costoUnitario;
-      
-      detallesSalida.push({
-        id_insumo: insumo.id_insumo,
-        cantidad: cantidadTotal,
-        costo_unitario: costoUnitario,
-        id_tipo_inventario: insumo.id_tipo_inventario
-      });
-    }
-    
     const queries = [];
     
     queries.push({
@@ -775,61 +817,22 @@ export async function iniciarProduccion(req, res) {
       params: ['En Curso', id]
     });
     
-    queries.push({
-      sql: `INSERT INTO salidas (
-        id_tipo_inventario, tipo_movimiento, departamento, total_costo,
-        id_registrado_por, observaciones, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      params: [
-        orden.id_tipo_inventario,
-        'Consumo Interno',
-        'Producción',
-        totalCosto,
-        orden.id_supervisor,
-        `Consumo para O.P. ${orden.numero_orden}`,
-        'Activo'
-      ]
-    });
-    
-    const resultParcial = await executeTransaction(queries);
-    
-    if (!resultParcial.success) {
-      return res.status(500).json({ error: resultParcial.error });
-    }
-    
-    const idSalida = resultParcial.data[1].insertId;
-    
-    const queriesDetalle = [];
-    
-    for (const detalle of detallesSalida) {
-      queriesDetalle.push({
-        sql: `INSERT INTO detalle_salidas (
-          id_salida, id_producto, cantidad, costo_unitario
-        ) VALUES (?, ?, ?, ?)`,
-        params: [idSalida, detalle.id_insumo, detalle.cantidad, detalle.costo_unitario]
-      });
+    for (const insumo of recetaData) {
+      const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
+      const costoUnitario = parseFloat(insumo.costo_unitario_promedio);
       
-      queriesDetalle.push({
+      queries.push({
         sql: `INSERT INTO op_consumo_materiales (
-          id_orden, id_insumo, cantidad_requerida, costo_unitario
-        ) VALUES (?, ?, ?, ?)`,
-        params: [id, detalle.id_insumo, detalle.cantidad, detalle.costo_unitario]
-      });
-      
-      queriesDetalle.push({
-        sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-        params: [detalle.cantidad, detalle.id_insumo]
+          id_orden, id_insumo, cantidad_requerida, costo_unitario, cantidad_real_consumida
+        ) VALUES (?, ?, ?, ?, ?)`,
+        params: [id, insumo.id_insumo, cantidadTotal, costoUnitario, 0]
       });
     }
     
-    const resultFinal = await executeTransaction(queriesDetalle);
+    const result = await executeTransaction(queries);
     
-    if (!resultFinal.success) {
-      await executeQuery(
-        'UPDATE ordenes_produccion SET estado = ? WHERE id_orden = ?',
-        ['Pendiente', id]
-      );
-      return res.status(500).json({ error: resultFinal.error });
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
     }
     
     res.json({
@@ -837,10 +840,8 @@ export async function iniciarProduccion(req, res) {
       message: 'Producción iniciada exitosamente',
       data: {
         estado: 'En Curso',
-        materiales_consumidos: recetaData.length,
-        lotes_necesarios: lotesNecesarios,
-        id_salida: idSalida,
-        total_costo: totalCosto
+        materiales_registrados: recetaData.length,
+        lotes_necesarios: lotesNecesarios
       }
     });
   } catch (error) {
@@ -919,13 +920,16 @@ export async function registrarProduccionParcial(req, res) {
     const { id } = req.params;
     const { 
       cantidad_parcial,
-      observaciones,
-      consumo_real, 
-      confirmar_exceso
+      insumos_consumidos,
+      observaciones
     } = req.body;
     
     if (!cantidad_parcial || cantidad_parcial <= 0) {
       return res.status(400).json({ error: 'La cantidad parcial debe ser mayor a 0' });
+    }
+
+    if (!insumos_consumidos || !Array.isArray(insumos_consumidos) || insumos_consumidos.length === 0) {
+      return res.status(400).json({ error: 'Debe especificar los insumos consumidos' });
     }
     
     const ordenResult = await executeQuery(
@@ -941,80 +945,62 @@ export async function registrarProduccionParcial(req, res) {
     }
     
     const orden = ordenResult.data[0];
-    
-    const cantidadYaProducida = parseFloat(orden.cantidad_producida || 0);
-    const cantidadPlanificada = parseFloat(orden.cantidad_planificada);
-    const cantidadNueva = parseFloat(cantidad_parcial);
-    const cantidadTotalProyectada = cantidadYaProducida + cantidadNueva;
-    const exceso = cantidadTotalProyectada - cantidadPlanificada;
-
-    if (exceso > 0 && confirmar_exceso !== true) {
-      return res.status(409).json({
-        error: 'Exceso de producción detectado',
-        requiere_confirmacion: true,
-        mensaje: `La cantidad ingresada (${cantidadNueva}) hace que el total (${cantidadTotalProyectada}) supere lo planificado (${cantidadPlanificada}) en ${exceso} unidades. ¿Desea continuar?`,
-        datos_validacion: {
-          planificado: cantidadPlanificada,
-          acumulado_actual: cantidadYaProducida,
-          nuevo_ingreso: cantidadNueva,
-          exceso: exceso
-        }
-      });
-    }
+    const cantidadParcialNum = parseFloat(cantidad_parcial);
     
     const queries = [];
-    let costoTotalProduccionParcial = 0;
+    let costoTotalParcial = 0;
 
-    if (consumo_real && Array.isArray(consumo_real) && consumo_real.length > 0) {
-      for (const item of consumo_real) {
-        const cantidadGastada = parseFloat(item.cantidad_real);
+    for (const insumo of insumos_consumidos) {
+      const cantidadConsumida = parseFloat(insumo.cantidad);
+      
+      if (cantidadConsumida <= 0) continue;
 
-        if (cantidadGastada > 0) {
-          const insumoInfo = await executeQuery(
-            'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?',
-            [item.id_insumo]
-          );
-          
-          const costoInsumo = insumoInfo.data.length > 0 ? parseFloat(insumoInfo.data[0].costo_unitario_promedio) : 0;
-          costoTotalProduccionParcial += (cantidadGastada * costoInsumo);
-
-          queries.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [cantidadGastada, item.id_insumo]
-          });
-
-          queries.push({
-            sql: `UPDATE op_consumo_materiales 
-                  SET cantidad_real_consumida = COALESCE(cantidad_real_consumida, 0) + ? 
-                  WHERE id_orden = ? AND id_insumo = ?`,
-            params: [cantidadGastada, id, item.id_insumo]
-          });
-        }
+      const insumoInfo = await executeQuery(
+        'SELECT costo_unitario_promedio, stock_actual FROM productos WHERE id_producto = ?',
+        [insumo.id_insumo]
+      );
+      
+      if (!insumoInfo.success || insumoInfo.data.length === 0) {
+        return res.status(400).json({ error: `Insumo ${insumo.id_insumo} no encontrado` });
       }
-    } else {
-      if (parseFloat(orden.costo_materiales) > 0) {
-        const costoUnitarioEstimado = parseFloat(orden.costo_materiales) / cantidadPlanificada;
-        costoTotalProduccionParcial = costoUnitarioEstimado * cantidadNueva;
+
+      const stockActual = parseFloat(insumoInfo.data[0].stock_actual);
+      if (stockActual < cantidadConsumida) {
+        return res.status(400).json({ 
+          error: `Stock insuficiente para insumo ${insumo.id_insumo}. Disponible: ${stockActual}, Requerido: ${cantidadConsumida}` 
+        });
       }
+      
+      const costoUnitario = parseFloat(insumoInfo.data[0].costo_unitario_promedio);
+      costoTotalParcial += cantidadConsumida * costoUnitario;
+
+      queries.push({
+        sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+        params: [cantidadConsumida, insumo.id_insumo]
+      });
+
+      queries.push({
+        sql: `UPDATE op_consumo_materiales 
+              SET cantidad_real_consumida = cantidad_real_consumida + ? 
+              WHERE id_orden = ? AND id_insumo = ?`,
+        params: [cantidadConsumida, id, insumo.id_insumo]
+      });
     }
 
-    const costoUnitarioProductoTerminado = cantidadNueva > 0 ? (costoTotalProduccionParcial / cantidadNueva) : 0;
-
-    let obsFinal = observaciones || '';
-    if (exceso > 0) obsFinal += `\n[ALERTA] Parcial con exceso (+${exceso} u.) autorizado.`;
+    const costoUnitarioProducto = cantidadParcialNum > 0 ? (costoTotalParcial / cantidadParcialNum) : 0;
 
     queries.push({
       sql: `UPDATE ordenes_produccion 
             SET cantidad_producida = cantidad_producida + ?
             WHERE id_orden = ?`,
-      params: [cantidadNueva, id]
+      params: [cantidadParcialNum, id]
     });
 
     queries.push({
       sql: `INSERT INTO op_registros_produccion (
         id_orden, cantidad_registrada, observaciones, id_registrado_por
       ) VALUES (?, ?, ?, ?)`,
-      params: [id, cantidadNueva, obsFinal || null, orden.id_supervisor]
+      params: [id, cantidadParcialNum, observaciones || null, orden.id_supervisor]
     });
 
     queries.push({
@@ -1025,10 +1011,10 @@ export async function registrarProduccionParcial(req, res) {
       params: [
         orden.id_tipo_inventario,
         `O.P. ${orden.numero_orden} (Parcial)`,
-        costoTotalProduccionParcial,
+        costoTotalParcial,
         'PEN',
         orden.id_supervisor,
-        `Ingreso Parcial O.P. - Costo real insumos: ${costoTotalProduccionParcial.toFixed(2)}`
+        `Producción Parcial - Cantidad: ${cantidadParcialNum}`
       ]
     });
     
@@ -1046,30 +1032,27 @@ export async function registrarProduccionParcial(req, res) {
       sql: `INSERT INTO detalle_entradas (
         id_entrada, id_producto, cantidad, costo_unitario
       ) VALUES (?, ?, ?, ?)`,
-      params: [idEntrada, orden.id_producto_terminado, cantidadNueva, costoUnitarioProductoTerminado]
+      params: [idEntrada, orden.id_producto_terminado, cantidadParcialNum, costoUnitarioProducto]
     });
 
     queriesFinales.push({
       sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-      params: [cantidadNueva, orden.id_producto_terminado]
+      params: [cantidadParcialNum, orden.id_producto_terminado]
     });
 
     const resultFinal = await executeTransaction(queriesFinales);
 
     if (!resultFinal.success) {
-       return res.status(500).json({ error: 'Error al actualizar stock de producto terminado', det: resultFinal.error });
+       return res.status(500).json({ error: 'Error al actualizar stock de producto terminado' });
     }
     
     res.json({
       success: true,
-      message: exceso > 0 
-        ? 'Registro parcial con EXCESO registrado exitosamente' 
-        : 'Registro parcial guardado exitosamente',
+      message: 'Registro parcial guardado exitosamente',
       data: {
-        id_registro: resultTransaccion.data[resultTransaccion.data.length - 2].insertId,
-        cantidad_registrada: cantidadNueva,
-        total_acumulado: cantidadTotalProyectada,
-        costo_asignado: costoTotalProduccionParcial
+        cantidad_registrada: cantidadParcialNum,
+        costo_total: costoTotalParcial,
+        insumos_consumidos: insumos_consumidos.length
       }
     });
     
@@ -1083,16 +1066,11 @@ export async function finalizarProduccion(req, res) {
   try {
     const { id } = req.params;
     const { 
-      cantidad_producida, 
+      cantidad_final, 
+      insumos_finales,
       observaciones,
-      mermas,
-      consumo_real, 
-      confirmar_exceso 
+      mermas
     } = req.body;
-    
-    if (cantidad_producida === undefined || parseFloat(cantidad_producida) < 0) {
-      return res.status(400).json({ error: 'La cantidad producida es inválida' });
-    }
     
     const ordenResult = await executeQuery(
       `SELECT op.*, p.id_tipo_inventario 
@@ -1107,71 +1085,105 @@ export async function finalizarProduccion(req, res) {
     }
     
     const orden = ordenResult.data[0];
-    
-    const cantidadYaProducida = parseFloat(orden.cantidad_producida || 0);
-    const cantidadFinalInput = parseFloat(cantidad_producida);
-    const cantidadTotalReal = cantidadYaProducida + cantidadFinalInput; 
+
+    const registrosParciales = await executeQuery(
+      'SELECT SUM(cantidad_registrada) as total_parcial FROM op_registros_produccion WHERE id_orden = ?',
+      [id]
+    );
+
+    const consumoParciales = await executeQuery(
+      `SELECT 
+        id_insumo,
+        SUM(cantidad_real_consumida) as total_consumido
+       FROM op_consumo_materiales
+       WHERE id_orden = ?
+       GROUP BY id_insumo`,
+      [id]
+    );
+
+    const totalProducidoParcial = parseFloat(registrosParciales.data[0]?.total_parcial || 0);
     const cantidadPlanificada = parseFloat(orden.cantidad_planificada);
-    
-    const exceso = cantidadTotalReal - cantidadPlanificada;
+    const cantidadFinalNum = parseFloat(cantidad_final || 0);
+    const cantidadTotalFinal = totalProducidoParcial + cantidadFinalNum;
 
-    if (exceso > 0 && confirmar_exceso !== true) {
-       return res.status(409).json({ 
-        error: 'Exceso de producción al finalizar',
-        requiere_confirmacion: true,
-        mensaje: `Con este ingreso de ${cantidadFinalInput}, el total producido será ${cantidadTotalReal}, excediendo lo planificado (${cantidadPlanificada}) en ${exceso}. ¿Confirmar ingreso de varianza?`,
-        datos_validacion: {
-          planificado: cantidadPlanificada,
-          acumulado_actual: cantidadYaProducida,
-          nuevo_ingreso: cantidadFinalInput,
-          total_final: cantidadTotalReal,
-          exceso: exceso
-        }
-      });
-    }
+    const varianzaCantidad = cantidadTotalFinal - cantidadPlanificada;
 
-    let costoTotalMaterialesCierre = 0;
+    const consumoMaterialesData = await executeQuery(
+      `SELECT 
+        cm.id_insumo,
+        cm.cantidad_requerida,
+        cm.cantidad_real_consumida,
+        cm.costo_unitario,
+        p.nombre as insumo,
+        p.stock_actual
+       FROM op_consumo_materiales cm
+       INNER JOIN productos p ON cm.id_insumo = p.id_producto
+       WHERE cm.id_orden = ?`,
+      [id]
+    );
+
     const queries = [];
-    
-    if (consumo_real && Array.isArray(consumo_real)) {
-      for (const item of consumo_real) {
-        const cantidadGastadaCierre = parseFloat(item.cantidad_real);
+    let costoTotalFinal = 0;
+    const resumenInsumos = [];
 
-        if (cantidadGastadaCierre > 0) {
-            const insumoInfo = await executeQuery(
-              'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?', 
-              [item.id_insumo]
-            );
-            const costoInsumoUnitario = insumoInfo.data.length > 0 ? parseFloat(insumoInfo.data[0].costo_unitario_promedio) : 0;
-            
-            costoTotalMaterialesCierre += (cantidadGastadaCierre * costoInsumoUnitario);
+    if (insumos_finales && Array.isArray(insumos_finales)) {
+      for (const insumo of insumos_finales) {
+        const cantidadFinalInsumo = parseFloat(insumo.cantidad);
+        
+        if (cantidadFinalInsumo <= 0) continue;
 
-            queries.push({
-                sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-                params: [cantidadGastadaCierre, item.id_insumo]
-            });
-
-            queries.push({
-                sql: `UPDATE op_consumo_materiales 
-                      SET cantidad_real_consumida = COALESCE(cantidad_real_consumida, 0) + ? 
-                      WHERE id_orden = ? AND id_insumo = ?`,
-                params: [cantidadGastadaCierre, id, item.id_insumo]
-            });
+        const insumoData = consumoMaterialesData.data.find(cm => cm.id_insumo === insumo.id_insumo);
+        
+        if (!insumoData) {
+          return res.status(400).json({ error: `Insumo ${insumo.id_insumo} no encontrado en la orden` });
         }
+
+        const stockActual = parseFloat(insumoData.stock_actual);
+        if (stockActual < cantidadFinalInsumo) {
+          return res.status(400).json({ 
+            error: `Stock insuficiente para ${insumoData.insumo}. Disponible: ${stockActual}, Requerido: ${cantidadFinalInsumo}` 
+          });
+        }
+
+        const costoUnitario = parseFloat(insumoData.costo_unitario);
+        costoTotalFinal += cantidadFinalInsumo * costoUnitario;
+
+        const totalConsumidoParcial = parseFloat(insumoData.cantidad_real_consumida || 0);
+        const totalConsumidoFinal = totalConsumidoParcial + cantidadFinalInsumo;
+        const cantidadRequerida = parseFloat(insumoData.cantidad_requerida);
+        const varianzaInsumo = totalConsumidoFinal - cantidadRequerida;
+
+        resumenInsumos.push({
+          insumo: insumoData.insumo,
+          planificado: cantidadRequerida,
+          consumido_parcial: totalConsumidoParcial,
+          consumido_final: cantidadFinalInsumo,
+          total_consumido: totalConsumidoFinal,
+          varianza: varianzaInsumo
+        });
+
+        queries.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+          params: [cantidadFinalInsumo, insumo.id_insumo]
+        });
+
+        queries.push({
+          sql: `UPDATE op_consumo_materiales 
+                SET cantidad_real_consumida = cantidad_real_consumida + ? 
+                WHERE id_orden = ? AND id_insumo = ?`,
+          params: [cantidadFinalInsumo, id, insumo.id_insumo]
+        });
       }
-    } else {
-        if (parseFloat(orden.costo_materiales) > 0) {
-            const costoUnitarioTeorico = parseFloat(orden.costo_materiales) / cantidadPlanificada;
-            costoTotalMaterialesCierre = costoUnitarioTeorico * cantidadFinalInput;
-        }
     }
-
-    const costoUnitarioProductoTerminado = cantidadFinalInput > 0 ? (costoTotalMaterialesCierre / cantidadFinalInput) : 0;
 
     const tiempoMinutos = Math.floor((new Date() - new Date(orden.fecha_inicio)) / 60000);
     
     let obsFinal = observaciones || '';
-    if (exceso > 0) obsFinal += `\n[VARIACIÓN POSITIVA] Producción finalizó con exceso total de ${exceso} u.`;
+    if (varianzaCantidad > 0) {
+      obsFinal += `\n[VARIANZA POSITIVA] Producción total: ${cantidadTotalFinal} (planificado: ${cantidadPlanificada}, exceso: +${varianzaCantidad})`;
+    } else if (varianzaCantidad < 0) {
+      obsFinal += `\n[VARIANZA NEGATIVA] Producción total: ${cantidadTotalFinal} (planificado: ${cantidadPlanificada}, déficit: ${varianzaCantidad})`;
+    }
 
     queries.push({
       sql: `UPDATE ordenes_produccion 
@@ -1179,12 +1191,14 @@ export async function finalizarProduccion(req, res) {
                 cantidad_producida = cantidad_producida + ?, 
                 fecha_fin = NOW(),
                 tiempo_total_minutos = ?, 
-                observaciones = CONCAT(COALESCE(observaciones, ''), '\n', ?)
+                observaciones = CONCAT(COALESCE(observaciones, ''), ?)
             WHERE id_orden = ?`,
-      params: [cantidadFinalInput, tiempoMinutos, obsFinal, id]
+      params: [cantidadFinalNum, tiempoMinutos, obsFinal, id]
     });
 
-    if (cantidadFinalInput > 0) {
+    if (cantidadFinalNum > 0) {
+      const costoUnitarioProductoFinal = cantidadFinalNum > 0 ? (costoTotalFinal / cantidadFinalNum) : 0;
+
       queries.push({
         sql: `INSERT INTO entradas (
           id_tipo_inventario, documento_soporte, total_costo, moneda,
@@ -1193,10 +1207,10 @@ export async function finalizarProduccion(req, res) {
         params: [
           orden.id_tipo_inventario,
           `O.P. ${orden.numero_orden} (Final)`,
-          costoTotalMaterialesCierre,
+          costoTotalFinal,
           'PEN',
           orden.id_supervisor,
-          `Cierre Producción. Costo materiales cierre: ${costoTotalMaterialesCierre.toFixed(2)}`
+          `Cierre Producción - Cantidad: ${cantidadFinalNum}`
         ]
       });
     }
@@ -1204,18 +1218,19 @@ export async function finalizarProduccion(req, res) {
     const result1 = await executeTransaction(queries);
     if (!result1.success) return res.status(500).json({ error: result1.error });
 
-    if (cantidadFinalInput > 0) {
-        const idEntrada = result1.data[result1.data.length - 1].insertId; 
+    if (cantidadFinalNum > 0) {
+        const idEntrada = result1.data[result1.data.length - 1].insertId;
+        const costoUnitarioProductoFinal = cantidadFinalNum > 0 ? (costoTotalFinal / cantidadFinalNum) : 0;
         
         const queriesStock = [];
         queriesStock.push({
           sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
-          params: [idEntrada, orden.id_producto_terminado, cantidadFinalInput, costoUnitarioProductoTerminado]
+          params: [idEntrada, orden.id_producto_terminado, cantidadFinalNum, costoUnitarioProductoFinal]
         });
 
         queriesStock.push({
-          sql: 'UPDATE productos SET stock_actual = stock_actual + ?, costo_unitario_promedio = ? WHERE id_producto = ?',
-          params: [cantidadFinalInput, costoUnitarioProductoTerminado, orden.id_producto_terminado]
+          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          params: [cantidadFinalNum, orden.id_producto_terminado]
         });
 
         await executeTransaction(queriesStock);
@@ -1247,11 +1262,20 @@ export async function finalizarProduccion(req, res) {
 
     res.json({
       success: true,
-      message: 'Producción finalizada exitosamente.',
+      message: 'Producción finalizada exitosamente',
       data: {
-        total_producido_historico: cantidadTotalReal,
-        producido_cierre: cantidadFinalInput,
-        varianza_cantidad: exceso
+        resumen: {
+          cantidad_planificada: cantidadPlanificada,
+          registros_parciales: {
+            cantidad: totalProducidoParcial,
+            numero_registros: registrosParciales.data[0]?.total_parcial ? 1 : 0
+          },
+          produccion_final: cantidadFinalNum,
+          total_producido: cantidadTotalFinal,
+          varianza_cantidad: varianzaCantidad,
+          varianza_tipo: varianzaCantidad > 0 ? 'POSITIVA' : varianzaCantidad < 0 ? 'NEGATIVA' : 'SIN VARIANZA'
+        },
+        insumos: resumenInsumos
       }
     });
 
@@ -1331,12 +1355,12 @@ export async function cancelarOrden(req, res) {
     const consumoResult = await executeQuery(
       `SELECT 
         cm.id_insumo,
-        cm.cantidad_requerida,
+        cm.cantidad_real_consumida,
         cm.costo_unitario,
         p.id_tipo_inventario
       FROM op_consumo_materiales cm
       INNER JOIN productos p ON cm.id_insumo = p.id_producto
-      WHERE cm.id_orden = ?`,
+      WHERE cm.id_orden = ? AND cm.cantidad_real_consumida > 0`,
       [id]
     );
     
@@ -1349,7 +1373,7 @@ export async function cancelarOrden(req, res) {
     }
     
     const totalCostoDevolucion = consumoResult.data.reduce((sum, item) => 
-      sum + (parseFloat(item.cantidad_requerida) * parseFloat(item.costo_unitario)), 0
+      sum + (parseFloat(item.cantidad_real_consumida) * parseFloat(item.costo_unitario)), 0
     );
     
     const queries = [];
@@ -1381,11 +1405,11 @@ export async function cancelarOrden(req, res) {
     for (const consumo of consumoResult.data) {
         queriesDetalle.push({
             sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
-            params: [idEntrada, consumo.id_insumo, consumo.cantidad_requerida, consumo.costo_unitario]
+            params: [idEntrada, consumo.id_insumo, consumo.cantidad_real_consumida, consumo.costo_unitario]
         });
         queriesDetalle.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [consumo.cantidad_requerida, consumo.id_insumo]
+            params: [consumo.cantidad_real_consumida, consumo.id_insumo]
         });
     }
 
@@ -1430,14 +1454,14 @@ export async function getAnalisisConsumoOrden(req, res) {
         p.unidad_medida,
         cm.cantidad_requerida AS cantidad_planificada,
         cm.cantidad_real_consumida AS cantidad_real,
-        COALESCE(cm.cantidad_real_consumida, cm.cantidad_requerida) - cm.cantidad_requerida AS diferencia,
+        COALESCE(cm.cantidad_real_consumida, 0) - cm.cantidad_requerida AS diferencia,
         cm.costo_unitario,
         cm.costo_total AS costo_planificado,
-        (COALESCE(cm.cantidad_real_consumida, cm.cantidad_requerida) * cm.costo_unitario) AS costo_real
+        (COALESCE(cm.cantidad_real_consumida, 0) * cm.costo_unitario) AS costo_real
       FROM op_consumo_materiales cm
       INNER JOIN productos p ON cm.id_insumo = p.id_producto
       WHERE cm.id_orden = ?
-      ORDER BY ABS(COALESCE(cm.cantidad_real_consumida, cm.cantidad_requerida) - cm.cantidad_requerida) DESC`,
+      ORDER BY ABS(COALESCE(cm.cantidad_real_consumida, 0) - cm.cantidad_requerida) DESC`,
       [id]
     );
 
@@ -1471,13 +1495,10 @@ export async function getAnalisisConsumoOrden(req, res) {
   }
 }
 
-// Reemplaza tu función generarPDFOrdenController con esta:
-
 export const generarPDFOrdenController = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // MODIFICADO: Agregado el LEFT JOIN con ordenes_venta para traer el numero_orden_venta
     const ordenResult = await executeQuery(`
       SELECT 
         op.*,
@@ -1492,7 +1513,6 @@ export const generarPDFOrdenController = async (req, res) => {
       INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
       INNER JOIN empleados e ON op.id_supervisor = e.id_empleado
       LEFT JOIN recetas_productos rp ON op.id_receta_producto = rp.id_receta_producto
-      -- Relación con Venta
       LEFT JOIN ordenes_venta ov ON op.id_orden_venta_origen = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE op.id_orden = ?
@@ -1532,7 +1552,6 @@ export const generarPDFOrdenController = async (req, res) => {
     `, [id]);
     const mermas = mermasResult.success ? mermasResult.data : [];
 
-    // Ahora 'orden' incluye 'numero_orden_venta' y 'cliente' para que salgan en el PDF
     const pdfBuffer = await generarPDFOrdenProduccion(orden, consumo, mermas);
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -1543,43 +1562,3 @@ export const generarPDFOrdenController = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-
-export async function updateOrden(req, res) {
-  try {
-    const { id } = req.params;
-    const { fecha_programada, fecha_programada_fin } = req.body;
-
-    let sql = 'UPDATE ordenes_produccion SET ';
-    const params = [];
-    const updates = [];
-
-    if (fecha_programada !== undefined) {
-      updates.push('fecha_programada = ?');
-      params.push(fecha_programada);
-    }
-
-    if (fecha_programada_fin !== undefined) {
-      updates.push('fecha_programada_fin = ?');
-      params.push(fecha_programada_fin);
-    }
-
-    if (updates.length === 0) {
-      return res.status(400).json({ error: 'No hay datos para actualizar' });
-    }
-
-    sql += updates.join(', ') + ' WHERE id_orden = ?';
-    params.push(id);
-
-    const result = await executeQuery(sql, params);
-
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
-    }
-
-    res.json({ success: true, message: 'Programación actualizada' });
-
-  } catch (error) {
-    console.error('Error al actualizar orden:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-}

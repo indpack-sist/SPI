@@ -339,23 +339,24 @@ export const ordenesProduccionAPI = {
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
   
   create: (data) => api.post('/produccion/ordenes', data),
-  
-  update: (id, data) => api.put(`/produccion/ordenes/${id}`, data), 
+  update: (id, data) => api.put(`/produccion/ordenes/${id}`, data),
 
   asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
+  
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
   reanudar: (id) => api.post(`/produccion/ordenes/${id}/reanudar`),
+  
+  registrarParcial: (id, data) => api.post(`/produccion/ordenes/${id}/registrar-parcial`, data),
+  getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
   
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
   
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   
-  registrarParcial: (id, data) => api.post(`/produccion/ordenes/${id}/registrar-parcial`, data),
-  getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
-  
   getConsumoMateriales: (id) => api.get(`/produccion/ordenes/${id}/consumo-materiales`),
   getAnalisisConsumo: (id) => api.get(`/produccion/ordenes/${id}/analisis-consumo`),
+  
   getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
   getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`),
 

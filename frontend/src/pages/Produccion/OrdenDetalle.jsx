@@ -39,15 +39,15 @@ function OrdenDetalle() {
     cantidad_requerida: ''
   });
   const [modalFinalizar, setModalFinalizar] = useState(false);
-  const [cantidadProducida, setCantidadProducida] = useState('');
+  const [cantidadFinal, setCantidadFinal] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
    
   const [modalParcial, setModalParcial] = useState(false);
   const [cantidadParcial, setCantidadParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
    
-  const [consumoRealInsumos, setConsumoRealInsumos] = useState([]);
-  const [mostrarConsumoReal, setMostrarConsumoReal] = useState(false);
+  const [insumosParcialesConsumo, setInsumosParcialesConsumo] = useState([]);
+  const [insumosFinalesConsumo, setInsumosFinalesConsumo] = useState([]);
    
   const [productosMerma, setProductosMerma] = useState([]);
   const [mermas, setMermas] = useState([]);
@@ -181,43 +181,55 @@ function OrdenDetalle() {
     }
   };
 
-  const inicializarConsumoReal = () => {
-    const consumo = consumoMateriales.map(item => ({
+  const inicializarInsumosParaParcial = () => {
+    const insumos = consumoMateriales.map(item => ({
       id_insumo: item.id_insumo,
       codigo_insumo: item.codigo_insumo,
       insumo: item.insumo,
       unidad_medida: item.unidad_medida,
-      cantidad_planificada: parseFloat(item.cantidad_requerida),
-      cantidad_real: parseFloat(item.cantidad_requerida),
-      costo_unitario: parseFloat(item.costo_unitario)
+      cantidad: '0'
     }));
-    setConsumoRealInsumos(consumo);
+    setInsumosParcialesConsumo(insumos);
   };
 
-  const actualizarCantidadReal = (id_insumo, valor) => {
-    setConsumoRealInsumos(prev => 
+  const inicializarInsumosParaFinal = () => {
+    const insumos = consumoMateriales.map(item => {
+      const yaConsumido = parseFloat(item.cantidad_real_consumida || 0);
+      const requerido = parseFloat(item.cantidad_requerida);
+      const pendiente = Math.max(0, requerido - yaConsumido);
+      
+      return {
+        id_insumo: item.id_insumo,
+        codigo_insumo: item.codigo_insumo,
+        insumo: item.insumo,
+        unidad_medida: item.unidad_medida,
+        cantidad_requerida: requerido,
+        cantidad_ya_consumida: yaConsumido,
+        cantidad_pendiente: pendiente,
+        cantidad: pendiente.toFixed(4)
+      };
+    });
+    setInsumosFinalesConsumo(insumos);
+  };
+
+  const actualizarCantidadInsumoParcial = (id_insumo, valor) => {
+    setInsumosParcialesConsumo(prev => 
       prev.map(item => 
         item.id_insumo === id_insumo 
-          ? { ...item, cantidad_real: parseFloat(valor) || 0 }
+          ? { ...item, cantidad: valor }
           : item
       )
     );
   };
 
-  const calcularCostoReal = () => {
-    return consumoRealInsumos.reduce((total, item) => {
-      return total + (item.cantidad_real * item.costo_unitario);
-    }, 0);
-  };
-
-  const procesarExitoParcial = (response) => {
-    setSuccess(`Producción parcial registrada: ${response.data.data.cantidad_registrada} unidades. Total acumulado: ${response.data.data.total_acumulado}`);
-    setModalParcial(false);
-    setCantidadParcial('');
-    setObservacionesParcial('');
-    setConsumoRealInsumos([]);
-    setMostrarConsumoReal(false);
-    cargarDatos();
+  const actualizarCantidadInsumoFinal = (id_insumo, valor) => {
+    setInsumosFinalesConsumo(prev => 
+      prev.map(item => 
+        item.id_insumo === id_insumo 
+          ? { ...item, cantidad: valor }
+          : item
+      )
+    );
   };
 
   const handleRegistroParcial = async (e) => {
@@ -226,34 +238,33 @@ function OrdenDetalle() {
     try {
       setProcesando(true);
       setError(null);
-       
-      const payload = {
-        cantidad_parcial: cantidadParcial,
-        observaciones: observacionesParcial
-      };
-       
-      if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
-        payload.consumo_real = consumoRealInsumos.map(item => ({
-          id_insumo: item.id_insumo,
-          cantidad_real: item.cantidad_real
-        }));
+
+      const insumosConCantidad = insumosParcialesConsumo.filter(i => parseFloat(i.cantidad) > 0);
+      
+      if (insumosConCantidad.length === 0) {
+        setError('Debe especificar al menos un insumo con cantidad mayor a 0');
+        setProcesando(false);
+        return;
       }
        
-      try {
-        const response = await ordenesProduccionAPI.registrarParcial(id, payload);
-        procesarExitoParcial(response);
-      } catch (err) {
-        if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
-          const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea confirmar el registro con este exceso?`);
-           
-          if (confirmar) {
-            payload.confirmar_exceso = true;
-            const retryResponse = await ordenesProduccionAPI.registrarParcial(id, payload);
-            procesarExitoParcial(retryResponse);
-            return;
-          }
-        }
-        throw err;
+      const payload = {
+        cantidad_parcial: parseFloat(cantidadParcial),
+        insumos_consumidos: insumosConCantidad.map(i => ({
+          id_insumo: i.id_insumo,
+          cantidad: parseFloat(i.cantidad)
+        })),
+        observaciones: observacionesParcial
+      };
+
+      const response = await ordenesProduccionAPI.registrarParcial(id, payload);
+      
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setModalParcial(false);
+        setCantidadParcial('');
+        setObservacionesParcial('');
+        setInsumosParcialesConsumo([]);
+        cargarDatos();
       }
        
     } catch (err) {
@@ -262,20 +273,6 @@ function OrdenDetalle() {
     } finally {
       setProcesando(false);
     }
-  };
-
-  const procesarExitoFinalizar = (mermasValidas) => {
-    const mensajeExito = mostrarConsumoReal
-      ? `Producción finalizada con ajustes de consumo real. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`
-      : `Producción finalizada exitosamente. ${mermasValidas.length > 0 ? `${mermasValidas.length} merma(s) registradas.` : ''}`;
-     
-    setSuccess(mensajeExito);
-    setModalFinalizar(false);
-    setMermas([]);
-    setMostrarMermas(false);
-    setConsumoRealInsumos([]);
-    setMostrarConsumoReal(false);
-    cargarDatos();
   };
 
   const handleFinalizar = async (e) => {
@@ -290,9 +287,21 @@ function OrdenDetalle() {
     try {
       setProcesando(true);
       setError(null);
+
+      const insumosConCantidad = insumosFinalesConsumo.filter(i => parseFloat(i.cantidad) > 0);
+      
+      if (insumosConCantidad.length === 0) {
+        setError('Debe especificar al menos un insumo con cantidad mayor a 0');
+        setProcesando(false);
+        return;
+      }
        
       const payload = {
-        cantidad_producida: cantidadProducida,
+        cantidad_final: parseFloat(cantidadFinal),
+        insumos_finales: insumosConCantidad.map(i => ({
+          id_insumo: i.id_insumo,
+          cantidad: parseFloat(i.cantidad)
+        })),
         observaciones: observacionesFinal,
         mermas: mermasValidas.map(m => ({
           id_producto_merma: parseInt(m.id_producto_merma),
@@ -300,29 +309,21 @@ function OrdenDetalle() {
           observaciones: m.observaciones || null
         }))
       };
-       
-      if (mostrarConsumoReal && consumoRealInsumos.length > 0) {
-        payload.consumo_real = consumoRealInsumos.map(item => ({
-          id_insumo: item.id_insumo,
-          cantidad_real: item.cantidad_real
-        }));
-      }
 
-      try {
-        await ordenesProduccionAPI.finalizar(id, payload);
-        procesarExitoFinalizar(mermasValidas);
-      } catch (err) {
-        if (err.response && err.response.status === 409 && err.response.data.requiere_confirmacion) {
-          const confirmar = window.confirm(`${err.response.data.mensaje}\n\n¿Desea finalizar la orden con este exceso?`);
-           
-          if (confirmar) {
-            payload.confirmar_exceso = true;
-            await ordenesProduccionAPI.finalizar(id, payload);
-            procesarExitoFinalizar(mermasValidas);
-            return;
-          }
-        }
-        throw err;
+      const response = await ordenesProduccionAPI.finalizar(id, payload);
+      
+      if (response.data.success) {
+        const resumen = response.data.data.resumen;
+        let mensaje = `Producción finalizada exitosamente.\n\n`;
+        mensaje += `Total Producido: ${resumen.total_producido} (Planificado: ${resumen.cantidad_planificada})\n`;
+        mensaje += `Varianza: ${resumen.varianza_tipo} (${resumen.varianza_cantidad > 0 ? '+' : ''}${resumen.varianza_cantidad})`;
+        
+        setSuccess(mensaje);
+        setModalFinalizar(false);
+        setMermas([]);
+        setMostrarMermas(false);
+        setInsumosFinalesConsumo([]);
+        cargarDatos();
       }
        
     } catch (err) {
@@ -371,13 +372,13 @@ function OrdenDetalle() {
   };
 
   const handleIniciar = async () => {
-    if (!confirm('¿Está seguro de iniciar la producción? Esto consumirá los materiales del inventario.')) return;
+    if (!confirm('¿Está seguro de iniciar la producción?')) return;
 
     try {
       setProcesando(true);
       setError(null);
       await ordenesProduccionAPI.iniciar(id);
-      setSuccess('Producción iniciada exitosamente. Los materiales han sido consumidos.');
+      setSuccess('Producción iniciada exitosamente');
       cargarDatos();
     } catch (err) {
       setError(err.error || 'Error al iniciar producción');
@@ -528,7 +529,7 @@ function OrdenDetalle() {
   const esRecetaProvisional = !orden.id_receta_producto;
   const lotesPlanificados = calcularLotesPlanificados();
   const lotesProducidos = calcularLotesProducidos();
-  const tieneReceta = orden.id_receta_producto !== null;
+  const tieneReceta = orden.id_receta_producto !== null || esRecetaProvisional;
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
 
   return (
@@ -624,13 +625,9 @@ function OrdenDetalle() {
               className="btn btn-info" 
               onClick={() => {
                 const cantidadRestante = parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0);
-                setCantidadParcial(cantidadRestante > 0 ? cantidadRestante : '');
+                setCantidadParcial(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
                 setObservacionesParcial('');
-                setConsumoRealInsumos([]);
-                setMostrarConsumoReal(false);
-                if (tieneReceta) {
-                  inicializarConsumoReal();
-                }
+                inicializarInsumosParaParcial();
                 setModalParcial(true);
               }}
               disabled={procesando}
@@ -642,15 +639,12 @@ function OrdenDetalle() {
             <button 
               className="btn btn-success" 
               onClick={() => {
-                setCantidadProducida(orden.cantidad_planificada);
+                const cantidadRestante = parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0);
+                setCantidadFinal(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
                 setObservacionesFinal('');
                 setMermas([]);
                 setMostrarMermas(false);
-                setConsumoRealInsumos([]);
-                setMostrarConsumoReal(false);
-                if (tieneReceta) {
-                  inicializarConsumoReal();
-                }
+                inicializarInsumosParaFinal();
                 cargarProductosMerma();
                 setModalFinalizar(true);
               }}
@@ -870,7 +864,7 @@ function OrdenDetalle() {
                   <tr key={registro.id_registro}>
                     <td>{formatearFecha(registro.fecha_registro)}</td>
                     <td className="text-right font-bold">
-                      {parseFloat(registro.cantidad_registrada).toFixed(2)} {registro.unidad_medida}
+                      {parseFloat(registro.cantidad_registrada).toFixed(2)} {orden.unidad_medida}
                     </td>
                     <td>{registro.registrado_por || '-'}</td>
                     <td className="text-sm text-muted">{registro.observaciones || '-'}</td>
@@ -1321,15 +1315,6 @@ function OrdenDetalle() {
             </small>
           </div>
 
-          {cantidadParcial && (
-            <div className="bg-gray-50 p-3 rounded mb-3 border border-gray-200">
-              <div className="text-sm">
-                <span className="text-muted">Total acumulado será:</span>
-                <strong className="ml-2">{(parseFloat(orden.cantidad_producida || 0) + parseFloat(cantidadParcial)).toFixed(2)} {orden.unidad_medida}</strong>
-              </div>
-            </div>
-          )}
-
           <div className="form-group">
             <label className="form-label">Observaciones</label>
             <textarea
@@ -1341,54 +1326,45 @@ function OrdenDetalle() {
             />
           </div>
 
-          {tieneReceta && consumoRealInsumos.length > 0 && (
-            <div className="border-t border-gray-200 pt-4 mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Edit size={18} className="text-primary" />
-                  <h3 className="font-semibold">Ajustar Consumo Real (Opcional)</h3>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline"
-                  onClick={() => setMostrarConsumoReal(!mostrarConsumoReal)}
-                >
-                  {mostrarConsumoReal ? 'Ocultar' : 'Mostrar'}
-                </button>
-              </div>
-
-              {mostrarConsumoReal && (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {consumoRealInsumos.map(item => {
-                    const proporcional = item.cantidad_planificada * (parseFloat(cantidadParcial || 0) / parseFloat(orden.cantidad_planificada));
-                     
-                    return (
-                      <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-2 rounded text-sm">
-                        <div className="col-span-4 font-medium">{item.insumo}</div>
-                        <div className="col-span-3 text-center text-muted">
-                          Proporcional: {proporcional.toFixed(4)} {item.unidad_medida}
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-xs text-muted">Cantidad Real:</label>
-                        </div>
-                        <div className="col-span-3">
-                          <input
-                            type="number"
-                            step="0.0001"
-                            min="0"
-                            className="form-input form-input-sm"
-                            value={item.cantidad_real}
-                            onChange={(e) => actualizarCantidadReal(item.id_insumo, e.target.value)}
-                            placeholder={proporcional.toFixed(4)}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Package size={18} className="text-primary" />
+              <h3 className="font-semibold">Consumo de Insumos *</h3>
             </div>
-          )}
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3 text-sm text-yellow-800">
+              <p><strong>Importante:</strong> Especifique la cantidad exacta de cada insumo consumido para esta producción parcial.</p>
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {insumosParcialesConsumo.map(item => (
+                <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
+                  <div className="col-span-6">
+                    <div className="font-medium text-sm">{item.insumo}</div>
+                    <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                  </div>
+                  
+                  <div className="col-span-3">
+                    <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
+                  </div>
+                  
+                  <div className="col-span-3">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      className="form-input form-input-sm"
+                      value={item.cantidad}
+                      onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
+                      placeholder="0.0000"
+                      required
+                    />
+                    <div className="text-xs text-muted mt-1">{item.unidad_medida}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           <div className="flex gap-2 justify-end mt-6">
             <button 
@@ -1423,142 +1399,83 @@ function OrdenDetalle() {
         <form onSubmit={handleFinalizar}>
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
             <Info className="text-blue-500 shrink-0" size={20} />
-            <p className="text-sm text-blue-700">
-              <strong>Importante:</strong> Al finalizar, los productos terminados serán agregados automáticamente al inventario.
-            </p>
+            <div className="text-sm text-blue-700">
+              <p><strong>Importante:</strong> Al finalizar, los productos terminados serán agregados automáticamente al inventario.</p>
+              <p className="mt-1">Ya producido en registros parciales: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> {orden.unidad_medida}</p>
+            </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Cantidad Producida Final *</label>
+            <label className="form-label">Cantidad Final a Registrar *</label>
             <input
               type="number"
               step="0.01"
-              min="0.01"
+              min="0"
               className="form-input"
-              value={cantidadProducida}
-              onChange={(e) => setCantidadProducida(e.target.value)}
+              value={cantidadFinal}
+              onChange={(e) => setCantidadFinal(e.target.value)}
               required
               placeholder="0.00"
             />
             <small className="text-muted block mt-1 italic">
-              Planificado: {parseFloat(orden.cantidad_planificada).toFixed(2)} {orden.unidad_medida} | 
-              Ya producido: {parseFloat(orden.cantidad_producida || 0).toFixed(2)} {orden.unidad_medida}
+              Ingrese la cantidad restante por registrar. Total final será: {(parseFloat(orden.cantidad_producida || 0) + parseFloat(cantidadFinal || 0)).toFixed(2)} {orden.unidad_medida}
             </small>
           </div>
 
-          {cantidadProducida && (
-            <div className="bg-gray-50 p-3 rounded mb-3 border border-gray-200">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-muted">Lotes producidos:</span>
-                  <strong className="ml-2">{Math.ceil(parseFloat(cantidadProducida) / parseFloat(orden.rendimiento_unidades || 1))}</strong>
-                </div>
-                <div>
-                  <span className="text-muted">Cantidad restante por registrar:</span>
-                  <strong className="ml-2">{(parseFloat(cantidadProducida) - parseFloat(orden.cantidad_producida || 0)).toFixed(2)} {orden.unidad_medida}</strong>
-                </div>
-              </div>
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Package size={18} className="text-primary" />
+              <h3 className="font-semibold">Consumo Final de Insumos *</h3>
             </div>
-          )}
 
-          {tieneReceta && consumoRealInsumos.length > 0 && (
-            <div className="border-t border-gray-200 pt-4 mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Edit size={18} className="text-primary" />
-                  <h3 className="font-semibold">Consumo Real de Insumos (Opcional)</h3>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline"
-                  onClick={() => setMostrarConsumoReal(!mostrarConsumoReal)}
-                >
-                  {mostrarConsumoReal ? 'Ocultar' : 'Ajustar Consumo Real'}
-                </button>
-              </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3 text-sm text-yellow-800">
+              <p><strong>Importante:</strong> Especifique la cantidad de insumos consumidos en esta etapa final.</p>
+              <p className="mt-1">Los valores sugeridos representan el consumo pendiente según lo planificado.</p>
+            </div>
 
-              {mostrarConsumoReal && (
-                <div className="space-y-2 bg-blue-50 p-4 rounded">
-                  <div className="bg-white border-l-4 border-blue-500 p-3 mb-3 text-sm text-blue-800">
-                    <p><strong>💡 Ajuste de Costos:</strong> Edite las cantidades reales consumidas si difieren de lo planificado.</p>
-                    <p className="mt-1">Los costos se recalcularán automáticamente basándose en el consumo real.</p>
-                  </div>
-
-                  <div className="max-h-96 overflow-y-auto space-y-2">
-                    {consumoRealInsumos.map(item => {
-                      const diferencia = item.cantidad_real - item.cantidad_planificada;
-                      const porcentajeDif = (diferencia / item.cantidad_planificada * 100).toFixed(1);
-                       
-                      return (
-                        <div key={item.id_insumo} className="bg-white p-3 rounded border border-gray-200">
-                          <div className="grid grid-cols-12 gap-3 items-center">
-                            <div className="col-span-5">
-                              <div className="font-medium text-sm">{item.insumo}</div>
-                              <div className="text-xs text-muted">{item.codigo_insumo}</div>
-                            </div>
-                            
-                            <div className="col-span-2 text-center">
-                              <div className="text-xs text-muted mb-1">Planificado</div>
-                              <div className="font-mono text-sm">
-                                {item.cantidad_planificada.toFixed(4)}
-                              </div>
-                              <div className="text-xs text-muted">{item.unidad_medida}</div>
-                            </div>
-                            
-                            <div className="col-span-3">
-                              <label className="text-xs text-muted block mb-1">Cantidad Real Consumida:</label>
-                              <input
-                                type="number"
-                                step="0.0001"
-                                min="0"
-                                className="form-input form-input-sm"
-                                value={item.cantidad_real}
-                                onChange={(e) => actualizarCantidadReal(item.id_insumo, e.target.value)}
-                              />
-                            </div>
-                            
-                            <div className="col-span-2 text-center">
-                              {diferencia !== 0 && (
-                                <div className={`badge ${diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>
-                                  {diferencia > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                                  {diferencia > 0 ? '+' : ''}{porcentajeDif}%
-                                </div>
-                              )}
-                              {diferencia !== 0 && (
-                                <div className="text-xs text-muted mt-1">
-                                  {diferencia > 0 ? '+' : ''}{diferencia.toFixed(4)} {item.unidad_medida}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="bg-white p-4 rounded border-2 border-blue-200 mt-3">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <div className="text-xs text-muted mb-1">Costo Planificado</div>
-                        <div className="font-bold text-lg">{formatearMoneda(orden.costo_materiales)}</div>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {insumosFinalesConsumo.map(item => (
+                <div key={item.id_insumo} className="bg-gray-50 p-3 rounded border">
+                  <div className="grid grid-cols-12 gap-3 items-center">
+                    <div className="col-span-5">
+                      <div className="font-medium text-sm">{item.insumo}</div>
+                      <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                    </div>
+                    
+                    <div className="col-span-2 text-center">
+                      <div className="text-xs text-muted mb-1">Ya Consumido</div>
+                      <div className="font-mono text-sm">
+                        {item.cantidad_ya_consumida.toFixed(4)}
                       </div>
-                      <div>
-                        <div className="text-xs text-muted mb-1">Costo Real Estimado</div>
-                        <div className="font-bold text-lg text-primary">{formatearMoneda(calcularCostoReal())}</div>
+                      <div className="text-xs text-muted">{item.unidad_medida}</div>
+                    </div>
+
+                    <div className="col-span-2 text-center">
+                      <div className="text-xs text-muted mb-1">Pendiente</div>
+                      <div className="font-mono text-sm text-warning">
+                        {item.cantidad_pendiente.toFixed(4)}
                       </div>
-                      <div>
-                        <div className="text-xs text-muted mb-1">Diferencia</div>
-                        <div className={`font-bold text-lg ${calcularCostoReal() > parseFloat(orden.costo_materiales) ? 'text-warning' : 'text-success'}`}>
-                          {calcularCostoReal() > parseFloat(orden.costo_materiales) ? '+' : ''}
-                          {formatearMoneda(calcularCostoReal() - parseFloat(orden.costo_materiales))}
-                        </div>
-                      </div>
+                      <div className="text-xs text-muted">{item.unidad_medida}</div>
+                    </div>
+                    
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted block mb-1">Cantidad Final:</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        className="form-input form-input-sm"
+                        value={item.cantidad}
+                        onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
+                        placeholder={item.cantidad_pendiente.toFixed(4)}
+                        required
+                      />
                     </div>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          )}
+          </div>
 
           <div className="form-group mt-4">
             <label className="form-label">Observaciones Finales</label>
@@ -1683,7 +1600,7 @@ function OrdenDetalle() {
             <button 
               type="submit" 
               className="btn btn-success"
-              disabled={procesando || !cantidadProducida}
+              disabled={procesando || !cantidadFinal}
             >
               {procesando ? 'Procesando...' : 'Finalizar Producción'}
             </button>

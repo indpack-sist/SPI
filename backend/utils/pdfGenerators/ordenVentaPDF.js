@@ -6,14 +6,29 @@ import https from 'https';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- FUNCIÓN MEJORADA: Con Timeout y manejo de errores ---
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
+    const request = https.get(url, {
+        timeout: 3000 // 3 segundos máximo de espera
+    }, (response) => {
+      // Si la imagen no existe o da error 404/500
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return reject(new Error(`Status Code: ${response.statusCode}`));
+      }
+
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
-    }).on('error', reject);
+    });
+
+    request.on('error', (err) => reject(err));
+
+    // Si tarda más de 3 segundos, cancelamos para no trabar el PDF
+    request.on('timeout', () => {
+        request.destroy();
+        reject(new Error("Timeout al descargar imagen"));
+    });
   });
 }
 
@@ -22,7 +37,8 @@ export async function generarOrdenVentaPDF(orden) {
     try {
       const doc = new PDFDocument({ 
         size: 'A4',
-        margins: { top: 30, bottom: 30, left: 30, right: 30 }
+        margins: { top: 30, bottom: 30, left: 30, right: 30 },
+        bufferPages: true // Optimización de memoria
       });
       
       const chunks = [];
@@ -30,31 +46,29 @@ export async function generarOrdenVentaPDF(orden) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      let logoBuffer;
+      // --- MANEJO DEL LOGO ---
+      let logoBuffer = null;
       try {
+        // Intentamos descargar, si falla o tarda, usamos el fallback
         logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
       } catch (error) {
-        console.error(error);
+        console.warn("No se pudo cargar el logo (usando fallback):", error.message);
+        // No hacemos reject, dejamos que continúe sin logo
       }
 
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          // Si el buffer es inválido (imagen corrupta)
+          dibujarLogoFallback(doc);
         }
       } else {
-        doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        dibujarLogoFallback(doc);
       }
+      // -----------------------
 
+      // Resto del contenido (Mismo código tuyo)
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, 110);
       
@@ -167,44 +181,46 @@ export async function generarOrdenVentaPDF(orden) {
 
       const simboloMoneda = orden.moneda === 'USD' ? '$' : 'S/';
       
-      orden.detalle.forEach((item, idx) => {
-        const cantidad = parseFloat(item.cantidad).toFixed(2);
-        const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
-        
-        const descuento = parseFloat(item.descuento_porcentaje || 0);
-        const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
-        const valorVenta = parseFloat(totalLinea).toFixed(2);
-        
-        const descripcion = item.producto;
-        const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
-        const alturaFila = Math.max(20, alturaDescripcion + 10);
-
-        if (yPos + alturaFila > 700) {
-          doc.addPage();
-          yPos = 50;
+      if (orden.detalle && orden.detalle.length > 0) {
+        orden.detalle.forEach((item, idx) => {
+          const cantidad = parseFloat(item.cantidad).toFixed(2);
+          const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
           
-          doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-          doc.text('CÓDIGO', 40, yPos + 6);
-          doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
-          doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
-          doc.text('DESCRIPCIÓN', 230, yPos + 6);
-          doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
-          doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
-          yPos += 20;
-        }
+          const descuento = parseFloat(item.descuento_porcentaje || 0);
+          const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
+          const valorVenta = parseFloat(totalLinea).toFixed(2);
+          
+          const descripcion = item.producto;
+          const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
+          const alturaFila = Math.max(20, alturaDescripcion + 10);
 
-        doc.fontSize(8).font('Helvetica').fillColor('#000000');
-        
-        doc.text(item.codigo_producto, 40, yPos + 5);
-        doc.text(cantidad, 130, yPos + 5, { width: 50, align: 'center' });
-        doc.text(item.unidad_medida || 'UND', 185, yPos + 5, { width: 40, align: 'center' });
-        doc.text(descripcion, 230, yPos + 5, { width: 215, lineGap: 2 });
-        doc.text(precioUnitario, 450, yPos + 5, { align: 'right', width: 50 });
-        doc.text(`${simboloMoneda} ${valorVenta}`, 505, yPos + 5, { align: 'right', width: 50 });
+          if (yPos + alturaFila > 700) {
+            doc.addPage();
+            yPos = 50;
+            
+            doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
+            doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+            doc.text('CÓDIGO', 40, yPos + 6);
+            doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
+            doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
+            doc.text('DESCRIPCIÓN', 230, yPos + 6);
+            doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
+            doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
+            yPos += 20;
+          }
 
-        yPos += alturaFila;
-      });
+          doc.fontSize(8).font('Helvetica').fillColor('#000000');
+          
+          doc.text(item.codigo_producto, 40, yPos + 5);
+          doc.text(cantidad, 130, yPos + 5, { width: 50, align: 'center' });
+          doc.text(item.unidad_medida || 'UND', 185, yPos + 5, { width: 40, align: 'center' });
+          doc.text(descripcion, 230, yPos + 5, { width: 215, lineGap: 2 });
+          doc.text(precioUnitario, 450, yPos + 5, { align: 'right', width: 50 });
+          doc.text(`${simboloMoneda} ${valorVenta}`, 505, yPos + 5, { align: 'right', width: 50 });
+
+          yPos += alturaFila;
+        });
+      }
 
       yPos += 10;
       
@@ -212,9 +228,9 @@ export async function generarOrdenVentaPDF(orden) {
       let yPosLeft = yBaseFooter;
       let yPosRight = yBaseFooter;
 
-      const subtotal = parseFloat(orden.subtotal).toFixed(2);
-      const igv = parseFloat(orden.igv).toFixed(2);
-      const total = parseFloat(orden.total).toFixed(2);
+      const subtotal = parseFloat(orden.subtotal || 0).toFixed(2);
+      const igv = parseFloat(orden.igv || 0).toFixed(2);
+      const total = parseFloat(orden.total || 0).toFixed(2);
       
       const tipoImpuesto = orden.tipo_impuesto || 'IGV';
       const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
@@ -296,6 +312,14 @@ export async function generarOrdenVentaPDF(orden) {
       reject(error);
     }
   });
+}
+
+function dibujarLogoFallback(doc) {
+    doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
+    doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
+    doc.text('IndPack', 60, 55);
+    doc.fontSize(10).font('Helvetica');
+    doc.text('EMBALAJE INDUSTRIAL', 60, 80);
 }
 
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {

@@ -126,13 +126,12 @@ function OrdenesVenta() {
     }
   };
 
-  const formatearFecha = (fecha) => {
-    if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+  const formatearFechaVisual = (fechaStr) => {
+    if (!fechaStr) return '-';
+    const cleanFecha = fechaStr.split('T')[0];
+    const partes = cleanFecha.split('-');
+    if (partes.length !== 3) return cleanFecha;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
   const formatearNumero = (valor) => {
@@ -242,10 +241,10 @@ function OrdenesVenta() {
       width: '110px',
       render: (value, row) => (
         <div>
-          <div>{formatearFecha(value)}</div>
+          <div className="font-medium text-gray-800">{formatearFechaVisual(value)}</div>
           {row.fecha_entrega_estimada && (
-            <div className="text-xs text-muted">
-              Entrega: {formatearFecha(row.fecha_entrega_estimada)}
+            <div className="text-[10px] text-muted mt-1 uppercase font-semibold">
+              Entrega: {formatearFechaVisual(row.fecha_entrega_estimada)}
             </div>
           )}
         </div>
@@ -299,14 +298,14 @@ function OrdenesVenta() {
         
         return (
           <div>
-            <div className="font-bold">{formatearMoneda(total, row.moneda)}</div>
+            <div className="font-bold text-gray-800">{formatearMoneda(total, row.moneda)}</div>
             <div className="text-xs text-muted">
               Pagado: {formatearMoneda(pagado, row.moneda)}
             </div>
             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
               <div 
                 className={`h-1.5 rounded-full ${
-                  porcentaje === 100 ? 'bg-success' : 
+                  porcentaje >= 99.9 ? 'bg-success' : 
                   porcentaje > 0 ? 'bg-info' : 'bg-warning'
                 }`}
                 style={{ width: `${porcentaje}%` }}
@@ -429,12 +428,12 @@ function OrdenesVenta() {
 
       {estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="card">
+          <div className="card shadow-sm">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">Total Órdenes</p>
-                  <h3 className="text-2xl font-bold">{estadisticas.total_ordenes || 0}</h3>
+                  <h3 className="text-2xl font-bold text-gray-800">{estadisticas.total_ordenes || 0}</h3>
                   <p className="text-xs text-muted">{estadisticas.clientes_unicos || 0} clientes</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
@@ -444,7 +443,7 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          <div className="card border-l-4 border-warning">
+          <div className="card shadow-sm border-l-4 border-warning">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
@@ -459,14 +458,14 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          <div className="card border-l-4 border-info">
+          <div className="card shadow-sm border-l-4 border-info">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted">En Proceso</p>
                   <h3 className="text-2xl font-bold text-info">{estadisticas.en_proceso || 0}</h3>
                   {estadisticas.urgentes > 0 && (
-                    <p className="text-xs text-danger flex items-center gap-1">
+                    <p className="text-xs text-danger flex items-center gap-1 font-bold">
                       <AlertTriangle size={12} />
                       {estadisticas.urgentes} urgentes
                     </p>
@@ -479,7 +478,7 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          <div className="card border-l-4 border-success">
+          <div className="card shadow-sm border-l-4 border-success">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
@@ -498,7 +497,7 @@ function OrdenesVenta() {
         </div>
       )}
 
-      <div className="card mb-4">
+      <div className="card mb-4 shadow-sm">
         <div className="card-body">
           <div className="flex flex-col gap-4">
             
@@ -610,8 +609,8 @@ function OrdenesVenta() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header flex justify-between items-center">
+      <div className="card shadow-sm">
+        <div className="card-header flex justify-between items-center bg-gray-50/50">
           <h2 className="card-title">
             Lista de Órdenes de Venta
             <span className="badge badge-primary ml-2">{ordenesFiltradas.length}</span>
@@ -621,7 +620,7 @@ function OrdenesVenta() {
           </div>
         </div>
         
-        <div className="card-body">
+        <div className="card-body p-0">
           <Table
             columns={columns}
             data={currentItems}

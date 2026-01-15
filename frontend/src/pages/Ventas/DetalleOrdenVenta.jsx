@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Lock // Agregué el icono Lock para reservas
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -394,10 +394,6 @@ function DetalleOrdenVenta() {
     }
   };
 
-  const handleGenerarGuia = () => {
-    navigate(`/ventas/guias-remision/nueva?orden=${id}`);
-  };
-
   const handleDescargarPDF = async (tipoDocumento) => {
     try {
       setProcesando(true);
@@ -461,20 +457,20 @@ function DetalleOrdenVenta() {
     const configs = {
       'En Espera': { 
         icono: Clock, 
-        clase: 'badge-warning',
-        color: 'border-warning',
+        clase: 'badge-warning', 
+        color: 'border-warning', 
         siguientes: ['En Proceso', 'Cancelada'] 
       },
       'En Proceso': { 
-        icono: Factory,
-        clase: 'badge-info',
-        color: 'border-info',
+        icono: Factory, 
+        clase: 'badge-info', 
+        color: 'border-info', 
         siguientes: ['Atendido por Producción', 'Cancelada']
       },
       'Atendido por Producción': {  
         icono: CheckCircle, 
-        clase: 'badge-primary',
-        color: 'border-primary',
+        clase: 'badge-primary', 
+        color: 'border-primary', 
         siguientes: ['Despacho Parcial', 'Despachada', 'Cancelada']
       },
       'Despacho Parcial': {
@@ -485,20 +481,20 @@ function DetalleOrdenVenta() {
       },
       'Despachada': { 
         icono: Truck, 
-        clase: 'badge-primary',
-        color: 'border-primary',
+        clase: 'badge-primary', 
+        color: 'border-primary', 
         siguientes: ['Entregada']
       },
       'Entregada': { 
         icono: CheckCircle, 
-        clase: 'badge-success',
-        color: 'border-success',
+        clase: 'badge-success', 
+        color: 'border-success', 
         siguientes: []
       },
       'Cancelada': { 
         icono: XCircle, 
-        clase: 'badge-danger',
-        color: 'border-danger',
+        clase: 'badge-danger', 
+        color: 'border-danger', 
         siguientes: []
       }
     };
@@ -582,7 +578,8 @@ function DetalleOrdenVenta() {
       width: '100px',
       align: 'right',
       render: (value) => {
-        const pendiente = parseFloat(value);
+        // Corrección de negativos en pendiente: si es negativo, mostrar 0 (aunque indica sobre-despacho)
+        const pendiente = Math.max(0, parseFloat(value));
         return (
           <span className={`font-bold ${pendiente > 0 ? 'text-danger' : 'text-success'}`}>
              {formatearNumero(pendiente || 0)}
@@ -605,12 +602,26 @@ function DetalleOrdenVenta() {
       width: '140px',
       align: 'center',
       render: (value, row) => {
+        const pendiente = parseFloat(row.cantidad_pendiente || 0);
+        
+        if (pendiente <= 0) return <span className="badge badge-success"><CheckCircle size={12}/> Completado</span>;
+
+        // --- CORRECCIÓN LÓGICA RESERVA ---
+        // Si la orden tiene stock_reservado = 1, NO verificamos stock en almacén, porque ya es nuestro.
+        if (orden.stock_reservado === 1) {
+            return (
+                <div className="flex flex-col gap-1">
+                    <span className="badge badge-success bg-green-100 text-green-700 border-green-200">
+                        <Lock size={10} className="mr-1"/> Reservado
+                    </span>
+                </div>
+            );
+        }
+
+        // --- PRODUCTO NORMAL (SIN RECETA) ---
         if (!row.requiere_receta) {
           const stockDisponible = parseFloat(row.stock_disponible || 0);
-          const pendiente = parseFloat(row.cantidad_pendiente || 0);
           
-          if (pendiente <= 0) return <span className="badge badge-success"><CheckCircle size={12}/> Completado</span>;
-
           return (
             <div className="flex flex-col gap-1">
               <span className={`badge ${stockDisponible >= pendiente ? 'badge-success' : 'badge-warning'}`}>
@@ -621,6 +632,7 @@ function DetalleOrdenVenta() {
           );
         }
 
+        // --- PRODUCTO MANUFACTURA (CON RECETA) ---
         const stockDisponible = parseFloat(row.stock_disponible || 0);
         const cantidadRequerida = parseFloat(row.cantidad);
 
@@ -633,15 +645,24 @@ function DetalleOrdenVenta() {
           );
         }
 
+        // Corrección de negativo: Usar Math.max(0, ...)
+        const faltante = Math.max(0, cantidadRequerida - stockDisponible);
+
         return (
           <div className="flex flex-col gap-1">
             <span className="badge badge-warning">
               <AlertCircle size={12} />
               Pendiente OP
             </span>
-            <span className="text-xs text-danger">
-              Falta: {(cantidadRequerida - stockDisponible).toFixed(2)} {row.unidad_medida}
-            </span>
+            {faltante > 0 ? (
+                <span className="text-xs text-danger">
+                  Falta: {faltante.toFixed(2)} {row.unidad_medida}
+                </span>
+            ) : (
+                <span className="text-xs text-success">
+                  Stock Cubierto
+                </span>
+            )}
           </div>
         );
       }
@@ -674,7 +695,8 @@ function DetalleOrdenVenta() {
               className={`btn btn-sm ${stockSuficiente ? 'btn-outline btn-primary' : 'btn-primary'}`}
               onClick={() => {
                 setProductoSeleccionado(row);
-                const faltante = cantidadRequerida - stockDisponible;
+                // Corrección de negativo aquí también
+                const faltante = Math.max(0, cantidadRequerida - stockDisponible);
                 setCantidadOP(faltante > 0 ? faltante : cantidadRequerida);
                 setModalCrearOP(true);
               }}
@@ -781,6 +803,9 @@ function DetalleOrdenVenta() {
   const IconoEstadoPago = estadoPagoConfig.icono;
 
   const productosRequierenOP = orden.detalle.filter(item => {
+    // Si está reservado, no requiere OP por falta de stock (ya está cubierto)
+    if(orden.stock_reservado === 1) return false;
+
     const stockDisponible = parseFloat(item.stock_disponible || 0);
     const cantidadRequerida = parseFloat(item.cantidad);
     return item.requiere_receta && 
@@ -825,6 +850,11 @@ function DetalleOrdenVenta() {
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShoppingCart size={32} />
               Orden de Venta {orden.numero_orden}
+              {orden.stock_reservado === 1 && (
+                  <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para esta orden">
+                      <Lock size={12} className="mr-1"/> Stock Reservado
+                  </span>
+              )}
             </h1>
             <div className="flex items-center gap-3 mt-1">
               <p className="text-muted">

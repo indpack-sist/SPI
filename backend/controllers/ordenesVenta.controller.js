@@ -184,6 +184,72 @@ export async function getOrdenVentaById(req, res) {
   }
 }
 
+export async function reservarStockOrden(req, res) {
+  try {
+    const { id } = req.params;
+
+    const ordenResult = await executeQuery('SELECT stock_reservado, estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.stock_reservado === 1) {
+      return res.status(400).json({ success: false, error: 'Esta orden ya tiene stock reservado' });
+    }
+
+    if (orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
+      return res.status(400).json({ success: false, error: 'No se puede reservar stock en el estado actual de la orden' });
+    }
+
+    const detalleResult = await executeQuery('SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
+    const detalles = detalleResult.data;
+
+    const queries = [];
+
+    for (const item of detalles) {
+      const productoResult = await executeQuery('SELECT stock_actual, nombre, requiere_receta FROM productos WHERE id_producto = ?', [item.id_producto]);
+      
+      if (productoResult.data.length > 0) {
+        const producto = productoResult.data[0];
+        
+        if (producto.requiere_receta === 0) {
+          if (parseFloat(producto.stock_actual) < parseFloat(item.cantidad)) {
+            return res.status(400).json({ 
+              success: false, 
+              error: `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock_actual}, Requerido: ${item.cantidad}` 
+            });
+          }
+
+          queries.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+            params: [parseFloat(item.cantidad), item.id_producto]
+          });
+        }
+      }
+    }
+
+    queries.push({
+      sql: 'UPDATE ordenes_venta SET stock_reservado = 1 WHERE id_orden_venta = ?',
+      params: [id]
+    });
+
+    const result = await executeTransaction(queries);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, message: 'Stock reservado exitosamente' });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function createOrdenVenta(req, res) {
   try {
     const {

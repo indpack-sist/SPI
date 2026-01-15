@@ -425,15 +425,31 @@ export const cotizacionesAPI = {
     });
     
     if (!response.ok) throw new Error('Error al descargar PDF');
+
+    // 1. Intentar extraer el nombre del archivo del header Content-Disposition
+    const disposition = response.headers.get('Content-Disposition');
+    let filename = `cotizacion-${id}.pdf`; // Nombre de respaldo
+
+    if (disposition && disposition.includes('filename=')) {
+      // Esta expresión regular extrae el texto entre comillas después de filename=
+      const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+      const matches = filenameRegex.exec(disposition);
+      if (matches != null && matches[1]) { 
+        filename = matches[1].replace(/['"]/g, '');
+      }
+    }
     
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `cotizacion-${id}.pdf`;
+
+    // 2. Usar el nombre que extrajimos del servidor
+    link.download = filename; 
     
     document.body.appendChild(link);
     link.click();
+
     setTimeout(() => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
@@ -458,6 +474,8 @@ export const ordenesVentaAPI = {
   
   update: (id, data) => api.put(`/ordenes-venta/${id}`, data),
   
+  reservarStock: (id) => api.post(`/ordenes-venta/${id}/reservar`),
+
   crearOrdenProduccion: (id, data) => api.post(`/ordenes-venta/${id}/crear-orden-produccion`, data),
 
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 

@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock // Agregué el icono Lock para reservas
+  ChevronLeft, ChevronRight, Lock
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -268,6 +268,27 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al anular orden');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleReservarStock = async () => {
+    if (!confirm('¿Desea reservar el stock para esta orden? Se descontarán las existencias del inventario.')) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.reservarStock(id);
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al reservar stock');
     } finally {
       setProcesando(false);
     }
@@ -578,7 +599,6 @@ function DetalleOrdenVenta() {
       width: '100px',
       align: 'right',
       render: (value) => {
-        // Corrección de negativos en pendiente: si es negativo, mostrar 0 (aunque indica sobre-despacho)
         const pendiente = Math.max(0, parseFloat(value));
         return (
           <span className={`font-bold ${pendiente > 0 ? 'text-danger' : 'text-success'}`}>
@@ -606,8 +626,6 @@ function DetalleOrdenVenta() {
         
         if (pendiente <= 0) return <span className="badge badge-success"><CheckCircle size={12}/> Completado</span>;
 
-        // --- CORRECCIÓN LÓGICA RESERVA ---
-        // Si la orden tiene stock_reservado = 1, NO verificamos stock en almacén, porque ya es nuestro.
         if (orden.stock_reservado === 1) {
             return (
                 <div className="flex flex-col gap-1">
@@ -618,7 +636,6 @@ function DetalleOrdenVenta() {
             );
         }
 
-        // --- PRODUCTO NORMAL (SIN RECETA) ---
         if (!row.requiere_receta) {
           const stockDisponible = parseFloat(row.stock_disponible || 0);
           
@@ -632,7 +649,6 @@ function DetalleOrdenVenta() {
           );
         }
 
-        // --- PRODUCTO MANUFACTURA (CON RECETA) ---
         const stockDisponible = parseFloat(row.stock_disponible || 0);
         const cantidadRequerida = parseFloat(row.cantidad);
 
@@ -645,7 +661,6 @@ function DetalleOrdenVenta() {
           );
         }
 
-        // Corrección de negativo: Usar Math.max(0, ...)
         const faltante = Math.max(0, cantidadRequerida - stockDisponible);
 
         return (
@@ -695,7 +710,6 @@ function DetalleOrdenVenta() {
               className={`btn btn-sm ${stockSuficiente ? 'btn-outline btn-primary' : 'btn-primary'}`}
               onClick={() => {
                 setProductoSeleccionado(row);
-                // Corrección de negativo aquí también
                 const faltante = Math.max(0, cantidadRequerida - stockDisponible);
                 setCantidadOP(faltante > 0 ? faltante : cantidadRequerida);
                 setModalCrearOP(true);
@@ -803,7 +817,6 @@ function DetalleOrdenVenta() {
   const IconoEstadoPago = estadoPagoConfig.icono;
 
   const productosRequierenOP = orden.detalle.filter(item => {
-    // Si está reservado, no requiere OP por falta de stock (ya está cubierto)
     if(orden.stock_reservado === 1) return false;
 
     const stockDisponible = parseFloat(item.stock_disponible || 0);
@@ -876,6 +889,17 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
+          {!orden.stock_reservado && orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+            <button
+              className="btn btn-warning border-yellow-400 text-yellow-800 hover:bg-yellow-100"
+              onClick={handleReservarStock}
+              disabled={procesando}
+              title="Reservar stock físico para esta orden"
+            >
+              <Lock size={20} /> Reservar Stock
+            </button>
+          )}
+
           {puedeDespachar() && (
              <button 
                className="btn btn-primary shadow-lg shadow-primary/20" 

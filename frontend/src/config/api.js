@@ -463,17 +463,25 @@ export const ordenesVentaAPI = {
   actualizarPrioridad: (id, prioridad) => 
     api.put(`/ordenes-venta/${id}/prioridad`, { prioridad }),
 
+  // Pagos
   registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data),
   getPagos: (id) => api.get(`/ordenes-venta/${id}/pagos`),
   anularPago: (id, idPago) => api.delete(`/ordenes-venta/${id}/pagos/${idPago}`),
   getResumenPagos: (id) => api.get(`/ordenes-venta/${id}/pagos/resumen`),
 
+  // Estadísticas
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 
-  // Funciones para Despacho Parcial
+  // Despachos
   getSalidas: (id) => api.get(`/ordenes-venta/${id}/salidas`),
   registrarDespacho: (id, data) => api.post(`/ordenes-venta/${id}/despacho`, data),
+  anularDespacho: (id, idSalida) => api.delete(`/ordenes-venta/${id}/salidas/${idSalida}`),  // <--- NUEVO
 
+  // Anular orden completa
+  anularOrden: (id, motivo_anulacion) => 
+    api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),  // <--- NUEVO
+
+  // PDF
   descargarPDF: async (id, tipo = 'orden') => {
     try {
       const urlFetch = new URL(`${API_URL}/ordenes-venta/${id}/pdf`);

@@ -6,12 +6,10 @@ import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 // --- FUNCIÓN HELPER PARA FORZAR HORA PERÚ ---
 function getFechaPeru() {
   const now = new Date();
-  // Crea una fecha basada en la zona horaria de Lima
   return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
 }
 
 function getFechaISOPeru() {
-    // Retorna YYYY-MM-DD basado en Lima
     const peruDate = getFechaPeru();
     const year = peruDate.getFullYear();
     const month = String(peruDate.getMonth() + 1).padStart(2, '0');
@@ -51,7 +49,8 @@ export async function getAllOrdenesVenta(req, res) {
         e_registrado.nombre_completo AS registrado_por,
         ov.id_comercial,
         ov.id_registrado_por,
-        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
+        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
+        (SELECT COUNT(*) FROM salidas WHERE observaciones LIKE CONCAT('%', ov.numero_orden, '%') AND estado = 'Activo') AS total_despachos
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
@@ -311,7 +310,6 @@ export async function createOrdenVenta(req, res) {
       }
     }
     
-    // CORRECCIÓN: Usar año de Perú, no del servidor
     const numeroOrden = `OV-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     const tipoComp = tipo_comprobante || 'Factura';
@@ -358,10 +356,8 @@ export async function createOrdenVenta(req, res) {
       numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
     }
     
-    // CORRECCIÓN: Cálculo de fecha vencimiento robusto
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal && fecha_emision) {
-      // Agregamos T12:00:00 para evitar que el string se interprete como 00:00 UTC y retroceda un día
       const fechaBase = new Date(fecha_emision + 'T12:00:00');
       fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
       fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
@@ -408,7 +404,7 @@ export async function createOrdenVenta(req, res) {
       numeroComprobante,
       id_cliente,
       id_cotizacion || null,
-      fecha_emision, // Se guarda tal cual viene del front, asumimos YYYY-MM-DD
+      fecha_emision,
       fecha_entrega_estimada || null,
       fechaVencimientoFinal,
       prioridad || 'Media',
@@ -576,10 +572,8 @@ export async function updateOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
 
-    // CORRECCIÓN: Cálculo de fecha vencimiento robusto
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal && fecha_emision) {
-        // Agregamos T12:00:00 para evitar que el string se interprete como 00:00 UTC
         const fechaBase = new Date(fecha_emision + 'T12:00:00');
         fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
         fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
@@ -762,7 +756,6 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
       }
     }
     
-    // CORRECCIÓN: Usar año Perú
     const numeroOrdenProduccion = `OP-${getFechaPeru().getFullYear()}-${String(numeroSecuenciaOP).padStart(4, '0')}`;
     
     const opResult = await executeQuery(`
@@ -842,6 +835,14 @@ export async function registrarDespacho(req, res) {
     if (ordenResult.data.length === 0) return res.status(404).json({ error: 'Orden no encontrada' });
     const orden = ordenResult.data[0];
 
+    // Validar que la orden no esté cancelada ni entregada completamente
+    if (orden.estado === 'Cancelada') {
+      return res.status(400).json({ error: 'No se puede despachar una orden cancelada' });
+    }
+    if (orden.estado === 'Entregada') {
+      return res.status(400).json({ error: 'Esta orden ya fue entregada completamente' });
+    }
+
     const itemsOrden = await executeQuery('SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
     
     let totalCosto = 0;
@@ -891,7 +892,6 @@ export async function registrarDespacho(req, res) {
         id_usuario,
         `Despacho Parcial Orden ${orden.numero_orden}`,
         'Activo',
-        // CORRECCIÓN: Si no hay fecha_despacho, usar hora Perú
         fecha_despacho || getFechaPeru()
       ]
     });
@@ -899,7 +899,7 @@ export async function registrarDespacho(req, res) {
     const resultTx = await executeTransaction(queries);
     if (!resultTx.success) return res.status(500).json({ error: resultTx.error });
 
-    const idSalida = resultTx.data[0].insertId; // Aquí definimos la variable como idSalida
+    const idSalida = resultTx.data[0].insertId;
     const queriesDetalle = [];
 
     for (const item of itemsProcesados) {
@@ -921,6 +921,7 @@ export async function registrarDespacho(req, res) {
 
     await executeTransaction(queriesDetalle);
 
+    // Verificar estado de completitud
     const verificacion = await executeQuery(`
       SELECT 
         COUNT(*) as total_items,
@@ -930,14 +931,14 @@ export async function registrarDespacho(req, res) {
 
     const { total_items, items_completados } = verificacion.data[0];
     
-    let nuevoEstado = 'En Proceso'; 
+    let nuevoEstado = 'Despacho Parcial';
     if (total_items == items_completados) {
-      nuevoEstado = 'Despachada'; 
+      nuevoEstado = 'Despachada';
     }
 
     await executeQuery(
-      'UPDATE ordenes_venta SET estado = ?, id_salida = ? WHERE id_orden_venta = ?', 
-      [nuevoEstado, idSalida, id]
+      'UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?', 
+      [nuevoEstado, id]
     );
 
     res.json({
@@ -955,13 +956,203 @@ export async function registrarDespacho(req, res) {
   }
 }
 
+export async function anularDespacho(req, res) {
+  try {
+    const { id, idSalida } = req.params;
+    const id_usuario = req.user?.id_empleado || null;
+
+    if (!id_usuario) {
+      return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
+    }
+
+    // Verificar que la orden existe
+    const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({ error: 'Orden de venta no encontrada' });
+    }
+    const orden = ordenResult.data[0];
+
+    // Verificar que la salida pertenece a esta orden
+    const salidaResult = await executeQuery(
+      'SELECT * FROM salidas WHERE id_salida = ? AND observaciones LIKE ?', 
+      [idSalida, `%${orden.numero_orden}%`]
+    );
+    
+    if (salidaResult.data.length === 0) {
+      return res.status(404).json({ error: 'Salida no encontrada o no pertenece a esta orden' });
+    }
+
+    const salida = salidaResult.data[0];
+
+    if (salida.estado !== 'Activo') {
+      return res.status(400).json({ error: 'Esta salida ya fue anulada' });
+    }
+
+    // Obtener el detalle de la salida
+    const detalleSalida = await executeQuery(
+      'SELECT * FROM detalle_salidas WHERE id_salida = ?',
+      [idSalida]
+    );
+
+    const queriesReversion = [];
+
+    // Revertir stock y cantidades despachadas
+    for (const item of detalleSalida.data) {
+      queriesReversion.push({
+        sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+        params: [item.cantidad, item.id_producto]
+      });
+
+      queriesReversion.push({
+        sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada - ? WHERE id_orden_venta = ? AND id_producto = ?',
+        params: [item.cantidad, id, item.id_producto]
+      });
+    }
+
+    // Marcar la salida como anulada
+    queriesReversion.push({
+      sql: 'UPDATE salidas SET estado = ?, observaciones = CONCAT(observaciones, " - ANULADA") WHERE id_salida = ?',
+      params: ['Anulado', idSalida]
+    });
+
+    await executeTransaction(queriesReversion);
+
+    // Recalcular estado de la orden
+    const verificacion = await executeQuery(`
+      SELECT 
+        COUNT(*) as total_items,
+        SUM(CASE WHEN cantidad_despachada > 0 THEN 1 ELSE 0 END) as items_con_despachos,
+        SUM(CASE WHEN cantidad = cantidad_despachada THEN 1 ELSE 0 END) as items_completados
+      FROM detalle_orden_venta WHERE id_orden_venta = ?
+    `, [id]);
+
+    const { total_items, items_con_despachos, items_completados } = verificacion.data[0];
+    
+    let nuevoEstado = 'En Espera';
+    if (items_completados == total_items && total_items > 0) {
+      nuevoEstado = 'Despachada';
+    } else if (items_con_despachos > 0) {
+      nuevoEstado = 'Despacho Parcial';
+    }
+
+    await executeQuery(
+      'UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?',
+      [nuevoEstado, id]
+    );
+
+    res.json({
+      success: true,
+      message: `Despacho anulado correctamente. Orden pasó a estado: ${nuevoEstado}`,
+      data: {
+        id_salida_anulada: idSalida,
+        nuevo_estado: nuevoEstado
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function anularOrdenVenta(req, res) {
+  try {
+    const { id } = req.params;
+    const { motivo_anulacion } = req.body;
+    const id_usuario = req.user?.id_empleado || null;
+
+    if (!id_usuario) {
+      return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
+    }
+
+    // Verificar que la orden existe
+    const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({ error: 'Orden de venta no encontrada' });
+    }
+    const orden = ordenResult.data[0];
+
+    if (orden.estado === 'Cancelada') {
+      return res.status(400).json({ error: 'Esta orden ya fue cancelada' });
+    }
+
+    if (orden.estado === 'Entregada') {
+      return res.status(400).json({ error: 'No se puede anular una orden que ya fue entregada' });
+    }
+
+    // Obtener todas las salidas asociadas a esta orden
+    const salidasResult = await executeQuery(
+      'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
+      [`%${orden.numero_orden}%`, 'Activo']
+    );
+
+    const queriesAnulacion = [];
+
+    // Anular todas las salidas y revertir stock
+    for (const salida of salidasResult.data) {
+      const detalleSalida = await executeQuery(
+        'SELECT * FROM detalle_salidas WHERE id_salida = ?',
+        [salida.id_salida]
+      );
+
+      for (const item of detalleSalida.data) {
+        queriesAnulacion.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          params: [item.cantidad, item.id_producto]
+        });
+      }
+
+      queriesAnulacion.push({
+        sql: 'UPDATE salidas SET estado = ?, observaciones = CONCAT(observaciones, " - ANULADA POR CANCELACIÓN OV") WHERE id_salida = ?',
+        params: ['Anulado', salida.id_salida]
+      });
+    }
+
+    // Resetear cantidades despachadas en el detalle
+    queriesAnulacion.push({
+      sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = 0 WHERE id_orden_venta = ?',
+      params: [id]
+    });
+
+    // Actualizar estado de la orden
+    const motivoFinal = motivo_anulacion || 'Sin motivo especificado';
+    queriesAnulacion.push({
+      sql: 'UPDATE ordenes_venta SET estado = ?, observaciones = CONCAT(COALESCE(observaciones, ""), " - ANULADA: ", ?) WHERE id_orden_venta = ?',
+      params: ['Cancelada', motivoFinal, id]
+    });
+
+    await executeTransaction(queriesAnulacion);
+
+    // Si había una cotización asociada, revertir su estado
+    if (orden.id_cotizacion) {
+      await executeQuery(
+        'UPDATE cotizaciones SET estado = ?, convertida_venta = 0, id_orden_venta = NULL WHERE id_cotizacion = ?',
+        ['Enviada', orden.id_cotizacion]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Orden de venta anulada correctamente',
+      data: {
+        salidas_anuladas: salidasResult.data.length,
+        motivo: motivoFinal
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
     const { estado, fecha_entrega_real } = req.body;
     const id_usuario = req.user?.id_empleado || null;
     
-    const estadosValidos = ['En Espera', 'En Proceso', 'Atendido por Producción', 'Despachada', 'Entregada', 'Cancelada'];
+    const estadosValidos = ['En Espera', 'En Proceso', 'Atendido por Producción', 'Despacho Parcial', 'Despachada', 'Entregada', 'Cancelada'];
     
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
@@ -986,70 +1177,34 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     
     const orden = ordenResult.data[0];
     const estadoAnterior = orden.estado;
-    
-    let idSalida = null;
 
-    if (estado === 'Despachada' && estadoAnterior !== 'Despachada' && estadoAnterior !== 'Entregada') {
-      
-      const detalleResult = await executeQuery(`
-        SELECT 
-          dov.id_producto,
-          (dov.cantidad - dov.cantidad_despachada) as cantidad_pendiente, 
-          p.costo_unitario_promedio
-        FROM detalle_orden_venta dov
-        INNER JOIN productos p ON dov.id_producto = p.id_producto
-        WHERE dov.id_orden_venta = ? AND (dov.cantidad - dov.cantidad_despachada) > 0
-      `, [id]);
-      
-      if (detalleResult.success && detalleResult.data.length > 0) {
-        const detallesPendientes = detalleResult.data;
-        
-        let totalCosto = 0;
-        for (const item of detallesPendientes) {
-           totalCosto += parseFloat(item.cantidad_pendiente) * parseFloat(item.costo_unitario_promedio || 0);
-        }
-        
-        // CORRECCIÓN: Usar getFechaPeru() para fecha_movimiento
-        const salidaResult = await executeQuery(`
-          INSERT INTO salidas (
-            id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-          3, 'Venta', orden.id_cliente, totalCosto, parseFloat(orden.total), orden.moneda || 'PEN', id_usuario, 
-          `Despacho Automático Final Orden ${orden.numero_orden}`, 'Activo', getFechaPeru()
-        ]);
-        
-        if (salidaResult.success) {
-          idSalida = salidaResult.data.insertId;
-          
-          for (const item of detallesPendientes) {
-            const stockCheck = await executeQuery('SELECT stock_actual FROM productos WHERE id_producto = ?', [item.id_producto]);
-            if (stockCheck.data[0].stock_actual < item.cantidad_pendiente) {
-               return res.status(400).json({ success: false, error: `No hay stock suficiente para completar el despacho del producto ID ${item.id_producto}` });
-            }
+    // Si cambia a Entregada desde Despacho Parcial o Despachada
+    if (estado === 'Entregada' && (estadoAnterior === 'Despacho Parcial' || estadoAnterior === 'Despachada')) {
+      const updateResult = await executeQuery(`
+        UPDATE ordenes_venta 
+        SET estado = ?,
+            fecha_entrega_real = ?
+        WHERE id_orden_venta = ?
+      `, [estado, fecha_entrega_real || getFechaISOPeru(), id]);
 
-            await executeQuery(`
-              INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) 
-              VALUES (?, ?, ?, ?, 0)
-            `, [idSalida, item.id_producto, item.cantidad_pendiente, item.costo_unitario_promedio]);
-            
-            await executeQuery('UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?', 
-              [item.cantidad_pendiente, item.id_producto]);
-
-             await executeQuery('UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ? WHERE id_orden_venta = ? AND id_producto = ?', 
-              [item.cantidad_pendiente, id, item.id_producto]);
-          }
-        }
+      if (!updateResult.success) {
+        return res.status(500).json({ success: false, error: updateResult.error });
       }
+
+      return res.json({
+        success: true,
+        message: `Estado actualizado a ${estado}`,
+        data: { nuevo_estado: estado }
+      });
     }
     
+    // Para otros cambios de estado
     const updateResult = await executeQuery(`
       UPDATE ordenes_venta 
       SET estado = ?,
-          fecha_entrega_real = ?,
-          id_salida = COALESCE(?, id_salida) 
+          fecha_entrega_real = ?
       WHERE id_orden_venta = ?
-    `, [estado, fecha_entrega_real || null, idSalida, id]);
+    `, [estado, fecha_entrega_real || null, id]);
     
     if (!updateResult.success) {
       return res.status(500).json({ 
@@ -1060,12 +1215,8 @@ export async function actualizarEstadoOrdenVenta(req, res) {
     
     res.json({
       success: true,
-      message: estado === 'Despachada' && idSalida
-        ? `Estado actualizado a ${estado}. Salida de inventario #${idSalida} generada automáticamente.`
-        : `Estado actualizado a ${estado}`,
-      data: {
-        id_salida: idSalida
-      }
+      message: `Estado actualizado a ${estado}`,
+      data: { nuevo_estado: estado }
     });
     
   } catch (error) {
@@ -1140,6 +1291,7 @@ export async function getEstadisticasOrdenesVenta(req, res) {
         SUM(CASE WHEN estado = 'En Espera' THEN 1 ELSE 0 END) AS en_espera,
         SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) AS en_proceso,
         SUM(CASE WHEN estado = 'Atendido por Producción' THEN 1 ELSE 0 END) AS atendidas,
+        SUM(CASE WHEN estado = 'Despacho Parcial' THEN 1 ELSE 0 END) AS despacho_parcial,
         SUM(CASE WHEN estado = 'Despachada' THEN 1 ELSE 0 END) AS despachadas,
         SUM(CASE WHEN estado = 'Entregada' THEN 1 ELSE 0 END) AS entregadas,
         SUM(CASE WHEN prioridad = 'Urgente' THEN 1 ELSE 0 END) AS urgentes,
@@ -1595,10 +1747,12 @@ export async function getSalidasOrden(req, res) {
         s.id_salida, 
         s.id_salida as numero_salida, 
         s.fecha_movimiento as fecha_salida, 
-        s.observaciones
+        s.observaciones,
+        s.estado,
+        s.total_costo,
+        (SELECT COUNT(*) FROM detalle_salidas WHERE id_salida = s.id_salida) as total_items
       FROM salidas s
       WHERE s.observaciones LIKE ? 
-      AND s.estado = 'Activo'
       ORDER BY s.fecha_movimiento DESC
     `;
     

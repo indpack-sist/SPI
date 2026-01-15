@@ -1053,11 +1053,10 @@ export async function recalcularTodosCUP(req, res) {
     const resultados = [];
     
     for (const producto of productos) {
-      // CORRECCIÓN: Agregado GROUP BY y uso de MAX para compatibilidad con only_full_group_by
       const cupResult = await executeQuery(
         `SELECT 
           COALESCE(
-            SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0),
+            SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / MAX(rp.rendimiento_unidades),
             0
           ) AS cup_calculado
          FROM recetas_productos rp
@@ -1111,25 +1110,24 @@ export async function verCUPPorRecetas(req, res) {
   try {
     const { id } = req.params;
     
-    // CORRECCIÓN: Uso de MAX en ORDER BY para columnas no agregadas
     const result = await executeQuery(
       `SELECT 
         rp.id_receta_producto,
-        MAX(rp.nombre_receta) as nombre_receta,
-        MAX(rp.version) as version,
-        MAX(rp.es_principal) as es_principal,
-        MAX(rp.es_activa) as es_activa,
-        MAX(rp.rendimiento_unidades) as rendimiento_unidades,
+        rp.nombre_receta,
+        rp.version,
+        rp.es_principal,
+        rp.es_activa,
+        rp.rendimiento_unidades,
         COALESCE(
           SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio),
           0
         ) AS costo_total_materiales,
         COALESCE(
-          SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0),
+          SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(rp.rendimiento_unidades, 0),
           0
         ) AS cup_por_unidad,
         COALESCE(
-          SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0) * 10,
+          SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(rp.rendimiento_unidades, 0) * 10,
           0
         ) AS cup_por_10_unidades,
         COUNT(rd.id_detalle) AS total_insumos
@@ -1137,8 +1135,8 @@ export async function verCUPPorRecetas(req, res) {
        LEFT JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
        LEFT JOIN productos insumo ON rd.id_insumo = insumo.id_producto
        WHERE rp.id_producto_terminado = ?
-       GROUP BY rp.id_receta_producto
-       ORDER BY MAX(rp.es_principal) DESC, MAX(rp.es_activa) DESC, MAX(rp.fecha_creacion) DESC`,
+       GROUP BY rp.id_receta_producto, rp.nombre_receta, rp.version, rp.es_principal, rp.es_activa, rp.rendimiento_unidades
+       ORDER BY rp.es_principal DESC, rp.es_activa DESC, rp.fecha_creacion DESC`,
       [id]
     );
     

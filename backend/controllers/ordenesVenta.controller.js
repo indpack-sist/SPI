@@ -346,10 +346,11 @@ export async function createOrdenVenta(req, res) {
     
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
 
-    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
-    
-    if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') {
+
+    // Aceptamos múltiples variantes para que no falle nunca
+    if (['EXO', 'INA', 'INAFECTO', 'EXONERADO', '0'].includes(tipoImpuestoFinal)) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
@@ -707,10 +708,17 @@ export async function updateOrdenVenta(req, res) {
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
 
-    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    // CÓDIGO CORREGIDO
+    // Normalizamos a mayúsculas y quitamos espacios para evitar errores de tipeo
+    const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
-    if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') porcentaje = 0.00;
-    else if (porcentaje_impuesto !== undefined) porcentaje = parseFloat(porcentaje_impuesto);
+    
+    // Agregamos más casos para asegurar que detecte inafecto/exonerado
+    if (['EXO', 'INA', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuestoFinal)) {
+      porcentaje = 0.00;
+    } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
+      porcentaje = parseFloat(porcentaje_impuesto);
+    }
 
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;

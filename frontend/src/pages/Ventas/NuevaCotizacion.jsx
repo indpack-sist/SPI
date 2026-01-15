@@ -78,11 +78,20 @@ function NuevaCotizacion() {
   const [clienteApiData, setClienteApiData] = useState(null);
   const [loadingApi, setLoadingApi] = useState(false);
   const [errorApi, setErrorApi] = useState(null);
+
+  const getFechaPeru = () => {
+    const now = new Date();
+    const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+    const year = peruDate.getFullYear();
+    const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+    const day = String(peruDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
     id_comercial: user?.id_empleado || '',
-    fecha_emision: new Date().toLocaleDateString('en-CA'),
+    fecha_emision: getFechaPeru(),
     moneda: 'PEN',
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
@@ -137,7 +146,7 @@ function NuevaCotizacion() {
 
   useEffect(() => {
     if (formCabecera.validez_dias && formCabecera.fecha_emision) {
-      const fechaEmision = new Date(formCabecera.fecha_emision);
+      const fechaEmision = new Date(formCabecera.fecha_emision + 'T12:00:00');
       fechaEmision.setDate(fechaEmision.getDate() + parseInt(formCabecera.validez_dias));
       setFechaVencimientoCalculada(fechaEmision.toISOString().split('T')[0]);
     }
@@ -192,7 +201,7 @@ function NuevaCotizacion() {
           setCotizacionConvertida(true);
           setIdOrdenVenta(cotizacion.id_orden_venta);
         }
-        const fechaEmision = modoDuplicar ? new Date().toLocaleDateString('en-CA') : cotizacion.fecha_emision.split('T')[0];
+        const fechaEmision = modoDuplicar ? getFechaPeru() : cotizacion.fecha_emision.split('T')[0];
         setFormCabecera({
           id_cliente: cotizacion.id_cliente,
           id_comercial: cotizacion.id_comercial || user?.id_empleado || '',
@@ -1036,9 +1045,9 @@ function NuevaCotizacion() {
                     </span>
                     <span className="font-bold">{formatearMonedaGral(totales.impuesto)}</span>
                   </div>
-                  <div className="flex justify-between py-3 bg-primary text-white px-4 rounded-lg mt-2 shadow-sm">
+                  <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg mt-2 shadow-sm border border-gray-200">
                     <span className="font-bold text-lg">TOTAL:</span>
-                    <span className="font-bold text-2xl">{formatearMonedaGral(totales.total)}</span>
+                    <span className="font-bold text-2xl text-primary">{formatearMonedaGral(totales.total)}</span>
                   </div>
                 </div>
               </div>

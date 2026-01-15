@@ -420,10 +420,34 @@ function DetalleOrdenVenta() {
       setProcesando(true);
       setError(null);
       
-      await ordenesVentaAPI.descargarPDF(id, tipoDocumento);
+      // 1. Obtenemos la respuesta completa (headers + data)
+      const response = await ordenesVentaAPI.descargarPDF(id, tipoDocumento);
       
-      const nombreArchivo = tipoDocumento === 'comprobante' ? orden.tipo_comprobante : 'Orden de Venta';
-      setSuccess(`PDF de ${nombreArchivo} descargado exitosamente`);
+      // 2. Crear un Blob con los datos binarios
+      // IMPORTANTE: Asegúrate de que tu API devuelve response.data como Blob
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      
+      // 3. Crear una URL temporal para el blob
+      const url = window.URL.createObjectURL(blob);
+      
+      // 4. Crear un elemento <a> invisible
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // 5. Definir nombre del archivo
+      const nombreArchivo = tipoDocumento === 'comprobante' 
+        ? `${orden.tipo_comprobante || 'Documento'}-${orden.numero_comprobante || orden.numero_orden}.pdf` 
+        : `OrdenVenta-${orden.numero_orden}.pdf`;
+        
+      link.setAttribute('download', nombreArchivo);
+      
+      // 6. Añadir al DOM, hacer click y remover
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url); // Liberar memoria
+      
+      setSuccess(`PDF descargado exitosamente`);
     } catch (err) {
       console.error(err);
       setError('Error al descargar el PDF');
@@ -442,7 +466,18 @@ function DetalleOrdenVenta() {
         return;
       }
       
-      await salidasAPI.generarPDF(orden.id_salida);
+      const response = await salidasAPI.generarPDF(orden.id_salida);
+      
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Salida-${orden.id_salida}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
       setSuccess('PDF de salida descargado exitosamente');
       
     } catch (err) {

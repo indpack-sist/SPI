@@ -3,6 +3,14 @@ import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarFacturaPDF } from '../utils/pdfGenerators/FacturaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 
+// --- FUNCIÓN HELPER: OBTENER FECHA ACTUAL EN ZONA HORARIA PERÚ ---
+function getFechaPeru() {
+  const now = new Date();
+  // Convertimos la fecha actual a la zona horaria de Lima
+  return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+}
+// ------------------------------------------------------------------
+
 export async function getAllOrdenesVenta(req, res) {
   try {
     const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
@@ -245,6 +253,7 @@ export async function createOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
     
+    // Verificación de Crédito
     const clienteInfo = await executeQuery('SELECT usar_limite_credito, limite_credito_pen, limite_credito_usd FROM clientes WHERE id_cliente = ?', [id_cliente]);
     
     if (clienteInfo.success && clienteInfo.data.length > 0) {
@@ -279,6 +288,7 @@ export async function createOrdenVenta(req, res) {
       }
     }
     
+    // Generar Número de Orden (Usando año Perú)
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_venta 
@@ -294,7 +304,8 @@ export async function createOrdenVenta(req, res) {
       }
     }
     
-    const numeroOrden = `OV-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
+    // CORRECCIÓN: Usar getFechaPeru para asegurar que el año sea correcto (ej: 2026 y no 2025 si es 31-Dic 11pm)
+    const numeroOrden = `OV-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     const tipoComp = tipo_comprobante || 'Factura';
     let numeroComprobante = null;
@@ -340,9 +351,11 @@ export async function createOrdenVenta(req, res) {
       numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
     }
     
+    // CORRECCIÓN CRÍTICA DE FECHA VENCIMIENTO
+    // Usamos T12:00:00 para forzar mediodía y evitar el retroceso de día por UTC-5
     let fechaVencimientoFinal = fecha_vencimiento;
-    if (!fechaVencimientoFinal) {
-      const fechaBase = new Date(fecha_emision);
+    if (!fechaVencimientoFinal && fecha_emision) {
+      const fechaBase = new Date(fecha_emision + 'T12:00:00'); 
       fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
       fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
     }
@@ -388,7 +401,7 @@ export async function createOrdenVenta(req, res) {
       numeroComprobante,
       id_cliente,
       id_cotizacion || null,
-      fecha_emision,
+      fecha_emision, // Se guarda string directo (YYYY-MM-DD), la BD lo toma como medianoche
       fecha_entrega_estimada || null,
       fechaVencimientoFinal,
       prioridad || 'Media',
@@ -556,11 +569,12 @@ export async function updateOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
 
+    // CORRECCIÓN CRÍTICA DE FECHA VENCIMIENTO (UPDATE)
     let fechaVencimientoFinal = fecha_vencimiento;
-    if (!fechaVencimientoFinal) {
-        const fechaBase = new Date(fecha_emision);
-        fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
-        fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
+    if (!fechaVencimientoFinal && fecha_emision) {
+      const fechaBase = new Date(fecha_emision + 'T12:00:00');
+      fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
+      fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
     }
 
     const updateResult = await executeQuery(`
@@ -740,7 +754,8 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
       }
     }
     
-    const numeroOrdenProduccion = `OP-${new Date().getFullYear()}-${String(numeroSecuenciaOP).padStart(4, '0')}`;
+    // CORRECCIÓN: Usar getFechaPeru() para el año
+    const numeroOrdenProduccion = `OP-${getFechaPeru().getFullYear()}-${String(numeroSecuenciaOP).padStart(4, '0')}`;
     
     const opResult = await executeQuery(`
       INSERT INTO ordenes_produccion (
@@ -868,7 +883,8 @@ export async function registrarDespacho(req, res) {
         id_usuario,
         `Despacho Parcial Orden ${orden.numero_orden}`,
         'Activo',
-        fecha_despacho || new Date()
+        // CORRECCIÓN: Usar getFechaPeru si no hay fecha explícita
+        fecha_despacho || getFechaPeru()
       ]
     });
 
@@ -920,7 +936,7 @@ export async function registrarDespacho(req, res) {
       success: true,
       message: `Despacho registrado correctamente. Orden pasó a estado: ${nuevoEstado}`,
       data: { 
-        id_salida: idSalida, // CORREGIDO AQUÍ: Asignamos idSalida a la clave id_salida
+        id_salida: idSalida, 
         nuevo_estado: nuevoEstado 
       }
     });
@@ -985,13 +1001,14 @@ export async function actualizarEstadoOrdenVenta(req, res) {
            totalCosto += parseFloat(item.cantidad_pendiente) * parseFloat(item.costo_unitario_promedio || 0);
         }
         
+        // CORRECCIÓN: Usar getFechaPeru()
         const salidaResult = await executeQuery(`
           INSERT INTO salidas (
             id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           3, 'Venta', orden.id_cliente, totalCosto, parseFloat(orden.total), orden.moneda || 'PEN', id_usuario, 
-          `Despacho Automático Final Orden ${orden.numero_orden}`, 'Activo', new Date()
+          `Despacho Automático Final Orden ${orden.numero_orden}`, 'Activo', getFechaPeru()
         ]);
         
         if (salidaResult.success) {

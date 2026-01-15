@@ -4,7 +4,8 @@ import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
-  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar
+  CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -33,6 +34,8 @@ function DetalleOrdenVenta() {
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
+  
+  const [navInfo, setNavInfo] = useState({ prev: null, next: null, current: 0, total: 0 });
   
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
@@ -80,7 +83,34 @@ function DetalleOrdenVenta() {
 
   useEffect(() => {
     cargarDatos();
+    cargarNavegacion();
   }, [id]);
+
+  const cargarNavegacion = async () => {
+    try {
+        const response = await ordenesVentaAPI.getAll();
+        if (response.data.success) {
+            const lista = response.data.data;
+            const currentIndex = lista.findIndex(o => String(o.id_orden_venta) === String(id));
+            if (currentIndex !== -1) {
+                setNavInfo({
+                    prev: currentIndex > 0 ? lista[currentIndex - 1].id_orden_venta : null,
+                    next: currentIndex < lista.length - 1 ? lista[currentIndex + 1].id_orden_venta : null,
+                    current: currentIndex + 1,
+                    total: lista.length
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Error cargando navegación', err);
+    }
+  };
+
+  const handleNavegar = (nuevoId) => {
+    if (nuevoId) {
+        navigate(`/ventas/ordenes/${nuevoId}`);
+    }
+  };
 
   const cargarDatos = async () => {
     try {
@@ -710,6 +740,29 @@ function DetalleOrdenVenta() {
           <button className="btn btn-outline" onClick={() => navigate('/ventas/ordenes')}>
             <ArrowLeft size={20} />
           </button>
+          
+          <div className="flex items-center bg-white rounded-lg border border-gray-200 px-1 py-0.5">
+            <button 
+                className="btn btn-sm btn-ghost p-1" 
+                disabled={!navInfo.prev} 
+                onClick={() => handleNavegar(navInfo.prev)}
+                title="Orden anterior"
+            >
+                <ChevronLeft size={20} />
+            </button>
+            <span className="text-xs font-medium text-gray-500 mx-2">
+                {navInfo.current} / {navInfo.total}
+            </span>
+            <button 
+                className="btn btn-sm btn-ghost p-1" 
+                disabled={!navInfo.next} 
+                onClick={() => handleNavegar(navInfo.next)}
+                title="Orden siguiente"
+            >
+                <ChevronRight size={20} />
+            </button>
+          </div>
+
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShoppingCart size={32} />
@@ -725,9 +778,11 @@ function DetalleOrdenVenta() {
                   <span className={`badge ${orden.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
                     {orden.tipo_comprobante}
                   </span>
-                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
-                    {orden.serie_correlativo || orden.numero_comprobante || 'Pendiente'}
-                  </span>
+                  {orden.tipo_comprobante !== 'Factura' && (
+                    <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
+                        {orden.serie_correlativo || orden.numero_comprobante || 'Pendiente'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -967,18 +1022,21 @@ function DetalleOrdenVenta() {
         <div className="card col-span-3">
             <div className="card-body">
                 <p className="text-sm text-muted mb-2">Progreso Entrega</p>
-                <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
-                    {(() => {
-                        const totalQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad), 0);
-                        const despachadoQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad_despachada || 0), 0);
-                        const pct = totalQty > 0 ? (despachadoQty / totalQty) * 100 : 0;
-                        return (
-                             <div className="bg-primary h-4 rounded-full text-xs text-white text-center leading-4" style={{ width: `${pct}%` }}>
+                {(() => {
+                    const totalQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad), 0);
+                    const despachadoQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad_despachada || 0), 0);
+                    const pct = totalQty > 0 ? (despachadoQty / totalQty) * 100 : 0;
+                    return (
+                        <div className="flex items-center gap-3 mt-2">
+                            <div className="flex-1 bg-gray-200 rounded-full h-4">
+                                 <div className="bg-primary h-4 rounded-full" style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <span className="text-sm font-bold text-gray-700 min-w-[3rem] text-right">
                                 {pct.toFixed(0)}%
-                             </div>
-                        )
-                    })()}
-                </div>
+                            </span>
+                        </div>
+                    )
+                })()}
             </div>
         </div>
       </div>

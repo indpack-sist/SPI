@@ -453,7 +453,9 @@ export const ordenesVentaAPI = {
   },
 
   getById: (id) => api.get(`/ordenes-venta/${id}`),
+  
   create: (data) => api.post('/ordenes-venta', data),
+  
   update: (id, data) => api.put(`/ordenes-venta/${id}`, data),
   
   crearOrdenProduccion: (id, data) => api.post(`/ordenes-venta/${id}/crear-orden-produccion`, data),
@@ -464,26 +466,26 @@ export const ordenesVentaAPI = {
   actualizarPrioridad: (id, prioridad) => 
     api.put(`/ordenes-venta/${id}/prioridad`, { prioridad }),
 
-  // Pagos
   registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data),
+  
   getPagos: (id) => api.get(`/ordenes-venta/${id}/pagos`),
+  
   anularPago: (id, idPago) => api.delete(`/ordenes-venta/${id}/pagos/${idPago}`),
+  
   getResumenPagos: (id) => api.get(`/ordenes-venta/${id}/pagos/resumen`),
 
-  // Estadísticas
   getEstadisticas: () => api.get('/ordenes-venta/estadisticas'),
 
-  // Despachos
   getSalidas: (id) => api.get(`/ordenes-venta/${id}/salidas`),
+  
   registrarDespacho: (id, data) => api.post(`/ordenes-venta/${id}/despacho`, data),
-  anularDespacho: (id, idSalida) => api.delete(`/ordenes-venta/${id}/salidas/${idSalida}`),  // <--- NUEVO
+  
+  anularDespacho: (id, idSalida) => api.delete(`/ordenes-venta/${id}/salidas/${idSalida}`),
 
-  // Anular orden completa
   anularOrden: (id, motivo_anulacion) => 
-    api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),  // <--- NUEVO
+    api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),
 
-  // PDF
-  descargarPDF: async (id, tipo = 'orden') => {
+  descargarPDF: async (id, tipo = 'orden', numeroOrden = null) => {
     try {
       const urlFetch = new URL(`${API_URL}/ordenes-venta/${id}/pdf`);
       urlFetch.searchParams.append('tipo', tipo);
@@ -507,8 +509,14 @@ export const ordenesVentaAPI = {
       const link = document.createElement('a');
       link.href = url;
       
-      const prefijo = tipo === 'comprobante' ? 'comprobante' : 'orden-venta';
-      link.download = `${prefijo}-${id}.pdf`;
+      let nombreArchivo = '';
+      if (tipo === 'comprobante') {
+        nombreArchivo = `Comprobante-${numeroOrden || id}.pdf`;
+      } else {
+        nombreArchivo = `OrdenVenta-${numeroOrden || id}.pdf`;
+      }
+
+      link.download = nombreArchivo;
       
       document.body.appendChild(link);
       link.click();

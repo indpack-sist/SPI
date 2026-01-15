@@ -305,7 +305,7 @@ export async function generarPDFSalida(datos) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // --- CABECERA Y LOGO ---
+      // --- CABECERA Y LOGO (Sin cambios) ---
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
@@ -344,23 +344,25 @@ export async function generarPDFSalida(datos) {
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`R.U.C. ${EMPRESA.ruc}`, 385, 48, { align: 'center', width: 155 });
       doc.fontSize(11).font('Helvetica-Bold');
-      doc.text('CONSTANCIA DE SALIDA', 385, 65, { align: 'center', width: 155 });
-      doc.fontSize(14).fillColor('#cc0000'); // Destacar el número en rojo
-      doc.text(`No. ${datos.codigo || datos.id_salida || 'N/A'}`, 385, 90, { align: 'center', width: 155 });
+      
+      // --- NUEVO: Título dinámico según si es reporte final o guía ---
+      const tituloDoc = datos.historial_despachos ? 'REPORTE DE ORDEN' : 'CONSTANCIA DE SALIDA';
+      doc.text(tituloDoc, 385, 65, { align: 'center', width: 155 });
+      
+      doc.fontSize(14).fillColor('#cc0000'); 
+      doc.text(`No. ${datos.numero_orden || datos.codigo || datos.id_salida || 'N/A'}`, 385, 90, { align: 'center', width: 155 });
 
-      // --- INFORMACIÓN DEL MOVIMIENTO (MODIFICADO AQUÍ) ---
+      // --- INFORMACIÓN DEL MOVIMIENTO ---
       const destino = datos.tipo_movimiento === 'Venta' 
         ? (datos.cliente || datos.destinatario_nombre) 
         : (datos.departamento || datos.tipo_movimiento);
 
-      // Función auxiliar para calcular altura
       const calcularAlturaTexto = (doc, text, width, fontSize) => {
         doc.fontSize(fontSize);
         return doc.heightOfString(text, { width: width });
       };
 
       const alturaDestino = calcularAlturaTexto(doc, destino || 'N/A', 195, 8);
-      // Aumentamos ligeramente la altura mínima base (de 105 a 115) para acomodar los nuevos campos
       const alturaInfoSalida = Math.max(115, alturaDestino + 90);
       
       doc.roundedRect(33, 205, 529, alturaInfoSalida, 3).stroke('#000000');
@@ -369,130 +371,196 @@ export async function generarPDFSalida(datos) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha:', 40, 213);
       doc.font('Helvetica');
-      doc.text(new Date(datos.fecha_movimiento).toLocaleDateString('es-PE'), 100, 213);
+      doc.text(new Date(datos.fecha_movimiento || datos.fecha_emision).toLocaleDateString('es-PE'), 100, 213);
+      
+      if (!datos.historial_despachos) {
+        doc.font('Helvetica-Bold');
+        doc.text('Hora:', 40, 228);
+        doc.font('Helvetica');
+        const horaStr = datos.fecha_movimiento ? new Date(datos.fecha_movimiento).toLocaleTimeString('es-PE', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+        doc.text(horaStr, 100, 228);
+      }
       
       doc.font('Helvetica-Bold');
-      doc.text('Hora:', 40, 228);
+      doc.text('Tipo:', 40, 243);
       doc.font('Helvetica');
-      const horaStr = new Date(datos.fecha_movimiento).toLocaleTimeString('es-PE', {hour: '2-digit', minute:'2-digit'});
-      doc.text(horaStr, 100, 228);
+      doc.text(datos.tipo_inventario || 'Venta', 120, 243, { width: 210 });
       
       doc.font('Helvetica-Bold');
-      doc.text('Tipo Inventario:', 40, 243);
-      doc.font('Helvetica');
-      doc.text(datos.tipo_inventario || 'N/A', 120, 243, { width: 210 });
-      
-      doc.font('Helvetica-Bold');
-      doc.text('Tipo Movimiento:', 40, 258);
-      doc.font('Helvetica');
-      doc.text(datos.tipo_movimiento || 'N/A', 120, 258, { width: 210 });
-
-      doc.font('Helvetica-Bold');
-      doc.text('Destinatario/Área:', 40, 273);
+      doc.text('Cliente/Destino:', 40, 273);
       doc.font('Helvetica');
       doc.text(destino || 'N/A', 120, 273, { width: 210, lineGap: 2 });
 
-      // COLUMNA DERECHA (AGREGADOS DOCUMENTOS ASOCIADOS)
+      // COLUMNA DERECHA
       doc.font('Helvetica-Bold');
       doc.text('Estado:', 340, 213);
       doc.font('Helvetica');
       doc.text(datos.estado || 'N/A', 430, 213);
       
-      // Vehículo (Etiqueta y valor en líneas separadas o compactas)
-      doc.font('Helvetica-Bold');
-      doc.text('Referencia/Vehículo:', 340, 228);
-      doc.font('Helvetica');
-      // Ajustamos para que el texto del vehículo no se monte si es largo, cortándolo si es necesario
-      doc.text(datos.vehiculo || '---', 430, 228, { width: 120, height: 10, ellipsis: true });
-
-      // === NUEVO: ORDEN DE VENTA ===
       doc.font('Helvetica-Bold');
       doc.text('Orden de Venta:', 340, 243);
       doc.font('Helvetica');
-      // Muestra el código de orden de venta si existe, sino un guión
-      const ordenVentaTexto = datos.codigo_orden_venta || datos.orden_venta || '---';
+      const ordenVentaTexto = datos.numero_orden || datos.codigo_orden_venta || '---';
       doc.text(ordenVentaTexto, 430, 243);
 
-      // === NUEVO: COTIZACIÓN ===
       doc.font('Helvetica-Bold');
       doc.text('Cotización:', 340, 258);
       doc.font('Helvetica');
-      // Muestra el código de cotización si existe, sino un guión
-      const cotizacionTexto = datos.codigo_cotizacion || datos.cotizacion || '---';
+      const cotizacionTexto = datos.numero_cotizacion || datos.codigo_cotizacion || '---';
       doc.text(cotizacionTexto, 430, 258);
 
 
-      // --- TABLA DE ITEMS ---
+      // --- TABLA DE ITEMS (LÓGICA MEJORADA) ---
       let yPos = 205 + alturaInfoSalida + 10;
-
-      doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
+      const detalles = datos.detalles || datos.detalle || [];
       
+      // Detectamos si debemos mostrar columnas extendidas (Total/Pendiente)
+      const mostrarDetalleExtendido = detalles.some(d => d.cantidad_pendiente !== undefined);
+      
+      doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('CÓDIGO', 40, yPos + 6);
-      doc.text('DESCRIPCIÓN', 140, yPos + 6);
-      doc.text('CANTIDAD', 420, yPos + 6, { width: 60, align: 'center' });
-      doc.text('UNIDAD', 485, yPos + 6, { width: 50, align: 'center' });
+
+      if (mostrarDetalleExtendido) {
+        // CABECERA PARA ORDEN CON SALDOS
+        doc.text('CÓDIGO', 40, yPos + 6);
+        doc.text('DESCRIPCIÓN', 110, yPos + 6);
+        doc.text('UND', 315, yPos + 6, { width: 30, align: 'center' });
+        doc.text('TOTAL', 350, yPos + 6, { width: 60, align: 'center' });
+        doc.text('DESPACHADO', 415, yPos + 6, { width: 70, align: 'center' });
+        doc.text('PENDIENTE', 490, yPos + 6, { width: 60, align: 'center' });
+      } else {
+        // CABECERA ESTÁNDAR (SOLO SALIDA)
+        doc.text('CÓDIGO', 40, yPos + 6);
+        doc.text('DESCRIPCIÓN', 140, yPos + 6);
+        doc.text('CANTIDAD', 420, yPos + 6, { width: 60, align: 'center' });
+        doc.text('UNIDAD', 485, yPos + 6, { width: 50, align: 'center' });
+      }
 
       yPos += 20;
 
-      const detalles = datos.detalles || [];
-      
-      detalles.forEach((item, idx) => {
-        const descripcion = item.producto;
-        const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 270, 8);
+      // SI HAY HISTORIAL (ESTADO DESPACHADA), NO MOSTRAMOS LA LISTA DE PRODUCTOS DUPLICADA
+      // SALVO QUE EL USUARIO QUIERA VER EL "RESUMEN FINAL".
+      // Lógica: Si hay historial, asumimos que es el reporte final y mostramos el resumen.
+      // Si NO hay historial, es un despacho parcial y mostramos los ítems del despacho actual.
+
+      const itemsAMostrar = detalles; 
+
+      itemsAMostrar.forEach((item, idx) => {
+        const descripcion = item.producto || item.nombre;
+        const alturaDescripcion = calcularAlturaTexto(doc, descripcion, mostrarDetalleExtendido ? 200 : 270, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
-        // Control de salto de página
         if (yPos + alturaFila > 700) {
           doc.addPage();
           yPos = 50;
-          
-          doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-          doc.text('CÓDIGO', 40, yPos + 6);
-          doc.text('DESCRIPCIÓN', 140, yPos + 6);
-          doc.text('CANTIDAD', 420, yPos + 6, { width: 60, align: 'center' });
-          doc.text('UNIDAD', 485, yPos + 6, { width: 50, align: 'center' });
+          // Repetir cabecera (simplificado para el ejemplo)
+          doc.fontSize(8).font('Helvetica-Bold');
+          doc.text('CONTINUACIÓN...', 40, yPos);
           yPos += 20;
         }
 
-        // Fila cebra (opcional, ayuda a la lectura)
-        if (idx % 2 === 0) {
-            doc.rect(33, yPos, 529, alturaFila).fillOpacity(0.1).fill('#f0f0f0').fillOpacity(1);
-        }
+        if (idx % 2 === 0) doc.rect(33, yPos, 529, alturaFila).fillOpacity(0.1).fill('#f0f0f0').fillOpacity(1);
 
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         
-        doc.text(item.codigo_producto, 40, yPos + 5);
-        doc.text(descripcion, 140, yPos + 5, { width: 270, lineGap: 2 });
-        doc.text(parseFloat(item.cantidad || 0).toFixed(2), 420, yPos + 5, { width: 60, align: 'center' });
-        doc.text(item.unidad_medida || '', 485, yPos + 5, { width: 50, align: 'center' });
+        if (mostrarDetalleExtendido) {
+          // FILA EXTENDIDA
+          doc.text(item.codigo_producto, 40, yPos + 5);
+          doc.text(descripcion, 110, yPos + 5, { width: 200, lineGap: 2 });
+          doc.text(item.unidad_medida, 315, yPos + 5, { width: 30, align: 'center' });
+          
+          doc.text(parseFloat(item.cantidad_total || item.cantidad).toFixed(2), 350, yPos + 5, { width: 60, align: 'center' });
+          
+          // Cantidad despachada acumulada o actual
+          const despachado = parseFloat(item.cantidad_despachada || 0).toFixed(2);
+          doc.text(despachado, 415, yPos + 5, { width: 70, align: 'center' });
+          
+          // Pendiente
+          const pendiente = parseFloat(item.cantidad_pendiente || 0).toFixed(2);
+          // Si está pendiente, pintar de rojo suave, si no, negro
+          if(parseFloat(pendiente) > 0) doc.fillColor('#cc0000');
+          doc.text(pendiente, 490, yPos + 5, { width: 60, align: 'center' });
+          doc.fillColor('#000000');
+
+        } else {
+          // FILA ESTÁNDAR
+          doc.text(item.codigo_producto, 40, yPos + 5);
+          doc.text(descripcion, 140, yPos + 5, { width: 270, lineGap: 2 });
+          doc.text(parseFloat(item.cantidad).toFixed(2), 420, yPos + 5, { width: 60, align: 'center' });
+          doc.text(item.unidad_medida, 485, yPos + 5, { width: 50, align: 'center' });
+        }
 
         yPos += alturaFila;
       });
 
-      yPos += 10;
+      yPos += 15;
+
+      // --- NUEVO: SECCIÓN DE HISTORIAL DE DESPACHOS ---
+      // Solo se muestra si el controller envió 'historial_despachos' (caso Orden Despachada)
+      if (datos.historial_despachos && datos.historial_despachos.length > 0) {
+        
+        if (yPos + 40 > 700) { doc.addPage(); yPos = 50; }
+
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#1e88e5');
+        doc.text('HISTORIAL DE DESPACHOS (TRAZABILIDAD)', 40, yPos);
+        yPos += 15;
+
+        // Cabecera Historial
+        doc.rect(33, yPos, 529, 15).fill('#e0e0e0');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('FECHA', 40, yPos + 4);
+        doc.text('GUÍA / SALIDA', 120, yPos + 4);
+        doc.text('PRODUCTO', 220, yPos + 4);
+        doc.text('UND', 450, yPos + 4);
+        doc.text('CANT', 490, yPos + 4, { align: 'right', width: 60 });
+        
+        yPos += 15;
+
+        datos.historial_despachos.forEach((h, i) => {
+          if (yPos + 15 > 700) { doc.addPage(); yPos = 50; }
+          
+          doc.fontSize(7).font('Helvetica').fillColor('#333333');
+          // Fecha
+          doc.text(new Date(h.fecha_movimiento).toLocaleDateString('es-PE'), 40, yPos + 2);
+          // Nro Guia (ID Salida)
+          doc.text(`Salida #${h.numero_guia || h.id_salida}`, 120, yPos + 2);
+          // Producto (cortado si es largo)
+          doc.text(h.producto, 220, yPos + 2, { width: 220, ellipsis: true });
+          // Unidad
+          doc.text(h.unidad_medida, 450, yPos + 2);
+          // Cantidad
+          doc.text(parseFloat(h.cantidad).toFixed(2), 490, yPos + 2, { align: 'right', width: 60 });
+
+          // Línea divisoria suave
+          doc.moveTo(33, yPos + 12).lineTo(562, yPos + 12).lineWidth(0.5).stroke('#eeeeee');
+          yPos += 12;
+        });
+        
+        yPos += 10;
+      }
 
       // --- OBSERVACIONES Y TOTALES ---
+      if (yPos + 50 > 700) { doc.addPage(); yPos = 50; }
+
       if (datos.observaciones) {
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text('OBSERVACIONES', 40, yPos);
-        
         doc.fontSize(8).font('Helvetica');
         doc.text(datos.observaciones, 40, yPos + 15, { width: 330 });
       }
 
-      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('TOTAL ITEMS', 390, yPos + 4);
-      
-      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text(`${detalles.length}`, 475, yPos + 4, { align: 'right', width: 80 });
+      if (!mostrarDetalleExtendido) {
+          doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+          doc.text('TOTAL ITEMS', 390, yPos + 4);
+          
+          doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+          doc.text(`${detalles.length}`, 475, yPos + 4, { align: 'right', width: 80 });
+      }
 
       // --- FIRMAS (PIE DE PÁGINA) ---
       let yFirmas = 720;
-      
       if (yPos > 650) {
         doc.addPage();
         yFirmas = 720;

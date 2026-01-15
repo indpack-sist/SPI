@@ -89,7 +89,7 @@ export async function getAllOrdenesCompra(req, res) {
     
     res.json({
       success: true,
-      data: result.data[0]
+      data: result.data // Eliminamos el [0] para que envíe la lista completa
     });
     
   } catch (error) {

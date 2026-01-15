@@ -112,6 +112,13 @@ function Cotizaciones() {
     return badges[estado] || 'badge-secondary';
   };
 
+  const formatearFechaVisual = (fechaStr) => {
+    if (!fechaStr) return '-';
+    const partes = fechaStr.split('T')[0].split('-');
+    if (partes.length !== 3) return fechaStr;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  };
+
   const handleDescargarPDF = async (id) => {
     try {
       await cotizacionesAPI.descargarPDF(id);
@@ -158,8 +165,8 @@ function Cotizaciones() {
               <CheckCircle2 size={16} className="text-success" title="Convertida a Orden de Venta" />
             )}
           </div>
-          <div className="text-xs text-muted">
-            {row.fecha_emision ? new Date(row.fecha_emision).toLocaleDateString('es-PE', { timeZone: 'America/Lima' }) : '-'}
+          <div className="text-xs text-muted font-medium">
+            {formatearFechaVisual(row.fecha_emision)}
           </div>
           {!!row.convertida_venta && !!row.id_orden_venta && (
             <button
@@ -192,7 +199,7 @@ function Cotizaciones() {
       width: '140px',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold text-lg">{formatearMoneda(value, row.moneda)}</div>
+          <div className="font-bold text-lg text-gray-800">{formatearMoneda(value, row.moneda)}</div>
           {row.moneda === 'USD' && parseFloat(row.tipo_cambio || 0) > 1 && (
             <div className="text-xs text-muted">
               TC: S/ {formatearNumero(parseFloat(row.tipo_cambio))}
@@ -305,7 +312,7 @@ function Cotizaciones() {
       {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
       <div className="grid grid-cols-5 gap-4 mb-6">
-        <div className="card">
+        <div className="card shadow-sm">
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
@@ -317,7 +324,7 @@ function Cotizaciones() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-warning">
+        <div className="card shadow-sm border-l-4 border-warning">
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
@@ -329,7 +336,7 @@ function Cotizaciones() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-success">
+        <div className="card shadow-sm border-l-4 border-success">
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
@@ -341,7 +348,7 @@ function Cotizaciones() {
           </div>
         </div>
 
-        <div className="card border-l-4 border-primary">
+        <div className="card shadow-sm border-l-4 border-primary">
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
@@ -353,7 +360,7 @@ function Cotizaciones() {
           </div>
         </div>
 
-        <div className="card bg-gradient-to-br from-primary to-blue-600 text-white">
+        <div className="card shadow-sm bg-gradient-to-br from-primary to-blue-600 text-white">
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
@@ -366,7 +373,7 @@ function Cotizaciones() {
         </div>
       </div>
 
-      <div className="card mb-4">
+      <div className="card mb-4 shadow-sm">
         <div className="card-body">
           <div className="flex flex-col md:flex-row gap-4">
             
@@ -417,8 +424,8 @@ function Cotizaciones() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header flex justify-between items-center">
+      <div className="card shadow-sm">
+        <div className="card-header flex justify-between items-center bg-gray-50/50">
           <h2 className="card-title">
             Lista de Cotizaciones
             {cotizacionesFiltradas.length !== cotizaciones.length && (

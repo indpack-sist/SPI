@@ -41,9 +41,11 @@ function DetalleOrdenVenta() {
   const [modalPagoOpen, setModalPagoOpen] = useState(false);
   const [modalCrearOP, setModalCrearOP] = useState(false);
   const [modalDespacho, setModalDespacho] = useState(false);
+  const [modalAnularOrden, setModalAnularOrden] = useState(false);
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
   
   const [pagoForm, setPagoForm] = useState({
     fecha_pago: getFechaLocal(),
@@ -66,9 +68,10 @@ function DetalleOrdenVenta() {
     }).format(valor);
   };
 
-  const formatearMoneda = (valor) => {
-    if (!orden && !valor) return '-';
-    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor, monedaOverride = null) => {
+    const monedaUsar = monedaOverride || orden?.moneda;
+    if (!monedaUsar && !valor) return '-';
+    const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
@@ -216,6 +219,55 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al registrar despacho');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleAnularDespacho = async (idSalida) => {
+    if (!confirm('¿Está seguro de anular este despacho? Se revertirá el stock y las cantidades despachadas.')) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.anularDespacho(id, idSalida);
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al anular despacho');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleAnularOrden = async () => {
+    if (!motivoAnulacion.trim()) {
+      setError('Debe ingresar un motivo de anulación');
+      return;
+    }
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.anularOrden(id, motivoAnulacion);
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setModalAnularOrden(false);
+        setMotivoAnulacion('');
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al anular orden');
     } finally {
       setProcesando(false);
     }
@@ -423,7 +475,13 @@ function DetalleOrdenVenta() {
         icono: CheckCircle, 
         clase: 'badge-primary',
         color: 'border-primary',
-        siguientes: ['Despachada', 'Cancelada']
+        siguientes: ['Despacho Parcial', 'Despachada', 'Cancelada']
+      },
+      'Despacho Parcial': {
+        icono: Truck,
+        clase: 'badge-warning',
+        color: 'border-warning',
+        siguientes: ['Entregada']
       },
       'Despachada': { 
         icono: Truck, 
@@ -773,16 +831,14 @@ function DetalleOrdenVenta() {
                 Emitida el {formatearFecha(orden.fecha_emision)}
               </p>
               
-              {orden.tipo_comprobante && (
+              {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
                 <div className="flex items-center gap-2">
-                  <span className={`badge ${orden.tipo_comprobante === 'Factura' ? 'badge-success' : 'badge-info'}`}>
+                  <span className="badge badge-info">
                     {orden.tipo_comprobante}
                   </span>
-                  {orden.tipo_comprobante !== 'Factura' && (
-                    <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
-                        {orden.serie_correlativo || orden.numero_comprobante || 'Pendiente'}
-                    </span>
-                  )}
+                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
+                    {orden.numero_comprobante || 'Pendiente'}
+                  </span>
                 </div>
               )}
             </div>
@@ -834,7 +890,7 @@ function DetalleOrdenVenta() {
           
           {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
             <>
-              {orden.estado !== 'Despachada' && (
+              {orden.estado === 'En Espera' && (
                 <button
                   className="btn btn-secondary"
                   onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
@@ -842,6 +898,13 @@ function DetalleOrdenVenta() {
                   <Edit size={20} /> Editar
                 </button>
               )}
+              <button
+                className="btn btn-danger"
+                onClick={() => setModalAnularOrden(true)}
+                disabled={procesando}
+              >
+                <XCircle size={20} /> Anular Orden
+              </button>
             </>
           )}
         </div>
@@ -886,6 +949,7 @@ function DetalleOrdenVenta() {
                 orden.estado === 'En Espera' ? 'from-yellow-100 to-yellow-200' :
                 orden.estado === 'En Proceso' ? 'from-blue-100 to-blue-200' :
                 orden.estado === 'Atendido por Producción' ? 'from-green-100 to-green-200' :
+                orden.estado === 'Despacho Parcial' ? 'from-orange-100 to-orange-200' :
                 orden.estado === 'Despachada' ? 'from-purple-100 to-purple-200' :
                 orden.estado === 'Entregada' ? 'from-emerald-100 to-emerald-200' :
                 'from-red-100 to-red-200'
@@ -894,6 +958,7 @@ function DetalleOrdenVenta() {
                   orden.estado === 'En Espera' ? 'text-yellow-600' :
                   orden.estado === 'En Proceso' ? 'text-blue-600' :
                   orden.estado === 'Atendido por Producción' ? 'text-green-600' :
+                  orden.estado === 'Despacho Parcial' ? 'text-orange-600' :
                   orden.estado === 'Despachada' ? 'text-purple-600' :
                   orden.estado === 'Entregada' ? 'text-emerald-600' :
                   'text-red-600'
@@ -940,6 +1005,10 @@ function DetalleOrdenVenta() {
                     colorClases = esActual 
                       ? 'bg-green-500 text-white cursor-not-allowed opacity-70' 
                       : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
+                  } else if (estado === 'Despacho Parcial') {
+                    colorClases = esActual 
+                      ? 'bg-orange-500 text-white cursor-not-allowed opacity-70' 
+                      : 'bg-white text-orange-600 border-2 border-orange-500 hover:bg-orange-500 hover:text-white';
                   } else if (estado === 'Despachada') {
                     colorClases = esActual 
                       ? 'bg-purple-500 text-white cursor-not-allowed opacity-70' 
@@ -967,15 +1036,6 @@ function DetalleOrdenVenta() {
                   );
                 })}
               </div>
-              
-              {orden.estado === 'Atendido por Producción' && (
-                <div className="mt-3 text-xs bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-                  <AlertCircle size={14} className="text-blue-600 shrink-0 mt-0.5" />
-                  <div className="text-blue-800">
-                    <strong>Importante:</strong> Al cambiar a "Despachada" se generará automáticamente una salida de inventario y se descontará el stock.
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -1136,16 +1196,17 @@ function DetalleOrdenVenta() {
             <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
           </div>
           <div className="card-body space-y-2">
-            
             <div className="grid grid-cols-2 gap-2 pb-2 mb-2 border-b border-gray-100">
               <div>
                  <label className="text-sm font-medium text-muted">Tipo Documento:</label>
                  <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
               </div>
-              <div>
-                 <label className="text-sm font-medium text-muted">N° Serie:</label>
-                 <p className="font-mono">{orden.serie_correlativo || orden.numero_comprobante || '-'}</p>
-              </div>
+              {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+                <div>
+                   <label className="text-sm font-medium text-muted">N° Serie:</label>
+                   <p className="font-mono">{orden.numero_comprobante || '-'}</p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -1225,14 +1286,52 @@ function DetalleOrdenVenta() {
              <div className="card-body">
                  <Table 
                      columns={[
-                         { header: 'N° Salida', accessor: 'numero_salida', render: val => `SAL-${String(val).padStart(6,'0')}` },
-                         { header: 'Fecha', accessor: 'fecha_salida', render: val => formatearFecha(val) },
+                         { header: 'N° Salida', accessor: 'numero_salida', width: '120px', render: val => `SAL-${String(val).padStart(6,'0')}` },
+                         { header: 'Fecha', accessor: 'fecha_salida', width: '120px', render: val => formatearFecha(val) },
+                         { 
+                           header: 'Estado', 
+                           accessor: 'estado', 
+                           width: '100px',
+                           align: 'center',
+                           render: (val) => (
+                             <span className={`badge ${val === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
+                               {val}
+                             </span>
+                           )
+                         },
                          { header: 'Observaciones', accessor: 'observaciones' },
-                         { header: 'PDF', accessor: 'id_salida', align:'center', render: (val) => (
-                             <button className="btn btn-sm btn-outline" onClick={() => handleDescargarSalidaEspecificaPDF(val)} disabled={descargandoPDF === val}>
-                                 {descargandoPDF === val ? <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div> : <Download size={14}/>}
-                             </button>
-                         )}
+                         { 
+                           header: 'Acciones', 
+                           accessor: 'id_salida', 
+                           width: '150px',
+                           align:'center', 
+                           render: (val, row) => (
+                             <div className="flex gap-2 justify-center">
+                               <button 
+                                 className="btn btn-sm btn-outline" 
+                                 onClick={() => handleDescargarSalidaEspecificaPDF(val)} 
+                                 disabled={descargandoPDF === val}
+                                 title="Descargar PDF"
+                               >
+                                 {descargandoPDF === val ? (
+                                   <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
+                                 ) : (
+                                   <Download size={14}/>
+                                 )}
+                               </button>
+                               {row.estado === 'Activo' && (
+                                 <button 
+                                   className="btn btn-sm btn-danger" 
+                                   onClick={() => handleAnularDespacho(val)}
+                                   disabled={procesando}
+                                   title="Anular despacho"
+                                 >
+                                   <Trash2 size={14}/>
+                                 </button>
+                               )}
+                             </div>
+                           )
+                         }
                      ]} 
                      data={salidas} 
                      emptyMessage="No hay despachos registrados"
@@ -1607,6 +1706,64 @@ function DetalleOrdenVenta() {
               disabled={procesando}
             >
               {procesando ? 'Procesando...' : 'Confirmar Despacho'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalAnularOrden}
+        onClose={() => {
+          setModalAnularOrden(false);
+          setMotivoAnulacion('');
+        }}
+        title="Anular Orden de Venta"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="alert alert-warning">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>¡Atención!</strong> Esta acción anulará completamente la orden de venta.
+              <ul className="list-disc list-inside mt-2 text-sm">
+                <li>Se anularán todos los despachos asociados</li>
+                <li>Se revertirá el stock de todos los productos</li>
+                <li>Se revertirá la cotización asociada (si existe)</li>
+                <li>Esta acción no se puede deshacer</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Motivo de Anulación *</label>
+            <textarea
+              className="form-textarea"
+              value={motivoAnulacion}
+              onChange={(e) => setMotivoAnulacion(e.target.value)}
+              rows={4}
+              placeholder="Ingrese el motivo por el cual se anula esta orden..."
+              required
+            ></textarea>
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                setModalAnularOrden(false);
+                setMotivoAnulacion('');
+              }}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={handleAnularOrden}
+              disabled={procesando || !motivoAnulacion.trim()}
+            >
+              <XCircle size={20} />
+              {procesando ? 'Anulando...' : 'Confirmar Anulación'}
             </button>
           </div>
         </div>

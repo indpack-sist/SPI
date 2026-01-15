@@ -416,7 +416,6 @@ export const cotizacionesAPI = {
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
   getEstadisticas: () => api.get('/cotizaciones/estadisticas'),
 
-  // --- SECCIÓN CORREGIDA PARA NOMBRE DINÁMICO ---
   descargarPDF: async (id) => {
     try {
       const response = await fetch(`${API_URL}/cotizaciones/${id}/pdf`, {
@@ -429,27 +428,21 @@ export const cotizacionesAPI = {
       
       if (!response.ok) throw new Error('Error al descargar PDF');
 
-      // 1. EXTRAER EL NOMBRE DEL HEADER QUE ENVÍA EL SERVIDOR
       const disposition = response.headers.get('Content-Disposition');
-      let filename = `cotizacion-${id}.pdf`; // Nombre por defecto
+      let filename = `cotizacion-${id}.pdf`;
 
       if (disposition && disposition.includes('filename=')) {
-        // Expresión regular para obtener el texto dentro de filename="..."
         const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
         const matches = filenameRegex.exec(disposition);
         if (matches != null && matches[1]) { 
-          // Limpiamos comillas extra
           filename = matches[1].replace(/['"]/g, '');
         }
       }
       
-      // 2. CREAR BLOB Y LINK DE DESCARGA
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-
-      // 3. ASIGNAR EL NOMBRE DINÁMICO
       link.download = filename; 
       
       document.body.appendChild(link);
@@ -460,7 +453,6 @@ export const cotizacionesAPI = {
         window.URL.revokeObjectURL(url);
       }, 100);
 
-      // IMPORTANTE: Retornamos éxito para que el frontend no de error al intentar leer respuesta
       return { success: true };
 
     } catch (error) {
@@ -721,6 +713,13 @@ export const comprasAPI = {
       window.URL.revokeObjectURL(url);
     }, 100);
   }
+};
+
+export const pagosCobranzasAPI = {
+  getAll: (params) => api.get('/pagos-cobranzas', { params }),
+  getEstadisticas: (params) => api.get('/pagos-cobranzas/estadisticas', { params }),
+  registrar: (data) => api.post('/pagos-cobranzas', data),
+  anular: (id) => api.delete(`/pagos-cobranzas/${id}`)
 };
 
 export const cuentasPagoAPI = {

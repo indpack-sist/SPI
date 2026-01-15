@@ -14,8 +14,7 @@ import {
   ShoppingCart,
   CheckCircle,
   RefreshCw,
-  ArrowLeftRight,
-  TrendingDown
+  ArrowLeftRight
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -30,7 +29,8 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { api } from "../../config/api";
+// --- CAMBIO IMPORTANTE AQUÍ: Importamos 'dashboard' directamente ---
+import { dashboard } from "../../config/api"; 
 import Loading from "../../components/UI/Loading";
 import Alert from "../../components/UI/Alert";
 import './Dashboard.css';
@@ -53,9 +53,10 @@ function Dashboard() {
       setLoading(true);
       setError(null);
       
+      // --- CAMBIO IMPORTANTE AQUÍ: Usamos 'dashboard' en lugar de 'api.dashboard' ---
       const [resumenResponse, estadisticasResponse] = await Promise.all([
-        api.dashboard.getResumen(),
-        api.dashboard.getEstadisticasMovimientos()
+        dashboard.getResumen(),
+        dashboard.getEstadisticasMovimientos()
       ]);
       
       setResumen(resumenResponse.data);
@@ -80,15 +81,14 @@ function Dashboard() {
       
       console.log('🔴 Consumiendo API de tipo de cambio...');
       
-      const response = await api.dashboard.actualizarTipoCambio({ 
+      // --- CAMBIO IMPORTANTE AQUÍ ---
+      const response = await dashboard.actualizarTipoCambio({ 
         currency: 'USD' 
       });
       
       if (response.data.success) {
         setTipoCambio(response.data.data);
-        
         alert('✅ Tipo de cambio actualizado correctamente');
-        
         await cargarDatos();
       }
       
@@ -292,8 +292,6 @@ function Dashboard() {
           </div>
         </div>
       </div>
-
-
 
       {/* ESTADÍSTICAS DE MOVIMIENTOS - DESGLOSE POR MONEDA */}
       <div className="card">

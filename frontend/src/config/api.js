@@ -508,51 +508,21 @@ export const ordenesVentaAPI = {
   anularOrden: (id, motivo_anulacion) => 
     api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),
 
-  descargarPDF: async (id, tipo = 'orden', numeroOrden = null) => {
-    try {
-      const urlFetch = new URL(`${API_URL}/ordenes-venta/${id}/pdf`);
-      urlFetch.searchParams.append('tipo', tipo);
+  // --- SECCIÓN DE PDFS CORREGIDA ---
+  
+  // 1. Descargar Orden de Venta, Factura o Boleta
+  descargarPDF: (id, tipo = 'orden') => {
+    return api.get(`/ordenes-venta/${id}/pdf`, {
+      params: { tipo },
+      responseType: 'blob' // Vital para archivos binarios
+    });
+  },
 
-      const response = await fetch(urlFetch.toString(), {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ 
-          error: 'Error al generar PDF' 
-        }));
-        throw new Error(errorData.error || 'Error al generar PDF');
-      }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      
-      let nombreArchivo = '';
-      if (tipo === 'comprobante') {
-        nombreArchivo = `Comprobante-${numeroOrden || id}.pdf`;
-      } else {
-        nombreArchivo = `OrdenVenta-${numeroOrden || id}.pdf`;
-      }
-
-      link.download = nombreArchivo;
-      
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error al descargar PDF orden venta:', error);
-      throw error;
-    }
+  // 2. Descargar Guía de Remisión (Salida) - ESTA FALTABA
+  descargarPDFDespacho: (id, idSalida) => {
+    return api.get(`/ordenes-venta/${id}/salidas/${idSalida}/pdf`, {
+      responseType: 'blob'
+    });
   }
 };
 

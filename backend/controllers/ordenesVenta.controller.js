@@ -2,7 +2,7 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarFacturaPDF } from '../utils/pdfGenerators/FacturaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
-import { generarPDFSalida } from '../utils/pdfGenerators/salidaPDF.js';
+import { generarPDFSalida } from '../utils/pdf-generator.js';
 
 function getFechaPeru() {
   const now = new Date();

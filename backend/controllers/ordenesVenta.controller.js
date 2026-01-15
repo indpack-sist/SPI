@@ -100,7 +100,84 @@ export async function getAllOrdenesVenta(req, res) {
     });
   }
 }
-
+export async function getOrdenVentaById(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const ordenResult = await executeQuery(`
+      SELECT 
+        ov.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente,
+        cl.telefono AS telefono_cliente,
+        e.nombre_completo AS comercial,
+        c.numero_cotizacion
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+    
+    if (!ordenResult.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: ordenResult.error 
+      });
+    }
+    
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
+    }
+    
+    const orden = ordenResult.data[0];
+    
+    const detalleResult = await executeQuery(`
+      SELECT 
+        dov.*,
+        dov.cantidad_despachada, 
+        (dov.cantidad - dov.cantidad_despachada) AS cantidad_pendiente,
+        dov.subtotal AS valor_venta,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida,
+        p.requiere_receta,
+        p.stock_actual AS stock_disponible,
+        ti.nombre AS tipo_inventario_nombre,
+        (SELECT COUNT(*) FROM ordenes_produccion WHERE id_orden_venta_origen = ? AND id_producto_terminado = dov.id_producto) AS tiene_op
+      FROM detalle_orden_venta dov
+      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+      WHERE dov.id_orden_venta = ?
+      ORDER BY dov.id_detalle
+    `, [id, id]);
+    
+    if (!detalleResult.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: detalleResult.error 
+      });
+    }
+    
+    orden.detalle = detalleResult.data;
+    
+    res.json({
+      success: true,
+      data: orden
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
 export async function createOrdenVenta(req, res) {
   try {
     const {

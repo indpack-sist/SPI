@@ -396,6 +396,7 @@ export const ordenesProduccionAPI = {
     }
   }
 };
+
 export const cotizacionesAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -415,45 +416,57 @@ export const cotizacionesAPI = {
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
   getEstadisticas: () => api.get('/cotizaciones/estadisticas'),
 
+  // --- SECCIÓN CORREGIDA PARA NOMBRE DINÁMICO ---
   descargarPDF: async (id) => {
-    const response = await fetch(`${API_URL}/cotizaciones/${id}/pdf`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/pdf',
-      }
-    });
-    
-    if (!response.ok) throw new Error('Error al descargar PDF');
+    try {
+      const response = await fetch(`${API_URL}/cotizaciones/${id}/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/pdf',
+        }
+      });
+      
+      if (!response.ok) throw new Error('Error al descargar PDF');
 
-    // 1. Intentar extraer el nombre del archivo del header Content-Disposition
-    const disposition = response.headers.get('Content-Disposition');
-    let filename = `cotizacion-${id}.pdf`; // Nombre de respaldo
+      // 1. EXTRAER EL NOMBRE DEL HEADER QUE ENVÍA EL SERVIDOR
+      const disposition = response.headers.get('Content-Disposition');
+      let filename = `cotizacion-${id}.pdf`; // Nombre por defecto
 
-    if (disposition && disposition.includes('filename=')) {
-      // Esta expresión regular extrae el texto entre comillas después de filename=
-      const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-      const matches = filenameRegex.exec(disposition);
-      if (matches != null && matches[1]) { 
-        filename = matches[1].replace(/['"]/g, '');
+      if (disposition && disposition.includes('filename=')) {
+        // Expresión regular para obtener el texto dentro de filename="..."
+        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches != null && matches[1]) { 
+          // Limpiamos comillas extra
+          filename = matches[1].replace(/['"]/g, '');
+        }
       }
+      
+      // 2. CREAR BLOB Y LINK DE DESCARGA
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // 3. ASIGNAR EL NOMBRE DINÁMICO
+      link.download = filename; 
+      
+      document.body.appendChild(link);
+      link.click();
+
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      // IMPORTANTE: Retornamos éxito para que el frontend no de error al intentar leer respuesta
+      return { success: true };
+
+    } catch (error) {
+      console.error('Error al descargar PDF de cotización:', error);
+      throw error;
     }
-    
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-
-    // 2. Usar el nombre que extrajimos del servidor
-    link.download = filename; 
-    
-    document.body.appendChild(link);
-    link.click();
-
-    setTimeout(() => {
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    }, 100);
   }
 };
 
@@ -649,44 +662,43 @@ export const guiasTransportistaAPI = {
   }
 };
 
-export const ordenesCompraAPI = {
-  // Listado y filtros
+export const comprasAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
     if (filtros.estado) params.append('estado', filtros.estado);
     if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
-    if (filtros.tipo_pago) params.append('tipo_pago', filtros.tipo_pago);
+    if (filtros.tipo_compra) params.append('tipo_compra', filtros.tipo_compra);
+    if (filtros.tipo_cuenta) params.append('tipo_cuenta', filtros.tipo_cuenta);
+    if (filtros.id_cuenta_pago) params.append('id_cuenta_pago', filtros.id_cuenta_pago);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+    if (filtros.mes) params.append('mes', filtros.mes);
+    if (filtros.anio) params.append('anio', filtros.anio);
     if (filtros.alertas) params.append('alertas', filtros.alertas);
     
-    return api.get(`/ordenes-compra?${params.toString()}`);
+    return api.get(`/compras?${params.toString()}`);
   },
 
-  // CRUD básico
-  getById: (id) => api.get(`/ordenes-compra/${id}`),
-  create: (data) => api.post('/ordenes-compra', data),
-  update: (id, data) => api.put(`/ordenes-compra/${id}`, data),
+  getById: (id) => api.get(`/compras/${id}`),
+  create: (data) => api.post('/compras', data),
+  update: (id, data) => api.put(`/compras/${id}`, data),
   cancelar: (id, motivo_cancelacion) => 
-    api.post(`/ordenes-compra/${id}/cancelar`, { motivo_cancelacion }),
+    api.delete(`/compras/${id}/cancelar`, { data: { motivo_cancelacion } }),
 
-  // Estadísticas y alertas
-  getEstadisticas: () => api.get('/ordenes-compra/estadisticas'),
-  getAlertas: () => api.get('/ordenes-compra/alertas'),
+  getEstadisticas: (params) => api.get('/compras/estadisticas', { params }),
+  getAlertas: (params) => api.get('/compras/alertas', { params }),
+  getPorCuenta: (params) => api.get('/compras/por-cuenta', { params }),
 
-  // Gestión de pagos y resumen
-  getResumenPagos: (id) => api.get(`/ordenes-compra/${id}/pagos/resumen`),
-  getHistorialPagos: (id) => api.get(`/ordenes-compra/${id}/pagos/historial`),
+  getResumenPagos: (id) => api.get(`/compras/${id}/resumen-pagos`),
+  getHistorialPagos: (id) => api.get(`/compras/${id}/historial-pagos`),
 
-  // Gestión de cuotas
-  getCuotas: (id, params) => api.get(`/ordenes-compra/${id}/cuotas`, { params }),
-  getCuotaById: (id, idCuota) => api.get(`/ordenes-compra/${id}/cuotas/${idCuota}`),
+  getCuotas: (id, params) => api.get(`/compras/${id}/cuotas`, { params }),
+  getCuotaById: (id, idCuota) => api.get(`/compras/${id}/cuotas/${idCuota}`),
   pagarCuota: (id, idCuota, data) => 
-    api.post(`/ordenes-compra/${id}/cuotas/${idCuota}/pagar`, data),
+    api.post(`/compras/${id}/cuotas/${idCuota}/pagar`, data),
 
-  // Descargar PDF
   descargarPDF: async (id) => {
-    const response = await fetch(`${API_URL}/ordenes-compra/${id}/pdf`, {
+    const response = await fetch(`${API_URL}/compras/${id}/pdf`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -700,7 +712,7 @@ export const ordenesCompraAPI = {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `orden-compra-${id}.pdf`;
+    link.download = `compra-${id}.pdf`;
     
     document.body.appendChild(link);
     link.click();
@@ -710,33 +722,18 @@ export const ordenesCompraAPI = {
     }, 100);
   }
 };
-
 export const cuentasPagoAPI = {
-  // Gestión de cuentas
   getAll: (params) => api.get('/cuentas-pago', { params }),
   getById: (id) => api.get(`/cuentas-pago/${id}`),
   create: (data) => api.post('/cuentas-pago', data),
   update: (id, data) => api.put(`/cuentas-pago/${id}`, data),
   delete: (id) => api.delete(`/cuentas-pago/${id}`),
   
-  // Resumen de cuenta
-  getResumen: (id) => api.get(`/cuentas-pago/${id}/resumen`),
+  getResumen: (id, params) => api.get(`/cuentas-pago/${id}/resumen`, { params }),
+  getEstadisticas: (params) => api.get('/cuentas-pago/estadisticas', { params }),
   
-  // Movimientos
   registrarMovimiento: (id, data) => api.post(`/cuentas-pago/${id}/movimientos`, data),
   getMovimientos: (id, params) => api.get(`/cuentas-pago/${id}/movimientos`, { params }),
   
-  // Transferencias entre cuentas
   transferir: (data) => api.post('/cuentas-pago/transferencias', data)
 };
-
-export const pagosCobranzasAPI = {
-  getResumen: (params) => api.get('/pagos-cobranzas/resumen', { params }),
-  getAll: (params) => api.get('/pagos-cobranzas', { params }),
-  getCuentasPorCobrar: (params) => api.get('/pagos-cobranzas/cuentas-por-cobrar', { params }) 
-};
-
-api.dashboard = dashboard;
-
-export { api };
-export default api;

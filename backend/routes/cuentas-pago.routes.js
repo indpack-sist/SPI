@@ -8,10 +8,14 @@ import {
   registrarMovimiento,
   getMovimientosCuenta,
   getResumenCuenta,
-  transferirEntreCuentas
-} from '../controllers/cuentas-pago.controller.js';
+  transferirEntreCuentas,
+  getEstadisticasCuentas
+} from '../controllers/cuentasPagoController.js';
 
 const router = express.Router();
+
+// Rutas de estadísticas y reportes (antes de las rutas con :id)
+router.get('/estadisticas', getEstadisticasCuentas);
 
 // Transferencias (debe ir antes de las rutas con :id)
 router.post('/transferencias', transferirEntreCuentas);

@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   Calculator, FileText, Building,
   Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink,
-  Building2, User, Loader, CheckCircle, CreditCard, DollarSign
+  Building2, User, Loader, CheckCircle, CreditCard, DollarSign, MapPin
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -106,6 +106,7 @@ function NuevaCotizacion() {
   });
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [direccionesCliente, setDireccionesCliente] = useState([]);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
@@ -117,12 +118,6 @@ function NuevaCotizacion() {
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(valor);
-  };
-
-  const formatearMoneda = (valor) => {
-    if (!orden && !valor) return '-';
-    const simbolo = orden?.moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
   const formatearMonedaGral = (valor) => {
@@ -218,10 +213,28 @@ function NuevaCotizacion() {
           plazo_entrega: cotizacion.plazo_entrega || '',
           lugar_entrega: cotizacion.lugar_entrega || ''
         });
+        
         const resCli = await clientesAPI.getById(cotizacion.id_cliente);
         if (resCli.data.success) {
-          handleSelectCliente(resCli.data.data);
+          const clienteData = resCli.data.data;
+          setClienteSeleccionado(clienteData);
+          
+          if (clienteData.direcciones && clienteData.direcciones.length > 0) {
+            setDireccionesCliente(clienteData.direcciones);
+          } else if (clienteData.direccion_despacho) {
+            setDireccionesCliente([{ id_direccion: 'principal', direccion: clienteData.direccion_despacho, es_principal: 1 }]);
+          }
+
+          try {
+            const resCredito = await clientesAPI.getEstadoCredito(cotizacion.id_cliente);
+            if (resCredito.data.success) {
+              setEstadoCredito(resCredito.data.data);
+            }
+          } catch (err) {
+            console.error('Error al cargar estado de crédito:', err);
+          }
         }
+
         if (cotizacion.detalle && cotizacion.detalle.length > 0) {
           setDetalle(cotizacion.detalle.map(item => ({
             id_producto: item.id_producto,
@@ -272,21 +285,44 @@ function NuevaCotizacion() {
   };
 
   const handleSelectCliente = async (cliente) => {
-    setClienteSeleccionado(cliente);
-    setFormCabecera(prev => ({
-      ...prev,
-      id_cliente: cliente.id_cliente,
-      lugar_entrega: cliente.direccion_despacho || '',
-      plazo_pago: 'Contado'
-    }));
     try {
-      const resCredito = await clientesAPI.getEstadoCredito(cliente.id_cliente);
+      const resFullCliente = await clientesAPI.getById(cliente.id_cliente);
+      const clienteCompleto = resFullCliente.data.data;
+      
+      setClienteSeleccionado(clienteCompleto);
+      
+      let direcciones = [];
+      if (clienteCompleto.direcciones && clienteCompleto.direcciones.length > 0) {
+        direcciones = clienteCompleto.direcciones;
+      } else if (clienteCompleto.direccion_despacho) {
+        direcciones = [{ id_direccion: 'principal', direccion: clienteCompleto.direccion_despacho, es_principal: 1 }];
+      }
+      setDireccionesCliente(direcciones);
+
+      const direccionPrincipal = direcciones.find(d => d.es_principal) || direcciones[0];
+
+      setFormCabecera(prev => ({
+        ...prev,
+        id_cliente: clienteCompleto.id_cliente,
+        lugar_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
+        plazo_pago: 'Contado'
+      }));
+
+      const resCredito = await clientesAPI.getEstadoCredito(clienteCompleto.id_cliente);
       if (resCredito.data.success) {
         setEstadoCredito(resCredito.data.data);
       }
     } catch (err) {
-      console.error('Error al cargar estado de crédito:', err);
+      console.error('Error al cargar datos completos del cliente:', err);
+      setClienteSeleccionado(cliente);
+      setFormCabecera(prev => ({
+        ...prev,
+        id_cliente: cliente.id_cliente,
+        lugar_entrega: cliente.direccion_despacho || '',
+        plazo_pago: 'Contado'
+      }));
     }
+    
     setModalClienteOpen(false);
     setBusquedaCliente('');
   };
@@ -624,6 +660,7 @@ function NuevaCotizacion() {
                       onClick={() => {
                         setClienteSeleccionado(null);
                         setEstadoCredito(null);
+                        setDireccionesCliente([]);
                       }}
                       disabled={cotizacionConvertida}
                     >
@@ -870,14 +907,33 @@ function NuevaCotizacion() {
             </div>
             <div className="form-group mt-4">
               <label className="form-label">Lugar de Entrega</label>
-              <input
-                type="text"
-                className="form-input"
-                value={formCabecera.lugar_entrega}
-                onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
-                placeholder="Dirección de entrega"
-                disabled={cotizacionConvertida}
-              />
+              {direccionesCliente.length > 0 ? (
+                <div className="relative">
+                  <select
+                    className="form-select pl-10"
+                    value={formCabecera.lugar_entrega}
+                    onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
+                    disabled={cotizacionConvertida}
+                  >
+                    <option value="">Seleccione una dirección...</option>
+                    {direccionesCliente.map((dir, idx) => (
+                      <option key={idx} value={dir.direccion}>
+                        {dir.direccion} {dir.es_principal ? '(Principal)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="form-input"
+                  value={formCabecera.lugar_entrega}
+                  onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
+                  placeholder="Dirección de entrega"
+                  disabled={cotizacionConvertida}
+                />
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Observaciones</label>

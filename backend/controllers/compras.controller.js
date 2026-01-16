@@ -2,8 +2,6 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarCompraPDF } from '../utils/pdfGenerators/compraPDF.js';
 import pool from '../config/database.js';
 
-// ==================== OBTENER COMPRAS ====================
-
 export async function getAllCompras(req, res) {
   try {
     const { 
@@ -107,7 +105,6 @@ export async function getAllCompras(req, res) {
       params.push(anio);
     }
     
-    // Filtros de alertas inteligentes
     if (alertas === 'proximas_vencer') {
       sql += ` AND oc.estado_pago != 'Pagado' AND DATEDIFF(oc.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 7`;
     } else if (alertas === 'vencidas') {
@@ -144,16 +141,9 @@ export async function getAllCompras(req, res) {
   }
 }
 
-// ==================== OBTENER COMPRA POR ID ====================
-
 export async function getCompraById(req, res) {
   try {
     const { id } = req.params;
-    
-    // LOG DE DEBUG
-    console.log('=== GET COMPRA BY ID ===');
-    console.log('ID recibido:', id);
-    console.log('Tipo de ID:', typeof id);
     
     const compraResult = await executeQuery(`
       SELECT 
@@ -180,12 +170,7 @@ export async function getCompraById(req, res) {
       WHERE oc.id_orden_compra = ?
     `, [id]);
     
-    // LOG DE DEBUG
-    console.log('Query ejecutada exitosamente:', compraResult.success);
-    console.log('Registros encontrados:', compraResult.data?.length || 0);
-    
     if (!compraResult.success) {
-      console.error('Error en query:', compraResult.error);
       return res.status(500).json({ 
         success: false,
         error: compraResult.error 
@@ -193,20 +178,14 @@ export async function getCompraById(req, res) {
     }
     
     if (compraResult.data.length === 0) {
-      console.log('❌ Compra no encontrada con ID:', id);
       return res.status(404).json({
         success: false,
         error: 'Compra no encontrada'
       });
     }
     
-    console.log('✅ Compra encontrada:', compraResult.data[0].numero_orden);
-    
     const compra = compraResult.data[0];
     
-    // ... resto del código
-    
-    // Obtener detalle de productos
     const detalleResult = await executeQuery(`
       SELECT 
         doc.*,
@@ -231,7 +210,6 @@ export async function getCompraById(req, res) {
     
     compra.detalle = detalleResult.data;
     
-    // Obtener cuotas si es compra a crédito
     if (compra.tipo_compra === 'Credito' && compra.numero_cuotas > 0) {
       const cuotasResult = await executeQuery(`
         SELECT 
@@ -266,8 +244,6 @@ export async function getCompraById(req, res) {
     });
   }
 }
-
-// ==================== CREAR COMPRA ====================
 
 export async function createCompra(req, res) {
   let connection;
@@ -602,8 +578,6 @@ export async function createCompra(req, res) {
   }
 }
 
-// ==================== ACTUALIZAR COMPRA ====================
-
 export async function updateCompra(req, res) {
   try {
     const { id } = req.params;
@@ -734,8 +708,6 @@ export async function updateCompra(req, res) {
   }
 }
 
-// ==================== CANCELAR COMPRA ====================
-
 export async function cancelarCompra(req, res) {
   try {
     const { id } = req.params;
@@ -769,7 +741,6 @@ export async function cancelarCompra(req, res) {
     }
     
     const operations = async (connection) => {
-      // Cancelar compra
       await connection.query(`
         UPDATE ordenes_compra 
         SET estado = 'Cancelada',
@@ -777,14 +748,12 @@ export async function cancelarCompra(req, res) {
         WHERE id_orden_compra = ?
       `, [motivo_cancelacion || 'Sin motivo especificado', id]);
       
-      // Cancelar cuotas pendientes
       await connection.query(`
         UPDATE cuotas_orden_compra 
         SET estado = 'Cancelada'
         WHERE id_orden_compra = ? AND estado = 'Pendiente'
       `, [id]);
       
-      // Revertir stock de productos
       const [detalles] = await connection.query(`
         SELECT id_producto, cantidad 
         FROM detalle_orden_compra 
@@ -806,7 +775,7 @@ export async function cancelarCompra(req, res) {
     
     if (!result.success) {
       return res.status(500).json({ 
-        success: false,
+        success: false, 
         error: result.error 
       });
     }
@@ -824,8 +793,6 @@ export async function cancelarCompra(req, res) {
     });
   }
 }
-
-// ==================== CUOTAS ====================
 
 export async function getCuotasCompra(req, res) {
   try {
@@ -859,7 +826,7 @@ export async function getCuotasCompra(req, res) {
     
     if (!result.success) {
       return res.status(500).json({ 
-        success: false,
+        success: false, 
         error: result.error 
       });
     }
@@ -903,7 +870,7 @@ export async function getCuotaById(req, res) {
     
     if (!result.success) {
       return res.status(500).json({ 
-        success: false,
+        success: false, 
         error: result.error 
       });
     }
@@ -917,7 +884,6 @@ export async function getCuotaById(req, res) {
     
     const cuota = result.data[0];
     
-    // Obtener historial de pagos de la cuota
     const pagosResult = await executeQuery(`
       SELECT 
         mc.*,
@@ -971,7 +937,6 @@ export async function pagarCuota(req, res) {
     }
     
     const operations = async (connection) => {
-      // Obtener cuota
       const [cuotas] = await connection.query(`
         SELECT coc.*, oc.moneda, oc.total, oc.monto_pagado
         FROM cuotas_orden_compra coc
@@ -998,7 +963,6 @@ export async function pagarCuota(req, res) {
         throw new Error(`El monto excede el valor de la cuota`);
       }
       
-      // Verificar saldo de cuenta
       const [cuentas] = await connection.query(
         'SELECT * FROM cuentas_pago WHERE id_cuenta = ? AND estado = "Activo" FOR UPDATE',
         [id_cuenta_pago]
@@ -1019,7 +983,6 @@ export async function pagarCuota(req, res) {
         throw new Error(`Saldo insuficiente en "${cuenta.nombre}". Disponible: ${saldoAnterior} ${cuenta.moneda}`);
       }
       
-      // Registrar movimiento en cuenta
       const saldoNuevo = saldoAnterior - montoPago;
       
       await connection.query(
@@ -1054,7 +1017,6 @@ export async function pagarCuota(req, res) {
         fecha_pago || new Date()
       ]);
       
-      // Actualizar cuota
       const nuevoMontoPagadoCuota = montoPagadoCuota + montoPago;
       const estadoCuota = nuevoMontoPagadoCuota >= montoCuota - 0.01 ? 'Pagada' : 'Parcial';
       
@@ -1066,7 +1028,6 @@ export async function pagarCuota(req, res) {
         WHERE id_cuota = ?
       `, [nuevoMontoPagadoCuota, estadoCuota, fecha_pago || new Date(), idCuota]);
       
-      // Actualizar compra
       const nuevoMontoPagadoCompra = parseFloat(cuota.monto_pagado) + montoPago;
       const totalCompra = parseFloat(cuota.total);
       
@@ -1116,448 +1077,558 @@ export async function pagarCuota(req, res) {
   }
 }
 
-// ==================== ALERTAS INTELIGENTES ====================
+export async function registrarPagoCompra(req, res) {
+  let connection;
+  try {
+    const { id } = req.params;
+    const {
+      id_cuenta_pago,
+      monto_pagado,
+      fecha_pago,
+      metodo_pago,
+      referencia,
+      observaciones
+    } = req.body;
+
+    const id_registrado_por = req.user?.id_empleado || null;
+
+    if (!id_registrado_por) {
+      return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
+    }
+
+    if (!id_cuenta_pago || !monto_pagado || parseFloat(monto_pagado) <= 0) {
+      return res.status(400).json({ success: false, error: 'Cuenta de pago y monto válido son obligatorios' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      const [compras] = await connection.query(`
+        SELECT numero_orden, total, monto_pagado, moneda, estado_pago 
+        FROM ordenes_compra 
+        WHERE id_orden_compra = ? 
+        FOR UPDATE
+      `, [id]);
+
+      if (compras.length === 0) throw new Error('Compra no encontrada');
+      const compra = compras[0];
+
+      if (compra.estado_pago === 'Pagado') {
+        throw new Error('Esta compra ya está pagada en su totalidad');
+      }
+
+      const deudaPendiente = parseFloat(compra.total) - parseFloat(compra.monto_pagado);
+      const montoAbono = parseFloat(monto_pagado);
+
+      if (montoAbono > deudaPendiente + 0.01) {
+        throw new Error(`El monto (${montoAbono}) excede la deuda pendiente (${deudaPendiente.toFixed(2)})`);
+      }
+
+      const [cuentas] = await connection.query(`
+        SELECT * FROM cuentas_pago WHERE id_cuenta = ? AND estado = 'Activo' FOR UPDATE
+      `, [id_cuenta_pago]);
+
+      if (cuentas.length === 0) throw new Error('Cuenta de pago no encontrada o inactiva');
+      const cuenta = cuentas[0];
+
+      if (cuenta.moneda !== compra.moneda) {
+        throw new Error(`La cuenta está en ${cuenta.moneda} pero la compra es en ${compra.moneda}`);
+      }
+
+      if (parseFloat(cuenta.saldo_actual) < montoAbono) {
+        throw new Error(`Saldo insuficiente en ${cuenta.nombre}. Disponible: ${cuenta.saldo_actual}`);
+      }
+
+      const nuevoSaldoCuenta = parseFloat(cuenta.saldo_actual) - montoAbono;
+      await connection.query('UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?', [nuevoSaldoCuenta, id_cuenta_pago]);
+
+      await connection.query(`
+        INSERT INTO movimientos_cuentas (
+          id_cuenta, tipo_movimiento, monto, concepto, referencia, 
+          id_orden_compra, saldo_anterior, saldo_nuevo, id_registrado_por, fecha_movimiento
+        ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id_cuenta_pago,
+        montoAbono,
+        observaciones || `Pago a cuenta Orden ${compra.numero_orden}`,
+        referencia || metodo_pago,
+        id,
+        cuenta.saldo_actual,
+        nuevoSaldoCuenta,
+        id_registrado_por,
+        fecha_pago || new Date()
+      ]);
+
+      const nuevoTotalPagado = parseFloat(compra.monto_pagado) + montoAbono;
+      let nuevoEstadoPago = 'Parcial';
+      
+      if (nuevoTotalPagado >= parseFloat(compra.total) - 0.01) {
+        nuevoEstadoPago = 'Pagado';
+      }
+
+      await connection.query(`
+        UPDATE ordenes_compra 
+        SET monto_pagado = ?, estado_pago = ? 
+        WHERE id_orden_compra = ?
+      `, [nuevoTotalPagado, nuevoEstadoPago, id]);
+
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: 'Pago registrado exitosamente',
+        data: {
+          numero_orden: compra.numero_orden,
+          monto_abonado: montoAbono,
+          nuevo_saldo_pendiente: parseFloat(compra.total) - nuevoTotalPagado,
+          estado_pago: nuevoEstadoPago
+        }
+      });
+
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    }
+
+  } catch (error) {
+    console.error(error);
+    if (connection) await connection.rollback();
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+}
 
 export async function getAlertasCompras(req, res) {
-  try {
-    const { tipo_cuenta, id_cuenta_pago } = req.query;
-    
-    let whereClause = '';
-    const params = [];
-    
-    if (tipo_cuenta) {
-      whereClause += ' AND cp.tipo = ?';
-      params.push(tipo_cuenta);
-    }
-    
-    if (id_cuenta_pago) {
-      whereClause += ' AND oc.id_cuenta_pago = ?';
-      params.push(id_cuenta_pago);
-    }
-    
-    const result = await executeQuery(`
-      SELECT 
-        'cuotas_vencidas' as tipo_alerta,
-        COUNT(DISTINCT coc.id_cuota) as cantidad,
-        SUM(coc.monto_cuota - COALESCE(coc.monto_pagado, 0)) as monto_total,
-        COUNT(DISTINCT oc.id_orden_compra) as compras_afectadas
-      FROM cuotas_orden_compra coc
-      INNER JOIN ordenes_compra oc ON coc.id_orden_compra = oc.id_orden_compra
-      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
-      WHERE coc.estado != 'Pagada' 
-        AND coc.fecha_vencimiento < CURDATE()
-        ${whereClause}
-      UNION ALL
-      SELECT 
-        'cuotas_proximas_vencer' as tipo_alerta,
-        COUNT(DISTINCT coc.id_cuota) as cantidad,
-        SUM(coc.monto_cuota - COALESCE(coc.monto_pagado, 0)) as monto_total,
-        COUNT(DISTINCT oc.id_orden_compra) as compras_afectadas
-      FROM cuotas_orden_compra coc
-      INNER JOIN ordenes_compra oc ON coc.id_orden_compra = oc.id_orden_compra
-      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
-      WHERE coc.estado != 'Pagada' 
-        AND DATEDIFF(coc.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 7
-        ${whereClause}
-      UNION ALL
-      SELECT 
-        'compras_vencidas' as tipo_alerta,
-        COUNT(DISTINCT oc.id_orden_compra) as cantidad,
-        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) as monto_total,
-        COUNT(DISTINCT oc.id_orden_compra) as compras_afectadas
-      FROM ordenes_compra oc
-      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
-      WHERE oc.estado_pago != 'Pagado' 
-        AND oc.fecha_vencimiento < CURDATE()
-        ${whereClause}
-      UNION ALL
-      SELECT 
-        'pagos_pendientes' as tipo_alerta,
-        COUNT(*) as cantidad,
-        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) as monto_total,
-        COUNT(*) as compras_afectadas
-      FROM ordenes_compra oc
-      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
-      WHERE oc.estado_pago = 'Pendiente'
-        ${whereClause}
-    `, [...params, ...params, ...params, ...params]);
-    
-    if (!result.success) {
-      return res.status(500).json({ 
-        success: false,
-        error: result.error 
-      });
-    }
-    
-    const alertas = {};
-    result.data.forEach(row => {
-      alertas[row.tipo_alerta] = {
-        cantidad: row.cantidad,
-        monto_total: parseFloat(row.monto_total || 0),
-        compras_afectadas: row.compras_afectadas
-      };
-    });
-    
-    res.json({
-      success: true,
-      data: alertas
-    });
-    
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+  try {
+    const { tipo_cuenta, id_cuenta_pago } = req.query;
+    
+    let whereClause = '';
+    const params = [];
+    
+    if (tipo_cuenta) {
+      whereClause += ' AND cp.tipo = ?';
+      params.push(tipo_cuenta);
+    }
+    
+    if (id_cuenta_pago) {
+      whereClause += ' AND oc.id_cuenta_pago = ?';
+      params.push(id_cuenta_pago);
+    }
+    
+    const result = await executeQuery(`
+      SELECT 
+        'cuotas_vencidas' as tipo_alerta,
+        COUNT(DISTINCT coc.id_cuota) as cantidad,
+        SUM(coc.monto_cuota - COALESCE(coc.monto_pagado, 0)) as monto_total,
+        COUNT(DISTINCT oc.id_orden_compra) as compras_afectadas
+      FROM cuotas_orden_compra coc
+      INNER JOIN ordenes_compra oc ON coc.id_orden_compra = oc.id_orden_compra
+      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
+      WHERE coc.estado != 'Pagada' 
+        AND coc.fecha_vencimiento < CURDATE()
+        ${whereClause}
+      UNION ALL
+      SELECT 
+        'cuotas_proximas_vencer' as tipo_alerta,
+        COUNT(DISTINCT coc.id_cuota) as cantidad,
+        SUM(coc.monto_cuota - COALESCE(coc.monto_pagado, 0)) as monto_total,
+        COUNT(DISTINCT oc.id_orden_compra) as compras_afectadas
+      FROM cuotas_orden_compra coc
+      INNER JOIN ordenes_compra oc ON coc.id_orden_compra = oc.id_orden_compra
+      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
+      WHERE coc.estado != 'Pagada' 
+        AND DATEDIFF(coc.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 7
+        ${whereClause}
+      UNION ALL
+      SELECT 
+        'compras_vencidas' as tipo_alerta,
+        COUNT(DISTINCT oc.id_orden_compra) as cantidad,
+        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) as monto_total,
+        COUNT(DISTINCT oc.id_orden_compra) as compras_afectadas
+      FROM ordenes_compra oc
+      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
+      WHERE oc.estado_pago != 'Pagado' 
+        AND oc.fecha_vencimiento < CURDATE()
+        ${whereClause}
+      UNION ALL
+      SELECT 
+        'pagos_pendientes' as tipo_alerta,
+        COUNT(*) as cantidad,
+        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) as monto_total,
+        COUNT(*) as compras_afectadas
+      FROM ordenes_compra oc
+      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
+      WHERE oc.estado_pago = 'Pendiente'
+        ${whereClause}
+    `, [...params, ...params, ...params, ...params]);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
+    const alertas = {};
+    result.data.forEach(row => {
+      alertas[row.tipo_alerta] = {
+        cantidad: row.cantidad,
+        monto_total: parseFloat(row.monto_total || 0),
+        compras_afectadas: row.compras_afectadas
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: alertas
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 }
-
-// ==================== ESTADÍSTICAS ====================
 
 export async function getEstadisticasCompras(req, res) {
-  try {
-    const { mes, anio, tipo_cuenta, id_cuenta_pago } = req.query;
-    
-    let whereClause = "WHERE oc.estado != 'Cancelada'";
-    const params = [];
-    
-    if (mes && anio) {
-      whereClause += ' AND MONTH(oc.fecha_emision) = ? AND YEAR(oc.fecha_emision) = ?';
-      params.push(mes, anio);
-    } else if (anio) {
-      whereClause += ' AND YEAR(oc.fecha_emision) = ?';
-      params.push(anio);
-    }
-    
-    if (tipo_cuenta) {
-      whereClause += ' AND cp.tipo = ?';
-      params.push(tipo_cuenta);
-    }
-    
-    if (id_cuenta_pago) {
-      whereClause += ' AND oc.id_cuenta_pago = ?';
-      params.push(id_cuenta_pago);
-    }
-    
-    const result = await executeQuery(`
-      SELECT 
-        COUNT(*) AS total_compras,
-        SUM(CASE WHEN oc.estado = 'Recibida' THEN 1 ELSE 0 END) AS recibidas,
-        SUM(CASE WHEN oc.estado = 'Cancelada' THEN 1 ELSE 0 END) AS canceladas,
-        SUM(CASE WHEN oc.estado_pago = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes_pago,
-        SUM(CASE WHEN oc.estado_pago = 'Parcial' THEN 1 ELSE 0 END) AS pagos_parciales,
-        SUM(CASE WHEN oc.estado_pago = 'Pagado' THEN 1 ELSE 0 END) AS pagadas,
-        SUM(CASE WHEN oc.tipo_compra = 'Contado' THEN 1 ELSE 0 END) AS al_contado,
-        SUM(CASE WHEN oc.tipo_compra = 'Credito' THEN 1 ELSE 0 END) AS a_credito,
-        SUM(oc.total) AS monto_total,
-        SUM(oc.monto_pagado) AS monto_pagado,
-        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) AS saldo_pendiente,
-        COUNT(DISTINCT oc.id_proveedor) AS proveedores_unicos,
-        COUNT(DISTINCT oc.id_cuenta_pago) AS cuentas_utilizadas,
-        AVG(oc.total) AS ticket_promedio
-      FROM ordenes_compra oc
-      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
-      ${whereClause}
-    `, params);
-    
-    if (!result.success) {
-      return res.status(500).json({ 
-        success: false,
-        error: result.error 
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: result.data[0]
-    });
-    
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+  try {
+    const { mes, anio, tipo_cuenta, id_cuenta_pago } = req.query;
+    
+    let whereClause = "WHERE oc.estado != 'Cancelada'";
+    const params = [];
+    
+    if (mes && anio) {
+      whereClause += ' AND MONTH(oc.fecha_emision) = ? AND YEAR(oc.fecha_emision) = ?';
+      params.push(mes, anio);
+    } else if (anio) {
+      whereClause += ' AND YEAR(oc.fecha_emision) = ?';
+      params.push(anio);
+    }
+    
+    if (tipo_cuenta) {
+      whereClause += ' AND cp.tipo = ?';
+      params.push(tipo_cuenta);
+    }
+    
+    if (id_cuenta_pago) {
+      whereClause += ' AND oc.id_cuenta_pago = ?';
+      params.push(id_cuenta_pago);
+    }
+    
+    const result = await executeQuery(`
+      SELECT 
+        COUNT(*) AS total_compras,
+        SUM(CASE WHEN oc.estado = 'Recibida' THEN 1 ELSE 0 END) AS recibidas,
+        SUM(CASE WHEN oc.estado = 'Cancelada' THEN 1 ELSE 0 END) AS canceladas,
+        SUM(CASE WHEN oc.estado_pago = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes_pago,
+        SUM(CASE WHEN oc.estado_pago = 'Parcial' THEN 1 ELSE 0 END) AS pagos_parciales,
+        SUM(CASE WHEN oc.estado_pago = 'Pagado' THEN 1 ELSE 0 END) AS pagadas,
+        SUM(CASE WHEN oc.tipo_compra = 'Contado' THEN 1 ELSE 0 END) AS al_contado,
+        SUM(CASE WHEN oc.tipo_compra = 'Credito' THEN 1 ELSE 0 END) AS a_credito,
+        SUM(oc.total) AS monto_total,
+        SUM(oc.monto_pagado) AS monto_pagado,
+        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) AS saldo_pendiente,
+        COUNT(DISTINCT oc.id_proveedor) AS proveedores_unicos,
+        COUNT(DISTINCT oc.id_cuenta_pago) AS cuentas_utilizadas,
+        AVG(oc.total) AS ticket_promedio
+      FROM ordenes_compra oc
+      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
+      ${whereClause}
+    `, params);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data[0]
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 }
-
-// ==================== RESUMEN DE PAGOS ====================
 
 export async function getResumenPagosCompra(req, res) {
-  try {
-    const { id } = req.params;
-    
-    const compraResult = await executeQuery(`
-      SELECT 
-        oc.numero_orden,
-        oc.tipo_compra,
-        oc.total,
-        oc.monto_pagado,
-        oc.estado_pago,
-        oc.moneda,
-        oc.numero_cuotas,
-        oc.fecha_vencimiento,
-        pr.razon_social AS proveedor,
-        cp.nombre AS cuenta_pago,
-        cp.tipo AS tipo_cuenta
-      FROM ordenes_compra oc
-      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
-      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
-      WHERE oc.id_orden_compra = ?
-    `, [id]);
-    
-    if (!compraResult.success || compraResult.data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Compra no encontrada'
-      });
-    }
-    
-    const compra = compraResult.data[0];
-    const totalCompra = parseFloat(compra.total);
-    const montoPagado = parseFloat(compra.monto_pagado || 0);
-    
-    let cuotasInfo = null;
-    if (compra.tipo_compra === 'Credito') {
-      const cuotasResult = await executeQuery(`
-        SELECT 
-          COUNT(*) as total_cuotas,
-          SUM(CASE WHEN estado = 'Pagada' THEN 1 ELSE 0 END) as cuotas_pagadas,
-          SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as cuotas_pendientes,
-          SUM(CASE WHEN estado = 'Parcial' THEN 1 ELSE 0 END) as cuotas_parciales,
-          SUM(CASE WHEN estado != 'Pagada' AND fecha_vencimiento < CURDATE() THEN 1 ELSE 0 END) as cuotas_vencidas,
-          MIN(CASE WHEN estado != 'Pagada' THEN fecha_vencimiento END) as proxima_cuota_vencimiento,
-          MIN(CASE WHEN estado != 'Pagada' THEN DATEDIFF(fecha_vencimiento, CURDATE()) END) as dias_proxima_cuota
-        FROM cuotas_orden_compra
-        WHERE id_orden_compra = ?
-      `, [id]);
-      
-      if (cuotasResult.success) {
-        cuotasInfo = cuotasResult.data[0];
-      }
-    }
-    
-    const movimientosResult = await executeQuery(`
-      SELECT COUNT(*) as total_movimientos
-      FROM movimientos_cuentas
-      WHERE id_orden_compra = ?
-    `, [id]);
-    
-    res.json({
-      success: true,
-      data: {
-        numero_orden: compra.numero_orden,
-        proveedor: compra.proveedor,
-        tipo_compra: compra.tipo_compra,
-        total_compra: totalCompra,
-        monto_pagado: montoPagado,
-        saldo_pendiente: totalCompra - montoPagado,
-        porcentaje_pagado: totalCompra > 0 ? ((montoPagado / totalCompra) * 100).toFixed(2) : 0,
-        estado_pago: compra.estado_pago,
-        moneda: compra.moneda,
-        fecha_vencimiento: compra.fecha_vencimiento,
-        cuenta_pago: compra.cuenta_pago,
-        tipo_cuenta: compra.tipo_cuenta,
-        cuotas: cuotasInfo,
-        total_movimientos: movimientosResult.data[0].total_movimientos
-      }
-    });
-    
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+  try {
+    const { id } = req.params;
+    
+    const compraResult = await executeQuery(`
+      SELECT 
+        oc.numero_orden,
+        oc.tipo_compra,
+        oc.total,
+        oc.monto_pagado,
+        oc.estado_pago,
+        oc.moneda,
+        oc.numero_cuotas,
+        oc.fecha_vencimiento,
+        pr.razon_social AS proveedor,
+        cp.nombre AS cuenta_pago,
+        cp.tipo AS tipo_cuenta
+      FROM ordenes_compra oc
+      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
+      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
+      WHERE oc.id_orden_compra = ?
+    `, [id]);
+    
+    if (!compraResult.success || compraResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Compra no encontrada'
+      });
+    }
+    
+    const compra = compraResult.data[0];
+    const totalCompra = parseFloat(compra.total);
+    const montoPagado = parseFloat(compra.monto_pagado || 0);
+    
+    let cuotasInfo = null;
+    if (compra.tipo_compra === 'Credito') {
+      const cuotasResult = await executeQuery(`
+        SELECT 
+          COUNT(*) as total_cuotas,
+          SUM(CASE WHEN estado = 'Pagada' THEN 1 ELSE 0 END) as cuotas_pagadas,
+          SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as cuotas_pendientes,
+          SUM(CASE WHEN estado = 'Parcial' THEN 1 ELSE 0 END) as cuotas_parciales,
+          SUM(CASE WHEN estado != 'Pagada' AND fecha_vencimiento < CURDATE() THEN 1 ELSE 0 END) as cuotas_vencidas,
+          MIN(CASE WHEN estado != 'Pagada' THEN fecha_vencimiento END) as proxima_cuota_vencimiento,
+          MIN(CASE WHEN estado != 'Pagada' THEN DATEDIFF(fecha_vencimiento, CURDATE()) END) as dias_proxima_cuota
+        FROM cuotas_orden_compra
+        WHERE id_orden_compra = ?
+      `, [id]);
+      
+      if (cuotasResult.success) {
+        cuotasInfo = cuotasResult.data[0];
+      }
+    }
+    
+    const movimientosResult = await executeQuery(`
+      SELECT COUNT(*) as total_movimientos
+      FROM movimientos_cuentas
+      WHERE id_orden_compra = ?
+    `, [id]);
+    
+    res.json({
+      success: true,
+      data: {
+        numero_orden: compra.numero_orden,
+        proveedor: compra.proveedor,
+        tipo_compra: compra.tipo_compra,
+        total_compra: totalCompra,
+        monto_pagado: montoPagado,
+        saldo_pendiente: totalCompra - montoPagado,
+        porcentaje_pagado: totalCompra > 0 ? ((montoPagado / totalCompra) * 100).toFixed(2) : 0,
+        estado_pago: compra.estado_pago,
+        moneda: compra.moneda,
+        fecha_vencimiento: compra.fecha_vencimiento,
+        cuenta_pago: compra.cuenta_pago,
+        tipo_cuenta: compra.tipo_cuenta,
+        cuotas: cuotasInfo,
+        total_movimientos: movimientosResult.data[0].total_movimientos
+      }
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 }
-
-// ==================== HISTORIAL DE MOVIMIENTOS ====================
 
 export async function getHistorialPagosCompra(req, res) {
-  try {
-    const { id } = req.params;
-    
-    const result = await executeQuery(`
-      SELECT 
-        mc.*,
-        cp.nombre AS cuenta_pago,
-        cp.tipo AS tipo_cuenta,
-        e.nombre_completo AS registrado_por_nombre,
-        coc.numero_cuota,
-        coc.monto_cuota
-      FROM movimientos_cuentas mc
-      LEFT JOIN cuentas_pago cp ON mc.id_cuenta = cp.id_cuenta
-      LEFT JOIN empleados e ON mc.id_registrado_por = e.id_empleado
-      LEFT JOIN cuotas_orden_compra coc ON mc.id_cuota = coc.id_cuota
-      WHERE mc.id_orden_compra = ?
-      ORDER BY mc.fecha_movimiento DESC
-    `, [id]);
-    
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        error: result.error
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: result.data,
-      total: result.data.length
-    });
-    
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+  try {
+    const { id } = req.params;
+    
+    const result = await executeQuery(`
+      SELECT 
+        mc.*,
+        cp.nombre AS cuenta_pago,
+        cp.tipo AS tipo_cuenta,
+        e.nombre_completo AS registrado_por_nombre,
+        coc.numero_cuota,
+        coc.monto_cuota
+      FROM movimientos_cuentas mc
+      LEFT JOIN cuentas_pago cp ON mc.id_cuenta = cp.id_cuenta
+      LEFT JOIN empleados e ON mc.id_registrado_por = e.id_empleado
+      LEFT JOIN cuotas_orden_compra coc ON mc.id_cuota = coc.id_cuota
+      WHERE mc.id_orden_compra = ?
+      ORDER BY mc.fecha_movimiento DESC
+    `, [id]);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 }
-
-// ==================== PDF ====================
 
 export async function descargarPDFCompra(req, res) {
-  try {
-    const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-    const compraResult = await executeQuery(`
-      SELECT 
-        oc.*,
-        pr.razon_social AS proveedor,
-        pr.ruc AS ruc_proveedor,
-        pr.direccion AS direccion_proveedor,
-        pr.telefono AS telefono_proveedor,
-        pr.email AS email_proveedor,
-        e_responsable.nombre_completo AS responsable,
-        e_responsable.email AS email_responsable,
-        e_registrado.nombre_completo AS registrado_por,
-        cp.nombre AS cuenta_pago,
-        cp.tipo AS tipo_cuenta,
-        cp.banco,
-        cp.numero_cuenta
-      FROM ordenes_compra oc
-      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
-      LEFT JOIN empleados e_responsable ON oc.id_responsable = e_responsable.id_empleado
-      LEFT JOIN empleados e_registrado ON oc.id_registrado_por = e_registrado.id_empleado
-      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
-      WHERE oc.id_orden_compra = ?
-    `, [id]);
-    
-    if (!compraResult.success || compraResult.data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Compra no encontrada'
-      });
-    }
-    
-    const compra = compraResult.data[0];
-    
-    const detalleResult = await executeQuery(`
-      SELECT 
-        doc.*,
-        p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida
-      FROM detalle_orden_compra doc
-      INNER JOIN productos p ON doc.id_producto = p.id_producto
-      WHERE doc.id_orden_compra = ?
-      ORDER BY doc.orden, doc.id_detalle
-    `, [id]);
-    
-    if (!detalleResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: 'Error al obtener detalle de la compra'
-      });
-    }
-    
-    compra.detalle = detalleResult.data;
-    
-    // Obtener cuotas si es a crédito
-    if (compra.tipo_compra === 'Credito') {
-      const cuotasResult = await executeQuery(`
-        SELECT * FROM cuotas_orden_compra 
-        WHERE id_orden_compra = ? 
-        ORDER BY numero_cuota
-      `, [id]);
-      
-      if (cuotasResult.success) {
-        compra.cuotas = cuotasResult.data;
-      }
-    }
-    
-    const pdfBuffer = await generarCompraPDF(compra);
-    const filename = `Compra-${compra.numero_orden}.pdf`;
-    
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(pdfBuffer);
+    const compraResult = await executeQuery(`
+      SELECT 
+        oc.*,
+        pr.razon_social AS proveedor,
+        pr.ruc AS ruc_proveedor,
+        pr.direccion AS direccion_proveedor,
+        pr.telefono AS telefono_proveedor,
+        pr.email AS email_proveedor,
+        e_responsable.nombre_completo AS responsable,
+        e_responsable.email AS email_responsable,
+        e_registrado.nombre_completo AS registrado_por,
+        cp.nombre AS cuenta_pago,
+        cp.tipo AS tipo_cuenta,
+        cp.banco,
+        cp.numero_cuenta
+      FROM ordenes_compra oc
+      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
+      LEFT JOIN empleados e_responsable ON oc.id_responsable = e_responsable.id_empleado
+      LEFT JOIN empleados e_registrado ON oc.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
+      WHERE oc.id_orden_compra = ?
+    `, [id]);
+    
+    if (!compraResult.success || compraResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Compra no encontrada'
+      });
+    }
+    
+    const compra = compraResult.data[0];
+    
+    const detalleResult = await executeQuery(`
+      SELECT 
+        doc.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida
+      FROM detalle_orden_compra doc
+      INNER JOIN productos p ON doc.id_producto = p.id_producto
+      WHERE doc.id_orden_compra = ?
+      ORDER BY doc.orden, doc.id_detalle
+    `, [id]);
+    
+    if (!detalleResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalle de la compra'
+      });
+    }
+    
+    compra.detalle = detalleResult.data;
+    
+    if (compra.tipo_compra === 'Credito') {
+      const cuotasResult = await executeQuery(`
+        SELECT * FROM cuotas_orden_compra 
+        WHERE id_orden_compra = ? 
+        ORDER BY numero_cuota
+      `, [id]);
+      
+      if (cuotasResult.success) {
+        compra.cuotas = cuotasResult.data;
+      }
+    }
+    
+    const pdfBuffer = await generarCompraPDF(compra);
+    const filename = `Compra-${compra.numero_orden}.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 }
 
-// ==================== COMPRAS POR CUENTA ====================
-
 export async function getComprasPorCuenta(req, res) {
-  try {
-    const { mes, anio } = req.query;
-    
-    let whereClause = "WHERE oc.estado != 'Cancelada'";
-    const params = [];
-    
-    if (mes && anio) {
-      whereClause += ' AND MONTH(oc.fecha_emision) = ? AND YEAR(oc.fecha_emision) = ?';
-      params.push(mes, anio);
-    } else if (anio) {
-      whereClause += ' AND YEAR(oc.fecha_emision) = ?';
-      params.push(anio);
-    }
-    
-    const result = await executeQuery(`
-      SELECT 
-        cp.id_cuenta,
-        cp.nombre AS cuenta,
-        cp.tipo AS tipo_cuenta,
-        cp.moneda,
-        COUNT(oc.id_orden_compra) AS total_compras,
-        SUM(oc.total) AS monto_total,
-        SUM(oc.monto_pagado) AS monto_pagado,
-        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) AS saldo_pendiente,
-        SUM(CASE WHEN oc.tipo_compra = 'Contado' THEN 1 ELSE 0 END) AS compras_contado,
-        SUM(CASE WHEN oc.tipo_compra = 'Credito' THEN 1 ELSE 0 END) AS compras_credito
-      FROM cuentas_pago cp
-      LEFT JOIN ordenes_compra oc ON cp.id_cuenta = oc.id_cuenta_pago
-      ${whereClause}
-      GROUP BY cp.id_cuenta, cp.nombre, cp.tipo, cp.moneda
-      HAVING total_compras > 0
-      ORDER BY monto_total DESC
-    `, params);
-    
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        error: result.error
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: result.data
-    });
-    
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
+  try {
+    const { mes, anio } = req.query;
+    
+    let whereClause = "WHERE oc.estado != 'Cancelada'";
+    const params = [];
+    
+    if (mes && anio) {
+      whereClause += ' AND MONTH(oc.fecha_emision) = ? AND YEAR(oc.fecha_emision) = ?';
+      params.push(mes, anio);
+    } else if (anio) {
+      whereClause += ' AND YEAR(oc.fecha_emision) = ?';
+      params.push(anio);
+    }
+    
+    const result = await executeQuery(`
+      SELECT 
+        cp.id_cuenta,
+        cp.nombre AS cuenta,
+        cp.tipo AS tipo_cuenta,
+        cp.moneda,
+        COUNT(oc.id_orden_compra) AS total_compras,
+        SUM(oc.total) AS monto_total,
+        SUM(oc.monto_pagado) AS monto_pagado,
+        SUM(oc.total - COALESCE(oc.monto_pagado, 0)) AS saldo_pendiente,
+        SUM(CASE WHEN oc.tipo_compra = 'Contado' THEN 1 ELSE 0 END) AS compras_contado,
+        SUM(CASE WHEN oc.tipo_compra = 'Credito' THEN 1 ELSE 0 END) AS compras_credito
+      FROM cuentas_pago cp
+      LEFT JOIN ordenes_compra oc ON cp.id_cuenta = oc.id_cuenta_pago
+      ${whereClause}
+      GROUP BY cp.id_cuenta, cp.nombre, cp.tipo, cp.moneda
+      HAVING total_compras > 0
+      ORDER BY monto_total DESC
+    `, params);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 }

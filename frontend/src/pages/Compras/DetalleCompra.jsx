@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
   XCircle, Clock, AlertCircle, Building, Calendar,
-  MapPin, CreditCard, Wallet, DollarSign, TrendingUp
+  MapPin, CreditCard, Wallet, DollarSign, TrendingUp,
+  Briefcase
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -24,6 +25,7 @@ function DetalleCompra() {
   const [success, setSuccess] = useState(null);
   
   const [modalPagarCuotaOpen, setModalPagarCuotaOpen] = useState(false);
+  const [modalPagoDirectoOpen, setModalPagoDirectoOpen] = useState(false);
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState(null);
   const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
   
@@ -102,25 +104,53 @@ function DetalleCompra() {
     setModalPagarCuotaOpen(true);
   };
 
+  const handleAbrirPagoDirecto = () => {
+    const saldoPendienteTotal = parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0);
+    setDatosPago({
+      id_cuenta_pago: compra.id_cuenta_pago || '',
+      monto_pagado: saldoPendienteTotal.toFixed(2),
+      fecha_pago: new Date().toISOString().split('T')[0],
+      metodo_pago: 'Transferencia',
+      referencia: '',
+      observaciones: ''
+    });
+    setModalPagoDirectoOpen(true);
+  };
+
   const handlePagarCuota = async (e) => {
     e.preventDefault();
-    
     try {
       setLoading(true);
       setError(null);
-      
       const response = await comprasAPI.pagarCuota(id, cuotaSeleccionada.id_cuota, datosPago);
-      
       if (response.data.success) {
-        setSuccess(`Pago de cuota registrado exitosamente. Nuevo saldo de cuenta: ${response.data.data.cuenta_utilizada}`);
+        setSuccess(`Pago de cuota registrado exitosamente.`);
         setModalPagarCuotaOpen(false);
         await cargarDatos();
       } else {
         setError(response.data.error || 'Error al registrar pago');
       }
-      
     } catch (err) {
-      console.error('Error al pagar cuota:', err);
+      setError(err.response?.data?.error || 'Error al registrar pago');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePagoDirecto = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await comprasAPI.registrarPago(id, datosPago);
+      if (response.data.success) {
+        setSuccess(`Pago registrado exitosamente.`);
+        setModalPagoDirectoOpen(false);
+        await cargarDatos();
+      } else {
+        setError(response.data.error || 'Error al registrar pago');
+      }
+    } catch (err) {
       setError(err.response?.data?.error || 'Error al registrar pago');
     } finally {
       setLoading(false);
@@ -132,13 +162,10 @@ function DetalleCompra() {
       setError('Debe indicar el motivo de cancelación');
       return;
     }
-
     try {
       setLoading(true);
       setError(null);
-      
       const response = await comprasAPI.cancelar(id, motivoCancelacion);
-      
       if (response.data.success) {
         setSuccess('Compra cancelada exitosamente');
         setModalCancelarOpen(false);
@@ -146,9 +173,7 @@ function DetalleCompra() {
       } else {
         setError(response.data.error || 'Error al cancelar compra');
       }
-      
     } catch (err) {
-      console.error('Error al cancelar compra:', err);
       setError(err.response?.data?.error || 'Error al cancelar compra');
     } finally {
       setLoading(false);
@@ -161,7 +186,6 @@ function DetalleCompra() {
       await comprasAPI.descargarPDF(id);
       setSuccess('PDF descargado exitosamente');
     } catch (err) {
-      console.error('Error al descargar PDF:', err);
       setError('Error al descargar el PDF');
     } finally {
       setLoading(false);
@@ -170,22 +194,12 @@ function DetalleCompra() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    return new Date(fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
   const formatearFechaHora = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha).toLocaleString('es-PE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return new Date(fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const formatearMoneda = (valor) => {
@@ -204,13 +218,13 @@ function DetalleCompra() {
   };
 
   const getNivelAlertaClase = (nivel) => {
-    const clases = {
-      'success': 'badge-success',
-      'info': 'badge-info',
-      'warning': 'badge-warning',
-      'danger': 'badge-danger'
-    };
+    const clases = { 'success': 'badge-success', 'info': 'badge-info', 'warning': 'badge-warning', 'danger': 'badge-danger' };
     return clases[nivel] || 'badge-info';
+  };
+
+  const getCuentaSaldo = (idCuenta) => {
+    const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(idCuenta));
+    return cuenta ? parseFloat(cuenta.saldo_actual) : 0;
   };
 
   if (loading && !compra) return <Loading message="Cargando compra..." />;
@@ -254,6 +268,13 @@ function DetalleCompra() {
           
           {compra.estado !== 'Cancelada' && compra.estado_pago !== 'Pagado' && (
             <>
+              <button 
+                className="btn btn-primary"
+                onClick={handleAbrirPagoDirecto}
+              >
+                <DollarSign size={20} /> Registrar Pago
+              </button>
+              
               <button 
                 className="btn btn-outline"
                 onClick={() => navigate(`/compras/${id}/editar`)}
@@ -317,8 +338,7 @@ function DetalleCompra() {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
-              <Building size={20} />
-              Proveedor
+              <Building size={20} /> Proveedor
             </h2>
           </div>
           <div className="card-body space-y-2">
@@ -342,8 +362,7 @@ function DetalleCompra() {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
-              <Wallet size={20} />
-              Cuenta de Pago
+              <Wallet size={20} /> Cuenta de Pago Inicial
             </h2>
           </div>
           <div className="card-body space-y-2">
@@ -356,7 +375,7 @@ function DetalleCompra() {
               <p className="font-medium">{compra.tipo_cuenta}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted">Saldo Actual:</label>
+              <label className="text-sm font-medium text-muted">Saldo/Cupo Actual:</label>
               <p className="font-bold text-success">{formatearMoneda(compra.saldo_cuenta)}</p>
             </div>
           </div>
@@ -365,8 +384,7 @@ function DetalleCompra() {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
-              <Calendar size={20} />
-              Información General
+              <Calendar size={20} /> Información General
             </h2>
           </div>
           <div className="card-body space-y-2">
@@ -402,8 +420,7 @@ function DetalleCompra() {
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
-              <CreditCard size={20} />
-              Cuotas de Pago
+              <CreditCard size={20} /> Cuotas de Pago
             </h2>
           </div>
           <div className="card-body">
@@ -469,8 +486,7 @@ function DetalleCompra() {
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
-              <TrendingUp size={20} />
-              Historial de Pagos
+              <TrendingUp size={20} /> Historial de Pagos
             </h2>
           </div>
           <div className="card-body">
@@ -518,8 +534,7 @@ function DetalleCompra() {
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
-              <MapPin size={20} />
-              Dirección de Entrega
+              <MapPin size={20} /> Dirección de Entrega
             </h2>
           </div>
           <div className="card-body">
@@ -530,9 +545,7 @@ function DetalleCompra() {
 
       <div className="card mb-4">
         <div className="card-header">
-          <h2 className="card-title">
-            Detalle de Productos
-          </h2>
+          <h2 className="card-title">Detalle de Productos</h2>
         </div>
         <div className="card-body">
           <div className="overflow-x-auto">
@@ -608,6 +621,7 @@ function DetalleCompra() {
         </div>
       )}
 
+      {/* MODAL PARA PAGAR CUOTA */}
       <Modal
         isOpen={modalPagarCuotaOpen}
         onClose={() => setModalPagarCuotaOpen(false)}
@@ -645,7 +659,7 @@ function DetalleCompra() {
                   <option value="">Seleccionar cuenta...</option>
                   {cuentasPago.filter(c => c.moneda === compra.moneda).map(cuenta => (
                     <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                      {cuenta.nombre} - Saldo: {formatearMoneda(cuenta.saldo_actual)}
+                      {cuenta.nombre} - Disp: {formatearMoneda(cuenta.saldo_actual)}
                     </option>
                   ))}
                 </select>
@@ -666,22 +680,14 @@ function DetalleCompra() {
 
               <div className="form-group">
                 <label className="form-label">Fecha de Pago *</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={datosPago.fecha_pago}
-                  onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })}
-                  required
-                />
+                <input type="date" className="form-input" value={datosPago.fecha_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })} required />
               </div>
 
               <div className="form-group">
                 <label className="form-label">Método de Pago</label>
-                <select
-                  className="form-select"
-                  value={datosPago.metodo_pago}
-                  onChange={(e) => setDatosPago({ ...datosPago, metodo_pago: e.target.value })}
-                >
+                <select className="form-select" value={datosPago.metodo_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, metodo_pago: e.target.value })}>
                   <option value="Transferencia">Transferencia</option>
                   <option value="Efectivo">Efectivo</option>
                   <option value="Cheque">Cheque</option>
@@ -691,47 +697,100 @@ function DetalleCompra() {
 
               <div className="form-group">
                 <label className="form-label">Referencia / N° Operación</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={datosPago.referencia}
+                <input type="text" className="form-input" value={datosPago.referencia}
                   onChange={(e) => setDatosPago({ ...datosPago, referencia: e.target.value })}
-                  placeholder="Número de operación"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Observaciones</label>
-                <textarea
-                  className="form-textarea"
-                  value={datosPago.observaciones}
-                  onChange={(e) => setDatosPago({ ...datosPago, observaciones: e.target.value })}
-                  rows={2}
-                  placeholder="Observaciones del pago..."
-                />
+                  placeholder="Número de operación" />
               </div>
 
               <div className="flex gap-2 justify-end pt-4 border-t">
-                <button 
-                  type="button"
-                  className="btn btn-outline" 
-                  onClick={() => setModalPagarCuotaOpen(false)}
-                  disabled={loading}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  className="btn btn-success"
-                  disabled={loading}
-                >
-                  <DollarSign size={20} />
-                  {loading ? 'Procesando...' : 'Registrar Pago'}
+                <button type="button" className="btn btn-outline" onClick={() => setModalPagarCuotaOpen(false)} disabled={loading}>Cancelar</button>
+                <button type="submit" className="btn btn-success" disabled={loading}>
+                  <DollarSign size={20} /> {loading ? 'Procesando...' : 'Registrar Pago'}
                 </button>
               </div>
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* MODAL PARA PAGO DIRECTO (Sin cuotas) */}
+      <Modal
+        isOpen={modalPagoDirectoOpen}
+        onClose={() => setModalPagoDirectoOpen(false)}
+        title="Registrar Pago a Cuenta"
+        size="md"
+      >
+        <form onSubmit={handlePagoDirecto}>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-muted">Total Compra:</span>
+                  <span className="font-bold">{formatearMoneda(compra.total)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2">
+                  <span className="text-sm font-bold">Saldo pendiente:</span>
+                  <span className="font-bold text-danger">
+                    {formatearMoneda(parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0))}
+                  </span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Cuenta de Pago *</label>
+                <select
+                  className="form-select"
+                  value={datosPago.id_cuenta_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, id_cuenta_pago: e.target.value })}
+                  required
+                >
+                  <option value="">Seleccionar cuenta...</option>
+                  {cuentasPago.filter(c => c.moneda === compra.moneda).map(cuenta => (
+                    <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
+                      {cuenta.nombre} - Disp: {formatearMoneda(cuenta.saldo_actual)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Monto a Pagar *</label>
+                <input type="number" className="form-input" value={datosPago.monto_pagado}
+                  onChange={(e) => setDatosPago({ ...datosPago, monto_pagado: e.target.value })}
+                  step="0.01" min="0.01" required />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Fecha de Pago *</label>
+                <input type="date" className="form-input" value={datosPago.fecha_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })} required />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Método de Pago</label>
+                <select className="form-select" value={datosPago.metodo_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, metodo_pago: e.target.value })}>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Tarjeta">Tarjeta</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Referencia</label>
+                <input type="text" className="form-input" value={datosPago.referencia}
+                  onChange={(e) => setDatosPago({ ...datosPago, referencia: e.target.value })}
+                  placeholder="Número de operación" />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <button type="button" className="btn btn-outline" onClick={() => setModalPagoDirectoOpen(false)} disabled={loading}>Cancelar</button>
+                <button type="submit" className="btn btn-success" disabled={loading}>
+                  <DollarSign size={20} /> {loading ? 'Procesando...' : 'Registrar Pago'}
+                </button>
+              </div>
+            </div>
+        </form>
       </Modal>
 
       <Modal
@@ -768,20 +827,9 @@ function DetalleCompra() {
           </div>
 
           <div className="flex gap-2 justify-end pt-4 border-t">
-            <button 
-              className="btn btn-outline" 
-              onClick={() => setModalCancelarOpen(false)}
-              disabled={loading}
-            >
-              No, Volver
-            </button>
-            <button 
-              className="btn btn-danger"
-              onClick={handleCancelarCompra}
-              disabled={loading}
-            >
-              <XCircle size={20} />
-              {loading ? 'Cancelando...' : 'Sí, Cancelar Compra'}
+            <button className="btn btn-outline" onClick={() => setModalCancelarOpen(false)} disabled={loading}>No, Volver</button>
+            <button className="btn btn-danger" onClick={handleCancelarCompra} disabled={loading}>
+              <XCircle size={20} /> {loading ? 'Cancelando...' : 'Sí, Cancelar Compra'}
             </button>
           </div>
         </div>

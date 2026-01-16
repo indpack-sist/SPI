@@ -122,7 +122,10 @@ export const clientesAPI = {
   delete: (id) => api.delete(`/clientes/${id}`),
   getHistorialCotizaciones: (id) => api.get(`/clientes/${id}/cotizaciones`),
   getHistorialOrdenesVenta: (id) => api.get(`/clientes/${id}/ordenes-venta`),
-  getEstadoCredito: (id) => api.get(`/clientes/${id}/credito`)
+  getEstadoCredito: (id) => api.get(`/clientes/${id}/credito`),
+  
+  addDireccion: (id, data) => api.post(`/clientes/${id}/direcciones`, data),
+  deleteDireccion: (idDireccion) => api.delete(`/clientes/direcciones/${idDireccion}`)
 };
 
 export const solicitudesCreditoAPI = {
@@ -651,6 +654,8 @@ export const comprasAPI = {
   getAlertas: (params) => api.get('/compras/alertas', { params }),
   getPorCuenta: (params) => api.get('/compras/por-cuenta', { params }),
 
+  registrarPago: (id, data) => api.post(`/compras/${id}/pagar`, data),
+
   getResumenPagos: (id) => api.get(`/compras/${id}/resumen-pagos`),
   getHistorialPagos: (id) => api.get(`/compras/${id}/historial-pagos`),
 
@@ -706,7 +711,8 @@ export const cuentasPagoAPI = {
   registrarMovimiento: (id, data) => api.post(`/cuentas-pago/${id}/movimientos`, data),
   getMovimientos: (id, params) => api.get(`/cuentas-pago/${id}/movimientos`, { params }),
   
-  transferir: (data) => api.post('/cuentas-pago/transferencias', data)
+  transferir: (data) => api.post('/cuentas-pago/transferencias', data),
+  renovarCredito: (id, data) => api.post(`/cuentas-pago/${id}/renovar-credito`, data)
 };
 
 export default api;

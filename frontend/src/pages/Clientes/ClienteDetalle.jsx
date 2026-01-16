@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, FileText, ShoppingCart, Eye, Download, Building2, 
-  DollarSign, CreditCard, AlertTriangle, TrendingUp
+  DollarSign, CreditCard, AlertTriangle, TrendingUp, Plus, Trash2, MapPin
 } from 'lucide-react';
 import { clientesAPI, cotizacionesAPI, ordenesVentaAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import Modal from '../../components/UI/Modal';
 
 function ClienteDetalle() {
   const { id } = useParams();
@@ -19,7 +20,12 @@ function ClienteDetalle() {
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   const [tabActiva, setTabActiva] = useState('cotizaciones');
+
+  const [modalDireccionOpen, setModalDireccionOpen] = useState(false);
+  const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', referencia: '', es_principal: false });
+  const [procesandoDireccion, setProcesandoDireccion] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -45,6 +51,44 @@ function ClienteDetalle() {
       setError(err.error || 'Error al cargar datos del cliente');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAgregarDireccion = async (e) => {
+    e.preventDefault();
+    if (!nuevaDireccion.direccion.trim()) return;
+
+    try {
+        setProcesandoDireccion(true);
+        const response = await clientesAPI.addDireccion(id, nuevaDireccion);
+        if (response.data.success) {
+            setSuccess('Dirección agregada exitosamente');
+            setModalDireccionOpen(false);
+            setNuevaDireccion({ direccion: '', referencia: '', es_principal: false });
+            
+            const clienteRes = await clientesAPI.getById(id);
+            setCliente(clienteRes.data.data);
+        }
+    } catch (err) {
+        console.error(err);
+        setError(err.response?.data?.error || 'Error al agregar dirección');
+    } finally {
+        setProcesandoDireccion(false);
+    }
+  };
+
+  const handleEliminarDireccion = async (idDireccion) => {
+    if (!confirm('¿Está seguro de eliminar esta dirección?')) return;
+    try {
+        const response = await clientesAPI.deleteDireccion(idDireccion);
+        if (response.data.success) {
+            setSuccess('Dirección eliminada');
+            const clienteRes = await clientesAPI.getById(id);
+            setCliente(clienteRes.data.data);
+        }
+    } catch (err) {
+        console.error(err);
+        setError(err.response?.data?.error || 'Error al eliminar dirección');
     }
   };
 
@@ -295,6 +339,7 @@ function ClienteDetalle() {
       </button>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       <div className="card mb-4">
         <div className="card-header flex items-center gap-2">
@@ -324,8 +369,42 @@ function ClienteDetalle() {
               <p>{cliente.email || '-'}</p>
             </div>
             <div className="col-span-3">
-              <p className="text-xs text-muted uppercase font-semibold">Dirección de Despacho</p>
-              <p>{cliente.direccion_despacho || '-'}</p>
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-xs text-muted uppercase font-semibold">Direcciones de Despacho</p>
+                <button 
+                    className="btn btn-xs btn-outline" 
+                    onClick={() => setModalDireccionOpen(true)}
+                >
+                    <Plus size={12} /> Agregar Dirección
+                </button>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-start gap-2 bg-blue-50 p-2 rounded border border-blue-100">
+                    <MapPin size={16} className="text-primary mt-0.5" />
+                    <div className="flex-1">
+                        <p className="text-sm font-medium">{cliente.direccion_despacho || 'Sin dirección principal registrada'}</p>
+                        <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">Principal</span>
+                    </div>
+                </div>
+
+                {cliente.direcciones && cliente.direcciones.filter(d => !d.es_principal).map(dir => (
+                    <div key={dir.id_direccion} className="flex items-start gap-2 bg-gray-50 p-2 rounded border border-gray-200 group">
+                        <MapPin size={16} className="text-gray-400 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="text-sm">{dir.direccion}</p>
+                            {dir.referencia && <p className="text-xs text-muted">{dir.referencia}</p>}
+                        </div>
+                        <button 
+                            className="text-danger opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-50 rounded"
+                            onClick={() => handleEliminarDireccion(dir.id_direccion)}
+                            title="Eliminar dirección"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    </div>
+                ))}
+              </div>
             </div>
             <div>
               <p className="text-xs text-muted uppercase font-semibold">Estado</p>
@@ -485,7 +564,7 @@ function ClienteDetalle() {
             </div>
           </div>
         </div>
-
+        
         <div className="stat-card border-l-4 border-warning">
           <div className="stat-icon">
             <AlertTriangle size={24} className="text-warning" />
@@ -536,6 +615,59 @@ function ClienteDetalle() {
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={modalDireccionOpen}
+        onClose={() => setModalDireccionOpen(false)}
+        title="Agregar Dirección de Despacho"
+        size="md"
+      >
+        <form onSubmit={handleAgregarDireccion}>
+            <div className="space-y-4">
+                <div className="form-group">
+                    <label className="form-label">Dirección *</label>
+                    <textarea 
+                        className="form-textarea" 
+                        value={nuevaDireccion.direccion}
+                        onChange={(e) => setNuevaDireccion({...nuevaDireccion, direccion: e.target.value})}
+                        required
+                        rows="3"
+                        placeholder="Ingrese la dirección completa..."
+                    />
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Referencia</label>
+                    <input 
+                        type="text" 
+                        className="form-input" 
+                        value={nuevaDireccion.referencia}
+                        onChange={(e) => setNuevaDireccion({...nuevaDireccion, referencia: e.target.value})}
+                        placeholder="Ej: Altura cuadra 5, frente al parque..."
+                    />
+                </div>
+                <div className="form-group">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            className="form-checkbox"
+                            checked={nuevaDireccion.es_principal}
+                            onChange={(e) => setNuevaDireccion({...nuevaDireccion, es_principal: e.target.checked})}
+                        />
+                        <span>Establecer como dirección principal</span>
+                    </label>
+                    {nuevaDireccion.es_principal && (
+                        <p className="text-xs text-warning mt-1 ml-5">Esta dirección reemplazará a la actual como predeterminada.</p>
+                    )}
+                </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+                <button type="button" className="btn btn-outline" onClick={() => setModalDireccionOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={procesandoDireccion || !nuevaDireccion.direccion}>
+                    {procesandoDireccion ? 'Guardando...' : 'Guardar Dirección'}
+                </button>
+            </div>
+        </form>
+      </Modal>
     </div>
   );
 }

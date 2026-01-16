@@ -1,5 +1,6 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarCompraPDF } from '../utils/pdfGenerators/compraPDF.js';
+import pool from '../config/database.js';
 
 // ==================== OBTENER COMPRAS ====================
 
@@ -414,7 +415,7 @@ export async function createCompra(req, res) {
     
     const operations = async (connection) => {
       // Insertar compra
-      const [resultCompra] = await connection.query(`
+    const [resultCompra] = await connection.query(`
         INSERT INTO ordenes_compra (
           numero_orden,
           id_proveedor,
@@ -440,7 +441,7 @@ export async function createCompra(req, res) {
           total,
           estado,
           estado_pago
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibida', ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         numeroCompra,
         id_proveedor,

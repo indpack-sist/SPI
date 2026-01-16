@@ -119,12 +119,54 @@ function Cotizaciones() {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
-  const handleDescargarPDF = async (id) => {
+  const handleDescargarPDF = async (id, numeroCotizacion) => {
     try {
-      await cotizacionesAPI.descargarPDF(id);
+      // Indicamos visualmente que estamos descargando (opcional, podrías usar un estado local para el botón específico)
+      setRefreshing(true); 
+      
+      const response = await cotizacionesAPI.descargarPDF(id);
+      
+      // Manejo de Blob y Descarga
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const contentDisposition = response.headers['content-disposition'];
+      let fileName = `Cotizacion-${numeroCotizacion || id}.pdf`;
+      
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (fileNameMatch && fileNameMatch.length === 2) {
+          fileName = fileNameMatch[1];
+        }
+      }
+      
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
     } catch (err) {
       console.error(err);
-      setError('Error al descargar el PDF');
+      
+      // Manejo de error específico de Blob
+      if (err.response && err.response.data instanceof Blob) {
+        try {
+          const errorText = await err.response.data.text();
+          const errorJson = JSON.parse(errorText);
+          setError(errorJson.error || 'Error al generar el PDF');
+        } catch (e) {
+          setError('Error inesperado al descargar el archivo');
+        }
+      } else {
+        setError(err.message || 'Error al descargar el PDF');
+      }
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -266,7 +308,7 @@ function Cotizaciones() {
             className="btn btn-sm btn-outline"
             onClick={(e) => {
               e.stopPropagation();
-              handleDescargarPDF(value);
+              handleDescargarPDF(value, row.numero_cotizacion);
             }}
             title="Descargar PDF"
           >

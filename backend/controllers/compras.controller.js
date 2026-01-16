@@ -435,12 +435,71 @@ export async function createCompra(req, res) {
 
       const idCompra = resultCompra.insertId;
 
+      // ============================================
+      // CREAR ENTRADA DE INVENTARIO AUTOMÁTICAMENTE
+      // ============================================
+      
+      // Obtener el tipo de inventario del primer producto (o puedes usar otro criterio)
+      const [primerProducto] = await connection.query(
+        'SELECT id_tipo_inventario FROM productos WHERE id_producto = ?',
+        [detalle[0].id_producto]
+      );
+
+      const id_tipo_inventario_entrada = primerProducto[0]?.id_tipo_inventario;
+
+      if (!id_tipo_inventario_entrada) {
+        throw new Error('No se pudo determinar el tipo de inventario para crear la entrada');
+      }
+
+      // Crear la entrada en el inventario
+      const [resultEntrada] = await connection.query(`
+        INSERT INTO entradas ( 
+          id_tipo_inventario,
+          tipo_entrada,
+          id_proveedor,
+          documento_soporte,
+          total_costo,
+          subtotal,
+          igv,
+          total,
+          porcentaje_igv,
+          moneda,
+          monto_pagado,
+          estado_pago,
+          id_cuenta_pago,
+          id_registrado_por,
+          observaciones,
+          id_orden_compra
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id_tipo_inventario_entrada,
+        'Compra',
+        id_proveedor,
+        numeroCompra, // Usar el número de orden como documento soporte
+        subtotal,
+        subtotal,
+        impuesto,
+        total,
+        porcentaje,
+        moneda,
+        tipo_compra === 'Contado' ? total : 0,
+        tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente',
+        id_cuenta_pago,
+        id_registrado_por,
+        `Entrada automática de compra ${numeroCompra}`,
+        idCompra
+      ]);
+
+      const idEntrada = resultEntrada.insertId;
+
+      // Insertar detalles y actualizar inventario
       for (let i = 0; i < detalle.length; i++) {
         const item = detalle[i];
         const precioUnitario = parseFloat(item.precio_unitario);
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const subtotalItem = (item.cantidad * precioUnitario) * (1 - descuento / 100);
 
+        // Insertar detalle de orden de compra
         await connection.query(`
           INSERT INTO detalle_orden_compra (
             id_orden_compra,
@@ -461,13 +520,46 @@ export async function createCompra(req, res) {
           i + 1
         ]);
 
+        // Insertar detalle de entrada
+        await connection.query(`
+          INSERT INTO detalle_entradas (
+            id_entrada,
+            id_producto,
+            cantidad,
+            costo_unitario
+          ) VALUES (?, ?, ?, ?)
+        `, [
+          idEntrada,
+          item.id_producto,
+          parseFloat(item.cantidad),
+          precioUnitario * (1 - descuento / 100) // Costo unitario después del descuento
+        ]);
+
+        // Actualizar stock y costo promedio del producto
+        const [productoInfo] = await connection.query(
+          'SELECT stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?',
+          [item.id_producto]
+        );
+
+        const stockActual = parseFloat(productoInfo[0].stock_actual);
+        const costoActual = parseFloat(productoInfo[0].costo_unitario_promedio);
+        const cantidadNueva = parseFloat(item.cantidad);
+        const costoNuevo = precioUnitario * (1 - descuento / 100);
+
+        const nuevoStock = stockActual + cantidadNueva;
+        const nuevoCostoPromedio = nuevoStock > 0
+          ? ((stockActual * costoActual) + (cantidadNueva * costoNuevo)) / nuevoStock
+          : costoNuevo;
+
         await connection.query(`
           UPDATE productos 
-          SET stock_actual = stock_actual + ? 
+          SET stock_actual = ?,
+              costo_unitario_promedio = ?
           WHERE id_producto = ?
-        `, [parseFloat(item.cantidad), item.id_producto]);
+        `, [nuevoStock, nuevoCostoPromedio, item.id_producto]);
       }
 
+      // Procesar pago si es al contado
       if (tipo_compra === 'Contado') {
         const [cuentaLock] = await connection.query(
           'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ? FOR UPDATE',
@@ -516,6 +608,7 @@ export async function createCompra(req, res) {
         );
       }
 
+      // Crear cuotas si es a crédito
       if (tipo_compra === 'Credito' && numero_cuotas > 0) {
         const cantidadCuotas = parseInt(numero_cuotas);
         const diasEntre = parseInt(dias_entre_cuotas || 30);
@@ -552,13 +645,14 @@ export async function createCompra(req, res) {
         success: true,
         data: {
           id_orden_compra: idCompra,
+          id_entrada: idEntrada,
           numero_orden: numeroCompra,
           tipo_cuenta: cuenta.tipo,
           cuenta_utilizada: cuenta.nombre
         },
         message: tipo_compra === 'Contado' ?
-          'Compra creada y pagada exitosamente' :
-          'Compra a crédito creada exitosamente'
+          'Compra creada, pagada y entrada de inventario registrada exitosamente' :
+          'Compra a crédito y entrada de inventario creadas exitosamente'
       });
 
     } catch (err) {

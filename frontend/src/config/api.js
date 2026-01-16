@@ -146,7 +146,8 @@ export const productosAPI = {
   delete: (id) => api.delete(`/productos/${id}`),
   
   getHistorialMovimientos: (id, params) => api.get(`/productos/${id}/historial-movimientos`, { params }),
-  
+  getHistorialCompras: (id, params) => api.get(`/productos/${id}/historial-compras`, { params }),
+
   getRecetasByProducto: (id) => api.get(`/productos/${id}/recetas`),
   getDetalleReceta: (idReceta) => api.get(`/productos/recetas/${idReceta}/detalle`),
   createReceta: (data) => api.post('/productos/recetas', data),

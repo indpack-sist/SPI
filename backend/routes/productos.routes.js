@@ -21,7 +21,8 @@ import {
   calcularCUPDesdeReceta,
   recalcularTodosCUP,
   verCUPPorRecetas,
-  calcularEvolucionCUP
+  calcularEvolucionCUP,
+  getHistorialComprasProducto
 } from '../controllers/productos.controller.js';
 
 import {
@@ -57,7 +58,7 @@ router.delete('/recetas/:idReceta', deleteReceta);
 
 router.get('/', getAllProductos);
 router.post('/', createProducto);
-
+router.get('/:id/historial-compras', getHistorialComprasProducto);
 router.get('/:id/historial-movimientos', getHistorialMovimientos);
 router.get('/:id/recetas', getRecetasByProducto);
 router.get('/:id/calcular-cup-receta', calcularCUPDesdeReceta);

@@ -429,8 +429,15 @@ function Clientes() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Dirección de Despacho</label>
-            <textarea className="form-textarea" value={formData.direccion_despacho} onChange={(e) => setFormData({ ...formData, direccion_despacho: e.target.value })} rows={3} />
+            <label className="form-label">Dirección Principal</label>
+            <textarea 
+              className="form-textarea" 
+              value={formData.direccion_despacho} 
+              onChange={(e) => setFormData({ ...formData, direccion_despacho: e.target.value })} 
+              rows={3} 
+              placeholder="Dirección principal de entrega"
+            />
+            <small className="text-muted">Las direcciones adicionales se pueden gestionar desde el detalle del cliente.</small>
           </div>
 
           <div className="card bg-gray-50 border p-4 mb-4">

@@ -149,6 +149,11 @@ export async function getCompraById(req, res) {
   try {
     const { id } = req.params;
     
+    // LOG DE DEBUG
+    console.log('=== GET COMPRA BY ID ===');
+    console.log('ID recibido:', id);
+    console.log('Tipo de ID:', typeof id);
+    
     const compraResult = await executeQuery(`
       SELECT 
         oc.*,
@@ -174,7 +179,12 @@ export async function getCompraById(req, res) {
       WHERE oc.id_orden_compra = ?
     `, [id]);
     
+    // LOG DE DEBUG
+    console.log('Query ejecutada exitosamente:', compraResult.success);
+    console.log('Registros encontrados:', compraResult.data?.length || 0);
+    
     if (!compraResult.success) {
+      console.error('Error en query:', compraResult.error);
       return res.status(500).json({ 
         success: false,
         error: compraResult.error 
@@ -182,13 +192,18 @@ export async function getCompraById(req, res) {
     }
     
     if (compraResult.data.length === 0) {
+      console.log('❌ Compra no encontrada con ID:', id);
       return res.status(404).json({
         success: false,
         error: 'Compra no encontrada'
       });
     }
     
+    console.log('✅ Compra encontrada:', compraResult.data[0].numero_orden);
+    
     const compra = compraResult.data[0];
+    
+    // ... resto del código
     
     // Obtener detalle de productos
     const detalleResult = await executeQuery(`

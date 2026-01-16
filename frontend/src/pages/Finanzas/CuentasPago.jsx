@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Wallet, CreditCard, Building2, DollarSign } from 'lucide-react';
+import { Plus, Edit, Trash2, Wallet, CreditCard, Building2, DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -22,7 +22,7 @@ function CuentasPago() {
     numero_cuenta: '',
     banco: '',
     moneda: 'PEN',
-    saldo_actual: 0,
+    saldo_inicial: 0,
     estado: 'Activo'
   });
 
@@ -34,9 +34,13 @@ function CuentasPago() {
     try {
       setLoading(true);
       const response = await cuentasPagoAPI.getAll({ estado: 'Activo' });
-      setCuentas(response.data.data);
+      
+      if (response.data.success) {
+        setCuentas(response.data.data || []);
+      }
     } catch (err) {
-      setError(err.error || 'Error al cargar cuentas');
+      console.error('Error al cargar cuentas:', err);
+      setError(err.response?.data?.error || 'Error al cargar cuentas');
     } finally {
       setLoading(false);
     }
@@ -49,18 +53,23 @@ function CuentasPago() {
       setLoading(true);
       
       if (modoEdicion) {
-        await cuentasPagoAPI.update(cuentaSeleccionada.id_cuenta, formData);
-        setSuccess('Cuenta actualizada exitosamente');
+        const response = await cuentasPagoAPI.update(cuentaSeleccionada.id_cuenta, formData);
+        if (response.data.success) {
+          setSuccess('Cuenta actualizada exitosamente');
+        }
       } else {
-        await cuentasPagoAPI.create(formData);
-        setSuccess('Cuenta creada exitosamente');
+        const response = await cuentasPagoAPI.create(formData);
+        if (response.data.success) {
+          setSuccess('Cuenta creada exitosamente');
+        }
       }
       
       setModalOpen(false);
       resetForm();
       await cargarCuentas();
     } catch (err) {
-      setError(err.error || 'Error al guardar cuenta');
+      console.error('Error al guardar cuenta:', err);
+      setError(err.response?.data?.error || 'Error al guardar cuenta');
     } finally {
       setLoading(false);
     }
@@ -74,7 +83,6 @@ function CuentasPago() {
       numero_cuenta: cuenta.numero_cuenta || '',
       banco: cuenta.banco || '',
       moneda: cuenta.moneda,
-      saldo_actual: cuenta.saldo_actual,
       estado: cuenta.estado
     });
     setModoEdicion(true);
@@ -82,15 +90,19 @@ function CuentasPago() {
   };
 
   const handleEliminar = async (id) => {
-    if (!confirm('¿Está seguro de desactivar esta cuenta?')) return;
+    if (!confirm('¿Está seguro de desactivar esta cuenta? Solo se pueden desactivar cuentas con saldo 0.')) return;
     
     try {
       setLoading(true);
-      await cuentasPagoAPI.delete(id);
-      setSuccess('Cuenta desactivada exitosamente');
-      await cargarCuentas();
+      const response = await cuentasPagoAPI.delete(id);
+      
+      if (response.data.success) {
+        setSuccess('Cuenta desactivada exitosamente');
+        await cargarCuentas();
+      }
     } catch (err) {
-      setError(err.error || 'Error al desactivar cuenta');
+      console.error('Error al desactivar cuenta:', err);
+      setError(err.response?.data?.error || 'Error al desactivar cuenta');
     } finally {
       setLoading(false);
     }
@@ -103,7 +115,7 @@ function CuentasPago() {
       numero_cuenta: '',
       banco: '',
       moneda: 'PEN',
-      saldo_actual: 0,
+      saldo_inicial: 0,
       estado: 'Activo'
     });
     setCuentaSeleccionada(null);
@@ -150,6 +162,9 @@ function CuentasPago() {
           {row.numero_cuenta && (
             <div className="text-xs font-mono text-muted">{row.numero_cuenta}</div>
           )}
+          {!value && !row.numero_cuenta && (
+            <div className="text-xs text-muted">-</div>
+          )}
         </div>
       )
     },
@@ -173,6 +188,33 @@ function CuentasPago() {
         <span className={`font-bold ${parseFloat(value) < 0 ? 'text-danger' : 'text-success'}`}>
           {formatearMoneda(value, row.moneda)}
         </span>
+      )
+    },
+    {
+      header: 'Movimientos',
+      accessor: 'total_movimientos',
+      width: '120px',
+      align: 'center',
+      render: (value) => (
+        <span className="badge badge-info">
+          {value || 0}
+        </span>
+      )
+    },
+    {
+      header: 'Compras',
+      accessor: 'total_compras',
+      width: '100px',
+      align: 'center',
+      render: (value, row) => (
+        <div>
+          <span className="badge badge-primary">{value || 0}</span>
+          {row.compras_pendientes > 0 && (
+            <div className="text-xs text-warning mt-1">
+              {row.compras_pendientes} pendientes
+            </div>
+          )}
+        </div>
       )
     },
     {
@@ -204,6 +246,7 @@ function CuentasPago() {
             className="btn btn-sm btn-danger"
             onClick={() => handleEliminar(value)}
             title="Desactivar"
+            disabled={parseFloat(row.saldo_actual) !== 0}
           >
             <Trash2 size={14} />
           </button>
@@ -218,11 +261,27 @@ function CuentasPago() {
 
   const totalPEN = cuentas
     .filter(c => c.moneda === 'PEN')
-    .reduce((sum, c) => sum + parseFloat(c.saldo_actual), 0);
+    .reduce((sum, c) => sum + parseFloat(c.saldo_actual || 0), 0);
   
   const totalUSD = cuentas
     .filter(c => c.moneda === 'USD')
-    .reduce((sum, c) => sum + parseFloat(c.saldo_actual), 0);
+    .reduce((sum, c) => sum + parseFloat(c.saldo_actual || 0), 0);
+
+  const totalIngresosPEN = cuentas
+    .filter(c => c.moneda === 'PEN')
+    .reduce((sum, c) => sum + parseFloat(c.total_ingresos || 0), 0);
+
+  const totalEgresosPEN = cuentas
+    .filter(c => c.moneda === 'PEN')
+    .reduce((sum, c) => sum + parseFloat(c.total_egresos || 0), 0);
+
+  const totalIngresosUSD = cuentas
+    .filter(c => c.moneda === 'USD')
+    .reduce((sum, c) => sum + parseFloat(c.total_ingresos || 0), 0);
+
+  const totalEgresosUSD = cuentas
+    .filter(c => c.moneda === 'USD')
+    .reduce((sum, c) => sum + parseFloat(c.total_egresos || 0), 0);
 
   return (
     <div className="p-6">
@@ -249,13 +308,16 @@ function CuentasPago() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="card border-l-4 border-info">
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted">Total en Soles</p>
+                <p className="text-sm text-muted">Saldo en Soles</p>
                 <h3 className="text-2xl font-bold">S/ {totalPEN.toFixed(2)}</h3>
+                <p className="text-xs text-muted mt-1">
+                  {cuentas.filter(c => c.moneda === 'PEN').length} cuentas
+                </p>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
                 <DollarSign size={32} className="text-info" />
@@ -268,11 +330,44 @@ function CuentasPago() {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted">Total en Dólares</p>
+                <p className="text-sm text-muted">Saldo en Dólares</p>
                 <h3 className="text-2xl font-bold">$ {totalUSD.toFixed(2)}</h3>
+                <p className="text-xs text-muted mt-1">
+                  {cuentas.filter(c => c.moneda === 'USD').length} cuentas
+                </p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <DollarSign size={32} className="text-success" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted">Ingresos Totales</p>
+                <h3 className="text-lg font-bold text-success">S/ {totalIngresosPEN.toFixed(2)}</h3>
+                <p className="text-sm font-bold text-success">$ {totalIngresosUSD.toFixed(2)}</p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <ArrowUpRight size={24} className="text-success" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted">Egresos Totales</p>
+                <h3 className="text-lg font-bold text-danger">S/ {totalEgresosPEN.toFixed(2)}</h3>
+                <p className="text-sm font-bold text-danger">$ {totalEgresosUSD.toFixed(2)}</p>
+              </div>
+              <div className="p-3 bg-red-100 rounded-lg">
+                <ArrowDownRight size={24} className="text-danger" />
               </div>
             </div>
           </div>
@@ -339,10 +434,14 @@ function CuentasPago() {
                   value={formData.moneda}
                   onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
                   required
+                  disabled={modoEdicion}
                 >
                   <option value="PEN">Soles (PEN)</option>
                   <option value="USD">Dólares (USD)</option>
                 </select>
+                {modoEdicion && (
+                  <small className="text-muted">No se puede cambiar la moneda de una cuenta existente</small>
+                )}
               </div>
             </div>
 
@@ -368,17 +467,20 @@ function CuentasPago() {
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Saldo Actual</label>
-              <input
-                type="number"
-                className="form-input"
-                value={formData.saldo_actual}
-                onChange={(e) => setFormData({ ...formData, saldo_actual: e.target.value })}
-                step="0.01"
-                min="0"
-              />
-            </div>
+            {!modoEdicion && (
+              <div className="form-group">
+                <label className="form-label">Saldo Inicial</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={formData.saldo_inicial}
+                  onChange={(e) => setFormData({ ...formData, saldo_inicial: e.target.value })}
+                  step="0.01"
+                  min="0"
+                />
+                <small className="text-muted">El saldo inicial se registrará como un ingreso automático</small>
+              </div>
+            )}
 
             {modoEdicion && (
               <div className="form-group">
@@ -405,8 +507,8 @@ function CuentasPago() {
               >
                 Cancelar
               </button>
-              <button type="submit" className="btn btn-primary">
-                {modoEdicion ? 'Actualizar' : 'Crear'} Cuenta
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cuenta' : 'Crear Cuenta'}
               </button>
             </div>
           </div>

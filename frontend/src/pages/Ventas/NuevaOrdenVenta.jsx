@@ -142,6 +142,20 @@ function NuevaOrdenVenta() {
     }
   }, [idCotizacionParam, clientes.length]);
 
+  // --- FUNCIÓN AUXILIAR PARA CORREGIR IMPUESTOS AUTOMÁTICAMENTE ---
+  const obtenerConfiguracionImpuesto = (codigoOTexto) => {
+    // 1. Intentar buscar por código exacto (IGV, EXO, INA)
+    let config = TIPOS_IMPUESTO.find(t => t.codigo === codigoOTexto);
+    
+    // 2. Si no encuentra, intentar corregir errores comunes de datos antiguos
+    if (!config) {
+        if (codigoOTexto === 'Exonerado') config = TIPOS_IMPUESTO.find(t => t.codigo === 'EXO');
+        else if (codigoOTexto === 'Inafecto') config = TIPOS_IMPUESTO.find(t => t.codigo === 'INA');
+        else config = TIPOS_IMPUESTO[0]; // Default a IGV si todo falla
+    }
+    return config;
+  };
+
   const cargarCatalogos = async () => {
     try {
       const [resClientes, resProductos, resEmpleados, resCotizaciones] = await Promise.all([
@@ -179,6 +193,9 @@ function NuevaOrdenVenta() {
       if (response.data.success) {
         const orden = response.data.data;
         
+        // --- CORRECCIÓN DE DATOS AL CARGAR ---
+        const configImpuesto = obtenerConfiguracionImpuesto(orden.tipo_impuesto);
+
         setFormCabecera({
           tipo_comprobante: orden.tipo_comprobante || 'Factura',
           id_cliente: orden.id_cliente,
@@ -189,8 +206,11 @@ function NuevaOrdenVenta() {
           fecha_vencimiento: orden.fecha_vencimiento ? orden.fecha_vencimiento.split('T')[0] : '',
           moneda: orden.moneda,
           tipo_cambio: orden.tipo_cambio,
-          tipo_impuesto: orden.tipo_impuesto,
-          porcentaje_impuesto: orden.porcentaje_impuesto,
+          
+          // Usamos la configuración forzada para asegurar consistencia
+          tipo_impuesto: configImpuesto.codigo,
+          porcentaje_impuesto: configImpuesto.porcentaje,
+          
           prioridad: orden.prioridad,
           tipo_venta: orden.tipo_venta || 'Contado',
           dias_credito: orden.dias_credito || 0,
@@ -256,14 +276,21 @@ function NuevaOrdenVenta() {
           diasCreditoCalculado = match ? parseInt(match[0]) : 0;
         }
 
+        // --- CORRECCIÓN CRÍTICA AL IMPORTAR ---
+        // Si la cotización tiene datos "sucios", esto lo arregla antes de ponerlo en el form
+        const configImpuesto = obtenerConfiguracionImpuesto(cot.tipo_impuesto);
+
         setFormCabecera(prev => ({
           ...prev,
           id_cotizacion: cot.id_cotizacion,
           id_cliente: cot.id_cliente,
           id_comercial: cot.id_comercial || prev.id_comercial,
           moneda: cot.moneda,
-          tipo_impuesto: cot.tipo_impuesto,
-          porcentaje_impuesto: cot.porcentaje_impuesto,
+          
+          // Forzamos la coherencia entre Código y Porcentaje
+          tipo_impuesto: configImpuesto.codigo,
+          porcentaje_impuesto: configImpuesto.porcentaje,
+          
           tipo_cambio: cot.tipo_cambio,
           tipo_venta: tipoVentaCalculado,
           dias_credito: diasCreditoCalculado,

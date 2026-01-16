@@ -232,21 +232,23 @@ function OrdenDetalle() {
     );
   };
 
-  const handleRegistroParcial = async (e) => {
+ const handleRegistroParcial = async (e) => {
     e.preventDefault();
-     
+      
     try {
       setProcesando(true);
       setError(null);
 
       const insumosConCantidad = insumosParcialesConsumo.filter(i => parseFloat(i.cantidad) > 0);
       
-      if (insumosConCantidad.length === 0) {
+      // LOGICA CORREGIDA:
+      // Solo validamos si existen insumos cargados en el estado (es decir, no es manual)
+      if (insumosParcialesConsumo.length > 0 && insumosConCantidad.length === 0) {
         setError('Debe especificar al menos un insumo con cantidad mayor a 0');
         setProcesando(false);
         return;
       }
-       
+        
       const payload = {
         cantidad_parcial: parseFloat(cantidadParcial),
         insumos_consumidos: insumosConCantidad.map(i => ({
@@ -266,7 +268,7 @@ function OrdenDetalle() {
         setInsumosParcialesConsumo([]);
         cargarDatos();
       }
-       
+        
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.error || 'Error al registrar producción parcial';
       setError(errorMsg);
@@ -277,27 +279,33 @@ function OrdenDetalle() {
 
   const handleFinalizar = async (e) => {
     e.preventDefault();
-     
+      
     const mermasValidas = mermas.filter(m => 
       m.id_producto_merma && 
       m.cantidad && 
       parseFloat(m.cantidad) > 0
     );
-     
+      
     try {
       setProcesando(true);
       setError(null);
 
+      // Filtramos los que tienen cantidad > 0
       const insumosConCantidad = insumosFinalesConsumo.filter(i => parseFloat(i.cantidad) > 0);
       
-      if (insumosConCantidad.length === 0) {
+      // LOGICA CORREGIDA:
+      // Solo lanzamos error si la orden TIENE insumos (insumosFinalesConsumo.length > 0)
+      // pero el usuario puso todo en 0 (insumosConCantidad.length === 0).
+      // Si es manual, insumosFinalesConsumo será [], por lo que saltará esta validación.
+      if (insumosFinalesConsumo.length > 0 && insumosConCantidad.length === 0) {
         setError('Debe especificar al menos un insumo con cantidad mayor a 0');
         setProcesando(false);
         return;
       }
-       
+        
       const payload = {
         cantidad_final: parseFloat(cantidadFinal),
+        // Si no hay insumos con cantidad, enviamos array vacío (para manuales)
         insumos_finales: insumosConCantidad.map(i => ({
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
@@ -325,7 +333,7 @@ function OrdenDetalle() {
         setInsumosFinalesConsumo([]);
         cargarDatos();
       }
-       
+        
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.error || 'Error al finalizar producción';
       setError(errorMsg);

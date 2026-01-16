@@ -28,24 +28,24 @@ function NuevaCompra() {
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState(null);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   
-  const [formData, setFormData] = useState({
-    id_proveedor: '',
-    id_cuenta_pago: '',
-    fecha_emision: new Date().toISOString().split('T')[0],
-    fecha_entrega_estimada: '',
-    prioridad: 'Media',
-    moneda: 'PEN',
-    tipo_compra: 'Contado',
-    numero_cuotas: 0,
-    dias_entre_cuotas: 30,
-    dias_credito: 0,
-    fecha_primera_cuota: '',
-    tipo_impuesto: 'IGV',
-    porcentaje_impuesto: 18.00,
-    observaciones: '',
-    contacto_proveedor: '',
-    direccion_entrega: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES'
-  });
+ const [formData, setFormData] = useState({
+  id_proveedor: '',
+  id_cuenta_pago: '',
+  fecha_emision: new Date().toISOString().split('T')[0],
+  fecha_entrega_estimada: '',
+  prioridad: 'Media',
+  moneda: '',
+  tipo_compra: 'Contado',
+  numero_cuotas: 0,
+  dias_entre_cuotas: 30,
+  dias_credito: 0,
+  fecha_primera_cuota: '',
+  tipo_impuesto: 'IGV',
+  porcentaje_impuesto: 18.00,
+  observaciones: '',
+  contacto_proveedor: '',
+  direccion_entrega: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES'
+});
   
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
@@ -59,46 +59,51 @@ function NuevaCompra() {
   }, [detalle, formData.porcentaje_impuesto, formData.tipo_impuesto]);
 
   useEffect(() => {
-    if (formData.id_cuenta_pago) {
-      const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(formData.id_cuenta_pago));
-      setCuentaSeleccionada(cuenta);
-    } else {
-      setCuentaSeleccionada(null);
+  if (formData.id_cuenta_pago) {
+    const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(formData.id_cuenta_pago));
+    setCuentaSeleccionada(cuenta);
+    
+    if (cuenta && cuenta.moneda !== formData.moneda) {
+      setFormData(prev => ({ ...prev, moneda: cuenta.moneda }));
     }
-  }, [formData.id_cuenta_pago, cuentasPago]);
+  } else {
+    setCuentaSeleccionada(null);
+  }
+}, [formData.id_cuenta_pago, cuentasPago]);
 
   const cargarCatalogos = async () => {
-    try {
-      setLoading(true);
-      
-      const [resProveedores, resProductos, resCuentas] = await Promise.all([
-        proveedoresAPI.getAll({ estado: 'Activo' }),
-        productosAPI.getAll({ 
-          estado: 'Activo',
-          id_tipo_inventario: '1,2,4'
-        }),
-        cuentasPagoAPI.getAll({ estado: 'Activo' })
-      ]);
-      
-      if (resProveedores.data.success) {
-        setProveedores(resProveedores.data.data || []);
-      }
-      
-      if (resProductos.data.success) {
-        setProductos(resProductos.data.data || []);
-      }
-
-      if (resCuentas.data.success) {
-        setCuentasPago(resCuentas.data.data || []);
-      }
-      
-    } catch (err) {
-      console.error('Error al cargar catálogos:', err);
-      setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    
+    const [resProveedores, resProductos, resCuentas] = await Promise.all([
+      proveedoresAPI.getAll({ estado: 'Activo' }),
+      productosAPI.getAll({ 
+        estado: 'Activo',
+        id_tipo_inventario: '1,2,4,5,6'
+      }),
+      cuentasPagoAPI.getAll({ estado: 'Activo' })
+    ]);
+    
+    if (resProveedores.data.success) {
+      setProveedores(resProveedores.data.data || []);
     }
-  };
+    
+    if (resProductos.data.success) {
+      setProductos(resProductos.data.data || []);
+      console.log('Productos cargados:', resProductos.data.data.length);
+    }
+
+    if (resCuentas.data.success) {
+      setCuentasPago(resCuentas.data.data || []);
+    }
+    
+  } catch (err) {
+    console.error('Error al cargar catálogos:', err);
+    setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSelectProveedor = (proveedor) => {
     setProveedorSeleccionado(proveedor);
@@ -187,20 +192,23 @@ function NuevaCompra() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    
-    if (!formData.id_proveedor) {
-      setError('Debe seleccionar un proveedor');
-      return;
-    }
+  e.preventDefault();
+  setError(null);
+  setSuccess(null);
+  
+  if (!formData.id_proveedor) {
+    setError('Debe seleccionar un proveedor');
+    return;
+  }
 
-    if (!formData.id_cuenta_pago) {
-      setError('Debe seleccionar una cuenta de pago');
-      return;
-    }
-    
+  if (!formData.id_cuenta_pago) {
+    setError('Debe seleccionar una cuenta de pago');
+    return;
+  }
+    if (!formData.moneda) {
+    setError('Debe seleccionar una cuenta de pago para determinar la moneda');
+    return;
+  }
     if (detalle.length === 0) {
       setError('Debe agregar al menos un producto');
       return;
@@ -353,51 +361,51 @@ function NuevaCompra() {
         </div>
 
         <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
-              <Wallet size={20} />
-              Cuenta de Pago
-            </h2>
-          </div>
-          <div className="card-body">
-            <div className="form-group">
-              <label className="form-label">Seleccionar Cuenta de Pago *</label>
-              <select
-                className="form-select"
-                value={formData.id_cuenta_pago}
-                onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
-                required
-              >
-                <option value="">Seleccionar cuenta...</option>
-                {cuentasPago.filter(c => c.moneda === formData.moneda).map(cuenta => (
-                  <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                    {cuenta.nombre} - {cuenta.tipo} ({cuenta.moneda}) - Saldo: {formatearMoneda(cuenta.saldo_actual)}
-                  </option>
-                ))}
-              </select>
-              <small className="text-muted">
-                Solo se muestran cuentas activas con la moneda seleccionada
-              </small>
-            </div>
+  <div className="card-header">
+    <h2 className="card-title">
+      <Wallet size={20} />
+      Cuenta de Pago
+    </h2>
+  </div>
+  <div className="card-body">
+    <div className="form-group">
+      <label className="form-label">Seleccionar Cuenta de Pago *</label>
+      <select
+        className="form-select"
+        value={formData.id_cuenta_pago}
+        onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
+        required
+      >
+        <option value="">Seleccionar cuenta...</option>
+        {cuentasPago.map(cuenta => (
+          <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
+            {cuenta.nombre} - {cuenta.tipo} ({cuenta.moneda}) - Saldo: {cuenta.moneda === 'USD' ? '$' : 'S/'} {parseFloat(cuenta.saldo_actual).toFixed(2)}
+          </option>
+        ))}
+      </select>
+      <small className="text-muted">
+        La moneda de la compra se ajustará automáticamente según la cuenta seleccionada
+      </small>
+    </div>
 
             {cuentaSeleccionada && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-medium">{cuentaSeleccionada.nombre}</p>
-                    <p className="text-sm text-muted">{cuentaSeleccionada.tipo}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted">Saldo disponible:</p>
-                    <p className="font-bold text-lg text-success">
-                      {formatearMoneda(cuentaSeleccionada.saldo_actual)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="font-medium">{cuentaSeleccionada.nombre}</p>
+            <p className="text-sm text-muted">{cuentaSeleccionada.tipo} - {cuentaSeleccionada.moneda}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted">Saldo disponible:</p>
+            <p className="font-bold text-lg text-success">
+              {formatearMoneda(cuentaSeleccionada.saldo_actual)}
+            </p>
           </div>
         </div>
+      </div>
+    )}
+  </div>
+</div>
 
         <div className="card mb-4">
           <div className="card-header">
@@ -446,33 +454,40 @@ function NuevaCompra() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label className="form-label">Moneda *</label>
-                <select
-                  className="form-select"
-                  value={formData.moneda}
-                  onChange={(e) => setFormData({ ...formData, moneda: e.target.value, id_cuenta_pago: '' })}
-                  required
-                >
-                  <option value="PEN">Soles (PEN)</option>
-                  <option value="USD">Dólares (USD)</option>
-                </select>
-              </div>
+  <div className="form-group">
+    <label className="form-label">Moneda *</label>
+    <select
+      className="form-select"
+      value={formData.moneda}
+      onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
+      disabled={!!formData.id_cuenta_pago}
+      required
+    >
+      <option value="">Seleccionar moneda...</option>
+      <option value="PEN">Soles (PEN)</option>
+      <option value="USD">Dólares (USD)</option>
+    </select>
+    {formData.id_cuenta_pago && (
+      <small className="text-info">
+        ✅ Moneda automática según cuenta seleccionada
+      </small>
+    )}
+  </div>
 
               <div className="form-group">
-                <label className="form-label">Tipo de Impuesto *</label>
-                <select
-                  className="form-select"
-                  value={formData.tipo_impuesto}
-                  onChange={(e) => setFormData({ ...formData, tipo_impuesto: e.target.value })}
-                  required
-                >
-                  <option value="IGV">IGV (18%)</option>
-                  <option value="EXO">Exonerado</option>
-                  <option value="INA">Inafecto</option>
-                </select>
-              </div>
-            </div>
+    <label className="form-label">Tipo de Impuesto *</label>
+    <select
+      className="form-select"
+      value={formData.tipo_impuesto}
+      onChange={(e) => setFormData({ ...formData, tipo_impuesto: e.target.value })}
+      required
+    >
+      <option value="IGV">IGV (18%)</option>
+      <option value="EXO">Exonerado</option>
+      <option value="INA">Inafecto</option>
+    </select>
+  </div>
+</div>
           </div>
         </div>
 
@@ -798,26 +813,44 @@ function NuevaCompra() {
       </Modal>
 
       <Modal
-        isOpen={modalProductoOpen}
-        onClose={() => setModalProductoOpen(false)}
-        title="Seleccionar Producto"
-        size="lg"
-      >
-        <div className="space-y-3">
-          {productos.map((prod) => (
-            <div
-              key={prod.id_producto}
-              className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
-              onClick={() => handleSelectProducto(prod)}
-            >
-              <div className="font-bold">[{prod.codigo}] {prod.nombre}</div>
-              <div className="text-sm text-muted">
-                Unidad: {prod.unidad_medida} • Tipo: {prod.tipo_inventario_nombre || 'N/A'}
-              </div>
-            </div>
-          ))}
+  isOpen={modalProductoOpen}
+  onClose={() => setModalProductoOpen(false)}
+  title="Seleccionar Producto"
+  size="lg"
+>
+  {productos.length === 0 ? (
+    <div className="text-center py-8">
+      <AlertCircle size={48} className="mx-auto text-muted mb-3" />
+      <p className="text-muted">No hay productos disponibles para compra</p>
+      <small className="text-muted">
+        Solo se muestran: Materia Prima, Insumos, Productos de Reventa, Suministros y Repuestos
+      </small>
+    </div>
+  ) : (
+    <div className="space-y-3">
+      <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+        <p className="text-sm text-blue-900">
+          <strong>{productos.length}</strong> productos disponibles para compra
+        </p>
+      </div>
+      {productos.map((prod) => (
+        <div
+          key={prod.id_producto}
+          className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
+          onClick={() => handleSelectProducto(prod)}
+        >
+          <div className="font-bold">[{prod.codigo}] {prod.nombre}</div>
+          <div className="text-sm text-muted">
+            Unidad: {prod.unidad_medida} • Tipo: {prod.tipo_inventario_nombre || 'N/A'}
+          </div>
+          <div className="text-xs text-muted mt-1">
+            Stock actual: {parseFloat(prod.stock_actual || 0).toFixed(2)}
+          </div>
         </div>
-      </Modal>
+      ))}
+    </div>
+  )}
+</Modal>
     </div>
   );
 }

@@ -490,6 +490,9 @@ export const ordenesVentaAPI = {
   actualizarPrioridad: (id, prioridad) => 
     api.put(`/ordenes-venta/${id}/prioridad`, { prioridad }),
 
+  actualizarTipoComprobante: (id, data) => 
+    api.put(`/ordenes-venta/${id}/tipo-comprobante`, data),
+
   registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data),
   
   getPagos: (id) => api.get(`/ordenes-venta/${id}/pagos`),
@@ -509,17 +512,13 @@ export const ordenesVentaAPI = {
   anularOrden: (id, motivo_anulacion) => 
     api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),
 
-  // --- SECCIÓN DE PDFS CORREGIDA ---
-  
-  // 1. Descargar Orden de Venta, Factura o Boleta
   descargarPDF: (id, tipo = 'orden') => {
     return api.get(`/ordenes-venta/${id}/pdf`, {
       params: { tipo },
-      responseType: 'blob' // Vital para archivos binarios
+      responseType: 'blob'
     });
   },
 
-  // 2. Descargar Guía de Remisión (Salida) - ESTA FALTABA
   descargarPDFDespacho: (id, idSalida) => {
     return api.get(`/ordenes-venta/${id}/salidas/${idSalida}/pdf`, {
       responseType: 'blob'

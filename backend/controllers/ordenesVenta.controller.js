@@ -2048,3 +2048,117 @@ export async function getSalidasOrden(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+export async function actualizarTipoComprobante(req, res) {
+  try {
+    const { id } = req.params;
+    const { tipo_comprobante } = req.body;
+
+    if (!tipo_comprobante || !['Factura', 'Nota de Venta'].includes(tipo_comprobante)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tipo de comprobante inválido. Debe ser "Factura" o "Nota de Venta"'
+      });
+    }
+
+    const ordenResult = await executeQuery(
+      'SELECT comprobante_editado, estado, tipo_comprobante FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.comprobante_editado === 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'El tipo de comprobante ya fue editado anteriormente. Solo se permite un cambio.'
+      });
+    }
+
+    if (['Cancelada', 'Entregada'].includes(orden.estado)) {
+      return res.status(400).json({
+        success: false,
+        error: 'No se puede editar el comprobante de una orden cancelada o entregada'
+      });
+    }
+
+    let numeroComprobante = null;
+
+    if (tipo_comprobante === 'Factura') {
+      const ultimaFactura = await executeQuery(`
+        SELECT numero_comprobante 
+        FROM ordenes_venta 
+        WHERE tipo_comprobante = 'Factura'
+        AND numero_comprobante IS NOT NULL
+        ORDER BY id_orden_venta DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuenciaFactura = 1;
+      if (ultimaFactura.success && ultimaFactura.data.length > 0 && ultimaFactura.data[0].numero_comprobante) {
+        const match = ultimaFactura.data[0].numero_comprobante.match(/F\d{3}-(\d+)$/);
+        if (match) {
+          numeroSecuenciaFactura = parseInt(match[1]) + 1;
+        }
+      }
+
+      numeroComprobante = `F001-${String(numeroSecuenciaFactura).padStart(8, '0')}`;
+
+    } else if (tipo_comprobante === 'Nota de Venta') {
+      const ultimaNota = await executeQuery(`
+        SELECT numero_comprobante 
+        FROM ordenes_venta 
+        WHERE tipo_comprobante = 'Nota de Venta'
+        AND numero_comprobante IS NOT NULL
+        ORDER BY id_orden_venta DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuenciaNota = 1;
+      if (ultimaNota.success && ultimaNota.data.length > 0 && ultimaNota.data[0].numero_comprobante) {
+        const match = ultimaNota.data[0].numero_comprobante.match(/NV\d{3}-(\d+)$/);
+        if (match) {
+          numeroSecuenciaNota = parseInt(match[1]) + 1;
+        }
+      }
+
+      numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
+    }
+
+    const updateResult = await executeQuery(
+      `UPDATE ordenes_venta 
+       SET tipo_comprobante = ?, 
+           numero_comprobante = ?,
+           comprobante_editado = 1,
+           fecha_actualizacion = NOW()
+       WHERE id_orden_venta = ?`,
+      [tipo_comprobante, numeroComprobante, id]
+    );
+
+    if (!updateResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: updateResult.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Tipo de comprobante actualizado exitosamente',
+      data: {
+        tipo_comprobante,
+        numero_comprobante
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al actualizar tipo de comprobante:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}

@@ -8,9 +8,10 @@ import {
   crearOrdenProduccionDesdeVenta,
   actualizarEstadoOrdenVenta,
   actualizarPrioridadOrdenVenta,
+  actualizarTipoComprobante,
   getEstadisticasOrdenesVenta,
   descargarPDFOrdenVenta,
-  descargarPDFDespacho, // <--- IMPORTANTE: Agregado aquí
+  descargarPDFDespacho,
   registrarPagoOrden,
   getPagosOrden,
   anularPagoOrden,
@@ -28,16 +29,15 @@ router.get('/estadisticas', verificarToken, getEstadisticasOrdenesVenta);
 router.get('/', verificarToken, getAllOrdenesVenta);
 router.post('/', verificarToken, createOrdenVenta);
 
-// --- RUTAS DE PDF ---
 router.get('/:id/pdf', verificarToken, descargarPDFOrdenVenta);
-// Esta es la ruta NUEVA que solucionará el error 404 al descargar guías:
-router.get('/:id/salidas/:idSalida/pdf', verificarToken, descargarPDFDespacho); 
+router.get('/:id/salidas/:idSalida/pdf', verificarToken, descargarPDFDespacho);
 
 router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionDesdeVenta);
 router.post('/:id/reservar', verificarToken, reservarStockOrden);
 
 router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
 router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
+router.put('/:id/tipo-comprobante', verificarToken, actualizarTipoComprobante);
 
 router.delete('/:id/anular', verificarToken, anularOrdenVenta);
 

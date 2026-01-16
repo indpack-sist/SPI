@@ -420,21 +420,14 @@ function DetalleOrdenVenta() {
       setProcesando(true);
       setError(null);
       
-      console.log("Solicitando PDF para ID:", id, "Tipo:", tipoDocumento); // 🔍 DEBUG
-
-      // 1. Llamada a la API
       const response = await ordenesVentaAPI.descargarPDF(id, tipoDocumento);
       
-      // 2. Verificar que lo que llegó es realmente un PDF y no un JSON de error
-      // A veces el status es 200 pero el contenido es JSON si el backend no maneja bien los status code
       if (response.data.type === 'application/json') {
-          // Si el tipo es json, es un error que pasó como éxito
           const errorText = await response.data.text();
           const errorJson = JSON.parse(errorText);
           throw new Error(errorJson.error || "Error generado por el servidor");
       }
 
-      // 3. Crear Blob y descargar
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
@@ -456,23 +449,17 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error("Error al descargar:", err);
 
-      // --- BLOQUE MÁGICO PARA LEER EL ERROR DEL BLOB ---
       if (err.response && err.response.data instanceof Blob && err.response.data.type === 'application/json') {
         try {
-            // Leemos el blob como texto
             const errorText = await err.response.data.text();
             const errorJson = JSON.parse(errorText);
-            // Mostramos el error real que viene del backend
             setError(errorJson.error || 'Error desconocido del servidor');
-            console.error("Contenido del error Blob:", errorJson);
         } catch (e) {
             setError('Error al procesar la respuesta del servidor');
         }
       } else {
-        // Error estándar o de red
         setError(err.message || 'Error de conexión al descargar PDF');
       }
-      // ------------------------------------------------
     } finally {
       setProcesando(false);
     }
@@ -488,7 +475,6 @@ function DetalleOrdenVenta() {
         return;
       }
       
-      // Asegúrate que salidasAPI.generarPDF también tenga responseType: 'blob' en api.js
       const response = await salidasAPI.generarPDF(orden.id_salida);
       
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -515,23 +501,18 @@ function DetalleOrdenVenta() {
 
   const handleDescargarSalidaEspecificaPDF = async (idSalida) => {
     try {
-      setDescargandoPDF(idSalida); // Activa el spinner específico de esa fila
+      setDescargandoPDF(idSalida);
       
-      // 1. Obtener datos
       const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida);
       
-      // 2. Crear Blob (ESTO FALTABA EN TU CÓDIGO ANTERIOR)
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
-      // 3. Crear enlace
       const link = document.createElement('a');
       link.href = url;
       
-      // 4. Nombre descriptivo: Guia-Orden-IdSalida.pdf
       link.setAttribute('download', `GuiaRemision-${orden.numero_orden}-${idSalida}.pdf`);
       
-      // 5. Descargar
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
@@ -1382,11 +1363,25 @@ function DetalleOrdenVenta() {
                   {orden.tipo_venta || 'Contado'}
                 </span>
               </div>
-              {orden.dias_credito > 0 && (
+              {orden.tipo_venta === 'Crédito' ? (
                 <div>
-                  <label className="text-sm font-medium text-muted">Crédito:</label>
-                  <p>{orden.dias_credito} días</p>
+                  <label className="text-sm font-medium text-muted">Crédito / Vence:</label>
+                  <div className="flex flex-col">
+                    <span className="font-semibold">{orden.dias_credito} días</span>
+                    {orden.fecha_vencimiento && (
+                        <span className={`text-xs flex items-center gap-1 ${new Date(orden.fecha_vencimiento) < new Date() && orden.estado_pago !== 'Pagado' ? 'text-red-600 font-bold' : 'text-muted'}`}>
+                            <Calendar size={10} /> {formatearFecha(orden.fecha_vencimiento)}
+                        </span>
+                    )}
+                  </div>
                 </div>
+              ) : (
+                orden.dias_credito > 0 && (
+                    <div>
+                    <label className="text-sm font-medium text-muted">Crédito:</label>
+                    <p>{orden.dias_credito} días</p>
+                    </div>
+                )
               )}
             </div>
             <div>

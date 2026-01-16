@@ -1017,6 +1017,7 @@ export async function descargarPDFCotizacion(req, res) {
 
     cotizacion.detalle = detalleResult.data;
 
+    const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
     const pdfBuffer = await generarCotizacionPDF(cotizacion);
 
     const fecha = new Date(cotizacion.fecha_emision).toISOString().split('T')[0];

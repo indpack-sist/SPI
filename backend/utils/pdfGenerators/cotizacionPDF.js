@@ -138,7 +138,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text(`No. ${cotizacion.numero_cotizacion}`, 385, 83, { align: 'center', width: 155 });
 
       const dirFiscal = cotizacion.direccion_cliente || '';
-      const dirEntrega = cotizacion.lugar_entrega || '';
+      const dirEntrega = cotizacion.lugar_entrega || cotizacion.direccion_entrega || '';
       const mostrarEntrega = dirEntrega && dirEntrega.trim() !== '' && dirEntrega.trim() !== dirFiscal.trim();
 
       const alturaFiscal = calcularAlturaTexto(doc, dirFiscal, 230, 8);

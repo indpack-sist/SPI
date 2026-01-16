@@ -56,7 +56,7 @@ function Sidebar({ isOpen, onToggle }) {
     {
       title: 'Compras',
       items: [
-{ path: '/compras/compras', icon: ShoppingBag, label: 'Compras', modulo: 'compras' }      ]
+{ path: '/compras', icon: ShoppingBag, label: 'Compras', modulo: 'compras' }]
     },
     {
       title: 'Finanzas',

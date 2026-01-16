@@ -27,27 +27,56 @@ async function cargarLogoURL() {
 
 function formatearFecha(fecha) {
   if (!fecha) return 'N/A';
-  const date = new Date(fecha);
-  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
-  return limaDate.toLocaleDateString('es-PE', {
+  
+  const date = typeof fecha === 'string' ? new Date(fecha + 'T00:00:00') : new Date(fecha);
+  
+  return date.toLocaleDateString('es-PE', {
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: 'UTC'
   });
 }
 
 function formatearHora(fecha) {
   if (!fecha) return 'N/A';
+  
   const date = new Date(fecha);
-  const limaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Lima' }));
-  return limaDate.toLocaleTimeString('es-PE', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
+  
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  
+  const hoursStr = String(hours12).padStart(2, '0');
+  const minutesStr = String(minutes).padStart(2, '0');
+  const secondsStr = String(seconds).padStart(2, '0');
+  
+  return `${hoursStr}:${minutesStr}:${secondsStr} ${ampm}`;
 }
-
+function formatearFechaHora(fecha) {
+  if (!fecha) return 'N/A';
+  
+  const date = new Date(fecha);
+  
+  // Formatear fecha
+  const dia = String(date.getDate()).padStart(2, '0');
+  const mes = String(date.getMonth() + 1).padStart(2, '0');
+  const anio = date.getFullYear();
+  
+  // Formatear hora
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  
+  const hoursStr = String(hours12).padStart(2, '0');
+  const minutesStr = String(minutes).padStart(2, '0');
+  
+  return `${dia}/${mes}/${anio} ${hoursStr}:${minutesStr} ${ampm}`;
+}
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
   const currentFontSize = doc._fontSize || 12;
   doc.fontSize(fontSize);

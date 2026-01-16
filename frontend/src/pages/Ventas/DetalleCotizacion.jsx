@@ -58,18 +58,17 @@ function DetalleCotizacion() {
       setLoading(true);
       setError(null);
       
-      // 1. Obtenemos la respuesta completa (headers + data)
+      // 1. Llamada a la API (esperamos un Blob)
       const response = await cotizacionesAPI.descargarPDF(id);
       
-      // 2. Creamos el objeto Blob con los datos binarios
+      // 2. Crear URL y descargar
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
-      // 3. Creamos un enlace temporal en el DOM
       const link = document.createElement('a');
       link.href = url;
       
-      // 4. Intentamos obtener el nombre real del archivo desde los headers
+      // Intentar sacar el nombre del archivo del header
       const contentDisposition = response.headers['content-disposition'];
       let fileName = `Cotizacion-${cotizacion.numero_cotizacion}.pdf`;
       
@@ -80,34 +79,38 @@ function DetalleCotizacion() {
         }
       }
       
-      // 5. Forzamos la descarga
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       
-      // 6. Limpieza
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
       
       setSuccess('PDF descargado exitosamente');
 
     } catch (err) {
-      console.error(err);
+      console.error("Error original:", err);
 
-      // 7. MANEJO DE ERROR DE BLOB (La solución al "undefined")
-      // Si el servidor devuelve un error, Axios lo entrega como Blob.
-      // Aquí lo convertimos de vuelta a texto JSON para leer el mensaje.
+      // --- AQUÍ ESTÁ LA SOLUCIÓN AL "UNDEFINED" ---
+      // Si la respuesta es un Blob (porque axios así lo configuró), hay que leerlo como texto
       if (err.response && err.response.data instanceof Blob) {
         try {
+          // Leemos el contenido del Blob (que contiene el JSON de error)
           const errorText = await err.response.data.text();
           const errorJson = JSON.parse(errorText);
-          setError(errorJson.error || 'Error al generar el PDF');
+          
+          // Ahora sí mostramos el mensaje real del backend
+          const mensajeError = errorJson.error || 'Error al generar el PDF';
+          console.error("Mensaje del backend:", mensajeError);
+          setError(mensajeError);
+          
         } catch (e) {
-          setError('Error inesperado al procesar la descarga');
+          // Si no es JSON válido
+          setError('Ocurrió un error inesperado al descargar el archivo.');
         }
       } else {
-        // Error estándar de red u otro tipo
-        setError(err.response?.data?.error || 'Error al descargar el PDF');
+        // Error de red u otro tipo que no sea del backend
+        setError(err.message || 'Error de conexión al descargar el PDF');
       }
     } finally {
       setLoading(false);

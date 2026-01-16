@@ -1434,3 +1434,93 @@ export async function calcularEvolucionCUP(req, res) {
     });
   }
 }
+export async function getHistorialComprasProducto(req, res) {
+  try {
+    const { id } = req.params;
+    const { limite = 10 } = req.query;
+    
+    const sql = `
+      SELECT 
+        oc.id_orden_compra,
+        oc.numero_orden,
+        oc.fecha_emision,
+        oc.moneda,
+        doc.cantidad,
+        doc.precio_unitario,
+        doc.descuento_porcentaje,
+        doc.subtotal,
+        pr.razon_social AS proveedor,
+        pr.ruc AS ruc_proveedor,
+        e.nombre_completo AS registrado_por,
+        oc.estado,
+        oc.tipo_compra,
+        DATEDIFF(CURDATE(), oc.fecha_emision) AS dias_desde_compra
+      FROM detalle_orden_compra doc
+      INNER JOIN ordenes_compra oc ON doc.id_orden_compra = oc.id_orden_compra
+      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
+      LEFT JOIN empleados e ON oc.id_registrado_por = e.id_empleado
+      WHERE doc.id_producto = ?
+        AND oc.estado != 'Cancelada'
+      ORDER BY oc.fecha_emision DESC
+      LIMIT ?
+    `;
+    
+    const result = await executeQuery(sql, [id, parseInt(limite)]);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
+    // Calcular estadísticas
+    let totalCompras = 0;
+    let cantidadTotalComprada = 0;
+    let precioPromedio = 0;
+    let precioMinimo = null;
+    let precioMaximo = null;
+    let ultimaCompra = null;
+    
+    if (result.data.length > 0) {
+      totalCompras = result.data.length;
+      
+      result.data.forEach(compra => {
+        cantidadTotalComprada += parseFloat(compra.cantidad);
+        const precio = parseFloat(compra.precio_unitario);
+        
+        if (precioMinimo === null || precio < precioMinimo) {
+          precioMinimo = precio;
+        }
+        if (precioMaximo === null || precio > precioMaximo) {
+          precioMaximo = precio;
+        }
+      });
+      
+      precioPromedio = result.data.reduce((sum, c) => sum + parseFloat(c.precio_unitario), 0) / totalCompras;
+      ultimaCompra = result.data[0].fecha_emision;
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        historial: result.data,
+        estadisticas: {
+          total_compras: totalCompras,
+          cantidad_total_comprada: cantidadTotalComprada,
+          precio_promedio: precioPromedio,
+          precio_minimo: precioMinimo,
+          precio_maximo: precioMaximo,
+          ultima_compra: ultimaCompra
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error al obtener historial de compras:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, ShoppingCart, Building, Calendar,
-  MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard
+  MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard, Clock
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -24,28 +24,32 @@ function NuevaCompra() {
   
   const [modalProveedorOpen, setModalProveedorOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
+  const [modalHistorialOpen, setModalHistorialOpen] = useState(false);
   
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState(null);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
+  const [productoHistorial, setProductoHistorial] = useState(null);
+  const [historialCompras, setHistorialCompras] = useState(null);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
   
- const [formData, setFormData] = useState({
-  id_proveedor: '',
-  id_cuenta_pago: '',
-  fecha_emision: new Date().toISOString().split('T')[0],
-  fecha_entrega_estimada: '',
-  prioridad: 'Media',
-  moneda: '',
-  tipo_compra: 'Contado',
-  numero_cuotas: 0,
-  dias_entre_cuotas: 30,
-  dias_credito: 0,
-  fecha_primera_cuota: '',
-  tipo_impuesto: 'IGV',
-  porcentaje_impuesto: 18.00,
-  observaciones: '',
-  contacto_proveedor: '',
-  direccion_entrega: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES'
-});
+  const [formData, setFormData] = useState({
+    id_proveedor: '',
+    id_cuenta_pago: '',
+    fecha_emision: new Date().toISOString().split('T')[0],
+    fecha_entrega_estimada: '',
+    prioridad: 'Media',
+    moneda: '',
+    tipo_compra: 'Contado',
+    numero_cuotas: 0,
+    dias_entre_cuotas: 30,
+    dias_credito: 0,
+    fecha_primera_cuota: '',
+    tipo_impuesto: 'IGV',
+    porcentaje_impuesto: 18.00,
+    observaciones: '',
+    contacto_proveedor: '',
+    direccion_entrega: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES'
+  });
   
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
@@ -59,51 +63,69 @@ function NuevaCompra() {
   }, [detalle, formData.porcentaje_impuesto, formData.tipo_impuesto]);
 
   useEffect(() => {
-  if (formData.id_cuenta_pago) {
-    const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(formData.id_cuenta_pago));
-    setCuentaSeleccionada(cuenta);
-    
-    if (cuenta && cuenta.moneda !== formData.moneda) {
-      setFormData(prev => ({ ...prev, moneda: cuenta.moneda }));
+    if (formData.id_cuenta_pago) {
+      const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(formData.id_cuenta_pago));
+      setCuentaSeleccionada(cuenta);
+      
+      if (cuenta && cuenta.moneda !== formData.moneda) {
+        setFormData(prev => ({ ...prev, moneda: cuenta.moneda }));
+      }
+    } else {
+      setCuentaSeleccionada(null);
     }
-  } else {
-    setCuentaSeleccionada(null);
-  }
-}, [formData.id_cuenta_pago, cuentasPago]);
+  }, [formData.id_cuenta_pago, cuentasPago]);
 
   const cargarCatalogos = async () => {
-  try {
-    setLoading(true);
-    
-    const [resProveedores, resProductos, resCuentas] = await Promise.all([
-      proveedoresAPI.getAll({ estado: 'Activo' }),
-      productosAPI.getAll({ 
-        estado: 'Activo',
-        id_tipo_inventario: '1,2,4,5,6'
-      }),
-      cuentasPagoAPI.getAll({ estado: 'Activo' })
-    ]);
-    
-    if (resProveedores.data.success) {
-      setProveedores(resProveedores.data.data || []);
-    }
-    
-    if (resProductos.data.success) {
-      setProductos(resProductos.data.data || []);
-      console.log('Productos cargados:', resProductos.data.data.length);
-    }
+    try {
+      setLoading(true);
+      
+      const [resProveedores, resProductos, resCuentas] = await Promise.all([
+        proveedoresAPI.getAll({ estado: 'Activo' }),
+        productosAPI.getAll({ 
+          estado: 'Activo',
+          id_tipo_inventario: '1,2,4,5,6'
+        }),
+        cuentasPagoAPI.getAll({ estado: 'Activo' })
+      ]);
+      
+      if (resProveedores.data.success) {
+        setProveedores(resProveedores.data.data || []);
+      }
+      
+      if (resProductos.data.success) {
+        setProductos(resProductos.data.data || []);
+      }
 
-    if (resCuentas.data.success) {
-      setCuentasPago(resCuentas.data.data || []);
+      if (resCuentas.data.success) {
+        setCuentasPago(resCuentas.data.data || []);
+      }
+      
+    } catch (err) {
+      console.error('Error al cargar catálogos:', err);
+      setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
     }
-    
-  } catch (err) {
-    console.error('Error al cargar catálogos:', err);
-    setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  const handleVerHistorial = async (producto) => {
+    try {
+      setLoadingHistorial(true);
+      setProductoHistorial(producto);
+      setModalHistorialOpen(true);
+      
+      const response = await productosAPI.getHistorialCompras(producto.id_producto, { limite: 20 });
+      
+      if (response.data.success) {
+        setHistorialCompras(response.data.data);
+      }
+    } catch (err) {
+      console.error('Error al cargar historial:', err);
+      setError('Error al cargar el historial de compras');
+    } finally {
+      setLoadingHistorial(false);
+    }
+  };
 
   const handleSelectProveedor = (proveedor) => {
     setProveedorSeleccionado(proveedor);
@@ -192,23 +214,25 @@ function NuevaCompra() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError(null);
-  setSuccess(null);
-  
-  if (!formData.id_proveedor) {
-    setError('Debe seleccionar un proveedor');
-    return;
-  }
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    
+    if (!formData.id_proveedor) {
+      setError('Debe seleccionar un proveedor');
+      return;
+    }
 
-  if (!formData.id_cuenta_pago) {
-    setError('Debe seleccionar una cuenta de pago');
-    return;
-  }
+    if (!formData.id_cuenta_pago) {
+      setError('Debe seleccionar una cuenta de pago');
+      return;
+    }
+
     if (!formData.moneda) {
-    setError('Debe seleccionar una cuenta de pago para determinar la moneda');
-    return;
-  }
+      setError('Debe seleccionar una cuenta de pago para determinar la moneda');
+      return;
+    }
+    
     if (detalle.length === 0) {
       setError('Debe agregar al menos un producto');
       return;
@@ -361,51 +385,51 @@ function NuevaCompra() {
         </div>
 
         <div className="card mb-4">
-  <div className="card-header">
-    <h2 className="card-title">
-      <Wallet size={20} />
-      Cuenta de Pago
-    </h2>
-  </div>
-  <div className="card-body">
-    <div className="form-group">
-      <label className="form-label">Seleccionar Cuenta de Pago *</label>
-      <select
-        className="form-select"
-        value={formData.id_cuenta_pago}
-        onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
-        required
-      >
-        <option value="">Seleccionar cuenta...</option>
-        {cuentasPago.map(cuenta => (
-          <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-            {cuenta.nombre} - {cuenta.tipo} ({cuenta.moneda}) - Saldo: {cuenta.moneda === 'USD' ? '$' : 'S/'} {parseFloat(cuenta.saldo_actual).toFixed(2)}
-          </option>
-        ))}
-      </select>
-      <small className="text-muted">
-        La moneda de la compra se ajustará automáticamente según la cuenta seleccionada
-      </small>
-    </div>
+          <div className="card-header">
+            <h2 className="card-title">
+              <Wallet size={20} />
+              Cuenta de Pago
+            </h2>
+          </div>
+          <div className="card-body">
+            <div className="form-group">
+              <label className="form-label">Seleccionar Cuenta de Pago *</label>
+              <select
+                className="form-select"
+                value={formData.id_cuenta_pago}
+                onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
+                required
+              >
+                <option value="">Seleccionar cuenta...</option>
+                {cuentasPago.map(cuenta => (
+                  <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
+                    {cuenta.nombre} - {cuenta.tipo} ({cuenta.moneda}) - Saldo: {cuenta.moneda === 'USD' ? '$' : 'S/'} {parseFloat(cuenta.saldo_actual).toFixed(2)}
+                  </option>
+                ))}
+              </select>
+              <small className="text-muted">
+                La moneda de la compra se ajustará automáticamente según la cuenta seleccionada
+              </small>
+            </div>
 
             {cuentaSeleccionada && (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="font-medium">{cuentaSeleccionada.nombre}</p>
-            <p className="text-sm text-muted">{cuentaSeleccionada.tipo} - {cuentaSeleccionada.moneda}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-muted">Saldo disponible:</p>
-            <p className="font-bold text-lg text-success">
-              {formatearMoneda(cuentaSeleccionada.saldo_actual)}
-            </p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">{cuentaSeleccionada.nombre}</p>
+                    <p className="text-sm text-muted">{cuentaSeleccionada.tipo} - {cuentaSeleccionada.moneda}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-muted">Saldo disponible:</p>
+                    <p className="font-bold text-lg text-success">
+                      {formatearMoneda(cuentaSeleccionada.saldo_actual)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    )}
-  </div>
-</div>
 
         <div className="card mb-4">
           <div className="card-header">
@@ -454,40 +478,40 @@ function NuevaCompra() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-  <div className="form-group">
-    <label className="form-label">Moneda *</label>
-    <select
-      className="form-select"
-      value={formData.moneda}
-      onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
-      disabled={!!formData.id_cuenta_pago}
-      required
-    >
-      <option value="">Seleccionar moneda...</option>
-      <option value="PEN">Soles (PEN)</option>
-      <option value="USD">Dólares (USD)</option>
-    </select>
-    {formData.id_cuenta_pago && (
-      <small className="text-info">
-        ✅ Moneda automática según cuenta seleccionada
-      </small>
-    )}
-  </div>
+              <div className="form-group">
+                <label className="form-label">Moneda *</label>
+                <select
+                  className="form-select"
+                  value={formData.moneda}
+                  onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
+                  disabled={!!formData.id_cuenta_pago}
+                  required
+                >
+                  <option value="">Seleccionar moneda...</option>
+                  <option value="PEN">Soles (PEN)</option>
+                  <option value="USD">Dólares (USD)</option>
+                </select>
+                {formData.id_cuenta_pago && (
+                  <small className="text-info">
+                    ✅ Moneda automática según cuenta seleccionada
+                  </small>
+                )}
+              </div>
 
               <div className="form-group">
-    <label className="form-label">Tipo de Impuesto *</label>
-    <select
-      className="form-select"
-      value={formData.tipo_impuesto}
-      onChange={(e) => setFormData({ ...formData, tipo_impuesto: e.target.value })}
-      required
-    >
-      <option value="IGV">IGV (18%)</option>
-      <option value="EXO">Exonerado</option>
-      <option value="INA">Inafecto</option>
-    </select>
-  </div>
-</div>
+                <label className="form-label">Tipo de Impuesto *</label>
+                <select
+                  className="form-select"
+                  value={formData.tipo_impuesto}
+                  onChange={(e) => setFormData({ ...formData, tipo_impuesto: e.target.value })}
+                  required
+                >
+                  <option value="IGV">IGV (18%)</option>
+                  <option value="EXO">Exonerado</option>
+                  <option value="INA">Inafecto</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -813,44 +837,186 @@ function NuevaCompra() {
       </Modal>
 
       <Modal
-  isOpen={modalProductoOpen}
-  onClose={() => setModalProductoOpen(false)}
-  title="Seleccionar Producto"
-  size="lg"
->
-  {productos.length === 0 ? (
-    <div className="text-center py-8">
-      <AlertCircle size={48} className="mx-auto text-muted mb-3" />
-      <p className="text-muted">No hay productos disponibles para compra</p>
-      <small className="text-muted">
-        Solo se muestran: Materia Prima, Insumos, Productos de Reventa, Suministros y Repuestos
-      </small>
-    </div>
-  ) : (
-    <div className="space-y-3">
-      <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
-        <p className="text-sm text-blue-900">
-          <strong>{productos.length}</strong> productos disponibles para compra
-        </p>
-      </div>
-      {productos.map((prod) => (
-        <div
-          key={prod.id_producto}
-          className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
-          onClick={() => handleSelectProducto(prod)}
-        >
-          <div className="font-bold">[{prod.codigo}] {prod.nombre}</div>
-          <div className="text-sm text-muted">
-            Unidad: {prod.unidad_medida} • Tipo: {prod.tipo_inventario_nombre || 'N/A'}
+        isOpen={modalProductoOpen}
+        onClose={() => setModalProductoOpen(false)}
+        title="Seleccionar Producto"
+        size="xl"
+      >
+        {productos.length === 0 ? (
+          <div className="text-center py-8">
+            <AlertCircle size={48} className="mx-auto text-muted mb-3" />
+            <p className="text-muted">No hay productos disponibles para compra</p>
+            <small className="text-muted">
+              Solo se muestran: Materia Prima, Insumos, Productos de Reventa, Suministros y Repuestos
+            </small>
           </div>
-          <div className="text-xs text-muted mt-1">
-            Stock actual: {parseFloat(prod.stock_actual || 0).toFixed(2)}
+        ) : (
+          <div className="space-y-3">
+            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+              <p className="text-sm text-blue-900">
+                <strong>{productos.length}</strong> productos disponibles para compra
+              </p>
+            </div>
+            {productos.map((prod) => (
+              <div
+                key={prod.id_producto}
+                className="p-4 border rounded-lg hover:bg-blue-50 transition"
+              >
+                <div className="flex items-start justify-between">
+                  <div 
+                    className="flex-1 cursor-pointer"
+                    onClick={() => handleSelectProducto(prod)}
+                  >
+                    <div className="font-bold">[{prod.codigo}] {prod.nombre}</div>
+                    <div className="text-sm text-muted">
+                      Unidad: {prod.unidad_medida} • Tipo: {prod.tipo_inventario_nombre || prod.tipo_inventario || 'N/A'}
+                    </div>
+                    <div className="text-xs text-muted mt-1">
+                      Stock actual: {parseFloat(prod.stock_actual || 0).toFixed(2)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline ml-3"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleVerHistorial(prod);
+                    }}
+                    title="Ver historial de compras"
+                  >
+                    <Clock size={16} />
+                    Historial
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      ))}
-    </div>
-  )}
-</Modal>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={modalHistorialOpen}
+        onClose={() => {
+          setModalHistorialOpen(false);
+          setProductoHistorial(null);
+          setHistorialCompras(null);
+        }}
+        title={productoHistorial ? `Historial de Compras - ${productoHistorial.nombre}` : 'Historial'}
+        size="xl"
+      >
+        {loadingHistorial ? (
+          <div className="text-center py-8">
+            <div className="spinner-border text-primary mb-3" role="status">
+              <span className="visually-hidden">Cargando...</span>
+            </div>
+            <p className="text-muted">Cargando historial...</p>
+          </div>
+        ) : historialCompras ? (
+          <div>
+            {historialCompras.estadisticas.total_compras > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-muted">Total Compras</p>
+                  <p className="text-xl font-bold text-primary">
+                    {historialCompras.estadisticas.total_compras}
+                  </p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-xs text-muted">Cantidad Total</p>
+                  <p className="text-xl font-bold text-success">
+                    {historialCompras.estadisticas.cantidad_total_comprada.toFixed(2)}
+                  </p>
+                </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <p className="text-xs text-muted">Precio Promedio</p>
+                  <p className="text-xl font-bold text-purple-600">
+                    S/ {historialCompras.estadisticas.precio_promedio.toFixed(2)}
+                  </p>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-xs text-muted">Precio Mínimo</p>
+                  <p className="text-lg font-bold text-warning">
+                    S/ {historialCompras.estadisticas.precio_minimo.toFixed(2)}
+                  </p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-xs text-muted">Precio Máximo</p>
+                  <p className="text-lg font-bold text-danger">
+                    S/ {historialCompras.estadisticas.precio_maximo.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {historialCompras.historial.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '120px' }}>Fecha</th>
+                      <th style={{ width: '130px' }}>N° Orden</th>
+                      <th>Proveedor</th>
+                      <th style={{ width: '100px' }} className="text-right">Cantidad</th>
+                      <th style={{ width: '100px' }} className="text-right">Precio Unit.</th>
+                      <th style={{ width: '80px' }} className="text-right">Desc.</th>
+                      <th style={{ width: '120px' }} className="text-right">Subtotal</th>
+                      <th style={{ width: '100px' }}>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historialCompras.historial.map((compra, index) => (
+                      <tr key={index}>
+                        <td>
+                          <div className="text-sm">
+                            {new Date(compra.fecha_emision).toLocaleDateString('es-PE')}
+                          </div>
+                          <div className="text-xs text-muted">
+                            Hace {compra.dias_desde_compra} días
+                          </div>
+                        </td>
+                        <td className="font-mono text-sm">{compra.numero_orden}</td>
+                        <td>
+                          <div className="font-medium text-sm">{compra.proveedor}</div>
+                          <div className="text-xs text-muted">RUC: {compra.ruc_proveedor}</div>
+                        </td>
+                        <td className="text-right font-mono">
+                          {parseFloat(compra.cantidad).toFixed(2)}
+                        </td>
+                        <td className="text-right font-mono">
+                          {compra.moneda === 'USD' ? '$' : 'S/'} {parseFloat(compra.precio_unitario).toFixed(2)}
+                        </td>
+                        <td className="text-right text-sm">
+                          {compra.descuento_porcentaje > 0 ? `${compra.descuento_porcentaje}%` : '-'}
+                        </td>
+                        <td className="text-right font-bold text-primary">
+                          {compra.moneda === 'USD' ? '$' : 'S/'} {parseFloat(compra.subtotal).toFixed(2)}
+                        </td>
+                        <td>
+                          <span className={`badge ${
+                            compra.estado === 'Recibida' ? 'badge-success' :
+                            compra.estado === 'Confirmada' ? 'badge-info' :
+                            compra.estado === 'Pendiente' ? 'badge-warning' : 'badge-secondary'
+                          }`}>
+                            {compra.estado}
+                          </span>
+                          {compra.tipo_compra === 'Credito' && (
+                            <div className="text-xs text-muted mt-1">A crédito</div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <AlertCircle size={48} className="mx-auto text-muted mb-3" />
+                <p className="text-muted">No hay historial de compras para este producto</p>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

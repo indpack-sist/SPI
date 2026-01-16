@@ -419,7 +419,16 @@ export const cotizacionesAPI = {
   actualizarEstado: (id, estado) => api.put(`/cotizaciones/${id}/estado`, { estado }),
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
   getEstadisticas: () => api.get('/cotizaciones/estadisticas'),
-  descargarPDF: (id) => api.get(`/cotizaciones/${id}/pdf`, { responseType: 'blob' })
+
+  descargarPDF: (id) => {
+    const token = localStorage.getItem('token'); 
+    return api.get(`/cotizaciones/${id}/pdf`, { 
+      responseType: 'blob',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  }
 };
 
 export const ordenesVentaAPI = {

@@ -229,20 +229,29 @@ function OrdenesVenta() {
   };
 
   const columns = [
-    {
+   {
       header: 'Comprobante / Orden',
       accessor: 'numero_orden',
       width: '200px',
       render: (value, row) => {
-        const tipoComprobante = row.tipo_comprobante;
-        const esFactura = tipoComprobante === 'Factura';
+        // Obtenemos el valor y aseguramos que no sea null
+        const tipoRaw = row.tipo_comprobante || ''; 
         
+        // Verificamos si incluye la palabra factura (para detectar Factura, FACTURA, factura)
+        const esFactura = tipoRaw.toLowerCase().includes('factura');
+        
+        // Si no viene nada del backend, mostramos 'Desconocido' o 'Sin Tipo' temporalmente para depurar
+        // Una vez arregles el backend, puedes volver a poner 'Factura' como default si prefieres.
+        const textoMostrar = tipoRaw || 'Sin Tipo'; 
+
         return (
           <div>
             <div className="flex items-center gap-1 mb-1.5">
+              {/* Lógica condicional para el color del badge */}
               <span className={`badge badge-xs ${esFactura ? 'badge-success' : 'badge-info'}`}>
-                {tipoComprobante || 'Factura'}
+                {textoMostrar}
               </span>
+              
               {!esFactura && row.numero_comprobante && (
                 <span className="font-mono text-xs text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
                   {row.numero_comprobante}

@@ -297,33 +297,33 @@ function DetalleOrdenVenta() {
   };
 
   const handleCambiarTipoComprobante = async () => {
-    if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
-      setError('Debe seleccionar un tipo de comprobante diferente');
-      return;
+  if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
+    setError('Debe seleccionar un tipo de comprobante diferente');
+    return;
+  }
+
+  try {
+    setProcesando(true);
+    setError(null);
+
+    const response = await ordenesVentaAPI.actualizarTipoComprobante(id, {
+      tipo_comprobante: nuevoTipoComprobante
+    });
+
+    if (response.data.success) {
+      setSuccess(`Tipo de comprobante actualizado exitosamente a ${nuevoTipoComprobante}`);
+      setModalEditarComprobante(false);
+      setNuevoTipoComprobante('');
+      await cargarDatos();
     }
 
-    try {
-      setProcesando(true);
-      setError(null);
-
-      const response = await ordenesVentaAPI.actualizarTipoComprobante(id, {
-        tipo_comprobante: nuevoTipoComprobante
-      });
-
-      if (response.data.success) {
-        setSuccess('Tipo de comprobante actualizado exitosamente');
-        setModalEditarComprobante(false);
-        setNuevoTipoComprobante('');
-        await cargarDatos();
-      }
-
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || 'Error al cambiar tipo de comprobante');
-    } finally {
-      setProcesando(false);
-    }
-  };
+  } catch (err) {
+    console.error(err);
+    setError(err.response?.data?.error || 'Error al cambiar tipo de comprobante');
+  } finally {
+    setProcesando(false);
+  }
+};
 
   const handleRegistrarPago = async (e) => {
     e.preventDefault();

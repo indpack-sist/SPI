@@ -966,7 +966,6 @@ export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
 
-    // 1. Obtener cabecera de la cotización
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
@@ -992,7 +991,6 @@ export async function descargarPDFCotizacion(req, res) {
 
     const cotizacion = cotizacionResult.data[0];
 
-    // 2. Obtener detalle de la cotización
     const detalleResult = await executeQuery(`
       SELECT 
         dc.id_detalle,
@@ -1019,32 +1017,23 @@ export async function descargarPDFCotizacion(req, res) {
 
     cotizacion.detalle = detalleResult.data;
 
-    // 3. Generar el Buffer del PDF
-    const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
     const pdfBuffer = await generarCotizacionPDF(cotizacion);
 
-    // --- LÓGICA DE NOMBRE DINÁMICO ---
-    
-    // Extraemos la fecha en formato YYYY-MM-DD
     const fecha = new Date(cotizacion.fecha_emision).toISOString().split('T')[0];
     
-    // Limpiamos el nombre del cliente: quitamos tildes, caracteres especiales y pasamos a mayúsculas
     const clienteSanitizado = cotizacion.cliente
       ? cotizacion.cliente
           .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "") // Quita tildes
-          .replace(/[^a-zA-Z0-9]/g, "_")   // Cambia símbolos por guion bajo
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9]/g, "_")
           .toUpperCase()
       : 'CLIENTE';
 
     const nroCot = cotizacion.numero_cotizacion || id;
     
-    // Resultado: 2024-05-22_COTIZACION_NOMBRE_CLIENTE_123.pdf
     const nombreArchivo = `${fecha}_COTIZACION_${clienteSanitizado}_${nroCot}.pdf`;
 
-    // 4. Configurar headers y enviar
     res.setHeader('Content-Type', 'application/pdf');
-    // Es importante usar comillas en el filename por si hay espacios
     res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
 

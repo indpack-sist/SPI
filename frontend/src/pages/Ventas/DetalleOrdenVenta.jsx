@@ -42,10 +42,12 @@ function DetalleOrdenVenta() {
   const [modalCrearOP, setModalCrearOP] = useState(false);
   const [modalDespacho, setModalDespacho] = useState(false);
   const [modalAnularOrden, setModalAnularOrden] = useState(false);
+  const [modalEditarComprobante, setModalEditarComprobante] = useState(false);
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [nuevoTipoComprobante, setNuevoTipoComprobante] = useState('');
   
   const [pagoForm, setPagoForm] = useState({
     fecha_pago: getFechaLocal(),
@@ -289,6 +291,35 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al reservar stock');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleCambiarTipoComprobante = async () => {
+    if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
+      setError('Debe seleccionar un tipo de comprobante diferente');
+      return;
+    }
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.actualizarTipoComprobante(id, {
+        tipo_comprobante: nuevoTipoComprobante
+      });
+
+      if (response.data.success) {
+        setSuccess('Tipo de comprobante actualizado exitosamente');
+        setModalEditarComprobante(false);
+        setNuevoTipoComprobante('');
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al cambiar tipo de comprobante');
     } finally {
       setProcesando(false);
     }
@@ -1356,17 +1387,38 @@ function DetalleOrdenVenta() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 pb-2 mb-2 border-b border-gray-100">
-              <div>
+            <div className="pb-2 mb-2 border-b border-gray-100">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
                   <label className="text-sm font-medium text-muted">Tipo Documento:</label>
-                  <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
-              </div>
-              {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
-                <div>
-                   <label className="text-sm font-medium text-muted">N° Serie:</label>
-                   <p className="font-mono">{orden.numero_comprobante || '-'}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
+                    {!orden.comprobante_editado && orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+                      <button
+                        className="btn btn-xs btn-outline text-xs"
+                        onClick={() => {
+                          setNuevoTipoComprobante(orden.tipo_comprobante);
+                          setModalEditarComprobante(true);
+                        }}
+                        title="Editar tipo de comprobante (solo una vez)"
+                      >
+                        <Edit size={12} /> Editar
+                      </button>
+                    )}
+                    {orden.comprobante_editado && (
+                      <span className="badge badge-sm badge-secondary" title="Ya se editó el tipo de comprobante">
+                        <Lock size={10} /> Editado
+                      </span>
+                    )}
+                  </div>
                 </div>
-              )}
+                {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+                  <div>
+                    <label className="text-sm font-medium text-muted">N° Serie:</label>
+                    <p className="font-mono">{orden.numero_comprobante || '-'}</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -1942,6 +1994,99 @@ function DetalleOrdenVenta() {
             >
               <XCircle size={20} />
               {procesando ? 'Anulando...' : 'Confirmar Anulación'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalEditarComprobante}
+        onClose={() => {
+          setModalEditarComprobante(false);
+          setNuevoTipoComprobante('');
+        }}
+        title="Cambiar Tipo de Comprobante"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="alert alert-warning">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>¡Importante!</strong> Debe consultar antes de realizar este cambio.
+              <ul className="list-disc list-inside mt-2 text-sm">
+                <li>Solo puede cambiar el tipo de comprobante una vez</li>
+                <li>Este cambio puede afectar aspectos contables y tributarios</li>
+                <li>Consulte con el área correspondiente antes de continuar</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-3 rounded border border-blue-200">
+            <p className="text-sm text-blue-700">
+              <strong>Tipo actual:</strong> {orden.tipo_comprobante || 'Orden Venta'}
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-muted">Seleccione el nuevo tipo de comprobante:</p>
+            
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                className={`btn py-4 text-left ${
+                  nuevoTipoComprobante === 'Factura' 
+                    ? 'btn-success text-white shadow-md' 
+                    : 'btn-outline hover:bg-green-50'
+                }`}
+                onClick={() => setNuevoTipoComprobante('Factura')}
+              >
+                <div className="flex items-center gap-3">
+                  <FileText size={24} />
+                  <div>
+                    <div className="font-bold">FACTURA</div>
+                    <div className="text-xs opacity-80">Comprobante fiscal para clientes con RUC</div>
+                  </div>
+                </div>
+              </button>
+              
+              <button
+                type="button"
+                className={`btn py-4 text-left ${
+                  nuevoTipoComprobante === 'Nota de Venta' 
+                    ? 'btn-info text-white shadow-md' 
+                    : 'btn-outline hover:bg-blue-50'
+                }`}
+                onClick={() => setNuevoTipoComprobante('Nota de Venta')}
+              >
+                <div className="flex items-center gap-3">
+                  <FileText size={24} />
+                  <div>
+                    <div className="font-bold">NOTA DE VENTA</div>
+                    <div className="text-xs opacity-80">Comprobante simple para ventas menores</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-3 border-t">
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                setModalEditarComprobante(false);
+                setNuevoTipoComprobante('');
+              }}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleCambiarTipoComprobante}
+              disabled={procesando || !nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante}
+            >
+              <Edit size={20} />
+              {procesando ? 'Actualizando...' : 'Confirmar Cambio'}
             </button>
           </div>
         </div>

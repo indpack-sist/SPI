@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock, ExternalLink
+  ChevronLeft, ChevronRight, Lock
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -527,13 +527,20 @@ function DetalleOrdenVenta() {
     }
   };
 
-  const getTipoImpuestoNombre = (codigo) => {
+  const getTipoImpuestoNombre = (valor) => {
+    const codigo = String(valor || '').toUpperCase().trim();
+    
     const tipos = {
       'IGV': 'IGV 18%',
       'EXO': 'Exonerado 0%',
       'INA': 'Inafecto 0%'
     };
-    return tipos[codigo] || 'IGV 18%';
+    
+    if (tipos[codigo]) return tipos[codigo];
+    if (codigo === 'EXONERADO') return tipos['EXO'];
+    if (codigo === 'INAFECTO') return tipos['INA'];
+    
+    return tipos['IGV'];
   };
 
   const getEstadoConfig = (estado) => {
@@ -1347,8 +1354,8 @@ function DetalleOrdenVenta() {
 
             <div className="grid grid-cols-2 gap-2 pb-2 mb-2 border-b border-gray-100">
               <div>
-                 <label className="text-sm font-medium text-muted">Tipo Documento:</label>
-                 <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
+                  <label className="text-sm font-medium text-muted">Tipo Documento:</label>
+                  <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
               </div>
               {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
                 <div>
@@ -1448,56 +1455,56 @@ function DetalleOrdenVenta() {
              </div>
              <div className="card-body">
                  <Table 
-                     columns={[
-                         { header: 'N° Salida', accessor: 'numero_salida', width: '120px', render: val => `SAL-${String(val).padStart(6,'0')}` },
-                         { header: 'Fecha', accessor: 'fecha_salida', width: '120px', render: val => formatearFecha(val) },
-                         { 
-                           header: 'Estado', 
-                           accessor: 'estado', 
-                           width: '100px',
-                           align: 'center',
-                           render: (val) => (
-                             <span className={`badge ${val === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
-                               {val}
-                             </span>
-                           )
-                         },
-                         { header: 'Observaciones', accessor: 'observaciones' },
-                         { 
-                           header: 'Acciones', 
-                           accessor: 'id_salida', 
-                           width: '150px',
-                           align:'center', 
-                           render: (val, row) => (
-                             <div className="flex gap-2 justify-center">
-                               <button 
-                                 className="btn btn-sm btn-outline" 
-                                 onClick={() => handleDescargarSalidaEspecificaPDF(val)} 
-                                 disabled={descargandoPDF === val}
-                                 title="Descargar PDF"
-                               >
-                                 {descargandoPDF === val ? (
-                                   <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
-                                 ) : (
-                                   <Download size={14}/>
-                                 )}
-                               </button>
-                               {row.estado === 'Activo' && (
-                                 <button 
-                                   className="btn btn-sm btn-danger" 
-                                   onClick={() => handleAnularDespacho(val)}
-                                   disabled={procesando}
-                                   title="Anular despacho"
-                                 >
-                                   <Trash2 size={14}/>
-                                 </button>
-                               )}
-                             </div>
-                           )
-                         }
-                     ]} 
-                     data={salidas} 
-                     emptyMessage="No hay despachos registrados"
+                      columns={[
+                          { header: 'N° Salida', accessor: 'numero_salida', width: '120px', render: val => `SAL-${String(val).padStart(6,'0')}` },
+                          { header: 'Fecha', accessor: 'fecha_salida', width: '120px', render: val => formatearFecha(val) },
+                          { 
+                            header: 'Estado', 
+                            accessor: 'estado', 
+                            width: '100px',
+                            align: 'center',
+                            render: (val) => (
+                              <span className={`badge ${val === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
+                                {val}
+                              </span>
+                            )
+                          },
+                          { header: 'Observaciones', accessor: 'observaciones' },
+                          { 
+                            header: 'Acciones', 
+                            accessor: 'id_salida', 
+                            width: '150px',
+                            align:'center', 
+                            render: (val, row) => (
+                              <div className="flex gap-2 justify-center">
+                                <button 
+                                  className="btn btn-sm btn-outline" 
+                                  onClick={() => handleDescargarSalidaEspecificaPDF(val)} 
+                                  disabled={descargandoPDF === val}
+                                  title="Descargar PDF"
+                                >
+                                  {descargandoPDF === val ? (
+                                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
+                                  ) : (
+                                    <Download size={14}/>
+                                  )}
+                                </button>
+                                {row.estado === 'Activo' && (
+                                  <button 
+                                    className="btn btn-sm btn-danger" 
+                                    onClick={() => handleAnularDespacho(val)}
+                                    disabled={procesando}
+                                    title="Anular despacho"
+                                  >
+                                    <Trash2 size={14}/>
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          }
+                      ]} 
+                      data={salidas} 
+                      emptyMessage="No hay despachos registrados"
                  />
              </div>
          </div>
@@ -1530,7 +1537,13 @@ function DetalleOrdenVenta() {
                 <Percent size={14} />
                 {getTipoImpuestoNombre(orden.tipo_impuesto)}:
               </span>
-              <span className="font-bold">{formatearMoneda(orden.igv)}</span>
+              <span className="font-bold">
+                {formatearMoneda(
+                  ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase()) 
+                  ? 0 
+                  : orden.igv
+                )}
+              </span>
             </div>
             <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
               <span className="font-bold">TOTAL:</span>

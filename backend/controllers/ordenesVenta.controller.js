@@ -25,6 +25,8 @@ export async function getAllOrdenesVenta(req, res) {
       SELECT 
         ov.id_orden_venta,
         ov.numero_orden,
+        ov.tipo_comprobante,    -- << AGREGAR ESTA LÍNEA
+        ov.numero_comprobante,  -- << AGREGAR ESTA LÍNEA (para que se vea F001-...)
         ov.fecha_emision,
         ov.fecha_entrega_estimada,
         ov.fecha_entrega_real,

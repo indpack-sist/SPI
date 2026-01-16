@@ -1547,14 +1547,25 @@ function DetalleOrdenVenta() {
             </div>
             <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
               <span className="font-bold">TOTAL:</span>
-              <span className="font-bold text-xl">{formatearMoneda(orden.total)}</span>
+              <span className="font-bold text-xl">
+                {formatearMoneda(
+                  ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase()) 
+                  ? orden.subtotal 
+                  : orden.total
+                )}
+              </span>
             </div>
             
             {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio || 0) > 1 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
                 <div className="flex justify-between items-center text-blue-900">
                   <span className="font-medium">Equivalente en Soles:</span>
-                  <span className="font-bold">S/ {formatearNumero(parseFloat(orden.total) * parseFloat(orden.tipo_cambio))}</span>
+                  <span className="font-bold">
+                    S/ {formatearNumero(
+                        parseFloat(['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase()) ? orden.subtotal : orden.total) 
+                        * parseFloat(orden.tipo_cambio)
+                    )}
+                  </span>
                 </div>
               </div>
             )}

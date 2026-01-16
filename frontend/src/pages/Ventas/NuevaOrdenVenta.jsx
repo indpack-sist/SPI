@@ -267,30 +267,45 @@ function NuevaOrdenVenta() {
       if (response.data.success) {
         const cot = response.data.data;
         
-        // --- LOGICA MEJORADA PARA DETECTAR CRÉDITO Y DÍAS ---
+        // 1. LÓGICA DE DETECCIÓN DE CRÉDITO Y DÍAS
         const plazoTexto = (cot.plazo_pago || 'Contado').toLowerCase();
         let tipoVentaCalculado = 'Contado';
         let diasCreditoCalculado = 0;
 
-        // Detectamos crédito si contiene "credito" (con o sin tilde) O si menciona "dias"
-        // Y aseguramos que NO diga "contado"
-        const esCredito = (plazoTexto.includes('credito') || plazoTexto.includes('crédito') || plazoTexto.includes('dias') || plazoTexto.includes('días')) && !plazoTexto.includes('contado');
+        // Si dice "crédito" O tiene días numéricos explícitos y NO dice contado
+        const esCredito = (plazoTexto.includes('credito') || plazoTexto.includes('crédito') || /\d/.test(plazoTexto)) && !plazoTexto.includes('contado');
 
         if (esCredito) {
           tipoVentaCalculado = 'Crédito';
-          // Buscamos cualquier número dentro del texto (ej: "30 días" -> 30)
           const match = cot.plazo_pago.match(/\d+/);
           diasCreditoCalculado = match ? parseInt(match[0]) : 0;
         }
 
-        // Calculamos la fecha de vencimiento inicial basada en los días detectados
-        const fechaEmision = new Date(); // Usamos fecha actual para la nueva orden
+        // Cálculo de fecha vencimiento
+        const fechaEmision = new Date();
         const fechaVencimientoCalc = new Date(fechaEmision);
         fechaVencimientoCalc.setDate(fechaVencimientoCalc.getDate() + diasCreditoCalculado);
 
-        // --- CORRECCIÓN DE IMPUESTOS ---
+        // 2. BUSCAR CLIENTE Y SUS DATOS DE CRÉDITO MANUALMENTE
+        // (Evitamos llamar a handleSelectCliente para que no resetee el tipo de venta)
+        const cliente = clientes.find(c => c.id_cliente === cot.id_cliente);
+        
+        if (cliente) {
+          setClienteSeleccionado(cliente);
+          try {
+            const resCredito = await clientesAPI.getEstadoCredito(cliente.id_cliente);
+            if (resCredito.data.success) {
+              setEstadoCredito(resCredito.data.data);
+            }
+          } catch (error) {
+            console.error("Error cargando crédito del cliente", error);
+          }
+        }
+
+        // 3. CONFIGURACIÓN DE IMPUESTOS
         const configImpuesto = obtenerConfiguracionImpuesto(cot.tipo_impuesto);
 
+        // 4. SETEAR TODO EL FORMULARIO DE GOLPE
         setFormCabecera(prev => ({
           ...prev,
           id_cotizacion: cot.id_cotizacion,
@@ -298,28 +313,25 @@ function NuevaOrdenVenta() {
           id_comercial: cot.id_comercial || prev.id_comercial,
           moneda: cot.moneda,
           
-          // Impuestos
           tipo_impuesto: configImpuesto.codigo,
           porcentaje_impuesto: configImpuesto.porcentaje,
           
           tipo_cambio: cot.tipo_cambio,
           
-          // DATOS DE PAGO Y CRÉDITO AUTOMÁTICOS
-          tipo_venta: tipoVentaCalculado,
+          // AQUÍ SE FUERZAN LOS DATOS CORRECTOS CALCULADOS ARRIBA
+          tipo_venta: tipoVentaCalculado, 
           dias_credito: diasCreditoCalculado,
           plazo_pago: cot.plazo_pago || 'Contado',
-          forma_pago: cot.forma_pago || '', // Aquí se jala la forma de pago (Transferencia, Cheque, etc)
+          forma_pago: cot.forma_pago || '',
           fecha_vencimiento: fechaVencimientoCalc.toISOString().split('T')[0],
           
-          direccion_entrega: cot.direccion_entrega || '',
+          // Usamos la dirección del cliente si la de la cotización está vacía
+          direccion_entrega: cot.direccion_entrega || (cliente ? cliente.direccion_despacho : ''),
           lugar_entrega: cot.lugar_entrega || '',
           observaciones: cot.observaciones || ''
         }));
 
-        // Cargar datos del cliente asociado para verificar su línea de crédito
-        const cliente = clientes.find(c => c.id_cliente === cot.id_cliente);
-        if (cliente) handleSelectCliente(cliente);
-
+        // 5. CARGAR PRODUCTOS
         if (cot.detalle) {
           setDetalle(cot.detalle.map(item => ({
             id_producto: item.id_producto,

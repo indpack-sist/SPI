@@ -1,4 +1,5 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
+import pool from '../config/database.js';
 
 export async function getAllProductos(req, res) {
   try {
@@ -1465,16 +1466,9 @@ export async function getHistorialComprasProducto(req, res) {
       LIMIT ?
     `;
     
-    const result = await executeQuery(sql, [id, parseInt(limite)]);
+    // ✅ CAMBIO: Usar pool.query directamente en lugar de executeQuery
+    const [rows] = await pool.query(sql, [id, parseInt(limite)]);
     
-    if (!result.success) {
-      return res.status(500).json({ 
-        success: false,
-        error: result.error 
-      });
-    }
-    
-    // Calcular estadísticas
     let totalCompras = 0;
     let cantidadTotalComprada = 0;
     let precioPromedio = 0;
@@ -1482,10 +1476,10 @@ export async function getHistorialComprasProducto(req, res) {
     let precioMaximo = null;
     let ultimaCompra = null;
     
-    if (result.data.length > 0) {
-      totalCompras = result.data.length;
+    if (rows.length > 0) {
+      totalCompras = rows.length;
       
-      result.data.forEach(compra => {
+      rows.forEach(compra => {
         cantidadTotalComprada += parseFloat(compra.cantidad);
         const precio = parseFloat(compra.precio_unitario);
         
@@ -1497,14 +1491,14 @@ export async function getHistorialComprasProducto(req, res) {
         }
       });
       
-      precioPromedio = result.data.reduce((sum, c) => sum + parseFloat(c.precio_unitario), 0) / totalCompras;
-      ultimaCompra = result.data[0].fecha_emision;
+      precioPromedio = rows.reduce((sum, c) => sum + parseFloat(c.precio_unitario), 0) / totalCompras;
+      ultimaCompra = rows[0].fecha_emision;
     }
     
     res.json({
       success: true,
       data: {
-        historial: result.data,
+        historial: rows,
         estadisticas: {
           total_compras: totalCompras,
           cantidad_total_comprada: cantidadTotalComprada,

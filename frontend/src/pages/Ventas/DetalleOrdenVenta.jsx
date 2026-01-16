@@ -917,6 +917,10 @@ function DetalleOrdenVenta() {
            orden.estado !== 'Despachada';
   });
 
+  const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase());
+  const totalCorregido = esSinImpuesto ? parseFloat(orden.subtotal) : parseFloat(orden.total);
+  const saldoCorregido = resumenPagos ? Math.max(0, totalCorregido - parseFloat(resumenPagos.monto_pagado)) : 0;
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -1257,7 +1261,7 @@ function DetalleOrdenVenta() {
             <div className="grid grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-muted">Total Orden</p>
-                <p className="text-2xl font-bold">{formatearMoneda(resumenPagos.total_orden)}</p>
+                <p className="text-2xl font-bold">{formatearMoneda(totalCorregido)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted">Monto Pagado</p>
@@ -1265,7 +1269,7 @@ function DetalleOrdenVenta() {
               </div>
               <div>
                 <p className="text-sm text-muted">Saldo Pendiente</p>
-                <p className="text-2xl font-bold text-warning">{formatearMoneda(resumenPagos.saldo_pendiente)}</p>
+                <p className="text-2xl font-bold text-warning">{formatearMoneda(saldoCorregido)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted">Progreso</p>
@@ -1273,13 +1277,13 @@ function DetalleOrdenVenta() {
                   <div className="flex-1 bg-gray-200 rounded-full h-3">
                     <div 
                       className={`h-3 rounded-full ${
-                        parseFloat(resumenPagos.porcentaje_pagado) === 100 ? 'bg-success' : 
-                        parseFloat(resumenPagos.porcentaje_pagado) > 0 ? 'bg-info' : 'bg-warning'
+                        (resumenPagos.monto_pagado >= totalCorregido - 0.1) ? 'bg-success' : 
+                        parseFloat(resumenPagos.monto_pagado) > 0 ? 'bg-info' : 'bg-warning'
                       }`}
-                      style={{ width: `${resumenPagos.porcentaje_pagado}%` }}
+                      style={{ width: `${Math.min(100, (parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100)}%` }}
                     ></div>
                   </div>
-                  <span className="font-bold">{resumenPagos.porcentaje_pagado}%</span>
+                  <span className="font-bold">{((parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100).toFixed(0)}%</span>
                 </div>
               </div>
             </div>
@@ -1538,22 +1542,12 @@ function DetalleOrdenVenta() {
                 {getTipoImpuestoNombre(orden.tipo_impuesto)}:
               </span>
               <span className="font-bold">
-                {formatearMoneda(
-                  ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase()) 
-                  ? 0 
-                  : orden.igv
-                )}
+                {formatearMoneda(esSinImpuesto ? 0 : orden.igv)}
               </span>
             </div>
             <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
               <span className="font-bold">TOTAL:</span>
-              <span className="font-bold text-xl">
-                {formatearMoneda(
-                  ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase()) 
-                  ? orden.subtotal 
-                  : orden.total
-                )}
-              </span>
+              <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
             </div>
             
             {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio || 0) > 1 && (
@@ -1561,10 +1555,7 @@ function DetalleOrdenVenta() {
                 <div className="flex justify-between items-center text-blue-900">
                   <span className="font-medium">Equivalente en Soles:</span>
                   <span className="font-bold">
-                    S/ {formatearNumero(
-                        parseFloat(['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase()) ? orden.subtotal : orden.total) 
-                        * parseFloat(orden.tipo_cambio)
-                    )}
+                    S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio))}
                   </span>
                 </div>
               </div>
@@ -1594,7 +1585,7 @@ function DetalleOrdenVenta() {
           <div className="space-y-4">
             {resumenPagos && (
               <div className="alert alert-info">
-                <strong>Saldo Pendiente:</strong> {formatearMoneda(resumenPagos.saldo_pendiente)}
+                <strong>Saldo Pendiente:</strong> {formatearMoneda(saldoCorregido)}
               </div>
             )}
 
@@ -1619,12 +1610,12 @@ function DetalleOrdenVenta() {
                 required
                 step="0.01"
                 min="0.01"
-                max={resumenPagos?.saldo_pendiente}
+                max={saldoCorregido}
                 placeholder="0.00"
               />
               {resumenPagos && (
                 <small className="text-muted">
-                  Máximo: {formatearMoneda(resumenPagos.saldo_pendiente)}
+                  Máximo: {formatearMoneda(saldoCorregido)}
                 </small>
               )}
             </div>

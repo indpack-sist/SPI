@@ -524,7 +524,7 @@ function NuevaCotizacion() {
         response = await cotizacionesAPI.create(payload);
         if (response.data.success) {
           setSuccess(`Cotización creada: ${response.data.data.numero_cotizacion}`);
-          setTimeout(() => navigate('/ventas/cotizaciones'), 1500);
+          setTimeout(() => navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`), 1500);
         }
       }
     } catch (err) {

@@ -117,7 +117,7 @@ function DetalleCotizacion() {
       const response = await cotizacionesAPI.actualizarEstado(id, estado);
       
       if (response.data.success) {
-        if (estado === 'Aprobada' && response.data.data?.requiere_orden_venta) {
+        if (estado === 'Aprobada') {
           setSuccess('Cotización aprobada. Redirigiendo a crear Orden de Venta...');
           
           setTimeout(() => {
@@ -580,7 +580,11 @@ function DetalleCotizacion() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-xs text-muted uppercase font-semibold mb-1">Plazo Pago</p>
-                <p className="font-medium">{cotizacion.plazo_pago || '-'}</p>
+                {cotizacion.plazo_pago && cotizacion.plazo_pago !== 'Contado' ? (
+                  <span className="badge badge-warning">{cotizacion.plazo_pago}</span>
+                ) : (
+                  <span className="badge badge-success">Contado</span>
+                )}
               </div>
               <div>
                 <p className="text-xs text-muted uppercase font-semibold mb-1">Forma Pago</p>

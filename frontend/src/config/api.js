@@ -419,51 +419,7 @@ export const cotizacionesAPI = {
   actualizarEstado: (id, estado) => api.put(`/cotizaciones/${id}/estado`, { estado }),
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
   getEstadisticas: () => api.get('/cotizaciones/estadisticas'),
-
-  descargarPDF: async (id) => {
-    try {
-      const response = await fetch(`${API_URL}/cotizaciones/${id}/pdf`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/pdf',
-        }
-      });
-      
-      if (!response.ok) throw new Error('Error al descargar PDF');
-
-      const disposition = response.headers.get('Content-Disposition');
-      let filename = `cotizacion-${id}.pdf`;
-
-      if (disposition && disposition.includes('filename=')) {
-        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-        const matches = filenameRegex.exec(disposition);
-        if (matches != null && matches[1]) { 
-          filename = matches[1].replace(/['"]/g, '');
-        }
-      }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename; 
-      
-      document.body.appendChild(link);
-      link.click();
-
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-
-      return { success: true };
-
-    } catch (error) {
-      console.error('Error al descargar PDF de cotización:', error);
-      throw error;
-    }
-  }
+  descargarPDF: (id) => api.get(`/cotizaciones/${id}/pdf`, { responseType: 'blob' })
 };
 
 export const ordenesVentaAPI = {

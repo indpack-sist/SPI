@@ -14,13 +14,77 @@ const ETIQUETAS_IMPUESTO = {
 
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
+    const req = https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        resolve(null);
+        return;
+      }
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
-    }).on('error', reject);
+      response.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.end();
   });
+}
+
+function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
+  const currentFontSize = doc._fontSize || 12;
+  doc.fontSize(fontSize);
+  const heightOfString = doc.heightOfString(texto || '', {
+    width: ancho,
+    lineGap: 2
+  });
+  doc.fontSize(currentFontSize);
+  return Math.ceil(heightOfString);
+}
+
+function numeroALetras(numero, moneda) {
+  const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
+  const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+  const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+  const especiales = {
+    11: 'ONCE', 12: 'DOCE', 13: 'TRECE', 14: 'CATORCE', 15: 'QUINCE',
+    16: 'DIECISEIS', 17: 'DIECISIETE', 18: 'DIECIOCHO', 19: 'DIECINUEVE'
+  };
+  
+  const entero = Math.floor(numero);
+  const decimales = Math.round((numero - entero) * 100);
+  
+  function convertirNumero(num) {
+    if (num === 0) return 'CERO';
+    if (num < 10) return unidades[num];
+    if (num >= 11 && num <= 19) return especiales[num];
+    if (num < 100) {
+      const d = Math.floor(num / 10);
+      const u = num % 10;
+      if (num === 20) return 'VEINTE';
+      if (num > 20 && num < 30) return 'VEINTI' + unidades[u];
+      return decenas[d] + (u > 0 ? ' Y ' + unidades[u] : '');
+    }
+    if (num < 1000) {
+      const c = Math.floor(num / 100);
+      const resto = num % 100;
+      if (num === 100) return 'CIEN';
+      return centenas[c] + (resto > 0 ? ' ' + convertirNumero(resto) : '');
+    }
+    if (num < 1000000) {
+      const miles = Math.floor(num / 1000);
+      const resto = num % 1000;
+      const textoMiles = miles === 1 ? 'MIL' : convertirNumero(miles) + ' MIL';
+      return textoMiles + (resto > 0 ? ' ' + convertirNumero(resto) : '');
+    }
+    const millones = Math.floor(num / 1000000);
+    const resto = num % 1000000;
+    const textoMillones = millones === 1 ? 'UN MILLON' : convertirNumero(millones) + ' MILLONES';
+    return textoMillones + (resto > 0 ? ' ' + convertirNumero(resto) : '');
+  }
+  
+  const resultado = convertirNumero(entero);
+  const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
+  
+  return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }
 
 export async function generarCotizacionPDF(cotizacion) {
@@ -36,12 +100,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      let logoBuffer;
-      try {
-        logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
-      } catch (error) {
-        console.error(error);
-      }
+      let logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
 
       if (logoBuffer) {
         try {
@@ -50,15 +109,11 @@ export async function generarCotizacionPDF(cotizacion) {
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
           doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
           doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
         doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
         doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
@@ -82,13 +137,19 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${cotizacion.numero_cotizacion}`, 385, 83, { align: 'center', width: 155 });
 
-      const direccionCliente = cotizacion.direccion_entrega || 
-                               cotizacion.direccion_despacho || 
-                               cotizacion.direccion_cliente || 
-                               '';
-      
-      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
-      const alturaRecuadroCliente = Math.max(75, alturaDireccion + 60);
+      const dirFiscal = cotizacion.direccion_cliente || '';
+      const dirEntrega = cotizacion.lugar_entrega || '';
+      const mostrarEntrega = dirEntrega && dirEntrega.trim() !== '' && dirEntrega.trim() !== dirFiscal.trim();
+
+      const alturaFiscal = calcularAlturaTexto(doc, dirFiscal, 230, 8);
+      const alturaEntrega = mostrarEntrega ? calcularAlturaTexto(doc, dirEntrega, 230, 8) : 0;
+
+      let alturaContenido = alturaFiscal + 60;
+      if (mostrarEntrega) {
+        alturaContenido += alturaEntrega + 15;
+      }
+
+      const alturaRecuadroCliente = Math.max(75, alturaContenido);
       
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
@@ -102,17 +163,29 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.font('Helvetica');
       doc.text(cotizacion.ruc_cliente || cotizacion.ruc || '', 100, 218);
       
+      let cursorY = 233;
+
       doc.font('Helvetica-Bold');
-      doc.text('Dirección:', 40, 233);
+      doc.text('Dir. Fiscal:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(direccionCliente, 100, 233, { width: 230, lineGap: 2 });
+      doc.text(dirFiscal, 100, cursorY, { width: 230, lineGap: 2 });
       
-      const yPosicionCiudad = 233 + alturaDireccion + 10;
+      cursorY += alturaFiscal + 5;
+
+      if (mostrarEntrega) {
+        doc.font('Helvetica-Bold');
+        doc.text('Lugar Entrega:', 40, cursorY);
+        doc.font('Helvetica');
+        doc.text(dirEntrega, 100, cursorY, { width: 230, lineGap: 2 });
+        cursorY += alturaEntrega + 5;
+      } else {
+        cursorY += 5;
+      }
       
       doc.font('Helvetica-Bold');
-      doc.text('Ciudad:', 40, yPosicionCiudad);
+      doc.text('Ciudad:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(cotizacion.ciudad_entrega || 'Lima - Perú', 100, yPosicionCiudad);
+      doc.text(cotizacion.ciudad_entrega || 'Lima - Perú', 100, cursorY);
 
       doc.font('Helvetica-Bold');
       doc.text('Moneda:', 360, 203);
@@ -179,7 +252,7 @@ export async function generarCotizacionPDF(cotizacion) {
       const simboloMoneda = cotizacion.moneda === 'USD' ? '$' : 'S/';
       
       cotizacion.detalle.forEach((item, idx) => {
-        const cantidad = parseFloat(item.cantidad).toFixed(5);
+        const cantidad = parseFloat(item.cantidad).toFixed(2);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
         const valorVenta = parseFloat(item.valor_venta || item.subtotal).toFixed(2);
         
@@ -275,62 +348,4 @@ export async function generarCotizacionPDF(cotizacion) {
       reject(error);
     }
   });
-}
-
-function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
-  const currentFontSize = doc._fontSize || 12;
-  doc.fontSize(fontSize);
-  const heightOfString = doc.heightOfString(texto || '', {
-    width: ancho,
-    lineGap: 2
-  });
-  doc.fontSize(currentFontSize);
-  return Math.ceil(heightOfString);
-}
-
-function numeroALetras(numero, moneda) {
-  const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
-  const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
-  const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
-  const especiales = {
-    11: 'ONCE', 12: 'DOCE', 13: 'TRECE', 14: 'CATORCE', 15: 'QUINCE',
-    16: 'DIECISEIS', 17: 'DIECISIETE', 18: 'DIECIOCHO', 19: 'DIECINUEVE'
-  };
-  
-  const entero = Math.floor(numero);
-  const decimales = Math.round((numero - entero) * 100);
-  
-  function convertirNumero(num) {
-    if (num === 0) return 'CERO';
-    if (num < 10) return unidades[num];
-    if (num >= 11 && num <= 19) return especiales[num];
-    if (num < 100) {
-      const d = Math.floor(num / 10);
-      const u = num % 10;
-      if (num === 20) return 'VEINTE';
-      if (num > 20 && num < 30) return 'VEINTI' + unidades[u];
-      return decenas[d] + (u > 0 ? ' Y ' + unidades[u] : '');
-    }
-    if (num < 1000) {
-      const c = Math.floor(num / 100);
-      const resto = num % 100;
-      if (num === 100) return 'CIEN';
-      return centenas[c] + (resto > 0 ? ' ' + convertirNumero(resto) : '');
-    }
-    if (num < 1000000) {
-      const miles = Math.floor(num / 1000);
-      const resto = num % 1000;
-      const textoMiles = miles === 1 ? 'MIL' : convertirNumero(miles) + ' MIL';
-      return textoMiles + (resto > 0 ? ' ' + convertirNumero(resto) : '');
-    }
-    const millones = Math.floor(num / 1000000);
-    const resto = num % 1000000;
-    const textoMillones = millones === 1 ? 'UN MILLON' : convertirNumero(millones) + ' MILLONES';
-    return textoMillones + (resto > 0 ? ' ' + convertirNumero(resto) : '');
-  }
-  
-  const resultado = convertirNumero(entero);
-  const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
-  
-  return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }

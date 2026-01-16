@@ -11,7 +11,7 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { ordenesVentaAPI, salidasAPI, clientesAPI } from '../../config/api';
+import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI } from '../../config/api';
 
 function DetalleOrdenVenta() {
   const { id } = useParams();
@@ -29,6 +29,7 @@ function DetalleOrdenVenta() {
   const [salidas, setSalidas] = useState([]);
   const [resumenPagos, setResumenPagos] = useState(null);
   const [estadoCredito, setEstadoCredito] = useState(null);
+  const [cuentasPago, setCuentasPago] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -50,6 +51,7 @@ function DetalleOrdenVenta() {
   const [nuevoTipoComprobante, setNuevoTipoComprobante] = useState('');
   
   const [pagoForm, setPagoForm] = useState({
+    id_cuenta_pago: '',
     fecha_pago: getFechaLocal(),
     monto_pagado: '',
     metodo_pago: 'Transferencia',
@@ -122,11 +124,12 @@ function DetalleOrdenVenta() {
       setLoading(true);
       setError(null);
       
-      const [ordenRes, pagosRes, resumenRes, salidasRes] = await Promise.all([
+      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes] = await Promise.all([
         ordenesVentaAPI.getById(id),
         ordenesVentaAPI.getPagos(id),
         ordenesVentaAPI.getResumenPagos(id),
-        ordenesVentaAPI.getSalidas(id).catch(() => ({ data: { success: true, data: [] } }))
+        ordenesVentaAPI.getSalidas(id).catch(() => ({ data: { success: true, data: [] } })),
+        cuentasPagoAPI.getAll({ estado: 'Activo' })
       ]);
       
       if (ordenRes.data.success) {
@@ -140,6 +143,7 @@ function DetalleOrdenVenta() {
       if (pagosRes.data.success) setPagos(pagosRes.data.data);
       if (resumenRes.data.success) setResumenPagos(resumenRes.data.data);
       if (salidasRes.data.success) setSalidas(salidasRes.data.data || []);
+      if (cuentasRes.data.success) setCuentasPago(cuentasRes.data.data || []);
       
     } catch (err) {
       console.error(err);
@@ -328,6 +332,11 @@ function DetalleOrdenVenta() {
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
     
+    if (!pagoForm.id_cuenta_pago) {
+        setError('Debe seleccionar una cuenta de pago');
+        return;
+    }
+
     const monto = parseFloat(pagoForm.monto_pagado);
 
     if (!monto || monto <= 0) {
@@ -353,6 +362,7 @@ function DetalleOrdenVenta() {
         setSuccess(`Pago registrado: ${response.data.data.numero_pago}`);
         setModalPagoOpen(false);
         setPagoForm({
+          id_cuenta_pago: '',
           fecha_pago: getFechaLocal(),
           monto_pagado: '',
           metodo_pago: 'Transferencia',
@@ -1511,57 +1521,57 @@ function DetalleOrdenVenta() {
              </div>
              <div className="card-body">
                  <Table 
-                      columns={[
-                          { header: 'N° Salida', accessor: 'numero_salida', width: '120px', render: val => `SAL-${String(val).padStart(6,'0')}` },
-                          { header: 'Fecha', accessor: 'fecha_salida', width: '120px', render: val => formatearFecha(val) },
-                          { 
-                            header: 'Estado', 
-                            accessor: 'estado', 
-                            width: '100px',
-                            align: 'center',
-                            render: (val) => (
-                              <span className={`badge ${val === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
-                                {val}
-                              </span>
-                            )
-                          },
-                          { header: 'Observaciones', accessor: 'observaciones' },
-                          { 
-                            header: 'Acciones', 
-                            accessor: 'id_salida', 
-                            width: '150px',
-                            align:'center', 
-                            render: (val, row) => (
-                              <div className="flex gap-2 justify-center">
-                                <button 
-                                  className="btn btn-sm btn-outline" 
-                                  onClick={() => handleDescargarSalidaEspecificaPDF(val)} 
-                                  disabled={descargandoPDF === val}
-                                  title="Descargar PDF"
-                                >
-                                  {descargandoPDF === val ? (
-                                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
-                                  ) : (
-                                    <Download size={14}/>
-                                  )}
-                                </button>
-                                {row.estado === 'Activo' && (
-                                  <button 
-                                    className="btn btn-sm btn-danger" 
-                                    onClick={() => handleAnularDespacho(val)}
-                                    disabled={procesando}
-                                    title="Anular despacho"
-                                  >
-                                    <Trash2 size={14}/>
-                                  </button>
-                                )}
-                              </div>
-                            )
-                          }
-                      ]} 
-                      data={salidas} 
-                      emptyMessage="No hay despachos registrados"
-                 />
+                     columns={[
+                         { header: 'N° Salida', accessor: 'numero_salida', width: '120px', render: val => `SAL-${String(val).padStart(6,'0')}` },
+                         { header: 'Fecha', accessor: 'fecha_salida', width: '120px', render: val => formatearFecha(val) },
+                         { 
+                           header: 'Estado', 
+                           accessor: 'estado', 
+                           width: '100px',
+                           align: 'center',
+                           render: (val) => (
+                             <span className={`badge ${val === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
+                               {val}
+                             </span>
+                           )
+                         },
+                         { header: 'Observaciones', accessor: 'observaciones' },
+                         { 
+                           header: 'Acciones', 
+                           accessor: 'id_salida', 
+                           width: '150px',
+                           align:'center', 
+                           render: (val, row) => (
+                             <div className="flex gap-2 justify-center">
+                               <button 
+                                 className="btn btn-sm btn-outline" 
+                                 onClick={() => handleDescargarSalidaEspecificaPDF(val)} 
+                                 disabled={descargandoPDF === val}
+                                 title="Descargar PDF"
+                               >
+                                 {descargandoPDF === val ? (
+                                   <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
+                                 ) : (
+                                   <Download size={14}/>
+                                 )}
+                               </button>
+                               {row.estado === 'Activo' && (
+                                 <button 
+                                   className="btn btn-sm btn-danger" 
+                                   onClick={() => handleAnularDespacho(val)}
+                                   disabled={procesando}
+                                   title="Anular despacho"
+                                 >
+                                   <Trash2 size={14}/>
+                                 </button>
+                               )}
+                             </div>
+                           )
+                         }
+                     ]} 
+                     data={salidas} 
+                     emptyMessage="No hay despachos registrados"
+                  />
              </div>
          </div>
       )}
@@ -1642,6 +1652,24 @@ function DetalleOrdenVenta() {
             )}
 
             <div className="form-group">
+                <label className="form-label">Cuenta de Depósito *</label>
+                <select
+                    className="form-select"
+                    value={pagoForm.id_cuenta_pago || ''}
+                    onChange={(e) => setPagoForm({ ...pagoForm, id_cuenta_pago: e.target.value })}
+                    required
+                >
+                    <option value="">Seleccionar cuenta...</option>
+                    {cuentasPago.map(c => (
+                        <option key={c.id_cuenta} value={c.id_cuenta}>
+                            {c.nombre} ({c.moneda})
+                        </option>
+                    ))}
+                </select>
+                <small className="text-muted">Cuenta donde ingresa el dinero</small>
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Fecha de Pago *</label>
               <input
                 type="date"
@@ -1702,13 +1730,13 @@ function DetalleOrdenVenta() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Banco</label>
+              <label className="form-label">Banco Origen</label>
               <input
                 type="text"
                 className="form-input"
                 value={pagoForm.banco}
                 onChange={(e) => setPagoForm({ ...pagoForm, banco: e.target.value })}
-                placeholder="Nombre del banco"
+                placeholder="Nombre del banco del cliente"
               />
             </div>
 

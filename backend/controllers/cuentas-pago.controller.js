@@ -1,7 +1,5 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 
-// ==================== GESTIÓN DE CUENTAS ====================
-
 export const getAllCuentasPago = async (req, res) => {
   try {
     const { tipo, moneda, estado } = req.query;
@@ -13,7 +11,11 @@ export const getAllCuentasPago = async (req, res) => {
         (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Ingreso') as total_ingresos,
         (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_egresos,
         (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta) as total_compras,
-        (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta AND estado_pago != 'Pagado') as compras_pendientes
+        (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta AND estado_pago != 'Pagado') as compras_pendientes,
+        CASE 
+            WHEN cp.tipo = 'Tarjeta' AND cp.fecha_renovacion IS NOT NULL AND cp.fecha_renovacion <= CURDATE() THEN 1 
+            ELSE 0 
+        END as requiere_renovacion
       FROM cuentas_pago cp
       WHERE 1=1
     `;
@@ -63,32 +65,53 @@ export const getCuentaPagoById = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const result = await executeQuery(`
+    const cuentaResult = await executeQuery(`
       SELECT 
         cp.*,
         (SELECT COUNT(*) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta) as total_movimientos,
+        (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_gastado,
         (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta) as total_compras
       FROM cuentas_pago cp
       WHERE cp.id_cuenta = ?
     `, [id]);
     
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        error: result.error
-      });
-    }
-    
-    if (result.data.length === 0) {
+    if (!cuentaResult.success || cuentaResult.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Cuenta no encontrada'
       });
     }
     
+    const cuenta = cuentaResult.data[0];
+
+    const comprasResult = await executeQuery(`
+      SELECT 
+        oc.id_orden_compra,
+        oc.numero_orden,
+        oc.fecha_emision,
+        oc.total,
+        oc.estado_pago,
+        oc.estado as estado_orden,
+        pr.razon_social as proveedor
+      FROM ordenes_compra oc
+      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
+      WHERE oc.id_cuenta_pago = ?
+      ORDER BY oc.fecha_emision DESC
+      LIMIT 50
+    `, [id]);
+
+    if (cuenta.tipo === 'Tarjeta' && cuenta.fecha_renovacion) {
+        const fechaRenov = new Date(cuenta.fecha_renovacion);
+        const hoy = new Date();
+        cuenta.estado_credito = fechaRenov <= hoy ? 'Renovación Pendiente' : 'Al día';
+        cuenta.credito_utilizado = parseFloat(cuenta.limite_credito || 0) - parseFloat(cuenta.saldo_actual || 0);
+    }
+
+    cuenta.compras_asociadas = comprasResult.data || [];
+    
     res.json({
       success: true,
-      data: result.data[0]
+      data: cuenta
     });
   } catch (error) {
     console.error(error);
@@ -108,8 +131,8 @@ export const createCuentaPago = async (req, res) => {
       banco,
       moneda,
       saldo_inicial,
-      descripcion,
-      titular
+      limite_credito,
+      fecha_renovacion
     } = req.body;
     
     if (!nombre || !tipo || !moneda) {
@@ -136,6 +159,14 @@ export const createCuentaPago = async (req, res) => {
     }
     
     const saldoInicial = parseFloat(saldo_inicial || 0);
+    const limiteCredito = parseFloat(limite_credito || 0);
+    
+    if (tipo === 'Tarjeta' && saldoInicial > limiteCredito && limiteCredito > 0) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'El saldo inicial no puede ser mayor al límite de crédito' 
+        });
+    }
     
     const result = await executeQuery(`
       INSERT INTO cuentas_pago (
@@ -145,15 +176,19 @@ export const createCuentaPago = async (req, res) => {
         banco,
         moneda,
         saldo_actual,
+        limite_credito,
+        fecha_renovacion,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, 'Activo')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Activo')
     `, [
       nombre,
       tipo,
       numero_cuenta || null,
       banco || null,
       moneda,
-      saldoInicial
+      saldoInicial,
+      limiteCredito,
+      fecha_renovacion || null
     ]);
     
     if (!result.success) {
@@ -163,7 +198,6 @@ export const createCuentaPago = async (req, res) => {
       });
     }
     
-    // Registrar movimiento inicial si hay saldo
     if (saldoInicial > 0) {
       await executeQuery(`
         INSERT INTO movimientos_cuentas (
@@ -203,9 +237,9 @@ export const updateCuentaPago = async (req, res) => {
       numero_cuenta,
       banco,
       moneda,
-      descripcion,
-      titular,
-      estado
+      estado,
+      limite_credito,
+      fecha_renovacion
     } = req.body;
     
     const checkResult = await executeQuery(
@@ -213,14 +247,7 @@ export const updateCuentaPago = async (req, res) => {
       [id]
     );
     
-    if (!checkResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: checkResult.error
-      });
-    }
-    
-    if (checkResult.data.length === 0) {
+    if (!checkResult.success || checkResult.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Cuenta no encontrada'
@@ -234,7 +261,9 @@ export const updateCuentaPago = async (req, res) => {
           numero_cuenta = ?,
           banco = ?,
           moneda = ?,
-          estado = ?
+          estado = ?,
+          limite_credito = ?,
+          fecha_renovacion = ?
       WHERE id_cuenta = ?
     `, [
       nombre,
@@ -243,6 +272,8 @@ export const updateCuentaPago = async (req, res) => {
       banco || null,
       moneda,
       estado || 'Activo',
+      limite_credito || 0,
+      fecha_renovacion || null,
       id
     ]);
     
@@ -271,16 +302,9 @@ export const deleteCuentaPago = async (req, res) => {
     const { id } = req.params;
     
     const checkResult = await executeQuery(
-      'SELECT estado, saldo_actual FROM cuentas_pago WHERE id_cuenta = ?',
+      'SELECT tipo, saldo_actual, limite_credito FROM cuentas_pago WHERE id_cuenta = ?',
       [id]
     );
-    
-    if (!checkResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: checkResult.error
-      });
-    }
     
     if (checkResult.data.length === 0) {
       return res.status(404).json({
@@ -291,10 +315,24 @@ export const deleteCuentaPago = async (req, res) => {
     
     const cuenta = checkResult.data[0];
     
-    if (parseFloat(cuenta.saldo_actual) !== 0) {
+    let puedeBorrar = false;
+    
+    if (cuenta.tipo === 'Tarjeta') {
+        if (parseFloat(cuenta.saldo_actual) === parseFloat(cuenta.limite_credito)) {
+            puedeBorrar = true;
+        }
+    } else {
+        if (parseFloat(cuenta.saldo_actual) === 0) {
+            puedeBorrar = true;
+        }
+    }
+
+    if (!puedeBorrar) {
       return res.status(400).json({
         success: false,
-        error: 'No se puede desactivar una cuenta con saldo diferente a 0'
+        error: cuenta.tipo === 'Tarjeta' 
+            ? 'No se puede desactivar una tarjeta con deuda pendiente' 
+            : 'No se puede desactivar una cuenta con saldo diferente a 0'
       });
     }
     
@@ -323,7 +361,54 @@ export const deleteCuentaPago = async (req, res) => {
   }
 };
 
-// ==================== MOVIMIENTOS DE CUENTAS ====================
+export const renovarCreditoManual = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nueva_fecha_renovacion } = req.body;
+
+        const cuentaCheck = await executeQuery('SELECT * FROM cuentas_pago WHERE id_cuenta = ?', [id]);
+        if (cuentaCheck.data.length === 0) return res.status(404).json({error: 'Cuenta no encontrada'});
+        
+        const cuenta = cuentaCheck.data[0];
+
+        if (cuenta.tipo !== 'Tarjeta') {
+            return res.status(400).json({error: 'Solo se pueden renovar créditos de cuentas tipo Tarjeta'});
+        }
+
+        const limite = parseFloat(cuenta.limite_credito);
+        const saldoActual = parseFloat(cuenta.saldo_actual);
+        const diferencia = limite - saldoActual;
+
+        if (diferencia <= 0) {
+            return res.status(400).json({message: 'La cuenta ya tiene el cupo completo o excede el límite'});
+        }
+
+        const queries = [
+            {
+                sql: 'UPDATE cuentas_pago SET saldo_actual = ?, fecha_renovacion = ? WHERE id_cuenta = ?',
+                params: [limite, nueva_fecha_renovacion || null, id]
+            },
+            {
+                sql: 'INSERT INTO movimientos_cuentas (id_cuenta, tipo_movimiento, monto, concepto, fecha_movimiento, saldo_anterior, saldo_nuevo) VALUES (?, "Ingreso", ?, "Renovación de Crédito (Reinicio Ciclo)", NOW(), ?, ?)',
+                params: [id, diferencia, saldoActual, limite]
+            }
+        ];
+
+        const result = await executeTransaction(queries);
+
+        if (!result.success) return res.status(500).json({error: result.error});
+
+        res.json({
+            success: true,
+            message: 'Crédito renovado exitosamente. Saldo restaurado al límite.',
+            data: { nuevo_saldo: limite }
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({success: false, error: error.message});
+    }
+};
 
 export const registrarMovimiento = async (req, res) => {
   try {
@@ -338,8 +423,9 @@ export const registrarMovimiento = async (req, res) => {
     } = req.body;
     
     const id_registrado_por = req.user?.id_empleado || null;
+    const montoMov = parseFloat(monto);
     
-    if (!tipo_movimiento || !monto || monto <= 0) {
+    if (!tipo_movimiento || !montoMov || montoMov <= 0) {
       return res.status(400).json({
         success: false,
         error: 'Tipo de movimiento y monto son obligatorios'
@@ -359,14 +445,7 @@ export const registrarMovimiento = async (req, res) => {
       [id]
     );
     
-    if (!cuentaResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: cuentaResult.error
-      });
-    }
-    
-    if (cuentaResult.data.length === 0) {
+    if (!cuentaResult.success || cuentaResult.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Cuenta no encontrada o inactiva'
@@ -375,66 +454,51 @@ export const registrarMovimiento = async (req, res) => {
     
     const cuenta = cuentaResult.data[0];
     const saldoAnterior = parseFloat(cuenta.saldo_actual);
-    const montoMovimiento = parseFloat(monto);
     
     let saldoNuevo;
     if (tipo_movimiento === 'Ingreso') {
-      saldoNuevo = saldoAnterior + montoMovimiento;
+      saldoNuevo = saldoAnterior + montoMov;
     } else {
-      if (saldoAnterior < montoMovimiento) {
+      if (saldoAnterior < montoMov) {
         return res.status(400).json({
           success: false,
-          error: 'Saldo insuficiente en la cuenta'
+          error: `Saldo insuficiente. Disponible: ${saldoAnterior} ${cuenta.moneda}`
         });
       }
-      saldoNuevo = saldoAnterior - montoMovimiento;
+      saldoNuevo = saldoAnterior - montoMov;
     }
     
-    const movimientoResult = await executeQuery(`
-      INSERT INTO movimientos_cuentas (
-        id_cuenta,
-        tipo_movimiento,
-        monto,
-        concepto,
-        referencia,
-        id_orden_compra,
-        id_cuota,
-        saldo_anterior,
-        saldo_nuevo,
-        id_registrado_por,
-        fecha_movimiento
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-    `, [
-      id,
-      tipo_movimiento,
-      montoMovimiento,
-      concepto || null,
-      referencia || null,
-      id_orden_compra || null,
-      id_cuota || null,
-      saldoAnterior,
-      saldoNuevo,
-      id_registrado_por
-    ]);
+    const queries = [
+        {
+            sql: `INSERT INTO movimientos_cuentas (
+                id_cuenta, tipo_movimiento, monto, concepto, referencia, 
+                id_orden_compra, id_cuota, saldo_anterior, saldo_nuevo, 
+                id_registrado_por, fecha_movimiento
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            params: [
+                id, tipo_movimiento, montoMov, concepto || null, referencia || null,
+                id_orden_compra || null, id_cuota || null, saldoAnterior, saldoNuevo, id_registrado_por
+            ]
+        },
+        {
+            sql: 'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
+            params: [saldoNuevo, id]
+        }
+    ];
+
+    const result = await executeTransaction(queries);
     
-    if (!movimientoResult.success) {
+    if (!result.success) {
       return res.status(500).json({
         success: false,
-        error: movimientoResult.error
+        error: result.error
       });
     }
     
-    await executeQuery(
-      'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
-      [saldoNuevo, id]
-    );
-    
-    res.status(201).json({
+    res.json({
       success: true,
       message: 'Movimiento registrado exitosamente',
       data: {
-        id_movimiento: movimientoResult.data.insertId,
-        saldo_anterior: saldoAnterior,
         saldo_nuevo: saldoNuevo
       }
     });
@@ -523,14 +587,7 @@ export const getResumenCuenta = async (req, res) => {
       SELECT * FROM cuentas_pago WHERE id_cuenta = ?
     `, [id]);
     
-    if (!cuentaResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: cuentaResult.error
-      });
-    }
-    
-    if (cuentaResult.data.length === 0) {
+    if (!cuentaResult.success || cuentaResult.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Cuenta no encontrada'
@@ -553,21 +610,11 @@ export const getResumenCuenta = async (req, res) => {
         COUNT(*) as total_movimientos,
         SUM(CASE WHEN tipo_movimiento = 'Ingreso' THEN monto ELSE 0 END) as total_ingresos,
         SUM(CASE WHEN tipo_movimiento = 'Egreso' THEN monto ELSE 0 END) as total_egresos,
-        SUM(CASE WHEN tipo_movimiento = 'Ingreso' THEN 1 ELSE 0 END) as cantidad_ingresos,
-        SUM(CASE WHEN tipo_movimiento = 'Egreso' THEN 1 ELSE 0 END) as cantidad_egresos,
         MAX(fecha_movimiento) as ultimo_movimiento
       FROM movimientos_cuentas
       ${whereClause}
     `, params);
     
-    if (!movimientosResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: movimientosResult.error
-      });
-    }
-    
-    // Obtener compras asociadas
     const comprasResult = await executeQuery(`
       SELECT 
         COUNT(*) as total_compras,
@@ -594,8 +641,6 @@ export const getResumenCuenta = async (req, res) => {
   }
 };
 
-// ==================== TRANSFERENCIAS ENTRE CUENTAS ====================
-
 export const transferirEntreCuentas = async (req, res) => {
   try {
     const {
@@ -607,22 +652,21 @@ export const transferirEntreCuentas = async (req, res) => {
     } = req.body;
     
     const id_registrado_por = req.user?.id_empleado || null;
+    const montoTransferencia = parseFloat(monto);
     
-    if (!id_cuenta_origen || !id_cuenta_destino || !monto || monto <= 0) {
+    if (!id_cuenta_origen || !id_cuenta_destino || !montoTransferencia || montoTransferencia <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'Cuenta origen, destino y monto son obligatorios'
+        error: 'Datos inválidos para transferencia'
       });
     }
     
     if (id_cuenta_origen === id_cuenta_destino) {
       return res.status(400).json({
         success: false,
-        error: 'La cuenta origen y destino no pueden ser la misma'
+        error: 'Cuentas origen y destino deben ser distintas'
       });
     }
-    
-    const montoTransferencia = parseFloat(monto);
     
     const operations = async (connection) => {
       const [cuentaOrigen] = await connection.query(
@@ -636,7 +680,7 @@ export const transferirEntreCuentas = async (req, res) => {
       );
       
       if (cuentaOrigen.length === 0 || cuentaDestino.length === 0) {
-        throw new Error('Una o ambas cuentas no encontradas o inactivas');
+        throw new Error('Una o ambas cuentas no encontradas');
       }
       
       if (cuentaOrigen[0].moneda !== cuentaDestino[0].moneda) {
@@ -649,7 +693,6 @@ export const transferirEntreCuentas = async (req, res) => {
       }
       
       const saldoDestinoAnterior = parseFloat(cuentaDestino[0].saldo_actual);
-      
       const saldoOrigenNuevo = saldoOrigenAnterior - montoTransferencia;
       const saldoDestinoNuevo = saldoDestinoAnterior + montoTransferencia;
       
@@ -663,59 +706,29 @@ export const transferirEntreCuentas = async (req, res) => {
         [saldoDestinoNuevo, id_cuenta_destino]
       );
       
-      const [resultEgreso] = await connection.query(`
+      await connection.query(`
         INSERT INTO movimientos_cuentas (
-          id_cuenta,
-          tipo_movimiento,
-          monto,
-          concepto,
-          referencia,
-          saldo_anterior,
-          saldo_nuevo,
-          id_registrado_por,
-          fecha_movimiento
+          id_cuenta, tipo_movimiento, monto, concepto, referencia, 
+          saldo_anterior, saldo_nuevo, id_registrado_por, fecha_movimiento
         ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, NOW())
       `, [
-        id_cuenta_origen,
-        montoTransferencia,
-        concepto || `Transferencia a cuenta ${cuentaDestino[0].nombre}`,
-        referencia || null,
-        saldoOrigenAnterior,
-        saldoOrigenNuevo,
-        id_registrado_por
+        id_cuenta_origen, montoTransferencia, 
+        concepto || `Transferencia a ${cuentaDestino[0].nombre}`, referencia,
+        saldoOrigenAnterior, saldoOrigenNuevo, id_registrado_por
       ]);
       
       await connection.query(`
         INSERT INTO movimientos_cuentas (
-          id_cuenta,
-          tipo_movimiento,
-          monto,
-          concepto,
-          referencia,
-          saldo_anterior,
-          saldo_nuevo,
-          id_registrado_por,
-          fecha_movimiento
+          id_cuenta, tipo_movimiento, monto, concepto, referencia, 
+          saldo_anterior, saldo_nuevo, id_registrado_por, fecha_movimiento
         ) VALUES (?, 'Ingreso', ?, ?, ?, ?, ?, ?, NOW())
       `, [
-        id_cuenta_destino,
-        montoTransferencia,
-        concepto || `Transferencia desde cuenta ${cuentaOrigen[0].nombre}`,
-        referencia || null,
-        saldoDestinoAnterior,
-        saldoDestinoNuevo,
-        id_registrado_por
+        id_cuenta_destino, montoTransferencia, 
+        concepto || `Transferencia desde ${cuentaOrigen[0].nombre}`, referencia,
+        saldoDestinoAnterior, saldoDestinoNuevo, id_registrado_por
       ]);
       
-      return {
-        id_movimiento_egreso: resultEgreso.insertId,
-        cuenta_origen: cuentaOrigen[0].nombre,
-        cuenta_destino: cuentaDestino[0].nombre,
-        saldo_origen_anterior: saldoOrigenAnterior,
-        saldo_origen_nuevo: saldoOrigenNuevo,
-        saldo_destino_anterior: saldoDestinoAnterior,
-        saldo_destino_nuevo: saldoDestinoNuevo
-      };
+      return { ok: true };
     };
     
     const result = await executeTransaction(operations);
@@ -729,8 +742,7 @@ export const transferirEntreCuentas = async (req, res) => {
     
     res.status(201).json({
       success: true,
-      message: 'Transferencia realizada exitosamente',
-      data: result.data
+      message: 'Transferencia realizada exitosamente'
     });
   } catch (error) {
     console.error(error);
@@ -741,45 +753,18 @@ export const transferirEntreCuentas = async (req, res) => {
   }
 };
 
-// ==================== ESTADÍSTICAS ====================
-
 export const getEstadisticasCuentas = async (req, res) => {
   try {
-    const { mes, anio } = req.query;
-    
-    let whereClause = '';
-    const params = [];
-    
-    if (mes && anio) {
-      whereClause = ' AND MONTH(mc.fecha_movimiento) = ? AND YEAR(mc.fecha_movimiento) = ?';
-      params.push(mes, anio);
-    } else if (anio) {
-      whereClause = ' AND YEAR(mc.fecha_movimiento) = ?';
-      params.push(anio);
-    }
-    
     const result = await executeQuery(`
       SELECT 
-        cp.tipo AS tipo_cuenta,
-        cp.moneda,
-        COUNT(DISTINCT cp.id_cuenta) AS total_cuentas,
-        SUM(cp.saldo_actual) AS saldo_total,
-        COUNT(mc.id_movimiento) AS total_movimientos,
-        SUM(CASE WHEN mc.tipo_movimiento = 'Ingreso' THEN mc.monto ELSE 0 END) AS total_ingresos,
-        SUM(CASE WHEN mc.tipo_movimiento = 'Egreso' THEN mc.monto ELSE 0 END) AS total_egresos
-      FROM cuentas_pago cp
-      LEFT JOIN movimientos_cuentas mc ON cp.id_cuenta = mc.id_cuenta ${whereClause}
-      WHERE cp.estado = 'Activo'
-      GROUP BY cp.tipo, cp.moneda
-      ORDER BY cp.tipo, cp.moneda
-    `, params);
-    
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        error: result.error
-      });
-    }
+        tipo AS tipo_cuenta, 
+        moneda, 
+        COUNT(id_cuenta) as total_cuentas, 
+        SUM(saldo_actual) as saldo_total
+      FROM cuentas_pago 
+      WHERE estado = 'Activo' 
+      GROUP BY tipo, moneda
+    `);
     
     res.json({
       success: true,

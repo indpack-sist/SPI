@@ -8,6 +8,7 @@ import {
   getCuotasCompra,
   getCuotaById,
   pagarCuota,
+  registrarPagoCompra,
   getAlertasCompras,
   getEstadisticasCompras,
   getResumenPagosCompra,
@@ -18,27 +19,21 @@ import {
 
 const router = express.Router();
 
-// Rutas de estadísticas y reportes (SIEMPRE PRIMERO)
 router.get('/alertas', getAlertasCompras);
 router.get('/estadisticas', getEstadisticasCompras);
 router.get('/por-cuenta', getComprasPorCuenta);
 
-// Rutas generales
 router.get('/', getAllCompras);
 router.post('/', createCompra);
 
-// Rutas específicas con paths literales (ANTES de :id)
-// Estas deben ir ANTES de cualquier ruta con parámetros dinámicos
-
-// Rutas que dependen del ID pero con paths específicos
 router.get('/:id/pdf', descargarPDFCompra);
 router.get('/:id/resumen-pagos', getResumenPagosCompra);
 router.get('/:id/historial-pagos', getHistorialPagosCompra);
 router.get('/:id/cuotas', getCuotasCompra);
 router.get('/:id/cuotas/:idCuota', getCuotaById);
 router.post('/:id/cuotas/:idCuota/pagar', pagarCuota);
+router.post('/:id/pagar', registrarPagoCompra);
 
-// Rutas generales con :id (SIEMPRE AL FINAL)
 router.get('/:id', getCompraById);
 router.put('/:id', updateCompra);
 router.delete('/:id/cancelar', cancelarCompra);

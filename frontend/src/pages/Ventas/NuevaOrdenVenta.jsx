@@ -57,6 +57,7 @@ function NuevaOrdenVenta() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [direccionesCliente, setDireccionesCliente] = useState([]);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0, totalComisiones: 0 });
@@ -142,16 +143,12 @@ function NuevaOrdenVenta() {
     }
   }, [idCotizacionParam, clientes.length]);
 
-  // --- FUNCIÓN AUXILIAR PARA CORREGIR IMPUESTOS AUTOMÁTICAMENTE ---
   const obtenerConfiguracionImpuesto = (codigoOTexto) => {
-    // 1. Intentar buscar por código exacto (IGV, EXO, INA)
     let config = TIPOS_IMPUESTO.find(t => t.codigo === codigoOTexto);
-    
-    // 2. Si no encuentra, intentar corregir errores comunes de datos antiguos
     if (!config) {
         if (codigoOTexto === 'Exonerado') config = TIPOS_IMPUESTO.find(t => t.codigo === 'EXO');
         else if (codigoOTexto === 'Inafecto') config = TIPOS_IMPUESTO.find(t => t.codigo === 'INA');
-        else config = TIPOS_IMPUESTO[0]; // Default a IGV si todo falla
+        else config = TIPOS_IMPUESTO[0]; 
     }
     return config;
   };
@@ -192,8 +189,6 @@ function NuevaOrdenVenta() {
       
       if (response.data.success) {
         const orden = response.data.data;
-        
-        // --- CORRECCIÓN DE DATOS AL CARGAR ---
         const configImpuesto = obtenerConfiguracionImpuesto(orden.tipo_impuesto);
 
         setFormCabecera({
@@ -206,11 +201,8 @@ function NuevaOrdenVenta() {
           fecha_vencimiento: orden.fecha_vencimiento ? orden.fecha_vencimiento.split('T')[0] : '',
           moneda: orden.moneda,
           tipo_cambio: orden.tipo_cambio,
-          
-          // Usamos la configuración forzada para asegurar consistencia
           tipo_impuesto: configImpuesto.codigo,
           porcentaje_impuesto: configImpuesto.porcentaje,
-          
           prioridad: orden.prioridad,
           tipo_venta: orden.tipo_venta || 'Contado',
           dias_credito: orden.dias_credito || 0,
@@ -227,7 +219,13 @@ function NuevaOrdenVenta() {
 
         const resCli = await clientesAPI.getById(orden.id_cliente);
         if (resCli.data.success) {
-          handleSelectCliente(resCli.data.data);
+          const clienteData = resCli.data.data;
+          setClienteSeleccionado(clienteData);
+          if (clienteData.direcciones && clienteData.direcciones.length > 0) {
+            setDireccionesCliente(clienteData.direcciones);
+          } else if (clienteData.direccion_despacho) {
+            setDireccionesCliente([{ id_direccion: 'principal', direccion: clienteData.direccion_despacho, es_principal: 1 }]);
+          }
         }
 
         if (orden.detalle && orden.detalle.length > 0) {
@@ -266,13 +264,10 @@ function NuevaOrdenVenta() {
       
       if (response.data.success) {
         const cot = response.data.data;
-        
-        // 1. LÓGICA DE DETECCIÓN DE CRÉDITO Y DÍAS
         const plazoTexto = (cot.plazo_pago || 'Contado').toLowerCase();
         let tipoVentaCalculado = 'Contado';
         let diasCreditoCalculado = 0;
 
-        // Si dice "crédito" O tiene días numéricos explícitos y NO dice contado
         const esCredito = (plazoTexto.includes('credito') || plazoTexto.includes('crédito') || /\d/.test(plazoTexto)) && !plazoTexto.includes('contado');
 
         if (esCredito) {
@@ -281,13 +276,10 @@ function NuevaOrdenVenta() {
           diasCreditoCalculado = match ? parseInt(match[0]) : 0;
         }
 
-        // Cálculo de fecha vencimiento
         const fechaEmision = new Date();
         const fechaVencimientoCalc = new Date(fechaEmision);
         fechaVencimientoCalc.setDate(fechaVencimientoCalc.getDate() + diasCreditoCalculado);
 
-        // 2. BUSCAR CLIENTE Y SUS DATOS DE CRÉDITO MANUALMENTE
-        // (Evitamos llamar a handleSelectCliente para que no resetee el tipo de venta)
         const cliente = clientes.find(c => c.id_cliente === cot.id_cliente);
         
         if (cliente) {
@@ -297,41 +289,42 @@ function NuevaOrdenVenta() {
             if (resCredito.data.success) {
               setEstadoCredito(resCredito.data.data);
             }
+            
+            const resFullCliente = await clientesAPI.getById(cliente.id_cliente);
+            if (resFullCliente.data.success) {
+                const fullClient = resFullCliente.data.data;
+                if (fullClient.direcciones && fullClient.direcciones.length > 0) {
+                    setDireccionesCliente(fullClient.direcciones);
+                } else if (fullClient.direccion_despacho) {
+                    setDireccionesCliente([{ id_direccion: 'principal', direccion: fullClient.direccion_despacho, es_principal: 1 }]);
+                }
+            }
           } catch (error) {
-            console.error("Error cargando crédito del cliente", error);
+            console.error("Error cargando datos del cliente", error);
           }
         }
 
-        // 3. CONFIGURACIÓN DE IMPUESTOS
         const configImpuesto = obtenerConfiguracionImpuesto(cot.tipo_impuesto);
 
-        // 4. SETEAR TODO EL FORMULARIO DE GOLPE
         setFormCabecera(prev => ({
           ...prev,
           id_cotizacion: cot.id_cotizacion,
           id_cliente: cot.id_cliente,
           id_comercial: cot.id_comercial || prev.id_comercial,
           moneda: cot.moneda,
-          
           tipo_impuesto: configImpuesto.codigo,
           porcentaje_impuesto: configImpuesto.porcentaje,
-          
           tipo_cambio: cot.tipo_cambio,
-          
-          // AQUÍ SE FUERZAN LOS DATOS CORRECTOS CALCULADOS ARRIBA
           tipo_venta: tipoVentaCalculado, 
           dias_credito: diasCreditoCalculado,
           plazo_pago: cot.plazo_pago || 'Contado',
           forma_pago: cot.forma_pago || '',
           fecha_vencimiento: fechaVencimientoCalc.toISOString().split('T')[0],
-          
-          // Usamos la dirección del cliente si la de la cotización está vacía
-          direccion_entrega: cot.direccion_entrega || (cliente ? cliente.direccion_despacho : ''),
+          direccion_entrega: cot.lugar_entrega || cot.direccion_entrega || (cliente ? cliente.direccion_despacho : ''),
           lugar_entrega: cot.lugar_entrega || '',
           observaciones: cot.observaciones || ''
         }));
 
-        // 5. CARGAR PRODUCTOS
         if (cot.detalle) {
           setDetalle(cot.detalle.map(item => ({
             id_producto: item.id_producto,
@@ -357,23 +350,43 @@ function NuevaOrdenVenta() {
   };
 
   const handleSelectCliente = async (cliente) => {
-    setClienteSeleccionado(cliente);
-    setFormCabecera(prev => ({
-      ...prev,
-      id_cliente: cliente.id_cliente,
-      direccion_entrega: cliente.direccion_despacho || '',
-      lugar_entrega: cliente.direccion_despacho || '',
-      tipo_venta: 'Contado'
-    }));
-
     try {
-      const resCredito = await clientesAPI.getEstadoCredito(cliente.id_cliente);
-      if (resCredito.data.success) {
-        setEstadoCredito(resCredito.data.data);
+        const resFullCliente = await clientesAPI.getById(cliente.id_cliente);
+        const clienteCompleto = resFullCliente.data.data;
+        
+        setClienteSeleccionado(clienteCompleto);
+        
+        let direcciones = [];
+        if (clienteCompleto.direcciones && clienteCompleto.direcciones.length > 0) {
+          direcciones = clienteCompleto.direcciones;
+        } else if (clienteCompleto.direccion_despacho) {
+          direcciones = [{ id_direccion: 'principal', direccion: clienteCompleto.direccion_despacho, es_principal: 1 }];
+        }
+        setDireccionesCliente(direcciones);
+  
+        const direccionPrincipal = direcciones.find(d => d.es_principal) || direcciones[0];
+  
+        setFormCabecera(prev => ({
+          ...prev,
+          id_cliente: clienteCompleto.id_cliente,
+          direccion_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
+          tipo_venta: 'Contado'
+        }));
+  
+        const resCredito = await clientesAPI.getEstadoCredito(clienteCompleto.id_cliente);
+        if (resCredito.data.success) {
+          setEstadoCredito(resCredito.data.data);
+        }
+      } catch (err) {
+        console.error('Error al cargar datos completos del cliente:', err);
+        setClienteSeleccionado(cliente);
+        setFormCabecera(prev => ({
+          ...prev,
+          id_cliente: cliente.id_cliente,
+          direccion_entrega: cliente.direccion_despacho || '',
+          tipo_venta: 'Contado'
+        }));
       }
-    } catch (err) {
-      console.error('Error al cargar crédito:', err);
-    }
 
     setModalClienteOpen(false);
     setBusquedaCliente('');
@@ -590,11 +603,8 @@ function NuevaOrdenVenta() {
                         <div>
                           <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
                           <p className="text-muted text-sm">RUC: {clienteSeleccionado.ruc}</p>
-                          {clienteSeleccionado.direccion_despacho && (
-                            <p className="text-xs text-muted mt-1"><MapPin size={12} className="inline"/> {clienteSeleccionado.direccion_despacho}</p>
-                          )}
                         </div>
-                        <button type="button" className="btn btn-sm btn-outline" onClick={() => { setClienteSeleccionado(null); setEstadoCredito(null); }}>
+                        <button type="button" className="btn btn-sm btn-outline" onClick={() => { setClienteSeleccionado(null); setEstadoCredito(null); setDireccionesCliente([]); }}>
                           Cambiar
                         </button>
                       </div>
@@ -957,12 +967,30 @@ function NuevaOrdenVenta() {
 
                 <div>
                   <label className="form-label">Dirección Entrega</label>
-                  <textarea 
-                    className="form-textarea" 
-                    rows="2"
-                    value={formCabecera.direccion_entrega}
-                    onChange={(e) => setFormCabecera({...formCabecera, direccion_entrega: e.target.value})}
-                  ></textarea>
+                  {direccionesCliente.length > 0 ? (
+                    <div className="relative">
+                      <select
+                        className="form-select pl-10"
+                        value={formCabecera.direccion_entrega}
+                        onChange={(e) => setFormCabecera({...formCabecera, direccion_entrega: e.target.value})}
+                      >
+                        <option value="">Seleccione una dirección...</option>
+                        {direccionesCliente.map((dir, idx) => (
+                          <option key={idx} value={dir.direccion}>
+                            {dir.direccion} {dir.es_principal ? '(Principal)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    </div>
+                  ) : (
+                    <textarea 
+                      className="form-textarea" 
+                      rows="2"
+                      value={formCabecera.direccion_entrega}
+                      onChange={(e) => setFormCabecera({...formCabecera, direccion_entrega: e.target.value})}
+                    ></textarea>
+                  )}
                 </div>
               </div>
             </div>
@@ -1035,13 +1063,13 @@ function NuevaOrdenVenta() {
               </div>
               <div className="text-right">
                 {c.usar_limite_credito === 1 ? (
-                   <span className="badge badge-success flex items-center gap-1 text-[10px]">
-                     <CheckCircle size={10} /> Crédito Habilitado
-                   </span>
+                    <span className="badge badge-success flex items-center gap-1 text-[10px]">
+                      <CheckCircle size={10} /> Crédito Habilitado
+                    </span>
                 ) : (
-                   <span className="badge badge-secondary flex items-center gap-1 text-[10px]">
-                     <Lock size={10} /> Solo Contado
-                   </span>
+                    <span className="badge badge-secondary flex items-center gap-1 text-[10px]">
+                      <Lock size={10} /> Solo Contado
+                    </span>
                 )}
               </div>
             </div>

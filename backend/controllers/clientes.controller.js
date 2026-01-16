@@ -48,9 +48,18 @@ export async function getClienteById(req, res) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
     
+    const cliente = result.data[0];
+
+    const direccionesResult = await executeQuery(
+      'SELECT * FROM clientes_direcciones WHERE id_cliente = ? AND estado = "Activo" ORDER BY es_principal DESC',
+      [id]
+    );
+
+    cliente.direcciones = direccionesResult.success ? direccionesResult.data : [];
+    
     res.json({
       success: true,
-      data: result.data[0]
+      data: cliente
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -262,12 +271,21 @@ export async function createCliente(req, res) {
     if (!result.success) {
       return res.status(500).json({ error: result.error });
     }
+
+    const idCliente = result.data.insertId;
+
+    if (direccion_despacho) {
+      await executeQuery(
+        `INSERT INTO clientes_direcciones (id_cliente, direccion, es_principal) VALUES (?, ?, 1)`,
+        [idCliente, direccion_despacho]
+      );
+    }
     
     res.status(201).json({
       success: true,
       message: 'Cliente creado exitosamente',
       data: {
-        id_cliente: result.data.insertId,
+        id_cliente: idCliente,
         ruc,
         tipo_documento: tipo_documento || 'RUC',
         razon_social
@@ -608,5 +626,72 @@ export async function getEstadoCreditoCliente(req, res) {
       success: false,
       error: error.message
     });
+  }
+}
+
+export async function addDireccionCliente(req, res) {
+  try {
+    const { id } = req.params;
+    const { direccion, referencia, es_principal } = req.body;
+
+    if (!direccion) {
+      return res.status(400).json({ error: 'La dirección es requerida' });
+    }
+
+    if (es_principal) {
+      await executeQuery(
+        'UPDATE clientes_direcciones SET es_principal = 0 WHERE id_cliente = ?',
+        [id]
+      );
+      
+      await executeQuery(
+        'UPDATE clientes SET direccion_despacho = ? WHERE id_cliente = ?',
+        [direccion, id]
+      );
+    }
+
+    const result = await executeQuery(
+      `INSERT INTO clientes_direcciones (id_cliente, direccion, referencia, es_principal) 
+       VALUES (?, ?, ?, ?)`,
+      [id, direccion, referencia || null, es_principal ? 1 : 0]
+    );
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+
+    res.json({
+      success: true,
+      message: 'Dirección agregada exitosamente',
+      id_direccion: result.data.insertId
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function deleteDireccionCliente(req, res) {
+  try {
+    const { id_direccion } = req.params;
+
+    const check = await executeQuery('SELECT * FROM clientes_direcciones WHERE id_direccion = ?', [id_direccion]);
+    
+    if (check.data.length > 0 && check.data[0].es_principal === 1) {
+       return res.status(400).json({ error: 'No se puede eliminar la dirección principal. Asigne otra como principal primero.' });
+    }
+
+    const result = await executeQuery(
+      'UPDATE clientes_direcciones SET estado = "Inactivo" WHERE id_direccion = ?',
+      [id_direccion]
+    );
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+
+    res.json({ success: true, message: 'Dirección eliminada exitosamente' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 }

@@ -81,7 +81,7 @@ function Compras() {
 
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
+    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
   const getNivelAlertaClase = (nivel) => {

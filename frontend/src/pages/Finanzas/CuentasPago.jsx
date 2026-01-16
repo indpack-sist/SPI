@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Wallet, CreditCard, Building2, DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Plus, Edit, Trash2, Wallet, CreditCard, Building2, 
+  DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight, Eye
+} from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -7,6 +11,7 @@ import Modal from '../../components/UI/Modal';
 import { cuentasPagoAPI } from '../../config/api';
 
 function CuentasPago() {
+  const navigate = useNavigate(); // Hook para navegación
   const [cuentas, setCuentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -23,6 +28,8 @@ function CuentasPago() {
     banco: '',
     moneda: 'PEN',
     saldo_inicial: 0,
+    limite_credito: 0,
+    fecha_renovacion: '',
     estado: 'Activo'
   });
 
@@ -83,10 +90,17 @@ function CuentasPago() {
       numero_cuenta: cuenta.numero_cuenta || '',
       banco: cuenta.banco || '',
       moneda: cuenta.moneda,
+      saldo_inicial: 0, // No se edita saldo inicial
+      limite_credito: cuenta.limite_credito || 0,
+      fecha_renovacion: cuenta.fecha_renovacion ? cuenta.fecha_renovacion.split('T')[0] : '',
       estado: cuenta.estado
     });
     setModoEdicion(true);
     setModalOpen(true);
+  };
+
+  const handleVerDetalle = (id) => {
+    navigate(`/finanzas/cuentas/${id}`);
   };
 
   const handleEliminar = async (id) => {
@@ -116,6 +130,8 @@ function CuentasPago() {
       banco: '',
       moneda: 'PEN',
       saldo_inicial: 0,
+      limite_credito: 0,
+      fecha_renovacion: '',
       estado: 'Activo'
     });
     setCuentaSeleccionada(null);
@@ -147,7 +163,12 @@ function CuentasPago() {
             <Icon size={18} className="text-primary" />
             <div>
               <div className="font-medium">{value}</div>
-              <div className="text-xs text-muted">{row.tipo}</div>
+              <div className="text-xs text-muted flex gap-1">
+                {row.tipo}
+                {row.tipo === 'Tarjeta' && row.requiere_renovacion === 1 && (
+                    <span className="text-danger font-bold">• Renovación Pendiente</span>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -180,25 +201,21 @@ function CuentasPago() {
       )
     },
     {
-      header: 'Saldo',
+      header: 'Saldo / Cupo',
       accessor: 'saldo_actual',
       width: '140px',
       align: 'right',
       render: (value, row) => (
-        <span className={`font-bold ${parseFloat(value) < 0 ? 'text-danger' : 'text-success'}`}>
-          {formatearMoneda(value, row.moneda)}
-        </span>
-      )
-    },
-    {
-      header: 'Movimientos',
-      accessor: 'total_movimientos',
-      width: '120px',
-      align: 'center',
-      render: (value) => (
-        <span className="badge badge-info">
-          {value || 0}
-        </span>
+        <div>
+            <span className={`font-bold ${parseFloat(value) < 0 ? 'text-danger' : 'text-success'}`}>
+            {formatearMoneda(value, row.moneda)}
+            </span>
+            {row.tipo === 'Tarjeta' && (
+                <div className="text-[10px] text-muted">
+                    Límite: {formatearMoneda(row.limite_credito, row.moneda)}
+                </div>
+            )}
+        </div>
       )
     },
     {
@@ -218,23 +235,19 @@ function CuentasPago() {
       )
     },
     {
-      header: 'Estado',
-      accessor: 'estado',
-      width: '100px',
-      align: 'center',
-      render: (value) => (
-        <span className={`badge ${value === 'Activo' ? 'badge-success' : 'badge-secondary'}`}>
-          {value}
-        </span>
-      )
-    },
-    {
       header: 'Acciones',
       accessor: 'id_cuenta',
-      width: '120px',
+      width: '140px',
       align: 'center',
       render: (value, row) => (
-        <div className="flex gap-2 justify-center">
+        <div className="flex gap-1 justify-center">
+          <button
+            className="btn btn-sm btn-outline"
+            onClick={() => handleVerDetalle(value)}
+            title="Ver Detalle y Compras"
+          >
+            <Eye size={14} />
+          </button>
           <button
             className="btn btn-sm btn-primary"
             onClick={() => handleEditar(row)}
@@ -246,7 +259,7 @@ function CuentasPago() {
             className="btn btn-sm btn-danger"
             onClick={() => handleEliminar(value)}
             title="Desactivar"
-            disabled={parseFloat(row.saldo_actual) !== 0}
+            disabled={parseFloat(row.saldo_actual) !== 0 && (row.tipo !== 'Tarjeta' || parseFloat(row.saldo_actual) !== parseFloat(row.limite_credito))}
           >
             <Trash2 size={14} />
           </button>
@@ -467,9 +480,41 @@ function CuentasPago() {
               />
             </div>
 
+            {/* CAMPOS ESPECÍFICOS PARA TARJETA DE CRÉDITO */}
+            {formData.tipo === 'Tarjeta' && (
+                <div className="p-3 bg-gray-50 border rounded-lg space-y-3">
+                    <h4 className="font-bold text-sm text-gray-700">Configuración de Crédito</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="form-group">
+                            <label className="form-label">Límite de Crédito</label>
+                            <input
+                                type="number"
+                                className="form-input"
+                                value={formData.limite_credito}
+                                onChange={(e) => setFormData({ ...formData, limite_credito: e.target.value })}
+                                min="0"
+                                step="0.01"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Fecha de Renovación</label>
+                            <input
+                                type="date"
+                                className="form-input"
+                                value={formData.fecha_renovacion}
+                                onChange={(e) => setFormData({ ...formData, fecha_renovacion: e.target.value })}
+                            />
+                            <small className="text-xs text-muted">Día de cierre/pago</small>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {!modoEdicion && (
               <div className="form-group">
-                <label className="form-label">Saldo Inicial</label>
+                <label className="form-label">
+                    {formData.tipo === 'Tarjeta' ? 'Cupo Disponible Inicial' : 'Saldo Inicial'}
+                </label>
                 <input
                   type="number"
                   className="form-input"
@@ -478,7 +523,11 @@ function CuentasPago() {
                   step="0.01"
                   min="0"
                 />
-                <small className="text-muted">El saldo inicial se registrará como un ingreso automático</small>
+                <small className="text-muted">
+                    {formData.tipo === 'Tarjeta' 
+                        ? 'El cupo disponible no puede ser mayor al límite de crédito.' 
+                        : 'El saldo inicial se registrará como un ingreso automático.'}
+                </small>
               </div>
             )}
 

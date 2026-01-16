@@ -618,14 +618,14 @@ function DetalleCotizacion() {
             )}
             
             {cotizacion.lugar_entrega && (
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
-                  <MapPin size={12} />
-                  Lugar de Entrega
-                </p>
-                <p className="text-sm">{cotizacion.lugar_entrega}</p>
-              </div>
-            )}
+  <div className="bg-orange-50 p-2 rounded border border-orange-100"> {/* Cambio para resaltar */}
+    <p className="text-xs text-orange-800 uppercase font-semibold mb-1 flex items-center gap-1">
+      <MapPin size={12} />
+      Lugar de Entrega
+    </p>
+    <p className="text-sm font-medium text-gray-800">{cotizacion.lugar_entrega}</p>
+  </div>
+)}
           </div>
         </div>
       </div>

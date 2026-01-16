@@ -56,11 +56,59 @@ function DetalleCotizacion() {
   const handleDescargarPDF = async () => {
     try {
       setLoading(true);
-      await cotizacionesAPI.descargarPDF(id);
+      setError(null);
+      
+      // 1. Obtenemos la respuesta completa (headers + data)
+      const response = await cotizacionesAPI.descargarPDF(id);
+      
+      // 2. Creamos el objeto Blob con los datos binarios
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // 3. Creamos un enlace temporal en el DOM
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // 4. Intentamos obtener el nombre real del archivo desde los headers
+      const contentDisposition = response.headers['content-disposition'];
+      let fileName = `Cotizacion-${cotizacion.numero_cotizacion}.pdf`;
+      
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (fileNameMatch && fileNameMatch.length === 2) {
+          fileName = fileNameMatch[1];
+        }
+      }
+      
+      // 5. Forzamos la descarga
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      
+      // 6. Limpieza
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
       setSuccess('PDF descargado exitosamente');
+
     } catch (err) {
       console.error(err);
-      setError('Error al descargar el PDF');
+
+      // 7. MANEJO DE ERROR DE BLOB (La solución al "undefined")
+      // Si el servidor devuelve un error, Axios lo entrega como Blob.
+      // Aquí lo convertimos de vuelta a texto JSON para leer el mensaje.
+      if (err.response && err.response.data instanceof Blob) {
+        try {
+          const errorText = await err.response.data.text();
+          const errorJson = JSON.parse(errorText);
+          setError(errorJson.error || 'Error al generar el PDF');
+        } catch (e) {
+          setError('Error inesperado al procesar la descarga');
+        }
+      } else {
+        // Error estándar de red u otro tipo
+        setError(err.response?.data?.error || 'Error al descargar el PDF');
+      }
     } finally {
       setLoading(false);
     }

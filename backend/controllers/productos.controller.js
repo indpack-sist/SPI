@@ -55,6 +55,65 @@ export async function getAllProductos(req, res) {
   }
 }
 
+export async function getAllProductos(req, res) {
+  try {
+    const { estado, id_tipo_inventario, id_categoria, requiere_receta } = req.query;
+    
+    let sql = `
+      SELECT 
+        p.*,
+        ti.nombre AS tipo_inventario,
+        c.nombre AS categoria,
+        (SELECT COUNT(*) FROM recetas_productos WHERE id_producto_terminado = p.id_producto AND es_activa = 1) AS total_recetas
+      FROM productos p
+      INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+      LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+      WHERE 1=1
+    `;
+    const params = [];
+    
+    if (estado) {
+      sql += ' AND p.estado = ?';
+      params.push(estado);
+    }
+    
+    // ✅ CAMBIAR ESTA PARTE
+    if (id_tipo_inventario) {
+      // Manejar múltiples IDs separados por coma
+      const ids = id_tipo_inventario.split(',').map(id => id.trim());
+      const placeholders = ids.map(() => '?').join(',');
+      sql += ` AND p.id_tipo_inventario IN (${placeholders})`;
+      params.push(...ids);
+    }
+    
+    if (id_categoria) {
+      sql += ' AND p.id_categoria = ?';
+      params.push(id_categoria);
+    }
+    
+    if (requiere_receta !== undefined) {
+      sql += ' AND p.requiere_receta = ?';
+      params.push(requiere_receta === 'true' ? 1 : 0);
+    }
+    
+    sql += ' ORDER BY p.nombre ASC';
+    
+    const result = await executeQuery(sql, params);
+    
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 export async function getProductoById(req, res) {
   try {
     const { id } = req.params;

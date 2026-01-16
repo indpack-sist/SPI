@@ -267,17 +267,28 @@ function NuevaOrdenVenta() {
       if (response.data.success) {
         const cot = response.data.data;
         
+        // --- LOGICA MEJORADA PARA DETECTAR CRÉDITO Y DÍAS ---
+        const plazoTexto = (cot.plazo_pago || 'Contado').toLowerCase();
         let tipoVentaCalculado = 'Contado';
         let diasCreditoCalculado = 0;
 
-        if (cot.plazo_pago && cot.plazo_pago.includes('Crédito')) {
+        // Detectamos crédito si contiene "credito" (con o sin tilde) O si menciona "dias"
+        // Y aseguramos que NO diga "contado"
+        const esCredito = (plazoTexto.includes('credito') || plazoTexto.includes('crédito') || plazoTexto.includes('dias') || plazoTexto.includes('días')) && !plazoTexto.includes('contado');
+
+        if (esCredito) {
           tipoVentaCalculado = 'Crédito';
+          // Buscamos cualquier número dentro del texto (ej: "30 días" -> 30)
           const match = cot.plazo_pago.match(/\d+/);
           diasCreditoCalculado = match ? parseInt(match[0]) : 0;
         }
 
-        // --- CORRECCIÓN CRÍTICA AL IMPORTAR ---
-        // Si la cotización tiene datos "sucios", esto lo arregla antes de ponerlo en el form
+        // Calculamos la fecha de vencimiento inicial basada en los días detectados
+        const fechaEmision = new Date(); // Usamos fecha actual para la nueva orden
+        const fechaVencimientoCalc = new Date(fechaEmision);
+        fechaVencimientoCalc.setDate(fechaVencimientoCalc.getDate() + diasCreditoCalculado);
+
+        // --- CORRECCIÓN DE IMPUESTOS ---
         const configImpuesto = obtenerConfiguracionImpuesto(cot.tipo_impuesto);
 
         setFormCabecera(prev => ({
@@ -287,20 +298,25 @@ function NuevaOrdenVenta() {
           id_comercial: cot.id_comercial || prev.id_comercial,
           moneda: cot.moneda,
           
-          // Forzamos la coherencia entre Código y Porcentaje
+          // Impuestos
           tipo_impuesto: configImpuesto.codigo,
           porcentaje_impuesto: configImpuesto.porcentaje,
           
           tipo_cambio: cot.tipo_cambio,
+          
+          // DATOS DE PAGO Y CRÉDITO AUTOMÁTICOS
           tipo_venta: tipoVentaCalculado,
           dias_credito: diasCreditoCalculado,
           plazo_pago: cot.plazo_pago || 'Contado',
-          forma_pago: cot.forma_pago || '', 
+          forma_pago: cot.forma_pago || '', // Aquí se jala la forma de pago (Transferencia, Cheque, etc)
+          fecha_vencimiento: fechaVencimientoCalc.toISOString().split('T')[0],
+          
           direccion_entrega: cot.direccion_entrega || '',
           lugar_entrega: cot.lugar_entrega || '',
           observaciones: cot.observaciones || ''
         }));
 
+        // Cargar datos del cliente asociado para verificar su línea de crédito
         const cliente = clientes.find(c => c.id_cliente === cot.id_cliente);
         if (cliente) handleSelectCliente(cliente);
 

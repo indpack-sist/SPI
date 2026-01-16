@@ -154,7 +154,6 @@ export async function getCompraById(req, res) {
         oc.*,
         pr.razon_social AS proveedor,
         pr.ruc AS ruc_proveedor,
-        pr.direccion AS direccion_proveedor,
         pr.telefono AS telefono_proveedor,
         pr.email AS email_proveedor,
         pr.contacto AS contacto_proveedor,

@@ -27,7 +27,7 @@ export const RedirectToFirstAvailable = () => {
     { path: '/clientes', modulo: 'clientes' },
     { path: '/ventas/guias-remision', modulo: 'guiasRemision' },
     { path: '/ventas/guias-transportista', modulo: 'guiasTransportista' },
-    { path: '/compras/ordenes', modulo: 'ordenesCompra' }
+    { path: '/compras/compras', modulo: 'compras' }
   ];
 
   const primeraRutaDisponible = rutas.find(ruta => puedeAcceder(ruta.modulo));

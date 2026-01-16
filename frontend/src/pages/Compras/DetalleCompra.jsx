@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
   XCircle, Clock, AlertCircle, Building, Calendar,
-  MapPin, CreditCard, Wallet, Package, DollarSign, Plus
+  MapPin, CreditCard, Wallet, DollarSign, TrendingUp
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -15,18 +15,17 @@ function DetalleCompra() {
   const navigate = useNavigate();
   
   const [compra, setCompra] = useState(null);
-  const [resumenPagos, setResumenPagos] = useState(null);
   const [cuotas, setCuotas] = useState([]);
+  const [resumenPagos, setResumenPagos] = useState(null);
   const [historialPagos, setHistorialPagos] = useState([]);
   const [cuentasPago, setCuentasPago] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
-  const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
   const [modalPagarCuotaOpen, setModalPagarCuotaOpen] = useState(false);
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState(null);
-  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
   
   const [datosPago, setDatosPago] = useState({
     id_cuenta_pago: '',
@@ -37,6 +36,8 @@ function DetalleCompra() {
     observaciones: ''
   });
 
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+
   useEffect(() => {
     cargarDatos();
   }, [id]);
@@ -46,30 +47,33 @@ function DetalleCompra() {
       setLoading(true);
       setError(null);
       
-      const [compraRes, resumenRes, cuentasRes] = await Promise.all([
+      const [compraRes, resumenRes, historialRes, cuentasRes] = await Promise.all([
         comprasAPI.getById(id),
         comprasAPI.getResumenPagos(id),
+        comprasAPI.getHistorialPagos(id),
         cuentasPagoAPI.getAll({ estado: 'Activo' })
       ]);
       
       if (compraRes.data.success) {
-        setCompra(compraRes.data.data);
+        const compraData = compraRes.data.data;
+        setCompra(compraData);
         
-        if (compraRes.data.data.tipo_compra === 'Credito') {
+        if (compraData.tipo_compra === 'Credito') {
           const cuotasRes = await comprasAPI.getCuotas(id);
           if (cuotasRes.data.success) {
             setCuotas(cuotasRes.data.data || []);
           }
         }
-
-        const historialRes = await comprasAPI.getHistorialPagos(id);
-        if (historialRes.data.success) {
-          setHistorialPagos(historialRes.data.data || []);
-        }
+      } else {
+        setError('Compra no encontrada');
       }
 
       if (resumenRes.data.success) {
         setResumenPagos(resumenRes.data.data);
+      }
+
+      if (historialRes.data.success) {
+        setHistorialPagos(historialRes.data.data || []);
       }
 
       if (cuentasRes.data.success) {
@@ -84,34 +88,12 @@ function DetalleCompra() {
     }
   };
 
-  const handleCancelar = async () => {
-    try {
-      setError(null);
-      setLoading(true);
-      
-      const response = await comprasAPI.cancelar(id, motivoCancelacion);
-      
-      if (response.data.success) {
-        setCompra({ ...compra, estado: 'Cancelada' });
-        setSuccess('Compra cancelada exitosamente');
-        setModalCancelarOpen(false);
-      } else {
-        setError(response.data.error || 'Error al cancelar compra');
-      }
-      
-    } catch (err) {
-      console.error('Error al cancelar:', err);
-      setError(err.response?.data?.error || 'Error al cancelar compra');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAbrirModalPago = async (cuota) => {
+  const handleAbrirPagarCuota = (cuota) => {
     setCuotaSeleccionada(cuota);
+    const saldoPendiente = parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0);
     setDatosPago({
-      id_cuenta_pago: compra.id_cuenta_pago || '',
-      monto_pagado: (parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0)).toFixed(2),
+      id_cuenta_pago: cuota.id_cuenta_pago || '',
+      monto_pagado: saldoPendiente.toFixed(2),
       fecha_pago: new Date().toISOString().split('T')[0],
       metodo_pago: 'Transferencia',
       referencia: '',
@@ -120,15 +102,17 @@ function DetalleCompra() {
     setModalPagarCuotaOpen(true);
   };
 
-  const handlePagarCuota = async () => {
+  const handlePagarCuota = async (e) => {
+    e.preventDefault();
+    
     try {
-      setError(null);
       setLoading(true);
+      setError(null);
       
       const response = await comprasAPI.pagarCuota(id, cuotaSeleccionada.id_cuota, datosPago);
       
       if (response.data.success) {
-        setSuccess(`Pago registrado exitosamente. Nuevo saldo: ${formatearMoneda(response.data.data.nuevo_saldo_cuenta, compra.moneda)}`);
+        setSuccess(`Pago de cuota registrado exitosamente. Nuevo saldo de cuenta: ${response.data.data.cuenta_utilizada}`);
         setModalPagarCuotaOpen(false);
         await cargarDatos();
       } else {
@@ -138,6 +122,34 @@ function DetalleCompra() {
     } catch (err) {
       console.error('Error al pagar cuota:', err);
       setError(err.response?.data?.error || 'Error al registrar pago');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelarCompra = async () => {
+    if (!motivoCancelacion.trim()) {
+      setError('Debe indicar el motivo de cancelación');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await comprasAPI.cancelar(id, motivoCancelacion);
+      
+      if (response.data.success) {
+        setSuccess('Compra cancelada exitosamente');
+        setModalCancelarOpen(false);
+        await cargarDatos();
+      } else {
+        setError(response.data.error || 'Error al cancelar compra');
+      }
+      
+    } catch (err) {
+      console.error('Error al cancelar compra:', err);
+      setError(err.response?.data?.error || 'Error al cancelar compra');
     } finally {
       setLoading(false);
     }
@@ -176,39 +188,29 @@ function DetalleCompra() {
     });
   };
 
-  const formatearMoneda = (valor, moneda) => {
-    if (valor === null || valor === undefined) return '-';
-    const simbolo = moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor) => {
+    if (!compra) return '-';
+    const simbolo = compra.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
   };
 
-  const getEstadoPagoClase = (estado) => {
-    const clases = {
-      'Pendiente': 'badge-warning',
-      'Parcial': 'badge-info',
-      'Pagado': 'badge-success'
+  const getEstadoPagoConfig = (estado) => {
+    const configs = {
+      'Pendiente': { clase: 'badge-warning', icono: Clock },
+      'Parcial': { clase: 'badge-info', icono: TrendingUp },
+      'Pagado': { clase: 'badge-success', icono: CheckCircle }
     };
-    return clases[estado] || 'badge-warning';
+    return configs[estado] || configs['Pendiente'];
   };
 
   const getNivelAlertaClase = (nivel) => {
     const clases = {
-      'success': 'border-success',
-      'info': 'border-info',
-      'warning': 'border-warning',
-      'danger': 'border-danger'
+      'success': 'badge-success',
+      'info': 'badge-info',
+      'warning': 'badge-warning',
+      'danger': 'badge-danger'
     };
-    return clases[nivel] || 'border-info';
-  };
-
-  const getCuotaEstadoClase = (estado) => {
-    const clases = {
-      'Pendiente': 'badge-warning',
-      'Parcial': 'badge-info',
-      'Pagada': 'badge-success',
-      'Cancelada': 'badge-danger'
-    };
-    return clases[estado] || 'badge-warning';
+    return clases[nivel] || 'badge-info';
   };
 
   if (loading && !compra) return <Loading message="Cargando compra..." />;
@@ -223,6 +225,9 @@ function DetalleCompra() {
       </div>
     );
   }
+
+  const estadoPagoConfig = getEstadoPagoConfig(compra.estado_pago);
+  const IconoEstadoPago = estadoPagoConfig.icono;
 
   return (
     <div className="p-6">
@@ -248,9 +253,21 @@ function DetalleCompra() {
           </button>
           
           {compra.estado !== 'Cancelada' && compra.estado_pago !== 'Pagado' && (
-            <button className="btn btn-outline btn-danger" onClick={() => setModalCancelarOpen(true)}>
-              <XCircle size={20} /> Cancelar
-            </button>
+            <>
+              <button 
+                className="btn btn-outline"
+                onClick={() => navigate(`/compras/${id}/editar`)}
+              >
+                <Edit size={20} /> Editar
+              </button>
+              
+              <button 
+                className="btn btn-danger"
+                onClick={() => setModalCancelarOpen(true)}
+              >
+                <XCircle size={20} /> Cancelar Compra
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -258,83 +275,43 @@ function DetalleCompra() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className={`card border-l-4 ${getNivelAlertaClase(compra.nivel_alerta)} mb-4`}>
+      <div className={`card border-l-4 ${estadoPagoConfig.clase.replace('badge-', 'border-')} mb-4`}>
         <div className="card-body">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex gap-2">
-                <span className={`badge ${getEstadoPagoClase(compra.estado_pago)}`}>
-                  {compra.estado_pago}
-                </span>
-                <span className={`badge ${compra.tipo_compra === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
-                  {compra.tipo_compra === 'Contado' ? <Wallet size={14} /> : <CreditCard size={14} />}
-                  {compra.tipo_compra}
-                </span>
+              <div className={`p-3 rounded-lg ${estadoPagoConfig.clase} bg-opacity-10`}>
+                <IconoEstadoPago size={32} />
+              </div>
+              <div>
+                <p className="text-sm text-muted">Estado de Pago</p>
+                <h3 className="text-xl font-bold">{compra.estado_pago}</h3>
+                <p className="text-sm text-muted">
+                  {compra.tipo_compra === 'Contado' ? 'Compra al Contado' : `Compra a Crédito - ${compra.numero_cuotas} cuotas`}
+                </p>
               </div>
             </div>
             
-            {compra.dias_para_vencer !== null && compra.estado_pago !== 'Pagado' && (
+            {resumenPagos && (
               <div className="text-right">
-                <p className="text-sm text-muted">Vencimiento</p>
-                <p className={`font-bold ${
-                  compra.dias_para_vencer < 0 ? 'text-danger' : 
-                  compra.dias_para_vencer <= 7 ? 'text-warning' : 
-                  'text-muted'
-                }`}>
-                  {compra.dias_para_vencer < 0 
-                    ? `Vencido hace ${Math.abs(compra.dias_para_vencer)} días`
-                    : `${compra.dias_para_vencer} días`
-                  }
-                </p>
+                <div className="mb-2">
+                  <span className="text-sm text-muted">Total: </span>
+                  <span className="font-bold text-lg">{formatearMoneda(resumenPagos.total_compra)}</span>
+                </div>
+                <div className="mb-2">
+                  <span className="text-sm text-muted">Pagado: </span>
+                  <span className="font-bold text-success">{formatearMoneda(resumenPagos.monto_pagado)}</span>
+                </div>
+                {resumenPagos.saldo_pendiente > 0 && (
+                  <div>
+                    <span className="text-sm text-muted">Pendiente: </span>
+                    <span className="font-bold text-danger">{formatearMoneda(resumenPagos.saldo_pendiente)}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {resumenPagos && compra.tipo_compra === 'Credito' && (
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          <div className="card">
-            <div className="card-body">
-              <p className="text-sm text-muted">Total Compra</p>
-              <h3 className="text-xl font-bold text-primary">
-                {formatearMoneda(resumenPagos.total_compra, compra.moneda)}
-              </h3>
-            </div>
-          </div>
-
-          <div className="card border-l-4 border-success">
-            <div className="card-body">
-              <p className="text-sm text-muted">Monto Pagado</p>
-              <h3 className="text-xl font-bold text-success">
-                {formatearMoneda(resumenPagos.monto_pagado, compra.moneda)}
-              </h3>
-              <p className="text-xs text-muted">{resumenPagos.porcentaje_pagado}% pagado</p>
-            </div>
-          </div>
-
-          <div className="card border-l-4 border-warning">
-            <div className="card-body">
-              <p className="text-sm text-muted">Saldo Pendiente</p>
-              <h3 className="text-xl font-bold text-warning">
-                {formatearMoneda(resumenPagos.saldo_pendiente, compra.moneda)}
-              </h3>
-            </div>
-          </div>
-
-          <div className="card border-l-4 border-info">
-            <div className="card-body">
-              <p className="text-sm text-muted">Cuotas</p>
-              <h3 className="text-xl font-bold text-info">
-                {resumenPagos.cuotas?.cuotas_pagadas || 0} / {resumenPagos.cuotas?.total_cuotas || 0}
-              </h3>
-              {resumenPagos.cuotas?.cuotas_vencidas > 0 && (
-                <p className="text-xs text-danger">{resumenPagos.cuotas.cuotas_vencidas} vencidas</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
@@ -379,8 +356,8 @@ function DetalleCompra() {
               <p className="font-medium">{compra.tipo_cuenta}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted">Moneda:</label>
-              <p className="font-medium">{compra.moneda === 'USD' ? 'Dólares (USD)' : 'Soles (PEN)'}</p>
+              <label className="text-sm font-medium text-muted">Saldo Actual:</label>
+              <p className="font-bold text-success">{formatearMoneda(compra.saldo_cuenta)}</p>
             </div>
           </div>
         </div>
@@ -389,13 +366,21 @@ function DetalleCompra() {
           <div className="card-header">
             <h2 className="card-title">
               <Calendar size={20} />
-              Fechas
+              Información General
             </h2>
           </div>
           <div className="card-body space-y-2">
             <div>
-              <label className="text-sm font-medium text-muted">Emisión:</label>
-              <p className="font-medium">{formatearFecha(compra.fecha_emision)}</p>
+              <label className="text-sm font-medium text-muted">Prioridad:</label>
+              <p className="font-medium">
+                <span className={`badge ${
+                  compra.prioridad === 'Urgente' ? 'badge-danger' :
+                  compra.prioridad === 'Alta' ? 'badge-warning' :
+                  compra.prioridad === 'Media' ? 'badge-info' : 'badge-secondary'
+                }`}>
+                  {compra.prioridad}
+                </span>
+              </p>
             </div>
             {compra.fecha_entrega_estimada && (
               <div>
@@ -403,10 +388,10 @@ function DetalleCompra() {
                 <p className="font-medium">{formatearFecha(compra.fecha_entrega_estimada)}</p>
               </div>
             )}
-            {compra.fecha_vencimiento && compra.tipo_compra === 'Credito' && (
+            {compra.responsable && (
               <div>
-                <label className="text-sm font-medium text-muted">Vencimiento:</label>
-                <p className="font-medium">{formatearFecha(compra.fecha_vencimiento)}</p>
+                <label className="text-sm font-medium text-muted">Responsable:</label>
+                <p className="font-medium">{compra.responsable}</p>
               </div>
             )}
           </div>
@@ -426,51 +411,53 @@ function DetalleCompra() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ width: '80px' }}>N° Cuota</th>
+                    <th style={{ width: '80px' }}>Cuota</th>
                     <th style={{ width: '120px' }}>Monto</th>
                     <th style={{ width: '120px' }}>Pagado</th>
                     <th style={{ width: '120px' }}>Saldo</th>
-                    <th style={{ width: '140px' }}>Vencimiento</th>
+                    <th style={{ width: '120px' }}>Vencimiento</th>
+                    <th style={{ width: '100px' }}>Días</th>
                     <th style={{ width: '100px' }}>Estado</th>
-                    <th style={{ width: '80px' }}>Alerta</th>
-                    <th style={{ width: '100px' }}>Acción</th>
+                    <th style={{ width: '100px' }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cuotas.map((cuota) => (
-                    <tr key={cuota.id_cuota}>
-                      <td className="font-bold">#{cuota.numero_cuota}</td>
-                      <td className="font-mono">{formatearMoneda(cuota.monto_cuota, compra.moneda)}</td>
-                      <td className="font-mono text-success">{formatearMoneda(cuota.monto_pagado || 0, compra.moneda)}</td>
-                      <td className="font-mono text-warning">
-                        {formatearMoneda(parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0), compra.moneda)}
-                      </td>
-                      <td>{formatearFecha(cuota.fecha_vencimiento)}</td>
-                      <td>
-                        <span className={`badge ${getCuotaEstadoClase(cuota.estado)}`}>
-                          {cuota.estado}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        {cuota.nivel_alerta !== 'success' && (
-                          <span className={`badge ${getNivelAlertaClase(cuota.nivel_alerta).replace('border-', 'badge-')}`}>
-                            <AlertCircle size={14} />
+                  {cuotas.map((cuota) => {
+                    const saldoCuota = parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0);
+                    return (
+                      <tr key={cuota.id_cuota}>
+                        <td className="text-center font-bold">#{cuota.numero_cuota}</td>
+                        <td className="text-right font-mono">{formatearMoneda(cuota.monto_cuota)}</td>
+                        <td className="text-right font-mono text-success">{formatearMoneda(cuota.monto_pagado || 0)}</td>
+                        <td className="text-right font-mono text-danger">{formatearMoneda(saldoCuota)}</td>
+                        <td className="text-center">{formatearFecha(cuota.fecha_vencimiento)}</td>
+                        <td className="text-center">
+                          <span className={`${
+                            cuota.dias_para_vencer < 0 ? 'text-danger font-bold' :
+                            cuota.dias_para_vencer <= 7 ? 'text-warning font-bold' :
+                            'text-muted'
+                          }`}>
+                            {cuota.dias_para_vencer < 0 ? `Vencido` : `${cuota.dias_para_vencer}d`}
                           </span>
-                        )}
-                      </td>
-                      <td>
-                        {cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && (
-                          <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => handleAbrirModalPago(cuota)}
-                          >
-                            <DollarSign size={14} />
-                            Pagar
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="text-center">
+                          <span className={`badge ${getNivelAlertaClase(cuota.nivel_alerta)}`}>
+                            {cuota.estado}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          {cuota.estado !== 'Pagada' && (
+                            <button
+                              className="btn btn-sm btn-success"
+                              onClick={() => handleAbrirPagarCuota(cuota)}
+                            >
+                              <DollarSign size={14} /> Pagar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -482,7 +469,7 @@ function DetalleCompra() {
         <div className="card mb-4">
           <div className="card-header">
             <h2 className="card-title">
-              <Clock size={20} />
+              <TrendingUp size={20} />
               Historial de Pagos
             </h2>
           </div>
@@ -494,31 +481,30 @@ function DetalleCompra() {
                     <th>Fecha</th>
                     <th>Concepto</th>
                     <th>Cuenta</th>
-                    <th>Cuota</th>
+                    <th>Referencia</th>
                     <th className="text-right">Monto</th>
-                    <th>Registrado por</th>
+                    <th>Registrado Por</th>
                   </tr>
                 </thead>
                 <tbody>
                   {historialPagos.map((pago) => (
                     <tr key={pago.id_movimiento}>
-                      <td className="text-sm">{formatearFechaHora(pago.fecha_movimiento)}</td>
-                      <td>{pago.concepto}</td>
+                      <td>{formatearFechaHora(pago.fecha_movimiento)}</td>
                       <td>
-                        <div className="text-sm">{pago.cuenta_pago}</div>
-                        <div className="text-xs text-muted">{pago.tipo_cuenta}</div>
-                      </td>
-                      <td>
-                        {pago.numero_cuota ? (
-                          <span className="badge badge-info">Cuota #{pago.numero_cuota}</span>
-                        ) : (
-                          '-'
+                        {pago.concepto}
+                        {pago.numero_cuota && (
+                          <div className="text-xs text-muted">Cuota #{pago.numero_cuota}</div>
                         )}
                       </td>
-                      <td className="text-right font-bold text-success">
-                        {formatearMoneda(pago.monto, compra.moneda)}
+                      <td>
+                        <div>{pago.cuenta_pago}</div>
+                        <div className="text-xs text-muted">{pago.tipo_cuenta}</div>
                       </td>
-                      <td className="text-sm">{pago.registrado_por_nombre || '-'}</td>
+                      <td className="text-sm">{pago.referencia || '-'}</td>
+                      <td className="text-right font-bold text-danger">
+                        {formatearMoneda(pago.monto)}
+                      </td>
+                      <td className="text-sm">{pago.registrado_por_nombre}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -528,10 +514,23 @@ function DetalleCompra() {
         </div>
       )}
 
+      {compra.direccion_entrega && (
+        <div className="card mb-4">
+          <div className="card-header">
+            <h2 className="card-title">
+              <MapPin size={20} />
+              Dirección de Entrega
+            </h2>
+          </div>
+          <div className="card-body">
+            <p className="font-medium">{compra.direccion_entrega}</p>
+          </div>
+        </div>
+      )}
+
       <div className="card mb-4">
         <div className="card-header">
           <h2 className="card-title">
-            <Package size={20} />
             Detalle de Productos
           </h2>
         </div>
@@ -545,7 +544,7 @@ function DetalleCompra() {
                   <th style={{ width: '120px' }} className="text-right">Cantidad</th>
                   <th style={{ width: '60px' }} className="text-center">Unidad</th>
                   <th style={{ width: '120px' }} className="text-right">Precio</th>
-                  <th style={{ width: '80px' }} className="text-right">Desc. %</th>
+                  <th style={{ width: '80px' }} className="text-right">Desc.</th>
                   <th style={{ width: '120px' }} className="text-right">Subtotal</th>
                 </tr>
               </thead>
@@ -561,13 +560,13 @@ function DetalleCompra() {
                     </td>
                     <td className="text-center text-sm text-muted">{item.unidad_medida}</td>
                     <td className="text-right font-mono">
-                      {formatearMoneda(item.precio_unitario, compra.moneda)}
+                      {formatearMoneda(item.precio_unitario)}
                     </td>
-                    <td className="text-right">
+                    <td className="text-right text-sm text-muted">
                       {item.descuento_porcentaje > 0 ? `${item.descuento_porcentaje}%` : '-'}
                     </td>
                     <td className="text-right font-bold text-primary">
-                      {formatearMoneda(item.subtotal, compra.moneda)}
+                      {formatearMoneda(item.subtotal)}
                     </td>
                   </tr>
                 ))}
@@ -583,15 +582,15 @@ function DetalleCompra() {
             <div className="w-80">
               <div className="flex justify-between py-2">
                 <span className="font-medium">Subtotal:</span>
-                <span className="font-bold">{formatearMoneda(compra.subtotal, compra.moneda)}</span>
+                <span className="font-bold">{formatearMoneda(compra.subtotal)}</span>
               </div>
               <div className="flex justify-between py-2 border-t">
                 <span className="font-medium">{compra.tipo_impuesto} ({compra.porcentaje_impuesto}%):</span>
-                <span className="font-bold">{formatearMoneda(compra.igv, compra.moneda)}</span>
+                <span className="font-bold">{formatearMoneda(compra.igv)}</span>
               </div>
               <div className="flex justify-between py-3 border-t bg-primary text-white px-3 rounded">
                 <span className="font-bold text-lg">TOTAL:</span>
-                <span className="font-bold text-xl">{formatearMoneda(compra.total, compra.moneda)}</span>
+                <span className="font-bold text-xl">{formatearMoneda(compra.total)}</span>
               </div>
             </div>
           </div>
@@ -610,6 +609,132 @@ function DetalleCompra() {
       )}
 
       <Modal
+        isOpen={modalPagarCuotaOpen}
+        onClose={() => setModalPagarCuotaOpen(false)}
+        title={`Pagar Cuota #${cuotaSeleccionada?.numero_cuota}`}
+        size="md"
+      >
+        {cuotaSeleccionada && (
+          <form onSubmit={handlePagarCuota}>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-muted">Monto de la cuota:</span>
+                  <span className="font-bold">{formatearMoneda(cuotaSeleccionada.monto_cuota)}</span>
+                </div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-muted">Ya pagado:</span>
+                  <span className="font-bold text-success">{formatearMoneda(cuotaSeleccionada.monto_pagado || 0)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2">
+                  <span className="text-sm font-bold">Saldo pendiente:</span>
+                  <span className="font-bold text-danger">
+                    {formatearMoneda(parseFloat(cuotaSeleccionada.monto_cuota) - parseFloat(cuotaSeleccionada.monto_pagado || 0))}
+                  </span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Cuenta de Pago *</label>
+                <select
+                  className="form-select"
+                  value={datosPago.id_cuenta_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, id_cuenta_pago: e.target.value })}
+                  required
+                >
+                  <option value="">Seleccionar cuenta...</option>
+                  {cuentasPago.filter(c => c.moneda === compra.moneda).map(cuenta => (
+                    <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
+                      {cuenta.nombre} - Saldo: {formatearMoneda(cuenta.saldo_actual)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Monto a Pagar *</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={datosPago.monto_pagado}
+                  onChange={(e) => setDatosPago({ ...datosPago, monto_pagado: e.target.value })}
+                  step="0.01"
+                  min="0.01"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Fecha de Pago *</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={datosPago.fecha_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Método de Pago</label>
+                <select
+                  className="form-select"
+                  value={datosPago.metodo_pago}
+                  onChange={(e) => setDatosPago({ ...datosPago, metodo_pago: e.target.value })}
+                >
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Tarjeta">Tarjeta</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Referencia / N° Operación</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={datosPago.referencia}
+                  onChange={(e) => setDatosPago({ ...datosPago, referencia: e.target.value })}
+                  placeholder="Número de operación"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Observaciones</label>
+                <textarea
+                  className="form-textarea"
+                  value={datosPago.observaciones}
+                  onChange={(e) => setDatosPago({ ...datosPago, observaciones: e.target.value })}
+                  rows={2}
+                  placeholder="Observaciones del pago..."
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <button 
+                  type="button"
+                  className="btn btn-outline" 
+                  onClick={() => setModalPagarCuotaOpen(false)}
+                  disabled={loading}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="btn btn-success"
+                  disabled={loading}
+                >
+                  <DollarSign size={20} />
+                  {loading ? 'Procesando...' : 'Registrar Pago'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
         isOpen={modalCancelarOpen}
         onClose={() => setModalCancelarOpen(false)}
         title="Cancelar Compra"
@@ -620,11 +745,12 @@ function DetalleCompra() {
             <div className="flex items-start gap-3">
               <AlertCircle size={20} className="text-danger mt-1" />
               <div>
-                <p className="font-bold text-red-900">Advertencia</p>
-                <p className="text-sm text-red-800 mt-1">
-                  Esta acción cancelará la compra y no se puede deshacer. 
-                  Solo se pueden cancelar compras sin pagos realizados.
-                </p>
+                <p className="font-bold text-red-900">¿Está seguro de cancelar esta compra?</p>
+                <ul className="text-sm text-red-800 mt-2 space-y-1">
+                  <li>• Esta acción no se puede deshacer</li>
+                  <li>• No se pueden cancelar compras con pagos realizados</li>
+                  <li>• El stock se revertirá automáticamente</li>
+                </ul>
               </div>
             </div>
           </div>
@@ -636,7 +762,7 @@ function DetalleCompra() {
               value={motivoCancelacion}
               onChange={(e) => setMotivoCancelacion(e.target.value)}
               rows={3}
-              placeholder="Explique el motivo de la cancelación..."
+              placeholder="Indique el motivo de la cancelación..."
               required
             />
           </div>
@@ -647,147 +773,18 @@ function DetalleCompra() {
               onClick={() => setModalCancelarOpen(false)}
               disabled={loading}
             >
-              Cerrar
+              No, Volver
             </button>
             <button 
-              className="btn btn-danger" 
-              onClick={handleCancelar}
-              disabled={loading || !motivoCancelacion.trim()}
+              className="btn btn-danger"
+              onClick={handleCancelarCompra}
+              disabled={loading}
             >
               <XCircle size={20} />
-              {loading ? 'Cancelando...' : 'Confirmar Cancelación'}
+              {loading ? 'Cancelando...' : 'Sí, Cancelar Compra'}
             </button>
           </div>
         </div>
-      </Modal>
-
-      <Modal
-        isOpen={modalPagarCuotaOpen}
-        onClose={() => setModalPagarCuotaOpen(false)}
-        title={`Pagar Cuota #${cuotaSeleccionada?.numero_cuota}`}
-        size="md"
-      >
-        {cuotaSeleccionada && (
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted">Monto Cuota:</span>
-                  <span className="font-bold">{formatearMoneda(cuotaSeleccionada.monto_cuota, compra.moneda)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Ya Pagado:</span>
-                  <span className="text-success">{formatearMoneda(cuotaSeleccionada.monto_pagado || 0, compra.moneda)}</span>
-                </div>
-                <div className="flex justify-between border-t pt-2">
-                  <span className="font-medium">Saldo Pendiente:</span>
-                  <span className="font-bold text-warning">
-                    {formatearMoneda(parseFloat(cuotaSeleccionada.monto_cuota) - parseFloat(cuotaSeleccionada.monto_pagado || 0), compra.moneda)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Cuenta de Pago *</label>
-              <select
-                className="form-select"
-                value={datosPago.id_cuenta_pago}
-                onChange={(e) => setDatosPago({ ...datosPago, id_cuenta_pago: e.target.value })}
-                required
-              >
-                <option value="">Seleccionar cuenta...</option>
-                {cuentasPago.filter(c => c.moneda === compra.moneda).map(cuenta => (
-                  <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                    {cuenta.nombre} - {cuenta.tipo} - Saldo: {formatearMoneda(cuenta.saldo_actual, compra.moneda)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Monto a Pagar *</label>
-              <input
-                type="number"
-                className="form-input"
-                value={datosPago.monto_pagado}
-                onChange={(e) => setDatosPago({ ...datosPago, monto_pagado: e.target.value })}
-                min="0"
-                step="0.01"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Fecha de Pago *</label>
-              <input
-                type="date"
-                className="form-input"
-                value={datosPago.fecha_pago}
-                onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })}
-                max={new Date().toISOString().split('T')[0]}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Método de Pago</label>
-              <select
-                className="form-select"
-                value={datosPago.metodo_pago}
-                onChange={(e) => setDatosPago({ ...datosPago, metodo_pago: e.target.value })}
-              >
-                <option value="Transferencia">Transferencia</option>
-                <option value="Efectivo">Efectivo</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Tarjeta">Tarjeta</option>
-                <option value="Deposito">Depósito</option>
-                <option value="Yape">Yape</option>
-                <option value="Plin">Plin</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Referencia</label>
-              <input
-                type="text"
-                className="form-input"
-                value={datosPago.referencia}
-                onChange={(e) => setDatosPago({ ...datosPago, referencia: e.target.value })}
-                placeholder="Número de operación, voucher, etc."
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Observaciones</label>
-              <textarea
-                className="form-textarea"
-                value={datosPago.observaciones}
-                onChange={(e) => setDatosPago({ ...datosPago, observaciones: e.target.value })}
-                rows={2}
-                placeholder="Observaciones del pago..."
-              />
-            </div>
-
-            <div className="flex gap-2 justify-end pt-4 border-t">
-              <button 
-                className="btn btn-outline" 
-                onClick={() => setModalPagarCuotaOpen(false)}
-                disabled={loading}
-              >
-                Cancelar
-              </button>
-              <button 
-                className="btn btn-success" 
-                onClick={handlePagarCuota}
-                disabled={loading || !datosPago.id_cuenta_pago || !datosPago.monto_pagado}
-              >
-                <DollarSign size={20} />
-                {loading ? 'Procesando...' : 'Registrar Pago'}
-              </button>
-            </div>
-          </div>
-        )}
       </Modal>
     </div>
   );

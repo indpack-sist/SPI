@@ -270,6 +270,7 @@ export async function getCompraById(req, res) {
 // ==================== CREAR COMPRA ====================
 
 export async function createCompra(req, res) {
+  let connection;
   try {
     const {
       id_proveedor,
@@ -292,31 +293,30 @@ export async function createCompra(req, res) {
       direccion_entrega,
       detalle
     } = req.body;
-    
+
     const id_registrado_por = req.user?.id_empleado || null;
-    
-    // Validaciones
+
     if (!id_proveedor || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Proveedor y detalle son obligatorios'
       });
     }
-    
+
     if (!id_registrado_por) {
       return res.status(400).json({
         success: false,
         error: 'Usuario no autenticado'
       });
     }
-    
+
     if (!id_cuenta_pago) {
       return res.status(400).json({
         success: false,
         error: 'Debe seleccionar una cuenta de pago'
       });
     }
-    
+
     const tiposCompraValidos = ['Contado', 'Credito'];
     if (!tiposCompraValidos.includes(tipo_compra)) {
       return res.status(400).json({
@@ -324,98 +324,86 @@ export async function createCompra(req, res) {
         error: 'Tipo de compra no válido. Debe ser: Contado o Credito'
       });
     }
-    
-    // Calcular totales
+
     let subtotal = 0;
     for (const item of detalle) {
       const precioUnitario = parseFloat(item.precio_unitario);
       const valorCompra = (item.cantidad * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorCompra;
     }
-    
+
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
-    
+
     if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
-    
+
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
-    
-    // Verificar cuenta de pago
-    const cuentaResult = await executeQuery(`
-      SELECT * FROM cuentas_pago 
-      WHERE id_cuenta = ? AND estado = 'Activo'
-    `, [id_cuenta_pago]);
-    
-    if (!cuentaResult.success || cuentaResult.data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Cuenta de pago no encontrada o inactiva'
-      });
-    }
-    
-    const cuenta = cuentaResult.data[0];
-    
-    if (cuenta.moneda !== moneda) {
-      return res.status(400).json({
-        success: false,
-        error: `La moneda de la cuenta (${cuenta.moneda}) no coincide con la moneda de la compra (${moneda})`
-      });
-    }
-    
-    // Verificar saldo si es al contado
-    if (tipo_compra === 'Contado') {
-      if (parseFloat(cuenta.saldo_actual) < total) {
-        return res.status(400).json({
-          success: false,
-          error: `Saldo insuficiente en la cuenta "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual} ${moneda}, Necesario: ${total.toFixed(2)} ${moneda}`
-        });
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      const [cuentas] = await connection.query(`
+        SELECT * FROM cuentas_pago 
+        WHERE id_cuenta = ? AND estado = 'Activo'
+      `, [id_cuenta_pago]);
+
+      if (cuentas.length === 0) {
+        throw new Error('Cuenta de pago no encontrada o inactiva');
       }
-    }
-    
-    // Generar número de compra
-    const ultimaResult = await executeQuery(`
-      SELECT numero_orden 
-      FROM ordenes_compra 
-      ORDER BY id_orden_compra DESC 
-      LIMIT 1
-    `);
-    
-    let numeroSecuencia = 1;
-    if (ultimaResult.success && ultimaResult.data.length > 0) {
-      const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
-      if (match) {
-        numeroSecuencia = parseInt(match[1]) + 1;
+
+      const cuenta = cuentas[0];
+
+      if (cuenta.moneda !== moneda) {
+        throw new Error(`La moneda de la cuenta (${cuenta.moneda}) no coincide con la moneda de la compra (${moneda})`);
       }
-    }
-    
-    const numeroCompra = `COM-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(5, '0')}`;
-    
-    // Calcular fecha de vencimiento
-    let fechaVencimientoFinal = fecha_vencimiento;
-    if (!fechaVencimientoFinal) {
-      const fechaBase = new Date(fecha_emision);
-      let diasTotal = 30;
-      
-      if (tipo_compra === 'Credito') {
-        if (dias_credito) {
-          diasTotal = parseInt(dias_credito);
-        } else if (numero_cuotas && dias_entre_cuotas) {
-          diasTotal = parseInt(numero_cuotas) * parseInt(dias_entre_cuotas);
+
+      if (tipo_compra === 'Contado') {
+        if (parseFloat(cuenta.saldo_actual) < total) {
+          throw new Error(`Saldo insuficiente en la cuenta "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual} ${moneda}, Necesario: ${total.toFixed(2)} ${moneda}`);
         }
       }
-      
-      fechaBase.setDate(fechaBase.getDate() + diasTotal);
-      fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
-    }
-    
-    const operations = async (connection) => {
-      // Insertar compra
-    const [resultCompra] = await connection.query(`
+
+      const [ultimaResult] = await connection.query(`
+        SELECT numero_orden 
+        FROM ordenes_compra 
+        ORDER BY id_orden_compra DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuencia = 1;
+      if (ultimaResult.length > 0) {
+        const match = ultimaResult[0].numero_orden.match(/(\d+)$/);
+        if (match) {
+          numeroSecuencia = parseInt(match[1]) + 1;
+        }
+      }
+
+      const numeroCompra = `COM-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(5, '0')}`;
+
+      let fechaVencimientoFinal = fecha_vencimiento;
+      if (!fechaVencimientoFinal) {
+        const fechaBase = new Date(fecha_emision);
+        let diasTotal = 30;
+
+        if (tipo_compra === 'Credito') {
+          if (dias_credito) {
+            diasTotal = parseInt(dias_credito);
+          } else if (numero_cuotas && dias_entre_cuotas) {
+            diasTotal = parseInt(numero_cuotas) * parseInt(dias_entre_cuotas);
+          }
+        }
+
+        fechaBase.setDate(fechaBase.getDate() + diasTotal);
+        fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
+      }
+
+      const [resultCompra] = await connection.query(`
         INSERT INTO ordenes_compra (
           numero_orden,
           id_proveedor,
@@ -441,7 +429,7 @@ export async function createCompra(req, res) {
           total,
           estado,
           estado_pago
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         numeroCompra,
         id_proveedor,
@@ -465,18 +453,18 @@ export async function createCompra(req, res) {
         subtotal,
         impuesto,
         total,
+        'Recibida',
         tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente'
       ]);
-      
+
       const idCompra = resultCompra.insertId;
-      
-      // Insertar detalles y actualizar stock
+
       for (let i = 0; i < detalle.length; i++) {
         const item = detalle[i];
         const precioUnitario = parseFloat(item.precio_unitario);
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const subtotalItem = (item.cantidad * precioUnitario) * (1 - descuento / 100);
-        
+
         await connection.query(`
           INSERT INTO detalle_orden_compra (
             id_orden_compra,
@@ -496,30 +484,32 @@ export async function createCompra(req, res) {
           subtotalItem,
           i + 1
         ]);
-        
-        // Actualizar stock del producto
+
         await connection.query(`
           UPDATE productos 
           SET stock_actual = stock_actual + ? 
           WHERE id_producto = ?
         `, [parseFloat(item.cantidad), item.id_producto]);
       }
-      
-      // Si es al contado, descontar de la cuenta y registrar pago
+
       if (tipo_compra === 'Contado') {
         const [cuentaLock] = await connection.query(
           'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ? FOR UPDATE',
           [id_cuenta_pago]
         );
-        
+
         const saldoAnterior = parseFloat(cuentaLock[0].saldo_actual);
         const saldoNuevo = saldoAnterior - total;
-        
+
+        if (saldoNuevo < 0) {
+          throw new Error('Saldo insuficiente al procesar el pago');
+        }
+
         await connection.query(
           'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
           [saldoNuevo, id_cuenta_pago]
         );
-        
+
         await connection.query(`
           INSERT INTO movimientos_cuentas (
             id_cuenta,
@@ -543,24 +533,23 @@ export async function createCompra(req, res) {
           saldoNuevo,
           id_registrado_por
         ]);
-        
+
         await connection.query(
           'UPDATE ordenes_compra SET monto_pagado = ? WHERE id_orden_compra = ?',
           [total, idCompra]
         );
       }
-      
-      // Si es a crédito, generar cuotas
+
       if (tipo_compra === 'Credito' && numero_cuotas > 0) {
         const cantidadCuotas = parseInt(numero_cuotas);
-        const diasEntreCuotas = parseInt(dias_entre_cuotas || 30);
+        const diasEntre = parseInt(dias_entre_cuotas || 30);
         const montoCuota = total / cantidadCuotas;
-        
+
         let fechaCuota = new Date(fecha_primera_cuota || fecha_emision);
         if (!fecha_primera_cuota) {
-          fechaCuota.setDate(fechaCuota.getDate() + diasEntreCuotas);
+          fechaCuota.setDate(fechaCuota.getDate() + diasEntre);
         }
-        
+
         for (let i = 1; i <= cantidadCuotas; i++) {
           await connection.query(`
             INSERT INTO cuotas_orden_compra (
@@ -576,42 +565,40 @@ export async function createCompra(req, res) {
             montoCuota,
             fechaCuota.toISOString().split('T')[0]
           ]);
-          
-          fechaCuota.setDate(fechaCuota.getDate() + diasEntreCuotas);
+
+          fechaCuota.setDate(fechaCuota.getDate() + diasEntre);
         }
       }
-      
-      return {
-        id_orden_compra: idCompra,
-        numero_orden: numeroCompra,
-        tipo_cuenta: cuenta.tipo,
-        cuenta_utilizada: cuenta.nombre
-      };
-    };
-    
-    const result = await executeTransaction(operations);
-    
-    if (!result.success) {
-      return res.status(500).json({ 
-        success: false,
-        error: result.error 
+
+      await connection.commit();
+
+      res.status(201).json({
+        success: true,
+        data: {
+          id_orden_compra: idCompra,
+          numero_orden: numeroCompra,
+          tipo_cuenta: cuenta.tipo,
+          cuenta_utilizada: cuenta.nombre
+        },
+        message: tipo_compra === 'Contado' ?
+          'Compra creada y pagada exitosamente' :
+          'Compra a crédito creada exitosamente'
       });
+
+    } catch (err) {
+      await connection.rollback();
+      throw err;
     }
-    
-    res.status(201).json({
-      success: true,
-      data: result.data,
-      message: tipo_compra === 'Contado' ? 
-        'Compra creada y pagada exitosamente' : 
-        'Compra a crédito creada exitosamente'
-    });
-    
+
   } catch (error) {
     console.error(error);
+    if (connection) await connection.rollback();
     res.status(500).json({
       success: false,
       error: error.message
     });
+  } finally {
+    if (connection) connection.release();
   }
 }
 

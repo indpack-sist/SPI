@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock
+  ChevronLeft, ChevronRight, Lock, ExternalLink
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -1331,6 +1331,20 @@ function DetalleOrdenVenta() {
             <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
           </div>
           <div className="card-body space-y-2">
+            
+            {orden.id_cotizacion && (
+              <div className="pb-2 mb-2 border-b border-gray-100">
+                <label className="text-sm font-medium text-muted">Cotización Origen:</label>
+                <button 
+                  className="flex items-center gap-2 text-primary font-bold hover:underline"
+                  onClick={() => navigate(`/ventas/cotizaciones/${orden.id_cotizacion}`)}
+                >
+                  <FileText size={16} />
+                  {orden.numero_cotizacion}
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 pb-2 mb-2 border-b border-gray-100">
               <div>
                  <label className="text-sm font-medium text-muted">Tipo Documento:</label>

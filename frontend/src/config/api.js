@@ -688,6 +688,7 @@ export const comprasAPI = {
 export const pagosCobranzasAPI = {
   getAll: (params) => api.get('/pagos-cobranzas', { params }),
   getEstadisticas: (params) => api.get('/pagos-cobranzas/estadisticas', { params }),
+  getCuentasPorCobrar: (params) => api.get('/pagos-cobranzas/cuentas-por-cobrar', { params }),
   registrar: (data) => api.post('/pagos-cobranzas', data),
   anular: (id) => api.delete(`/pagos-cobranzas/${id}`)
 };

@@ -77,7 +77,7 @@ function OrdenesVenta() {
       }
       
     } catch (err) {
-      console.error('Error al cargar órdenes de venta:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
     } finally {
       setLoading(false);
@@ -113,27 +113,20 @@ function OrdenesVenta() {
       setDescargandoPDF(idOrden);
       setError(null);
       
-      // 1. Obtener la respuesta (que contiene el blob)
       const response = await ordenesVentaAPI.descargarPDF(idOrden);
       
-      // 2. Crear el archivo en memoria
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
-      // 3. Crear el enlace invisible
       const link = document.createElement('a');
       link.href = url;
       
-      // 4. Usar el numeroOrden para el nombre del archivo
-      // Si numeroOrden viene null, usamos el ID como respaldo
       const nombreArchivo = `OrdenVenta-${numeroOrden || idOrden}.pdf`;
       link.setAttribute('download', nombreArchivo);
       
-      // 5. Forzar la descarga
       document.body.appendChild(link);
       link.click();
       
-      // 6. Limpiar memoria
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
       
@@ -141,7 +134,7 @@ function OrdenesVenta() {
       setTimeout(() => setSuccess(null), 3000);
       
     } catch (err) {
-      console.error('Error al descargar PDF:', err);
+      console.error(err);
       setError('Error al descargar el PDF. Intente nuevamente.');
     } finally {
       setDescargandoPDF(null);
@@ -234,20 +227,15 @@ function OrdenesVenta() {
       accessor: 'numero_orden',
       width: '200px',
       render: (value, row) => {
-        // Obtenemos el valor y aseguramos que no sea null
         const tipoRaw = row.tipo_comprobante || ''; 
         
-        // Verificamos si incluye la palabra factura (para detectar Factura, FACTURA, factura)
         const esFactura = tipoRaw.toLowerCase().includes('factura');
         
-        // Si no viene nada del backend, mostramos 'Desconocido' o 'Sin Tipo' temporalmente para depurar
-        // Una vez arregles el backend, puedes volver a poner 'Factura' como default si prefieres.
         const textoMostrar = tipoRaw || 'Sin Tipo'; 
 
         return (
           <div>
             <div className="flex items-center gap-1 mb-1.5">
-              {/* Lógica condicional para el color del badge */}
               <span className={`badge badge-xs ${esFactura ? 'badge-success' : 'badge-info'}`}>
                 {textoMostrar}
               </span>
@@ -407,7 +395,10 @@ function OrdenesVenta() {
         <div className="flex gap-1 justify-center">
           <button
             className="btn btn-sm btn-primary"
-            onClick={() => navigate(`/ventas/ordenes/${value}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/ventas/ordenes/${value}`);
+            }}
             title="Ver detalle"
           >
             <Eye size={14} />
@@ -415,7 +406,10 @@ function OrdenesVenta() {
           
           <button
             className="btn btn-sm btn-secondary"
-            onClick={() => navigate(`/ventas/ordenes/${value}/editar`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/ventas/ordenes/${value}/editar`);
+            }}
             title="Editar orden"
             disabled={row.estado !== 'En Espera'}
           >
@@ -424,7 +418,10 @@ function OrdenesVenta() {
 
           <button
             className="btn btn-sm btn-outline"
-            onClick={() => handleDescargarPDF(value, row.numero_orden)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDescargarPDF(value, row.numero_orden);
+            }}
             disabled={descargandoPDF === value}
             title="Descargar PDF"
           >
@@ -684,6 +681,7 @@ function OrdenesVenta() {
             columns={columns}
             data={currentItems}
             emptyMessage="No hay órdenes de venta registradas"
+            onRowClick={(row) => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
           />
         </div>
 

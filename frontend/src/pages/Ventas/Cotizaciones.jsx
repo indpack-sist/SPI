@@ -121,12 +121,10 @@ function Cotizaciones() {
 
   const handleDescargarPDF = async (id, numeroCotizacion) => {
     try {
-      // Indicamos visualmente que estamos descargando (opcional, podrías usar un estado local para el botón específico)
       setRefreshing(true); 
       
       const response = await cotizacionesAPI.descargarPDF(id);
       
-      // Manejo de Blob y Descarga
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
@@ -153,7 +151,6 @@ function Cotizaciones() {
     } catch (err) {
       console.error(err);
       
-      // Manejo de error específico de Blob
       if (err.response && err.response.data instanceof Blob) {
         try {
           const errorText = await err.response.data.text();

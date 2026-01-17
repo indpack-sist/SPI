@@ -2080,12 +2080,12 @@ export async function actualizarTipoComprobante(req, res) {
       });
     }
 
-    if (['Cancelada', 'Entregada'].includes(orden.estado)) {
-      return res.status(400).json({
-        success: false,
-        error: 'No se puede editar el comprobante de una orden cancelada o entregada'
-      });
-    }
+    if (orden.estado === 'Cancelada') {
+  return res.status(400).json({
+    success: false,
+    error: 'No se puede editar el comprobante de una orden cancelada'
+  });
+}
 
     let numeroComprobante = null;
 

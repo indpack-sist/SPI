@@ -4,7 +4,7 @@ import {
   ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
   XCircle, Clock, AlertCircle, Building, Calendar,
   MapPin, CreditCard, Wallet, DollarSign, TrendingUp,
-  Briefcase
+  Briefcase, ArrowRightLeft
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -202,9 +202,10 @@ function DetalleCompra() {
     return new Date(fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const formatearMoneda = (valor) => {
-    if (!compra) return '-';
-    const simbolo = compra.moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor, monedaOverride = null) => {
+    const monedaUsar = monedaOverride || compra?.moneda;
+    if (!monedaUsar) return '-';
+    const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
   };
 
@@ -334,6 +335,43 @@ function DetalleCompra() {
         </div>
       </div>
 
+      {compra.tipo_cambio && parseFloat(compra.tipo_cambio) !== 1.0 && (
+        <div className="card border-l-4 border-info mb-4">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <ArrowRightLeft size={24} className="text-info" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted">Conversión de Moneda Aplicada</p>
+                  <h3 className="text-xl font-bold">
+                    Tipo de Cambio: {parseFloat(compra.tipo_cambio).toFixed(4)}
+                  </h3>
+                  <p className="text-sm text-muted">
+                    Compra en {compra.moneda} / Cuenta en {compra.moneda_cuenta}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="text-right">
+                <div className="mb-2">
+                  <span className="text-sm text-muted">Total Compra:</span>
+                  <div className="font-bold text-lg">{formatearMoneda(compra.total)}</div>
+                </div>
+                <div className="text-sm text-info">
+                  {compra.moneda_cuenta === 'PEN' && compra.moneda === 'USD' ? (
+                    <>Pagado en cuenta: S/ {(parseFloat(compra.total) * parseFloat(compra.tipo_cambio)).toFixed(2)}</>
+                  ) : compra.moneda_cuenta === 'USD' && compra.moneda === 'PEN' ? (
+                    <>Pagado en cuenta: $ {(parseFloat(compra.total) / parseFloat(compra.tipo_cambio)).toFixed(2)}</>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
           <div className="card-header">
@@ -376,7 +414,7 @@ function DetalleCompra() {
             </div>
             <div>
               <label className="text-sm font-medium text-muted">Saldo/Cupo Actual:</label>
-              <p className="font-bold text-success">{formatearMoneda(compra.saldo_cuenta)}</p>
+              <p className="font-bold text-success">{formatearMoneda(compra.saldo_cuenta, compra.moneda_cuenta)}</p>
             </div>
           </div>
         </div>
@@ -621,7 +659,6 @@ function DetalleCompra() {
         </div>
       )}
 
-      {/* MODAL PARA PAGAR CUOTA */}
       <Modal
         isOpen={modalPagarCuotaOpen}
         onClose={() => setModalPagarCuotaOpen(false)}
@@ -713,7 +750,6 @@ function DetalleCompra() {
         )}
       </Modal>
 
-      {/* MODAL PARA PAGO DIRECTO (Sin cuotas) */}
       <Modal
         isOpen={modalPagoDirectoOpen}
         onClose={() => setModalPagoDirectoOpen(false)}

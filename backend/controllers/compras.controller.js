@@ -33,6 +33,7 @@ export async function getAllCompras(req, res) {
         oc.igv,
         oc.total,
         oc.moneda,
+        oc.tipo_cambio,
         oc.monto_pagado,
         oc.estado_pago,
         oc.numero_cuotas,
@@ -267,6 +268,7 @@ export async function createCompra(req, res) {
       id_responsable,
       contacto_proveedor,
       direccion_entrega,
+      tipo_cambio,
       detalle
     } = req.body;
 
@@ -290,6 +292,13 @@ export async function createCompra(req, res) {
       return res.status(400).json({
         success: false,
         error: 'Debe seleccionar una cuenta de pago'
+      });
+    }
+
+    if (!moneda) {
+      return res.status(400).json({
+        success: false,
+        error: 'Debe especificar la moneda de la compra'
       });
     }
 
@@ -334,14 +343,28 @@ export async function createCompra(req, res) {
       }
 
       const cuenta = cuentas[0];
+      const monedaCuenta = cuenta.moneda;
+      
+      let tipoCambioFinal = parseFloat(tipo_cambio || 1.0000);
+      
+      if (monedaCuenta !== moneda) {
+        if (!tipo_cambio || parseFloat(tipo_cambio) <= 0) {
+          throw new Error(`Debe especificar el tipo de cambio porque la cuenta está en ${monedaCuenta} y la compra en ${moneda}`);
+        }
+      }
 
-      if (cuenta.moneda !== moneda) {
-        throw new Error(`La moneda de la cuenta (${cuenta.moneda}) no coincide con la moneda de la compra (${moneda})`);
+      let montoAPagar = total;
+      if (monedaCuenta !== moneda) {
+        if (monedaCuenta === 'PEN' && moneda === 'USD') {
+          montoAPagar = total * tipoCambioFinal;
+        } else if (monedaCuenta === 'USD' && moneda === 'PEN') {
+          montoAPagar = total / tipoCambioFinal;
+        }
       }
 
       if (tipo_compra === 'Contado') {
-        if (parseFloat(cuenta.saldo_actual) < total) {
-          throw new Error(`Saldo insuficiente en la cuenta "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual} ${moneda}, Necesario: ${total.toFixed(2)} ${moneda}`);
+        if (parseFloat(cuenta.saldo_actual) < montoAPagar) {
+          throw new Error(`Saldo insuficiente en la cuenta "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual} ${monedaCuenta}, Necesario: ${montoAPagar.toFixed(2)} ${monedaCuenta}`);
         }
       }
 
@@ -389,6 +412,7 @@ export async function createCompra(req, res) {
           fecha_vencimiento,
           prioridad,
           moneda,
+          tipo_cambio,
           tipo_impuesto,
           porcentaje_impuesto,
           tipo_compra,
@@ -405,7 +429,7 @@ export async function createCompra(req, res) {
           total,
           estado,
           estado_pago
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         numeroCompra,
         id_proveedor,
@@ -415,6 +439,7 @@ export async function createCompra(req, res) {
         fechaVencimientoFinal,
         prioridad || 'Media',
         moneda,
+        tipoCambioFinal,
         tipoImpuestoFinal,
         porcentaje,
         tipo_compra,
@@ -434,10 +459,6 @@ export async function createCompra(req, res) {
       ]);
 
       const idCompra = resultCompra.insertId;
-
-      // ============================================
-      // CREAR ENTRADA DE INVENTARIO AUTOMÁTICAMENTE
-      // ============================================
       
       const [primerProducto] = await connection.query(
         'SELECT id_tipo_inventario FROM productos WHERE id_producto = ?',
@@ -560,7 +581,7 @@ export async function createCompra(req, res) {
         );
 
         const saldoAnterior = parseFloat(cuentaLock[0].saldo_actual);
-        const saldoNuevo = saldoAnterior - total;
+        const saldoNuevo = saldoAnterior - montoAPagar;
 
         if (saldoNuevo < 0) {
           throw new Error('Saldo insuficiente al procesar el pago');
@@ -570,6 +591,11 @@ export async function createCompra(req, res) {
           'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
           [saldoNuevo, id_cuenta_pago]
         );
+
+        let conceptoPago = `Pago de compra ${numeroCompra}`;
+        if (monedaCuenta !== moneda) {
+          conceptoPago += ` (${moneda} ${total.toFixed(2)} × T.C. ${tipoCambioFinal})`;
+        }
 
         await connection.query(`
           INSERT INTO movimientos_cuentas (
@@ -586,8 +612,8 @@ export async function createCompra(req, res) {
           ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, NOW())
         `, [
           id_cuenta_pago,
-          total,
-          `Pago de compra ${numeroCompra}`,
+          montoAPagar,
+          conceptoPago,
           numeroCompra,
           idCompra,
           saldoAnterior,
@@ -633,6 +659,11 @@ export async function createCompra(req, res) {
 
       await connection.commit();
 
+      let mensajeAdicional = '';
+      if (monedaCuenta !== moneda) {
+        mensajeAdicional = ` (Conversión aplicada: ${moneda} ${total.toFixed(2)} → ${monedaCuenta} ${montoAPagar.toFixed(2)})`;
+      }
+
       res.status(201).json({
         success: true,
         data: {
@@ -640,11 +671,12 @@ export async function createCompra(req, res) {
           id_entrada: idEntrada,
           numero_orden: numeroCompra,
           tipo_cuenta: cuenta.tipo,
-          cuenta_utilizada: cuenta.nombre
+          cuenta_utilizada: cuenta.nombre,
+          tipo_cambio_aplicado: tipoCambioFinal
         },
         message: tipo_compra === 'Contado' ?
-          'Compra creada, pagada y entrada de inventario registrada exitosamente' :
-          'Compra a crédito y entrada de inventario creadas exitosamente'
+          `Compra creada, pagada y entrada de inventario registrada exitosamente${mensajeAdicional}` :
+          `Compra a crédito y entrada de inventario creadas exitosamente`
       });
 
     } catch (err) {

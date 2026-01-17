@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, ShoppingCart, Building, Calendar,
   MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard, Clock,
-  Calculator, CalendarCheck
+  Calculator, CalendarCheck, DollarSign, ArrowRightLeft
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -32,6 +32,7 @@ function NuevaCompra() {
   const [productoHistorial, setProductoHistorial] = useState(null);
   const [historialCompras, setHistorialCompras] = useState(null);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const [requiereConversion, setRequiereConversion] = useState(false);
   
   const [formData, setFormData] = useState({
     id_proveedor: '',
@@ -41,6 +42,7 @@ function NuevaCompra() {
     fecha_vencimiento: '', 
     prioridad: 'Media',
     moneda: '',
+    tipo_cambio: '',
     tipo_compra: 'Contado',
     numero_cuotas: 1,
     dias_entre_cuotas: 30,
@@ -65,7 +67,6 @@ function NuevaCompra() {
     calcularTotales();
   }, [detalle, formData.porcentaje_impuesto, formData.tipo_impuesto]);
 
-  // Recalcular cronograma y fechas cuando cambian los parámetros de crédito
   useEffect(() => {
     if (formData.tipo_compra === 'Credito') {
       calcularCronograma();
@@ -84,13 +85,19 @@ function NuevaCompra() {
       const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(formData.id_cuenta_pago));
       setCuentaSeleccionada(cuenta);
       
-      if (cuenta && cuenta.moneda !== formData.moneda) {
-        setFormData(prev => ({ ...prev, moneda: cuenta.moneda }));
+      if (cuenta) {
+        const necesitaConversion = cuenta.moneda !== formData.moneda && formData.moneda;
+        setRequiereConversion(necesitaConversion);
+        
+        if (!necesitaConversion) {
+          setFormData(prev => ({ ...prev, tipo_cambio: '' }));
+        }
       }
     } else {
       setCuentaSeleccionada(null);
+      setRequiereConversion(false);
     }
-  }, [formData.id_cuenta_pago, cuentasPago]);
+  }, [formData.id_cuenta_pago, formData.moneda, cuentasPago]);
 
   const cargarCatalogos = async () => {
     try {
@@ -209,21 +216,14 @@ function NuevaCompra() {
 
     const numCuotas = parseInt(formData.numero_cuotas) || 1;
     const diasEntre = parseInt(formData.dias_entre_cuotas) || 30;
-    const montoCuota = totals.total / numCuotas; // Usando totals temporalmente, corregir a totales
-    
-    // Corregir acceso al estado
-    const totalReal = totales.total; 
-    const montoPorCuota = totalReal / numCuotas;
+    const montoPorCuota = totales.total / numCuotas;
 
     let fechaBase = new Date(formData.fecha_primera_cuota || formData.fecha_emision);
     
-    // Si no hay fecha primera cuota explícita, sumar días a la emisión
     if (!formData.fecha_primera_cuota) {
-        // Asegurar que no mute la fecha original si es emisión
         fechaBase = new Date(formData.fecha_emision);
         fechaBase.setDate(fechaBase.getDate() + diasEntre); 
     } else {
-        // Ajuste por zona horaria al crear fecha desde string
         fechaBase = new Date(formData.fecha_primera_cuota + 'T12:00:00');
     }
 
@@ -236,13 +236,11 @@ function NuevaCompra() {
             fecha: new Date(ultimaFecha),
             monto: montoPorCuota
         });
-        // Siguiente fecha
         ultimaFecha.setDate(ultimaFecha.getDate() + diasEntre);
     }
 
     setCronograma(nuevoCronograma);
 
-    // Actualizar fecha vencimiento final y días crédito totales
     if (nuevoCronograma.length > 0) {
         const fechaFinal = nuevoCronograma[nuevoCronograma.length - 1].fecha;
         const emision = new Date(formData.fecha_emision);
@@ -268,6 +266,20 @@ function NuevaCompra() {
     });
   };
 
+  const calcularMontoConversion = () => {
+    if (!requiereConversion || !formData.tipo_cambio || !totales.total) return null;
+    
+    const tc = parseFloat(formData.tipo_cambio);
+    const total = parseFloat(totales.total);
+    
+    if (cuentaSeleccionada.moneda === 'PEN' && formData.moneda === 'USD') {
+      return total * tc;
+    } else if (cuentaSeleccionada.moneda === 'USD' && formData.moneda === 'PEN') {
+      return total / tc;
+    }
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -275,8 +287,13 @@ function NuevaCompra() {
     
     if (!formData.id_proveedor) { setError('Debe seleccionar un proveedor'); return; }
     if (!formData.id_cuenta_pago) { setError('Debe seleccionar una cuenta de pago'); return; }
-    if (!formData.moneda) { setError('Falta moneda'); return; }
+    if (!formData.moneda) { setError('Debe especificar la moneda de la compra'); return; }
     if (detalle.length === 0) { setError('Debe agregar al menos un producto'); return; }
+    
+    if (requiereConversion && (!formData.tipo_cambio || parseFloat(formData.tipo_cambio) <= 0)) {
+      setError(`Debe especificar el tipo de cambio para convertir de ${formData.moneda} a ${cuentaSeleccionada.moneda}`);
+      return;
+    }
     
     const invalidos = detalle.filter(item => parseFloat(item.cantidad) <= 0 || parseFloat(item.precio_unitario) <= 0);
     if (invalidos.length > 0) { setError('Productos con cantidad o precio 0'); return; }
@@ -295,6 +312,7 @@ function NuevaCompra() {
         dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
         dias_credito: parseInt(formData.dias_credito),
         porcentaje_impuesto: parseFloat(formData.porcentaje_impuesto),
+        tipo_cambio: requiereConversion ? parseFloat(formData.tipo_cambio) : 1.0,
         contacto_proveedor: formData.contacto_proveedor || null,
         direccion_entrega: formData.direccion_entrega || null,
         detalle: detalle.map(item => ({
@@ -320,12 +338,25 @@ function NuevaCompra() {
     }
   };
 
-  const formatearMoneda = (valor) => {
-    const simbolo = formData.moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor, moneda = null) => {
+    const monedaUsar = moneda || formData.moneda;
+    const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor).toFixed(2)}`;
   };
 
+  const getCuotasProximasVencer = () => {
+    const hoy = new Date();
+    const proximas = cronograma.filter(c => {
+      const diasDiff = Math.ceil((c.fecha - hoy) / (1000 * 60 * 60 * 24));
+      return diasDiff >= 0 && diasDiff <= 7;
+    });
+    return proximas;
+  };
+
   if (loading && proveedores.length === 0) return <Loading message="Cargando formulario..." />;
+
+  const montoConvertido = calcularMontoConversion();
+  const cuotasProximasVencer = getCuotasProximasVencer();
 
   return (
     <div className="p-6">
@@ -348,7 +379,6 @@ function NuevaCompra() {
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* COLUMNA IZQUIERDA: DATOS GENERALES */}
             <div className="lg:col-span-2 space-y-6">
                 <div className="card">
                     <div className="card-header bg-gray-50/50">
@@ -400,238 +430,347 @@ function NuevaCompra() {
                     </div>
                 </div>
 
-                <div className="card">
-                    <div className="card-header bg-gray-50/50 flex justify-between items-center">
-                        <h2 className="card-title flex items-center gap-2">
-                            <MapPin size={18} /> Detalle de Productos
-                        </h2>
-                        <button type="button" className="btn btn-sm btn-primary" 
-                            onClick={() => setModalProductoOpen(true)} disabled={!proveedorSeleccionado}>
-                            <Plus size={16} /> Agregar
-                        </button>
+                {proveedorSeleccionado && (
+                    <div className="card">
+                        <div className="card-header bg-gray-50/50">
+                            <h2 className="card-title flex items-center gap-2">
+                                <DollarSign size={18} /> Moneda de la Compra
+                            </h2>
+                        </div>
+                        <div className="card-body">
+                            <div className="grid grid-cols-2 gap-3">
+                                <button type="button"
+                                    className={`p-4 border rounded-lg text-center transition ${formData.moneda === 'PEN' ? 'bg-green-50 border-green-500 text-green-700 ring-2 ring-green-500' : 'hover:bg-gray-50'}`}
+                                    onClick={() => setFormData({...formData, moneda: 'PEN'})}>
+                                    <div className="flex flex-col items-center gap-2">
+                                        <DollarSign size={24} />
+                                        <span className="font-bold">Soles (PEN)</span>
+                                    </div>
+                                </button>
+                                <button type="button"
+                                    className={`p-4 border rounded-lg text-center transition ${formData.moneda === 'USD' ? 'bg-blue-50 border-blue-500 text-blue-700 ring-2 ring-blue-500' : 'hover:bg-gray-50'}`}
+                                    onClick={() => setFormData({...formData, moneda: 'USD'})}>
+                                    <div className="flex flex-col items-center gap-2">
+                                        <DollarSign size={24} />
+                                        <span className="font-bold">Dólares (USD)</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="card-body p-0">
-                        {detalle.length > 0 ? (
-                            <div className="overflow-x-auto">
-                                <table className="table">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="w-12 text-center">#</th>
-                                            <th>Producto</th>
-                                            <th className="w-24 text-right">Cant.</th>
-                                            <th className="w-28 text-right">Precio</th>
-                                            <th className="w-20 text-center">Desc%</th>
-                                            <th className="w-28 text-right">Total</th>
-                                            <th className="w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {detalle.map((item, index) => (
-                                            <tr key={index} className="hover:bg-gray-50">
-                                                <td className="text-center text-muted text-xs">{index + 1}</td>
-                                                <td>
-                                                    <div className="font-medium text-sm">{item.producto}</div>
-                                                    <div className="text-[10px] text-muted">{item.codigo_producto}</div>
-                                                </td>
-                                                <td>
-                                                    <input type="number" className="form-input text-right h-8 text-sm"
-                                                        value={item.cantidad} onChange={(e) => handleCantidadChange(index, e.target.value)}
-                                                        min="0" step="0.01" />
-                                                </td>
-                                                <td>
-                                                    <input type="number" className="form-input text-right h-8 text-sm"
-                                                        value={item.precio_unitario} onChange={(e) => handlePrecioChange(index, e.target.value)}
-                                                        min="0" step="0.01" />
-                                                </td>
-                                                <td>
-                                                    <input type="number" className="form-input text-center h-8 text-sm"
-                                                        value={item.descuento_porcentaje} onChange={(e) => handleDescuentoChange(index, e.target.value)}
-                                                        min="0" max="100" />
-                                                </td>
-                                                <td className="text-right font-bold text-gray-700">
-                                                    {formatearMoneda(calcularSubtotalItem(item))}
-                                                </td>
-                                                <td className="text-center">
-                                                    <button type="button" className="text-red-500 hover:bg-red-50 p-1 rounded" 
-                                                        onClick={() => handleEliminarProducto(index)}>
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </td>
+                )}
+
+                {formData.moneda && (
+                    <div className="card">
+                        <div className="card-header bg-gray-50/50 flex justify-between items-center">
+                            <h2 className="card-title flex items-center gap-2">
+                                <MapPin size={18} /> Detalle de Productos
+                            </h2>
+                            <button type="button" className="btn btn-sm btn-primary" 
+                                onClick={() => setModalProductoOpen(true)}>
+                                <Plus size={16} /> Agregar
+                            </button>
+                        </div>
+                        <div className="card-body p-0">
+                            {detalle.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="table">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="w-12 text-center">#</th>
+                                                <th>Producto</th>
+                                                <th className="w-24 text-right">Cant.</th>
+                                                <th className="w-28 text-right">Precio</th>
+                                                <th className="w-20 text-center">Desc%</th>
+                                                <th className="w-28 text-right">Total</th>
+                                                <th className="w-10"></th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ) : (
-                            <div className="p-8 text-center text-muted border-dashed border-2 m-4 rounded-lg">
-                                <ShoppingCart size={40} className="mx-auto mb-2 opacity-20" />
-                                <p>No hay productos agregados</p>
-                            </div>
-                        )}
-                        
-                        <div className="p-4 bg-gray-50 border-t flex justify-end">
-                            <div className="w-64 space-y-1">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted">Subtotal:</span>
-                                    <span>{formatearMoneda(totales.subtotal)}</span>
+                                        </thead>
+                                        <tbody>
+                                            {detalle.map((item, index) => (
+                                                <tr key={index} className="hover:bg-gray-50">
+                                                    <td className="text-center text-muted text-xs">{index + 1}</td>
+                                                    <td>
+                                                        <div className="font-medium text-sm">{item.producto}</div>
+                                                        <div className="text-[10px] text-muted">{item.codigo_producto}</div>
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" className="form-input text-right h-8 text-sm"
+                                                            value={item.cantidad} onChange={(e) => handleCantidadChange(index, e.target.value)}
+                                                            min="0" step="0.01" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" className="form-input text-right h-8 text-sm"
+                                                            value={item.precio_unitario} onChange={(e) => handlePrecioChange(index, e.target.value)}
+                                                            min="0" step="0.01" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" className="form-input text-center h-8 text-sm"
+                                                            value={item.descuento_porcentaje} onChange={(e) => handleDescuentoChange(index, e.target.value)}
+                                                            min="0" max="100" />
+                                                    </td>
+                                                    <td className="text-right font-bold text-gray-700">
+                                                        {formatearMoneda(calcularSubtotalItem(item))}
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <button type="button" className="text-red-500 hover:bg-red-50 p-1 rounded" 
+                                                            onClick={() => handleEliminarProducto(index)}>
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted">
-                                        <select className="bg-transparent border-none p-0 text-sm focus:ring-0 cursor-pointer text-muted font-medium"
-                                            value={formData.tipo_impuesto} onChange={(e) => setFormData({...formData, tipo_impuesto: e.target.value})}>
-                                            <option value="IGV">IGV (18%)</option>
-                                            <option value="EXO">Exonerado</option>
-                                            <option value="INA">Inafecto</option>
-                                        </select>
-                                    </span>
-                                    <span>{formatearMoneda(totales.igv)}</span>
+                            ) : (
+                                <div className="p-8 text-center text-muted border-dashed border-2 m-4 rounded-lg">
+                                    <ShoppingCart size={40} className="mx-auto mb-2 opacity-20" />
+                                    <p>No hay productos agregados</p>
                                 </div>
-                                <div className="flex justify-between text-lg font-bold text-primary pt-2 border-t border-gray-200">
-                                    <span>Total:</span>
-                                    <span>{formatearMoneda(totales.total)}</span>
+                            )}
+                            
+                            <div className="p-4 bg-gray-50 border-t flex justify-end">
+                                <div className="w-64 space-y-1">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted">Subtotal:</span>
+                                        <span>{formatearMoneda(totales.subtotal)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted">
+                                            <select className="bg-transparent border-none p-0 text-sm focus:ring-0 cursor-pointer text-muted font-medium"
+                                                value={formData.tipo_impuesto} onChange={(e) => setFormData({...formData, tipo_impuesto: e.target.value})}>
+                                                <option value="IGV">IGV (18%)</option>
+                                                <option value="EXO">Exonerado</option>
+                                                <option value="INA">Inafecto</option>
+                                            </select>
+                                        </span>
+                                        <span>{formatearMoneda(totales.igv)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-lg font-bold text-primary pt-2 border-t border-gray-200">
+                                        <span>Total:</span>
+                                        <span>{formatearMoneda(totales.total)}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
 
-            {/* COLUMNA DERECHA: PAGO Y CONFIGURACIÓN */}
             <div className="space-y-6">
-                <div className="card">
-                    <div className="card-header bg-gray-50/50">
-                        <h2 className="card-title flex items-center gap-2">
-                            <Wallet size={18} /> Método de Pago
-                        </h2>
-                    </div>
-                    <div className="card-body space-y-4">
-                        <div className="form-group">
-                            <label className="form-label text-xs">Cuenta de Origen</label>
-                            <select className="form-select" value={formData.id_cuenta_pago}
-                                onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} required>
-                                <option value="">Seleccionar cuenta...</option>
-                                {cuentasPago.map(c => (
-                                    <option key={c.id_cuenta} value={c.id_cuenta}>
-                                        {c.nombre} ({c.moneda})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                            <button type="button" 
-                                className={`p-3 border rounded-lg text-center transition ${formData.tipo_compra === 'Contado' ? 'bg-green-50 border-green-500 text-green-700 ring-1 ring-green-500' : 'hover:bg-gray-50'}`}
-                                onClick={() => handleTipoCompraChange('Contado')}>
-                                <div className="flex flex-col items-center gap-1">
-                                    <Wallet size={20} />
-                                    <span className="font-bold text-sm">Contado</span>
-                                </div>
-                            </button>
-                            <button type="button" 
-                                className={`p-3 border rounded-lg text-center transition ${formData.tipo_compra === 'Credito' ? 'bg-orange-50 border-orange-500 text-orange-700 ring-1 ring-orange-500' : 'hover:bg-gray-50'}`}
-                                onClick={() => handleTipoCompraChange('Credito')}>
-                                <div className="flex flex-col items-center gap-1">
-                                    <CreditCard size={20} />
-                                    <span className="font-bold text-sm">Crédito</span>
-                                </div>
-                            </button>
-                        </div>
-
-                        {formData.tipo_compra === 'Contado' && cuentaSeleccionada && (
-                            <div className={`text-xs p-2 rounded border ${cuentaSeleccionada.saldo_actual >= totales.total ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800'}`}>
-                                {cuentaSeleccionada.saldo_actual >= totales.total 
-                                    ? '✅ Saldo disponible suficiente.' 
-                                    : `❌ Saldo insuficiente. Faltan ${formatearMoneda(totales.total - cuentaSeleccionada.saldo_actual)}`}
+                {detalle.length > 0 && (
+                    <>
+                        <div className="card">
+                            <div className="card-header bg-gray-50/50">
+                                <h2 className="card-title flex items-center gap-2">
+                                    <Wallet size={18} /> Método de Pago
+                                </h2>
                             </div>
-                        )}
-
-                        {formData.tipo_compra === 'Credito' && (
-                            <div className="space-y-3 pt-2 border-t animate-in fade-in slide-in-from-top-2">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Calculator size={16} className="text-orange-600" />
-                                    <span className="font-bold text-sm text-gray-800">Plan de Pagos</span>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="form-group">
-                                        <label className="form-label text-[10px] uppercase text-gray-500">N° Cuotas</label>
-                                        <input type="number" className="form-input text-center font-bold" min="1"
-                                            value={formData.numero_cuotas} 
-                                            onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label text-[10px] uppercase text-gray-500">Frecuencia (Días)</label>
-                                        <input type="number" className="form-input text-center" min="1"
-                                            value={formData.dias_entre_cuotas} 
-                                            onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} />
-                                    </div>
-                                </div>
-
+                            <div className="card-body space-y-4">
                                 <div className="form-group">
-                                    <label className="form-label text-[10px] uppercase text-gray-500">1° Vencimiento</label>
-                                    <input type="date" className="form-input" 
-                                        value={formData.fecha_primera_cuota}
-                                        onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} />
-                                    <small className="text-[10px] text-muted block mt-1">
-                                        * Por defecto: {formData.dias_entre_cuotas} días después de emisión
-                                    </small>
+                                    <label className="form-label text-xs">Cuenta de Pago</label>
+                                    <select className="form-select" value={formData.id_cuenta_pago}
+                                        onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} required>
+                                        <option value="">Seleccionar cuenta...</option>
+                                        {cuentasPago.map(c => (
+                                            <option key={c.id_cuenta} value={c.id_cuenta}>
+                                                {c.nombre} ({c.moneda}) - {c.tipo}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
-                                {/* CRONOGRAMA AUTOMÁTICO */}
-                                <div className="bg-white border rounded-lg overflow-hidden text-xs mt-3">
-                                    <div className="bg-gray-100 p-2 font-bold text-center border-b flex justify-between items-center">
-                                        <span>Simulación</span>
-                                        <span className="text-orange-600">{formData.dias_credito} días total</span>
+                                {cuentaSeleccionada && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-muted">Saldo actual:</span>
+                                            <span className="font-bold">{formatearMoneda(cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-muted">Moneda:</span>
+                                            <span className="font-bold">{cuentaSeleccionada.moneda}</span>
+                                        </div>
                                     </div>
-                                    <div className="max-h-40 overflow-y-auto">
-                                        <table className="w-full">
-                                            <tbody>
-                                                {cronograma.map((cuota, idx) => (
-                                                    <tr key={idx} className="border-b last:border-0 hover:bg-gray-50">
-                                                        <td className="p-2 text-center font-bold text-gray-500">{cuota.numero}</td>
-                                                        <td className="p-2 text-center">{cuota.fecha.toLocaleDateString('es-PE')}</td>
-                                                        <td className="p-2 text-right font-medium">{formatearMoneda(cuota.monto)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                )}
+
+                                {requiereConversion && (
+                                    <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4 space-y-3">
+                                        <div className="flex items-center gap-2 text-orange-700">
+                                            <ArrowRightLeft size={16} />
+                                            <span className="font-bold text-sm">Conversión de Moneda Requerida</span>
+                                        </div>
+                                        <div className="text-xs text-orange-600">
+                                            <p>Cuenta: {cuentaSeleccionada.moneda} → Compra: {formData.moneda}</p>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label text-xs">Tipo de Cambio *</label>
+                                            <input 
+                                                type="number" 
+                                                className="form-input text-center font-bold" 
+                                                value={formData.tipo_cambio}
+                                                onChange={(e) => setFormData({...formData, tipo_cambio: e.target.value})}
+                                                placeholder="Ej: 3.75"
+                                                step="0.0001"
+                                                min="0"
+                                                required
+                                            />
+                                        </div>
+                                        {montoConvertido && (
+                                            <div className="bg-white rounded p-2 text-center border border-orange-200">
+                                                <p className="text-xs text-muted mb-1">Monto a pagar</p>
+                                                <p className="font-bold text-orange-700">
+                                                    {formatearMoneda(montoConvertido, cuentaSeleccionada.moneda)}
+                                                </p>
+                                                <p className="text-[10px] text-muted mt-1">
+                                                    {formatearMoneda(totales.total, formData.moneda)} × {parseFloat(formData.tipo_cambio || 0).toFixed(4)}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button type="button" 
+                                        className={`p-3 border rounded-lg text-center transition ${formData.tipo_compra === 'Contado' ? 'bg-green-50 border-green-500 text-green-700 ring-1 ring-green-500' : 'hover:bg-gray-50'}`}
+                                        onClick={() => handleTipoCompraChange('Contado')}>
+                                        <div className="flex flex-col items-center gap-1">
+                                            <Wallet size={20} />
+                                            <span className="font-bold text-sm">Contado</span>
+                                        </div>
+                                    </button>
+                                    <button type="button" 
+                                        className={`p-3 border rounded-lg text-center transition ${formData.tipo_compra === 'Credito' ? 'bg-orange-50 border-orange-500 text-orange-700 ring-1 ring-orange-500' : 'hover:bg-gray-50'}`}
+                                        onClick={() => handleTipoCompraChange('Credito')}>
+                                        <div className="flex flex-col items-center gap-1">
+                                            <CreditCard size={20} />
+                                            <span className="font-bold text-sm">Crédito</span>
+                                        </div>
+                                    </button>
+                                </div>
+
+                                {formData.tipo_compra === 'Contado' && cuentaSeleccionada && (
+                                    <div className={`text-xs p-2 rounded border ${
+                                        montoConvertido 
+                                            ? (cuentaSeleccionada.saldo_actual >= montoConvertido ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
+                                            : (cuentaSeleccionada.saldo_actual >= totales.total ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
+                                    }`}>
+                                        {(() => {
+                                            const montoRequerido = montoConvertido || totales.total;
+                                            const suficiente = cuentaSeleccionada.saldo_actual >= montoRequerido;
+                                            return suficiente 
+                                                ? 'Saldo disponible suficiente.' 
+                                                : `Saldo insuficiente. Faltan ${formatearMoneda(montoRequerido - cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}`;
+                                        })()}
+                                    </div>
+                                )}
+
+                                {formData.tipo_compra === 'Credito' && (
+                                    <div className="space-y-3 pt-2 border-t animate-in fade-in slide-in-from-top-2">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Calculator size={16} className="text-orange-600" />
+                                            <span className="font-bold text-sm text-gray-800">Plan de Pagos</span>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="form-group">
+                                                <label className="form-label text-[10px] uppercase text-gray-500">N° Cuotas</label>
+                                                <input type="number" className="form-input text-center font-bold" min="1"
+                                                    value={formData.numero_cuotas} 
+                                                    onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label text-[10px] uppercase text-gray-500">Frecuencia (Días)</label>
+                                                <input type="number" className="form-input text-center" min="1"
+                                                    value={formData.dias_entre_cuotas} 
+                                                    onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} />
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label className="form-label text-[10px] uppercase text-gray-500">1° Vencimiento</label>
+                                            <input type="date" className="form-input" 
+                                                value={formData.fecha_primera_cuota}
+                                                onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} />
+                                            <small className="text-[10px] text-muted block mt-1">
+                                                Por defecto: {formData.dias_entre_cuotas} días después de emisión
+                                            </small>
+                                        </div>
+
+                                        <div className="bg-white border rounded-lg overflow-hidden text-xs mt-3">
+                                            <div className="bg-gray-100 p-2 font-bold text-center border-b flex justify-between items-center">
+                                                <span>Simulación</span>
+                                                <span className="text-orange-600">{formData.dias_credito} días total</span>
+                                            </div>
+                                            <div className="max-h-40 overflow-y-auto">
+                                                <table className="w-full">
+                                                    <tbody>
+                                                        {cronograma.map((cuota, idx) => {
+                                                            const hoy = new Date();
+                                                            const diasDiff = Math.ceil((cuota.fecha - hoy) / (1000 * 60 * 60 * 24));
+                                                            const esProximo = diasDiff >= 0 && diasDiff <= 7;
+                                                            
+                                                            return (
+                                                                <tr key={idx} className={`border-b last:border-0 ${esProximo ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}>
+                                                                    <td className="p-2 text-center font-bold text-gray-500">#{cuota.numero}</td>
+                                                                    <td className="p-2 text-center">
+                                                                        <div>{cuota.fecha.toLocaleDateString('es-PE')}</div>
+                                                                        {esProximo && <div className="text-[9px] text-yellow-600 font-bold">Próxima semana</div>}
+                                                                    </td>
+                                                                    <td className="p-2 text-right font-medium">{formatearMoneda(cuota.monto)}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        {cuotasProximasVencer.length > 0 && (
+                                            <div className="bg-yellow-50 border border-yellow-300 rounded p-2 text-xs text-yellow-800">
+                                                <div className="flex items-center gap-1 mb-1">
+                                                    <AlertCircle size={12} />
+                                                    <span className="font-bold">Alerta de vencimiento</span>
+                                                </div>
+                                                <p>{cuotasProximasVencer.length} cuota(s) vencen en los próximos 7 días</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="card">
+                            <div className="card-body">
+                                <div className="form-group mb-3">
+                                    <label className="form-label text-xs">Dirección Entrega</label>
+                                    <textarea className="form-textarea text-sm" rows="2"
+                                        value={formData.direccion_entrega}
+                                        onChange={(e) => setFormData({...formData, direccion_entrega: e.target.value})} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label text-xs">Notas / Observaciones</label>
+                                    <textarea className="form-textarea text-sm" rows="2"
+                                        value={formData.observaciones}
+                                        onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
+                                        placeholder="Ej: Entregar por la mañana..." />
                                 </div>
                             </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="card">
-                    <div className="card-body">
-                        <div className="form-group mb-3">
-                            <label className="form-label text-xs">Dirección Entrega</label>
-                            <textarea className="form-textarea text-sm" rows="2"
-                                value={formData.direccion_entrega}
-                                onChange={(e) => setFormData({...formData, direccion_entrega: e.target.value})} />
                         </div>
-                        <div className="form-group">
-                            <label className="form-label text-xs">Notas / Observaciones</label>
-                            <textarea className="form-textarea text-sm" rows="2"
-                                value={formData.observaciones}
-                                onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
-                                placeholder="Ej: Entregar por la mañana..." />
-                        </div>
-                    </div>
-                </div>
 
-                <button type="submit" className="btn btn-primary w-full py-3 shadow-lg shadow-blue-200" disabled={loading}>
-                    {loading ? 'Procesando...' : (
-                        <span className="flex items-center justify-center gap-2">
-                            <Save size={18} /> Guardar Compra
-                        </span>
-                    )}
-                </button>
+                        <button type="submit" className="btn btn-primary w-full py-3 shadow-lg shadow-blue-200" disabled={loading}>
+                            {loading ? 'Procesando...' : (
+                                <span className="flex items-center justify-center gap-2">
+                                    <Save size={18} /> Guardar Compra
+                                </span>
+                            )}
+                        </button>
+                    </>
+                )}
             </div>
         </div>
       </form>
 
-      {/* MODALES (Proveedor, Producto, Historial) se mantienen igual que tu versión original */}
       <Modal
         isOpen={modalProveedorOpen}
         onClose={() => setModalProveedorOpen(false)}
@@ -694,7 +833,6 @@ function NuevaCompra() {
       >
         {loadingHistorial ? <Loading message="Cargando historial..." /> : historialCompras ? (
             <div className="space-y-4">
-                {/* Resumen de estadísticas del historial (Precio promedio, mínimo, máximo) */}
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="bg-blue-50 p-2 rounded">
                         <span className="block text-muted">Promedio</span>

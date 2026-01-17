@@ -595,34 +595,26 @@ export const guiasTransportistaAPI = {
 export const comprasAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
-    if (filtros.estado) params.append('estado', filtros.estado);
-    if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
-    if (filtros.tipo_compra) params.append('tipo_compra', filtros.tipo_compra);
-    if (filtros.tipo_cuenta) params.append('tipo_cuenta', filtros.tipo_cuenta);
-    if (filtros.id_cuenta_pago) params.append('id_cuenta_pago', filtros.id_cuenta_pago);
-    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
-    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    if (filtros.mes) params.append('mes', filtros.mes);
-    if (filtros.anio) params.append('anio', filtros.anio);
-    if (filtros.alertas) params.append('alertas', filtros.alertas);
-    
+    Object.entries(filtros).forEach(([key, value]) => {
+      if (value) params.append(key, value);
+    });
     return api.get(`/compras?${params.toString()}`);
   },
 
   getById: (id) => api.get(`/compras/${id}`),
   create: (data) => api.post('/compras', data),
   update: (id, data) => api.put(`/compras/${id}`, data),
+  
   cancelar: (id, motivo_cancelacion) => 
-    api.delete(`/compras/${id}/cancelar`, { data: { motivo_cancelacion } }),
+    api.patch(`/compras/${id}/cancelar`, { motivo_cancelacion }),
 
   getEstadisticas: (params) => api.get('/compras/estadisticas', { params }),
   getAlertas: (params) => api.get('/compras/alertas', { params }),
   getPorCuenta: (params) => api.get('/compras/por-cuenta', { params }),
 
-  registrarPago: (id, data) => api.post(`/compras/${id}/pagar`, data),
-
-  getResumenPagos: (id) => api.get(`/compras/${id}/resumen-pagos`),
-  getHistorialPagos: (id) => api.get(`/compras/${id}/historial-pagos`),
+  registrarPago: (id, data) => api.post(`/compras/${id}/pagos`, data),
+  getResumenPagos: (id) => api.get(`/compras/${id}/pagos/resumen`),
+  getHistorialPagos: (id) => api.get(`/compras/${id}/pagos/historial`),
 
   getCuotas: (id, params) => api.get(`/compras/${id}/cuotas`, { params }),
   getCuotaById: (id, idCuota) => api.get(`/compras/${id}/cuotas/${idCuota}`),
@@ -630,7 +622,7 @@ export const comprasAPI = {
     api.post(`/compras/${id}/cuotas/${idCuota}/pagar`, data),
 
   descargarPDF: async (id) => {
-    const response = await fetch(`${API_URL}/compras/${id}/pdf`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/compras/${id}/pdf`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,

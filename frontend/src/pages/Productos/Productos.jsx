@@ -231,7 +231,10 @@ function Productos() {
         <div className="flex gap-2 justify-center">
           <button
             className="btn btn-sm btn-warning"
-            onClick={() => abrirModalConteo(row)}
+            onClick={(e) => {
+              e.stopPropagation();
+              abrirModalConteo(row);
+            }}
             title="Conteo Físico"
             disabled={row.estado === 'Inactivo'}
           >
@@ -240,7 +243,10 @@ function Productos() {
           
           <button
             className="btn btn-sm btn-primary"
-            onClick={() => navigate(`/productos/${value}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/productos/${value}`);
+            }}
             title="Ver Detalle y Recetas"
           >
             <Eye size={14} />
@@ -248,7 +254,10 @@ function Productos() {
           
           <button
             className="btn btn-sm btn-outline"
-            onClick={() => abrirModal(row)}
+            onClick={(e) => {
+              e.stopPropagation();
+              abrirModal(row);
+            }}
             title="Editar"
           >
             <Edit size={14} />
@@ -256,7 +265,10 @@ function Productos() {
           
           <button
             className="btn btn-sm btn-danger"
-            onClick={() => handleDelete(value)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(value);
+            }}
             title="Desactivar"
             disabled={row.estado === 'Inactivo'}
           >
@@ -350,6 +362,7 @@ function Productos() {
         columns={columns}
         data={productosFiltrados}
         emptyMessage="No se encontraron productos"
+        onRowClick={(row) => navigate(`/productos/${row.id_producto}`)}
       />
 
       <Modal

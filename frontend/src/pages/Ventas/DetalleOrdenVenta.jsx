@@ -1403,7 +1403,8 @@ function DetalleOrdenVenta() {
                   <label className="text-sm font-medium text-muted">Tipo Documento:</label>
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
-                    {!orden.comprobante_editado && orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+                   {!orden.comprobante_editado && !['Cancelada', 'Entregada'].includes(orden.estado) && (
+
                       <button
                         className="btn btn-xs btn-outline text-xs"
                         onClick={() => {

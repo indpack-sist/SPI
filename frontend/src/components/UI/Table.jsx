@@ -7,7 +7,8 @@ function Table({
   loading = false,
   emptyMessage = 'No hay datos para mostrar',
   pagination = null,
-  onPageChange = null
+  onPageChange = null,
+  onRowClick = null
 }) {
   if (loading) {
     return (
@@ -51,7 +52,11 @@ function Table({
           </thead>
           <tbody>
             {data.map((row, rowIndex) => (
-              <tr key={rowIndex}>
+              <tr 
+                key={rowIndex}
+                onClick={() => onRowClick && onRowClick(row)}
+                className={onRowClick ? "cursor-pointer hover:bg-gray-50 transition-colors" : ""}
+              >
                 {columns.map((column, colIndex) => (
                   <td 
                     key={colIndex}

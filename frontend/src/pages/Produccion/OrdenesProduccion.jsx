@@ -12,7 +12,6 @@ import {
   AlertCircle,
   Factory,
   TrendingUp,
-  DollarSign,
   Package,
   Users,
   Calendar,
@@ -347,10 +346,24 @@ function OrdenesProduccion() {
       align: 'center',
       render: (value) => (
         <div className="flex gap-1 justify-center">
-          <button className="btn btn-sm btn-primary p-2" onClick={() => handleVerDetalle(value)} title="Ver detalle">
+          <button 
+            className="btn btn-sm btn-primary p-2" 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleVerDetalle(value);
+            }} 
+            title="Ver detalle"
+          >
             <Eye size={16} />
           </button>
-          <button className="btn btn-sm btn-outline p-2" onClick={() => handleDescargarPDF(value)} title="Descargar PDF">
+          <button 
+            className="btn btn-sm btn-outline p-2" 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDescargarPDF(value);
+            }} 
+            title="Descargar PDF"
+          >
             <Download size={16} />
           </button>
         </div>
@@ -541,7 +554,12 @@ function OrdenesProduccion() {
           </div>
         </div>
         <div className="card-body table-container">
-            <Table columns={columns} data={currentItems} emptyMessage="No hay órdenes registradas" />
+            <Table 
+              columns={columns} 
+              data={currentItems} 
+              emptyMessage="No hay órdenes registradas" 
+              onRowClick={(row) => navigate(`/produccion/ordenes/${row.id_orden}`)}
+            />
         </div>
         
         {ordenesFiltradas.length > itemsPerPage && (

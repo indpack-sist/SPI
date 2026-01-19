@@ -6,13 +6,11 @@ import https from 'https';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- FUNCIÓN MEJORADA: Con Timeout y manejo de errores ---
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
     const request = https.get(url, {
-        timeout: 3000 // 3 segundos máximo de espera
+        timeout: 3000
     }, (response) => {
-      // Si la imagen no existe o da error 404/500
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return reject(new Error(`Status Code: ${response.statusCode}`));
       }
@@ -24,7 +22,6 @@ function descargarImagen(url) {
 
     request.on('error', (err) => reject(err));
 
-    // Si tarda más de 3 segundos, cancelamos para no trabar el PDF
     request.on('timeout', () => {
         request.destroy();
         reject(new Error("Timeout al descargar imagen"));
@@ -38,7 +35,7 @@ export async function generarOrdenVentaPDF(orden) {
       const doc = new PDFDocument({ 
         size: 'A4',
         margins: { top: 30, bottom: 30, left: 30, right: 30 },
-        bufferPages: true // Optimización de memoria
+        bufferPages: true
       });
       
       const chunks = [];
@@ -46,29 +43,27 @@ export async function generarOrdenVentaPDF(orden) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // --- MANEJO DEL LOGO ---
+      const fmt = new Intl.NumberFormat('en-US', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      });
+
       let logoBuffer = null;
       try {
-        // Intentamos descargar, si falla o tarda, usamos el fallback
         logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
       } catch (error) {
-        console.warn("No se pudo cargar el logo (usando fallback):", error.message);
-        // No hacemos reject, dejamos que continúe sin logo
       }
 
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          // Si el buffer es inválido (imagen corrupta)
           dibujarLogoFallback(doc);
         }
       } else {
         dibujarLogoFallback(doc);
       }
-      // -----------------------
 
-      // Resto del contenido (Mismo código tuyo)
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
       doc.text('INDPACK S.A.C.', 50, 110);
       
@@ -99,15 +94,18 @@ export async function generarOrdenVentaPDF(orden) {
       
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
+      const nombreCliente = orden.cliente || orden.razon_social || orden.nombre || '';
+      const rucCliente = orden.ruc_cliente || orden.ruc || orden.numero_documento || '';
+
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Cliente:', 40, 203);
       doc.font('Helvetica');
-      doc.text(orden.cliente || '', 100, 203, { width: 230 });
+      doc.text(nombreCliente, 100, 203, { width: 230 });
       
       doc.font('Helvetica-Bold');
       doc.text('RUC:', 40, 218);
       doc.font('Helvetica');
-      doc.text(orden.ruc_cliente || '', 100, 218);
+      doc.text(rucCliente, 100, 218);
       
       doc.font('Helvetica-Bold');
       doc.text('Dirección:', 40, 233);
@@ -183,12 +181,12 @@ export async function generarOrdenVentaPDF(orden) {
       
       if (orden.detalle && orden.detalle.length > 0) {
         orden.detalle.forEach((item, idx) => {
-          const cantidad = parseFloat(item.cantidad).toFixed(2);
-          const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
+          const cantidad = fmt.format(item.cantidad);
+          const precioUnitario = fmt.format(item.precio_unitario);
           
           const descuento = parseFloat(item.descuento_porcentaje || 0);
           const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
-          const valorVenta = parseFloat(totalLinea).toFixed(2);
+          const valorVenta = fmt.format(totalLinea);
           
           const descripcion = item.producto;
           const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
@@ -228,9 +226,10 @@ export async function generarOrdenVentaPDF(orden) {
       let yPosLeft = yBaseFooter;
       let yPosRight = yBaseFooter;
 
-      const subtotal = parseFloat(orden.subtotal || 0).toFixed(2);
-      const igv = parseFloat(orden.igv || 0).toFixed(2);
-      const total = parseFloat(orden.total || 0).toFixed(2);
+      const subtotal = fmt.format(orden.subtotal || 0);
+      const igv = fmt.format(orden.igv || 0);
+      const total = fmt.format(orden.total || 0);
+      const totalNumero = parseFloat(orden.total || 0);
       
       const tipoImpuesto = orden.tipo_impuesto || 'IGV';
       const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
@@ -266,12 +265,6 @@ export async function generarOrdenVentaPDF(orden) {
 
       yPosRight += 25;
 
-      if (orden.tipo_cambio && parseFloat(orden.tipo_cambio) > 1) {
-        doc.fontSize(8).font('Helvetica').fillColor('#666666');
-        doc.text(`T.C. Ref: ${parseFloat(orden.tipo_cambio).toFixed(3)}`, 475, yPosRight, { align: 'right', width: 80 });
-        yPosRight += 15;
-      }
-
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('OBSERVACIONES', 40, yPosLeft);
       
@@ -299,7 +292,7 @@ export async function generarOrdenVentaPDF(orden) {
 
       doc.fillColor('#000000');
       doc.fontSize(8).font('Helvetica');
-      const totalEnLetras = numeroALetras(parseFloat(total), orden.moneda);
+      const totalEnLetras = numeroALetras(totalNumero, orden.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');

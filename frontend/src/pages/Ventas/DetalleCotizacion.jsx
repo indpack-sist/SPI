@@ -58,26 +58,32 @@ function DetalleCotizacion() {
       setLoading(true);
       setError(null);
       
-      // 1. Llamada a la API (esperamos un Blob)
+      // 1. Llamada a la API
       const response = await cotizacionesAPI.descargarPDF(id);
       
-      // 2. Crear URL y descargar
+      // 2. Crear URL
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
       const link = document.createElement('a');
       link.href = url;
       
-      // Intentar sacar el nombre del archivo del header
-      const contentDisposition = response.headers['content-disposition'];
-      let fileName = `Cotizacion-${cotizacion.numero_cotizacion}.pdf`;
+      // --- INICIO DE LA MODIFICACIÓN PARA TU FORMATO DESEADO ---
       
-      if (contentDisposition) {
-        const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (fileNameMatch && fileNameMatch.length === 2) {
-          fileName = fileNameMatch[1];
-        }
-      }
+      // 1. Limpiamos el nombre del cliente (Mayúsculas, sin tildes, espacios por guión bajo)
+      const clienteSanitizado = (cotizacion.cliente || 'CLIENTE')
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar tildes
+        .replace(/[^a-zA-Z0-9]/g, "_")   // Reemplazar espacios y símbolos por guiones bajos
+        .replace(/_+/g, "_")             // Evitar guiones dobles (ej: EMPRESA__SA)
+        .toUpperCase();
+
+      // 2. Obtenemos el número (ej: COT-2025-001)
+      const nroCot = cotizacion.numero_cotizacion || id;
+      
+      // 3. Armamos el nombre final: EMPRESA_SA_COT-2025-001.pdf
+      const fileName = `${clienteSanitizado}_${nroCot}.pdf`;
+      
+      // --- FIN DE LA MODIFICACIÓN ---
       
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
@@ -91,25 +97,16 @@ function DetalleCotizacion() {
     } catch (err) {
       console.error("Error original:", err);
 
-      // --- AQUÍ ESTÁ LA SOLUCIÓN AL "UNDEFINED" ---
-      // Si la respuesta es un Blob (porque axios así lo configuró), hay que leerlo como texto
       if (err.response && err.response.data instanceof Blob) {
         try {
-          // Leemos el contenido del Blob (que contiene el JSON de error)
           const errorText = await err.response.data.text();
           const errorJson = JSON.parse(errorText);
-          
-          // Ahora sí mostramos el mensaje real del backend
           const mensajeError = errorJson.error || 'Error al generar el PDF';
-          console.error("Mensaje del backend:", mensajeError);
           setError(mensajeError);
-          
         } catch (e) {
-          // Si no es JSON válido
           setError('Ocurrió un error inesperado al descargar el archivo.');
         }
       } else {
-        // Error de red u otro tipo que no sea del backend
         setError(err.message || 'Error de conexión al descargar el PDF');
       }
     } finally {

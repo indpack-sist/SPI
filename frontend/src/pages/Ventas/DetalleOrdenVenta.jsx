@@ -1139,7 +1139,7 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      <div className="card mb-4 border-l-4 border-primary">
+      <div className="card mb-6 border-l-4 border-primary">
         <div className="card-header">
           <h2 className="card-title">
             <TrendingUp size={20} />
@@ -1245,325 +1245,292 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className={`card border-l-4 ${estadoPagoConfig.clase.replace('badge-', 'border-')}`}>
-          <div className="card-body">
-            <div className="flex items-center gap-3">
-              <IconoEstadoPago size={32} />
-              <div>
-                <p className="text-sm text-muted">Estado Pago</p>
-                <span className={`badge ${estadoPagoConfig.clase}`}>{orden.estado_pago}</span>
-              </div>
+      {/* ---------------- SECCION 1: CABECERA Y DATOS DEL CLIENTE ---------------- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        
+        {/* COLUMNA 1: CLIENTE */}
+        <div className="card h-full">
+            <div className="card-header">
+                <h2 className="card-title"><Building size={20} /> Cliente</h2>
             </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-body">
-            <p className="text-sm text-muted mb-2">Productos</p>
-            <div className="flex items-center gap-2">
-              <Package size={24} />
-              <div>
-                <span className="font-bold text-2xl">{orden.detalle.length}</span>
-                <span className="text-sm text-muted ml-1">items</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-body">
-            <p className="text-sm text-muted mb-2">Comercial</p>
-            <div className="flex items-center gap-2">
-              <User size={24} />
-              <div>
-                <span className="font-bold text-lg">{orden.comercial || 'Sin asignar'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card col-span-3">
-            <div className="card-body">
-                <p className="text-sm text-muted mb-2">Progreso Entrega</p>
-                {(() => {
-                    const totalQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad), 0);
-                    const despachadoQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad_despachada || 0), 0);
-                    const pct = totalQty > 0 ? (despachadoQty / totalQty) * 100 : 0;
-                    return (
-                        <div className="flex items-center gap-3 mt-2">
-                            <div className="flex-1 bg-gray-200 rounded-full h-4">
-                                 <div className="bg-primary h-4 rounded-full" style={{ width: `${pct}%` }}></div>
+            <div className="card-body space-y-2">
+                <div>
+                    <label className="text-sm font-medium text-muted">Razón Social:</label>
+                    <p className="font-bold">{orden.cliente}</p>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-muted">RUC:</label>
+                    <p>{orden.ruc_cliente}</p>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-muted">Comercial Asignado:</label>
+                    <p className="flex items-center gap-1"><User size={14}/> {orden.comercial || 'Sin asignar'}</p>
+                </div>
+                {estadoCredito?.usar_limite_credito && (
+                    <div className="pt-3 mt-2 border-t border-gray-100">
+                        <p className="text-xs font-bold text-primary uppercase flex items-center gap-1"><CreditCard size={14}/> Crédito Disponible</p>
+                        <div className="grid grid-cols-1 gap-1 mt-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-muted">PEN:</span>
+                                <span className="font-bold text-green-600">{formatearMoneda(estadoCredito.credito_pen.disponible, 'PEN')}</span>
                             </div>
-                            <span className="text-sm font-bold text-gray-700 min-w-[3rem] text-right">
-                                {pct.toFixed(0)}%
-                            </span>
-                        </div>
-                    )
-                })()}
-            </div>
-        </div>
-      </div>
-
-      {resumenPagos && (
-        <div className="card mb-4 border-l-4 border-primary">
-          <div className="card-header flex justify-between items-center">
-            <h2 className="card-title"><CreditCard size={20} /> Resumen de Pagos</h2>
-            {orden.estado_pago !== 'Pagado' && (
-              <button className="btn btn-sm btn-success" onClick={() => setModalPagoOpen(true)}>
-                <Plus size={16} /> Registrar Pago
-              </button>
-            )}
-          </div>
-          <div className="card-body">
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted">Total Orden</p>
-                <p className="text-2xl font-bold">{formatearMoneda(totalCorregido)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted">Monto Pagado</p>
-                <p className="text-2xl font-bold text-success">{formatearMoneda(resumenPagos.monto_pagado)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted">Saldo Pendiente</p>
-                <p className="text-2xl font-bold text-warning">{formatearMoneda(saldoCorregido)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted">Progreso</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-gray-200 rounded-full h-3">
-                    <div 
-                      className={`h-3 rounded-full ${
-                        (resumenPagos.monto_pagado >= totalCorregido - 0.1) ? 'bg-success' : 
-                        parseFloat(resumenPagos.monto_pagado) > 0 ? 'bg-info' : 'bg-warning'
-                      }`}
-                      style={{ width: `${Math.min(100, (parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100)}%` }}
-                    ></div>
-                  </div>
-                  <span className="font-bold">{((parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100).toFixed(0)}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {pagos.length > 0 && (
-        <div className="card mb-4">
-          <div className="card-header">
-            <h2 className="card-title">
-              <FileText size={20} /> Historial de Pagos
-              <span className="badge badge-primary ml-2">{pagos.length}</span>
-            </h2>
-          </div>
-          <div className="card-body">
-            <Table columns={columnsPagos} data={pagos} emptyMessage="No hay pagos registrados" />
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title"><Building size={20} /> Cliente</h2>
-          </div>
-          <div className="card-body space-y-2">
-            <div>
-              <label className="text-sm font-medium text-muted">Razón Social:</label>
-              <p className="font-bold">{orden.cliente}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted">RUC:</label>
-              <p>{orden.ruc_cliente}</p>
-            </div>
-            {estadoCredito?.usar_limite_credito && (
-                <div className="pt-3 mt-2 border-t border-gray-100">
-                    <p className="text-xs font-bold text-primary uppercase flex items-center gap-1"><CreditCard size={14}/> Crédito Disponible</p>
-                    <div className="grid grid-cols-1 gap-1 mt-2 text-sm">
-                        <div className="flex justify-between">
-                            <span className="text-muted">PEN:</span>
-                            <span className="font-bold text-green-600">{formatearMoneda(estadoCredito.credito_pen.disponible, 'PEN')}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-muted">USD:</span>
-                            <span className="font-bold text-blue-600">$ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}</span>
+                            <div className="flex justify-between">
+                                <span className="text-muted">USD:</span>
+                                <span className="font-bold text-blue-600">$ {parseFloat(estadoCredito.credito_usd.disponible).toFixed(2)}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-          </div>
+                )}
+            </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
-          </div>
-          <div className="card-body space-y-2">
-            
-            {orden.id_cotizacion && (
-              <div className="pb-2 mb-2 border-b border-gray-100">
-                <label className="text-sm font-medium text-muted">Cotización Origen:</label>
-                <button 
-                  className="flex items-center gap-2 text-primary font-bold hover:underline"
-                  onClick={() => navigate(`/ventas/cotizaciones/${orden.id_cotizacion}`)}
-                >
-                  <FileText size={16} />
-                  {orden.numero_cotizacion}
-                </button>
-              </div>
-            )}
-
-            {orden.orden_compra_cliente && (
-              <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded">
-                <label className="text-sm font-medium text-muted">O/C Cliente:</label>
-                <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
-              </div>
-            )}
-
-            <div className="pb-2 mb-2 border-b border-gray-100">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <label className="text-sm font-medium text-muted">Tipo Documento:</label>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
-                   {!orden.comprobante_editado && orden.estado !== 'Cancelada' && (
-                      <button
-                        className="btn btn-xs btn-outline text-xs"
-                        onClick={() => {
-                          setNuevoTipoComprobante(orden.tipo_comprobante);
-                          setModalEditarComprobante(true);
-                        }}
-                        title="Editar tipo de comprobante (solo una vez)"
-                      >
-                        <Edit size={12} /> Editar
-                      </button>
-                    )}
-                    {orden.comprobante_editado && (
-                      <span className="badge badge-sm badge-secondary" title="Ya se editó el tipo de comprobante">
-                        <Lock size={10} /> Editado
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
-                  <div>
-                    <label className="text-sm font-medium text-muted">N° Serie:</label>
-                    <p className="font-mono">{orden.numero_comprobante || '-'}</p>
-                  </div>
+        {/* COLUMNA 2: CONDICIONES COMERCIALES */}
+        <div className="card h-full">
+            <div className="card-header">
+                <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
+            </div>
+            <div className="card-body space-y-2">
+                
+                {orden.id_cotizacion && (
+                    <div className="pb-2 mb-2 border-b border-gray-100">
+                        <label className="text-sm font-medium text-muted">Cotización Origen:</label>
+                        <button 
+                            className="flex items-center gap-2 text-primary font-bold hover:underline"
+                            onClick={() => navigate(`/ventas/cotizaciones/${orden.id_cotizacion}`)}
+                        >
+                            <FileText size={16} />
+                            {orden.numero_cotizacion}
+                        </button>
+                    </div>
                 )}
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-sm font-medium text-muted">Moneda:</label>
-                <p className="font-semibold">{orden.moneda === 'USD' ? 'Dólares' : 'Soles'}</p>
-              </div>
-              {orden.moneda === 'USD' && (
-                <div>
-                  <label className="text-sm font-medium text-muted">T.C.:</label>
-                  <p>{parseFloat(orden.tipo_cambio).toFixed(4)}</p>
+                {orden.orden_compra_cliente && (
+                    <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded">
+                        <label className="text-sm font-medium text-muted">O/C Cliente:</label>
+                        <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
+                    </div>
+                )}
+
+                <div className="pb-2 mb-2 border-b border-gray-100">
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                            <label className="text-sm font-medium text-muted">Tipo Documento:</label>
+                            <div className="flex items-center gap-2">
+                                <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
+                                {!orden.comprobante_editado && orden.estado !== 'Cancelada' && (
+                                    <button
+                                        className="btn btn-xs btn-outline text-xs"
+                                        onClick={() => {
+                                            setNuevoTipoComprobante(orden.tipo_comprobante);
+                                            setModalEditarComprobante(true);
+                                        }}
+                                        title="Editar tipo de comprobante (solo una vez)"
+                                    >
+                                        <Edit size={12} /> Editar
+                                    </button>
+                                )}
+                                {orden.comprobante_editado && (
+                                    <span className="badge badge-sm badge-secondary" title="Ya se editó el tipo de comprobante">
+                                        <Lock size={10} /> Editado
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                        {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+                            <div>
+                                <label className="text-sm font-medium text-muted">N° Serie:</label>
+                                <p className="font-mono">{orden.numero_comprobante || '-'}</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-sm font-medium text-muted">Tipo Venta:</label>
-                <span className={`badge ${orden.tipo_venta === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
-                  {orden.tipo_venta || 'Contado'}
-                </span>
-              </div>
-              {orden.tipo_venta === 'Crédito' ? (
-                <div>
-                  <label className="text-sm font-medium text-muted">Crédito / Vence:</label>
-                  <div className="flex flex-col">
-                    <span className="font-semibold">{orden.dias_credito} días</span>
-                    {orden.fecha_vencimiento && (
-                        <span className={`text-xs flex items-center gap-1 ${new Date(orden.fecha_vencimiento) < new Date() && orden.estado_pago !== 'Pagado' ? 'text-red-600 font-bold' : 'text-muted'}`}>
-                            <Calendar size={10} /> {formatearFecha(orden.fecha_vencimiento)}
+
+                <div className="grid grid-cols-2 gap-2">
+                    <div>
+                        <label className="text-sm font-medium text-muted">Moneda:</label>
+                        <p className="font-semibold">{orden.moneda === 'USD' ? 'Dólares' : 'Soles'}</p>
+                    </div>
+                    {orden.moneda === 'USD' && (
+                        <div>
+                            <label className="text-sm font-medium text-muted">T.C.:</label>
+                            <p>{parseFloat(orden.tipo_cambio).toFixed(4)}</p>
+                        </div>
+                    )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div>
+                        <label className="text-sm font-medium text-muted">Tipo Venta:</label>
+                        <span className={`badge ${orden.tipo_venta === 'Contado' ? 'badge-success' : 'badge-warning'}`}>
+                            {orden.tipo_venta || 'Contado'}
                         </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                orden.dias_credito > 0 && (
-                    <div>
-                    <label className="text-sm font-medium text-muted">Crédito:</label>
-                    <p>{orden.dias_credito} días</p>
                     </div>
-                )
-              )}
+                    {orden.tipo_venta === 'Crédito' ? (
+                        <div>
+                            <label className="text-sm font-medium text-muted">Crédito / Vence:</label>
+                            <div className="flex flex-col">
+                                <span className="font-semibold">{orden.dias_credito} días</span>
+                                {orden.fecha_vencimiento && (
+                                    <span className={`text-xs flex items-center gap-1 ${new Date(orden.fecha_vencimiento) < new Date() && orden.estado_pago !== 'Pagado' ? 'text-red-600 font-bold' : 'text-muted'}`}>
+                                        <Calendar size={10} /> {formatearFecha(orden.fecha_vencimiento)}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        orden.dias_credito > 0 && (
+                            <div>
+                                <label className="text-sm font-medium text-muted">Crédito:</label>
+                                <p>{orden.dias_credito} días</p>
+                            </div>
+                        )
+                    )}
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-muted">Forma Pago:</label>
+                    <p>{orden.forma_pago || orden.plazo_pago || '-'}</p>
+                </div>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Forma Pago:</label>
-              <p>{orden.forma_pago || orden.plazo_pago || '-'}</p>
-            </div>
-          </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title"><MapPin size={20} /> Entrega y Logística</h2>
-          </div>
-          <div className="card-body space-y-2">
-            <div>
-              <label className="text-sm font-medium text-muted">Fecha Estimada:</label>
-              <p className="flex items-center gap-1">
-                <Calendar size={14} />
-                {formatearFecha(orden.fecha_entrega_estimada)}
-              </p>
+        {/* COLUMNA 3: LOGÍSTICA */}
+        <div className="card h-full">
+            <div className="card-header">
+                <h2 className="card-title"><MapPin size={20} /> Entrega y Logística</h2>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted">Dirección:</label>
-              <p className="text-sm">{orden.direccion_entrega || orden.lugar_entrega || '-'}</p>
+            <div className="card-body space-y-2">
+                <div>
+                    <label className="text-sm font-medium text-muted">Fecha Estimada:</label>
+                    <p className="flex items-center gap-1">
+                        <Calendar size={14} />
+                        {formatearFecha(orden.fecha_entrega_estimada)}
+                    </p>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-muted">Dirección:</label>
+                    <p className="text-sm">{orden.direccion_entrega || orden.lugar_entrega || '-'}</p>
+                </div>
+                {orden.ciudad_entrega && (
+                    <div>
+                        <label className="text-sm font-medium text-muted">Ciudad:</label>
+                        <p>{orden.ciudad_entrega}</p>
+                    </div>
+                )}
+                
+                {/* PROGRESO */}
+                <div className="pt-3 mt-2 border-t border-gray-100">
+                    <label className="text-sm font-medium text-muted">Progreso Entrega:</label>
+                    {(() => {
+                        const totalQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad), 0);
+                        const despachadoQty = orden.detalle.reduce((acc, i) => acc + parseFloat(i.cantidad_despachada || 0), 0);
+                        const pct = totalQty > 0 ? (despachadoQty / totalQty) * 100 : 0;
+                        return (
+                            <div className="flex items-center gap-3 mt-1">
+                                <div className="flex-1 bg-gray-200 rounded-full h-4">
+                                        <div className="bg-primary h-4 rounded-full" style={{ width: `${pct}%` }}></div>
+                                </div>
+                                <span className="text-sm font-bold text-gray-700 min-w-[3rem] text-right">
+                                    {pct.toFixed(0)}%
+                                </span>
+                            </div>
+                        )
+                    })()}
+                </div>
+
+                {(orden.vehiculo_placa || orden.conductor) && (
+                    <div className="pt-3 mt-2 border-t border-gray-100">
+                        <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
+                        {orden.vehiculo_placa && (
+                            <div className="flex items-center gap-2 mb-1">
+                                <Truck size={14} className="text-indigo-600" />
+                                <div>
+                                    <span className="text-xs text-muted">Vehículo:</span>
+                                    <span className="font-bold ml-1">{orden.vehiculo_placa}</span>
+                                    {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
+                                </div>
+                            </div>
+                        )}
+                        {orden.conductor && (
+                            <div className="flex items-center gap-2">
+                                <User size={14} className="text-indigo-600" />
+                                <div>
+                                    <span className="text-xs text-muted">Conductor:</span>
+                                    <span className="font-bold ml-1">{orden.conductor}</span>
+                                    {orden.conductor_dni && <span className="text-xs text-muted ml-1">- DNI: {orden.conductor_dni}</span>}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
-            {orden.ciudad_entrega && (
-              <div>
-                <label className="text-sm font-medium text-muted">Ciudad:</label>
-                <p>{orden.ciudad_entrega}</p>
-              </div>
-            )}
-            {(orden.vehiculo_placa || orden.conductor) && (
-              <div className="pt-3 mt-2 border-t border-gray-100">
-                <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
-                {orden.vehiculo_placa && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <Truck size={14} className="text-indigo-600" />
-                    <div>
-                      <span className="text-xs text-muted">Vehículo:</span>
-                      <span className="font-bold ml-1">{orden.vehiculo_placa}</span>
-                      {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
-                    </div>
-                  </div>
-                )}
-                {orden.conductor && (
-                  <div className="flex items-center gap-2">
-                    <User size={14} className="text-indigo-600" />
-                    <div>
-                      <span className="text-xs text-muted">Conductor:</span>
-                      <span className="font-bold ml-1">{orden.conductor}</span>
-                      {orden.conductor_dni && <span className="text-xs text-muted ml-1">- DNI: {orden.conductor_dni}</span>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
-      <div className="card mb-4">
-        <div className="card-header">
+      {/* ---------------- SECCION 2: DETALLES DEL PRODUCTO Y TOTALES ---------------- */}
+      <div className="card mb-6">
+        <div className="card-header flex justify-between items-center">
           <h2 className="card-title"><Package size={20} /> Detalle de Productos</h2>
+          <span className="badge badge-neutral">{orden.detalle.length} items</span>
         </div>
         <div className="card-body">
           <Table columns={columns} data={orden.detalle} />
         </div>
       </div>
 
+      {/* Grid para Observaciones y Totales justo debajo de la tabla */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {orden.observaciones && (
+          <div className="card h-full">
+            <div className="card-header"><h3 className="card-title">Observaciones</h3></div>
+            <div className="card-body"><p className="whitespace-pre-wrap">{orden.observaciones}</p></div>
+          </div>
+        )}
+        {/* Si no hay observaciones, el div de totales ocupará su espacio o se puede ajustar col-span */}
+        <div className={`card ${!orden.observaciones ? 'md:col-span-2' : ''} ml-auto w-full`}>
+          <div className="card-header">
+            <h3 className="card-title"><Calculator size={20} /> Totales</h3>
+          </div>
+          <div className="card-body space-y-3">
+            <div className="flex justify-between py-2 border-b">
+              <span>Sub Total:</span>
+              <span className="font-bold">{formatearMoneda(orden.subtotal)}</span>
+            </div>
+            {orden.total_comision > 0 && (
+              <div className="flex justify-between py-2 border-b text-yellow-600">
+                <span className="font-medium">Total Comisiones ({parseFloat(orden.porcentaje_comision_promedio || 0).toFixed(2)}%):</span>
+                <span className="font-bold">{formatearMoneda(orden.total_comision)}</span>
+              </div>
+            )}
+            <div className="flex justify-between py-2 border-b">
+              <span className="flex items-center gap-1">
+                <Percent size={14} />
+                {getTipoImpuestoNombre(orden.tipo_impuesto)}:
+              </span>
+              <span className="font-bold">
+                {formatearMoneda(esSinImpuesto ? 0 : orden.igv)}
+              </span>
+            </div>
+            <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
+              <span className="font-bold">TOTAL:</span>
+              <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
+            </div>
+            
+            {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio || 0) > 1 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                <div className="flex justify-between items-center text-blue-900">
+                  <span className="font-medium">Equivalente en Soles:</span>
+                  <span className="font-bold">
+                    S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio))}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Historial de Despachos - Opcional aquí o antes de pagos */}
       {salidas.length > 0 && (
-         <div className="card mb-4 border-l-4 border-info">
+         <div className="card mb-6 border-l-4 border-info">
              <div className="card-header flex items-center gap-2">
                  <Truck size={20} className="text-info"/>
                  <h2 className="card-title">Historial de Despachos (Guías de Salida)</h2>
@@ -1625,54 +1592,69 @@ function DetalleOrdenVenta() {
          </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        {orden.observaciones && (
-          <div className="card">
-            <div className="card-header"><h3 className="card-title">Observaciones</h3></div>
-            <div className="card-body"><p className="whitespace-pre-wrap">{orden.observaciones}</p></div>
-          </div>
-        )}
-        <div className="card ml-auto w-full">
-          <div className="card-header">
-            <h3 className="card-title"><Calculator size={20} /> Totales</h3>
-          </div>
-          <div className="card-body space-y-3">
-            <div className="flex justify-between py-2 border-b">
-              <span>Sub Total:</span>
-              <span className="font-bold">{formatearMoneda(orden.subtotal)}</span>
+      {/* ---------------- SECCION 3: REGISTRO E HISTORIAL DE PAGOS ---------------- */}
+      <div className="mt-8 border-t-2 border-gray-100 pt-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700">
+            <CreditCard size={24} /> Gestión de Cobranzas
+        </h2>
+
+        {resumenPagos && (
+            <div className="card mb-4 border-l-4 border-success">
+            <div className="card-header flex justify-between items-center">
+                <h2 className="card-title">Resumen de Pagos</h2>
+                {orden.estado_pago !== 'Pagado' && (
+                <button className="btn btn-sm btn-success" onClick={() => setModalPagoOpen(true)}>
+                    <Plus size={16} /> Registrar Pago
+                </button>
+                )}
             </div>
-            {orden.total_comision > 0 && (
-              <div className="flex justify-between py-2 border-b text-yellow-600">
-                <span className="font-medium">Total Comisiones ({parseFloat(orden.porcentaje_comision_promedio || 0).toFixed(2)}%):</span>
-                <span className="font-bold">{formatearMoneda(orden.total_comision)}</span>
-              </div>
-            )}
-            <div className="flex justify-between py-2 border-b">
-              <span className="flex items-center gap-1">
-                <Percent size={14} />
-                {getTipoImpuestoNombre(orden.tipo_impuesto)}:
-              </span>
-              <span className="font-bold">
-                {formatearMoneda(esSinImpuesto ? 0 : orden.igv)}
-              </span>
-            </div>
-            <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
-              <span className="font-bold">TOTAL:</span>
-              <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
-            </div>
-            
-            {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio || 0) > 1 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-                <div className="flex justify-between items-center text-blue-900">
-                  <span className="font-medium">Equivalente en Soles:</span>
-                  <span className="font-bold">
-                    S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio))}
-                  </span>
+            <div className="card-body">
+                <div className="grid grid-cols-4 gap-4">
+                <div>
+                    <p className="text-sm text-muted">Total Orden</p>
+                    <p className="text-2xl font-bold">{formatearMoneda(totalCorregido)}</p>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
+                <div>
+                    <p className="text-sm text-muted">Monto Pagado</p>
+                    <p className="text-2xl font-bold text-success">{formatearMoneda(resumenPagos.monto_pagado)}</p>
+                </div>
+                <div>
+                    <p className="text-sm text-muted">Saldo Pendiente</p>
+                    <p className="text-2xl font-bold text-warning">{formatearMoneda(saldoCorregido)}</p>
+                </div>
+                <div>
+                    <p className="text-sm text-muted">Progreso Pago</p>
+                    <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-200 rounded-full h-3">
+                        <div 
+                        className={`h-3 rounded-full ${
+                            (resumenPagos.monto_pagado >= totalCorregido - 0.1) ? 'bg-success' : 
+                            parseFloat(resumenPagos.monto_pagado) > 0 ? 'bg-info' : 'bg-warning'
+                        }`}
+                        style={{ width: `${Math.min(100, (parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100)}%` }}
+                        ></div>
+                    </div>
+                    <span className="font-bold">{((parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100).toFixed(0)}%</span>
+                    </div>
+                </div>
+                </div>
+            </div>
+            </div>
+        )}
+
+        {pagos.length > 0 && (
+            <div className="card mb-4">
+            <div className="card-header">
+                <h2 className="card-title">
+                <FileText size={20} /> Historial de Transacciones
+                <span className="badge badge-primary ml-2">{pagos.length}</span>
+                </h2>
+            </div>
+            <div className="card-body">
+                <Table columns={columnsPagos} data={pagos} emptyMessage="No hay pagos registrados" />
+            </div>
+            </div>
+        )}
       </div>
 
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">

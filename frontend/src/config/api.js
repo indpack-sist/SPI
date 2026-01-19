@@ -644,8 +644,6 @@ export const pagosCobranzasAPI = {
   anular: (id) => api.delete(`/pagos-cobranzas/${id}`)
 };
 
-import api from './api';
-
 export const cuentasPagoAPI = {
   getAll: (params) => api.get('/cuentas-pago', { params }),
   getById: (id) => api.get(`/cuentas-pago/${id}`),

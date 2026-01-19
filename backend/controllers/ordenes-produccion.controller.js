@@ -1,6 +1,18 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarPDFOrdenProduccion } from '../utils/pdf-generator.js';
 
+const getFechaPeru = () => {
+  const now = new Date();
+  const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  const year = peruDate.getFullYear();
+  const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+  const day = String(peruDate.getDate()).padStart(2, '0');
+  const hours = String(peruDate.getHours()).padStart(2, '0');
+  const minutes = String(peruDate.getMinutes()).padStart(2, '0');
+  const seconds = String(peruDate.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
 export async function getAllOrdenes(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin, origen_tipo } = req.query;
@@ -517,6 +529,8 @@ export async function createOrden(req, res) {
       es_orden_manual 
     } = req.body;
     
+    const fechaActual = getFechaPeru();
+
     if (!numero_orden || !id_producto_terminado || !cantidad_planificada || !id_supervisor) {
       return res.status(400).json({ 
         error: 'numero_orden, id_producto_terminado, cantidad_planificada e id_supervisor son requeridos' 
@@ -556,8 +570,8 @@ export async function createOrden(req, res) {
         `INSERT INTO ordenes_produccion (
           numero_orden, id_producto_terminado, cantidad_planificada,
           id_supervisor, costo_materiales, estado, observaciones,
-          id_receta_producto, rendimiento_unidades, origen_tipo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id_receta_producto, rendimiento_unidades, origen_tipo, fecha_creacion
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           numero_orden,
           id_producto_terminado,
@@ -568,7 +582,8 @@ export async function createOrden(req, res) {
           (observaciones || '') + '\n[ORDEN MANUAL - Sin receta ni consumo de materiales]',
           null, 
           1,
-          'Supervisor'
+          'Supervisor',
+          fechaActual
         ]
       );
       
@@ -671,8 +686,8 @@ export async function createOrden(req, res) {
       `INSERT INTO ordenes_produccion (
         numero_orden, id_producto_terminado, cantidad_planificada,
         id_supervisor, costo_materiales, estado, observaciones,
-        id_receta_producto, rendimiento_unidades, origen_tipo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id_receta_producto, rendimiento_unidades, origen_tipo, fecha_creacion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         numero_orden,
         id_producto_terminado,
@@ -683,7 +698,8 @@ export async function createOrden(req, res) {
         observaciones || null,
         id_receta_producto || null,
         rendimientoUnidades,
-        'Supervisor'
+        'Supervisor',
+        fechaActual
       ]
     );
     
@@ -725,6 +741,8 @@ export async function iniciarProduccion(req, res) {
   try {
     const { id } = req.params;
     
+    const fechaActual = getFechaPeru();
+
     const ordenResult = await executeQuery(
       `SELECT op.*, p.id_tipo_inventario 
       FROM ordenes_produccion op
@@ -752,9 +770,9 @@ export async function iniciarProduccion(req, res) {
     if (orden.id_receta_producto === null && parseFloat(orden.costo_materiales) === 0) {
       const result = await executeQuery(
         `UPDATE ordenes_produccion 
-        SET estado = 'En Curso', fecha_inicio = NOW() 
+        SET estado = 'En Curso', fecha_inicio = ? 
         WHERE id_orden = ?`,
-        [id]
+        [fechaActual, id]
       );
       
       if (!result.success) {
@@ -812,9 +830,9 @@ export async function iniciarProduccion(req, res) {
     
     queries.push({
       sql: `UPDATE ordenes_produccion 
-            SET estado = ?, fecha_inicio = NOW() 
+            SET estado = ?, fecha_inicio = ? 
             WHERE id_orden = ?`,
-      params: ['En Curso', id]
+      params: ['En Curso', fechaActual, id]
     });
     
     for (const insumo of recetaData) {
@@ -1072,6 +1090,8 @@ export async function finalizarProduccion(req, res) {
       mermas
     } = req.body;
     
+    const fechaActual = getFechaPeru();
+
     const ordenResult = await executeQuery(
       `SELECT op.*, p.id_tipo_inventario 
        FROM ordenes_produccion op
@@ -1189,11 +1209,11 @@ export async function finalizarProduccion(req, res) {
       sql: `UPDATE ordenes_produccion 
             SET estado = 'Finalizada', 
                 cantidad_producida = cantidad_producida + ?, 
-                fecha_fin = NOW(),
+                fecha_fin = ?, 
                 tiempo_total_minutos = ?, 
                 observaciones = CONCAT(COALESCE(observaciones, ''), ?)
             WHERE id_orden = ?`,
-      params: [cantidadFinalNum, tiempoMinutos, obsFinal, id]
+      params: [cantidadFinalNum, fechaActual, tiempoMinutos, obsFinal, id]
     });
 
     if (cantidadFinalNum > 0) {

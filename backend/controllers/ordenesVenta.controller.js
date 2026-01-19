@@ -1541,17 +1541,32 @@ export async function descargarPDFOrdenVenta(req, res) {
     console.log("🛑 DEBUG PDF - INICIO");
     console.log(`➡️ ID Recibido: '${id}' (Tipo: ${typeof id})`);
     
-    // VALIDACIÓN 1: ¿El ID existe?
     if (!id || id === 'undefined' || id === 'null') {
       console.log("❌ ERROR: ID es inválido.");
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    // VALIDACIÓN 2: ¿Qué devuelve la base de datos?
     console.log("🔄 Ejecutando consulta SQL...");
-    const ordenResult = await executeQuery(`SELECT * FROM ordenes_venta WHERE id_orden_venta = ?`, [id]);
     
-    console.log("📊 Resultado SQL:", ordenResult.data); // <--- ESTO ES LO IMPORTANTE
+    // ✅ AQUÍ ESTÁ LA SOLUCIÓN - JOIN CON LA TABLA CLIENTES
+    const ordenResult = await executeQuery(`
+      SELECT 
+        ov.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente,
+        cl.telefono AS telefono_cliente,
+        e.nombre_completo AS comercial,
+        e.email AS email_comercial,
+        c.numero_cotizacion
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+    
+    console.log("📊 Resultado SQL:", ordenResult.data);
 
     if (!ordenResult.success || ordenResult.data.length === 0) {
       console.log("❌ ERROR: La base de datos devolvió 0 filas.");
@@ -1560,18 +1575,14 @@ export async function descargarPDFOrdenVenta(req, res) {
 
     const orden = ordenResult.data[0];
     console.log(`✅ Orden encontrada: ${orden.numero_orden}`);
-
-    // ... (aquí sigue el resto de tu código normal de obtener detalle y generar PDF) ...
-    // Solo para probar si el problema es la BD, corta aquí y envía un "OK" falso por un momento:
-    /*
-    return res.json({ success: true, message: "DEBUG: Orden encontrada, deteniendo antes de generar PDF" });
-    */
+    console.log(`✅ Cliente: ${orden.cliente}, RUC: ${orden.ruc_cliente}`);
     
-    // Si descomentas lo de arriba, verás si la BD responde. Si lo dejas comentado, intentará generar el PDF.
-    
-    // -- CONTINUACIÓN ORIGINAL DEL CÓDIGO (Resumida para no pegar todo) --
     const detalleResult = await executeQuery(`
-      SELECT dov.*, p.codigo AS codigo_producto, p.nombre AS producto, p.unidad_medida
+      SELECT 
+        dov.*, 
+        p.codigo AS codigo_producto, 
+        p.nombre AS producto, 
+        p.unidad_medida
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
@@ -1581,8 +1592,7 @@ export async function descargarPDFOrdenVenta(req, res) {
 
     let pdfBuffer;
     if (tipo === 'comprobante') {
-        // ... lógica de comprobante
-         pdfBuffer = await generarOrdenVentaPDF(orden); // Usamos el generador por defecto por ahora para probar
+        pdfBuffer = await generarOrdenVentaPDF(orden);
     } else {
         pdfBuffer = await generarOrdenVentaPDF(orden);
     }

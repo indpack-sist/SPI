@@ -387,10 +387,19 @@ export async function generarPDFSalida(datos) {
         return doc.heightOfString(text, { width: width });
       };
 
+      doc.fontSize(8).font('Helvetica');
       const alturaDestino = calcularAlturaTexto(doc, destino || 'N/A', 195, 8);
-      const alturaInfoSalida = Math.max(125, alturaDestino + 90); 
       
-      doc.roundedRect(33, 205, 529, alturaInfoSalida, 3).stroke('#000000');
+      let alturaTransporte = 0;
+      if (datos.conductor) alturaTransporte += calcularAlturaTexto(doc, datos.conductor, 190, 8) + 10;
+      if (datos.vehiculo_placa) {
+        const vTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
+        alturaTransporte += calcularAlturaTexto(doc, vTxt, 190, 8) + 10;
+      }
+
+      const alturaInfoSalida = Math.max(90, 55 + Math.max(alturaDestino + (datos.ruc_cliente ? 12 : 0), alturaTransporte)); 
+      
+      doc.roundedRect(33, 205, 529, alturaInfoSalida + 15, 3).stroke('#000000');
       
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha:', 40, 213);
@@ -410,11 +419,13 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica');
       doc.text(datos.tipo_inventario || 'Venta', 120, 243, { width: 210 });
       
+      const yBloque2 = 260; 
+
       doc.font('Helvetica-Bold');
-      doc.text('Cliente/Destino:', 40, 273);
+      doc.text('Cliente/Destino:', 40, yBloque2);
       
       doc.font('Helvetica');
-      doc.text(destino || 'N/A', 120, 273, { width: 210, lineGap: 2 });
+      doc.text(destino || 'N/A', 120, yBloque2, { width: 210, lineGap: 2 });
 
       if (datos.ruc_cliente) {
          const currentY = doc.y; 
@@ -422,42 +433,52 @@ export async function generarPDFSalida(datos) {
          doc.text(`RUC: ${datos.ruc_cliente}`, 120, currentY + 2);
       }
 
+      const xLabelRight = 310;
+      const xValueRight = 370;
+      const wValueRight = 180;
+
       doc.font('Helvetica-Bold');
-      doc.text('Estado:', 340, 213);
+      doc.text('Estado:', xLabelRight, 213);
       doc.font('Helvetica');
-      doc.text(datos.estado || 'N/A', 430, 213);
+      doc.text(datos.estado || 'N/A', xValueRight, 213);
       
       doc.font('Helvetica-Bold');
-      doc.text('Orden de Venta:', 340, 243);
+      doc.text('Orden de Venta:', xLabelRight, 228);
       doc.font('Helvetica');
       const ordenVentaTexto = datos.numero_orden || datos.codigo_orden_venta || '---';
-      doc.text(ordenVentaTexto, 430, 243);
+      doc.text(ordenVentaTexto, xValueRight, 228);
 
       doc.font('Helvetica-Bold');
-      doc.text('Cotización:', 340, 258);
+      doc.text('Cotización:', xLabelRight, 243);
       doc.font('Helvetica');
       const cotizacionTexto = datos.numero_cotizacion || datos.codigo_cotizacion || '---';
-      doc.text(cotizacionTexto, 430, 258);
+      doc.text(cotizacionTexto, xValueRight, 243);
 
-      let yDerecha = 273;
+      let yDerecha = yBloque2;
 
       if (datos.conductor) {
         doc.font('Helvetica-Bold');
-        doc.text('Conductor:', 340, yDerecha);
+        doc.text('Conductor:', xLabelRight, yDerecha);
         doc.font('Helvetica');
-        doc.text(datos.conductor.substring(0, 25), 430, yDerecha, { width: 120, ellipsis: true });
-        yDerecha += 15;
+        
+        const conductorTxt = datos.conductor.substring(0, 40); 
+        const heightC = doc.heightOfString(conductorTxt, { width: wValueRight });
+        doc.text(conductorTxt, xValueRight, yDerecha, { width: wValueRight });
+        
+        yDerecha += heightC + 4;
       }
 
       if (datos.vehiculo_placa) {
         doc.font('Helvetica-Bold');
-        doc.text('Vehículo:', 340, yDerecha);
+        doc.text('Vehículo:', xLabelRight, yDerecha);
         doc.font('Helvetica');
         const vehiculoTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
-        doc.text(vehiculoTxt, 430, yDerecha, { width: 120, ellipsis: true });
+        
+        const heightV = doc.heightOfString(vehiculoTxt, { width: wValueRight });
+        doc.text(vehiculoTxt, xValueRight, yDerecha, { width: wValueRight });
       }
 
-      let yPos = 205 + alturaInfoSalida + 10;
+      let yPos = 205 + alturaInfoSalida + 25;
       const detalles = datos.detalles || datos.detalle || [];
       
       const mostrarDetalleExtendido = detalles.some(d => d.cantidad_pendiente !== undefined);

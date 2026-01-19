@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock
+  ChevronLeft, ChevronRight, Lock, Save
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -30,6 +30,10 @@ function DetalleOrdenVenta() {
   const [resumenPagos, setResumenPagos] = useState(null);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [cuentasPago, setCuentasPago] = useState([]);
+  
+  const [vehiculos, setVehiculos] = useState([]);
+  const [conductores, setConductores] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -44,6 +48,7 @@ function DetalleOrdenVenta() {
   const [modalDespacho, setModalDespacho] = useState(false);
   const [modalAnularOrden, setModalAnularOrden] = useState(false);
   const [modalEditarComprobante, setModalEditarComprobante] = useState(false);
+  const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
@@ -63,6 +68,17 @@ function DetalleOrdenVenta() {
   const [despachoForm, setDespachoForm] = useState({
     detalles: [],
     fecha_despacho: getFechaLocal()
+  });
+
+  const [transporteForm, setTransporteForm] = useState({
+    tipo_entrega: 'Vehiculo Empresa',
+    id_vehiculo: '',
+    id_conductor: '',
+    transporte_nombre: '',
+    transporte_placa: '',
+    transporte_conductor: '',
+    transporte_dni: '',
+    fecha_entrega_estimada: ''
   });
 
   const formatearNumero = (valor) => {
@@ -91,6 +107,7 @@ function DetalleOrdenVenta() {
   useEffect(() => {
     cargarDatos();
     cargarNavegacion();
+    cargarCatalogosTransporte();
   }, [id]);
 
   const cargarNavegacion = async () => {
@@ -110,6 +127,19 @@ function DetalleOrdenVenta() {
         }
     } catch (err) {
         console.error('Error cargando navegación', err);
+    }
+  };
+
+  const cargarCatalogosTransporte = async () => {
+    try {
+      const [vehiculosRes, conductoresRes] = await Promise.all([
+        ordenesVentaAPI.getVehiculos(),
+        ordenesVentaAPI.getConductores()
+      ]);
+      if (vehiculosRes.data.success) setVehiculos(vehiculosRes.data.data);
+      if (conductoresRes.data.success) setConductores(conductoresRes.data.data);
+    } catch (error) {
+      console.error("Error cargando catálogos transporte", error);
     }
   };
 
@@ -328,6 +358,41 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al cambiar tipo de comprobante');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleAbrirTransporte = () => {
+    setTransporteForm({
+      tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
+      id_vehiculo: orden.id_vehiculo || '',
+      id_conductor: orden.id_conductor || '',
+      transporte_nombre: orden.transporte_nombre || '',
+      transporte_placa: orden.transporte_placa || '',
+      transporte_conductor: orden.transporte_conductor || '',
+      transporte_dni: orden.transporte_dni || '',
+      fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
+    });
+    setModalTransporteOpen(true);
+  };
+
+  const handleGuardarTransporte = async (e) => {
+    e.preventDefault();
+    try {
+      setProcesando(true);
+      setError(null);
+      
+      const response = await ordenesVentaAPI.actualizarTransporte(id, transporteForm);
+      
+      if (response.data.success) {
+        setSuccess('Datos de transporte actualizados');
+        setModalTransporteOpen(false);
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al actualizar transporte');
     } finally {
       setProcesando(false);
     }
@@ -678,8 +743,9 @@ function DetalleOrdenVenta() {
 
   const puedeReservarStock = () => {
     if (!orden) return false;
-    const estadosNoPermitidos = ['Despacho Parcial', 'Despachada', 'Entregada', 'Cancelada'];
-    return !orden.stock_reservado && !estadosNoPermitidos.includes(orden.estado);
+    // Si ya tiene todo reservado (1), no mostrar botón. Si tiene reserva parcial (2) o nada (0), se puede.
+    const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
+    return orden.stock_reservado !== 1 && !estadosNoPermitidos.includes(orden.estado);
   };
 
   const columns = [
@@ -762,7 +828,8 @@ function DetalleOrdenVenta() {
         const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
         const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
 
-        if (orden.stock_reservado === 1) {
+        // Validación individual de reserva por ítem
+        if (row.stock_reservado === 1) {
             return (
                 <div className="flex flex-col gap-1">
                     <span className="badge badge-success bg-green-100 text-green-700 border-green-200">
@@ -962,7 +1029,7 @@ function DetalleOrdenVenta() {
   const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
 
   const productosRequierenOP = orden.detalle.filter(item => {
-    if(orden.stock_reservado === 1) return false;
+    if(item.stock_reservado === 1) return false;
     if(!mostrarAlertaStock) return false;
 
     const stockDisponible = parseFloat(item.stock_disponible || 0);
@@ -1014,8 +1081,13 @@ function DetalleOrdenVenta() {
               <ShoppingCart size={32} />
               Orden de Venta {orden.numero_orden}
               {orden.stock_reservado === 1 && (
-                  <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para esta orden">
-                      <Lock size={12} className="mr-1"/> Stock Reservado
+                  <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para toda la orden">
+                      <Lock size={12} className="mr-1"/> Reserva Total
+                  </span>
+              )}
+              {orden.stock_reservado === 2 && (
+                  <span className="badge badge-sm badge-warning ml-2 border border-yellow-500 text-yellow-800" title="Stock reservado parcialmente">
+                      <Lock size={12} className="mr-1"/> Reserva Parcial
                   </span>
               )}
             </h1>
@@ -1044,9 +1116,9 @@ function DetalleOrdenVenta() {
               className="btn btn-warning border-yellow-400 text-yellow-800 hover:bg-yellow-100"
               onClick={handleReservarStock}
               disabled={procesando}
-              title="Reservar stock físico para esta orden"
+              title="Reservar stock físico disponible para esta orden"
             >
-              <Lock size={20} /> Reservar Stock
+              <Lock size={20} /> {orden.stock_reservado === 2 ? 'Completar Reserva' : 'Reservar Stock'}
             </button>
           )}
 
@@ -1394,8 +1466,15 @@ function DetalleOrdenVenta() {
 
         {/* COLUMNA 3: LOGÍSTICA */}
         <div className="card h-full">
-            <div className="card-header">
+            <div className="card-header flex justify-between items-center">
                 <h2 className="card-title"><MapPin size={20} /> Entrega y Logística</h2>
+                <button 
+                  className="btn btn-xs btn-outline" 
+                  onClick={handleAbrirTransporte}
+                  title="Editar datos de transporte"
+                >
+                  <Edit size={14} />
+                </button>
             </div>
             <div className="card-body space-y-2">
                 <div>
@@ -1426,7 +1505,7 @@ function DetalleOrdenVenta() {
                         return (
                             <div className="flex items-center gap-3 mt-1">
                                 <div className="flex-1 bg-gray-200 rounded-full h-4">
-                                        <div className="bg-primary h-4 rounded-full" style={{ width: `${pct}%` }}></div>
+                                    <div className="bg-primary h-4 rounded-full" style={{ width: `${pct}%` }}></div>
                                 </div>
                                 <span className="text-sm font-bold text-gray-700 min-w-[3rem] text-right">
                                     {pct.toFixed(0)}%
@@ -1436,31 +1515,34 @@ function DetalleOrdenVenta() {
                     })()}
                 </div>
 
-                {(orden.vehiculo_placa || orden.conductor) && (
-                    <div className="pt-3 mt-2 border-t border-gray-100">
-                        <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
-                        {orden.vehiculo_placa && (
-                            <div className="flex items-center gap-2 mb-1">
-                                <Truck size={14} className="text-indigo-600" />
-                                <div>
-                                    <span className="text-xs text-muted">Vehículo:</span>
-                                    <span className="font-bold ml-1">{orden.vehiculo_placa}</span>
-                                    {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
-                                </div>
+                <div className="pt-3 mt-2 border-t border-gray-100">
+                    <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
+                    {orden.tipo_entrega === 'Vehiculo Empresa' ? (
+                      <>
+                        <div className="flex items-center gap-2 mb-1">
+                            <Truck size={14} className="text-indigo-600" />
+                            <div>
+                                <span className="text-xs text-muted">Vehículo:</span>
+                                <span className="font-bold ml-1">{orden.vehiculo_placa_interna || orden.vehiculo_placa || 'No asignado'}</span>
+                                {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
                             </div>
-                        )}
-                        {orden.conductor && (
-                            <div className="flex items-center gap-2">
-                                <User size={14} className="text-indigo-600" />
-                                <div>
-                                    <span className="text-xs text-muted">Conductor:</span>
-                                    <span className="font-bold ml-1">{orden.conductor}</span>
-                                    {orden.conductor_dni && <span className="text-xs text-muted ml-1">- DNI: {orden.conductor_dni}</span>}
-                                </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <User size={14} className="text-indigo-600" />
+                            <div>
+                                <span className="text-xs text-muted">Conductor:</span>
+                                <span className="font-bold ml-1">{orden.conductor_nombre || orden.conductor || 'No asignado'}</span>
                             </div>
-                        )}
-                    </div>
-                )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm">
+                        <p><span className="font-bold">Privado:</span> {orden.transporte_nombre}</p>
+                        <p><span className="font-bold">Placa:</span> {orden.transporte_placa}</p>
+                        <p><span className="font-bold">Chofer:</span> {orden.transporte_conductor}</p>
+                      </div>
+                    )}
+                </div>
             </div>
         </div>
       </div>
@@ -1484,7 +1566,6 @@ function DetalleOrdenVenta() {
             <div className="card-body"><p className="whitespace-pre-wrap">{orden.observaciones}</p></div>
           </div>
         )}
-        {/* Si no hay observaciones, el div de totales ocupará su espacio o se puede ajustar col-span */}
         <div className={`card ${!orden.observaciones ? 'md:col-span-2' : ''} ml-auto w-full`}>
           <div className="card-header">
             <h3 className="card-title"><Calculator size={20} /> Totales</h3>
@@ -1528,7 +1609,6 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* Historial de Despachos - Opcional aquí o antes de pagos */}
       {salidas.length > 0 && (
          <div className="card mb-6 border-l-4 border-info">
              <div className="card-header flex items-center gap-2">
@@ -2148,6 +2228,122 @@ function DetalleOrdenVenta() {
         </button>
       </div>
     </div>
+  </Modal>
+
+  <Modal
+    isOpen={modalTransporteOpen}
+    onClose={() => setModalTransporteOpen(false)}
+    title="Editar Datos de Transporte"
+    size="md"
+  >
+    <form onSubmit={handleGuardarTransporte}>
+      <div className="space-y-4">
+        <div className="form-group">
+          <label className="form-label">Tipo de Entrega</label>
+          <select 
+            className="form-select"
+            value={transporteForm.tipo_entrega}
+            onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
+          >
+            <option value="Vehiculo Empresa">Vehículo Empresa</option>
+            <option value="Transporte Privado">Transporte Privado / Tercero</option>
+            <option value="Recojo Tienda">Recojo en Tienda</option>
+          </select>
+        </div>
+
+        {transporteForm.tipo_entrega === 'Vehiculo Empresa' && (
+          <>
+            <div className="form-group">
+              <label className="form-label">Vehículo</label>
+              <select 
+                className="form-select"
+                value={transporteForm.id_vehiculo}
+                onChange={(e) => setTransporteForm({ ...transporteForm, id_vehiculo: e.target.value })}
+              >
+                <option value="">Seleccione vehículo</option>
+                {vehiculos.map(v => (
+                  <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa} - {v.marca_modelo}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Conductor</label>
+              <select 
+                className="form-select"
+                value={transporteForm.id_conductor}
+                onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
+              >
+                <option value="">Seleccione conductor</option>
+                {conductores.map(c => (
+                  <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+
+        {transporteForm.tipo_entrega === 'Transporte Privado' && (
+          <>
+            <div className="form-group">
+              <label className="form-label">Empresa Transporte</label>
+              <input 
+                type="text" 
+                className="form-input"
+                value={transporteForm.transporte_nombre}
+                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
+                placeholder="Nombre de la empresa o transportista"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="form-group">
+                <label className="form-label">Placa Vehículo</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={transporteForm.transporte_placa}
+                  onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">DNI Chofer</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={transporteForm.transporte_dni}
+                  onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Nombre Chofer</label>
+              <input 
+                type="text" 
+                className="form-input"
+                value={transporteForm.transporte_conductor}
+                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
+              />
+            </div>
+          </>
+        )}
+
+        <div className="form-group">
+          <label className="form-label">Fecha Estimada Entrega</label>
+          <input 
+            type="date" 
+            className="form-input"
+            value={transporteForm.fecha_entrega_estimada}
+            onChange={(e) => setTransporteForm({ ...transporteForm, fecha_entrega_estimada: e.target.value })}
+          />
+        </div>
+
+        <div className="flex gap-2 justify-end pt-2">
+          <button type="button" className="btn btn-outline" onClick={() => setModalTransporteOpen(false)}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={procesando}>
+            <Save size={20} /> Guardar Cambios
+          </button>
+        </div>
+      </div>
+    </form>
   </Modal>
 </div>
 );

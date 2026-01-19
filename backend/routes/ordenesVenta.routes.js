@@ -9,6 +9,7 @@ import {
   actualizarEstadoOrdenVenta,
   actualizarPrioridadOrdenVenta,
   actualizarTipoComprobante,
+  actualizarDatosTransporte,
   getEstadisticasOrdenesVenta,
   descargarPDFOrdenVenta,
   descargarPDFDespacho,
@@ -43,6 +44,7 @@ router.post('/:id/reservar', verificarToken, reservarStockOrden);
 router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
 router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
 router.put('/:id/tipo-comprobante', verificarToken, actualizarTipoComprobante);
+router.put('/:id/transporte', verificarToken, actualizarDatosTransporte);
 
 router.delete('/:id/anular', verificarToken, anularOrdenVenta);
 

@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle, Truck, User
+  FileText, Lock, CheckCircle, Truck, User, Box
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -69,8 +69,13 @@ function NuevaOrdenVenta() {
     id_cliente: '',
     id_cotizacion: '',
     id_comercial: user?.id_empleado || '',
+    tipo_entrega: 'Vehiculo Empresa',
     id_vehiculo: '',
     id_conductor: '',
+    transporte_nombre: '',
+    transporte_placa: '',
+    transporte_conductor: '',
+    transporte_dni: '',
     orden_compra_cliente: '',
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_entrega_estimada: '',
@@ -210,8 +215,13 @@ function NuevaOrdenVenta() {
           id_cliente: orden.id_cliente,
           id_cotizacion: orden.id_cotizacion || '',
           id_comercial: orden.id_comercial || '',
+          tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
           id_vehiculo: orden.id_vehiculo || '',
           id_conductor: orden.id_conductor || '',
+          transporte_nombre: orden.transporte_nombre || '',
+          transporte_placa: orden.transporte_placa || '',
+          transporte_conductor: orden.transporte_conductor || '',
+          transporte_dni: orden.transporte_dni || '',
           orden_compra_cliente: orden.orden_compra_cliente || '',
           fecha_emision: orden.fecha_emision ? orden.fecha_emision.split('T')[0] : '',
           fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : '',
@@ -942,41 +952,115 @@ function NuevaOrdenVenta() {
                 <h2 className="card-title text-indigo-900"><Truck size={20} /> Logística y Transporte</h2>
               </div>
               <div className="card-body space-y-4">
+                
                 <div>
-                  <label className="form-label flex items-center gap-2">
-                    <Truck size={16} /> Vehículo Asignado
-                  </label>
+                  <label className="form-label">Tipo de Entrega</label>
                   <select 
                     className="form-select"
-                    value={formCabecera.id_vehiculo}
-                    onChange={(e) => setFormCabecera({...formCabecera, id_vehiculo: e.target.value})}
+                    value={formCabecera.tipo_entrega}
+                    onChange={(e) => setFormCabecera({...formCabecera, tipo_entrega: e.target.value})}
                   >
-                    <option value="">Sin asignar</option>
-                    {vehiculos.map(v => (
-                      <option key={v.id_vehiculo} value={v.id_vehiculo}>
-                        {v.placa} - {v.marca_modelo}
-                      </option>
-                    ))}
+                    <option value="Vehiculo Empresa">Vehículo de Empresa</option>
+                    <option value="Transporte Privado">Transporte Privado</option>
+                    <option value="Recojo Tienda">Recojo en Tienda</option>
                   </select>
                 </div>
 
-                <div>
-                  <label className="form-label flex items-center gap-2">
-                    <User size={16} /> Conductor Asignado
-                  </label>
-                  <select 
-                    className="form-select"
-                    value={formCabecera.id_conductor}
-                    onChange={(e) => setFormCabecera({...formCabecera, id_conductor: e.target.value})}
-                  >
-                    <option value="">Sin asignar</option>
-                    {conductores.map(c => (
-                      <option key={c.id_empleado} value={c.id_empleado}>
-                        {c.nombre_completo} {c.dni ? `- DNI: ${c.dni}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {formCabecera.tipo_entrega === 'Vehiculo Empresa' && (
+                  <>
+                    <div>
+                      <label className="form-label flex items-center gap-2">
+                        <Truck size={16} /> Vehículo Asignado
+                      </label>
+                      <select 
+                        className="form-select"
+                        value={formCabecera.id_vehiculo}
+                        onChange={(e) => setFormCabecera({...formCabecera, id_vehiculo: e.target.value})}
+                      >
+                        <option value="">Sin asignar</option>
+                        {vehiculos.map(v => (
+                          <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                            {v.placa} - {v.marca_modelo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="form-label flex items-center gap-2">
+                        <User size={16} /> Conductor Asignado
+                      </label>
+                      <select 
+                        className="form-select"
+                        value={formCabecera.id_conductor}
+                        onChange={(e) => setFormCabecera({...formCabecera, id_conductor: e.target.value})}
+                      >
+                        <option value="">Sin asignar</option>
+                        {conductores.map(c => (
+                          <option key={c.id_empleado} value={c.id_empleado}>
+                            {c.nombre_completo} {c.dni ? `- DNI: ${c.dni}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {formCabecera.tipo_entrega === 'Transporte Privado' && (
+                  <div className="space-y-3 bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <div>
+                        <label className="form-label text-xs">Empresa de Transporte</label>
+                        <input 
+                            type="text"
+                            className="form-input form-input-sm"
+                            placeholder="Nombre de la empresa"
+                            value={formCabecera.transporte_nombre}
+                            onChange={(e) => setFormCabecera({...formCabecera, transporte_nombre: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="form-label text-xs">Placa del Vehículo</label>
+                        <input 
+                            type="text"
+                            className="form-input form-input-sm"
+                            placeholder="ABC-123"
+                            value={formCabecera.transporte_placa}
+                            onChange={(e) => setFormCabecera({...formCabecera, transporte_placa: e.target.value})}
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="form-label text-xs">Conductor</label>
+                            <input 
+                                type="text"
+                                className="form-input form-input-sm"
+                                placeholder="Nombre completo"
+                                value={formCabecera.transporte_conductor}
+                                onChange={(e) => setFormCabecera({...formCabecera, transporte_conductor: e.target.value})}
+                            />
+                        </div>
+                        <div>
+                            <label className="form-label text-xs">DNI Conductor</label>
+                            <input 
+                                type="text"
+                                className="form-input form-input-sm"
+                                placeholder="DNI"
+                                maxLength={8}
+                                value={formCabecera.transporte_dni}
+                                onChange={(e) => setFormCabecera({...formCabecera, transporte_dni: e.target.value})}
+                            />
+                        </div>
+                    </div>
+                  </div>
+                )}
+
+                {formCabecera.tipo_entrega === 'Recojo Tienda' && (
+                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 text-sm text-blue-800 flex items-center gap-2">
+                        <Box size={16} />
+                        El cliente recogerá los productos en las instalaciones de la empresa.
+                    </div>
+                )}
+
               </div>
             </div>
 

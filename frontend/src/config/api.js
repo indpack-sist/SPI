@@ -463,6 +463,10 @@ export const ordenesVentaAPI = {
   actualizarTipoComprobante: (id, data) => 
     api.put(`/ordenes-venta/${id}/tipo-comprobante`, data),
 
+  // ✅ NUEVA FUNCIÓN AGREGADA
+  actualizarTransporte: (id, data) => 
+    api.put(`/ordenes-venta/${id}/transporte`, data),
+
   registrarPago: (id, data) => api.post(`/ordenes-venta/${id}/pagos`, data),
   
   getPagos: (id) => api.get(`/ordenes-venta/${id}/pagos`),

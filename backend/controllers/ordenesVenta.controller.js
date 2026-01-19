@@ -46,6 +46,11 @@ export async function getAllOrdenesVenta(req, res) {
         ov.orden_compra_cliente,
         ov.id_vehiculo,
         ov.id_conductor,
+        ov.tipo_entrega,
+        ov.transporte_nombre,
+        ov.transporte_placa,
+        ov.transporte_conductor,
+        ov.transporte_dni,
         c.numero_cotizacion,
         cl.id_cliente,
         cl.razon_social AS cliente,
@@ -119,7 +124,7 @@ export async function getAllOrdenesVenta(req, res) {
 export async function getOrdenVentaById(req, res) {
   try {
     const { id } = req.params;
-    
+
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
@@ -128,9 +133,8 @@ export async function getOrdenVentaById(req, res) {
         cl.direccion_despacho AS direccion_cliente,
         cl.telefono AS telefono_cliente,
         e.nombre_completo AS comercial,
-        e_conductor.nombre_completo AS conductor,
-        e_conductor.dni AS conductor_dni,
-        f.placa AS vehiculo_placa,
+        e_conductor.nombre_completo AS conductor_nombre,
+        f.placa AS vehiculo_placa_interna,
         f.marca_modelo AS vehiculo_modelo,
         f.capacidad_kg AS vehiculo_capacidad_kg,
         c.numero_cotizacion
@@ -142,26 +146,26 @@ export async function getOrdenVentaById(req, res) {
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       WHERE ov.id_orden_venta = ?
     `, [id]);
-    
+
     if (!ordenResult.success) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        error: ordenResult.error 
+        error: ordenResult.error
       });
     }
-    
+
     if (ordenResult.data.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Orden de venta no encontrada'
       });
     }
-    
+
     const orden = ordenResult.data[0];
-    
+
     const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
     const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
-    
+
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*,
@@ -181,22 +185,22 @@ export async function getOrdenVentaById(req, res) {
       WHERE dov.id_orden_venta = ?
       ORDER BY dov.id_detalle
     `, [id, id]);
-    
+
     if (!detalleResult.success) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        error: detalleResult.error 
+        error: detalleResult.error
       });
     }
-    
+
     orden.detalle = detalleResult.data;
     orden.mostrar_alerta_stock = mostrarAlertaStock;
-    
+
     res.json({
       success: true,
       data: orden
     });
-    
+
   } catch (error) {
     console.error(error);
     res.status(500).json({
@@ -210,62 +214,124 @@ export async function reservarStockOrden(req, res) {
   try {
     const { id } = req.params;
 
-    const ordenResult = await executeQuery('SELECT stock_reservado, estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
-    
-    if (ordenResult.data.length === 0) {
-      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    // 1. Obtener información de la orden y sus detalles
+    // Asegúrate de incluir el nuevo campo 'stock_reservado' del detalle en el SELECT
+    const detalleResult = await executeQuery(`
+      SELECT 
+        dov.id_detalle, 
+        dov.id_producto, 
+        dov.cantidad, 
+        dov.stock_reservado AS item_reservado,
+        p.stock_actual, 
+        p.nombre, 
+        p.requiere_receta 
+      FROM detalle_orden_venta dov
+      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      WHERE dov.id_orden_venta = ?
+    `, [id]);
+
+    if (!detalleResult.success || detalleResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada o sin detalles' });
     }
 
-    const orden = ordenResult.data[0];
-
-    if (orden.stock_reservado === 1) {
-      return res.status(400).json({ success: false, error: 'Esta orden ya tiene stock reservado' });
-    }
-
-    const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
-    if (estadosNoPermitidos.includes(orden.estado)) {
-      return res.status(400).json({ success: false, error: 'No se puede reservar stock en el estado actual de la orden' });
-    }
-
-    const detalleResult = await executeQuery('SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
     const detalles = detalleResult.data;
-
     const queries = [];
+    let itemsProcesados = 0;
+    let itemsPendientes = 0;
 
+    // 2. Iterar producto por producto
     for (const item of detalles) {
-      const productoResult = await executeQuery('SELECT stock_actual, nombre, requiere_receta FROM productos WHERE id_producto = ?', [item.id_producto]);
       
-      if (productoResult.data.length > 0) {
-        const producto = productoResult.data[0];
-        
-        if (producto.requiere_receta === 0) {
-          if (parseFloat(producto.stock_actual) < parseFloat(item.cantidad)) {
-            return res.status(400).json({ 
-              success: false, 
-              error: `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock_actual}, Requerido: ${item.cantidad}` 
-            });
-          }
+      // Si el ítem YA estaba reservado, lo contamos como procesado y saltamos
+      if (item.item_reservado === 1) {
+        itemsProcesados++;
+        continue;
+      }
 
+      // Lógica para Productos que NO requieren receta (Materia Prima / Comercial)
+      if (item.requiere_receta === 0) {
+        const stockActual = parseFloat(item.stock_actual);
+        const cantidadRequerida = parseFloat(item.cantidad);
+
+        if (stockActual >= cantidadRequerida) {
+          // A) SI HAY STOCK: Descontamos y marcamos el ítem
           queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [parseFloat(item.cantidad), item.id_producto]
+            params: [cantidadRequerida, item.id_producto]
           });
+
+          queries.push({
+            sql: 'UPDATE detalle_orden_venta SET stock_reservado = 1 WHERE id_detalle = ?',
+            params: [item.id_detalle]
+          });
+
+          itemsProcesados++;
+        } else {
+          // B) NO HAY STOCK: No hacemos nada, solo contamos como pendiente.
+          // Esto permite que la transacción continúe para los otros productos que SI tienen stock.
+          itemsPendientes++;
         }
+      } else {
+        // Lógica para Productos Manufacturados (Requieren Receta)
+        // Generalmente estos no descuentan stock directo, o dependen de una Orden de Producción.
+        // Asumiremos que no se reservan stock físico, o se marcan como listos.
+        // Si tu lógica requiere validar insumos, iría aquí. Por ahora, los marcamos como procesados
+        // para no bloquear el estado de la orden, o los dejas pendientes según tu flujo.
+        
+        // Ejemplo: Si no manejan stock físico directo, lo marcamos reservado/listo
+        // queries.push({ sql: 'UPDATE detalle_orden_venta SET stock_reservado = 1 WHERE id_detalle = ?', params: [item.id_detalle] });
+        // itemsProcesados++;
+        
+        // O si simplemente se ignoran:
+        itemsPendientes++; 
       }
     }
 
-    queries.push({
-      sql: 'UPDATE ordenes_venta SET stock_reservado = 1 WHERE id_orden_venta = ?',
-      params: [id]
-    });
+    // 3. Determinar el estado Global de la Orden
+    // Estado 0: Nada reservado
+    // Estado 1: Todo reservado
+    // Estado 2: Reserva Parcial (Nuevo estado para tu lógica)
+    
+    let nuevoEstadoGlobal = 0;
+    const totalItems = detalles.length;
 
-    const result = await executeTransaction(queries);
-
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
+    if (itemsProcesados === totalItems) {
+      nuevoEstadoGlobal = 1; // Completo
+    } else if (itemsProcesados > 0) {
+      nuevoEstadoGlobal = 2; // Parcial
     }
 
-    res.json({ success: true, message: 'Stock reservado exitosamente' });
+    // Solo actualizamos si hubo cambios (hay queries para ejecutar)
+    if (queries.length > 0) {
+      queries.push({
+        sql: 'UPDATE ordenes_venta SET stock_reservado = ? WHERE id_orden_venta = ?',
+        params: [nuevoEstadoGlobal, id]
+      });
+
+      const result = await executeTransaction(queries);
+
+      if (!result.success) {
+        return res.status(500).json({ success: false, error: result.error });
+      }
+
+      // Mensaje dinámico según el resultado
+      const msg = itemsPendientes > 0 
+        ? `Reserva Parcial realizada. ${itemsPendientes} productos sin stock suficiente.` 
+        : 'Stock reservado exitosamente para todos los productos.';
+
+      res.json({ success: true, message: msg, estado_reserva: nuevoEstadoGlobal });
+
+    } else {
+      // Caso: No se pudo reservar nada nuevo (o todo ya estaba reservado o nada tiene stock)
+      if (itemsProcesados === totalItems) {
+         return res.status(200).json({ success: true, message: 'La orden ya tiene todo el stock reservado.' });
+      }
+      
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No hay stock suficiente para reservar ninguno de los productos pendientes.' 
+      });
+    }
 
   } catch (error) {
     console.error(error);
@@ -291,9 +357,14 @@ export async function createOrdenVenta(req, res) {
       dias_credito,
       plazo_pago,
       forma_pago,
-      orden_compra_cliente,  // ⬅️ NUEVO
-      id_vehiculo,           // ⬅️ NUEVO
-      id_conductor,          // ⬅️ NUEVO
+      orden_compra_cliente,
+      id_vehiculo,
+      id_conductor,
+      tipo_entrega,
+      transporte_nombre,
+      transporte_placa,
+      transporte_conductor,
+      transporte_dni,
       direccion_entrega,
       lugar_entrega,
       ciudad_entrega,
@@ -304,51 +375,21 @@ export async function createOrdenVenta(req, res) {
       detalle,
       reservar_stock
     } = req.body;
-    
+
     const id_registrado_por = req.user?.id_empleado || null;
-    
+
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Cliente y detalle son obligatorios'
       });
     }
-    
+
     if (!id_registrado_por) {
       return res.status(400).json({
         success: false,
         error: 'Usuario no autenticado'
       });
-    }
-
-    // ⬅️ NUEVO: Validar vehículo si se proporciona
-    if (id_vehiculo) {
-      const vehiculoResult = await executeQuery(
-        'SELECT * FROM flota WHERE id_vehiculo = ? AND estado IN ("Disponible", "En Uso")',
-        [id_vehiculo]
-      );
-      
-      if (!vehiculoResult.success || vehiculoResult.data.length === 0) {
-        return res.status(404).json({
-          success: false,
-          error: 'Vehículo no encontrado o no disponible'
-        });
-      }
-    }
-
-    // ⬅️ NUEVO: Validar conductor si se proporciona
-    if (id_conductor) {
-      const conductorResult = await executeQuery(
-        'SELECT * FROM empleados WHERE id_empleado = ? AND rol = "Conductor" AND estado = "Activo"',
-        [id_conductor]
-      );
-      
-      if (!conductorResult.success || conductorResult.data.length === 0) {
-        return res.status(404).json({
-          success: false,
-          error: 'Conductor no encontrado o no activo'
-        });
-      }
     }
 
     if (reservar_stock) {
@@ -360,7 +401,7 @@ export async function createOrdenVenta(req, res) {
 
         if (productoResult.success && productoResult.data.length > 0) {
           const producto = productoResult.data[0];
-          
+
           if (producto.requiere_receta === 0) {
             const stockActual = parseFloat(producto.stock_actual);
             const cantidadRequerida = parseFloat(item.cantidad);
@@ -375,7 +416,52 @@ export async function createOrdenVenta(req, res) {
         }
       }
     }
-    
+
+    let idVehiculoFinal = null;
+    let idConductorFinal = null;
+    let transNombreFinal = null;
+    let transPlacaFinal = null;
+    let transCondFinal = null;
+    let transDniFinal = null;
+
+    if (tipo_entrega === 'Vehiculo Empresa') {
+      idVehiculoFinal = id_vehiculo || null;
+      idConductorFinal = id_conductor || null;
+
+      if (idVehiculoFinal) {
+        const vehiculoResult = await executeQuery(
+          'SELECT * FROM flota WHERE id_vehiculo = ? AND estado IN ("Disponible", "En Uso")',
+          [idVehiculoFinal]
+        );
+
+        if (!vehiculoResult.success || vehiculoResult.data.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Vehículo no encontrado o no disponible'
+          });
+        }
+      }
+
+      if (idConductorFinal) {
+        const conductorResult = await executeQuery(
+          'SELECT * FROM empleados WHERE id_empleado = ? AND rol = "Conductor" AND estado = "Activo"',
+          [idConductorFinal]
+        );
+
+        if (!conductorResult.success || conductorResult.data.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Conductor no encontrado o no activo'
+          });
+        }
+      }
+    } else if (tipo_entrega === 'Transporte Privado') {
+      transNombreFinal = transporte_nombre || null;
+      transPlacaFinal = transporte_placa || null;
+      transCondFinal = transporte_conductor || null;
+      transDniFinal = transporte_dni || null;
+    }
+
     let subtotal = 0;
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
@@ -392,7 +478,7 @@ export async function createOrdenVenta(req, res) {
       totalComision += montoComision * item.cantidad;
       sumaComisionPorcentual += porcentajeComision;
     }
-    
+
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
 
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
@@ -403,18 +489,18 @@ export async function createOrdenVenta(req, res) {
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
-    
+
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
-    
+
     const clienteInfo = await executeQuery('SELECT usar_limite_credito, limite_credito_pen, limite_credito_usd FROM clientes WHERE id_cliente = ?', [id_cliente]);
-    
+
     if (clienteInfo.success && clienteInfo.data.length > 0) {
       const cliente = clienteInfo.data[0];
 
       if (cliente.usar_limite_credito === 1) {
         const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_credito_usd || 0) : parseFloat(cliente.limite_credito_pen || 0);
-        
+
         const deudaResult = await executeQuery(`
           SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
           FROM ordenes_venta
@@ -430,23 +516,19 @@ export async function createOrdenVenta(req, res) {
         if (nuevaDeudaTotal > limiteAsignado) {
           return res.status(400).json({
             success: false,
-            error: `Límite de crédito excedido. 
-                    Límite: ${moneda} ${limiteAsignado.toFixed(2)}. 
-                    Deuda actual: ${moneda} ${deudaActual.toFixed(2)}. 
-                    Nueva orden: ${moneda} ${total.toFixed(2)}. 
-                    Total proyectado: ${moneda} ${nuevaDeudaTotal.toFixed(2)}.`
+            error: `Límite de crédito excedido. Límite: ${moneda} ${limiteAsignado.toFixed(2)}. Deuda actual: ${moneda} ${deudaActual.toFixed(2)}. Nueva orden: ${moneda} ${total.toFixed(2)}. Total proyectado: ${moneda} ${nuevaDeudaTotal.toFixed(2)}.`
           });
         }
       }
     }
-    
+
     const ultimaResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_venta 
       ORDER BY id_orden_venta DESC 
       LIMIT 1
     `);
-    
+
     let numeroSecuencia = 1;
     if (ultimaResult.success && ultimaResult.data.length > 0) {
       const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
@@ -454,9 +536,9 @@ export async function createOrdenVenta(req, res) {
         numeroSecuencia = parseInt(match[1]) + 1;
       }
     }
-    
+
     const numeroOrden = `OV-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
-    
+
     const tipoComp = tipo_comprobante || 'Factura';
     let numeroComprobante = null;
 
@@ -479,7 +561,7 @@ export async function createOrdenVenta(req, res) {
       }
 
       numeroComprobante = `F001-${String(numeroSecuenciaFactura).padStart(8, '0')}`;
-      
+
     } else if (tipoComp === 'Nota de Venta') {
       const ultimaNota = await executeQuery(`
         SELECT numero_comprobante 
@@ -500,14 +582,14 @@ export async function createOrdenVenta(req, res) {
 
       numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
     }
-    
+
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal && fecha_emision) {
       const fechaBase = new Date(fecha_emision + 'T12:00:00');
       fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
       fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
     }
-    
+
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
         numero_orden,
@@ -530,6 +612,11 @@ export async function createOrdenVenta(req, res) {
         orden_compra_cliente,
         id_vehiculo,
         id_conductor,
+        tipo_entrega,
+        transporte_nombre,
+        transporte_placa,
+        transporte_conductor,
+        transporte_dni,
         direccion_entrega,
         lugar_entrega,
         ciudad_entrega,
@@ -545,7 +632,7 @@ export async function createOrdenVenta(req, res) {
         porcentaje_comision_promedio,
         estado,
         stock_reservado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', ?)
     `, [
       numeroOrden,
       tipoComp,
@@ -564,9 +651,14 @@ export async function createOrdenVenta(req, res) {
       parseInt(dias_credito || 0),
       plazo_pago,
       forma_pago,
-      orden_compra_cliente || null,  // ⬅️ NUEVO
-      id_vehiculo || null,            // ⬅️ NUEVO
-      id_conductor || null,           // ⬅️ NUEVO
+      orden_compra_cliente || null,
+      idVehiculoFinal,
+      idConductorFinal,
+      tipo_entrega || 'Vehiculo Empresa',
+      transNombreFinal,
+      transPlacaFinal,
+      transCondFinal,
+      transDniFinal,
       direccion_entrega,
       lugar_entrega,
       ciudad_entrega,
@@ -582,16 +674,16 @@ export async function createOrdenVenta(req, res) {
       porcentajeComisionPromedio,
       reservar_stock ? 1 : 0
     ]);
-    
+
     if (!result.success) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        error: result.error 
+        error: result.error
       });
     }
-    
+
     const idOrden = result.data.insertId;
-    
+
     const queriesDetalle = [];
 
     for (let i = 0; i < detalle.length; i++) {
@@ -600,7 +692,7 @@ export async function createOrdenVenta(req, res) {
       const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (porcentajeComision / 100);
       const precioFinal = precioBase + montoComision;
-      
+
       queriesDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
           id_orden_venta,
@@ -640,7 +732,7 @@ export async function createOrdenVenta(req, res) {
     }
 
     await executeTransaction(queriesDetalle);
-    
+
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 
@@ -650,7 +742,7 @@ export async function createOrdenVenta(req, res) {
         WHERE id_cotizacion = ?
       `, [idOrden, id_cotizacion]);
     }
-    
+
     res.status(201).json({
       success: true,
       data: {
@@ -660,11 +752,11 @@ export async function createOrdenVenta(req, res) {
         numero_comprobante: numeroComprobante,
         stock_reservado: reservar_stock ? 1 : 0
       },
-      message: reservar_stock 
-        ? 'Orden de venta creada exitosamente y stock reservado' 
-        : 'Orden de venta creada exitosamente'
+      message: reservar_stock ?
+        'Orden de venta creada exitosamente y stock reservado' :
+        'Orden de venta creada exitosamente'
     });
-    
+
   } catch (error) {
     console.error(error);
     res.status(500).json({
@@ -692,6 +784,13 @@ export async function updateOrdenVenta(req, res) {
       plazo_pago,
       forma_pago,
       orden_compra_cliente,
+      id_vehiculo,
+      id_conductor,
+      tipo_entrega,
+      transporte_nombre,
+      transporte_placa,
+      transporte_conductor,
+      transporte_dni,
       direccion_entrega,
       lugar_entrega,
       ciudad_entrega,
@@ -760,12 +859,9 @@ export async function updateOrdenVenta(req, res) {
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
 
-    // CÓDIGO CORREGIDO
-    // Normalizamos a mayúsculas y quitamos espacios para evitar errores de tipeo
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
     
-    // Agregamos más casos para asegurar que detecte inafecto/exonerado
     if (['EXO', 'INA', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuestoFinal)) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
@@ -780,6 +876,25 @@ export async function updateOrdenVenta(req, res) {
         const fechaBase = new Date(fecha_emision + 'T12:00:00');
         fechaBase.setDate(fechaBase.getDate() + (parseInt(dias_credito) || 0));
         fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
+    }
+
+    const tipoEntregaFinal = tipo_entrega || 'Vehiculo Empresa';
+    
+    let idVehiculoFinal = null;
+    let idConductorFinal = null;
+    let transporteNombreFinal = null;
+    let transportePlacaFinal = null;
+    let transporteConductorFinal = null;
+    let transporteDniFinal = null;
+
+    if (tipoEntregaFinal === 'Vehiculo Empresa') {
+      idVehiculoFinal = id_vehiculo || null;
+      idConductorFinal = id_conductor || null;
+    } else if (tipoEntregaFinal === 'Transporte Privado') {
+      transporteNombreFinal = transporte_nombre || null;
+      transportePlacaFinal = transporte_placa || null;
+      transporteConductorFinal = transporte_conductor || null;
+      transporteDniFinal = transporte_dni || null;
     }
 
     const updateResult = await executeQuery(`
@@ -799,6 +914,13 @@ export async function updateOrdenVenta(req, res) {
         plazo_pago = ?,
         forma_pago = ?,
         orden_compra_cliente = ?,
+        id_vehiculo = ?,
+        id_conductor = ?,
+        tipo_entrega = ?,
+        transporte_nombre = ?,
+        transporte_placa = ?,
+        transporte_conductor = ?,
+        transporte_dni = ?,
         direccion_entrega = ?,
         lugar_entrega = ?,
         ciudad_entrega = ?,
@@ -826,7 +948,14 @@ export async function updateOrdenVenta(req, res) {
       parseInt(dias_credito || 0),
       plazo_pago,
       forma_pago,
-      orden_compra_cliente,
+      orden_compra_cliente || null,
+      idVehiculoFinal,
+      idConductorFinal,
+      tipoEntregaFinal,
+      transporteNombreFinal,
+      transportePlacaFinal,
+      transporteConductorFinal,
+      transporteDniFinal,
       direccion_entrega,
       lugar_entrega,
       ciudad_entrega,
@@ -1053,6 +1182,7 @@ export async function registrarDespacho(req, res) {
       return res.status(400).json({ success: false, error: 'No se han indicado productos para despachar' });
     }
 
+    // 1. Validar Orden
     const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
     if (ordenResult.data.length === 0) return res.status(404).json({ error: 'Orden no encontrada' });
     const orden = ordenResult.data[0];
@@ -1064,12 +1194,14 @@ export async function registrarDespacho(req, res) {
       return res.status(400).json({ error: 'Esta orden ya fue entregada completamente' });
     }
 
+    // 2. Obtener detalles (Incluyendo la columna stock_reservado)
     const itemsOrden = await executeQuery('SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
     
     let totalCosto = 0;
     let totalPrecio = 0;
     const itemsProcesados = [];
 
+    // 3. Procesar y Validar cada ítem a despachar
     for (const itemDespacho of detalles_despacho) {
       const itemDb = itemsOrden.data.find(i => i.id_producto === itemDespacho.id_producto);
       
@@ -1084,13 +1216,23 @@ export async function registrarDespacho(req, res) {
 
       const productoStock = await executeQuery('SELECT stock_actual, costo_unitario_promedio, requiere_receta FROM productos WHERE id_producto = ?', [itemDespacho.id_producto]);
       
-      if (productoStock.data[0].requiere_receta === 0 && !orden.stock_reservado) {
-        if (parseFloat(productoStock.data[0].stock_actual) < cantidadADespachar) {
-          return res.status(400).json({ error: `Stock insuficiente para el producto ID ${itemDespacho.id_producto}` });
+      if (productoStock.data.length === 0) {
+        return res.status(404).json({ error: `Producto ID ${itemDespacho.id_producto} no encontrado en inventario` });
+      }
+
+      const infoProducto = productoStock.data[0];
+      const estabaReservado = itemDb.stock_reservado === 1; // <--- VALIDACIÓN POR ÍTEM
+
+      // LÓGICA DE STOCK:
+      // Si es un producto físico (no receta) Y NO estaba reservado previamente,
+      // debemos validar que exista stock AHORA mismo.
+      if (infoProducto.requiere_receta === 0 && !estabaReservado) {
+        if (parseFloat(infoProducto.stock_actual) < cantidadADespachar) {
+          return res.status(400).json({ error: `Stock insuficiente para el producto ID ${itemDespacho.id_producto}. (No estaba reservado)` });
         }
       }
 
-      const costoUnitario = parseFloat(productoStock.data[0].costo_unitario_promedio || 0);
+      const costoUnitario = parseFloat(infoProducto.costo_unitario_promedio || 0);
       const precioUnitario = parseFloat(itemDb.precio_unitario || 0);
       
       totalCosto += cantidadADespachar * costoUnitario;
@@ -1100,19 +1242,22 @@ export async function registrarDespacho(req, res) {
         ...itemDespacho,
         costo_unitario: costoUnitario,
         precio_unitario: precioUnitario,
-        requiere_receta: productoStock.data[0].requiere_receta
+        requiere_receta: infoProducto.requiere_receta,
+        estaba_reservado: estabaReservado // <--- Pasamos este flag para usarlo en la transacción
       });
     }
 
+    // 4. Ejecutar Transacción
     const queries = [];
 
+    // A) Insertar Cabecera de Salida
     queries.push({
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, 
         total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
-        3, 
+        3, // ID Tipo Inventario (Mercadería / Producto Terminado)
         'Venta',
         orden.id_cliente,
         totalCosto,
@@ -1131,19 +1276,24 @@ export async function registrarDespacho(req, res) {
     const idSalida = resultTx.data[0].insertId;
     const queriesDetalle = [];
 
+    // B) Procesar Detalles de Salida y Descuentos de Stock
     for (const item of itemsProcesados) {
+      // Registrar en detalle_salidas
       queriesDetalle.push({
         sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) VALUES (?, ?, ?, ?, ?)`,
         params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario]
       });
 
-      if (item.requiere_receta === 0 && !orden.stock_reservado) {
+      // Descontar Stock SOLO si NO estaba reservado
+      // Si item.estaba_reservado es TRUE, significa que el stock ya se restó en la función reservarStockOrden
+      if (item.requiere_receta === 0 && !item.estaba_reservado) {
         queriesDetalle.push({
           sql: `UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?`,
           params: [item.cantidad, item.id_producto]
         });
       }
 
+      // Actualizar cantidad despachada en la orden de venta
       queriesDetalle.push({
         sql: `UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ? WHERE id_orden_venta = ? AND id_producto = ?`,
         params: [item.cantidad, id, item.id_producto]
@@ -1152,6 +1302,7 @@ export async function registrarDespacho(req, res) {
 
     await executeTransaction(queriesDetalle);
 
+    // 5. Verificar si la orden se completó totalmente
     const verificacion = await executeQuery(`
       SELECT 
         COUNT(*) as total_items,
@@ -1166,6 +1317,7 @@ export async function registrarDespacho(req, res) {
       nuevoEstado = 'Despachada';
     }
 
+    // Actualizar estado de la orden
     await executeQuery(
       'UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?', 
       [nuevoEstado, id]
@@ -1300,43 +1452,38 @@ export async function anularOrdenVenta(req, res) {
       return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
     }
 
+    // 1. Obtener datos de la Orden
     const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
     if (ordenResult.data.length === 0) {
       return res.status(404).json({ error: 'Orden de venta no encontrada' });
     }
     const orden = ordenResult.data[0];
 
-    if (orden.estado === 'Cancelada') {
-      return res.status(400).json({ error: 'Esta orden ya fue cancelada' });
-    }
-
-    if (orden.estado === 'Entregada') {
-      return res.status(400).json({ error: 'No se puede anular una orden que ya fue entregada' });
+    if (['Cancelada', 'Entregada'].includes(orden.estado)) {
+      return res.status(400).json({ error: `No se puede anular una orden en estado ${orden.estado}` });
     }
 
     const queriesAnulacion = [];
 
-    if (orden.stock_reservado === 1) {
-      const detalleOrden = await executeQuery(
-        'SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?',
-        [id]
-      );
+    // 2. Obtener el detalle para saber EXACTAMENTE qué se reservó ítem por ítem
+    // (Asumiendo que ya agregaste la columna stock_reservado a detalle_orden_venta)
+    const detalleOrden = await executeQuery(
+      `SELECT dov.id_producto, dov.cantidad, dov.stock_reservado, p.requiere_receta 
+       FROM detalle_orden_venta dov
+       INNER JOIN productos p ON dov.id_producto = p.id_producto
+       WHERE dov.id_orden_venta = ?`,
+      [id]
+    );
+    
+    // Creamos un Mapa para consulta rápida: ID_Producto -> EstabaReservado? (true/false)
+    const mapaReservas = {};
+    detalleOrden.data.forEach(item => {
+      mapaReservas[item.id_producto] = (item.stock_reservado === 1);
+    });
 
-      for (const item of detalleOrden.data) {
-        const productoInfo = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-          [item.id_producto]
-        );
-
-        if (productoInfo.success && productoInfo.data.length > 0 && productoInfo.data[0].requiere_receta === 0) {
-          queriesAnulacion.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [parseFloat(item.cantidad), item.id_producto]
-          });
-        }
-      }
-    }
-
+    // ---------------------------------------------------------
+    // FASE A: Reversar Despachos (Salidas)
+    // ---------------------------------------------------------
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
       [`%${orden.numero_orden}%`, 'Activo']
@@ -1349,42 +1496,75 @@ export async function anularOrdenVenta(req, res) {
       );
 
       for (const item of detalleSalida.data) {
+        // Verificamos si es un producto físico (no receta)
         const productoInfo = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
+          'SELECT requiere_receta FROM productos WHERE id_producto = ?', 
           [item.id_producto]
         );
 
         if (productoInfo.success && productoInfo.data.length > 0) {
-          const requiereReceta = productoInfo.data[0].requiere_receta;
+           const requiereReceta = productoInfo.data[0].requiere_receta;
+           const estabaReservado = mapaReservas[item.id_producto] || false;
 
-          if (requiereReceta === 0 && !orden.stock_reservado) {
-            queriesAnulacion.push({
-              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-              params: [item.cantidad, item.id_producto]
-            });
-          }
+           // CRÍTICO: Solo devolvemos stock desde la SALIDA si el producto NO estaba reservado.
+           // Si estaba reservado, el stock se devuelve en la Fase B (abajo) usando la cantidad total original.
+           if (requiereReceta === 0 && !estabaReservado) {
+             queriesAnulacion.push({
+               sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+               params: [item.cantidad, item.id_producto]
+             });
+           }
         }
       }
 
+      // Anulamos la salida lógicamente
       queriesAnulacion.push({
         sql: 'UPDATE salidas SET estado = ?, observaciones = CONCAT(observaciones, " - ANULADA POR CANCELACIÓN OV") WHERE id_salida = ?',
         params: ['Anulado', salida.id_salida]
       });
     }
 
+    // ---------------------------------------------------------
+    // FASE B: Reversar Reservas (Stock en "Limbo")
+    // ---------------------------------------------------------
+    // Aquí devolvemos TODO lo que se marcó como reservado originalmente.
+    // Esto cubre tanto lo que se despachó (porque al estar reservado no se descontó en la salida)
+    // como lo que nunca salió del almacén.
+    
+    for (const item of detalleOrden.data) {
+      if (item.stock_reservado === 1 && item.requiere_receta === 0) {
+        queriesAnulacion.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          params: [parseFloat(item.cantidad), item.id_producto]
+        });
+
+        // Opcional: Limpiamos la marca de reserva en el detalle por consistencia
+        queriesAnulacion.push({
+          sql: 'UPDATE detalle_orden_venta SET stock_reservado = 0 WHERE id_orden_venta = ? AND id_producto = ?',
+          params: [id, item.id_producto]
+        });
+      }
+    }
+
+    // ---------------------------------------------------------
+    // FASE C: Actualizar Estado de la Orden
+    // ---------------------------------------------------------
     queriesAnulacion.push({
       sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = 0 WHERE id_orden_venta = ?',
       params: [id]
     });
 
     const motivoFinal = motivo_anulacion || 'Sin motivo especificado';
+    
+    // También actualizamos el flag global stock_reservado a 0
     queriesAnulacion.push({
-      sql: 'UPDATE ordenes_venta SET estado = ?, observaciones = CONCAT(COALESCE(observaciones, ""), " - ANULADA: ", ?) WHERE id_orden_venta = ?',
+      sql: 'UPDATE ordenes_venta SET estado = ?, stock_reservado = 0, observaciones = CONCAT(COALESCE(observaciones, ""), " - ANULADA: ", ?) WHERE id_orden_venta = ?',
       params: ['Cancelada', motivoFinal, id]
     });
 
     await executeTransaction(queriesAnulacion);
 
+    // Liberar cotización si existe
     if (orden.id_cotizacion) {
       await executeQuery(
         'UPDATE cotizaciones SET estado = ?, convertida_venta = 0, id_orden_venta = NULL WHERE id_cotizacion = ?',
@@ -1397,7 +1577,6 @@ export async function anularOrdenVenta(req, res) {
       message: 'Orden de venta anulada correctamente',
       data: {
         salidas_anuladas: salidasResult.data.length,
-        stock_devuelto: orden.stock_reservado === 1,
         motivo: motivoFinal
       }
     });
@@ -1407,7 +1586,6 @@ export async function anularOrdenVenta(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -2306,5 +2484,89 @@ export async function actualizarTipoComprobante(req, res) {
       success: false,
       error: error.message
     });
+  }
+}
+export async function actualizarDatosTransporte(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      tipo_entrega,
+      id_vehiculo,
+      id_conductor,
+      transporte_nombre,
+      transporte_placa,
+      transporte_conductor,
+      transporte_dni,
+      fecha_entrega_estimada // Opcional: a veces transporte y fecha van de la mano
+    } = req.body;
+
+    // 1. Validar que la orden exista
+    const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenCheck.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+    
+    // Opcional: Validar si se puede editar en el estado actual (si lo deseas restringir)
+    // if (ordenCheck.data[0].estado === 'Entregada') ...
+
+    // 2. Lógica de limpieza de datos según el tipo
+    let idVehiculoFinal = null;
+    let idConductorFinal = null;
+    let transNombreFinal = null;
+    let transPlacaFinal = null;
+    let transCondFinal = null;
+    let transDniFinal = null;
+
+    if (tipo_entrega === 'Vehiculo Empresa') {
+      idVehiculoFinal = id_vehiculo;
+      idConductorFinal = id_conductor;
+      
+      // Validar disponibilidad rápida (opcional pero recomendado)
+      if (idVehiculoFinal) {
+         const vCheck = await executeQuery('SELECT id_vehiculo FROM flota WHERE id_vehiculo = ?', [idVehiculoFinal]);
+         if (!vCheck.success || vCheck.data.length === 0) return res.status(400).json({success: false, error: 'Vehículo no válido'});
+      }
+    } else if (tipo_entrega === 'Transporte Privado') {
+      transNombreFinal = transporte_nombre;
+      transPlacaFinal = transporte_placa;
+      transCondFinal = transporte_conductor;
+      transDniFinal = transporte_dni;
+    } 
+    // Si es 'Recojo Tienda', todo se queda en null
+
+    // 3. Ejecutar Update
+    const result = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET 
+        tipo_entrega = ?,
+        id_vehiculo = ?,
+        id_conductor = ?,
+        transporte_nombre = ?,
+        transporte_placa = ?,
+        transporte_conductor = ?,
+        transporte_dni = ?,
+        fecha_entrega_estimada = COALESCE(?, fecha_entrega_estimada)
+      WHERE id_orden_venta = ?
+    `, [
+      tipo_entrega,
+      idVehiculoFinal,
+      idConductorFinal,
+      transNombreFinal,
+      transPlacaFinal,
+      transCondFinal,
+      transDniFinal,
+      fecha_entrega_estimada || null,
+      id
+    ]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, message: 'Datos de transporte actualizados correctamente' });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }

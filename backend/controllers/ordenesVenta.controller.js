@@ -1537,69 +1537,96 @@ export async function descargarPDFOrdenVenta(req, res) {
     const { id } = req.params;
     const { tipo } = req.query; 
 
-    console.log("=========================================");
-    console.log("🛑 DEBUG PDF - INICIO");
-    
-    if (!id || id === 'undefined' || id === 'null') {
-      return res.status(400).json({ success: false, error: 'ID inválido' });
-    }
-
-    // --- CORRECCIÓN AQUÍ: Agregamos el JOIN para traer datos del cliente ---
-    console.log("🔄 Ejecutando consulta SQL con JOIN...");
-    
-    const query = `
+    // 1. Consulta Principal con JOIN a Clientes
+    const ordenResult = await executeQuery(`
       SELECT 
-        ov.*, 
-        c.razon_social AS cliente, 
-        c.numero_documento AS ruc_cliente, 
-        c.direccion AS direccion_cliente,
-        c.telefono AS telefono_cliente,
-        c.email AS email_cliente
+        ov.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion AS direccion_cliente,
+        cl.telefono AS telefono_cliente,
+        cl.email AS email_cliente,
+        e.nombre_completo AS comercial
       FROM ordenes_venta ov
-      LEFT JOIN clientes c ON ov.id_cliente = c.id_cliente
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
       WHERE ov.id_orden_venta = ?
-    `;
-
-    const ordenResult = await executeQuery(query, [id]);
-    
-    // ---------------------------------------------------------------------
+    `, [id]);
 
     if (!ordenResult.success || ordenResult.data.length === 0) {
-      return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
+      return res.status(404).json({
+        success: false,
+        error: 'Orden de venta no encontrada'
+      });
     }
 
     const orden = ordenResult.data[0];
-    console.log(`✅ Orden encontrada: ${orden.numero_orden} - Cliente: ${orden.cliente}`);
 
-    // Obtenemos el detalle (esto estaba bien, lo mantenemos igual)
+    // 2. Consulta de Detalles
     const detalleResult = await executeQuery(`
-      SELECT dov.*, p.codigo AS codigo_producto, p.nombre AS producto, p.unidad_medida
+      SELECT 
+        dov.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
     `, [id]);
-    
+
+    if (!detalleResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalle de la orden'
+      });
+    }
+
     orden.detalle = detalleResult.data;
 
-    let pdfBuffer;
-    // Asumiendo que ya importaste generarOrdenVentaPDF al inicio de este archivo
-    if (tipo === 'comprobante') {
-         // Si tienes una función específica para comprobantes úsala aquí, sino:
-         pdfBuffer = await generarOrdenVentaPDF(orden); 
-    } else {
-         pdfBuffer = await generarOrdenVentaPDF(orden);
-    }
+    // 3. Importación dinámica y Generación del PDF
+    const { generarOrdenVentaPDF } = await import('../utils/pdfGenerators/ordenVentaPDF.js');
     
+    let pdfBuffer;
+    if (tipo === 'comprobante') {
+        // Si tienes una función diferente para comprobantes, úsala aquí.
+        // Por ahora usamos la misma según tu código anterior.
+        pdfBuffer = await generarOrdenVentaPDF(orden);
+    } else {
+        pdfBuffer = await generarOrdenVentaPDF(orden);
+    }
+
+    // 4. Lógica de nombre de archivo sanitizado
+    const clienteSanitizado = orden.cliente
+      ? orden.cliente
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "") // Quitar tildes
+          .replace(/[^a-zA-Z0-9\s]/g, "") // Quitar caracteres especiales
+          .trim()
+          .replace(/\s+/g, "_") // Espacios a guiones bajos
+          .toUpperCase()
+      : 'CLIENTE';
+
+    // Usamos el número de comprobante si es tipo comprobante, sino el número de orden
+    const numeroDocumento = (tipo === 'comprobante' && orden.numero_comprobante) 
+        ? orden.numero_comprobante 
+        : (orden.numero_orden || id);
+
+    const sufijo = tipo === 'comprobante' ? 'COMPROBANTE' : 'ORDEN';
+    const nombreArchivo = `${clienteSanitizado}_${sufijo}_${numeroDocumento}.pdf`;
+
+    // 5. Envío de respuesta
     res.setHeader('Content-Type', 'application/pdf');
-    // Aquí puedes usar orden.cliente para que el nombre del archivo también sea bonito
-    const nombreArchivo = `Orden-${orden.numero_orden}.pdf`;
     res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
     res.send(pdfBuffer);
-    console.log("✅ PDF Enviado al cliente");
 
   } catch (error) {
-    console.error("🔥 CRASH:", error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error en descargarPDFOrdenVenta:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Error al generar PDF'
+    });
   }
 }
 export async function descargarPDFDespacho(req, res) {

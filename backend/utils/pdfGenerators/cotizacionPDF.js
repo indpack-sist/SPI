@@ -15,7 +15,7 @@ const ETIQUETAS_IMPUESTO = {
 const fmtNum = (num) => {
   return Number(num).toLocaleString('en-US', { 
     minimumFractionDigits: 2, 
-    maximumFractionDigits: 2 
+    maximumFractionDigits: 4
   });
 };
 

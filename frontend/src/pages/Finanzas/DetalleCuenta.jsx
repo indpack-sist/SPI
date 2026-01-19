@@ -156,6 +156,19 @@ function DetalleCuenta() {
       )
     },
     {
+      header: 'Saldo Inicial',
+      align: 'right',
+      render: (_, row) => {
+        const saldoFinal = parseFloat(row.saldo_nuevo || 0);
+        const monto = parseFloat(row.monto || 0);
+        const saldoInicial = row.tipo_movimiento === 'Ingreso' 
+            ? saldoFinal - monto 
+            : saldoFinal + monto;
+        
+        return <span className="text-gray-500 font-mono text-sm">{formatearMoneda(saldoInicial)}</span>;
+      }
+    },
+    {
       header: 'Monto',
       accessor: 'monto',
       align: 'right',
@@ -166,11 +179,11 @@ function DetalleCuenta() {
       )
     },
     {
-      header: 'Saldo Post.',
+      header: 'Saldo Final',
       accessor: 'saldo_nuevo',
       align: 'right',
       render: (value) => (
-        <span className="font-mono text-gray-600 font-medium">
+        <span className="font-mono text-gray-800 font-bold">
             {formatearMoneda(value)}
         </span>
       )
@@ -225,7 +238,7 @@ function DetalleCuenta() {
   return (
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
-        <button className="btn btn-outline" onClick={() => navigate('/finanzas/cuentas')}>
+        <button className="btn btn-outline" onClick={() => navigate('/finanzas/cuentas-pago')}>
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1">

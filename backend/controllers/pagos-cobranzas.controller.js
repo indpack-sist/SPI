@@ -198,16 +198,30 @@ export const getCuentasPorCobrar = async (req, res, next) => {
   try {
     const { fecha_inicio, fecha_fin, id_cliente } = req.query;
     
+    // ✅ CONDICIÓN CORREGIDA: Incluye todas las órdenes con saldo pendiente mayor a 0
     let whereClause = `
       ov.estado != 'Cancelada' 
-      AND (ov.total - COALESCE(ov.monto_pagado, 0)) > 0.1
+      AND ov.estado_pago != 'Pagado'
+      AND (ov.total - COALESCE(ov.monto_pagado, 0)) >= 0.01
     `;
     const params = [];
     
-    // ... (lógica de filtros fecha_inicio, fecha_fin, id_cliente igual que antes) ...
-    if (fecha_inicio) { whereClause += ' AND ov.fecha_vencimiento >= ?'; params.push(fecha_inicio); }
-    if (fecha_fin) { whereClause += ' AND ov.fecha_vencimiento <= ?'; params.push(fecha_fin); }
-    if (id_cliente) { whereClause += ' AND ov.id_cliente = ?'; params.push(id_cliente); }
+    // Filtro por rango de fechas de vencimiento
+    if (fecha_inicio) {
+      whereClause += ' AND ov.fecha_vencimiento >= ?';
+      params.push(fecha_inicio);
+    }
+    
+    if (fecha_fin) {
+      whereClause += ' AND ov.fecha_vencimiento <= ?';
+      params.push(fecha_fin);
+    }
+    
+    // Filtro por cliente específico
+    if (id_cliente) {
+      whereClause += ' AND ov.id_cliente = ?';
+      params.push(id_cliente);
+    }
 
     const sql = `
       SELECT 
@@ -219,7 +233,8 @@ export const getCuentasPorCobrar = async (req, res, next) => {
         ov.fecha_vencimiento,
         ov.moneda,
         ov.tipo_venta,
-        ov.estado,          -- <<<< AGREGAR ESTE CAMPO AQUÍ
+        ov.estado,
+        ov.estado_pago,
         ov.total,
         COALESCE(ov.monto_pagado, 0) as monto_pagado,
         (ov.total - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
@@ -227,26 +242,45 @@ export const getCuentasPorCobrar = async (req, res, next) => {
         cl.ruc,
         DATEDIFF(ov.fecha_vencimiento, CURDATE()) as dias_restantes,
         CASE 
-          WHEN ov.tipo_venta = 'Contado' THEN 'Pendiente'
+          WHEN ov.tipo_venta = 'Contado' THEN 'Pendiente Pago'
           WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 'Vencido'
-          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 'Proximo a Vencer'
-          ELSE 'Al Dia'
-        END as estado_deuda
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 'Próximo a Vencer'
+          ELSE 'Al Día'
+        END as estado_deuda,
+        (
+          SELECT COUNT(*) 
+          FROM pagos_ordenes_venta pov 
+          WHERE pov.id_orden_venta = ov.id_orden_venta
+        ) as total_pagos_registrados
       FROM ordenes_venta ov
       INNER JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       WHERE ${whereClause}
       ORDER BY 
         CASE 
-          WHEN ov.tipo_venta = 'Contado' THEN 1.5
-          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 1
-          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 2
-          ELSE 3
+          WHEN ov.tipo_venta = 'Contado' THEN 1
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 2
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 3
+          ELSE 4
         END ASC,
-        ov.fecha_vencimiento ASC
+        ov.fecha_vencimiento ASC,
+        ov.fecha_emision DESC
     `;
 
     const [rows] = await pool.query(sql, params);
-    res.json({ success: true, data: rows });
+    
+    res.json({ 
+      success: true, 
+      data: rows,
+      summary: {
+        total_ordenes: rows.length,
+        total_saldo_pen: rows.filter(r => r.moneda === 'PEN').reduce((acc, r) => acc + parseFloat(r.saldo_pendiente), 0),
+        total_saldo_usd: rows.filter(r => r.moneda === 'USD').reduce((acc, r) => acc + parseFloat(r.saldo_pendiente), 0),
+        vencidas: rows.filter(r => r.estado_deuda === 'Vencido').length,
+        proximas_vencer: rows.filter(r => r.estado_deuda === 'Próximo a Vencer').length,
+        al_dia: rows.filter(r => r.estado_deuda === 'Al Día').length,
+        contado_pendiente: rows.filter(r => r.estado_deuda === 'Pendiente Pago').length
+      }
+    });
   } catch (error) {
     next(error);
   }

@@ -25,8 +25,8 @@ export async function getAllOrdenesVenta(req, res) {
       SELECT 
         ov.id_orden_venta,
         ov.numero_orden,
-        ov.tipo_comprobante,    -- << AGREGAR ESTA LÍNEA
-        ov.numero_comprobante,  -- << AGREGAR ESTA LÍNEA (para que se vea F001-...)
+        ov.tipo_comprobante,
+        ov.numero_comprobante,
         ov.fecha_emision,
         ov.fecha_entrega_estimada,
         ov.fecha_entrega_real,
@@ -43,12 +43,18 @@ export async function getAllOrdenesVenta(req, res) {
         ov.estado_pago,
         ov.id_cotizacion,
         ov.stock_reservado,
+        ov.orden_compra_cliente,
+        ov.id_vehiculo,
+        ov.id_conductor,
         c.numero_cotizacion,
         cl.id_cliente,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         e_comercial.nombre_completo AS comercial,
         e_registrado.nombre_completo AS registrado_por,
+        e_conductor.nombre_completo AS conductor,
+        f.placa AS vehiculo_placa,
+        f.marca_modelo AS vehiculo_modelo,
         ov.id_comercial,
         ov.id_registrado_por,
         (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
@@ -58,6 +64,8 @@ export async function getAllOrdenesVenta(req, res) {
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
       LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
       WHERE 1=1
     `;
     
@@ -120,10 +128,17 @@ export async function getOrdenVentaById(req, res) {
         cl.direccion_despacho AS direccion_cliente,
         cl.telefono AS telefono_cliente,
         e.nombre_completo AS comercial,
+        e_conductor.nombre_completo AS conductor,
+        e_conductor.dni AS conductor_dni,
+        f.placa AS vehiculo_placa,
+        f.marca_modelo AS vehiculo_modelo,
+        f.capacidad_kg AS vehiculo_capacidad_kg,
         c.numero_cotizacion
       FROM ordenes_venta ov
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       WHERE ov.id_orden_venta = ?
     `, [id]);
@@ -276,7 +291,9 @@ export async function createOrdenVenta(req, res) {
       dias_credito,
       plazo_pago,
       forma_pago,
-      orden_compra_cliente,
+      orden_compra_cliente,  // ⬅️ NUEVO
+      id_vehiculo,           // ⬅️ NUEVO
+      id_conductor,          // ⬅️ NUEVO
       direccion_entrega,
       lugar_entrega,
       ciudad_entrega,
@@ -302,6 +319,36 @@ export async function createOrdenVenta(req, res) {
         success: false,
         error: 'Usuario no autenticado'
       });
+    }
+
+    // ⬅️ NUEVO: Validar vehículo si se proporciona
+    if (id_vehiculo) {
+      const vehiculoResult = await executeQuery(
+        'SELECT * FROM flota WHERE id_vehiculo = ? AND estado IN ("Disponible", "En Uso")',
+        [id_vehiculo]
+      );
+      
+      if (!vehiculoResult.success || vehiculoResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Vehículo no encontrado o no disponible'
+        });
+      }
+    }
+
+    // ⬅️ NUEVO: Validar conductor si se proporciona
+    if (id_conductor) {
+      const conductorResult = await executeQuery(
+        'SELECT * FROM empleados WHERE id_empleado = ? AND rol = "Conductor" AND estado = "Activo"',
+        [id_conductor]
+      );
+      
+      if (!conductorResult.success || conductorResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Conductor no encontrado o no activo'
+        });
+      }
     }
 
     if (reservar_stock) {
@@ -351,7 +398,6 @@ export async function createOrdenVenta(req, res) {
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
 
-    // Aceptamos múltiples variantes para que no falle nunca
     if (['EXO', 'INA', 'INAFECTO', 'EXONERADO', '0'].includes(tipoImpuestoFinal)) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
@@ -482,6 +528,8 @@ export async function createOrdenVenta(req, res) {
         plazo_pago,
         forma_pago,
         orden_compra_cliente,
+        id_vehiculo,
+        id_conductor,
         direccion_entrega,
         lugar_entrega,
         ciudad_entrega,
@@ -497,7 +545,7 @@ export async function createOrdenVenta(req, res) {
         porcentaje_comision_promedio,
         estado,
         stock_reservado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', ?)
     `, [
       numeroOrden,
       tipoComp,
@@ -516,7 +564,9 @@ export async function createOrdenVenta(req, res) {
       parseInt(dias_credito || 0),
       plazo_pago,
       forma_pago,
-      orden_compra_cliente,
+      orden_compra_cliente || null,  // ⬅️ NUEVO
+      id_vehiculo || null,            // ⬅️ NUEVO
+      id_conductor || null,           // ⬅️ NUEVO
       direccion_entrega,
       lugar_entrega,
       ciudad_entrega,
@@ -1612,6 +1662,7 @@ export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
 
+    // 1. MODIFICAMOS LA CONSULTA PARA TRAER FLOTA Y CONDUCTOR
     const ordenResult = await executeQuery(`
       SELECT 
         ov.numero_orden,
@@ -1620,10 +1671,17 @@ export async function descargarPDFDespacho(req, res) {
         ov.id_cliente,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
-        c.numero_cotizacion
+        c.numero_cotizacion,
+        -- Campos nuevos de transporte
+        f.placa,
+        f.marca_modelo,
+        e_cond.nombre_completo AS conductor_nombre,
+        e_cond.dni AS conductor_dni
       FROM ordenes_venta ov
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo             -- JOIN Flota
+      LEFT JOIN empleados e_cond ON ov.id_conductor = e_cond.id_empleado -- JOIN Conductor
       WHERE ov.id_orden_venta = ?
     `, [id]);
 
@@ -1670,6 +1728,7 @@ export async function descargarPDFDespacho(req, res) {
       });
     }
 
+    // 2. AGREGAMOS LOS DATOS AL OBJETO QUE VA AL GENERADOR
     const datosPDF = {
       id_salida: salida.id_salida,
       numero_orden: orden.numero_orden,
@@ -1680,6 +1739,12 @@ export async function descargarPDFDespacho(req, res) {
       observaciones: salida.observaciones,
       moneda: orden.moneda,
       cliente: orden.cliente,
+      ruc_cliente: orden.ruc_cliente,
+      // Nuevos datos pasados al PDF
+      conductor: orden.conductor_nombre,
+      conductor_dni: orden.conductor_dni,
+      vehiculo_placa: orden.placa,
+      vehiculo_modelo: orden.marca_modelo,
       detalles: detalleResult.data
     };
 

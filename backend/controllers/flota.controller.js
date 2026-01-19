@@ -194,3 +194,32 @@ export async function getVehiculosDisponibles(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+export async function getVehiculosParaOrdenes(req, res) {
+  try {
+    const result = await executeQuery(
+      `SELECT 
+        id_vehiculo, 
+        placa, 
+        marca_modelo, 
+        capacidad_kg, 
+        capacidad_m3,
+        estado
+      FROM flota 
+      WHERE estado IN ('Disponible', 'En Uso')
+      ORDER BY placa ASC`,
+      []
+    );
+    
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}

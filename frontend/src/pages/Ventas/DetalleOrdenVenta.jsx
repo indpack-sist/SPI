@@ -192,45 +192,47 @@ function DetalleOrdenVenta() {
         setDespachoForm({ ...despachoForm, detalles: nuevosDetalles });
     }
   };
+
   const getFechaConHora = (fechaString) => {
-  return `${fechaString}T12:00:00`;
-};
+    return `${fechaString}T12:00:00`;
+  };
+
   const handleRegistrarDespacho = async () => {
-  try {
-    setProcesando(true);
-    setError(null);
+    try {
+      setProcesando(true);
+      setError(null);
 
-    const itemsADespachar = despachoForm.detalles
-      .filter(item => parseFloat(item.cantidad_a_despachar) > 0)
-      .map(item => ({
-        id_producto: item.id_producto,
-        cantidad: parseFloat(item.cantidad_a_despachar)
-      }));
+      const itemsADespachar = despachoForm.detalles
+        .filter(item => parseFloat(item.cantidad_a_despachar) > 0)
+        .map(item => ({
+          id_producto: item.id_producto,
+          cantidad: parseFloat(item.cantidad_a_despachar)
+        }));
 
-    if (itemsADespachar.length === 0) {
-      setError("Debe seleccionar al menos un producto para despachar");
+      if (itemsADespachar.length === 0) {
+        setError("Debe seleccionar al menos un producto para despachar");
+        setProcesando(false);
+        return;
+      }
+
+      const response = await ordenesVentaAPI.registrarDespacho(id, {
+        detalles_despacho: itemsADespachar,
+        fecha_despacho: getFechaConHora(despachoForm.fecha_despacho) 
+      });
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setModalDespacho(false);
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al registrar despacho');
+    } finally {
       setProcesando(false);
-      return;
     }
-
-    const response = await ordenesVentaAPI.registrarDespacho(id, {
-      detalles_despacho: itemsADespachar,
-      fecha_despacho: getFechaConHora(despachoForm.fecha_despacho) 
-    });
-
-    if (response.data.success) {
-      setSuccess(response.data.message);
-      setModalDespacho(false);
-      await cargarDatos();
-    }
-
-  } catch (err) {
-    console.error(err);
-    setError(err.response?.data?.error || 'Error al registrar despacho');
-  } finally {
-    setProcesando(false);
-  }
-};
+  };
 
   const handleAnularDespacho = async (idSalida) => {
     if (!confirm('¿Está seguro de anular este despacho? Se revertirá el stock y las cantidades despachadas.')) return;
@@ -303,33 +305,33 @@ function DetalleOrdenVenta() {
   };
 
   const handleCambiarTipoComprobante = async () => {
-  if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
-    setError('Debe seleccionar un tipo de comprobante diferente');
-    return;
-  }
-
-  try {
-    setProcesando(true);
-    setError(null);
-
-    const response = await ordenesVentaAPI.actualizarTipoComprobante(id, {
-      tipo_comprobante: nuevoTipoComprobante
-    });
-
-    if (response.data.success) {
-      setSuccess(`Tipo de comprobante actualizado exitosamente a ${nuevoTipoComprobante}`);
-      setModalEditarComprobante(false);
-      setNuevoTipoComprobante('');
-      await cargarDatos();
+    if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
+      setError('Debe seleccionar un tipo de comprobante diferente');
+      return;
     }
 
-  } catch (err) {
-    console.error(err);
-    setError(err.response?.data?.error || 'Error al cambiar tipo de comprobante');
-  } finally {
-    setProcesando(false);
-  }
-};
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.actualizarTipoComprobante(id, {
+        tipo_comprobante: nuevoTipoComprobante
+      });
+
+      if (response.data.success) {
+        setSuccess(`Tipo de comprobante actualizado exitosamente a ${nuevoTipoComprobante}`);
+        setModalEditarComprobante(false);
+        setNuevoTipoComprobante('');
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al cambiar tipo de comprobante');
+    } finally {
+      setProcesando(false);
+    }
+  };
 
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
@@ -1412,6 +1414,13 @@ function DetalleOrdenVenta() {
               </div>
             )}
 
+            {orden.orden_compra_cliente && (
+              <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded">
+                <label className="text-sm font-medium text-muted">O/C Cliente:</label>
+                <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
+              </div>
+            )}
+
             <div className="pb-2 mb-2 border-b border-gray-100">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -1419,8 +1428,6 @@ function DetalleOrdenVenta() {
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
                    {!orden.comprobante_editado && orden.estado !== 'Cancelada' && (
-
-
                       <button
                         className="btn btn-xs btn-outline text-xs"
                         onClick={() => {
@@ -1497,7 +1504,7 @@ function DetalleOrdenVenta() {
 
         <div className="card">
           <div className="card-header">
-            <h2 className="card-title"><MapPin size={20} /> Entrega</h2>
+            <h2 className="card-title"><MapPin size={20} /> Entrega y Logística</h2>
           </div>
           <div className="card-body space-y-2">
             <div>
@@ -1515,6 +1522,31 @@ function DetalleOrdenVenta() {
               <div>
                 <label className="text-sm font-medium text-muted">Ciudad:</label>
                 <p>{orden.ciudad_entrega}</p>
+              </div>
+            )}
+            {(orden.vehiculo_placa || orden.conductor) && (
+              <div className="pt-3 mt-2 border-t border-gray-100">
+                <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
+                {orden.vehiculo_placa && (
+                  <div className="flex items-center gap-2 mb-1">
+                    <Truck size={14} className="text-indigo-600" />
+                    <div>
+                      <span className="text-xs text-muted">Vehículo:</span>
+                      <span className="font-bold ml-1">{orden.vehiculo_placa}</span>
+                      {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
+                    </div>
+                  </div>
+                )}
+                {orden.conductor && (
+                  <div className="flex items-center gap-2">
+                    <User size={14} className="text-indigo-600" />
+                    <div>
+                      <span className="text-xs text-muted">Conductor:</span>
+                      <span className="font-bold ml-1">{orden.conductor}</span>
+                      {orden.conductor_dni && <span className="text-xs text-muted ml-1">- DNI: {orden.conductor_dni}</span>}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2095,49 +2127,47 @@ function DetalleOrdenVenta() {
               </button>
               
               <button
-                type="button"
-                className={`btn py-4 text-left ${
-                  nuevoTipoComprobante === 'Nota de Venta' 
-                    ? 'btn-info text-white shadow-md' 
-                    : 'btn-outline hover:bg-blue-50'
-                }`}
-                onClick={() => setNuevoTipoComprobante('Nota de Venta')}
-              >
-                <div className="flex items-center gap-3">
-                  <FileText size={24} />
-                  <div>
-                    <div className="font-bold">NOTA DE VENTA</div>
-                    <div className="text-xs opacity-80">Comprobante simple para ventas menores</div>
-                  </div>
-                </div>
-              </button>
+                type="button" className={`btn py-4 text-left ${
+              nuevoTipoComprobante === 'Nota de Venta' 
+                ? 'btn-info text-white shadow-md' 
+                : 'btn-outline hover:bg-blue-50'
+            }`}
+            onClick={() => setNuevoTipoComprobante('Nota de Venta')}
+          >
+            <div className="flex items-center gap-3">
+              <FileText size={24} />
+              <div>
+                <div className="font-bold">NOTA DE VENTA</div>
+                <div className="text-xs opacity-80">Comprobante simple para ventas menores</div>
+              </div>
             </div>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-3 border-t">
-            <button
-              className="btn btn-outline"
-              onClick={() => {
-                setModalEditarComprobante(false);
-                setNuevoTipoComprobante('');
-              }}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleCambiarTipoComprobante}
-              disabled={procesando || !nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante}
-            >
-              <Edit size={20} />
-              {procesando ? 'Actualizando...' : 'Confirmar Cambio'}
-            </button>
-          </div>
+          </button>
         </div>
-      </Modal>
-    </div>
-  );
-}
+      </div>
 
+      <div className="flex gap-2 justify-end pt-3 border-t">
+        <button
+          className="btn btn-outline"
+          onClick={() => {
+            setModalEditarComprobante(false);
+            setNuevoTipoComprobante('');
+          }}
+          disabled={procesando}
+        >
+          Cancelar
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={handleCambiarTipoComprobante}
+          disabled={procesando || !nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante}
+        >
+          <Edit size={20} />
+          {procesando ? 'Actualizando...' : 'Confirmar Cambio'}
+        </button>
+      </div>
+    </div>
+  </Modal>
+</div>
+);
+}
 export default DetalleOrdenVenta;

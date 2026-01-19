@@ -5,13 +5,15 @@ import {
   createVehiculo,
   updateVehiculo,
   deleteVehiculo,
-  getVehiculosDisponibles
+  getVehiculosDisponibles,
+  getVehiculosParaOrdenes
 } from '../controllers/flota.controller.js';
 
 const router = express.Router();
 
 router.get('/', getAllVehiculos);
 router.get('/disponibles', getVehiculosDisponibles);
+router.get('/para-ordenes', getVehiculosParaOrdenes);
 router.get('/:id', getVehiculoById);
 router.post('/', createVehiculo);
 router.put('/:id', updateVehiculo);

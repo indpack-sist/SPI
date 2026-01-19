@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle
+  FileText, Lock, CheckCircle, Truck, User
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -49,6 +49,8 @@ function NuevaOrdenVenta() {
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
   const [cotizacionesPendientes, setCotizacionesPendientes] = useState([]);
+  const [vehiculos, setVehiculos] = useState([]);
+  const [conductores, setConductores] = useState([]);
   
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
@@ -67,6 +69,9 @@ function NuevaOrdenVenta() {
     id_cliente: '',
     id_cotizacion: '',
     id_comercial: user?.id_empleado || '',
+    id_vehiculo: '',
+    id_conductor: '',
+    orden_compra_cliente: '',
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_entrega_estimada: '',
     fecha_vencimiento: new Date().toISOString().split('T')[0], 
@@ -79,7 +84,6 @@ function NuevaOrdenVenta() {
     dias_credito: 0,      
     plazo_pago: 'Contado',
     forma_pago: '',
-    orden_compra_cliente: '',
     direccion_entrega: '',
     lugar_entrega: '',
     ciudad_entrega: 'Lima',
@@ -155,11 +159,13 @@ function NuevaOrdenVenta() {
 
   const cargarCatalogos = async () => {
     try {
-      const [resClientes, resProductos, resEmpleados, resCotizaciones] = await Promise.all([
+      const [resClientes, resProductos, resEmpleados, resCotizaciones, resVehiculos, resConductores] = await Promise.all([
         clientesAPI.getAll({ estado: 'Activo' }),
         productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: 3 }),
         empleadosAPI.getAll({ estado: 'Activo' }),
-        !modoEdicion ? cotizacionesAPI.getAll({ estado: 'Aprobada' }) : { data: { success: true, data: [] } }
+        !modoEdicion ? cotizacionesAPI.getAll({ estado: 'Aprobada' }) : { data: { success: true, data: [] } },
+        ordenesVentaAPI.getVehiculos(),
+        ordenesVentaAPI.getConductores()
       ]);
 
       if (resClientes.data.success) setClientes(resClientes.data.data || []);
@@ -174,6 +180,14 @@ function NuevaOrdenVenta() {
 
       if (resCotizaciones.data.success) {
         setCotizacionesPendientes(resCotizaciones.data.data || []);
+      }
+
+      if (resVehiculos.data.success) {
+        setVehiculos(resVehiculos.data.data || []);
+      }
+
+      if (resConductores.data.success) {
+        setConductores(resConductores.data.data || []);
       }
 
     } catch (err) {
@@ -196,6 +210,9 @@ function NuevaOrdenVenta() {
           id_cliente: orden.id_cliente,
           id_cotizacion: orden.id_cotizacion || '',
           id_comercial: orden.id_comercial || '',
+          id_vehiculo: orden.id_vehiculo || '',
+          id_conductor: orden.id_conductor || '',
+          orden_compra_cliente: orden.orden_compra_cliente || '',
           fecha_emision: orden.fecha_emision ? orden.fecha_emision.split('T')[0] : '',
           fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : '',
           fecha_vencimiento: orden.fecha_vencimiento ? orden.fecha_vencimiento.split('T')[0] : '',
@@ -208,7 +225,6 @@ function NuevaOrdenVenta() {
           dias_credito: orden.dias_credito || 0,
           plazo_pago: orden.plazo_pago || '',
           forma_pago: orden.forma_pago || '',
-          orden_compra_cliente: orden.orden_compra_cliente || '',
           direccion_entrega: orden.direccion_entrega || '',
           lugar_entrega: orden.lugar_entrega || '',
           ciudad_entrega: orden.ciudad_entrega || '',
@@ -658,6 +674,31 @@ function NuevaOrdenVenta() {
             </div>
 
             <div className="card">
+              <div className="card-header bg-gradient-to-r from-orange-50 to-white">
+                <h2 className="card-title text-orange-900">
+                  <FileText size={20} /> Orden de Compra del Cliente
+                </h2>
+              </div>
+              <div className="card-body">
+                <label className="form-label text-sm font-semibold text-gray-700">
+                  Nº Orden de Compra (Opcional)
+                </label>
+                <input
+                  type="text"
+                  className="form-input text-lg font-mono"
+                  placeholder="Ej: OC-2025-001234"
+                  value={formCabecera.orden_compra_cliente}
+                  onChange={(e) => setFormCabecera({...formCabecera, orden_compra_cliente: e.target.value})}
+                  maxLength={100}
+                />
+                <p className="text-xs text-muted mt-2">
+                  <Info size={12} className="inline mr-1" />
+                  Número de orden de compra proporcionado por el cliente (si aplica)
+                </p>
+              </div>
+            </div>
+
+            <div className="card">
               <div className="card-header bg-gradient-to-r from-green-50 to-white">
                 <h2 className="card-title text-green-900">
                   <FileText size={20} /> Tipo de Comprobante
@@ -892,6 +933,49 @@ function NuevaOrdenVenta() {
                       </button>
                     ))}
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header bg-gradient-to-r from-indigo-50 to-white">
+                <h2 className="card-title text-indigo-900"><Truck size={20} /> Logística y Transporte</h2>
+              </div>
+              <div className="card-body space-y-4">
+                <div>
+                  <label className="form-label flex items-center gap-2">
+                    <Truck size={16} /> Vehículo Asignado
+                  </label>
+                  <select 
+                    className="form-select"
+                    value={formCabecera.id_vehiculo}
+                    onChange={(e) => setFormCabecera({...formCabecera, id_vehiculo: e.target.value})}
+                  >
+                    <option value="">Sin asignar</option>
+                    {vehiculos.map(v => (
+                      <option key={v.id_vehiculo} value={v.id_vehiculo}>
+                        {v.placa} - {v.marca_modelo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label flex items-center gap-2">
+                    <User size={16} /> Conductor Asignado
+                  </label>
+                  <select 
+                    className="form-select"
+                    value={formCabecera.id_conductor}
+                    onChange={(e) => setFormCabecera({...formCabecera, id_conductor: e.target.value})}
+                  >
+                    <option value="">Sin asignar</option>
+                    {conductores.map(c => (
+                      <option key={c.id_empleado} value={c.id_empleado}>
+                        {c.nombre_completo} {c.dni ? `- DNI: ${c.dni}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

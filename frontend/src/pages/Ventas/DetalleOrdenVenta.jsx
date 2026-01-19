@@ -192,43 +192,45 @@ function DetalleOrdenVenta() {
         setDespachoForm({ ...despachoForm, detalles: nuevosDetalles });
     }
   };
-
+  const getFechaConHora = (fechaString) => {
+  return `${fechaString}T12:00:00`;
+};
   const handleRegistrarDespacho = async () => {
-    try {
-      setProcesando(true);
-      setError(null);
+  try {
+    setProcesando(true);
+    setError(null);
 
-      const itemsADespachar = despachoForm.detalles
-        .filter(item => parseFloat(item.cantidad_a_despachar) > 0)
-        .map(item => ({
-          id_producto: item.id_producto,
-          cantidad: parseFloat(item.cantidad_a_despachar)
-        }));
+    const itemsADespachar = despachoForm.detalles
+      .filter(item => parseFloat(item.cantidad_a_despachar) > 0)
+      .map(item => ({
+        id_producto: item.id_producto,
+        cantidad: parseFloat(item.cantidad_a_despachar)
+      }));
 
-      if (itemsADespachar.length === 0) {
-        setError("Debe seleccionar al menos un producto para despachar");
-        setProcesando(false);
-        return;
-      }
-
-      const response = await ordenesVentaAPI.registrarDespacho(id, {
-        detalles_despacho: itemsADespachar,
-        fecha_despacho: despachoForm.fecha_despacho
-      });
-
-      if (response.data.success) {
-        setSuccess(response.data.message);
-        setModalDespacho(false);
-        await cargarDatos();
-      }
-
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || 'Error al registrar despacho');
-    } finally {
+    if (itemsADespachar.length === 0) {
+      setError("Debe seleccionar al menos un producto para despachar");
       setProcesando(false);
+      return;
     }
-  };
+
+    const response = await ordenesVentaAPI.registrarDespacho(id, {
+      detalles_despacho: itemsADespachar,
+      fecha_despacho: getFechaConHora(despachoForm.fecha_despacho) // ✅ CAMBIO AQUÍ
+    });
+
+    if (response.data.success) {
+      setSuccess(response.data.message);
+      setModalDespacho(false);
+      await cargarDatos();
+    }
+
+  } catch (err) {
+    console.error(err);
+    setError(err.response?.data?.error || 'Error al registrar despacho');
+  } finally {
+    setProcesando(false);
+  }
+};
 
   const handleAnularDespacho = async (idSalida) => {
     if (!confirm('¿Está seguro de anular este despacho? Se revertirá el stock y las cantidades despachadas.')) return;

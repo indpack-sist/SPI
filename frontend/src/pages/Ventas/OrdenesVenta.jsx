@@ -108,38 +108,58 @@ function OrdenesVenta() {
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
-  const handleDescargarPDF = async (idOrden, numeroOrden) => {
-    try {
-      setDescargandoPDF(idOrden);
-      setError(null);
-      
-      const response = await ordenesVentaAPI.descargarPDF(idOrden);
-      
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.href = url;
-      
-      const nombreArchivo = `OrdenVenta-${numeroOrden || idOrden}.pdf`;
-      link.setAttribute('download', nombreArchivo);
-      
-      document.body.appendChild(link);
-      link.click();
-      
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      setSuccess('PDF descargado exitosamente');
-      setTimeout(() => setSuccess(null), 3000);
-      
-    } catch (err) {
-      console.error(err);
-      setError('Error al descargar el PDF. Intente nuevamente.');
-    } finally {
-      setDescargandoPDF(null);
+ const handleDescargarPDF = async (idOrden, numeroOrden, cliente) => {
+  try {
+    setDescargandoPDF(idOrden);
+    setError(null);
+    
+    const response = await ordenesVentaAPI.descargarPDF(idOrden);
+    
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    
+    const clienteSanitizado = (cliente || 'CLIENTE')
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+      .replace(/[^a-zA-Z0-9]/g, "_")   
+      .replace(/_+/g, "_")             
+      .toUpperCase();
+
+    const nroOrden = numeroOrden || idOrden;
+    const nombreArchivo = `${clienteSanitizado}_${nroOrden}.pdf`;
+    
+    link.setAttribute('download', nombreArchivo);
+    
+    document.body.appendChild(link);
+    link.click();
+    
+    link.parentNode.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    setSuccess('PDF descargado exitosamente');
+    setTimeout(() => setSuccess(null), 3000);
+    
+  } catch (err) {
+    console.error("Error original:", err);
+
+    if (err.response && err.response.data instanceof Blob) {
+      try {
+        const errorText = await err.response.data.text();
+        const errorJson = JSON.parse(errorText);
+        const mensajeError = errorJson.error || 'Error al generar el PDF';
+        setError(mensajeError);
+      } catch (e) {
+        setError('Ocurrió un error inesperado al descargar el archivo.');
+      }
+    } else {
+      setError(err.message || 'Error de conexión al descargar el PDF');
     }
-  };
+  } finally {
+    setDescargandoPDF(null);
+  }
+};
 
   const formatearFechaVisual = (fechaStr) => {
     if (!fechaStr) return '-';

@@ -475,9 +475,22 @@ function DetalleOrdenVenta() {
       const link = document.createElement('a');
       link.href = url;
       
-      const nombreArchivo = tipoDocumento === 'comprobante' 
-        ? `${orden.tipo_comprobante || 'Doc'}-${orden.numero_comprobante || orden.numero_orden}.pdf` 
-        : `OrdenVenta-${orden.numero_orden}.pdf`;
+      const clienteSanitizado = (orden.cliente || 'CLIENTE')
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .toUpperCase();
+
+      let nombreArchivo;
+
+      if (tipoDocumento === 'comprobante') {
+        const tipoDoc = (orden.tipo_comprobante || 'DOC').toUpperCase().replace(/\s+/g, '_');
+        const numDoc = orden.numero_comprobante || orden.numero_orden;
+        nombreArchivo = `${clienteSanitizado}_${tipoDoc}_${numDoc}.pdf`;
+      } else {
+        const nroOrden = orden.numero_orden || id;
+        nombreArchivo = `${clienteSanitizado}_${nroOrden}.pdf`;
+      }
         
       link.setAttribute('download', nombreArchivo);
       document.body.appendChild(link);

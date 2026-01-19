@@ -48,6 +48,7 @@ import NuevaCompra from './pages/Compras/NuevaCompra';
 import DetalleCompra from './pages/Compras/DetalleCompra';
 
 import CuentasPago from './pages/Finanzas/CuentasPago';
+import DetalleCuenta from './pages/Finanzas/DetalleCuenta';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
 
 function App() {
@@ -385,7 +386,14 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
-
+                      <Route 
+                        path="/finanzas/cuentas/:id" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="cuentasPago">
+                            <DetalleCuenta />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
                       <Route 
                         path="/finanzas/pagos-cobranzas" 
                         element={

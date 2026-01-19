@@ -4,21 +4,23 @@ import {
   DollarSign, TrendingUp, Calendar, Filter, Download, 
   ArrowUpCircle, ArrowDownCircle, AlertCircle, LayoutList,
   FileText, CheckCircle, XCircle, AlertTriangle, FileBadge, Clock,
-  Truck, Package
+  Truck, Package, Search, X, Users, RefreshCw
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
-import { pagosCobranzasAPI, cuentasPagoAPI } from '../../config/api';
+import { pagosCobranzasAPI, cuentasPagoAPI, clientesAPI } from '../../config/api';
 
 function PagosCobranzas() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   
   const [movimientos, setMovimientos] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [cuentas, setCuentas] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [cuentasPorCobrar, setCuentasPorCobrar] = useState([]);
   
   const [activeTab, setActiveTab] = useState('movimientos');
@@ -31,8 +33,23 @@ function PagosCobranzas() {
     id_cuenta: ''
   });
 
+  const [filtrosCobranzas, setFiltrosCobranzas] = useState({
+    id_cliente: '',
+    estado_deuda: '',
+    tipo_venta: '',
+    moneda: '',
+    fecha_vencimiento_desde: '',
+    fecha_vencimiento_hasta: '',
+    monto_minimo: '',
+    monto_maximo: '',
+    busqueda_texto: ''
+  });
+
+  const [mostrarFiltrosAvanzados, setMostrarFiltrosAvanzados] = useState(false);
+
   useEffect(() => {
     cargarCuentas();
+    cargarClientes();
   }, []);
 
   useEffect(() => {
@@ -47,6 +64,17 @@ function PagosCobranzas() {
     try {
       const response = await cuentasPagoAPI.getAll({ estado: 'Activo' });
       setCuentas(response.data.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cargarClientes = async () => {
+    try {
+      const response = await clientesAPI.getAll();
+      if (response.data.success) {
+        setClientes(response.data.data || []);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -76,7 +104,22 @@ function PagosCobranzas() {
     try {
       setLoading(true);
       setError(null);
-      const response = await pagosCobranzasAPI.getCuentasPorCobrar(filtros);
+      
+      const filtrosDeudas = {};
+      
+      if (filtrosCobranzas.id_cliente) {
+        filtrosDeudas.id_cliente = filtrosCobranzas.id_cliente;
+      }
+
+      if (filtrosCobranzas.fecha_vencimiento_desde) {
+        filtrosDeudas.fecha_inicio = filtrosCobranzas.fecha_vencimiento_desde;
+      }
+
+      if (filtrosCobranzas.fecha_vencimiento_hasta) {
+        filtrosDeudas.fecha_fin = filtrosCobranzas.fecha_vencimiento_hasta;
+      }
+      
+      const response = await pagosCobranzasAPI.getCuentasPorCobrar(filtrosDeudas);
       
       if (response.data.success) {
         setCuentasPorCobrar(response.data.data || []);
@@ -99,8 +142,28 @@ function PagosCobranzas() {
     });
   };
 
+  const limpiarFiltrosCobranzas = () => {
+    setFiltrosCobranzas({
+      id_cliente: '',
+      estado_deuda: '',
+      tipo_venta: '',
+      moneda: '',
+      fecha_vencimiento_desde: '',
+      fecha_vencimiento_hasta: '',
+      monto_minimo: '',
+      monto_maximo: '',
+      busqueda_texto: ''
+    });
+  };
+
+  const aplicarFiltrosCobranzas = () => {
+    cargarDeudas();
+  };
+
   const exportarExcel = () => {
-    console.log('Exportando...', filtros);
+    const dataExport = activeTab === 'movimientos' ? movimientos : cuentasPorCobrarFiltradas;
+    console.log('Exportando...', dataExport);
+    setSuccess('Exportación en desarrollo');
   };
 
   const formatearFecha = (fecha) => {
@@ -125,6 +188,36 @@ function PagosCobranzas() {
       default: return { bg: 'bg-gray-100', text: 'text-gray-800', icon: FileText };
     }
   };
+
+  const cuentasPorCobrarFiltradas = cuentasPorCobrar.filter(cuenta => {
+    if (filtrosCobranzas.estado_deuda) {
+      if (cuenta.estado_deuda !== filtrosCobranzas.estado_deuda) return false;
+    }
+
+    if (filtrosCobranzas.tipo_venta) {
+      if (cuenta.tipo_venta !== filtrosCobranzas.tipo_venta) return false;
+    }
+
+    if (filtrosCobranzas.moneda) {
+      if (cuenta.moneda !== filtrosCobranzas.moneda) return false;
+    }
+
+    if (filtrosCobranzas.monto_minimo) {
+      if (parseFloat(cuenta.saldo_pendiente) < parseFloat(filtrosCobranzas.monto_minimo)) return false;
+    }
+
+    if (filtrosCobranzas.monto_maximo) {
+      if (parseFloat(cuenta.saldo_pendiente) > parseFloat(filtrosCobranzas.monto_maximo)) return false;
+    }
+
+    if (filtrosCobranzas.busqueda_texto) {
+      const busqueda = filtrosCobranzas.busqueda_texto.toLowerCase();
+      const textoCompleto = `${cuenta.numero_orden} ${cuenta.cliente} ${cuenta.ruc}`.toLowerCase();
+      if (!textoCompleto.includes(busqueda)) return false;
+    }
+
+    return true;
+  });
 
   const columnsMovimientos = [
     {
@@ -223,7 +316,7 @@ function PagosCobranzas() {
                 mensaje: `${Math.abs(dias)} días de atraso`
               };
               break;
-            case 'Proximo a Vencer': 
+            case 'Próximo a Vencer': 
               estadoConfig = {
                 color: 'badge-warning',
                 texto: 'Por Vencer',
@@ -356,8 +449,21 @@ function PagosCobranzas() {
     return <Loading message="Cargando información financiera..." />;
   }
 
-  const cuentasContado = cuentasPorCobrar.filter(c => c.tipo_venta === 'Contado');
-  const cuentasCredito = cuentasPorCobrar.filter(c => c.tipo_venta !== 'Contado');
+  const cuentasContado = cuentasPorCobrarFiltradas.filter(c => c.tipo_venta === 'Contado');
+  const cuentasCredito = cuentasPorCobrarFiltradas.filter(c => c.tipo_venta !== 'Contado');
+
+  const totalDeudaPEN = cuentasPorCobrarFiltradas
+    .filter(c => c.moneda === 'PEN')
+    .reduce((sum, c) => sum + parseFloat(c.saldo_pendiente), 0);
+
+  const totalDeudaUSD = cuentasPorCobrarFiltradas
+    .filter(c => c.moneda === 'USD')
+    .reduce((sum, c) => sum + parseFloat(c.saldo_pendiente), 0);
+
+  const cuentasVencidas = cuentasPorCobrarFiltradas.filter(c => c.estado_deuda === 'Vencido').length;
+  const cuentasPorVencer = cuentasPorCobrarFiltradas.filter(c => c.estado_deuda === 'Próximo a Vencer').length;
+
+  const filtrosActivos = Object.values(filtrosCobranzas).filter(v => v !== '').length;
 
   return (
     <div className="p-6">
@@ -395,6 +501,7 @@ function PagosCobranzas() {
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       {activeTab === 'movimientos' && resumen && (
         <div className="grid grid-cols-4 gap-4 mb-6">
@@ -467,118 +574,350 @@ function PagosCobranzas() {
         </div>
       )}
 
-      <div className="card mb-4 bg-gray-50 border border-gray-200">
-        <div className="card-body p-4">
-          <div className="flex flex-wrap items-end gap-4">
-            {activeTab === 'movimientos' && (
-              <div className="w-40">
-                <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Tipo Movimiento</label>
-                <select className="form-select form-select-sm" value={filtros.tipo} onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}>
-                  <option value="">Todos</option>
-                  <option value="pago">Egresos (Pagos)</option>
-                  <option value="cobranza">Ingresos (Cobros)</option>
-                </select>
+      {activeTab === 'cobranzas' && (
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="card border-l-4 border-red-500 hover:shadow-md transition-shadow">
+            <div className="card-body">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-muted font-medium uppercase">Total Pendiente PEN</p>
+                  <h3 className="text-2xl font-bold text-red-600">
+                    {formatearMoneda(totalDeudaPEN, 'PEN')}
+                  </h3>
+                </div>
+                <div className="p-3 bg-red-50 rounded-full">
+                  <DollarSign size={24} className="text-red-600" />
+                </div>
               </div>
-            )}
-            
-            <div className="w-36">
-              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">
-                {activeTab === 'movimientos' ? 'Fecha Inicio' : 'Vencimiento Desde'}
-              </label>
-              <input type="date" className="form-input form-input-sm" value={filtros.fecha_inicio} onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })} />
+              <p className="text-xs text-muted">
+                {cuentasPorCobrarFiltradas.filter(c => c.moneda === 'PEN').length} órdenes
+              </p>
             </div>
+          </div>
 
-            <div className="w-36">
-              <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">
-                {activeTab === 'movimientos' ? 'Fecha Fin' : 'Vencimiento Hasta'}
-              </label>
-              <input type="date" className="form-input form-input-sm" value={filtros.fecha_fin} onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })} />
-            </div>
-
-            {activeTab === 'movimientos' && (
-              <div className="w-40">
-                <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Cuenta / Caja</label>
-                <select className="form-select form-select-sm" value={filtros.id_cuenta} onChange={(e) => setFiltros({ ...filtros, id_cuenta: e.target.value })}>
-                  <option value="">Todas</option>
-                  {cuentas.map(c => (
-                    <option key={c.id_cuenta} value={c.id_cuenta}>
-                        {c.nombre} - {c.tipo} ({c.moneda})
-                    </option>
-                  ))}
-                </select>
+          <div className="card border-l-4 border-orange-500 hover:shadow-md transition-shadow">
+            <div className="card-body">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-muted font-medium uppercase">Total Pendiente USD</p>
+                  <h3 className="text-2xl font-bold text-orange-600">
+                    {formatearMoneda(totalDeudaUSD, 'USD')}
+                  </h3>
+                </div>
+                <div className="p-3 bg-orange-50 rounded-full">
+                  <DollarSign size={24} className="text-orange-600" />
+                </div>
               </div>
-            )}
+              <p className="text-xs text-muted">
+                {cuentasPorCobrarFiltradas.filter(c => c.moneda === 'USD').length} órdenes
+              </p>
+            </div>
+          </div>
 
-            <div className="flex gap-2 ml-auto">
-              <button className="btn btn-outline btn-sm bg-white hover:bg-gray-100 text-gray-700 border-gray-300" onClick={limpiarFiltros}>
-                <Filter size={14} className="mr-1"/> Limpiar
-              </button>
-              <button className="btn btn-success btn-sm text-white shadow-sm" onClick={exportarExcel}>
-                <Download size={14} className="mr-1"/> Exportar
-              </button>
+          <div className="card border-l-4 border-red-700 hover:shadow-md transition-shadow">
+            <div className="card-body">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-muted font-medium uppercase">Vencidas</p>
+                  <h3 className="text-3xl font-bold text-red-700">{cuentasVencidas}</h3>
+                </div>
+                <div className="p-3 bg-red-100 rounded-full">
+                  <XCircle size={24} className="text-red-700" />
+                </div>
+              </div>
+              <p className="text-xs text-danger font-bold">Requieren atención inmediata</p>
+            </div>
+          </div>
+
+          <div className="card border-l-4 border-yellow-500 hover:shadow-md transition-shadow">
+            <div className="card-body">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-muted font-medium uppercase">Por Vencer</p>
+                  <h3 className="text-3xl font-bold text-yellow-600">{cuentasPorVencer}</h3>
+                </div>
+                <div className="p-3 bg-yellow-50 rounded-full">
+                  <AlertTriangle size={24} className="text-yellow-600" />
+                </div>
+              </div>
+              <p className="text-xs text-warning font-bold">Próximas a vencer (≤5 días)</p>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {activeTab === 'movimientos' ? (
-        <div className="card">
-          <div className="card-header border-b-0">
-            <h2 className="card-title">
-              Historial de Transacciones
-              <span className="badge badge-primary ml-2">
-                {movimientos.length}
-              </span>
-            </h2>
-          </div>
-          <div className="card-body p-0">
-            <Table
-              columns={columnsMovimientos}
-              data={movimientos}
-              emptyMessage="No hay movimientos en el período seleccionado"
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="card border-l-4 border-red-500">
-            <div className="card-header border-b-0">
-              <h2 className="card-title text-red-700">
-                <AlertCircle size={20} />
-                Pendientes de Pago (Contado)
-                <span className="badge badge-danger ml-2">
-                  {cuentasContado.length}
-                </span>
-              </h2>
-            </div>
-            <div className="card-body p-0">
-              <Table
-                columns={columnsCobranzas}
-                data={cuentasContado}
-                emptyMessage="No hay órdenes al contado pendientes de pago"
-              />
+        <>
+          <div className="card mb-4 bg-gray-50 border border-gray-200">
+            <div className="card-body p-4">
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="w-40">
+                  <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Tipo Movimiento</label>
+                  <select className="form-select form-select-sm" value={filtros.tipo} onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}>
+                    <option value="">Todos</option>
+                    <option value="pago">Egresos (Pagos)</option>
+                    <option value="cobranza">Ingresos (Cobros)</option>
+                  </select>
+                </div>
+                
+                <div className="w-36">
+                  <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Fecha Inicio</label>
+                  <input type="date" className="form-input form-input-sm" value={filtros.fecha_inicio} onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })} />
+                </div>
+
+                <div className="w-36">
+                  <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Fecha Fin</label>
+                  <input type="date" className="form-input form-input-sm" value={filtros.fecha_fin} onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })} />
+                </div>
+
+                <div className="w-40">
+                  <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Cuenta / Caja</label>
+                  <select className="form-select form-select-sm" value={filtros.id_cuenta} onChange={(e) => setFiltros({ ...filtros, id_cuenta: e.target.value })}>
+                    <option value="">Todas</option>
+                    {cuentas.map(c => (
+                      <option key={c.id_cuenta} value={c.id_cuenta}>
+                          {c.nombre} - {c.tipo} ({c.moneda})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-2 ml-auto">
+                  <button className="btn btn-outline btn-sm bg-white hover:bg-gray-100 text-gray-700 border-gray-300" onClick={limpiarFiltros}>
+                    <Filter size={14} className="mr-1"/> Limpiar
+                  </button>
+                  <button className="btn btn-success btn-sm text-white shadow-sm" onClick={exportarExcel}>
+                    <Download size={14} className="mr-1"/> Exportar
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="card border-l-4 border-blue-500">
+          <div className="card">
             <div className="card-header border-b-0">
-              <h2 className="card-title text-blue-700">
-                <Clock size={20} />
-                Cartera de Crédito
-                <span className="badge badge-info ml-2">
-                  {cuentasCredito.length}
+              <h2 className="card-title">
+                Historial de Transacciones
+                <span className="badge badge-primary ml-2">
+                  {movimientos.length}
                 </span>
               </h2>
             </div>
             <div className="card-body p-0">
               <Table
-                columns={columnsCobranzas}
-                data={cuentasCredito}
-                emptyMessage="No hay créditos pendientes de cobro"
+                columns={columnsMovimientos}
+                data={movimientos}
+                emptyMessage="No hay movimientos en el período seleccionado"
               />
             </div>
           </div>
-        </div>
+        </>
+      ) : (
+        <>
+          <div className="card mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+            <div className="card-body p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Search size={20} className="text-blue-600" />
+                  <h3 className="font-bold text-blue-900">Filtros de Búsqueda Avanzada</h3>
+                  {filtrosActivos > 0 && (
+                    <span className="badge badge-primary">{filtrosActivos} activos</span>
+                  )}
+                </div>
+                <button 
+                  className="btn btn-sm btn-outline text-blue-700 border-blue-300 hover:bg-blue-100"
+                  onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)}
+                >
+                  <Filter size={14} className="mr-1" />
+                  {mostrarFiltrosAvanzados ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="col-span-2">
+                  <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1 flex items-center gap-1">
+                    <Search size={12} /> Búsqueda Rápida
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-input form-input-sm" 
+                    placeholder="Buscar por N° Orden, Cliente o RUC..."
+                    value={filtrosCobranzas.busqueda_texto}
+                    onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, busqueda_texto: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1 flex items-center gap-1">
+                    <Users size={12} /> Cliente
+                  </label>
+                  <select 
+                    className="form-select form-select-sm"
+                    value={filtrosCobranzas.id_cliente}
+                    onChange={(e) => {
+                      setFiltrosCobranzas({ ...filtrosCobranzas, id_cliente: e.target.value });
+                      setTimeout(() => aplicarFiltrosCobranzas(), 100);
+                    }}
+                  >
+                    <option value="">Todos los clientes</option>
+                    {clientes.map(cliente => (
+                      <option key={cliente.id_cliente} value={cliente.id_cliente}>
+                        {cliente.razon_social}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <button 
+                    className="btn btn-primary btn-sm flex-1"
+                    onClick={aplicarFiltrosCobranzas}
+                  >
+                    <RefreshCw size={14} className="mr-1" /> Aplicar
+                  </button>
+                  {filtrosActivos > 0 && (
+                    <button 
+                      className="btn btn-outline btn-sm"
+                      onClick={limpiarFiltrosCobranzas}
+                      title="Limpiar todos los filtros"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {mostrarFiltrosAvanzados && (
+                <div className="grid grid-cols-4 gap-3 pt-3 border-t border-blue-200">
+                  <div>
+                    <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1">Estado Deuda</label>
+                    <select 
+                      className="form-select form-select-sm"
+                      value={filtrosCobranzas.estado_deuda}
+                      onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, estado_deuda: e.target.value })}
+                    >
+                      <option value="">Todos</option>
+                      <option value="Vencido">Vencidos</option>
+                      <option value="Próximo a Vencer">Próximos a Vencer</option>
+                      <option value="Al Día">Al Día</option>
+                      <option value="Pendiente Pago">Pendiente Pago (Contado)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1">Tipo Venta</label>
+                    <select 
+                      className="form-select form-select-sm"
+                      value={filtrosCobranzas.tipo_venta}
+                      onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, tipo_venta: e.target.value })}
+                    >
+                      <option value="">Todos</option>
+                      <option value="Contado">Contado</option>
+                      <option value="Crédito">Crédito</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1">Moneda</label>
+                    <select 
+                      className="form-select form-select-sm"
+                      value={filtrosCobranzas.moneda}
+                      onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, moneda: e.target.value })}
+                    >
+                      <option value="">Todas</option>
+                      <option value="PEN">Soles (PEN)</option>
+                      <option value="USD">Dólares (USD)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1">Vencimiento Desde</label>
+                    <input 
+                      type="date" 
+                      className="form-input form-input-sm"
+                      value={filtrosCobranzas.fecha_vencimiento_desde}
+                      onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, fecha_vencimiento_desde: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1">Vencimiento Hasta</label>
+                    <input 
+                      type="date" 
+                      className="form-input form-input-sm"
+                      value={filtrosCobranzas.fecha_vencimiento_hasta}
+                      onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, fecha_vencimiento_hasta: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1">Monto Mínimo</label>
+                    <input 
+                      type="number" 
+                      className="form-input form-input-sm"
+                      placeholder="0.00"
+                      step="0.01"
+                      value={filtrosCobranzas.monto_minimo}
+                      onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, monto_minimo: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs font-semibold uppercase text-gray-600 mb-1">Monto Máximo</label>
+                    <input 
+                      type="number" 
+                      className="form-input form-input-sm"
+                      placeholder="0.00"
+                      step="0.01"
+                      value={filtrosCobranzas.monto_maximo}
+                      onChange={(e) => setFiltrosCobranzas({ ...filtrosCobranzas, monto_maximo: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="card border-l-4 border-red-500">
+              <div className="card-header border-b-0">
+                <h2 className="card-title text-red-700">
+                  <AlertCircle size={20} />
+                  Pendientes de Pago (Contado)
+                  <span className="badge badge-danger ml-2">
+                    {cuentasContado.length}
+                  </span>
+                </h2>
+              </div>
+              <div className="card-body p-0">
+                <Table
+                  columns={columnsCobranzas}
+                  data={cuentasContado}
+                  emptyMessage="No hay órdenes al contado pendientes de pago con los filtros aplicados"
+                />
+              </div>
+            </div>
+
+            <div className="card border-l-4 border-blue-500">
+              <div className="card-header border-b-0">
+                <h2 className="card-title text-blue-700">
+                  <Clock size={20} />
+                  Cartera de Crédito
+                  <span className="badge badge-info ml-2">
+                    {cuentasCredito.length}
+                  </span>
+                </h2>
+              </div>
+              <div className="card-body p-0">
+                <Table
+                  columns={columnsCobranzas}
+                  data={cuentasCredito}
+                  emptyMessage="No hay créditos pendientes de cobro con los filtros aplicados"
+                />
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

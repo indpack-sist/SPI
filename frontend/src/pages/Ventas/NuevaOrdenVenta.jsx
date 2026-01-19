@@ -91,7 +91,7 @@ function NuevaOrdenVenta() {
   const formatearNumero = (valor) => {
     return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
+      maximumFractionDigits: 4
     }).format(valor);
   };
 

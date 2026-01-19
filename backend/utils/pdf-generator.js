@@ -25,58 +25,50 @@ async function cargarLogoURL() {
   }
 }
 
+// --- FUNCIONES DE FECHA CORREGIDAS PARA PERÚ (UTC-5) ---
+
 function formatearFecha(fecha) {
   if (!fecha) return 'N/A';
-  
-  const date = typeof fecha === 'string' ? new Date(fecha + 'T00:00:00') : new Date(fecha);
-  
+  const date = new Date(fecha);
+  // Forzamos la zona horaria a America/Lima para que no reste/sume horas incorrectamente al cambiar de día
   return date.toLocaleDateString('es-PE', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: 'UTC'
+    timeZone: 'America/Lima' // <--- CAMBIO IMPORTANTE
   });
 }
 
 function formatearHora(fecha) {
   if (!fecha) return 'N/A';
-  
   const date = new Date(fecha);
   
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const seconds = date.getSeconds();
-  
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const hours12 = hours % 12 || 12;
-  
-  const hoursStr = String(hours12).padStart(2, '0');
-  const minutesStr = String(minutes).padStart(2, '0');
-  const secondsStr = String(seconds).padStart(2, '0');
-  
-  return `${hoursStr}:${minutesStr}:${secondsStr} ${ampm}`;
+  // Usamos toLocaleTimeString forzando la zona horaria de Perú
+  return date.toLocaleTimeString('es-PE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'America/Lima' // <--- ESTO RESTA LAS 5 HORAS
+  });
 }
+
 function formatearFechaHora(fecha) {
   if (!fecha) return 'N/A';
-  
   const date = new Date(fecha);
-  
-  // Formatear fecha
-  const dia = String(date.getDate()).padStart(2, '0');
-  const mes = String(date.getMonth() + 1).padStart(2, '0');
-  const anio = date.getFullYear();
-  
-  // Formatear hora
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const hours12 = hours % 12 || 12;
-  
-  const hoursStr = String(hours12).padStart(2, '0');
-  const minutesStr = String(minutes).padStart(2, '0');
-  
-  return `${dia}/${mes}/${anio} ${hoursStr}:${minutesStr} ${ampm}`;
+
+  // Usamos toLocaleString para fecha y hora juntas en zona horaria Perú
+  return date.toLocaleString('es-PE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'America/Lima' // <--- CAMBIO IMPORTANTE
+  });
 }
+
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
   const currentFontSize = doc._fontSize || 12;
   doc.fontSize(fontSize);
@@ -134,7 +126,6 @@ function numeroALetras(numero, moneda) {
   
   return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }
-
 export async function generarPDFEntrada(datos) {
   const logoBuffer = await cargarLogoURL();
 
@@ -404,13 +395,26 @@ export async function generarPDFSalida(datos) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha:', 40, 213);
       doc.font('Helvetica');
-      doc.text(new Date(datos.fecha_movimiento || datos.fecha_emision).toLocaleDateString('es-PE'), 100, 213);
+      
+      // *** AQUÍ ESTÁ EL CAMBIO CLAVE EN LA FECHA ***
+      // Usamos la función formatearFecha que ahora fuerza America/Lima
+      doc.text(formatearFecha(datos.fecha_movimiento || datos.fecha_emision), 100, 213);
       
       if (!datos.historial_despachos) {
         doc.font('Helvetica-Bold');
         doc.text('Hora:', 40, 228);
         doc.font('Helvetica');
-        const horaStr = datos.fecha_movimiento ? new Date(datos.fecha_movimiento).toLocaleTimeString('es-PE', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+        
+        // *** AQUÍ ESTÁ EL CAMBIO CLAVE EN LA HORA ***
+        // Usamos toLocaleTimeString forzando la zona horaria a America/Lima (Perú)
+        // Esto le restará las 5 horas al tiempo UTC de la base de datos
+        const horaStr = datos.fecha_movimiento ? new Date(datos.fecha_movimiento).toLocaleTimeString('es-PE', {
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: true, 
+            timeZone: 'America/Lima' 
+        }) : '--:--';
+        
         doc.text(horaStr, 100, 228);
       }
       
@@ -560,7 +564,8 @@ export async function generarPDFSalida(datos) {
         datos.historial_despachos.forEach((h, i) => {
           if (yPos + 15 > 700) { doc.addPage(); yPos = 50; }
           doc.fontSize(7).font('Helvetica').fillColor('#333333');
-          doc.text(new Date(h.fecha_movimiento).toLocaleDateString('es-PE'), 40, yPos + 2);
+          // También corregimos la fecha aquí
+          doc.text(formatearFecha(h.fecha_movimiento), 40, yPos + 2);
           doc.text(`Salida #${h.numero_guia || h.id_salida}`, 120, yPos + 2);
           doc.text(h.producto, 220, yPos + 2, { width: 220, ellipsis: true });
           doc.text(h.unidad_medida, 450, yPos + 2);

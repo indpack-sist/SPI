@@ -51,7 +51,7 @@ function DetalleOrdenVenta() {
   const [nuevoTipoComprobante, setNuevoTipoComprobante] = useState('');
   
   const [pagoForm, setPagoForm] = useState({
-    id_cuenta_pago: '',
+    id_cuenta_destino: '',
     fecha_pago: getFechaLocal(),
     monto_pagado: '',
     metodo_pago: 'Transferencia',
@@ -215,7 +215,7 @@ function DetalleOrdenVenta() {
 
     const response = await ordenesVentaAPI.registrarDespacho(id, {
       detalles_despacho: itemsADespachar,
-      fecha_despacho: getFechaConHora(despachoForm.fecha_despacho) // ✅ CAMBIO AQUÍ
+      fecha_despacho: getFechaConHora(despachoForm.fecha_despacho) 
     });
 
     if (response.data.success) {
@@ -334,7 +334,7 @@ function DetalleOrdenVenta() {
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
     
-    if (!pagoForm.id_cuenta_pago) {
+    if (!pagoForm.id_cuenta_destino) {
         setError('Debe seleccionar una cuenta de pago');
         return;
     }
@@ -364,7 +364,7 @@ function DetalleOrdenVenta() {
         setSuccess(`Pago registrado: ${response.data.data.numero_pago}`);
         setModalPagoOpen(false);
         setPagoForm({
-          id_cuenta_pago: '',
+          id_cuenta_destino: '',
           fecha_pago: getFechaLocal(),
           monto_pagado: '',
           metodo_pago: 'Transferencia',
@@ -1672,14 +1672,14 @@ function DetalleOrdenVenta() {
                 <label className="form-label">Cuenta de Depósito *</label>
                 <select
                     className="form-select"
-                    value={pagoForm.id_cuenta_pago || ''}
-                    onChange={(e) => setPagoForm({ ...pagoForm, id_cuenta_pago: e.target.value })}
+                    value={pagoForm.id_cuenta_destino || ''}
+                    onChange={(e) => setPagoForm({ ...pagoForm, id_cuenta_destino: e.target.value })}
                     required
                 >
-                    <option value="">Seleccionar cuenta...</option>
-                    {cuentasPago.map(c => (
+                    <option value="">Seleccione cuenta</option>
+                    {cuentasPago.filter(c => c.estado === 'Activo' && c.moneda === orden.moneda).map(c => (
                         <option key={c.id_cuenta} value={c.id_cuenta}>
-                            {c.nombre} ({c.moneda})
+                            {c.nombre} - {c.tipo} ({c.moneda} {c.saldo_actual})
                         </option>
                     ))}
                 </select>

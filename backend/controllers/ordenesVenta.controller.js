@@ -1708,7 +1708,8 @@ export async function registrarPagoOrden(req, res) {
       metodo_pago,
       numero_operacion,
       banco,
-      observaciones
+      observaciones,
+      id_cuenta_destino  // ⬅️ NUEVO: ID de la cuenta donde se deposita
     } = req.body;
     
     const id_registrado_por = req.user?.id_empleado || null;
@@ -1725,6 +1726,21 @@ export async function registrarPagoOrden(req, res) {
         success: false,
         error: 'Fecha de pago y monto son obligatorios'
       });
+    }
+
+    // ⬅️ NUEVO: Validar cuenta si se proporciona
+    if (id_cuenta_destino) {
+      const cuentaResult = await executeQuery(
+        'SELECT * FROM cuentas_pago WHERE id_cuenta = ? AND estado = "Activo"',
+        [id_cuenta_destino]
+      );
+      
+      if (!cuentaResult.success || cuentaResult.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Cuenta no encontrada o inactiva'
+        });
+      }
     }
     
     const ordenResult = await executeQuery(`
@@ -1768,37 +1784,34 @@ export async function registrarPagoOrden(req, res) {
     
     const numeroPago = `${orden.numero_orden}-P${String(numeroSecuencia).padStart(2, '0')}`;
     
-    const pagoResult = await executeQuery(`
-      INSERT INTO pagos_ordenes_venta (
-        id_orden_venta,
-        numero_pago,
-        fecha_pago,
-        monto_pagado,
-        metodo_pago,
-        numero_operacion,
-        banco,
-        observaciones,
-        id_registrado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      id,
-      numeroPago,
-      fecha_pago,
-      montoNuevoPago,
-      metodo_pago || 'Transferencia',
-      numero_operacion || null,
-      banco || null,
-      observaciones || null,
-      id_registrado_por
-    ]);
-    
-    if (!pagoResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: pagoResult.error
-      });
-    }
-    
+    // ⬅️ MODIFICADO: Usar transacción para asegurar consistencia
+    const queries = [
+      {
+        sql: `INSERT INTO pagos_ordenes_venta (
+          id_orden_venta,
+          numero_pago,
+          fecha_pago,
+          monto_pagado,
+          metodo_pago,
+          numero_operacion,
+          banco,
+          observaciones,
+          id_registrado_por
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          id,
+          numeroPago,
+          fecha_pago,
+          montoNuevoPago,
+          metodo_pago || 'Transferencia',
+          numero_operacion || null,
+          banco || null,
+          observaciones || null,
+          id_registrado_por
+        ]
+      }
+    ];
+
     const nuevoMontoPagado = montoPagadoActual + montoNuevoPago;
     let estadoPago = 'Parcial';
     
@@ -1807,23 +1820,79 @@ export async function registrarPagoOrden(req, res) {
     } else if (nuevoMontoPagado === 0) {
       estadoPago = 'Pendiente';
     }
+
+    queries.push({
+      sql: `UPDATE ordenes_venta 
+            SET monto_pagado = ?,
+                estado_pago = ?
+            WHERE id_orden_venta = ?`,
+      params: [nuevoMontoPagado, estadoPago, id]
+    });
+
+    // ⬅️ NUEVO: Registrar movimiento en cuenta si se proporcionó
+    if (id_cuenta_destino) {
+      const cuentaResult = await executeQuery(
+        'SELECT saldo_actual, moneda FROM cuentas_pago WHERE id_cuenta = ?',
+        [id_cuenta_destino]
+      );
+      
+      const cuenta = cuentaResult.data[0];
+      const saldoAnterior = parseFloat(cuenta.saldo_actual);
+      const saldoNuevo = saldoAnterior + montoNuevoPago;
+
+      queries.push({
+        sql: `INSERT INTO movimientos_cuentas (
+          id_cuenta,
+          tipo_movimiento,
+          monto,
+          concepto,
+          referencia,
+          saldo_anterior,
+          saldo_nuevo,
+          id_registrado_por,
+          fecha_movimiento
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          id_cuenta_destino,
+          'Ingreso',
+          montoNuevoPago,
+          `Cobranza Orden ${orden.numero_orden}`,
+          numeroPago,
+          saldoAnterior,
+          saldoNuevo,
+          id_registrado_por,
+          fecha_pago
+        ]
+      });
+
+      queries.push({
+        sql: 'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
+        params: [saldoNuevo, id_cuenta_destino]
+      });
+    }
+
+    const result = await executeTransaction(queries);
     
-    await executeQuery(`
-      UPDATE ordenes_venta 
-      SET monto_pagado = ?,
-          estado_pago = ?
-      WHERE id_orden_venta = ?
-    `, [nuevoMontoPagado, estadoPago, id]);
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    // El insertId está en result.data[0] (primer query)
+    const idPagoOrden = result.data[0].insertId;
     
     res.status(201).json({
       success: true,
       data: {
-        id_pago_orden: pagoResult.data.insertId,
+        id_pago_orden: idPagoOrden,
         numero_pago: numeroPago,
         monto_pagado: montoNuevoPago,
         nuevo_monto_total_pagado: nuevoMontoPagado,
         saldo_pendiente: totalOrden - nuevoMontoPagado,
-        estado_pago: estadoPago
+        estado_pago: estadoPago,
+        cuenta_actualizada: !!id_cuenta_destino
       },
       message: 'Pago registrado exitosamente'
     });

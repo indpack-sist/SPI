@@ -366,3 +366,33 @@ export async function deleteEmpleado(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+export async function getConductores(req, res) {
+  try {
+    const result = await executeQuery(
+      `SELECT 
+        id_empleado, 
+        dni, 
+        nombre_completo, 
+        cargo,
+        rol,
+        estado
+      FROM empleados 
+      WHERE rol = 'Conductor' 
+      AND estado = 'Activo'
+      ORDER BY nombre_completo ASC`,
+      []
+    );
+    
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}

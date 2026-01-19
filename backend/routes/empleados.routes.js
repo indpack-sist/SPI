@@ -3,6 +3,7 @@ import {
   getAllEmpleados,
   getEmpleadoById,
   getEmpleadosByRol,
+  getConductores,
   validarDNIEmpleado,
   validarEmailEmpleado, 
   createEmpleado,
@@ -13,11 +14,10 @@ import {
 const router = express.Router();
 
 router.get('/', getAllEmpleados);
+router.get('/conductores', getConductores);
 router.get('/rol/:rol', getEmpleadosByRol);
 router.get('/validar-dni/:dni', validarDNIEmpleado);
-
 router.get('/validar-email/:email', validarEmailEmpleado);
-
 router.get('/:id', getEmpleadoById);
 router.post('/', createEmpleado);
 router.put('/:id', updateEmpleado);

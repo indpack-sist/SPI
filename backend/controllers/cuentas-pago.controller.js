@@ -65,11 +65,18 @@ export const getCuentaPagoById = async (req, res) => {
   try {
     const { id } = req.params;
     
+    // CORRECCIÓN AQUÍ: Se agregó la subconsulta para total_ingresos
     const cuentaResult = await executeQuery(`
       SELECT 
         cp.*,
         (SELECT COUNT(*) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta) as total_movimientos,
-        (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_gastado,
+        
+        /* ⬇️ ESTA LÍNEA FALTABA ⬇️ */
+        (SELECT COALESCE(SUM(monto), 0) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Ingreso') as total_ingresos,
+        
+        /* Se agregó COALESCE para evitar nulls */
+        (SELECT COALESCE(SUM(monto), 0) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_gastado,
+        
         (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta) as total_compras
       FROM cuentas_pago cp
       WHERE cp.id_cuenta = ?

@@ -83,6 +83,7 @@ export const authAPI = {
 
 export const empleadosAPI = {
   getAll: (params) => api.get('/empleados', { params }),
+  getConductores: () => api.get('/empleados/conductores'),
   getById: (id) => api.get(`/empleados/${id}`),
   getByRol: (rol) => api.get(`/empleados/rol/${rol}`),
   validarDNI: (dni) => api.get(`/empleados/validar-dni/${dni}`),
@@ -96,6 +97,7 @@ export const flotaAPI = {
   getAll: (params) => api.get('/flota', { params }),
   getById: (id) => api.get(`/flota/${id}`),
   getDisponibles: () => api.get('/flota/disponibles'),
+  getParaOrdenes: () => api.get('/flota/para-ordenes'),
   create: (data) => api.post('/flota', data),
   update: (id, data) => api.put(`/flota/${id}`, data),
   delete: (id) => api.delete(`/flota/${id}`),
@@ -491,7 +493,11 @@ export const ordenesVentaAPI = {
     return api.get(`/ordenes-venta/${id}/salidas/${idSalida}/pdf`, {
       responseType: 'blob'
     });
-  }
+  },
+
+  getConductores: () => api.get('/ordenes-venta/catalogo/conductores'),
+
+  getVehiculos: () => api.get('/ordenes-venta/catalogo/vehiculos')
 };
 
 export const guiasRemisionAPI = {

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertTriangle, CheckCircle, Package, TrendingUp, TrendingDown } from 'lucide-react';
 import Modal from '../UI/Modal';
-import api from '../../config/api';
-
+import { api } from '../../config/api';
 function ModalConteoFisico({ isOpen, onClose, producto, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

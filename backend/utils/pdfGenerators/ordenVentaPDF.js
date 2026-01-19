@@ -6,6 +6,19 @@ import https from 'https';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const ETIQUETAS_IMPUESTO = {
+  'IGV': 'IGV (18%)',
+  'EXO': 'EXONERADO (0%)',
+  'INA': 'INAFECTO (0%)'
+};
+
+const fmtNum = (num) => {
+  return Number(num).toLocaleString('en-US', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  });
+};
+
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
     const request = https.get(url, {
@@ -43,10 +56,9 @@ export async function generarOrdenVentaPDF(orden) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const fmt = new Intl.NumberFormat('en-US', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      });
+      const nombreCliente = orden.cliente || orden.razon_social || orden.nombre || 'CLIENTE SIN NOMBRE';
+      const rucCliente = orden.ruc_cliente || orden.ruc || orden.numero_documento || 'SIN RUC';
+      const direccionCliente = orden.direccion_entrega || orden.direccion_cliente || orden.direccion || '';
 
       let logoBuffer = null;
       try {
@@ -85,18 +97,11 @@ export async function generarOrdenVentaPDF(orden) {
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${orden.numero_orden}`, 385, 83, { align: 'center', width: 155 });
 
-      const direccionCliente = orden.direccion_entrega || 
-                               orden.direccion_cliente || 
-                               '';
-      
       const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
       const alturaRecuadroCliente = Math.max(90, alturaDireccion + 75);
       
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
-      const nombreCliente = orden.cliente || orden.razon_social || orden.nombre || '';
-      const rucCliente = orden.ruc_cliente || orden.ruc || orden.numero_documento || '';
-
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Cliente:', 40, 203);
       doc.font('Helvetica');
@@ -181,12 +186,12 @@ export async function generarOrdenVentaPDF(orden) {
       
       if (orden.detalle && orden.detalle.length > 0) {
         orden.detalle.forEach((item, idx) => {
-          const cantidad = fmt.format(item.cantidad);
-          const precioUnitario = fmt.format(item.precio_unitario);
+          const cantidad = fmtNum(item.cantidad);
+          const precioUnitario = fmtNum(item.precio_unitario);
           
           const descuento = parseFloat(item.descuento_porcentaje || 0);
           const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
-          const valorVenta = fmt.format(totalLinea);
+          const valorVenta = fmtNum(totalLinea);
           
           const descripcion = item.producto;
           const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
@@ -226,14 +231,13 @@ export async function generarOrdenVentaPDF(orden) {
       let yPosLeft = yBaseFooter;
       let yPosRight = yBaseFooter;
 
-      const subtotal = fmt.format(orden.subtotal || 0);
-      const igv = fmt.format(orden.igv || 0);
-      const total = fmt.format(orden.total || 0);
+      const subtotal = fmtNum(orden.subtotal || 0);
+      const igv = fmtNum(orden.igv || 0);
+      const total = fmtNum(orden.total || 0);
       const totalNumero = parseFloat(orden.total || 0);
       
       const tipoImpuesto = orden.tipo_impuesto || 'IGV';
-      const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
-      const etiquetaImpuesto = `${tipoImpuesto} (${porcImpuesto}%)`;
+      const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || tipoImpuesto;
 
       doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');

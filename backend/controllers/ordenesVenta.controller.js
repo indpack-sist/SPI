@@ -1539,37 +1539,39 @@ export async function descargarPDFOrdenVenta(req, res) {
 
     console.log("=========================================");
     console.log("🛑 DEBUG PDF - INICIO");
-    console.log(`➡️ ID Recibido: '${id}' (Tipo: ${typeof id})`);
     
-    // VALIDACIÓN 1: ¿El ID existe?
     if (!id || id === 'undefined' || id === 'null') {
-      console.log("❌ ERROR: ID es inválido.");
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    // VALIDACIÓN 2: ¿Qué devuelve la base de datos?
-    console.log("🔄 Ejecutando consulta SQL...");
-    const ordenResult = await executeQuery(`SELECT * FROM ordenes_venta WHERE id_orden_venta = ?`, [id]);
+    // --- CORRECCIÓN AQUÍ: Agregamos el JOIN para traer datos del cliente ---
+    console.log("🔄 Ejecutando consulta SQL con JOIN...");
     
-    console.log("📊 Resultado SQL:", ordenResult.data); // <--- ESTO ES LO IMPORTANTE
+    const query = `
+      SELECT 
+        ov.*, 
+        c.razon_social AS cliente, 
+        c.numero_documento AS ruc_cliente, 
+        c.direccion AS direccion_cliente,
+        c.telefono AS telefono_cliente,
+        c.email AS email_cliente
+      FROM ordenes_venta ov
+      LEFT JOIN clientes c ON ov.id_cliente = c.id_cliente
+      WHERE ov.id_orden_venta = ?
+    `;
+
+    const ordenResult = await executeQuery(query, [id]);
+    
+    // ---------------------------------------------------------------------
 
     if (!ordenResult.success || ordenResult.data.length === 0) {
-      console.log("❌ ERROR: La base de datos devolvió 0 filas.");
       return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
     }
 
     const orden = ordenResult.data[0];
-    console.log(`✅ Orden encontrada: ${orden.numero_orden}`);
+    console.log(`✅ Orden encontrada: ${orden.numero_orden} - Cliente: ${orden.cliente}`);
 
-    // ... (aquí sigue el resto de tu código normal de obtener detalle y generar PDF) ...
-    // Solo para probar si el problema es la BD, corta aquí y envía un "OK" falso por un momento:
-    /*
-    return res.json({ success: true, message: "DEBUG: Orden encontrada, deteniendo antes de generar PDF" });
-    */
-    
-    // Si descomentas lo de arriba, verás si la BD responde. Si lo dejas comentado, intentará generar el PDF.
-    
-    // -- CONTINUACIÓN ORIGINAL DEL CÓDIGO (Resumida para no pegar todo) --
+    // Obtenemos el detalle (esto estaba bien, lo mantenemos igual)
     const detalleResult = await executeQuery(`
       SELECT dov.*, p.codigo AS codigo_producto, p.nombre AS producto, p.unidad_medida
       FROM detalle_orden_venta dov
@@ -1580,15 +1582,18 @@ export async function descargarPDFOrdenVenta(req, res) {
     orden.detalle = detalleResult.data;
 
     let pdfBuffer;
+    // Asumiendo que ya importaste generarOrdenVentaPDF al inicio de este archivo
     if (tipo === 'comprobante') {
-        // ... lógica de comprobante
-         pdfBuffer = await generarOrdenVentaPDF(orden); // Usamos el generador por defecto por ahora para probar
+         // Si tienes una función específica para comprobantes úsala aquí, sino:
+         pdfBuffer = await generarOrdenVentaPDF(orden); 
     } else {
-        pdfBuffer = await generarOrdenVentaPDF(orden);
+         pdfBuffer = await generarOrdenVentaPDF(orden);
     }
     
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Orden-${orden.numero_orden}.pdf"`);
+    // Aquí puedes usar orden.cliente para que el nombre del archivo también sea bonito
+    const nombreArchivo = `Orden-${orden.numero_orden}.pdf`;
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
     res.send(pdfBuffer);
     console.log("✅ PDF Enviado al cliente");
 
@@ -1597,7 +1602,6 @@ export async function descargarPDFOrdenVenta(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-
 export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;

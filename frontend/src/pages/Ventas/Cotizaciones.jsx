@@ -119,27 +119,37 @@ function Cotizaciones() {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
-  const handleDescargarPDF = async (id, numeroCotizacion) => {
+  const handleDescargarPDF = async () => {
     try {
-      setRefreshing(true); 
+      setLoading(true);
+      setError(null);
       
+      // 1. Llamada a la API
       const response = await cotizacionesAPI.descargarPDF(id);
       
+      // 2. Crear URL
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
       const link = document.createElement('a');
       link.href = url;
       
-      const contentDisposition = response.headers['content-disposition'];
-      let fileName = `Cotizacion-${numeroCotizacion || id}.pdf`;
+      // --- INICIO DE LA MODIFICACIÓN PARA TU FORMATO DESEADO ---
       
-      if (contentDisposition) {
-        const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (fileNameMatch && fileNameMatch.length === 2) {
-          fileName = fileNameMatch[1];
-        }
-      }
+      // 1. Limpiamos el nombre del cliente (Mayúsculas, sin tildes, espacios por guión bajo)
+      const clienteSanitizado = (cotizacion.cliente || 'CLIENTE')
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar tildes
+        .replace(/[^a-zA-Z0-9]/g, "_")   // Reemplazar espacios y símbolos por guiones bajos
+        .replace(/_+/g, "_")             // Evitar guiones dobles (ej: EMPRESA__SA)
+        .toUpperCase();
+
+      // 2. Obtenemos el número (ej: COT-2025-001)
+      const nroCot = cotizacion.numero_cotizacion || id;
+      
+      // 3. Armamos el nombre final: EMPRESA_SA_COT-2025-001.pdf
+      const fileName = `${clienteSanitizado}_${nroCot}.pdf`;
+      
+      // --- FIN DE LA MODIFICACIÓN ---
       
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
@@ -148,22 +158,25 @@ function Cotizaciones() {
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
       
+      setSuccess('PDF descargado exitosamente');
+
     } catch (err) {
-      console.error(err);
-      
+      console.error("Error original:", err);
+
       if (err.response && err.response.data instanceof Blob) {
         try {
           const errorText = await err.response.data.text();
           const errorJson = JSON.parse(errorText);
-          setError(errorJson.error || 'Error al generar el PDF');
+          const mensajeError = errorJson.error || 'Error al generar el PDF';
+          setError(mensajeError);
         } catch (e) {
-          setError('Error inesperado al descargar el archivo');
+          setError('Ocurrió un error inesperado al descargar el archivo.');
         }
       } else {
-        setError(err.message || 'Error al descargar el PDF');
+        setError(err.message || 'Error de conexión al descargar el PDF');
       }
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
   };
 

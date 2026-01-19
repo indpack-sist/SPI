@@ -180,7 +180,7 @@ export async function createCotizacion(req, res) {
       tipo_impuesto,
       porcentaje_impuesto,
       tipo_cambio,
-      plazo_pago,         
+      plazo_pago,        
       forma_pago,
       direccion_entrega,
       observaciones,
@@ -319,14 +319,14 @@ export async function createCotizacion(req, res) {
     `, [
       numeroCotizacion,
       id_cliente,
-      comercialFinal,                   
-      fechaEmisionFinal,                 
-      fechaVencimientoCalculada,         
+      comercialFinal,                  
+      fechaEmisionFinal,                
+      fechaVencimientoCalculada,        
       prioridad || 'Media',
       moneda || 'PEN',
       tipoImpuestoFinal,
       porcentaje,
-      tipoCambioFinal,                   
+      tipoCambioFinal,                  
       plazo_pago,                        
       forma_pago || null,
       direccion_entrega || null,
@@ -962,6 +962,7 @@ export async function getEstadisticasCotizaciones(req, res) {
     });
   }
 }
+
 export async function descargarPDFCotizacion(req, res) {
   try {
     const { id } = req.params;
@@ -1020,19 +1021,19 @@ export async function descargarPDFCotizacion(req, res) {
     const { generarCotizacionPDF } = await import('../utils/pdfGenerators/cotizacionPDF.js');
     const pdfBuffer = await generarCotizacionPDF(cotizacion);
 
-    const fecha = new Date(cotizacion.fecha_emision).toISOString().split('T')[0];
-    
     const clienteSanitizado = cotizacion.cliente
       ? cotizacion.cliente
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-zA-Z0-9]/g, "_")
+          .replace(/[^a-zA-Z0-9\s]/g, "")
+          .trim()
+          .replace(/\s+/g, "_")
           .toUpperCase()
       : 'CLIENTE';
 
     const nroCot = cotizacion.numero_cotizacion || id;
     
-    const nombreArchivo = `${fecha}_COTIZACION_${clienteSanitizado}_${nroCot}.pdf`;
+    const nombreArchivo = `${clienteSanitizado}_${nroCot}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);

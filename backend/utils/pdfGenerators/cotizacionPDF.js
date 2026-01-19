@@ -12,6 +12,13 @@ const ETIQUETAS_IMPUESTO = {
   'INA': 'INAFECTO (0%)'
 };
 
+const fmtNum = (num) => {
+  return Number(num).toLocaleString('en-US', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  });
+};
+
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, (response) => {
@@ -252,9 +259,9 @@ export async function generarCotizacionPDF(cotizacion) {
       const simboloMoneda = cotizacion.moneda === 'USD' ? '$' : 'S/';
       
       cotizacion.detalle.forEach((item, idx) => {
-        const cantidad = parseFloat(item.cantidad).toFixed(2);
-        const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
-        const valorVenta = parseFloat(item.valor_venta || item.subtotal).toFixed(2);
+        const cantidad = fmtNum(item.cantidad);
+        const precioUnitario = fmtNum(item.precio_unitario);
+        const valorVenta = fmtNum(item.valor_venta || item.subtotal);
         
         const descripcion = item.producto;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
@@ -297,9 +304,9 @@ export async function generarCotizacionPDF(cotizacion) {
         doc.text(cotizacion.observaciones, 40, yPos + 15, { width: 330 });
       }
 
-      const subtotal = parseFloat(cotizacion.subtotal).toFixed(2);
-      const igv = parseFloat(cotizacion.igv).toFixed(2);
-      const total = parseFloat(cotizacion.total).toFixed(2);
+      const subtotal = fmtNum(cotizacion.subtotal);
+      const igv = fmtNum(cotizacion.igv);
+      const total = fmtNum(cotizacion.total);
       
       const tipoImpuesto = cotizacion.tipo_impuesto || 'IGV';
       const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || tipoImpuesto;
@@ -335,7 +342,7 @@ export async function generarCotizacionPDF(cotizacion) {
       yPos += 25;
 
       doc.fontSize(8).font('Helvetica');
-      const totalEnLetras = numeroALetras(parseFloat(total), cotizacion.moneda);
+      const totalEnLetras = numeroALetras(parseFloat(cotizacion.total), cotizacion.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');

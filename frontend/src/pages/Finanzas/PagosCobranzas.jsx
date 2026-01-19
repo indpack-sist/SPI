@@ -48,7 +48,7 @@ function PagosCobranzas() {
       const response = await cuentasPagoAPI.getAll({ estado: 'Activo' });
       setCuentas(response.data.data || []);
     } catch (err) {
-      console.error('Error al cargar cuentas:', err);
+      console.error(err);
     }
   };
 
@@ -100,7 +100,7 @@ function PagosCobranzas() {
   };
 
   const exportarExcel = () => {
-    alert('Función de exportar a Excel');
+    console.log('Exportando...', filtros);
   };
 
   const formatearFecha = (fecha) => {
@@ -114,7 +114,6 @@ function PagosCobranzas() {
     return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
-  // Helper para el color y estilo del estado de la orden
   const getOrderStateConfig = (estado) => {
     switch (estado) {
       case 'En Espera': return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock };
@@ -291,21 +290,20 @@ function PagosCobranzas() {
     {
       header: 'Vencimiento',
       accessor: 'fecha_vencimiento',
-      width: '140px', // Aumentado para dar espacio al estado
+      width: '140px',
       align: 'center',
       render: (value, row) => {
-        const orderState = getOrderStateConfig(row.estado); // Usamos el helper
+        const orderState = getOrderStateConfig(row.estado);
         
         return (
           <div 
             className="flex flex-col items-center cursor-pointer group relative"
-            title={`Estado de la Orden: ${row.estado}`} // Tooltip nativo
+            title={`Estado de la Orden: ${row.estado}`}
           >
             <div className="font-medium text-gray-700 text-sm">
               {formatearFecha(value)}
             </div>
             
-            {/* Estado de la Orden Notorio */}
             <div className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${orderState.bg} ${orderState.text} border-transparent group-hover:border-current transition-all`}>
               {row.estado}
             </div>
@@ -499,10 +497,14 @@ function PagosCobranzas() {
 
             {activeTab === 'movimientos' && (
               <div className="w-40">
-                <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Cuenta</label>
+                <label className="form-label text-xs font-semibold uppercase text-gray-500 mb-1">Cuenta / Caja</label>
                 <select className="form-select form-select-sm" value={filtros.id_cuenta} onChange={(e) => setFiltros({ ...filtros, id_cuenta: e.target.value })}>
                   <option value="">Todas</option>
-                  {cuentas.map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre}</option>)}
+                  {cuentas.map(c => (
+                    <option key={c.id_cuenta} value={c.id_cuenta}>
+                        {c.nombre} - {c.tipo} ({c.moneda})
+                    </option>
+                  ))}
                 </select>
               </div>
             )}

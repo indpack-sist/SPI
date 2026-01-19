@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, ShoppingCart, Building, Calendar,
   MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard, Clock,
-  Calculator, CalendarCheck, DollarSign, ArrowRightLeft
+  Calculator, DollarSign, ArrowRightLeft, XCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -41,7 +41,7 @@ function NuevaCompra() {
     fecha_entrega_estimada: '',
     fecha_vencimiento: '', 
     prioridad: 'Media',
-    moneda: '',
+    moneda: 'PEN',
     tipo_cambio: '',
     tipo_compra: 'Contado',
     numero_cuotas: 1,
@@ -52,7 +52,7 @@ function NuevaCompra() {
     porcentaje_impuesto: 18.00,
     observaciones: '',
     contacto_proveedor: '',
-    direccion_entrega: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES'
+    direccion_entrega: ''
   });
   
   const [detalle, setDetalle] = useState([]);
@@ -116,7 +116,7 @@ function NuevaCompra() {
       if (resCuentas.data.success) setCuentasPago(resCuentas.data.data || []);
       
     } catch (err) {
-      console.error('Error al cargar catálogos:', err);
+      console.error(err);
       setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
@@ -133,7 +133,7 @@ function NuevaCompra() {
         setHistorialCompras(response.data.data);
       }
     } catch (err) {
-      console.error('Error al cargar historial:', err);
+      console.error(err);
       setError('Error al cargar el historial de compras');
     } finally {
       setLoadingHistorial(false);
@@ -295,8 +295,16 @@ function NuevaCompra() {
       return;
     }
     
+    if (formData.tipo_compra === 'Contado') {
+        const montoRequerido = calcularMontoConversion() || totales.total;
+        if (parseFloat(cuentaSeleccionada.saldo_actual) < montoRequerido) {
+            setError(`Saldo insuficiente en ${cuentaSeleccionada.nombre}. Requerido: ${formatearMoneda(montoRequerido, cuentaSeleccionada.moneda)}`);
+            return;
+        }
+    }
+
     const invalidos = detalle.filter(item => parseFloat(item.cantidad) <= 0 || parseFloat(item.precio_unitario) <= 0);
-    if (invalidos.length > 0) { setError('Productos con cantidad o precio 0'); return; }
+    if (invalidos.length > 0) { setError('Hay productos con cantidad o precio inválido'); return; }
 
     if (formData.tipo_compra === 'Credito' && formData.numero_cuotas <= 0) {
       setError('Número de cuotas inválido'); return;
@@ -325,7 +333,7 @@ function NuevaCompra() {
       
       const response = await comprasAPI.create(payload);
       if (response.data.success) {
-        setSuccess(`Compra ${response.data.data.numero_orden} creada exitosamente`);
+        setSuccess(`Compra ${response.data.data.numero_orden} registrada exitosamente`);
         setTimeout(() => navigate('/compras'), 1500);
       } else {
         setError(response.data.error || 'Error al crear compra');
@@ -369,7 +377,7 @@ function NuevaCompra() {
             <ShoppingCart size={32} />
             Nueva Compra
           </h1>
-          <p className="text-muted">Crear compra a proveedor</p>
+          <p className="text-muted">Ingreso de mercadería y cuenta por pagar</p>
         </div>
       </div>
 
@@ -434,7 +442,7 @@ function NuevaCompra() {
                     <div className="card">
                         <div className="card-header bg-gray-50/50">
                             <h2 className="card-title flex items-center gap-2">
-                                <DollarSign size={18} /> Moneda de la Compra
+                                <DollarSign size={18} /> Moneda de la Factura
                             </h2>
                         </div>
                         <div className="card-body">
@@ -443,7 +451,7 @@ function NuevaCompra() {
                                     className={`p-4 border rounded-lg text-center transition ${formData.moneda === 'PEN' ? 'bg-green-50 border-green-500 text-green-700 ring-2 ring-green-500' : 'hover:bg-gray-50'}`}
                                     onClick={() => setFormData({...formData, moneda: 'PEN'})}>
                                     <div className="flex flex-col items-center gap-2">
-                                        <DollarSign size={24} />
+                                        <div className="font-bold text-xl">S/</div>
                                         <span className="font-bold">Soles (PEN)</span>
                                     </div>
                                 </button>
@@ -451,7 +459,7 @@ function NuevaCompra() {
                                     className={`p-4 border rounded-lg text-center transition ${formData.moneda === 'USD' ? 'bg-blue-50 border-blue-500 text-blue-700 ring-2 ring-blue-500' : 'hover:bg-gray-50'}`}
                                     onClick={() => setFormData({...formData, moneda: 'USD'})}>
                                     <div className="flex flex-col items-center gap-2">
-                                        <DollarSign size={24} />
+                                        <div className="font-bold text-xl">$</div>
                                         <span className="font-bold">Dólares (USD)</span>
                                     </div>
                                 </button>
@@ -569,7 +577,7 @@ function NuevaCompra() {
                             </div>
                             <div className="card-body space-y-4">
                                 <div className="form-group">
-                                    <label className="form-label text-xs">Cuenta de Pago</label>
+                                    <label className="form-label text-xs">Cuenta de Origen</label>
                                     <select className="form-select" value={formData.id_cuenta_pago}
                                         onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} required>
                                         <option value="">Seleccionar cuenta...</option>
@@ -584,11 +592,11 @@ function NuevaCompra() {
                                 {cuentaSeleccionada && (
                                     <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs">
                                         <div className="flex justify-between mb-1">
-                                            <span className="text-muted">Saldo actual:</span>
+                                            <span className="text-muted">Saldo/Cupo:</span>
                                             <span className="font-bold">{formatearMoneda(cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}</span>
                                         </div>
                                         <div className="flex justify-between">
-                                            <span className="text-muted">Moneda:</span>
+                                            <span className="text-muted">Moneda Cuenta:</span>
                                             <span className="font-bold">{cuentaSeleccionada.moneda}</span>
                                         </div>
                                     </div>
@@ -598,10 +606,10 @@ function NuevaCompra() {
                                     <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4 space-y-3">
                                         <div className="flex items-center gap-2 text-orange-700">
                                             <ArrowRightLeft size={16} />
-                                            <span className="font-bold text-sm">Conversión de Moneda Requerida</span>
+                                            <span className="font-bold text-sm">Conversión Requerida</span>
                                         </div>
                                         <div className="text-xs text-orange-600">
-                                            <p>Cuenta: {cuentaSeleccionada.moneda} → Compra: {formData.moneda}</p>
+                                            <p>Factura: {formData.moneda} → Pago: {cuentaSeleccionada.moneda}</p>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label text-xs">Tipo de Cambio *</label>
@@ -618,12 +626,9 @@ function NuevaCompra() {
                                         </div>
                                         {montoConvertido && (
                                             <div className="bg-white rounded p-2 text-center border border-orange-200">
-                                                <p className="text-xs text-muted mb-1">Monto a pagar</p>
+                                                <p className="text-xs text-muted mb-1">Monto a descontar</p>
                                                 <p className="font-bold text-orange-700">
                                                     {formatearMoneda(montoConvertido, cuentaSeleccionada.moneda)}
-                                                </p>
-                                                <p className="text-[10px] text-muted mt-1">
-                                                    {formatearMoneda(totales.total, formData.moneda)} × {parseFloat(formData.tipo_cambio || 0).toFixed(4)}
                                                 </p>
                                             </div>
                                         )}
@@ -652,15 +657,15 @@ function NuevaCompra() {
                                 {formData.tipo_compra === 'Contado' && cuentaSeleccionada && (
                                     <div className={`text-xs p-2 rounded border ${
                                         montoConvertido 
-                                            ? (cuentaSeleccionada.saldo_actual >= montoConvertido ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
-                                            : (cuentaSeleccionada.saldo_actual >= totales.total ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
+                                            ? (parseFloat(cuentaSeleccionada.saldo_actual) >= montoConvertido ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
+                                            : (parseFloat(cuentaSeleccionada.saldo_actual) >= totales.total ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
                                     }`}>
                                         {(() => {
                                             const montoRequerido = montoConvertido || totales.total;
-                                            const suficiente = cuentaSeleccionada.saldo_actual >= montoRequerido;
+                                            const suficiente = parseFloat(cuentaSeleccionada.saldo_actual) >= montoRequerido;
                                             return suficiente 
                                                 ? 'Saldo disponible suficiente.' 
-                                                : `Saldo insuficiente. Faltan ${formatearMoneda(montoRequerido - cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}`;
+                                                : `Saldo insuficiente. Faltan ${formatearMoneda(montoRequerido - parseFloat(cuentaSeleccionada.saldo_actual), cuentaSeleccionada.moneda)}`;
                                         })()}
                                     </div>
                                 )}

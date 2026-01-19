@@ -4,7 +4,7 @@ import {
   ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
   XCircle, Clock, AlertCircle, Building, Calendar,
   MapPin, CreditCard, Wallet, DollarSign, TrendingUp,
-  Briefcase, ArrowRightLeft
+  ArrowRightLeft
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -83,7 +83,7 @@ function DetalleCompra() {
       }
       
     } catch (err) {
-      console.error('Error al cargar la compra:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar la compra');
     } finally {
       setLoading(false);
@@ -94,7 +94,7 @@ function DetalleCompra() {
     setCuotaSeleccionada(cuota);
     const saldoPendiente = parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0);
     setDatosPago({
-      id_cuenta_pago: cuota.id_cuenta_pago || '',
+      id_cuenta_pago: '',
       monto_pagado: saldoPendiente.toFixed(2),
       fecha_pago: new Date().toISOString().split('T')[0],
       metodo_pago: 'Transferencia',
@@ -107,7 +107,7 @@ function DetalleCompra() {
   const handleAbrirPagoDirecto = () => {
     const saldoPendienteTotal = parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0);
     setDatosPago({
-      id_cuenta_pago: compra.id_cuenta_pago || '',
+      id_cuenta_pago: '',
       monto_pagado: saldoPendienteTotal.toFixed(2),
       fecha_pago: new Date().toISOString().split('T')[0],
       metodo_pago: 'Transferencia',
@@ -223,11 +223,6 @@ function DetalleCompra() {
     return clases[nivel] || 'badge-info';
   };
 
-  const getCuentaSaldo = (idCuenta) => {
-    const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(idCuenta));
-    return cuenta ? parseFloat(cuenta.saldo_actual) : 0;
-  };
-
   if (loading && !compra) return <Loading message="Cargando compra..." />;
   
   if (!compra) {
@@ -269,12 +264,14 @@ function DetalleCompra() {
           
           {compra.estado !== 'Cancelada' && compra.estado_pago !== 'Pagado' && (
             <>
-              <button 
-                className="btn btn-primary"
-                onClick={handleAbrirPagoDirecto}
-              >
-                <DollarSign size={20} /> Registrar Pago
-              </button>
+              {compra.tipo_compra === 'Contado' && (
+                  <button 
+                    className="btn btn-primary"
+                    onClick={handleAbrirPagoDirecto}
+                  >
+                    <DollarSign size={20} /> Registrar Pago
+                  </button>
+              )}
               
               <button 
                 className="btn btn-outline"
@@ -406,11 +403,11 @@ function DetalleCompra() {
           <div className="card-body space-y-2">
             <div>
               <label className="text-sm font-medium text-muted">Cuenta:</label>
-              <p className="font-medium">{compra.cuenta_pago}</p>
+              <p className="font-medium">{compra.cuenta_pago || 'No registrada'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted">Tipo:</label>
-              <p className="font-medium">{compra.tipo_cuenta}</p>
+              <p className="font-medium">{compra.tipo_cuenta || '-'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted">Saldo/Cupo Actual:</label>
@@ -696,10 +693,13 @@ function DetalleCompra() {
                   <option value="">Seleccionar cuenta...</option>
                   {cuentasPago.filter(c => c.moneda === compra.moneda).map(cuenta => (
                     <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                      {cuenta.nombre} - Disp: {formatearMoneda(cuenta.saldo_actual)}
+                      {cuenta.nombre} - Disp: {formatearMoneda(cuenta.saldo_actual, cuenta.moneda)}
                     </option>
                   ))}
                 </select>
+                {cuentasPago.filter(c => c.moneda === compra.moneda).length === 0 && (
+                    <small className="text-danger block mt-1">No tienes cuentas activas en {compra.moneda}</small>
+                )}
               </div>
 
               <div className="form-group">
@@ -782,10 +782,13 @@ function DetalleCompra() {
                   <option value="">Seleccionar cuenta...</option>
                   {cuentasPago.filter(c => c.moneda === compra.moneda).map(cuenta => (
                     <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                      {cuenta.nombre} - Disp: {formatearMoneda(cuenta.saldo_actual)}
+                      {cuenta.nombre} - Disp: {formatearMoneda(cuenta.saldo_actual, cuenta.moneda)}
                     </option>
                   ))}
                 </select>
+                {cuentasPago.filter(c => c.moneda === compra.moneda).length === 0 && (
+                    <small className="text-danger block mt-1">No tienes cuentas activas en {compra.moneda}</small>
+                )}
               </div>
 
               <div className="form-group">

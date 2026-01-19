@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Wallet, CreditCard, Building2, Calendar, 
   DollarSign, ArrowUpCircle, ArrowDownCircle, RefreshCw, 
-  FileText, ShoppingBag, AlertTriangle, CheckCircle
+  FileText, ShoppingBag, AlertTriangle, CheckCircle, Filter
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -36,10 +36,10 @@ function DetalleCuenta() {
   }, [id]);
 
   useEffect(() => {
-    if (activeTab === 'movimientos') {
+    if (cuenta) {
       cargarMovimientos();
     }
-  }, [id, activeTab, filtrosMovimientos]);
+  }, [cuenta, filtrosMovimientos]);
 
   const cargarDatos = async () => {
     try {
@@ -138,14 +138,19 @@ function DetalleCuenta() {
       )
     },
     {
-      header: 'Concepto',
+      header: 'Concepto / Referencia',
       accessor: 'concepto',
       render: (value, row) => (
         <div>
             <div className="font-medium">{value}</div>
-            <div className="text-xs text-muted">
-                {row.numero_orden && `Ref: ${row.numero_orden}`}
-                {row.numero_cuota && ` - Cuota ${row.numero_cuota}`}
+            <div className="text-xs text-muted flex flex-col">
+                {row.numero_orden && (
+                    <span className="text-primary cursor-pointer hover:underline" onClick={() => navigate(`/compras/${row.id_orden_compra}`)}>
+                        Ref: {row.numero_orden}
+                    </span>
+                )}
+                {row.numero_cuota && <span>Cuota: {row.numero_cuota}</span>}
+                {row.registrado_por_nombre && <span>Por: {row.registrado_por_nombre}</span>}
             </div>
         </div>
       )
@@ -161,11 +166,11 @@ function DetalleCuenta() {
       )
     },
     {
-      header: 'Saldo',
+      header: 'Saldo Post.',
       accessor: 'saldo_nuevo',
       align: 'right',
       render: (value) => (
-        <span className="font-mono text-gray-600">
+        <span className="font-mono text-gray-600 font-medium">
             {formatearMoneda(value)}
         </span>
       )
@@ -183,7 +188,7 @@ function DetalleCuenta() {
       )
     },
     {
-      header: 'Fecha',
+      header: 'Fecha Emisión',
       accessor: 'fecha_emision',
       render: (value) => formatearFecha(value)
     },
@@ -192,7 +197,7 @@ function DetalleCuenta() {
       accessor: 'proveedor'
     },
     {
-      header: 'Total',
+      header: 'Total Orden',
       accessor: 'total',
       align: 'right',
       render: (value) => formatearMoneda(value)
@@ -233,7 +238,7 @@ function DetalleCuenta() {
                 {cuenta.estado}
             </span>
           </div>
-          <p className="text-muted">{cuenta.tipo} • {cuenta.banco} • {cuenta.moneda}</p>
+          <p className="text-muted">{cuenta.tipo} • {cuenta.banco || 'Efectivo'} • {cuenta.moneda}</p>
         </div>
         
         {cuenta.tipo === 'Tarjeta' && (
@@ -242,7 +247,7 @@ function DetalleCuenta() {
                 onClick={() => setModalRenovarOpen(true)}
             >
                 <RefreshCw size={20} />
-                Renovar Crédito / Pagar Tarjeta
+                Renovar Crédito / Cierre
             </button>
         )}
       </div>
@@ -271,7 +276,7 @@ function DetalleCuenta() {
                                 style={{ width: `${Math.min(porcentajeUso, 100)}%` }}
                             ></div>
                         </div>
-                        <p className="text-xs text-right mt-1 text-muted">
+                        <p className="text-xs text-right mt-1 font-bold text-gray-700">
                             Deuda actual: {formatearMoneda(cuenta.credito_utilizado)}
                         </p>
                     </div>
@@ -288,7 +293,7 @@ function DetalleCuenta() {
                         </div>
                         <div>
                             <p className="text-xs text-muted">Total Ingresos</p>
-                            <p className="font-bold">{formatearMoneda(cuenta.total_ingresos)}</p>
+                            <p className="font-bold text-success">{formatearMoneda(cuenta.total_ingresos)}</p>
                         </div>
                     </div>
                 </div>
@@ -300,7 +305,7 @@ function DetalleCuenta() {
                         </div>
                         <div>
                             <p className="text-xs text-muted">Total Egresos</p>
-                            <p className="font-bold">{formatearMoneda(cuenta.total_gastado)}</p>
+                            <p className="font-bold text-danger">{formatearMoneda(cuenta.total_gastado)}</p>
                         </div>
                     </div>
                 </div>
@@ -324,14 +329,14 @@ function DetalleCuenta() {
                     {cuenta.tipo === 'Tarjeta' && (
                         <>
                             <div className="flex justify-between items-center pt-2 border-t mt-2">
-                                <span className="text-muted">Renovación:</span>
+                                <span className="text-muted">Cierre/Renovación:</span>
                                 <span className={`font-bold ${cuenta.estado_credito === 'Renovación Pendiente' ? 'text-danger' : 'text-success'}`}>
                                     {formatearFecha(cuenta.fecha_renovacion)}
                                 </span>
                             </div>
                             {cuenta.estado_credito === 'Renovación Pendiente' && (
-                                <div className="text-xs text-danger flex items-center gap-1 mt-1 justify-end">
-                                    <AlertTriangle size={12} /> Requiere pago/renovación
+                                <div className="text-xs text-danger flex items-center gap-1 mt-1 justify-end font-medium">
+                                    <AlertTriangle size={12} /> Requiere atención
                                 </div>
                             )}
                         </>
@@ -355,6 +360,7 @@ function DetalleCuenta() {
                     <div className="flex items-center gap-2">
                         <FileText size={16} />
                         Movimientos
+                        <span className="badge badge-sm badge-outline ml-1">{cuenta.total_movimientos}</span>
                     </div>
                 </button>
                 <button
@@ -368,6 +374,7 @@ function DetalleCuenta() {
                     <div className="flex items-center gap-2">
                         <ShoppingBag size={16} />
                         Compras Asociadas
+                        <span className="badge badge-sm badge-outline ml-1">{cuenta.total_compras}</span>
                     </div>
                 </button>
             </div>
@@ -376,37 +383,54 @@ function DetalleCuenta() {
         <div className="card-body">
             {activeTab === 'movimientos' && (
                 <>
-                    <div className="flex gap-4 mb-4 flex-wrap">
-                        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded border">
-                            <Calendar size={16} className="text-muted" />
+                    <div className="flex flex-wrap items-end gap-4 mb-4 p-3 bg-gray-50 rounded-lg border">
+                        <div className="flex items-center gap-2">
+                            <Filter size={18} className="text-muted" />
+                            <span className="text-sm font-medium text-gray-700">Filtros:</span>
+                        </div>
+                        <div className="form-group mb-0">
+                            <label className="text-xs text-muted block mb-1">Desde</label>
                             <input 
                                 type="date" 
-                                className="bg-transparent border-none text-sm focus:ring-0 p-0"
+                                className="form-input py-1 text-sm w-36"
                                 value={filtrosMovimientos.fecha_inicio}
                                 onChange={(e) => setFiltrosMovimientos({...filtrosMovimientos, fecha_inicio: e.target.value})}
                             />
-                            <span className="text-muted">-</span>
+                        </div>
+                        <div className="form-group mb-0">
+                            <label className="text-xs text-muted block mb-1">Hasta</label>
                             <input 
                                 type="date" 
-                                className="bg-transparent border-none text-sm focus:ring-0 p-0"
+                                className="form-input py-1 text-sm w-36"
                                 value={filtrosMovimientos.fecha_fin}
                                 onChange={(e) => setFiltrosMovimientos({...filtrosMovimientos, fecha_fin: e.target.value})}
                             />
                         </div>
-                        <select 
-                            className="form-select text-sm w-40"
-                            value={filtrosMovimientos.tipo_movimiento}
-                            onChange={(e) => setFiltrosMovimientos({...filtrosMovimientos, tipo_movimiento: e.target.value})}
-                        >
-                            <option value="">Todos</option>
-                            <option value="Ingreso">Ingresos</option>
-                            <option value="Egreso">Egresos</option>
-                        </select>
+                        <div className="form-group mb-0">
+                            <label className="text-xs text-muted block mb-1">Tipo</label>
+                            <select 
+                                className="form-select py-1 text-sm w-32"
+                                value={filtrosMovimientos.tipo_movimiento}
+                                onChange={(e) => setFiltrosMovimientos({...filtrosMovimientos, tipo_movimiento: e.target.value})}
+                            >
+                                <option value="">Todos</option>
+                                <option value="Ingreso">Ingresos</option>
+                                <option value="Egreso">Egresos</option>
+                            </select>
+                        </div>
+                        {(filtrosMovimientos.fecha_inicio || filtrosMovimientos.fecha_fin || filtrosMovimientos.tipo_movimiento) && (
+                            <button 
+                                className="btn btn-sm btn-ghost text-muted ml-auto"
+                                onClick={() => setFiltrosMovimientos({fecha_inicio: '', fecha_fin: '', tipo_movimiento: ''})}
+                            >
+                                Limpiar Filtros
+                            </button>
+                        )}
                     </div>
                     <Table 
                         columns={columnsMovimientos}
                         data={movimientos}
-                        emptyMessage="No hay movimientos registrados"
+                        emptyMessage="No hay movimientos registrados en este periodo"
                     />
                 </>
             )}
@@ -427,21 +451,21 @@ function DetalleCuenta() {
         title="Renovar Crédito / Pagar Tarjeta"
       >
         <form onSubmit={handleRenovarCredito}>
-            <div className="p-4 bg-blue-50 rounded-lg mb-4 text-sm text-blue-900">
-                <p className="font-bold mb-1 flex items-center gap-1">
-                    <CheckCircle size={16} /> Acción de Cierre
+            <div className="p-4 bg-blue-50 rounded-lg mb-4 text-sm text-blue-900 border border-blue-100">
+                <p className="font-bold mb-2 flex items-center gap-2">
+                    <CheckCircle size={16} className="text-blue-600" /> Confirmación de Cierre
                 </p>
-                <p>
-                    Esta acción simulará el pago total de la deuda de la tarjeta:
+                <p className="mb-2">
+                    Esta acción reiniciará el ciclo de facturación de la tarjeta:
                 </p>
-                <ul className="list-disc list-inside mt-2 ml-1 space-y-1">
-                    <li>El saldo (cupo) volverá a ser <strong>{formatearMoneda(cuenta.limite_credito)}</strong>.</li>
-                    <li>Se registrará un ingreso de <strong>{formatearMoneda(cuenta.credito_utilizado)}</strong> para cuadrar.</li>
+                <ul className="list-disc list-inside space-y-1 pl-1">
+                    <li>El saldo se restaurará a <strong>{formatearMoneda(cuenta.limite_credito)}</strong>.</li>
+                    <li>Se generará un ingreso de ajuste por <strong>{formatearMoneda(cuenta.credito_utilizado)}</strong>.</li>
                 </ul>
             </div>
 
             <div className="form-group mb-4">
-                <label className="form-label">Próxima Fecha de Renovación/Cierre</label>
+                <label className="form-label">Nueva Fecha de Corte/Renovación</label>
                 <input 
                     type="date"
                     className="form-input"
@@ -449,9 +473,10 @@ function DetalleCuenta() {
                     onChange={(e) => setNuevaFechaRenovacion(e.target.value)}
                     required
                 />
+                <small className="text-muted">La próxima fecha en la que se deberá realizar el pago.</small>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 mt-6">
                 <button type="button" className="btn btn-outline" onClick={() => setModalRenovarOpen(false)}>Cancelar</button>
                 <button type="submit" className="btn btn-primary">Confirmar Renovación</button>
             </div>

@@ -198,7 +198,7 @@ export const createCuentaPago = async (req, res) => {
       });
     }
     
-    if (saldoInicial > 0) {
+    if (saldoInicial !== 0) {
       await executeQuery(`
         INSERT INTO movimientos_cuentas (
           id_cuenta,
@@ -208,8 +208,8 @@ export const createCuentaPago = async (req, res) => {
           fecha_movimiento,
           saldo_anterior,
           saldo_nuevo
-        ) VALUES (?, 'Ingreso', ?, 'Saldo inicial', NOW(), 0, ?)
-      `, [result.data.insertId, saldoInicial, saldoInicial]);
+        ) VALUES (?, ?, ?, 'Saldo inicial', NOW(), 0, ?)
+      `, [result.data.insertId, saldoInicial > 0 ? 'Ingreso' : 'Egreso', Math.abs(saldoInicial), saldoInicial]);
     }
     
     res.status(201).json({
@@ -459,11 +459,13 @@ export const registrarMovimiento = async (req, res) => {
     if (tipo_movimiento === 'Ingreso') {
       saldoNuevo = saldoAnterior + montoMov;
     } else {
-      if (saldoAnterior < montoMov) {
-        return res.status(400).json({
-          success: false,
-          error: `Saldo insuficiente. Disponible: ${saldoAnterior} ${cuenta.moneda}`
-        });
+      if (cuenta.tipo === 'Tarjeta') {
+          if (saldoAnterior < montoMov) {
+            return res.status(400).json({
+              success: false,
+              error: `Saldo insuficiente en tarjeta. Disponible: ${saldoAnterior} ${cuenta.moneda}`
+            });
+          }
       }
       saldoNuevo = saldoAnterior - montoMov;
     }
@@ -688,7 +690,8 @@ export const transferirEntreCuentas = async (req, res) => {
       }
       
       const saldoOrigenAnterior = parseFloat(cuentaOrigen[0].saldo_actual);
-      if (saldoOrigenAnterior < montoTransferencia) {
+      
+      if (cuentaOrigen[0].tipo === 'Tarjeta' && saldoOrigenAnterior < montoTransferencia) {
         throw new Error('Saldo insuficiente en cuenta origen');
       }
       

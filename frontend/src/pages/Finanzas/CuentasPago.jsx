@@ -11,7 +11,7 @@ import Modal from '../../components/UI/Modal';
 import { cuentasPagoAPI } from '../../config/api';
 
 function CuentasPago() {
-  const navigate = useNavigate(); // Hook para navegación
+  const navigate = useNavigate();
   const [cuentas, setCuentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,7 +46,7 @@ function CuentasPago() {
         setCuentas(response.data.data || []);
       }
     } catch (err) {
-      console.error('Error al cargar cuentas:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar cuentas');
     } finally {
       setLoading(false);
@@ -75,7 +75,7 @@ function CuentasPago() {
       resetForm();
       await cargarCuentas();
     } catch (err) {
-      console.error('Error al guardar cuenta:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al guardar cuenta');
     } finally {
       setLoading(false);
@@ -90,7 +90,7 @@ function CuentasPago() {
       numero_cuenta: cuenta.numero_cuenta || '',
       banco: cuenta.banco || '',
       moneda: cuenta.moneda,
-      saldo_inicial: 0, // No se edita saldo inicial
+      saldo_inicial: 0,
       limite_credito: cuenta.limite_credito || 0,
       fecha_renovacion: cuenta.fecha_renovacion ? cuenta.fecha_renovacion.split('T')[0] : '',
       estado: cuenta.estado
@@ -104,7 +104,7 @@ function CuentasPago() {
   };
 
   const handleEliminar = async (id) => {
-    if (!confirm('¿Está seguro de desactivar esta cuenta? Solo se pueden desactivar cuentas con saldo 0.')) return;
+    if (!confirm('¿Está seguro de desactivar esta cuenta?')) return;
     
     try {
       setLoading(true);
@@ -115,7 +115,7 @@ function CuentasPago() {
         await cargarCuentas();
       }
     } catch (err) {
-      console.error('Error al desactivar cuenta:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al desactivar cuenta');
     } finally {
       setLoading(false);
@@ -166,7 +166,7 @@ function CuentasPago() {
               <div className="text-xs text-muted flex gap-1">
                 {row.tipo}
                 {row.tipo === 'Tarjeta' && row.requiere_renovacion === 1 && (
-                    <span className="text-danger font-bold">• Renovación Pendiente</span>
+                    <span className="text-danger font-bold ml-1">• Renovación Pendiente</span>
                 )}
               </div>
             </div>
@@ -201,7 +201,7 @@ function CuentasPago() {
       )
     },
     {
-      header: 'Saldo / Cupo',
+      header: 'Saldo Actual',
       accessor: 'saldo_actual',
       width: '140px',
       align: 'right',
@@ -219,19 +219,12 @@ function CuentasPago() {
       )
     },
     {
-      header: 'Compras',
-      accessor: 'total_compras',
+      header: 'Movimientos',
+      accessor: 'total_movimientos',
       width: '100px',
       align: 'center',
-      render: (value, row) => (
-        <div>
-          <span className="badge badge-primary">{value || 0}</span>
-          {row.compras_pendientes > 0 && (
-            <div className="text-xs text-warning mt-1">
-              {row.compras_pendientes} pendientes
-            </div>
-          )}
-        </div>
+      render: (value) => (
+        <span className="badge badge-outline">{value || 0}</span>
       )
     },
     {
@@ -244,7 +237,7 @@ function CuentasPago() {
           <button
             className="btn btn-sm btn-outline"
             onClick={() => handleVerDetalle(value)}
-            title="Ver Detalle y Compras"
+            title="Ver Trazabilidad Detallada"
           >
             <Eye size={14} />
           </button>
@@ -259,7 +252,6 @@ function CuentasPago() {
             className="btn btn-sm btn-danger"
             onClick={() => handleEliminar(value)}
             title="Desactivar"
-            disabled={parseFloat(row.saldo_actual) !== 0 && (row.tipo !== 'Tarjeta' || parseFloat(row.saldo_actual) !== parseFloat(row.limite_credito))}
           >
             <Trash2 size={14} />
           </button>
@@ -304,7 +296,7 @@ function CuentasPago() {
             <Wallet size={32} />
             Cuentas de Pago
           </h1>
-          <p className="text-muted">Gestión de cuentas bancarias y cajas</p>
+          <p className="text-muted">Control de flujos, cajas y bancos</p>
         </div>
         <button 
           className="btn btn-primary"
@@ -326,8 +318,10 @@ function CuentasPago() {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted">Saldo en Soles</p>
-                <h3 className="text-2xl font-bold">S/ {totalPEN.toFixed(2)}</h3>
+                <p className="text-sm text-muted">Saldo Neto Soles</p>
+                <h3 className={`text-2xl font-bold ${totalPEN < 0 ? 'text-danger' : 'text-primary'}`}>
+                    S/ {totalPEN.toFixed(2)}
+                </h3>
                 <p className="text-xs text-muted mt-1">
                   {cuentas.filter(c => c.moneda === 'PEN').length} cuentas
                 </p>
@@ -343,8 +337,10 @@ function CuentasPago() {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted">Saldo en Dólares</p>
-                <h3 className="text-2xl font-bold">$ {totalUSD.toFixed(2)}</h3>
+                <p className="text-sm text-muted">Saldo Neto Dólares</p>
+                <h3 className={`text-2xl font-bold ${totalUSD < 0 ? 'text-danger' : 'text-success'}`}>
+                    $ {totalUSD.toFixed(2)}
+                </h3>
                 <p className="text-xs text-muted mt-1">
                   {cuentas.filter(c => c.moneda === 'USD').length} cuentas
                 </p>
@@ -360,7 +356,7 @@ function CuentasPago() {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted">Ingresos Totales</p>
+                <p className="text-sm text-muted">Ingresos Históricos</p>
                 <h3 className="text-lg font-bold text-success">S/ {totalIngresosPEN.toFixed(2)}</h3>
                 <p className="text-sm font-bold text-success">$ {totalIngresosUSD.toFixed(2)}</p>
               </div>
@@ -375,7 +371,7 @@ function CuentasPago() {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted">Egresos Totales</p>
+                <p className="text-sm text-muted">Egresos Históricos</p>
                 <h3 className="text-lg font-bold text-danger">S/ {totalEgresosPEN.toFixed(2)}</h3>
                 <p className="text-sm font-bold text-danger">$ {totalEgresosUSD.toFixed(2)}</p>
               </div>
@@ -390,7 +386,7 @@ function CuentasPago() {
       <div className="card">
         <div className="card-header">
           <h2 className="card-title">
-            Lista de Cuentas
+            Listado de Cuentas
             <span className="badge badge-primary ml-2">{cuentas.length}</span>
           </h2>
         </div>
@@ -436,7 +432,7 @@ function CuentasPago() {
                 >
                   <option value="Banco">Banco</option>
                   <option value="Caja">Caja</option>
-                  <option value="Tarjeta">Tarjeta</option>
+                  <option value="Tarjeta">Tarjeta de Crédito</option>
                 </select>
               </div>
 
@@ -453,13 +449,13 @@ function CuentasPago() {
                   <option value="USD">Dólares (USD)</option>
                 </select>
                 {modoEdicion && (
-                  <small className="text-muted">No se puede cambiar la moneda de una cuenta existente</small>
+                  <small className="text-muted">No editable</small>
                 )}
               </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Banco</label>
+              <label className="form-label">Banco / Entidad</label>
               <input
                 type="text"
                 className="form-input"
@@ -480,10 +476,9 @@ function CuentasPago() {
               />
             </div>
 
-            {/* CAMPOS ESPECÍFICOS PARA TARJETA DE CRÉDITO */}
             {formData.tipo === 'Tarjeta' && (
                 <div className="p-3 bg-gray-50 border rounded-lg space-y-3">
-                    <h4 className="font-bold text-sm text-gray-700">Configuración de Crédito</h4>
+                    <h4 className="font-bold text-sm text-gray-700">Datos de Crédito</h4>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="form-group">
                             <label className="form-label">Límite de Crédito</label>
@@ -497,14 +492,13 @@ function CuentasPago() {
                             />
                         </div>
                         <div className="form-group">
-                            <label className="form-label">Fecha de Renovación</label>
+                            <label className="form-label">Fecha Corte / Renovación</label>
                             <input
                                 type="date"
                                 className="form-input"
                                 value={formData.fecha_renovacion}
                                 onChange={(e) => setFormData({ ...formData, fecha_renovacion: e.target.value })}
                             />
-                            <small className="text-xs text-muted">Día de cierre/pago</small>
                         </div>
                     </div>
                 </div>
@@ -521,12 +515,11 @@ function CuentasPago() {
                   value={formData.saldo_inicial}
                   onChange={(e) => setFormData({ ...formData, saldo_inicial: e.target.value })}
                   step="0.01"
-                  min="0"
                 />
                 <small className="text-muted">
                     {formData.tipo === 'Tarjeta' 
-                        ? 'El cupo disponible no puede ser mayor al límite de crédito.' 
-                        : 'El saldo inicial se registrará como un ingreso automático.'}
+                        ? 'Debe ser menor o igual al límite.' 
+                        : 'Se registrará como saldo de apertura.'}
                 </small>
               </div>
             )}
@@ -545,7 +538,7 @@ function CuentasPago() {
               </div>
             )}
 
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-2 justify-end mt-4">
               <button 
                 type="button" 
                 className="btn btn-outline" 
@@ -557,7 +550,7 @@ function CuentasPago() {
                 Cancelar
               </button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cuenta' : 'Crear Cuenta'}
+                {loading ? 'Guardando...' : modoEdicion ? 'Actualizar' : 'Crear'}
               </button>
             </div>
           </div>

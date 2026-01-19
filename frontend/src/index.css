@@ -1909,3 +1909,492 @@ button[title="Ver Detalle"] {
 div:hover > div > button[title="Ver Detalle"] {
   opacity: 1;
 }
+/* =================================================================
+   ESTILOS ESPECÍFICOS PARA FINANZAS Y COMPRAS (Cuentas, Pagos, Nueva Compra)
+   Agregar al final de index.css
+   ================================================================= */
+
+/* --- 1. Bordes y Anillos (Focus Rings & Selection States) --- */
+/* Necesario para la selección de moneda y tipo de compra en NuevaCompra */
+.ring-1 {
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+.ring-2 {
+  box-shadow: 0 0 0 2px currentColor;
+}
+
+.ring-green-500 { color: var(--success); }
+.ring-blue-500 { color: var(--primary); }
+.ring-orange-500 { color: var(--warning); }
+.ring-red-600 { color: var(--danger); }
+.ring-warning { color: var(--warning); }
+.ring-danger { color: var(--danger); }
+.ring-blue-400 { color: #60a5fa; }
+
+/* Borde discontinuo para estados vacíos o áreas de carga */
+.border-dashed {
+  border-style: dashed;
+}
+
+/* --- 2. Animaciones para Nueva Compra (Sección Crédito) --- */
+/* Simulación de las clases 'animate-in' usadas en el formulario */
+.animate-in {
+  animation-duration: 0.3s;
+  animation-fill-mode: forwards;
+  animation-timing-function: ease-out;
+}
+
+.fade-in {
+  animation-name: fadeInOpacity;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slideInTop;
+}
+
+@keyframes fadeInOpacity {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInTop {
+  from { transform: translateY(-0.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* --- 3. Inputs Compactos para Tablas de Detalle --- */
+/* Para los inputs de cantidad, precio y descuento dentro de la tabla de productos */
+.table input.form-input {
+  min-width: 60px;
+  padding: 0.25rem 0.5rem;
+  height: 2rem; /* h-8 */
+  font-size: 0.875rem;
+}
+
+/* Alinear inputs numéricos a la derecha */
+.table input.text-right {
+  text-align: right;
+}
+
+.table input.text-center {
+  text-align: center;
+}
+
+/* --- 4. Estilos de Tarjetas de Crédito y Cuentas --- */
+/* Gradientes sutiles para diferenciar tipos de cuenta visualmente */
+.card-account-bank {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+  border-left: 4px solid var(--primary);
+}
+
+.card-account-cash {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  border-left: 4px solid var(--success);
+}
+
+.card-account-credit {
+  background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+  border-left: 4px solid var(--warning);
+}
+
+/* --- 5. Utilidades de Texto y Fondo Faltantes --- */
+.text-orange-600 { color: #ea580c; }
+.text-orange-700 { color: #c2410c; }
+.bg-orange-50 { background-color: #fff7ed; }
+.border-orange-200 { border-color: #fed7aa; }
+.border-orange-300 { border-color: #fdba74; }
+.border-orange-500 { border-color: #f97316; }
+
+.bg-cyan-50 { background-color: #ecfeff; } /* Para pagos parciales */
+
+/* --- 6. Layout Grid Responsivo Específico (lg:grid-cols-3) --- */
+@media (min-width: 1024px) {
+  .lg\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  
+  .lg\:col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+}
+
+/* --- 7. Badges de Estado Financiero Específicos --- */
+/* Sobrescribimos o añadimos variantes para Pago */
+.badge-pending-pay {
+  background-color: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
+.badge-paid {
+  background-color: #ecfdf5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
+}
+
+.badge-overdue {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+/* --- 8. Utilidades de Tooltip y Hover --- */
+.group:hover .group-hover\:opacity-100 {
+  opacity: 1;
+}
+
+.opacity-0 {
+  opacity: 0;
+}
+
+.transition-opacity {
+  transition-property: opacity;
+  transition-duration: 0.2s;
+}
+
+/* --- 9. Botón Outline para Tablas (Pequeño) --- */
+.btn-xs {
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  height: auto;
+}
+
+/* --- 10. Estilos de Totales (Resumen de Compra) --- */
+.total-summary-container {
+  background-color: var(--bg-secondary);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.total-row.final {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #cbd5e1;
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--primary-dark);
+}
+/* =================================================================
+   ESTILOS ESPECÍFICOS PARA ÓRDENES DE PRODUCCIÓN
+   Agregar al final de index.css
+   ================================================================= */
+
+/* --- 1. Barra de Progreso (Columna Progreso) --- */
+.progress-bar {
+  background-color: var(--bg-tertiary); /* Fondo gris claro */
+  border-radius: 9999px;
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); /* Animación suave */
+}
+
+/* --- 2. Buscador con Icono (Filtros) --- */
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-secondary);
+  pointer-events: none; /* Permite hacer clic a través del icono */
+  z-index: 10;
+}
+
+.search-input-wrapper .search-input {
+  padding-left: 2.5rem; /* Espacio para el icono a la izquierda */
+  width: 100%;
+}
+
+/* --- 3. Utilidades de Ancho y Layout --- */
+.w-fit {
+  width: fit-content;
+}
+
+.w-full {
+  width: 100%;
+}
+
+/* Grid de 5 columnas para las tarjetas de estadísticas */
+.md\:grid-cols-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1024px) {
+  .md\:grid-cols-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)); /* 3 columnas en tablet */
+  }
+}
+
+@media (max-width: 640px) {
+  .md\:grid-cols-5 {
+    grid-template-columns: 1fr; /* 1 columna en móvil */
+  }
+}
+
+/* --- 4. Estilos de Texto y Fuente --- */
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.text-primary-dark {
+  color: var(--primary-dark);
+}
+
+/* --- 5. Colores de Fondo Específicos (Badges y Etiquetas) --- */
+.bg-info-light {
+  background-color: #f0f9ff; /* Azul muy claro para receta */
+}
+
+/* --- 6. Footer de la Tarjeta (Paginación) --- */
+.card-footer {
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  padding: 1rem;
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* --- 7. Bordes Laterales para Tarjetas de Estadísticas --- */
+/* (Aseguramos que existan si no estaban antes) */
+.border-l-4 {
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+
+/* --- 8. Transiciones para Botones de Tabla --- */
+.table .btn-sm {
+  transition: all 0.2s ease;
+}
+
+.table .btn-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+/* =================================================================
+   AGREGAR AL FINAL DE INDEX.CSS - SOPORTE PARA ORDENES DE VENTA
+   ================================================================= */
+
+/* --- 1. Paleta de Colores Extendida (Texto y Fondos) --- */
+.text-yellow-600 { color: #ca8a04; }
+.text-blue-600   { color: #2563eb; }
+.text-green-600  { color: #16a34a; }
+.text-orange-600 { color: #ea580c; }
+.text-purple-600 { color: #9333ea; }
+.text-emerald-600{ color: #059669; }
+.text-red-600    { color: #dc2626; }
+
+/* Fondos sólidos para botones de acción */
+.bg-blue-500    { background-color: #3b82f6; }
+.bg-green-500   { background-color: #22c55e; }
+.bg-orange-500  { background-color: #f97316; }
+.bg-purple-500  { background-color: #a855f7; }
+.bg-emerald-500 { background-color: #10b981; }
+.bg-red-500     { background-color: #ef4444; }
+
+/* Bordes para botones outline */
+.border-blue-500    { border-color: #3b82f6; }
+.border-green-500   { border-color: #22c55e; }
+.border-orange-500  { border-color: #f97316; }
+.border-purple-500  { border-color: #a855f7; }
+.border-emerald-500 { border-color: #10b981; }
+.border-red-500     { border-color: #ef4444; }
+
+/* Fondos claros para áreas de información */
+.bg-emerald-100 { background-color: #d1fae5; }
+.bg-purple-100  { background-color: #f3e8ff; }
+.bg-orange-100  { background-color: #ffedd5; }
+
+/* --- 2. Sistema de Degradados (Gradients) para Tarjetas de Estado --- */
+.bg-gradient-to-br {
+  background-image: linear-gradient(to bottom right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent));
+}
+
+/* Colores de inicio (From) */
+.from-yellow-100 { --tw-gradient-from: #fef9c3; --tw-gradient-to: #fef9c3; } 
+.from-blue-100   { --tw-gradient-from: #dbeafe; --tw-gradient-to: #dbeafe; }
+.from-green-100  { --tw-gradient-from: #dcfce7; --tw-gradient-to: #dcfce7; }
+.from-orange-100 { --tw-gradient-from: #ffedd5; --tw-gradient-to: #ffedd5; }
+.from-purple-100 { --tw-gradient-from: #f3e8ff; --tw-gradient-to: #f3e8ff; }
+.from-emerald-100{ --tw-gradient-from: #d1fae5; --tw-gradient-to: #d1fae5; }
+.from-red-100    { --tw-gradient-from: #fee2e2; --tw-gradient-to: #fee2e2; }
+
+/* Colores de fin (To) */
+.to-yellow-200 { --tw-gradient-to: #fef08a; }
+.to-blue-200   { --tw-gradient-to: #bfdbfe; }
+.to-green-200  { --tw-gradient-to: #bbf7d0; }
+.to-orange-200 { --tw-gradient-to: #fed7aa; }
+.to-purple-200 { --tw-gradient-to: #e9d5ff; }
+.to-emerald-200{ --tw-gradient-to: #a7f3d0; }
+.to-red-200    { --tw-gradient-to: #fecaca; }
+
+/* --- 3. Utilidades de Botones y Badges --- */
+
+/* Botón Ghost (para navegación) */
+.btn-ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: none;
+}
+.btn-ghost:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Tamaños de Badge faltantes */
+.badge-sm {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.7rem;
+}
+.badge-xs {
+  padding: 0.1rem 0.375rem;
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+/* Efectos Hover Específicos para Botones de Estado */
+.hover\:bg-blue-500:hover   { background-color: #3b82f6; border-color: #3b82f6; }
+.hover\:bg-green-500:hover  { background-color: #22c55e; border-color: #22c55e; }
+.hover\:bg-orange-500:hover { background-color: #f97316; border-color: #f97316; }
+.hover\:bg-purple-500:hover { background-color: #a855f7; border-color: #a855f7; }
+.hover\:bg-emerald-500:hover{ background-color: #10b981; border-color: #10b981; }
+.hover\:bg-red-500:hover    { background-color: #ef4444; border-color: #ef4444; }
+
+.hover\:text-white:hover { color: white !important; }
+
+/* --- 4. Utilidades de Espaciado y Layout --- */
+.shrink-0 {
+  flex-shrink: 0;
+}
+
+/* Padding Left 10 (2.5rem) para input de búsqueda con icono */
+.pl-10 {
+  padding-left: 2.5rem;
+}
+
+/* --- 5. Estilos Específicos de PDF/Documentos --- */
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.border-2 {
+  border-width: 2px;
+}
+
+/* Corrección de z-index para elementos superpuestos */
+.relative { position: relative; }
+.absolute { position: absolute; }
+.top-1\/2 { top: 50%; }
+.-translate-y-1\/2 { transform: translateY(-50%); }
+.left-3 { left: 0.75rem; }
+/* =================================================================
+   AGREGAR AL FINAL DE INDEX.CSS - SOPORTE PARA COTIZACIONES
+   ================================================================= */
+
+/* --- 1. Utilidades de Posicionamiento Sticky (Barra superior detalle) --- */
+.sticky {
+  position: sticky;
+}
+
+.top-0 {
+  top: 0;
+}
+
+.z-10 {
+  z-index: 10;
+}
+
+/* --- 2. Degradados Horizontales (Usados en cards de detalle) --- */
+.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent));
+}
+
+/* Definición de colores 'From' adicionales */
+.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05); --tw-gradient-to: rgba(37, 99, 235, 0.05); }
+.from-gray-50    { --tw-gradient-from: #f9fafb; --tw-gradient-to: #f9fafb; }
+
+/* --- 3. Paleta de Colores Pastel y Contraste (Para Estados) --- */
+
+/* Fondos muy claros (100) */
+.bg-yellow-100 { background-color: #fef9c3; }
+.bg-blue-100   { background-color: #dbeafe; }
+.bg-green-100  { background-color: #dcfce7; }
+.bg-red-100    { background-color: #fee2e2; }
+.bg-primary\/10{ background-color: rgba(37, 99, 235, 0.1); }
+
+/* Textos muy oscuros (800/900) */
+.text-yellow-800 { color: #854d0e; }
+.text-blue-800   { color: #1e40af; }
+.text-green-800  { color: #166534; }
+.text-red-800    { color: #991b1b; }
+.text-gray-800   { color: #1f2937; }
+
+.text-blue-900   { color: #1e3a8a; }
+.text-green-900  { color: #14532d; }
+.text-purple-900 { color: #581c87; }
+
+/* Bordes Pastel (200) */
+.border-yellow-200 { border-color: #fef08a; }
+.border-blue-200   { border-color: #bfdbfe; }
+.border-green-200  { border-color: #bbf7d0; }
+.border-red-200    { border-color: #fecaca; }
+.border-gray-200   { border-color: #e5e7eb; }
+.border-primary\/20{ border-color: rgba(37, 99, 235, 0.2); }
+
+/* --- 4. Sombras Internas (Para totales) --- */
+.shadow-inner {
+  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+}
+
+/* --- 5. Utilidades de Opacidad --- */
+.opacity-20 { opacity: 0.2; }
+.opacity-50 { opacity: 0.5; }
+.opacity-60 { opacity: 0.6; }
+.opacity-70 { opacity: 0.7; }
+.opacity-90 { opacity: 0.9; }
+
+/* --- 6. Iconos en línea (Inline) --- */
+.inline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* --- 7. Ajustes de Texto --- */
+.italic {
+  font-style: italic;
+}
+
+.leading-relaxed {
+  line-height: 1.625;
+}
+
+/* --- 8. Badge Outline Personalizado (Check2) --- */
+.text-success { color: var(--success); }
+
+/* Ajuste específico para el botón de conversión a venta */
+.hover\:underline:hover {
+  text-decoration: underline;
+}

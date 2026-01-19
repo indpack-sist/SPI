@@ -440,7 +440,7 @@ function OrdenesVenta() {
             className="btn btn-sm btn-outline"
             onClick={(e) => {
               e.stopPropagation();
-              handleDescargarPDF(value, row.numero_orden);
+              handleDescargarPDF(value, row.numero_orden, row.cliente);
             }}
             disabled={descargandoPDF === value}
             title="Descargar PDF"

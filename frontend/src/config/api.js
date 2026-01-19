@@ -593,20 +593,11 @@ export const guiasTransportistaAPI = {
 };
 
 export const comprasAPI = {
-  getAll: (filtros = {}) => {
-    const params = new URLSearchParams();
-    Object.entries(filtros).forEach(([key, value]) => {
-      if (value) params.append(key, value);
-    });
-    return api.get(`/compras?${params.toString()}`);
-  },
-
+  getAll: (params) => api.get('/compras', { params }),
   getById: (id) => api.get(`/compras/${id}`),
   create: (data) => api.post('/compras', data),
   update: (id, data) => api.put(`/compras/${id}`, data),
-  
-  cancelar: (id, motivo_cancelacion) => 
-    api.patch(`/compras/${id}/cancelar`, { motivo_cancelacion }),
+  cancelar: (id, motivo_cancelacion) => api.patch(`/compras/${id}/cancelar`, { motivo_cancelacion }),
 
   getEstadisticas: (params) => api.get('/compras/estadisticas', { params }),
   getAlertas: (params) => api.get('/compras/alertas', { params }),
@@ -618,15 +609,13 @@ export const comprasAPI = {
 
   getCuotas: (id, params) => api.get(`/compras/${id}/cuotas`, { params }),
   getCuotaById: (id, idCuota) => api.get(`/compras/${id}/cuotas/${idCuota}`),
-  pagarCuota: (id, idCuota, data) => 
-    api.post(`/compras/${id}/cuotas/${idCuota}/pagar`, data),
+  pagarCuota: (id, idCuota, data) => api.post(`/compras/${id}/cuotas/${idCuota}/pagar`, data),
 
   descargarPDF: async (id) => {
     const response = await fetch(`${import.meta.env.VITE_API_URL}/compras/${id}/pdf`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/pdf',
       }
     });
     
@@ -655,21 +644,18 @@ export const pagosCobranzasAPI = {
   anular: (id) => api.delete(`/pagos-cobranzas/${id}`)
 };
 
+import api from './api';
+
 export const cuentasPagoAPI = {
   getAll: (params) => api.get('/cuentas-pago', { params }),
   getById: (id) => api.get(`/cuentas-pago/${id}`),
   create: (data) => api.post('/cuentas-pago', data),
   update: (id, data) => api.put(`/cuentas-pago/${id}`, data),
   delete: (id) => api.delete(`/cuentas-pago/${id}`),
-  
   getResumen: (id, params) => api.get(`/cuentas-pago/${id}/resumen`, { params }),
   getEstadisticas: (params) => api.get('/cuentas-pago/estadisticas', { params }),
-  
   registrarMovimiento: (id, data) => api.post(`/cuentas-pago/${id}/movimientos`, data),
   getMovimientos: (id, params) => api.get(`/cuentas-pago/${id}/movimientos`, { params }),
-  
   transferir: (data) => api.post('/cuentas-pago/transferencias', data),
   renovarCredito: (id, data) => api.post(`/cuentas-pago/${id}/renovar-credito`, data)
 };
-
-export default api;

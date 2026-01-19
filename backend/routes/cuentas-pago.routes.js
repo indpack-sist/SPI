@@ -16,7 +16,6 @@ import {
 const router = express.Router();
 
 router.get('/estadisticas', getEstadisticasCuentas);
-
 router.post('/transferencias', transferirEntreCuentas);
 
 router.get('/', getAllCuentasPago);
@@ -30,7 +29,5 @@ router.post('/:id/movimientos', registrarMovimiento);
 router.get('/:id/movimientos', getMovimientosCuenta);
 
 router.get('/:id/resumen', getResumenCuenta);
-
 router.post('/:id/renovar-credito', renovarCreditoManual);
-
 export default router;

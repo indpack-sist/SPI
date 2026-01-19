@@ -364,7 +364,10 @@ export async function createCompra(req, res) {
 
       if (tipo_compra === 'Contado') {
         if (parseFloat(cuenta.saldo_actual) < montoAPagar) {
-          throw new Error(`Saldo insuficiente en la cuenta "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual} ${monedaCuenta}, Necesario: ${montoAPagar.toFixed(2)} ${monedaCuenta}`);
+            const errorMsg = cuenta.tipo === 'Tarjeta' 
+                ? `Cupo insuficiente en la tarjeta "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual} ${monedaCuenta}`
+                : `Saldo insuficiente en la cuenta "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual} ${monedaCuenta}`;
+            throw new Error(errorMsg);
         }
       }
 
@@ -576,7 +579,7 @@ export async function createCompra(req, res) {
 
       if (tipo_compra === 'Contado') {
         const [cuentaLock] = await connection.query(
-          'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ? FOR UPDATE',
+          'SELECT saldo_actual, tipo FROM cuentas_pago WHERE id_cuenta = ? FOR UPDATE',
           [id_cuenta_pago]
         );
 
@@ -584,7 +587,7 @@ export async function createCompra(req, res) {
         const saldoNuevo = saldoAnterior - montoAPagar;
 
         if (saldoNuevo < 0) {
-          throw new Error('Saldo insuficiente al procesar el pago');
+            throw new Error(cuentaLock[0].tipo === 'Tarjeta' ? 'Cupo insuficiente' : 'Saldo insuficiente');
         }
 
         await connection.query(
@@ -1098,7 +1101,10 @@ export async function pagarCuota(req, res) {
       
       const saldoAnterior = parseFloat(cuenta.saldo_actual);
       if (saldoAnterior < montoPago) {
-        throw new Error(`Saldo insuficiente en "${cuenta.nombre}". Disponible: ${saldoAnterior} ${cuenta.moneda}`);
+        const errorMsg = cuenta.tipo === 'Tarjeta' 
+            ? `Cupo insuficiente en "${cuenta.nombre}". Disponible: ${saldoAnterior} ${cuenta.moneda}`
+            : `Saldo insuficiente en "${cuenta.nombre}". Disponible: ${saldoAnterior} ${cuenta.moneda}`;
+        throw new Error(errorMsg);
       }
       
       const saldoNuevo = saldoAnterior - montoPago;
@@ -1255,7 +1261,10 @@ export async function registrarPagoCompra(req, res) {
       }
 
       if (parseFloat(cuenta.saldo_actual) < montoAbono) {
-        throw new Error(`Saldo insuficiente en ${cuenta.nombre}. Disponible: ${cuenta.saldo_actual}`);
+        const errorMsg = cuenta.tipo === 'Tarjeta' 
+            ? `Cupo insuficiente en "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual}`
+            : `Saldo insuficiente en "${cuenta.nombre}". Disponible: ${cuenta.saldo_actual}`;
+        throw new Error(errorMsg);
       }
 
       const nuevoSaldoCuenta = parseFloat(cuenta.saldo_actual) - montoAbono;

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, ShoppingCart, Filter, Clock, CheckCircle,
-  XCircle, AlertCircle, TrendingUp, Wallet, CreditCard
+  XCircle, AlertCircle, TrendingUp, Wallet, CreditCard,
+  Calendar
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -18,11 +19,14 @@ function Compras() {
   const [cuentas, setCuentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
   const [filtros, setFiltros] = useState({
     estado: '',
     tipo_compra: '',
     tipo_cuenta: '',
     id_cuenta_pago: '',
+    fecha_inicio: '',
+    fecha_fin: '',
     alertas: ''
   });
 
@@ -63,7 +67,7 @@ function Compras() {
       }
       
     } catch (err) {
-      console.error('Error al cargar compras:', err);
+      console.error(err);
       setError(err.response?.data?.error || 'Error al cargar compras');
     } finally {
       setLoading(false);
@@ -118,8 +122,11 @@ function Compras() {
       width: '140px',
       render: (value, row) => (
         <div>
-          <span className="font-mono font-bold text-sm">{value}</span>
-          <div className="text-xs text-muted">
+          <span className="font-mono font-bold text-sm text-primary cursor-pointer hover:underline" onClick={() => navigate(`/compras/${row.id_orden_compra}`)}>
+            {value}
+          </span>
+          <div className="text-xs text-muted flex items-center gap-1">
+            <Calendar size={10} />
             {formatearFecha(row.fecha_emision)}
           </div>
         </div>
@@ -130,19 +137,22 @@ function Compras() {
       accessor: 'proveedor',
       render: (value, row) => (
         <div>
-          <div className="font-medium">{value}</div>
+          <div className="font-medium truncate max-w-[200px]" title={value}>{value}</div>
           <div className="text-xs text-muted">RUC: {row.ruc_proveedor}</div>
         </div>
       )
     },
     {
-      header: 'Cuenta de Pago',
+      header: 'Método Pago',
       accessor: 'cuenta_pago',
-      width: '150px',
+      width: '160px',
       render: (value, row) => (
         <div>
-          <div className="font-medium text-sm">{value}</div>
-          <div className="text-xs text-muted">{row.tipo_cuenta_pago}</div>
+          <div className="font-medium text-sm">{value || 'Sin asignar'}</div>
+          <div className="text-xs text-muted flex gap-1">
+             {row.tipo_cuenta_pago}
+             {row.moneda_cuenta && <span className="font-mono">({row.moneda_cuenta})</span>}
+          </div>
         </div>
       )
     },
@@ -155,13 +165,13 @@ function Compras() {
         const config = getTipoCompraConfig(value);
         const Icono = config.icono;
         return (
-          <div>
-            <span className={`badge ${config.clase}`}>
+          <div className="flex flex-col items-center">
+            <span className={`badge ${config.clase} flex gap-1 items-center`}>
               <Icono size={12} />
               {value}
             </span>
             {value === 'Credito' && row.numero_cuotas > 0 && (
-              <div className="text-xs text-muted mt-1">
+              <div className="text-[10px] text-muted mt-0.5">
                 {row.numero_cuotas} cuotas
               </div>
             )}
@@ -172,36 +182,36 @@ function Compras() {
     {
       header: 'Total',
       accessor: 'total',
-      width: '120px',
+      width: '130px',
       align: 'right',
       render: (value, row) => (
         <div>
-          <div className="font-bold text-primary">
+          <div className="font-bold text-gray-800">
             {formatearMoneda(value, row.moneda)}
           </div>
           {row.tipo_compra === 'Credito' && (
             <div className="text-xs text-muted">
-              Pagado: {formatearMoneda(row.monto_pagado || 0, row.moneda)}
+              Pagado: <span className="text-success">{formatearMoneda(row.monto_pagado || 0, row.moneda)}</span>
             </div>
           )}
         </div>
       )
     },
     {
-      header: 'Estado Pago',
+      header: 'Estado',
       accessor: 'estado_pago',
-      width: '110px',
+      width: '120px',
       align: 'center',
       render: (value, row) => {
         const config = getEstadoPagoConfig(value);
         return (
-          <div>
+          <div className="flex flex-col items-center">
             <span className={`badge ${config.clase}`}>
               {config.texto}
             </span>
             {row.dias_para_vencer !== null && row.estado_pago !== 'Pagado' && (
-              <div className={`text-xs mt-1 ${row.dias_para_vencer < 0 ? 'text-danger' : row.dias_para_vencer <= 7 ? 'text-warning' : 'text-muted'}`}>
-                {row.dias_para_vencer < 0 ? `Vencido` : `${row.dias_para_vencer}d`}
+              <div className={`text-[10px] font-bold mt-1 ${row.dias_para_vencer < 0 ? 'text-danger' : row.dias_para_vencer <= 7 ? 'text-warning' : 'text-success'}`}>
+                {row.dias_para_vencer < 0 ? `Vencido (${Math.abs(row.dias_para_vencer)}d)` : `${row.dias_para_vencer} días rest.`}
               </div>
             )}
           </div>
@@ -209,31 +219,17 @@ function Compras() {
       }
     },
     {
-      header: 'Alerta',
-      accessor: 'nivel_alerta',
-      width: '80px',
-      align: 'center',
-      render: (value) => {
-        if (value === 'success') return null;
-        return (
-          <span className={`badge ${getNivelAlertaClase(value)}`}>
-            <AlertCircle size={14} />
-          </span>
-        );
-      }
-    },
-    {
       header: 'Acciones',
       accessor: 'id_orden_compra',
-      width: '100px',
+      width: '80px',
       align: 'center',
       render: (value) => (
         <button
-          className="btn btn-sm btn-primary"
+          className="btn btn-sm btn-ghost text-primary hover:bg-blue-50"
           onClick={() => navigate(`/compras/${value}`)}
-          title="Ver detalle"
+          title="Ver detalle completo"
         >
-          <Eye size={14} />
+          <Eye size={18} />
         </button>
       )
     }
@@ -249,28 +245,30 @@ function Compras() {
       tipo_compra: '',
       tipo_cuenta: '',
       id_cuenta_pago: '',
+      fecha_inicio: '',
+      fecha_fin: '',
       alertas: ''
     });
   };
 
-  if (loading) return <Loading message="Cargando compras..." />;
+  if (loading && !estadisticas) return <Loading message="Cargando módulo de compras..." />;
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShoppingCart size={32} />
-            Compras
+            <ShoppingCart size={32} className="text-primary" />
+            Gestión de Compras
           </h1>
-          <p className="text-muted">Gestión de compras a proveedores</p>
+          <p className="text-muted">Registro, control de pagos y trazabilidad</p>
         </div>
         <button 
-          className="btn btn-primary"
+          className="btn btn-primary shadow-lg hover:shadow-xl transition-all"
           onClick={() => navigate('/compras/nueva')}
         >
           <Plus size={20} />
-          Nueva Compra
+          Registrar Compra
         </button>
       </div>
 
@@ -278,18 +276,18 @@ function Compras() {
 
       {estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div className="card">
+          <div className="card hover:border-blue-300 transition-colors">
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Total Compras</p>
+                  <p className="text-sm text-muted">Total Operaciones</p>
                   <h3 className="text-2xl font-bold">{estadisticas.total_compras || 0}</h3>
                   <p className="text-xs text-muted">
                     {estadisticas.proveedores_unicos || 0} proveedores
                   </p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <ShoppingCart size={24} className="text-primary" />
+                <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
+                  <ShoppingCart size={24} />
                 </div>
               </div>
             </div>
@@ -299,12 +297,12 @@ function Compras() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Pendiente Pago</p>
+                  <p className="text-sm text-muted">Pendiente de Pago</p>
                   <h3 className="text-2xl font-bold text-warning">{estadisticas.pendientes_pago || 0}</h3>
-                  <p className="text-xs text-muted">Sin pagar</p>
+                  <p className="text-xs text-muted">Órdenes abiertas</p>
                 </div>
-                <div className="p-3 bg-yellow-100 rounded-lg">
-                  <Clock size={24} className="text-warning" />
+                <div className="p-3 bg-yellow-50 rounded-lg text-warning">
+                  <Clock size={24} />
                 </div>
               </div>
             </div>
@@ -314,12 +312,12 @@ function Compras() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Pago Parcial</p>
+                  <p className="text-sm text-muted">Pagos Parciales</p>
                   <h3 className="text-2xl font-bold text-info">{estadisticas.pagos_parciales || 0}</h3>
-                  <p className="text-xs text-muted">En proceso</p>
+                  <p className="text-xs text-muted">En amortización</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <CreditCard size={24} className="text-info" />
+                <div className="p-3 bg-cyan-50 rounded-lg text-info">
+                  <CreditCard size={24} />
                 </div>
               </div>
             </div>
@@ -329,14 +327,14 @@ function Compras() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Monto Total</p>
-                  <h3 className="text-xl font-bold text-success">
+                  <p className="text-sm text-muted">Total Comprado</p>
+                  <h3 className="text-lg font-bold text-success truncate" title={formatearMoneda(estadisticas.monto_total || 0, 'PEN')}>
                     {formatearMoneda(estadisticas.monto_total || 0, 'PEN')}
                   </h3>
-                  <p className="text-xs text-muted">{estadisticas.pagadas || 0} pagadas</p>
+                  <p className="text-xs text-muted">{estadisticas.pagadas || 0} liquidadas</p>
                 </div>
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <TrendingUp size={24} className="text-success" />
+                <div className="p-3 bg-green-50 rounded-lg text-success">
+                  <TrendingUp size={24} />
                 </div>
               </div>
             </div>
@@ -346,14 +344,14 @@ function Compras() {
             <div className="card-body">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted">Saldo Pendiente</p>
-                  <h3 className="text-xl font-bold text-danger">
+                  <p className="text-sm text-muted">Deuda Total</p>
+                  <h3 className="text-lg font-bold text-danger truncate" title={formatearMoneda(estadisticas.saldo_pendiente || 0, 'PEN')}>
                     {formatearMoneda(estadisticas.saldo_pendiente || 0, 'PEN')}
                   </h3>
-                  <p className="text-xs text-muted">Por pagar</p>
+                  <p className="text-xs text-muted">Saldo exigible</p>
                 </div>
-                <div className="p-3 bg-red-100 rounded-lg">
-                  <AlertCircle size={24} className="text-danger" />
+                <div className="p-3 bg-red-50 rounded-lg text-danger">
+                  <AlertCircle size={24} />
                 </div>
               </div>
             </div>
@@ -365,19 +363,19 @@ function Compras() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {alertas.cuotas_vencidas?.cantidad > 0 && (
             <div 
-              className="card border-l-4 border-danger cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => actualizarFiltro('alertas', 'vencidas')}
+              className={`card border-l-4 border-danger cursor-pointer hover:shadow-md transition-all ${filtros.alertas === 'vencidas' ? 'ring-2 ring-danger' : ''}`}
+              onClick={() => actualizarFiltro('alertas', filtros.alertas === 'vencidas' ? '' : 'vencidas')}
             >
-              <div className="card-body">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-danger font-medium">Cuotas Vencidas</p>
-                    <h3 className="text-2xl font-bold text-danger">{alertas.cuotas_vencidas.cantidad}</h3>
-                    <p className="text-xs text-muted">
-                      {formatearMoneda(alertas.cuotas_vencidas.monto_total, 'PEN')}
-                    </p>
-                  </div>
+              <div className="card-body py-3">
+                <div className="flex items-center gap-3">
                   <XCircle size={24} className="text-danger" />
+                  <div>
+                    <p className="text-sm font-bold text-danger">Cuotas Vencidas</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-bold">{alertas.cuotas_vencidas.cantidad}</span>
+                        <span className="text-xs text-muted">({formatearMoneda(alertas.cuotas_vencidas.monto_total, 'PEN')})</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -385,36 +383,39 @@ function Compras() {
 
           {alertas.cuotas_proximas_vencer?.cantidad > 0 && (
             <div 
-              className="card border-l-4 border-warning cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => actualizarFiltro('alertas', 'proximas_vencer')}
+              className={`card border-l-4 border-warning cursor-pointer hover:shadow-md transition-all ${filtros.alertas === 'proximas_vencer' ? 'ring-2 ring-warning' : ''}`}
+              onClick={() => actualizarFiltro('alertas', filtros.alertas === 'proximas_vencer' ? '' : 'proximas_vencer')}
             >
-              <div className="card-body">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-warning font-medium">Próximas a Vencer</p>
-                    <h3 className="text-2xl font-bold text-warning">{alertas.cuotas_proximas_vencer.cantidad}</h3>
-                    <p className="text-xs text-muted">
-                      {formatearMoneda(alertas.cuotas_proximas_vencer.monto_total, 'PEN')}
-                    </p>
-                  </div>
+              <div className="card-body py-3">
+                <div className="flex items-center gap-3">
                   <Clock size={24} className="text-warning" />
+                  <div>
+                    <p className="text-sm font-bold text-warning">Vencen pronto</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-bold">{alertas.cuotas_proximas_vencer.cantidad}</span>
+                        <span className="text-xs text-muted">({formatearMoneda(alertas.cuotas_proximas_vencer.monto_total, 'PEN')})</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
           {alertas.compras_vencidas?.cantidad > 0 && (
-            <div className="card border-l-4 border-danger">
-              <div className="card-body">
-                <div className="flex items-center justify-between">
+            <div 
+                className={`card border-l-4 border-red-600 cursor-pointer hover:shadow-md transition-all ${filtros.alertas === 'compras_vencidas' ? 'ring-2 ring-red-600' : ''}`}
+                onClick={() => actualizarFiltro('alertas', filtros.alertas === 'compras_vencidas' ? '' : 'compras_vencidas')}
+            >
+              <div className="card-body py-3">
+                <div className="flex items-center gap-3">
+                  <AlertCircle size={24} className="text-red-600" />
                   <div>
-                    <p className="text-sm text-danger font-medium">Compras Vencidas</p>
-                    <h3 className="text-2xl font-bold text-danger">{alertas.compras_vencidas.cantidad}</h3>
-                    <p className="text-xs text-muted">
-                      {formatearMoneda(alertas.compras_vencidas.monto_total, 'PEN')}
-                    </p>
+                    <p className="text-sm font-bold text-red-600">Facturas Vencidas</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-bold">{alertas.compras_vencidas.cantidad}</span>
+                        <span className="text-xs text-muted">({formatearMoneda(alertas.compras_vencidas.monto_total, 'PEN')})</span>
+                    </div>
                   </div>
-                  <XCircle size={24} className="text-danger" />
                 </div>
               </div>
             </div>
@@ -422,19 +423,19 @@ function Compras() {
 
           {alertas.pagos_pendientes?.cantidad > 0 && (
             <div 
-              className="card border-l-4 border-info cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => actualizarFiltro('alertas', 'pendiente_pago')}
+              className={`card border-l-4 border-blue-400 cursor-pointer hover:shadow-md transition-all ${filtros.alertas === 'pendiente_pago' ? 'ring-2 ring-blue-400' : ''}`}
+              onClick={() => actualizarFiltro('alertas', filtros.alertas === 'pendiente_pago' ? '' : 'pendiente_pago')}
             >
-              <div className="card-body">
-                <div className="flex items-center justify-between">
+              <div className="card-body py-3">
+                <div className="flex items-center gap-3">
+                  <Wallet size={24} className="text-blue-400" />
                   <div>
-                    <p className="text-sm text-info font-medium">Pagos Pendientes</p>
-                    <h3 className="text-2xl font-bold text-info">{alertas.pagos_pendientes.cantidad}</h3>
-                    <p className="text-xs text-muted">
-                      {formatearMoneda(alertas.pagos_pendientes.monto_total, 'PEN')}
-                    </p>
+                    <p className="text-sm font-bold text-blue-600">Total Pendiente</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-bold">{alertas.pagos_pendientes.cantidad}</span>
+                        <span className="text-xs text-muted">({formatearMoneda(alertas.pagos_pendientes.monto_total, 'PEN')})</span>
+                    </div>
                   </div>
-                  <Clock size={24} className="text-info" />
                 </div>
               </div>
             </div>
@@ -442,110 +443,87 @@ function Compras() {
         </div>
       )}
 
-      <div className="card mb-4">
-        <div className="card-body">
-          <div className="flex items-start gap-3 flex-wrap">
-            <Filter size={20} className="text-muted mt-2" />
-            <div className="flex-1">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Tipo de Compra</label>
-                  <select
-                    className="form-select"
-                    value={filtros.tipo_compra}
-                    onChange={(e) => actualizarFiltro('tipo_compra', e.target.value)}
-                  >
-                    <option value="">Todos</option>
-                    <option value="Contado">Contado</option>
-                    <option value="Credito">Crédito</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Tipo de Cuenta</label>
-                  <select
-                    className="form-select"
-                    value={filtros.tipo_cuenta}
-                    onChange={(e) => actualizarFiltro('tipo_cuenta', e.target.value)}
-                  >
-                    <option value="">Todas</option>
-                    <option value="Banco">Banco</option>
-                    <option value="Caja">Caja</option>
-                    <option value="Tarjeta">Tarjeta</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Cuenta de Pago</label>
-                  <select
-                    className="form-select"
-                    value={filtros.id_cuenta_pago}
-                    onChange={(e) => actualizarFiltro('id_cuenta_pago', e.target.value)}
-                  >
-                    <option value="">Todas las cuentas</option>
-                    {cuentas.map(cuenta => (
-                      <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                        {cuenta.nombre} ({cuenta.tipo} - {cuenta.moneda})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  className={`btn btn-sm ${filtros.alertas === '' ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => actualizarFiltro('alertas', '')}
-                >
-                  Todas
-                </button>
-                <button
-                  className={`btn btn-sm ${filtros.alertas === 'vencidas' ? 'btn-danger' : 'btn-outline'}`}
-                  onClick={() => actualizarFiltro('alertas', 'vencidas')}
-                >
-                  <XCircle size={14} />
-                  Vencidas
-                </button>
-                <button
-                  className={`btn btn-sm ${filtros.alertas === 'proximas_vencer' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => actualizarFiltro('alertas', 'proximas_vencer')}
-                >
-                  <Clock size={14} />
-                  Próximas a Vencer
-                </button>
-                <button
-                  className={`btn btn-sm ${filtros.alertas === 'pendiente_pago' ? 'btn-info' : 'btn-outline'}`}
-                  onClick={() => actualizarFiltro('alertas', 'pendiente_pago')}
-                >
-                  <AlertCircle size={14} />
-                  Pendiente Pago
-                </button>
-                {Object.values(filtros).some(v => v !== '') && (
-                  <button
-                    className="btn btn-sm btn-outline ml-auto"
-                    onClick={limpiarFiltros}
-                  >
-                    Limpiar Filtros
-                  </button>
-                )}
-              </div>
+      <div className="card mb-4 bg-gray-50 border border-gray-200">
+        <div className="card-body p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex items-center gap-2 mr-2">
+                <Filter size={20} className="text-muted" />
+                <span className="font-medium text-sm text-gray-700">Filtros:</span>
             </div>
+
+            <div className="w-36">
+                <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Desde</label>
+                <input 
+                    type="date" 
+                    className="form-input form-input-sm bg-white"
+                    value={filtros.fecha_inicio}
+                    onChange={(e) => actualizarFiltro('fecha_inicio', e.target.value)}
+                />
+            </div>
+
+            <div className="w-36">
+                <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Hasta</label>
+                <input 
+                    type="date" 
+                    className="form-input form-input-sm bg-white"
+                    value={filtros.fecha_fin}
+                    onChange={(e) => actualizarFiltro('fecha_fin', e.target.value)}
+                />
+            </div>
+
+            <div className="w-40">
+              <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Tipo de Compra</label>
+              <select
+                className="form-select form-select-sm bg-white"
+                value={filtros.tipo_compra}
+                onChange={(e) => actualizarFiltro('tipo_compra', e.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="Contado">Contado</option>
+                <option value="Credito">Crédito</option>
+              </select>
+            </div>
+
+            <div className="w-48">
+              <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Cuenta de Pago</label>
+              <select
+                className="form-select form-select-sm bg-white"
+                value={filtros.id_cuenta_pago}
+                onChange={(e) => actualizarFiltro('id_cuenta_pago', e.target.value)}
+              >
+                <option value="">Todas las cuentas</option>
+                {cuentas.map(cuenta => (
+                  <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
+                    {cuenta.nombre} ({cuenta.moneda})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {Object.values(filtros).some(v => v !== '') && (
+              <button
+                className="btn btn-sm btn-outline bg-white hover:bg-gray-100 text-gray-700 ml-auto"
+                onClick={limpiarFiltros}
+              >
+                Limpiar
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
+      <div className="card shadow-md">
+        <div className="card-header border-b-0 flex justify-between items-center">
           <h2 className="card-title">
-            Lista de Compras
+            Listado de Compras
             <span className="badge badge-primary ml-2">{compras.length}</span>
           </h2>
         </div>
-        <div className="card-body">
+        <div className="card-body p-0">
           <Table
             columns={columns}
             data={compras}
-            emptyMessage="No hay compras registradas"
+            emptyMessage="No se encontraron compras con los filtros aplicados"
           />
         </div>
       </div>

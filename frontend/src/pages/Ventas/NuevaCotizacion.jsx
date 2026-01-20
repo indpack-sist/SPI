@@ -140,6 +140,30 @@ function NuevaCotizacion() {
   }, [id, modoEdicion, modoDuplicar]);
 
   useEffect(() => {
+    if (location.state?.productosPreseleccionados && location.state?.clientePreseleccionado) {
+      const cliente = location.state.clientePreseleccionado;
+      setClienteSeleccionado(cliente);
+      setFormCabecera(prev => ({
+          ...prev,
+          id_cliente: cliente.id_cliente,
+          moneda: location.state.productosPreseleccionados[0].moneda || 'PEN'
+      }));
+      setDetalle(location.state.productosPreseleccionados);
+      
+      clientesAPI.getById(cliente.id_cliente).then(res => {
+          if (res.data.success) {
+              const data = res.data.data;
+              setDireccionesCliente(data.direcciones || []);
+              setFormCabecera(prev => ({ ...prev, lugar_entrega: data.direccion_despacho || '' }));
+          }
+      });
+      clientesAPI.getEstadoCredito(cliente.id_cliente).then(res => {
+          if (res.data.success) setEstadoCredito(res.data.data);
+      });
+    }
+  }, [location.state]);
+
+  useEffect(() => {
     calcularTotales();
   }, [detalle, formCabecera.porcentaje_impuesto]);
 

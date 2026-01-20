@@ -5,7 +5,7 @@ import {
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag,
   CreditCard, Banknote, Search, 
-  Calendar, FileInput
+  Calendar, FileInput, Tags
 } from 'lucide-react';
 import { usePermisos } from '../../context/PermisosContext';
 import './Sidebar.css';
@@ -48,6 +48,7 @@ function Sidebar({ isOpen, onToggle }) {
       title: 'Ventas',
       items: [
         { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones' },
+        { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones' },
         { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Órdenes de Venta', modulo: 'ordenesVenta' },
         { path: '/ventas/guias-remision', icon: FileCheck, label: 'Guías de Remisión', modulo: 'guiasRemision' },
         { path: '/ventas/guias-transportista', icon: Truck, label: 'Guías de Transportista', modulo: 'guiasTransportista' }
@@ -56,7 +57,8 @@ function Sidebar({ isOpen, onToggle }) {
     {
       title: 'Compras',
       items: [
-{ path: '/compras', icon: ShoppingBag, label: 'Compras', modulo: 'compras' }]
+        { path: '/compras', icon: ShoppingBag, label: 'Compras', modulo: 'compras' }
+      ]
     },
     {
       title: 'Finanzas',
@@ -125,14 +127,9 @@ function Sidebar({ isOpen, onToggle }) {
               <div key={idx} className="sidebar-section">
                 <div className="sidebar-section-title">{section.title}</div>
                 <ul className="sidebar-menu">
-                  {section.items.map((item) => {
+                  {itemsVisibles.map((item) => {
                     const Icon = item.icon;
-                    const puedeVer = tienePermiso(item.modulo);
                     
-                    if (!puedeVer) {
-                      return null;
-                    }
-
                     return (
                       <li key={item.path}>
                         <Link

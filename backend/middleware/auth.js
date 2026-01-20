@@ -19,7 +19,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: true,
       cuentasPago: true,
-      pagosCobranzas: true
+      pagosCobranzas: true,
+      listasPrecios: true
     },
     api: {
       dashboard: true,
@@ -38,7 +39,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: true,
       cuentasPago: true,
-      pagosCobranzas: true
+      pagosCobranzas: true,
+      listasPrecios: true
     }
   },
   'Gerencia': {
@@ -59,7 +61,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: true,
       cuentasPago: true,
-      pagosCobranzas: true
+      pagosCobranzas: true,
+      listasPrecios: true
     },
     api: {
       dashboard: true,
@@ -78,7 +81,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: true,
       cuentasPago: true,
-      pagosCobranzas: true
+      pagosCobranzas: true,
+      listasPrecios: true
     }
   },
   'Comercial': {
@@ -99,7 +103,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: false,
       cuentasPago: true,
-      pagosCobranzas: true
+      pagosCobranzas: true,
+      listasPrecios: true
     },
     api: {
       dashboard: true,
@@ -118,7 +123,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: true,
       cuentasPago: true,
-      pagosCobranzas: true
+      pagosCobranzas: true,
+      listasPrecios: true
     }
   },
   'Ventas': {
@@ -139,7 +145,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: true
     },
     api: {
       dashboard: false,
@@ -158,7 +165,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: true
     }
   },
   'Produccion': {
@@ -179,7 +187,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     },
     api: {
       dashboard: false,
@@ -191,14 +200,15 @@ const PERMISOS_POR_ROL = {
       productos: true,
       consultarStock: true,
       entradas: true,
-      salidas: true,
+      outputs: true,
       transferencias: true,
       ordenesProduccion: true,
       cotizaciones: false,
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     }
   },
   'Supervisor': {
@@ -219,7 +229,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     },
     api: {
       dashboard: false,
@@ -238,7 +249,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     }
   },
   'Operario': {
@@ -259,7 +271,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     },
     api: {
       dashboard: false,
@@ -278,7 +291,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     }
   },
   'Almacenero': {
@@ -299,7 +313,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     },
     api: {
       dashboard: false,
@@ -318,7 +333,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     }
   },
   'Logistica': {
@@ -339,7 +355,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: true,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     },
     api: {
       dashboard: false,
@@ -358,7 +375,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: true,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     }
   },
   'Conductor': {
@@ -379,9 +397,9 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     },
-    dashboard: false,
     api: {
       empleados: false,
       flota: true,
@@ -398,7 +416,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       compras: false,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: false
     }
   },
   'Administrativo': {
@@ -419,7 +438,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: true,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: true
     },
     api: {
       dashboard: true,
@@ -438,7 +458,8 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: true,
       compras: true,
       cuentasPago: false,
-      pagosCobranzas: false
+      pagosCobranzas: false,
+      listasPrecios: true
     }
   }
 };
@@ -446,22 +467,16 @@ const PERMISOS_POR_ROL = {
 export const verificarToken = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
         error: 'No se proporcionó token de autenticación'
       });
     }
-    
     const token = authHeader.split(' ')[1];
-    
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'indpack-secret-key-2025');
-    
     req.user = decoded;
-    
     next();
-    
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
@@ -469,14 +484,12 @@ export const verificarToken = (req, res, next) => {
         error: 'Token inválido'
       });
     }
-    
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,
         error: 'Token expirado'
       });
     }
-    
     return res.status(500).json({
       success: false,
       error: 'Error al verificar token'
@@ -488,26 +501,20 @@ export const verificarPermiso = (modulo) => {
   return (req, res, next) => {
     try {
       const { rol } = req.user;
-      
       if (!rol) {
         return res.status(403).json({
           success: false,
           error: 'Usuario sin rol asignado'
         });
       }
-      
       const permisos = PERMISOS_POR_ROL[rol];
-      
       if (!permisos) {
         return res.status(403).json({
           success: false,
           error: 'Rol no reconocido'
         });
       }
-      
       if (!permisos.api[modulo]) {
-        console.log(`[AUTH] Acceso denegado. Rol: ${rol}, Modulo solicitado: ${modulo}`);
-        
         return res.status(403).json({
           success: false,
           error: 'No tienes permiso para acceder a este módulo',
@@ -515,11 +522,8 @@ export const verificarPermiso = (modulo) => {
           rol: rol
         });
       }
-      
       next();
-      
     } catch (error) {
-      console.error('Error al verificar permisos:', error);
       return res.status(500).json({
         success: false,
         error: 'Error al verificar permisos'
@@ -531,9 +535,7 @@ export const verificarPermiso = (modulo) => {
 export const obtenerPermisos = (req, res) => {
   try {
     const { rol } = req.user;
-    
     const permisos = PERMISOS_POR_ROL[rol] || { ui: {}, api: {} };
-    
     res.json({
       success: true,
       data: {
@@ -542,9 +544,7 @@ export const obtenerPermisos = (req, res) => {
         permisosApi: permisos.api
       }
     });
-    
   } catch (error) {
-    console.error('Error al obtener permisos:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener permisos'

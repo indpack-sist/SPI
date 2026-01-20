@@ -388,33 +388,25 @@ export async function generarPDFSalida(datos) {
         alturaTransporte += calcularAlturaTexto(doc, vTxt, 190, 8) + 10;
       }
 
-      const alturaInfoSalida = Math.max(90, 55 + Math.max(alturaDestino + (datos.ruc_cliente ? 12 : 0), alturaTransporte)); 
+      const alturaInfoSalida = Math.max(115, 55 + Math.max(alturaDestino + (datos.ruc_cliente ? 12 : 0) + (datos.direccion_despacho ? 15 : 0), alturaTransporte)); 
       
       doc.roundedRect(33, 205, 529, alturaInfoSalida + 15, 3).stroke('#000000');
       
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha:', 40, 213);
       doc.font('Helvetica');
-      
-      // *** AQUÍ ESTÁ EL CAMBIO CLAVE EN LA FECHA ***
-      // Usamos la función formatearFecha que ahora fuerza America/Lima
       doc.text(formatearFecha(datos.fecha_movimiento || datos.fecha_emision), 100, 213);
       
       if (!datos.historial_despachos) {
         doc.font('Helvetica-Bold');
         doc.text('Hora:', 40, 228);
         doc.font('Helvetica');
-        
-        // *** AQUÍ ESTÁ EL CAMBIO CLAVE EN LA HORA ***
-        // Usamos toLocaleTimeString forzando la zona horaria a America/Lima (Perú)
-        // Esto le restará las 5 horas al tiempo UTC de la base de datos
         const horaStr = datos.fecha_movimiento ? new Date(datos.fecha_movimiento).toLocaleTimeString('es-PE', {
             hour: '2-digit', 
             minute: '2-digit', 
             hour12: true, 
             timeZone: 'America/Lima' 
         }) : '--:--';
-        
         doc.text(horaStr, 100, 228);
       }
       
@@ -427,14 +419,19 @@ export async function generarPDFSalida(datos) {
 
       doc.font('Helvetica-Bold');
       doc.text('Cliente/Destino:', 40, yBloque2);
-      
       doc.font('Helvetica');
       doc.text(destino || 'N/A', 120, yBloque2, { width: 210, lineGap: 2 });
 
+      if (datos.direccion_despacho) {
+          doc.fontSize(7).font('Helvetica-Oblique').fillColor('#444444');
+          doc.text(`Dirección: ${datos.direccion_despacho}`, 120, doc.y + 2, { width: 210 });
+          doc.fontSize(8).fillColor('#000000');
+      }
+
       if (datos.ruc_cliente) {
-         const currentY = doc.y; 
-         doc.font('Helvetica-Bold');
-         doc.text(`RUC: ${datos.ruc_cliente}`, 120, currentY + 2);
+          const currentY = doc.y; 
+          doc.font('Helvetica-Bold');
+          doc.text(`RUC: ${datos.ruc_cliente}`, 120, currentY + 2);
       }
 
       const xLabelRight = 310;
@@ -449,26 +446,27 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica-Bold');
       doc.text('Orden de Venta:', xLabelRight, 228);
       doc.font('Helvetica');
-      const ordenVentaTexto = datos.numero_orden || datos.codigo_orden_venta || '---';
-      doc.text(ordenVentaTexto, xValueRight, 228);
+      doc.text(datos.numero_orden || '---', xValueRight, 228);
 
       doc.font('Helvetica-Bold');
-      doc.text('Cotización:', xLabelRight, 243);
+      doc.text('OC Cliente:', xLabelRight, 243);
       doc.font('Helvetica');
-      const cotizacionTexto = datos.numero_cotizacion || datos.codigo_cotizacion || '---';
-      doc.text(cotizacionTexto, xValueRight, 243);
+      doc.text(datos.oc_cliente || 'SIN OC', xValueRight, 243);
 
-      let yDerecha = yBloque2;
+      doc.font('Helvetica-Bold');
+      doc.text('Cotización:', xLabelRight, 258);
+      doc.font('Helvetica');
+      doc.text(datos.numero_cotizacion || '---', xValueRight, 258);
+
+      let yDerecha = 273;
 
       if (datos.conductor) {
         doc.font('Helvetica-Bold');
         doc.text('Conductor:', xLabelRight, yDerecha);
         doc.font('Helvetica');
-        
         const conductorTxt = datos.conductor.substring(0, 40); 
         const heightC = doc.heightOfString(conductorTxt, { width: wValueRight });
         doc.text(conductorTxt, xValueRight, yDerecha, { width: wValueRight });
-        
         yDerecha += heightC + 4;
       }
 
@@ -477,7 +475,6 @@ export async function generarPDFSalida(datos) {
         doc.text('Vehículo:', xLabelRight, yDerecha);
         doc.font('Helvetica');
         const vehiculoTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
-        
         const heightV = doc.heightOfString(vehiculoTxt, { width: wValueRight });
         doc.text(vehiculoTxt, xValueRight, yDerecha, { width: wValueRight });
       }
@@ -564,7 +561,6 @@ export async function generarPDFSalida(datos) {
         datos.historial_despachos.forEach((h, i) => {
           if (yPos + 15 > 700) { doc.addPage(); yPos = 50; }
           doc.fontSize(7).font('Helvetica').fillColor('#333333');
-          // También corregimos la fecha aquí
           doc.text(formatearFecha(h.fecha_movimiento), 40, yPos + 2);
           doc.text(`Salida #${h.numero_guia || h.id_salida}`, 120, yPos + 2);
           doc.text(h.producto, 220, yPos + 2, { width: 220, ellipsis: true });

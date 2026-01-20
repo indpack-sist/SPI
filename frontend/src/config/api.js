@@ -655,6 +655,7 @@ export const pagosCobranzasAPI = {
   getAll: (params) => api.get('/pagos-cobranzas', { params }),
   getResumen: (params) => api.get('/pagos-cobranzas/resumen', { params }),
   getCuentasPorCobrar: (params) => api.get('/pagos-cobranzas/cuentas-por-cobrar', { params }),
+  descargarReporteDeudas: (params) => api.get('/pagos-cobranzas/reporte-deudas', { params, responseType: 'blob' }),
   registrar: (data) => api.post('/pagos-cobranzas', data),
   anular: (id) => api.delete(`/pagos-cobranzas/${id}`)
 };

@@ -472,8 +472,11 @@ function ListaPrecios() {
                                         <div className="text-xs text-muted">{p.codigo}</div>
                                     </td>
                                     <td className="text-right text-xs text-muted">
-                                        {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} {parseFloat(nuevaLista.moneda === 'PEN' ? p.precio_venta_soles : p.precio_venta).toFixed(2)}
-                                    </td>
+    {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} 
+    {parseFloat(
+        (nuevaLista.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0
+    ).toFixed(2)}
+</td>
                                     <td className="text-right">
                                         <div className="relative">
                                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">

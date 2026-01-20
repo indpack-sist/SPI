@@ -1926,7 +1926,7 @@ export async function descargarPDFDespacho(req, res) {
     };
 
     const pdfBuffer = await generarPDFSalida(datosPDF);
-    const filename = `Despacho-${orden.numero_orden}-Salida-${salida.id_salida}.pdf`;
+    const filename = `Salida-${orden.numero_orden}-Salida-${salida.id_salida}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

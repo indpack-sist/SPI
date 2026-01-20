@@ -132,6 +132,41 @@ function PagosCobranzas() {
     }
   };
 
+  const descargarPDFDeudas = async () => {
+    try {
+      setLoading(true);
+      const params = {};
+      
+      if (filtrosCobranzas.id_cliente) params.id_cliente = filtrosCobranzas.id_cliente;
+      if (filtrosCobranzas.fecha_vencimiento_desde) params.fecha_inicio = filtrosCobranzas.fecha_vencimiento_desde;
+      if (filtrosCobranzas.fecha_vencimiento_hasta) params.fecha_fin = filtrosCobranzas.fecha_vencimiento_hasta;
+
+      const response = await pagosCobranzasAPI.descargarReporteDeudas(params);
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const nombreArchivo = params.id_cliente 
+        ? `Estado_Cuenta_${new Date().getTime()}.pdf`
+        : `Reporte_Deudas_General_${new Date().getTime()}.pdf`;
+
+      link.setAttribute('download', nombreArchivo);
+      document.body.appendChild(link);
+      link.click();
+      
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      setSuccess('Reporte PDF descargado correctamente');
+    } catch (err) {
+      console.error(err);
+      setError('Error al generar el reporte PDF. Verifique que existan datos para los filtros seleccionados.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const limpiarFiltros = () => {
     setFiltros({
       tipo: '',
@@ -774,6 +809,13 @@ function PagosCobranzas() {
                     onClick={aplicarFiltrosCobranzas}
                   >
                     <RefreshCw size={14} className="mr-1" /> Aplicar
+                  </button>
+                  <button 
+                    className="btn btn-danger btn-sm text-white flex items-center gap-1"
+                    onClick={descargarPDFDeudas}
+                    title="Descargar Reporte PDF (General o por Cliente)"
+                  >
+                    <FileText size={14} /> PDF
                   </button>
                   {filtrosActivos > 0 && (
                     <button 

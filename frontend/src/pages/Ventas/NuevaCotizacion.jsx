@@ -4,12 +4,13 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   Calculator, FileText, Building,
   Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink,
-  Building2, User, Loader, CheckCircle, CreditCard, DollarSign, MapPin
+  Building2, User, Loader, CheckCircle, CreditCard, DollarSign, MapPin, 
+  Package, Check
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, dashboard } from '../../config/api';
+import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, dashboard, listasPreciosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 
 const TIPOS_IMPUESTO = [
@@ -82,6 +83,10 @@ function NuevaCotizacion() {
   const [modalDireccionOpen, setModalDireccionOpen] = useState(false);
   const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', referencia: '' });
   const [savingDireccion, setSavingDireccion] = useState(false);
+
+  const [listasPreciosCliente, setListasPreciosCliente] = useState([]);
+  const [loadingListas, setLoadingListas] = useState(false);
+  const [detallesListas, setDetallesListas] = useState({}); 
 
   const getFechaPeru = () => {
     const now = new Date();
@@ -160,6 +165,7 @@ function NuevaCotizacion() {
       clientesAPI.getEstadoCredito(cliente.id_cliente).then(res => {
           if (res.data.success) setEstadoCredito(res.data.data);
       });
+      cargarListasPrecios(cliente.id_cliente);
     }
   }, [location.state]);
 
@@ -246,6 +252,7 @@ function NuevaCotizacion() {
         if (resCli.data.success) {
           const clienteData = resCli.data.data;
           setClienteSeleccionado(clienteData);
+          cargarListasPrecios(clienteData.id_cliente);
           
           if (clienteData.direcciones && clienteData.direcciones.length > 0) {
             setDireccionesCliente(clienteData.direcciones);
@@ -287,6 +294,29 @@ function NuevaCotizacion() {
     }
   };
 
+  const cargarListasPrecios = async (idCliente) => {
+      try {
+          setLoadingListas(true);
+          const res = await listasPreciosAPI.getByCliente(idCliente);
+          if (res.data.success) {
+              setListasPreciosCliente(res.data.data);
+              
+              const detalles = {};
+              for (const lista of res.data.data) {
+                  const resDetalle = await listasPreciosAPI.getDetalle(lista.id_lista);
+                  if (resDetalle.data.success) {
+                      detalles[lista.id_lista] = resDetalle.data.data;
+                  }
+              }
+              setDetallesListas(detalles);
+          }
+      } catch (err) {
+          console.error("Error cargando listas de precios", err);
+      } finally {
+          setLoadingListas(false);
+      }
+  };
+
   const obtenerTipoCambio = async () => {
     try {
       setLoadingTC(true);
@@ -318,6 +348,7 @@ function NuevaCotizacion() {
       const clienteCompleto = resFullCliente.data.data;
       
       setClienteSeleccionado(clienteCompleto);
+      cargarListasPrecios(clienteCompleto.id_cliente);
       
       let direcciones = [];
       if (clienteCompleto.direcciones && clienteCompleto.direcciones.length > 0) {
@@ -446,13 +477,40 @@ function NuevaCotizacion() {
       precio_base: precioBase,
       porcentaje_comision: 0,
       monto_comision: 0,
-      precio_unitario: '',
+      precio_unitario: precioBase,
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual
     };
     setDetalle([...detalle, nuevoItem]);
     setModalProductoOpen(false);
     setBusquedaProducto('');
+  };
+
+  const toggleProductoDesdeLista = (prod, monedaLista) => {
+      const existeIndex = detalle.findIndex(d => d.id_producto === prod.id_producto);
+      
+      if (existeIndex >= 0) {
+          const newDetalle = detalle.filter((_, i) => i !== existeIndex);
+          setDetalle(newDetalle);
+      } else {
+          if (monedaLista !== formCabecera.moneda) {
+          }
+
+          const nuevoItem = {
+              id_producto: prod.id_producto,
+              codigo_producto: prod.codigo,
+              producto: prod.producto,
+              unidad_medida: prod.unidad_medida,
+              cantidad: 1,
+              precio_base: parseFloat(prod.precio_especial),
+              porcentaje_comision: 0,
+              monto_comision: 0,
+              precio_unitario: parseFloat(prod.precio_especial),
+              descuento_porcentaje: 0,
+              stock_actual: 0 
+          };
+          setDetalle([...detalle, nuevoItem]);
+      }
   };
 
   const handlePrecioVentaChange = (index, valor) => {
@@ -719,6 +777,8 @@ function NuevaCotizacion() {
                         setClienteSeleccionado(null);
                         setEstadoCredito(null);
                         setDireccionesCliente([]);
+                        setListasPreciosCliente([]);
+                        setDetallesListas({});
                       }}
                       disabled={cotizacionConvertida}
                     >
@@ -726,6 +786,56 @@ function NuevaCotizacion() {
                     </button>
                   </div>
                 </div>
+                
+                {listasPreciosCliente.length > 0 && !cotizacionConvertida && (
+                    <div className="animate-fadeIn">
+                        <label className="form-label mb-2 flex items-center gap-2">
+                            <Package size={16} className="text-primary"/> Listas de Precios Disponibles
+                        </label>
+                        <div className="flex gap-4 overflow-x-auto pb-2">
+                            {listasPreciosCliente.map(lista => (
+                                <div key={lista.id_lista} className="border rounded-lg min-w-[280px] bg-white shadow-sm flex flex-col">
+                                    <div className="p-3 border-b bg-gray-50 flex justify-between items-center rounded-t-lg">
+                                        <span className="font-bold text-sm text-primary">{lista.nombre_lista}</span>
+                                        <span className="badge badge-sm badge-outline">{lista.moneda}</span>
+                                    </div>
+                                    <div className="p-0 flex-1 max-h-48 overflow-y-auto">
+                                        {detallesListas[lista.id_lista] ? (
+                                            <table className="table w-full text-xs">
+                                                <tbody>
+                                                    {detallesListas[lista.id_lista].map(prod => {
+                                                        const isSelected = detalle.some(d => d.id_producto === prod.id_producto);
+                                                        return (
+                                                            <tr key={prod.id_producto} className={isSelected ? 'bg-green-50' : 'hover:bg-gray-50'} onClick={() => toggleProductoDesdeLista(prod, lista.moneda)}>
+                                                                <td className="p-2 cursor-pointer">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+                                                                            {isSelected && <Check size={10} className="text-white" />}
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className="font-medium truncate max-w-[160px]" title={prod.producto}>{prod.producto}</p>
+                                                                            <div className="flex justify-between text-muted mt-0.5">
+                                                                                <span>{prod.codigo}</span>
+                                                                                <span className="font-bold text-gray-700">{lista.moneda} {parseFloat(prod.precio_especial).toFixed(2)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div className="p-4 text-center text-muted text-xs">Cargando productos...</div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {estadoCredito && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 border rounded-lg bg-white shadow-sm">

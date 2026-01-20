@@ -95,13 +95,11 @@ export async function generarOrdenVentaPDF(orden) {
       yText += 20;
       
       doc.fontSize(14).fillColor('#000000');
-      const titulo = orden.tipo_comprobante === 'Factura' ? 'FACTURA ELECTRÓNICA' : 'ORDEN DE VENTA';
-      doc.text(titulo, xBox, yText, { width: wBox, align: 'center' });
+      doc.text('ORDEN DE VENTA', xBox, yText, { width: wBox, align: 'center' });
       yText += 20;
       
       doc.fontSize(12).fillColor('#000000');
-      const numeroMostrar = orden.numero_comprobante || orden.numero_orden;
-      doc.text(`No. ${numeroMostrar}`, xBox, yText, { width: wBox, align: 'center' });
+      doc.text(`No. ${orden.numero_orden}`, xBox, yText, { width: wBox, align: 'center' });
 
       const yInfo = 145;
       const hInfo = 95;
@@ -180,8 +178,10 @@ export async function generarOrdenVentaPDF(orden) {
           }
 
           const descuento = parseFloat(item.descuento_porcentaje || 0);
-          const precioFinal = item.precio_unitario * (1 - descuento/100);
-          const totalLinea = item.cantidad * precioFinal;
+          const precioUnitario = parseFloat(item.precio_unitario || 0);
+          const cantidad = parseFloat(item.cantidad || 0);
+          const precioFinal = precioUnitario * (1 - descuento / 100);
+          const totalLinea = cantidad * precioFinal;
 
           doc.fillColor('#000000').fontSize(7).font('Helvetica');
           
@@ -190,10 +190,10 @@ export async function generarOrdenVentaPDF(orden) {
           }
 
           doc.text(String(i + 1), 35, yTable, { width: 30, align: 'center' });
-          doc.text(item.codigo_producto || '-', 70, yTable);
-          doc.text(item.producto, 130, yTable, { width: 220, ellipsis: true });
-          doc.text(item.unidad_medida || 'UND', 350, yTable, { width: 30, align: 'center' });
-          doc.text(fmtNum(item.cantidad), 380, yTable, { width: 50, align: 'center' });
+          doc.text(String(item.codigo_producto || '-'), 70, yTable);
+          doc.text(String(item.producto || 'SIN NOMBRE'), 130, yTable, { width: 220, ellipsis: true });
+          doc.text(String(item.unidad_medida || 'UND'), 350, yTable, { width: 30, align: 'center' });
+          doc.text(fmtNum(cantidad), 380, yTable, { width: 50, align: 'center' });
           doc.text(fmtNum(precioFinal), 435, yTable, { width: 50, align: 'right' });
           doc.text(fmtNum(totalLinea), 490, yTable, { width: 70, align: 'right' });
 

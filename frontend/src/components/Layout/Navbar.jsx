@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import { notificacionesAPI } from '../../config/api';
 import './Navbar.css';
+
+const SOCKET_URL = import.meta.env.VITE_API_URL 
+  ? import.meta.env.VITE_API_URL.replace('/api', '') 
+  : 'http://localhost:3000';
 
 function Navbar({ onToggleSidebar }) {
   const { user, logout } = useAuth();
@@ -12,18 +17,46 @@ function Navbar({ onToggleSidebar }) {
   const [notificaciones, setNotificaciones] = useState([]);
   const [noLeidas, setNoLeidas] = useState(0);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [socket, setSocket] = useState(null);
 
-  // Cargar notificaciones al inicio y cada 30 segundos
   useEffect(() => {
     cargarNotificaciones();
-    const interval = setInterval(cargarNotificaciones, 30000); 
-    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      const newSocket = io(SOCKET_URL, {
+        withCredentials: true,
+        transports: ['websocket', 'polling']
+      });
+
+      newSocket.on('connect', () => {
+        newSocket.emit('identificar_usuario', user.id);
+      });
+
+      newSocket.on('nueva_notificacion', (notif) => {
+        setNotificaciones(prev => [notif, ...prev]);
+        setNoLeidas(prev => prev + 1);
+        
+        try {
+          const audio = new Audio('/assets/notification.mp3');
+          audio.volume = 0.5;
+          audio.play().catch(() => {});
+        } catch (e) {
+          console.error("No se pudo reproducir audio");
+        }
+      });
+
+      setSocket(newSocket);
+
+      return () => {
+        newSocket.disconnect();
+      };
+    }
+  }, [user]);
 
   const cargarNotificaciones = async () => {
     try {
-      // setLoading(true); // Omitimos loading global para no parpadear en el polling
       const response = await notificacionesAPI.getAll();
       if (response.data.success) {
         setNotificaciones(response.data.data);
@@ -37,24 +70,21 @@ function Navbar({ onToggleSidebar }) {
   const marcarTodasComoLeidas = async () => {
     try {
       await notificacionesAPI.marcarTodasLeidas();
-      cargarNotificaciones();
+      setNotificaciones(prev => prev.map(n => ({ ...n, leido: 1 })));
+      setNoLeidas(0);
     } catch (error) {
       console.error('Error al marcar todas como leídas:', error);
     }
   };
 
   const handleNotificacionClick = async (notif, e) => {
-    // Si se hace click, marcamos como leída y navegamos
     if (!notif.leido) {
       try {
         await notificacionesAPI.marcarLeida(notif.id_notificacion);
-        
-        // Actualización optimista local para que desaparezca rápido
         setNotificaciones(prev => prev.map(n => 
           n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
         ));
         setNoLeidas(prev => Math.max(0, prev - 1));
-
       } catch (error) {
         console.error('Error al marcar notificación:', error);
       }
@@ -62,23 +92,21 @@ function Navbar({ onToggleSidebar }) {
     
     setShowNotificaciones(false);
     
-    // Si tiene ruta y no fue click en el botón de cerrar (X), navegamos
     if (notif.ruta_destino && (!e || e.target.closest('.toast-close-btn') === null)) {
       navigate(notif.ruta_destino);
     }
   };
 
   const handleCloseToast = async (e, notif) => {
-    e.stopPropagation(); // Evitar que se dispare el click del contenedor (navegación)
+    e.stopPropagation();
     try {
-        await notificacionesAPI.marcarLeida(notif.id_notificacion);
-        // Actualizar estado local para quitarla de la pantalla
-        setNotificaciones(prev => prev.map(n => 
-            n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
-        ));
-        setNoLeidas(prev => Math.max(0, prev - 1));
+      await notificacionesAPI.marcarLeida(notif.id_notificacion);
+      setNotificaciones(prev => prev.map(n => 
+        n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
+      ));
+      setNoLeidas(prev => Math.max(0, prev - 1));
     } catch (error) {
-        console.error(error);
+      console.error(error);
     }
   };
 
@@ -94,6 +122,7 @@ function Navbar({ onToggleSidebar }) {
   };
 
   const handleLogout = () => {
+    if (socket) socket.disconnect();
     try {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -109,13 +138,12 @@ function Navbar({ onToggleSidebar }) {
   const getIconoNotificacion = (tipo) => {
     switch(tipo) {
       case 'success': return CheckCircle;
-      case 'warning': return AlertCircle;
+      case 'warning': return AlertTriangle;
       case 'info': return Info;
       default: return Bell;
     }
   };
 
-  // Filtramos solo las no leídas para mostrarlas en pantalla
   const notificacionesActivas = notificaciones.filter(n => !n.leido);
 
   return (
@@ -129,7 +157,6 @@ function Navbar({ onToggleSidebar }) {
         </div>
 
         <div className="navbar-right">
-          {/* Campana (Historial) */}
           <div className="navbar-notifications-container">
             <button 
               className="navbar-icon-btn navbar-notifications-btn" 
@@ -141,7 +168,6 @@ function Navbar({ onToggleSidebar }) {
               )}
             </button>
 
-            {/* Panel Desplegable (Historial completo) */}
             {showNotificaciones && (
               <div className="navbar-notifications-panel">
                 <div className="navbar-notifications-header">
@@ -210,7 +236,6 @@ function Navbar({ onToggleSidebar }) {
         </div>
       </header>
 
-      {/* --- CONTENEDOR FLOTANTE DE NOTIFICACIONES (TOASTS) --- */}
       <div className="notification-toast-container">
         {notificacionesActivas.map((notif) => {
             const Icono = getIconoNotificacion(notif.tipo);

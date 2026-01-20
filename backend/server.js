@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { testConnection } from './config/database.js';
 import { verificarToken, verificarPermiso } from './middleware/auth.js';
 
@@ -37,6 +39,15 @@ import notificacionesRoutes from './routes/notificaciones.routes.js';
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({
@@ -51,6 +62,16 @@ app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
   next();
+});
+
+app.set('socketio', io);
+
+io.on('connection', (socket) => {
+  socket.on('identificar_usuario', (id_usuario) => {
+    if (id_usuario) {
+      socket.join(`usuario_${id_usuario}`);
+    }
+  });
 });
 
 app.get('/', (req, res) => {
@@ -188,7 +209,7 @@ async function startServer() {
       process.exit(1);
     }
 
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log('='.repeat(80));
       console.log(`SERVIDOR INDPACK ERP - INICIADO EXITOSAMENTE`);
       console.log('='.repeat(80));

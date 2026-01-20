@@ -157,7 +157,7 @@ export async function generarOrdenVentaPDF(orden) {
 
       let yTable = yInfo + hInfo + 15;
       
-      doc.rect(30, yTable, 535, 20).fill('#e0e0e0');
+      doc.rect(30, yTable, 535, 20).fillAndStroke('#e0e0e0', '#000000');
       doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
       
       doc.text('ITEM', 35, yTable + 6, { width: 30, align: 'center' });
@@ -183,12 +183,12 @@ export async function generarOrdenVentaPDF(orden) {
           const precioFinal = precioUnitario * (1 - descuento / 100);
           const totalLinea = cantidad * precioFinal;
 
-          doc.fillColor('#000000').fontSize(7).font('Helvetica');
-          
           if (i % 2 === 0) {
-             doc.rect(30, yTable - 2, 535, 14).fillOpacity(0.3).fill('#f9f9f9').fillOpacity(1);
+             doc.rect(30, yTable - 2, 535, 14).fillAndStroke('#f9f9f9', '#f9f9f9');
           }
 
+          doc.fillColor('#000000').fontSize(7).font('Helvetica');
+          
           doc.text(String(i + 1), 35, yTable, { width: 30, align: 'center' });
           doc.text(String(item.codigo_producto || '-'), 70, yTable);
           doc.text(String(item.producto || 'SIN NOMBRE'), 130, yTable, { width: 220, ellipsis: true });
@@ -201,6 +201,7 @@ export async function generarOrdenVentaPDF(orden) {
         });
       }
 
+      doc.fillColor('#000000');
       doc.moveTo(30, yTable).lineTo(565, yTable).lineWidth(0.5).stroke('#aaaaaa');
       yTable += 10;
 
@@ -221,36 +222,37 @@ export async function generarOrdenVentaPDF(orden) {
       const xTotales = 380;
       let yTotales = yFooter;
 
-      doc.fontSize(8).font('Helvetica-Bold');
+      doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
       
       doc.text('SUB TOTAL:', xTotales, yTotales);
       doc.font('Helvetica').text(`${simbolo} ${subtotal}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
       yTotales += 15;
 
-      doc.font('Helvetica-Bold').text(etiquetaImp + ':', xTotales, yTotales);
+      doc.fillColor('#000000').font('Helvetica-Bold').text(etiquetaImp + ':', xTotales, yTotales);
       doc.font('Helvetica').text(`${simbolo} ${igv}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
       yTotales += 15;
 
+      doc.fillColor('#000000');
       doc.moveTo(xTotales, yTotales).lineTo(565, yTotales).stroke();
       yTotales += 5;
 
-      doc.fontSize(9).font('Helvetica-Bold').text('TOTAL A PAGAR:', xTotales, yTotales);
+      doc.fillColor('#000000').fontSize(9).font('Helvetica-Bold').text('TOTAL A PAGAR:', xTotales, yTotales);
       doc.text(`${simbolo} ${total}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
 
-      doc.fontSize(7).font('Helvetica-Bold').text('OBSERVACIONES:', 30, yFooter);
+      doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold').text('OBSERVACIONES:', 30, yFooter);
       doc.font('Helvetica').text(orden.observaciones || 'Sin observaciones.', 30, yFooter + 10, { width: 330 });
 
       const letras = numeroALetras(totalNumero, orden.moneda);
-      doc.font('Helvetica-Bold').text('SON:', 30, yFooter + 50);
+      doc.fillColor('#000000').font('Helvetica-Bold').text('SON:', 30, yFooter + 50);
       doc.font('Helvetica').text(letras, 55, yFooter + 50, { width: 300 });
 
       const yBank = 710;
-      doc.rect(30, yBank, 535, 55).fill('#f0f0f0');
+      doc.rect(30, yBank, 535, 55).fillAndStroke('#f0f0f0', '#cccccc');
       
       doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
       doc.text('CUENTAS BANCARIAS - INDPACK S.A.C.', 30, yBank + 6, { width: 535, align: 'center' });
       
-      doc.font('Helvetica');
+      doc.fillColor('#000000').font('Helvetica');
       const bankY = yBank + 20;
       
       doc.text('BCP SOLES: 194-2055093-0-22', 40, bankY);

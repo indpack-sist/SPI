@@ -1049,3 +1049,75 @@ export async function descargarPDFCotizacion(req, res) {
     });
   }
 }
+export async function agregarDireccionClienteDesdeCotizacion(req, res) {
+  try {
+    const { id_cliente, direccion, referencia } = req.body;
+
+    // Validaciones básicas
+    if (!id_cliente) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'El ID del cliente es obligatorio' 
+      });
+    }
+
+    if (!direccion || direccion.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'La dirección es requerida' 
+      });
+    }
+
+    // Verificar que el cliente exista
+    const clienteCheck = await executeQuery(
+      'SELECT id_cliente FROM clientes WHERE id_cliente = ?',
+      [id_cliente]
+    );
+
+    if (clienteCheck.data.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Cliente no encontrado' 
+      });
+    }
+
+    // Insertar la nueva dirección
+    // Nota: Por defecto la ponemos como 'Activo' y es_principal = 0 (ya que se agrega desde una cotización específica)
+    const result = await executeQuery(
+      `INSERT INTO clientes_direcciones (
+        id_cliente, 
+        direccion, 
+        referencia, 
+        es_principal, 
+        estado
+      ) VALUES (?, ?, ?, 0, 'Activo')`,
+      [id_cliente, direccion, referencia || null]
+    );
+
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false, 
+        error: result.error 
+      });
+    }
+
+    // Devolvemos el ID insertado para que el frontend pueda auto-seleccionar esta dirección
+    res.status(201).json({
+      success: true,
+      message: 'Dirección agregada exitosamente',
+      data: {
+        id_direccion: result.data.insertId,
+        id_cliente: id_cliente,
+        direccion: direccion,
+        referencia: referencia || null
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al agregar dirección desde cotización:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+}

@@ -79,6 +79,10 @@ function NuevaCotizacion() {
   const [loadingApi, setLoadingApi] = useState(false);
   const [errorApi, setErrorApi] = useState(null);
 
+  const [modalDireccionOpen, setModalDireccionOpen] = useState(false);
+  const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', referencia: '' });
+  const [savingDireccion, setSavingDireccion] = useState(false);
+
   const getFechaPeru = () => {
     const now = new Date();
     const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -484,6 +488,36 @@ function NuevaCotizacion() {
         tipo_impuesto: codigo,
         porcentaje_impuesto: tipoImpuesto.porcentaje
       }));
+    }
+  };
+
+  const handleGuardarDireccion = async () => {
+    if (!nuevaDireccion.direccion.trim()) return;
+    try {
+      setSavingDireccion(true);
+      const payload = {
+        id_cliente: formCabecera.id_cliente,
+        direccion: nuevaDireccion.direccion,
+        referencia: nuevaDireccion.referencia
+      };
+      const response = await cotizacionesAPI.addDireccion(payload);
+      if (response.data.success) {
+        const nuevaDir = {
+          id_direccion: response.data.data.id_direccion,
+          direccion: response.data.data.direccion,
+          es_principal: 0
+        };
+        setDireccionesCliente([...direccionesCliente, nuevaDir]);
+        setFormCabecera(prev => ({ ...prev, lugar_entrega: nuevaDir.direccion }));
+        setModalDireccionOpen(false);
+        setNuevaDireccion({ direccion: '', referencia: '' });
+        setSuccess('Dirección agregada correctamente');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Error al guardar la dirección');
+    } finally {
+      setSavingDireccion(false);
     }
   };
 
@@ -907,33 +941,47 @@ function NuevaCotizacion() {
             </div>
             <div className="form-group mt-4">
               <label className="form-label">Lugar de Entrega</label>
-              {direccionesCliente.length > 0 ? (
-                <div className="relative">
-                  <select
-                    className="form-select pl-10"
-                    value={formCabecera.lugar_entrega}
-                    onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
-                    disabled={cotizacionConvertida}
-                  >
-                    <option value="">Seleccione una dirección...</option>
-                    {direccionesCliente.map((dir, idx) => (
-                      <option key={idx} value={dir.direccion}>
-                        {dir.direccion} {dir.es_principal ? '(Principal)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  {direccionesCliente.length > 0 ? (
+                    <>
+                      <select
+                        className="form-select pl-10"
+                        value={formCabecera.lugar_entrega}
+                        onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
+                        disabled={cotizacionConvertida}
+                      >
+                        <option value="">Seleccione una dirección...</option>
+                        {direccionesCliente.map((dir, idx) => (
+                          <option key={idx} value={dir.direccion}>
+                            {dir.direccion} {dir.es_principal ? '(Principal)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    </>
+                  ) : (
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={formCabecera.lugar_entrega}
+                      onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
+                      placeholder="Dirección de entrega"
+                      disabled={cotizacionConvertida}
+                    />
+                  )}
                 </div>
-              ) : (
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formCabecera.lugar_entrega}
-                  onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
-                  placeholder="Dirección de entrega"
-                  disabled={cotizacionConvertida}
-                />
-              )}
+                {clienteSeleccionado && !cotizacionConvertida && (
+                  <button 
+                    type="button" 
+                    className="btn btn-outline px-3" 
+                    onClick={() => setModalDireccionOpen(true)}
+                    title="Guardar nueva dirección"
+                  >
+                    <Plus size={18} />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">Observaciones</label>
@@ -1220,6 +1268,40 @@ function NuevaCotizacion() {
           ) : (
             <p className="text-center text-muted py-8">No se encontraron productos</p>
           )}
+        </div>
+      </Modal>
+
+      <Modal isOpen={modalDireccionOpen} onClose={() => setModalDireccionOpen(false)} title="Nueva Dirección de Entrega" size="md">
+        <div className="space-y-4">
+          <div className="form-group">
+            <label className="form-label">Dirección *</label>
+            <textarea
+              className="form-textarea"
+              value={nuevaDireccion.direccion}
+              onChange={(e) => setNuevaDireccion({ ...nuevaDireccion, direccion: e.target.value })}
+              placeholder="Ingresa la dirección completa..."
+              rows={3}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Referencia</label>
+            <input
+              type="text"
+              className="form-input"
+              value={nuevaDireccion.referencia}
+              onChange={(e) => setNuevaDireccion({ ...nuevaDireccion, referencia: e.target.value })}
+              placeholder="Ej. Frente al parque, esquina con..."
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="btn btn-outline" onClick={() => setModalDireccionOpen(false)} disabled={savingDireccion}>
+              Cancelar
+            </button>
+            <button type="button" className="btn btn-primary" onClick={handleGuardarDireccion} disabled={savingDireccion || !nuevaDireccion.direccion.trim()}>
+              {savingDireccion ? 'Guardando...' : 'Guardar Dirección'}
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

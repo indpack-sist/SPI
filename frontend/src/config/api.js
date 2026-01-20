@@ -417,6 +417,10 @@ export const cotizacionesAPI = {
   getById: (id) => api.get(`/cotizaciones/${id}`),
   create: (data) => api.post('/cotizaciones', data),
   update: (id, data) => api.put(`/cotizaciones/${id}`, data),
+  
+  // Nueva función para agregar dirección desde el modal de cotización
+  addDireccion: (data) => api.post('/cotizaciones/direccion-cliente', data),
+
   duplicar: (id) => api.post(`/cotizaciones/${id}/duplicar`),
   actualizarEstado: (id, estado) => api.put(`/cotizaciones/${id}/estado`, { estado }),
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
@@ -449,6 +453,8 @@ export const ordenesVentaAPI = {
   create: (data) => api.post('/ordenes-venta', data),
   
   update: (id, data) => api.put(`/ordenes-venta/${id}`, data),
+
+  addDireccion: (data) => api.post('/ordenes-venta/direccion-cliente', data),
   
   reservarStock: (id) => api.post(`/ordenes-venta/${id}/reservar`),
 
@@ -463,7 +469,6 @@ export const ordenesVentaAPI = {
   actualizarTipoComprobante: (id, data) => 
     api.put(`/ordenes-venta/${id}/tipo-comprobante`, data),
 
-  // ✅ NUEVA FUNCIÓN AGREGADA
   actualizarTransporte: (id, data) => 
     api.put(`/ordenes-venta/${id}/transporte`, data),
 

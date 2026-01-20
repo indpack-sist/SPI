@@ -8,12 +8,14 @@ import {
   actualizarEstadoCotizacion,
   actualizarPrioridadCotizacion,
   getEstadisticasCotizaciones,
-  descargarPDFCotizacion
+  descargarPDFCotizacion,
+  agregarDireccionClienteDesdeCotizacion
 } from '../controllers/cotizaciones.controller.js';
 
 const router = express.Router();
 
 router.get('/estadisticas', getEstadisticasCotizaciones);
+router.post('/direccion-cliente', agregarDireccionClienteDesdeCotizacion);
 
 router.get('/', getAllCotizaciones);
 router.post('/', createCotizacion);

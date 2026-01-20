@@ -21,7 +21,8 @@ import {
   getSalidasOrden,
   anularDespacho,
   anularOrdenVenta,
-  reservarStockOrden
+  reservarStockOrden,
+  agregarDireccionClienteDesdeOrden
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -31,6 +32,8 @@ const router = express.Router();
 router.get('/estadisticas', verificarToken, getEstadisticasOrdenesVenta);
 router.get('/catalogo/conductores', verificarToken, getConductores);
 router.get('/catalogo/vehiculos', verificarToken, getVehiculosParaOrdenes);
+
+router.post('/direccion-cliente', verificarToken, agregarDireccionClienteDesdeOrden);
 
 router.get('/', verificarToken, getAllOrdenesVenta);
 router.post('/', verificarToken, createOrdenVenta);

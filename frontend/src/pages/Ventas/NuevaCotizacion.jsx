@@ -5,7 +5,7 @@ import {
   Calculator, FileText, Building,
   Calendar, RefreshCw, AlertCircle, Info, Lock, ExternalLink,
   Building2, User, Loader, CheckCircle, CreditCard, DollarSign, MapPin, 
-  Package, Check
+  Package, Check, ChevronDown, ChevronUp
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -87,6 +87,8 @@ function NuevaCotizacion() {
   const [listasPreciosCliente, setListasPreciosCliente] = useState([]);
   const [loadingListas, setLoadingListas] = useState(false);
   const [detallesListas, setDetallesListas] = useState({}); 
+  const [listasDesplegadas, setListasDesplegadas] = useState({});
+  const [busquedaLista, setBusquedaLista] = useState('');
 
   const getFechaPeru = () => {
     const now = new Date();
@@ -315,6 +317,13 @@ function NuevaCotizacion() {
       } finally {
           setLoadingListas(false);
       }
+  };
+
+  const toggleListaDesplegada = (idLista) => {
+    setListasDesplegadas(prev => ({
+      ...prev,
+      [idLista]: !prev[idLista]
+    }));
   };
 
   const obtenerTipoCambio = async () => {
@@ -787,55 +796,6 @@ function NuevaCotizacion() {
                   </div>
                 </div>
                 
-                {listasPreciosCliente.length > 0 && !cotizacionConvertida && (
-                    <div className="animate-fadeIn">
-                        <label className="form-label mb-2 flex items-center gap-2">
-                            <Package size={16} className="text-primary"/> Listas de Precios Disponibles
-                        </label>
-                        <div className="flex gap-4 overflow-x-auto pb-2">
-                            {listasPreciosCliente.map(lista => (
-                                <div key={lista.id_lista} className="border rounded-lg min-w-[280px] bg-white shadow-sm flex flex-col">
-                                    <div className="p-3 border-b bg-gray-50 flex justify-between items-center rounded-t-lg">
-                                        <span className="font-bold text-sm text-primary">{lista.nombre_lista}</span>
-                                        <span className="badge badge-sm badge-outline">{lista.moneda}</span>
-                                    </div>
-                                    <div className="p-0 flex-1 max-h-48 overflow-y-auto">
-                                        {detallesListas[lista.id_lista] ? (
-                                            <table className="table w-full text-xs">
-                                                <tbody>
-                                                    {detallesListas[lista.id_lista].map(prod => {
-                                                        const isSelected = detalle.some(d => d.id_producto === prod.id_producto);
-                                                        return (
-                                                            <tr key={prod.id_producto} className={isSelected ? 'bg-green-50' : 'hover:bg-gray-50'} onClick={() => toggleProductoDesdeLista(prod, lista.moneda)}>
-                                                                <td className="p-2 cursor-pointer">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
-                                                                            {isSelected && <Check size={10} className="text-white" />}
-                                                                        </div>
-                                                                        <div className="flex-1">
-                                                                            <p className="font-medium truncate max-w-[160px]" title={prod.producto}>{prod.producto}</p>
-                                                                            <div className="flex justify-between text-muted mt-0.5">
-                                                                                <span>{prod.codigo}</span>
-                                                                                <span className="font-bold text-gray-700">{lista.moneda} {parseFloat(prod.precio_especial).toFixed(2)}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        ) : (
-                                            <div className="p-4 text-center text-muted text-xs">Cargando productos...</div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
                 {estadoCredito && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 border rounded-lg bg-white shadow-sm">
@@ -1130,6 +1090,90 @@ function NuevaCotizacion() {
             </div>
           </div>
         </div>
+
+        {listasPreciosCliente.length > 0 && !cotizacionConvertida && (
+            <div className="card mb-4 animate-fadeIn">
+                <div className="card-header flex justify-between items-center">
+                    <h2 className="card-title text-primary">
+                        <Package size={20} /> Listas de Precios
+                    </h2>
+                    <div className="relative w-64">
+                        <input 
+                            type="text" 
+                            className="form-input form-input-sm pl-8" 
+                            placeholder="Buscar lista..." 
+                            value={busquedaLista}
+                            onChange={(e) => setBusquedaLista(e.target.value)}
+                        />
+                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    </div>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-b-lg">
+                    <div className="flex gap-4 overflow-x-auto pb-2">
+                        {listasPreciosCliente
+                            .filter(l => l.nombre_lista.toLowerCase().includes(busquedaLista.toLowerCase()))
+                            .map(lista => (
+                            <div key={lista.id_lista} className="border rounded-lg min-w-[280px] bg-white shadow-sm flex flex-col transition-all duration-200">
+                                <div 
+                                    className="p-3 border-b bg-white flex justify-between items-center rounded-t-lg cursor-pointer hover:bg-gray-50"
+                                    onClick={() => toggleListaDesplegada(lista.id_lista)}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-sm text-gray-800">{lista.nombre_lista}</span>
+                                        <span className="text-xs text-muted">{lista.total_productos} productos</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="badge badge-sm badge-outline">{lista.moneda}</span>
+                                        {listasDesplegadas[lista.id_lista] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </div>
+                                </div>
+                                
+                                {listasDesplegadas[lista.id_lista] && (
+                                    <div className="p-0 flex-1 max-h-60 overflow-y-auto animate-fadeIn border-t">
+                                        {detallesListas[lista.id_lista] ? (
+                                            <table className="table w-full text-xs">
+                                                <tbody>
+                                                    {detallesListas[lista.id_lista].map(prod => {
+                                                        const isSelected = detalle.some(d => d.id_producto === prod.id_producto);
+                                                        return (
+                                                            <tr key={prod.id_producto} className={isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'} onClick={() => toggleProductoDesdeLista(prod, lista.moneda)}>
+                                                                <td className="p-2 cursor-pointer border-b border-gray-100 last:border-0">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
+                                                                            {isSelected && <Check size={10} className="text-white" />}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="font-medium truncate text-gray-700" title={prod.producto}>{prod.producto}</p>
+                                                                            <div className="flex justify-between items-center mt-1">
+                                                                                <span className="text-gray-400 font-mono text-[10px]">{prod.codigo}</span>
+                                                                                <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">{lista.moneda} {parseFloat(prod.precio_especial).toFixed(2)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div className="p-4 text-center text-muted text-xs flex items-center justify-center gap-2">
+                                                <Loader size={14} className="animate-spin" /> Cargando...
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {listasPreciosCliente.length === 0 && (
+                            <div className="w-full text-center py-4 text-muted text-sm italic">
+                                No se encontraron listas de precios para este cliente.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
 
         <div className="card mb-4">
           <div className="card-header">

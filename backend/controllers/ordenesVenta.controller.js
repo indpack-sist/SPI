@@ -1763,7 +1763,6 @@ export async function getEstadisticasOrdenesVenta(req, res) {
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    const { tipo } = req.query;
 
     if (!id || id === 'undefined' || id === 'null') {
       return res.status(400).json({ success: false, error: 'ID inválido' });
@@ -1792,18 +1791,31 @@ export async function descargarPDFOrdenVenta(req, res) {
 
     const orden = ordenResult.data[0];
 
+    // ✅ ESTE ES EL QUERY QUE FALTABA - CON EL JOIN A PRODUCTOS
     const detalleResult = await executeQuery(`
       SELECT 
-        dov.*, 
+        dov.id_detalle,
+        dov.id_producto,
+        dov.cantidad,
+        dov.precio_unitario,
+        dov.descuento_porcentaje,
         p.codigo AS codigo_producto, 
         p.nombre AS producto, 
         p.unidad_medida
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
+      ORDER BY dov.orden ASC
     `, [id]);
 
-    orden.detalle = detalleResult.data;
+    if (!detalleResult.success) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error al obtener detalle de la orden' 
+      });
+    }
+
+    orden.detalle = detalleResult.data || [];
 
     const direccionFinal = orden.direccion_entrega && orden.direccion_entrega.trim() !== '' 
       ? orden.direccion_entrega 

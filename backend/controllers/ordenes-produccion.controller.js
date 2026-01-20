@@ -43,6 +43,8 @@ export async function getAllOrdenes(req, res) {
         op.origen_tipo,
         op.id_orden_venta_origen,
         ov.numero_orden AS numero_orden_venta,
+        ov.prioridad AS prioridad_venta,
+        e_comercial.nombre_completo AS comercial_venta,
         rp.nombre_receta,
         CASE 
           WHEN op.id_receta_producto IS NULL AND op.costo_materiales = 0 THEN 1
@@ -57,6 +59,7 @@ export async function getAllOrdenes(req, res) {
       LEFT JOIN empleados e ON op.id_supervisor = e.id_empleado
       LEFT JOIN recetas_productos rp ON op.id_receta_producto = rp.id_receta_producto
       LEFT JOIN ordenes_venta ov ON op.id_orden_venta_origen = ov.id_orden_venta
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
       WHERE 1=1
     `;
     const params = [];

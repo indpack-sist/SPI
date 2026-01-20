@@ -14,14 +14,18 @@ const pool = mysql.createPool({
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
-ssl: {
-      rejectUnauthorized: false
-  }
+  ssl: {
+    rejectUnauthorized: false
+  },
+  timezone: '-05:00'
 });
+
 export async function testConnection() {
   try {
     const connection = await pool.getConnection();
+    const [rows] = await connection.execute("SELECT @@session.time_zone as tz");
     console.log('✓ Conexión exitosa a la base de datos MySQL');
+    console.log('✓ Zona horaria configurada:', rows[0].tz);
     connection.release();
     return true;
   } catch (error) {

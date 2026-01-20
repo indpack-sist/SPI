@@ -27,16 +27,15 @@ async function cargarLogoURL() {
 
 // --- FUNCIONES DE FECHA CORREGIDAS PARA PERÚ (UTC-5) ---
 
-function formatearFecha(fecha) {
+function formatearHora(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
-  // Forzamos la zona horaria a America/Lima para que no reste/sume horas incorrectamente al cambiar de día
-  return date.toLocaleDateString('es-PE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'America/Lima' // <--- CAMBIO IMPORTANTE
-  });
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0 se convierte en 12
+  return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
 }
 
 function formatearHora(fecha) {
@@ -56,17 +55,17 @@ function formatearHora(fecha) {
 function formatearFechaHora(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
-
-  // Usamos toLocaleString para fecha y hora juntas en zona horaria Perú
-  return date.toLocaleString('es-PE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'America/Lima' // <--- CAMBIO IMPORTANTE
-  });
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  
+  return `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
 }
 
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {

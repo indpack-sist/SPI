@@ -1452,7 +1452,6 @@ export async function anularOrdenVenta(req, res) {
       return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
     }
 
-    // 1. Obtener datos de la Orden
     const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
     if (ordenResult.data.length === 0) {
       return res.status(404).json({ error: 'Orden de venta no encontrada' });
@@ -1465,8 +1464,6 @@ export async function anularOrdenVenta(req, res) {
 
     const queriesAnulacion = [];
 
-    // 2. Obtener el detalle para saber EXACTAMENTE qué se reservó ítem por ítem
-    // (Asumiendo que ya agregaste la columna stock_reservado a detalle_orden_venta)
     const detalleOrden = await executeQuery(
       `SELECT dov.id_producto, dov.cantidad, dov.stock_reservado, p.requiere_receta 
        FROM detalle_orden_venta dov
@@ -1475,15 +1472,11 @@ export async function anularOrdenVenta(req, res) {
       [id]
     );
     
-    // Creamos un Mapa para consulta rápida: ID_Producto -> EstabaReservado? (true/false)
     const mapaReservas = {};
     detalleOrden.data.forEach(item => {
       mapaReservas[item.id_producto] = (item.stock_reservado === 1);
     });
 
-    // ---------------------------------------------------------
-    // FASE A: Reversar Despachos (Salidas)
-    // ---------------------------------------------------------
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
       [`%${orden.numero_orden}%`, 'Activo']
@@ -1496,7 +1489,6 @@ export async function anularOrdenVenta(req, res) {
       );
 
       for (const item of detalleSalida.data) {
-        // Verificamos si es un producto físico (no receta)
         const productoInfo = await executeQuery(
           'SELECT requiere_receta FROM productos WHERE id_producto = ?', 
           [item.id_producto]
@@ -1506,8 +1498,6 @@ export async function anularOrdenVenta(req, res) {
            const requiereReceta = productoInfo.data[0].requiere_receta;
            const estabaReservado = mapaReservas[item.id_producto] || false;
 
-           // CRÍTICO: Solo devolvemos stock desde la SALIDA si el producto NO estaba reservado.
-           // Si estaba reservado, el stock se devuelve en la Fase B (abajo) usando la cantidad total original.
            if (requiereReceta === 0 && !estabaReservado) {
              queriesAnulacion.push({
                sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
@@ -1517,20 +1507,12 @@ export async function anularOrdenVenta(req, res) {
         }
       }
 
-      // Anulamos la salida lógicamente
       queriesAnulacion.push({
         sql: 'UPDATE salidas SET estado = ?, observaciones = CONCAT(observaciones, " - ANULADA POR CANCELACIÓN OV") WHERE id_salida = ?',
         params: ['Anulado', salida.id_salida]
       });
     }
 
-    // ---------------------------------------------------------
-    // FASE B: Reversar Reservas (Stock en "Limbo")
-    // ---------------------------------------------------------
-    // Aquí devolvemos TODO lo que se marcó como reservado originalmente.
-    // Esto cubre tanto lo que se despachó (porque al estar reservado no se descontó en la salida)
-    // como lo que nunca salió del almacén.
-    
     for (const item of detalleOrden.data) {
       if (item.stock_reservado === 1 && item.requiere_receta === 0) {
         queriesAnulacion.push({
@@ -1538,7 +1520,6 @@ export async function anularOrdenVenta(req, res) {
           params: [parseFloat(item.cantidad), item.id_producto]
         });
 
-        // Opcional: Limpiamos la marca de reserva en el detalle por consistencia
         queriesAnulacion.push({
           sql: 'UPDATE detalle_orden_venta SET stock_reservado = 0 WHERE id_orden_venta = ? AND id_producto = ?',
           params: [id, item.id_producto]
@@ -1546,9 +1527,6 @@ export async function anularOrdenVenta(req, res) {
       }
     }
 
-    // ---------------------------------------------------------
-    // FASE C: Actualizar Estado de la Orden
-    // ---------------------------------------------------------
     queriesAnulacion.push({
       sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = 0 WHERE id_orden_venta = ?',
       params: [id]
@@ -1556,21 +1534,19 @@ export async function anularOrdenVenta(req, res) {
 
     const motivoFinal = motivo_anulacion || 'Sin motivo especificado';
     
-    // También actualizamos el flag global stock_reservado a 0
     queriesAnulacion.push({
       sql: 'UPDATE ordenes_venta SET estado = ?, stock_reservado = 0, observaciones = CONCAT(COALESCE(observaciones, ""), " - ANULADA: ", ?) WHERE id_orden_venta = ?',
       params: ['Cancelada', motivoFinal, id]
     });
 
-    await executeTransaction(queriesAnulacion);
-
-    // Liberar cotización si existe
     if (orden.id_cotizacion) {
-      await executeQuery(
-        'UPDATE cotizaciones SET estado = ?, convertida_venta = 0, id_orden_venta = NULL WHERE id_cotizacion = ?',
-        ['Enviada', orden.id_cotizacion]
-      );
+      queriesAnulacion.push({
+        sql: "UPDATE cotizaciones SET estado = 'Rechazada', convertida_venta = 0, id_orden_venta = NULL WHERE id_cotizacion = ?",
+        params: [orden.id_cotizacion]
+      });
     }
+
+    await executeTransaction(queriesAnulacion);
 
     res.json({
       success: true,

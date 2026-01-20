@@ -1,7 +1,5 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
-import { generarFacturaPDF } from '../utils/pdfGenerators/FacturaPDF.js';
-import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 
 function getFechaPeru() {
@@ -214,8 +212,6 @@ export async function reservarStockOrden(req, res) {
   try {
     const { id } = req.params;
 
-    // 1. Obtener información de la orden y sus detalles
-    // Asegúrate de incluir el nuevo campo 'stock_reservado' del detalle en el SELECT
     const detalleResult = await executeQuery(`
       SELECT 
         dov.id_detalle, 
@@ -239,22 +235,18 @@ export async function reservarStockOrden(req, res) {
     let itemsProcesados = 0;
     let itemsPendientes = 0;
 
-    // 2. Iterar producto por producto
     for (const item of detalles) {
       
-      // Si el ítem YA estaba reservado, lo contamos como procesado y saltamos
       if (item.item_reservado === 1) {
         itemsProcesados++;
         continue;
       }
 
-      // Lógica para Productos que NO requieren receta (Materia Prima / Comercial)
       if (item.requiere_receta === 0) {
         const stockActual = parseFloat(item.stock_actual);
         const cantidadRequerida = parseFloat(item.cantidad);
 
         if (stockActual >= cantidadRequerida) {
-          // A) SI HAY STOCK: Descontamos y marcamos el ítem
           queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
             params: [cantidadRequerida, item.id_producto]
@@ -267,41 +259,22 @@ export async function reservarStockOrden(req, res) {
 
           itemsProcesados++;
         } else {
-          // B) NO HAY STOCK: No hacemos nada, solo contamos como pendiente.
-          // Esto permite que la transacción continúe para los otros productos que SI tienen stock.
           itemsPendientes++;
         }
       } else {
-        // Lógica para Productos Manufacturados (Requieren Receta)
-        // Generalmente estos no descuentan stock directo, o dependen de una Orden de Producción.
-        // Asumiremos que no se reservan stock físico, o se marcan como listos.
-        // Si tu lógica requiere validar insumos, iría aquí. Por ahora, los marcamos como procesados
-        // para no bloquear el estado de la orden, o los dejas pendientes según tu flujo.
-        
-        // Ejemplo: Si no manejan stock físico directo, lo marcamos reservado/listo
-        // queries.push({ sql: 'UPDATE detalle_orden_venta SET stock_reservado = 1 WHERE id_detalle = ?', params: [item.id_detalle] });
-        // itemsProcesados++;
-        
-        // O si simplemente se ignoran:
         itemsPendientes++; 
       }
     }
 
-    // 3. Determinar el estado Global de la Orden
-    // Estado 0: Nada reservado
-    // Estado 1: Todo reservado
-    // Estado 2: Reserva Parcial (Nuevo estado para tu lógica)
-    
     let nuevoEstadoGlobal = 0;
     const totalItems = detalles.length;
 
     if (itemsProcesados === totalItems) {
-      nuevoEstadoGlobal = 1; // Completo
+      nuevoEstadoGlobal = 1; 
     } else if (itemsProcesados > 0) {
-      nuevoEstadoGlobal = 2; // Parcial
+      nuevoEstadoGlobal = 2; 
     }
 
-    // Solo actualizamos si hubo cambios (hay queries para ejecutar)
     if (queries.length > 0) {
       queries.push({
         sql: 'UPDATE ordenes_venta SET stock_reservado = ? WHERE id_orden_venta = ?',
@@ -314,7 +287,6 @@ export async function reservarStockOrden(req, res) {
         return res.status(500).json({ success: false, error: result.error });
       }
 
-      // Mensaje dinámico según el resultado
       const msg = itemsPendientes > 0 
         ? `Reserva Parcial realizada. ${itemsPendientes} productos sin stock suficiente.` 
         : 'Stock reservado exitosamente para todos los productos.';
@@ -322,7 +294,6 @@ export async function reservarStockOrden(req, res) {
       res.json({ success: true, message: msg, estado_reserva: nuevoEstadoGlobal });
 
     } else {
-      // Caso: No se pudo reservar nada nuevo (o todo ya estaba reservado o nada tiene stock)
       if (itemsProcesados === totalItems) {
          return res.status(200).json({ success: true, message: 'La orden ya tiene todo el stock reservado.' });
       }
@@ -1152,6 +1123,26 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
         error: updateOVResult.error
       });
     }
+
+    const nombreProducto = productoResult.data[0].nombre;
+
+    const supervisoresResult = await executeQuery(
+      "SELECT id_empleado FROM empleados WHERE rol IN ('Supervisor', 'Jefe de Planta', 'Jefe de Producción') AND estado = 'Activo'"
+    );
+
+    if (supervisoresResult.success) {
+      for (const sup of supervisoresResult.data) {
+        await executeQuery(`
+          INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
+          VALUES (?, ?, ?, 'warning', ?)
+        `, [
+          sup.id_empleado,
+          `Nueva OP: ${numeroOrdenProduccion}`,
+          `Origen: Ventas ${ordenVenta.numero_orden}. Producto: ${nombreProducto}. Cant: ${cantidad}`,
+          '/produccion/ordenes'
+        ]);
+      }
+    }
     
     res.status(201).json({
       success: true,
@@ -1182,7 +1173,6 @@ export async function registrarDespacho(req, res) {
       return res.status(400).json({ success: false, error: 'No se han indicado productos para despachar' });
     }
 
-    // 1. Validar Orden
     const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
     if (ordenResult.data.length === 0) return res.status(404).json({ error: 'Orden no encontrada' });
     const orden = ordenResult.data[0];
@@ -1194,14 +1184,12 @@ export async function registrarDespacho(req, res) {
       return res.status(400).json({ error: 'Esta orden ya fue entregada completamente' });
     }
 
-    // 2. Obtener detalles (Incluyendo la columna stock_reservado)
     const itemsOrden = await executeQuery('SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
     
     let totalCosto = 0;
     let totalPrecio = 0;
     const itemsProcesados = [];
 
-    // 3. Procesar y Validar cada ítem a despachar
     for (const itemDespacho of detalles_despacho) {
       const itemDb = itemsOrden.data.find(i => i.id_producto === itemDespacho.id_producto);
       
@@ -1221,11 +1209,8 @@ export async function registrarDespacho(req, res) {
       }
 
       const infoProducto = productoStock.data[0];
-      const estabaReservado = itemDb.stock_reservado === 1; // <--- VALIDACIÓN POR ÍTEM
+      const estabaReservado = itemDb.stock_reservado === 1; 
 
-      // LÓGICA DE STOCK:
-      // Si es un producto físico (no receta) Y NO estaba reservado previamente,
-      // debemos validar que exista stock AHORA mismo.
       if (infoProducto.requiere_receta === 0 && !estabaReservado) {
         if (parseFloat(infoProducto.stock_actual) < cantidadADespachar) {
           return res.status(400).json({ error: `Stock insuficiente para el producto ID ${itemDespacho.id_producto}. (No estaba reservado)` });
@@ -1243,21 +1228,19 @@ export async function registrarDespacho(req, res) {
         costo_unitario: costoUnitario,
         precio_unitario: precioUnitario,
         requiere_receta: infoProducto.requiere_receta,
-        estaba_reservado: estabaReservado // <--- Pasamos este flag para usarlo en la transacción
+        estaba_reservado: estabaReservado
       });
     }
 
-    // 4. Ejecutar Transacción
     const queries = [];
 
-    // A) Insertar Cabecera de Salida
     queries.push({
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, 
         total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
-        3, // ID Tipo Inventario (Mercadería / Producto Terminado)
+        3, 
         'Venta',
         orden.id_cliente,
         totalCosto,
@@ -1276,16 +1259,12 @@ export async function registrarDespacho(req, res) {
     const idSalida = resultTx.data[0].insertId;
     const queriesDetalle = [];
 
-    // B) Procesar Detalles de Salida y Descuentos de Stock
     for (const item of itemsProcesados) {
-      // Registrar en detalle_salidas
       queriesDetalle.push({
         sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) VALUES (?, ?, ?, ?, ?)`,
         params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario]
       });
 
-      // Descontar Stock SOLO si NO estaba reservado
-      // Si item.estaba_reservado es TRUE, significa que el stock ya se restó en la función reservarStockOrden
       if (item.requiere_receta === 0 && !item.estaba_reservado) {
         queriesDetalle.push({
           sql: `UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?`,
@@ -1293,7 +1272,6 @@ export async function registrarDespacho(req, res) {
         });
       }
 
-      // Actualizar cantidad despachada en la orden de venta
       queriesDetalle.push({
         sql: `UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ? WHERE id_orden_venta = ? AND id_producto = ?`,
         params: [item.cantidad, id, item.id_producto]
@@ -1302,7 +1280,6 @@ export async function registrarDespacho(req, res) {
 
     await executeTransaction(queriesDetalle);
 
-    // 5. Verificar si la orden se completó totalmente
     const verificacion = await executeQuery(`
       SELECT 
         COUNT(*) as total_items,
@@ -1317,7 +1294,6 @@ export async function registrarDespacho(req, res) {
       nuevoEstado = 'Despachada';
     }
 
-    // Actualizar estado de la orden
     await executeQuery(
       'UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?', 
       [nuevoEstado, id]
@@ -1562,6 +1538,7 @@ export async function anularOrdenVenta(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function actualizarEstadoOrdenVenta(req, res) {
   try {
     const { id } = req.params;
@@ -1811,6 +1788,7 @@ export async function descargarPDFOrdenVenta(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
@@ -1927,7 +1905,7 @@ export async function registrarPagoOrden(req, res) {
       numero_operacion,
       banco,
       observaciones,
-      id_cuenta_destino  // ⬅️ NUEVO: ID de la cuenta donde se deposita
+      id_cuenta_destino 
     } = req.body;
     
     const id_registrado_por = req.user?.id_empleado || null;
@@ -1946,7 +1924,6 @@ export async function registrarPagoOrden(req, res) {
       });
     }
 
-    // ⬅️ NUEVO: Validar cuenta si se proporciona
     if (id_cuenta_destino) {
       const cuentaResult = await executeQuery(
         'SELECT * FROM cuentas_pago WHERE id_cuenta = ? AND estado = "Activo"',
@@ -2002,7 +1979,6 @@ export async function registrarPagoOrden(req, res) {
     
     const numeroPago = `${orden.numero_orden}-P${String(numeroSecuencia).padStart(2, '0')}`;
     
-    // ⬅️ MODIFICADO: Usar transacción para asegurar consistencia
     const queries = [
       {
         sql: `INSERT INTO pagos_ordenes_venta (
@@ -2047,7 +2023,6 @@ export async function registrarPagoOrden(req, res) {
       params: [nuevoMontoPagado, estadoPago, id]
     });
 
-    // ⬅️ NUEVO: Registrar movimiento en cuenta si se proporcionó
     if (id_cuenta_destino) {
       const cuentaResult = await executeQuery(
         'SELECT saldo_actual, moneda FROM cuentas_pago WHERE id_cuenta = ?',
@@ -2098,7 +2073,6 @@ export async function registrarPagoOrden(req, res) {
       });
     }
 
-    // El insertId está en result.data[0] (primer query)
     const idPagoOrden = result.data[0].insertId;
     
     res.status(201).json({
@@ -2347,6 +2321,7 @@ export async function getSalidasOrden(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function actualizarTipoComprobante(req, res) {
   try {
     const { id } = req.params;
@@ -2378,11 +2353,11 @@ export async function actualizarTipoComprobante(req, res) {
     }
 
     if (orden.estado === 'Cancelada') {
-  return res.status(400).json({
-    success: false,
-    error: 'No se puede editar el comprobante de una orden cancelada'
-  });
-}
+      return res.status(400).json({
+        success: false,
+        error: 'No se puede editar el comprobante de una orden cancelada'
+      });
+    }
 
     let numeroComprobante = null;
 
@@ -2461,6 +2436,7 @@ export async function actualizarTipoComprobante(req, res) {
     });
   }
 }
+
 export async function actualizarDatosTransporte(req, res) {
   try {
     const { id } = req.params;
@@ -2472,19 +2448,14 @@ export async function actualizarDatosTransporte(req, res) {
       transporte_placa,
       transporte_conductor,
       transporte_dni,
-      fecha_entrega_estimada // Opcional: a veces transporte y fecha van de la mano
+      fecha_entrega_estimada 
     } = req.body;
 
-    // 1. Validar que la orden exista
     const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
     if (ordenCheck.data.length === 0) {
       return res.status(404).json({ success: false, error: 'Orden no encontrada' });
     }
     
-    // Opcional: Validar si se puede editar en el estado actual (si lo deseas restringir)
-    // if (ordenCheck.data[0].estado === 'Entregada') ...
-
-    // 2. Lógica de limpieza de datos según el tipo
     let idVehiculoFinal = null;
     let idConductorFinal = null;
     let transNombreFinal = null;
@@ -2496,7 +2467,6 @@ export async function actualizarDatosTransporte(req, res) {
       idVehiculoFinal = id_vehiculo;
       idConductorFinal = id_conductor;
       
-      // Validar disponibilidad rápida (opcional pero recomendado)
       if (idVehiculoFinal) {
          const vCheck = await executeQuery('SELECT id_vehiculo FROM flota WHERE id_vehiculo = ?', [idVehiculoFinal]);
          if (!vCheck.success || vCheck.data.length === 0) return res.status(400).json({success: false, error: 'Vehículo no válido'});
@@ -2507,9 +2477,7 @@ export async function actualizarDatosTransporte(req, res) {
       transCondFinal = transporte_conductor;
       transDniFinal = transporte_dni;
     } 
-    // Si es 'Recojo Tienda', todo se queda en null
 
-    // 3. Ejecutar Update
     const result = await executeQuery(`
       UPDATE ordenes_venta 
       SET 
@@ -2545,13 +2513,11 @@ export async function actualizarDatosTransporte(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-// ... (código anterior)
 
 export async function agregarDireccionClienteDesdeOrden(req, res) {
   try {
     const { id_cliente, direccion, referencia } = req.body;
 
-    // Validaciones básicas
     if (!id_cliente) {
       return res.status(400).json({ 
         success: false, 
@@ -2566,7 +2532,6 @@ export async function agregarDireccionClienteDesdeOrden(req, res) {
       });
     }
 
-    // Verificar que el cliente exista
     const clienteCheck = await executeQuery(
       'SELECT id_cliente FROM clientes WHERE id_cliente = ?',
       [id_cliente]
@@ -2579,8 +2544,6 @@ export async function agregarDireccionClienteDesdeOrden(req, res) {
       });
     }
 
-    // Insertar la nueva dirección
-    // Nota: Por defecto la ponemos como 'Activo' y es_principal = 0 
     const result = await executeQuery(
       `INSERT INTO clientes_direcciones (
         id_cliente, 
@@ -2599,7 +2562,6 @@ export async function agregarDireccionClienteDesdeOrden(req, res) {
       });
     }
 
-    // Devolvemos el ID insertado para que el frontend pueda auto-seleccionar esta dirección
     res.status(201).json({
       success: true,
       message: 'Dirección agregada exitosamente',

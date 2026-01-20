@@ -674,8 +674,9 @@ export const cuentasPagoAPI = {
 };
 
 export const listasPreciosAPI = {
-    getByCliente: (idCliente) => api.get(`/listas-precios/cliente/${idCliente}`),
-    getDetalle: (idLista) => api.get(`/listas-precios/${idLista}/detalle`),
-    create: (data) => api.post('/listas-precios', data),
-    delete: (id) => api.delete(`/listas-precios/${id}`)
+  getByCliente: (idCliente) => api.get(`/listas-precios/cliente/${idCliente}`),
+  getDetalle: (idLista) => api.get(`/listas-precios/${idLista}/detalle`),
+  create: (data) => api.post('/listas-precios', data),
+  update: (id, data) => api.put(`/listas-precios/${id}`, data),
+  delete: (id) => api.delete(`/listas-precios/${id}`)
 };

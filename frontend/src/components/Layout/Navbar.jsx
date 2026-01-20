@@ -1,111 +1,84 @@
 import { useState, useEffect } from 'react';
-import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory } from 'lucide-react';
+import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ordenesProduccionAPI } from '../../config/api';
-import { useNotificacionesCompras } from './NotificacionesCompras';
+import { notificacionesAPI } from '../../config/api';
 import './Navbar.css';
 
 function Navbar({ onToggleSidebar }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
-  const [notificacionesProduccion, setNotificacionesProduccion] = useState([]);
-  const { notificaciones: notificacionesCompras, loading: loadingCompras } = useNotificacionesCompras();
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [noLeidas, setNoLeidas] = useState(0);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [categoriaActiva, setCategoriaActiva] = useState('todas');
 
   useEffect(() => {
-    cargarNotificacionesProduccion();
-    const interval = setInterval(cargarNotificacionesProduccion, 120000);
+    cargarNotificaciones();
+    const interval = setInterval(cargarNotificaciones, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  const cargarNotificacionesProduccion = async () => {
+  const cargarNotificaciones = async () => {
     try {
       setLoading(true);
-      const response = await ordenesProduccionAPI.getAll({ 
-        estado: 'Pendiente,En Proceso' 
-      });
-      
+      const response = await notificacionesAPI.getAll();
       if (response.data.success) {
-        const ordenes = response.data.data || [];
-        generarNotificacionesProduccion(ordenes);
+        setNotificaciones(response.data.data);
+        setNoLeidas(response.data.no_leidas);
       }
     } catch (error) {
-      console.error('Error al cargar notificaciones de producción:', error);
+      console.error('Error al cargar notificaciones:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const generarNotificacionesProduccion = (ordenes) => {
-    const notifs = [];
-    ordenes.forEach(orden => {
-      const fechaReferencia = orden.estado === 'En Proceso' ? orden.fecha_inicio : orden.fecha_creacion;
-      const fechaDoc = new Date(fechaReferencia);
-
-      if (orden.estado === 'Pendiente') {
-        notifs.push({
-          id: `p-${orden.id_orden}`,
-          titulo: 'Orden en Espera',
-          mensaje: `${orden.numero_orden}: ${orden.producto} está listo para iniciar.`,
-          fecha: fechaDoc,
-          link: `/produccion/ordenes/${orden.id_orden}`,
-          tipo: 'warning',
-          categoria: 'produccion'
-        });
-      } else if (orden.estado === 'En Proceso') {
-        notifs.push({
-          id: `e-${orden.id_orden}`,
-          titulo: 'Producción Activa',
-          mensaje: `${orden.numero_orden}: Fabricando ${orden.producto}.`,
-          fecha: fechaDoc,
-          link: `/produccion/ordenes/${orden.id_orden}`,
-          tipo: 'info',
-          categoria: 'produccion'
-        });
-      }
-    });
-
-    notifs.sort((a, b) => b.fecha - a.fecha);
-    setNotificacionesProduccion(notifs.slice(0, 10));
+  const marcarTodasComoLeidas = async () => {
+    try {
+      await notificacionesAPI.marcarTodasLeidas();
+      cargarNotificaciones();
+    } catch (error) {
+      console.error('Error al marcar todas como leídas:', error);
+    }
   };
 
-  const todasLasNotificaciones = [
-    ...notificacionesProduccion.map(n => ({ ...n, categoria: 'produccion' })),
-    ...notificacionesCompras.map(n => ({ ...n, categoria: 'compras', fecha: new Date() }))
-  ];
-
-  const notificacionesFiltradas = categoriaActiva === 'todas' 
-    ? todasLasNotificaciones 
-    : todasLasNotificaciones.filter(n => n.categoria === categoriaActiva);
-
-  const totalNotificaciones = todasLasNotificaciones.length;
-  const notificacionesComprasCant = notificacionesCompras.length;
-  const notificacionesProduccionCant = notificacionesProduccion.length;
+  const handleNotificacionClick = async (notif) => {
+    if (!notif.leido) {
+      try {
+        await notificacionesAPI.marcarLeida(notif.id_notificacion);
+        setNoLeidas(prev => Math.max(0, prev - 1));
+        setNotificaciones(prev => prev.map(n => 
+          n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
+        ));
+      } catch (error) {
+        console.error('Error al marcar notificación:', error);
+      }
+    }
+    
+    setShowNotificaciones(false);
+    if (notif.ruta_destino) {
+      navigate(notif.ruta_destino);
+    }
+  };
 
   const formatearTiempo = (fecha) => {
+    const fechaObj = new Date(fecha);
     const ahora = new Date();
-    const diff = Math.floor((ahora - fecha) / 1000);
+    const diff = Math.floor((ahora - fechaObj) / 1000);
 
     if (diff < 60) return 'hace unos segundos';
     if (diff < 3600) return `hace ${Math.floor(diff / 60)} minutos`;
     if (diff < 86400) return `hace ${Math.floor(diff / 3600)} horas`;
     if (diff < 604800) return `hace ${Math.floor(diff / 86400)} días`;
     
-    return fecha.toLocaleDateString('es-PE', {
+    return fechaObj.toLocaleDateString('es-PE', {
       day: '2-digit',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
-
-  const handleNotificacionClick = (notif) => {
-    navigate(notif.link);
-    setShowNotificaciones(false);
   };
 
   const handleLogout = () => {
@@ -125,6 +98,15 @@ function Navbar({ onToggleSidebar }) {
     }
   };
 
+  const getIconoNotificacion = (tipo) => {
+    switch(tipo) {
+      case 'success': return CheckCircle;
+      case 'warning': return AlertCircle;
+      case 'info': return Info;
+      default: return Bell;
+    }
+  };
+
   return (
     <header className="navbar">
       <div className="navbar-left">
@@ -141,9 +123,9 @@ function Navbar({ onToggleSidebar }) {
             onClick={() => setShowNotificaciones(!showNotificaciones)}
           >
             <Bell size={20} />
-            {totalNotificaciones > 0 && (
+            {noLeidas > 0 && (
               <span className="navbar-notifications-badge">
-                {totalNotificaciones}
+                {noLeidas}
               </span>
             )}
           </button>
@@ -152,91 +134,59 @@ function Navbar({ onToggleSidebar }) {
             <div className="navbar-notifications-panel">
               <div className="navbar-notifications-header">
                 <h3>Notificaciones</h3>
-                <button 
-                  className="navbar-notifications-close"
-                  onClick={() => setShowNotificaciones(false)}
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="navbar-notifications-filters">
-                <button 
-                  className={`navbar-notification-filter ${categoriaActiva === 'todas' ? 'active' : ''}`}
-                  onClick={() => setCategoriaActiva('todas')}
-                >
-                  Todas ({totalNotificaciones})
-                </button>
-                <button 
-                  className={`navbar-notification-filter ${categoriaActiva === 'compras' ? 'active' : ''}`}
-                  onClick={() => setCategoriaActiva('compras')}
-                >
-                  <ShoppingCart size={14} />
-                  Compras ({notificacionesComprasCant})
-                </button>
-                <button 
-                  className={`navbar-notification-filter ${categoriaActiva === 'produccion' ? 'active' : ''}`}
-                  onClick={() => setCategoriaActiva('produccion')}
-                >
-                  <Factory size={14} />
-                  Producción ({notificacionesProduccionCant})
-                </button>
+                <div className="flex gap-2">
+                  {noLeidas > 0 && (
+                    <button 
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                      onClick={marcarTodasComoLeidas}
+                    >
+                      Marcar todo leído
+                    </button>
+                  )}
+                  <button 
+                    className="navbar-notifications-close"
+                    onClick={() => setShowNotificaciones(false)}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               <div className="navbar-notifications-body">
-                {(loading || loadingCompras) ? (
+                {loading && notificaciones.length === 0 ? (
                   <div className="navbar-notifications-loading">
                     Cargando...
                   </div>
-                ) : notificacionesFiltradas.length === 0 ? (
+                ) : notificaciones.length === 0 ? (
                   <div className="navbar-notifications-empty">
                     <Bell size={48} className="text-gray-300" />
-                    <p>No hay notificaciones nuevas</p>
+                    <p>No hay notificaciones</p>
                   </div>
                 ) : (
-                  notificacionesFiltradas.map(notif => {
-                    const Icono = notif.icono || Bell;
+                  notificaciones.map(notif => {
+                    const Icono = getIconoNotificacion(notif.tipo);
                     return (
                       <div 
-                        key={notif.id}
-                        className={`navbar-notification-item navbar-notification-${notif.tipo}`}
+                        key={notif.id_notificacion}
+                        className={`navbar-notification-item ${notif.leido ? 'read' : 'unread'}`}
                         onClick={() => handleNotificacionClick(notif)}
                       >
-                        <div className="navbar-notification-icon">
+                        <div className={`navbar-notification-icon ${notif.tipo || 'info'}`}>
                           <Icono size={20} />
                         </div>
                         <div className="navbar-notification-content">
-                          <h4>
-                            {notif.titulo}
-                            {notif.categoria && (
-                              <span className={`navbar-notification-category ${notif.categoria}`}>
-                                {notif.categoria === 'compras' ? 'Compras' : 'Producción'}
-                              </span>
-                            )}
-                          </h4>
+                          <h4>{notif.titulo}</h4>
                           <p>{notif.mensaje}</p>
                           <span className="navbar-notification-time">
-                            {formatearTiempo(notif.fecha)}
+                            {formatearTiempo(notif.fecha_creacion)}
                           </span>
                         </div>
+                        {!notif.leido && <div className="navbar-notification-dot"></div>}
                       </div>
                     );
                   })
                 )}
               </div>
-
-              {notificacionesFiltradas.length > 0 && (
-                <div className="navbar-notifications-footer">
-                  <button 
-                    onClick={() => {
-                      navigate(categoriaActiva === 'compras' ? '/compras' : '/produccion/ordenes');
-                      setShowNotificaciones(false);
-                    }}
-                  >
-                    Ver todas
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>

@@ -681,3 +681,8 @@ export const listasPreciosAPI = {
   update: (id, data) => api.put(`/listas-precios/${id}`, data),
   delete: (id) => api.delete(`/listas-precios/${id}`)
 };
+export const notificacionesAPI = {
+  getAll: () => api.get('/notificaciones'),
+  marcarLeida: (id) => api.put(`/notificaciones/${id}/leida`),
+  marcarTodasLeidas: () => api.put('/notificaciones/marcar-todas-leidas')
+};

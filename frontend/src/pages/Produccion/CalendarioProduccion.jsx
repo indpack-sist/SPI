@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Package, User, ExternalLink, Clock,
   AlertCircle, PlayCircle, PauseCircle, CheckCircle, XCircle, X, ArrowRight, RotateCcw,
   ShoppingCart, Flag, Briefcase
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api'; 
+import { useAuth } from '../../context/AuthContext';
 import Loading from '../../components/UI/Loading'; 
 
 const CalendarioProduccion = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  
   const [currentDate, setCurrentDate] = useState(new Date());
   const [ordenes, setOrdenes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +26,18 @@ const CalendarioProduccion = () => {
 
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  const userRole = user?.rol || '';
+  const esComercial = ['comercial', 'ventas', 'vendedor'].includes(userRole.toLowerCase());
+
+  useEffect(() => {
+    const fechaParam = searchParams.get('fecha');
+    if (fechaParam) {
+      const nuevaFecha = new Date(fechaParam);
+      nuevaFecha.setHours(nuevaFecha.getHours() + 5); 
+      setCurrentDate(nuevaFecha);
+    }
+  }, [searchParams]);
 
   useEffect(() => { cargarOrdenes(); }, []);
 
@@ -100,6 +116,7 @@ const CalendarioProduccion = () => {
   };
 
   const handleDragStart = (e, orden) => {
+    if (esComercial) return;
     setDraggedOrden(orden);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify(orden));
@@ -109,6 +126,7 @@ const CalendarioProduccion = () => {
 
   const handleDrop = async (e, dateStr) => {
     e.preventDefault();
+    if (esComercial) return;
     if (!draggedOrden || !dateStr) return;
 
     const ordenesTemp = ordenes.map(o => {
@@ -137,6 +155,10 @@ const CalendarioProduccion = () => {
     if (!dayData || !dayData.fullDate) return;
 
     if (pendingResize) {
+      if (esComercial) {
+          setPendingResize(null);
+          return;
+      }
       const endDate = dayData.fullDate;
       const startDate = pendingResize.start_date;
 
@@ -173,6 +195,7 @@ const CalendarioProduccion = () => {
 
   const handleDesprogramar = async (e, orden) => {
     e.stopPropagation();
+    if (esComercial) return;
     if (!window.confirm(`¿Retornar la orden ${orden.numero_orden} a la lista de pendientes?`)) return;
 
     const ordenesActualizadas = ordenes.map(o => {
@@ -194,7 +217,7 @@ const CalendarioProduccion = () => {
   };
 
   const OrdenCard = ({ orden, compact = false, isRangePart = false }) => {
-    const isDraggable = orden.estado === 'Pendiente' || orden.estado === 'Pendiente Asignación';
+    const isDraggable = !esComercial && (orden.estado === 'Pendiente' || orden.estado === 'Pendiente Asignación');
     const isScheduled = !!orden.fecha_programada;
     
     const borderColor = getStatusColor(orden.estado);
@@ -242,7 +265,7 @@ const CalendarioProduccion = () => {
           </div>
           
           <div style={{ display: 'flex', gap: '4px' }}>
-            {isScheduled && (isDraggable) && (
+            {isScheduled && isDraggable && (
                 <button 
                     onClick={(e) => handleDesprogramar(e, orden)}
                     style={{ border: 'none', background: '#fee2e2', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', padding: '2px' }}
@@ -410,19 +433,21 @@ const CalendarioProduccion = () => {
         </div>
       </div>
 
-      <div style={{ width: '320px', minWidth: '320px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0', height: '100%' }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}><Package size={18} /> Por Programar</h3>
-          <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>Arrastra al día de inicio</p>
+      {!esComercial && (
+        <div style={{ width: '320px', minWidth: '320px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0', height: '100%' }}>
+            <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}><Package size={18} /> Por Programar</h3>
+            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>Arrastra al día de inicio</p>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px', backgroundColor: '#f1f5f9' }}>
+            {ordenesParaSidebar.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}><CheckCircle size={32} style={{margin:'0 auto 8px'}}/><p>Todo programado</p></div>
+            ) : (
+                ordenesParaSidebar.map(o => <OrdenCard key={o.id_orden} orden={o} />)
+            )}
+            </div>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px', backgroundColor: '#f1f5f9' }}>
-          {ordenesParaSidebar.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}><CheckCircle size={32} style={{margin:'0 auto 8px'}}/><p>Todo programado</p></div>
-          ) : (
-            ordenesParaSidebar.map(o => <OrdenCard key={o.id_orden} orden={o} />)
-          )}
-        </div>
-      </div>
+      )}
 
       {modalOpen && selectedDay && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>

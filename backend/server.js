@@ -32,6 +32,7 @@ import comprasRoutes from './routes/compras.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import cuentasPagoRoutes from './routes/cuentas-pago.routes.js';
 import pagosCobranzasRoutes from './routes/pagos-cobranzas.routes.js';
+import notificacionesRoutes from './routes/notificaciones.routes.js';
 
 dotenv.config();
 
@@ -65,7 +66,8 @@ app.get('/', (req, res) => {
       ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista', 'listas-precios'],
       compras: ['compras'],
       analytics: ['dashboard'],
-      finanzas: ['cuentas-pago', 'pagos-cobranzas']
+      finanzas: ['cuentas-pago', 'pagos-cobranzas'],
+      sistema: ['notificaciones']
     }
   });
 });
@@ -109,6 +111,8 @@ app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboa
 
 app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cuentasPagoRoutes);
 app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);
+
+app.use('/api/notificaciones', verificarToken, notificacionesRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -235,6 +239,9 @@ async function startServer() {
       console.log('FINANZAS:');
       console.log('   - /api/cuentas-pago [cuentasPago]');
       console.log('   - /api/pagos-cobranzas [pagosCobranzas]');
+      console.log('');
+      console.log('SISTEMA:');
+      console.log('   - /api/notificaciones [General]');
       console.log('');
       console.log('='.repeat(80));
       console.log('SISTEMA LISTO PARA RECIBIR PETICIONES');

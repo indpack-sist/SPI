@@ -130,11 +130,11 @@ function ClienteDetalle() {
 
   const calcularTotalesPorMoneda = (items, campo = 'total') => {
     const totalPEN = items
-      .filter(item => item.moneda === 'PEN')
+      .filter(item => item.moneda === 'PEN' && item.estado !== 'Cancelada' && item.estado !== 'Rechazada')
       .reduce((sum, item) => sum + parseFloat(item[campo] || 0), 0);
     
     const totalUSD = items
-      .filter(item => item.moneda === 'USD')
+      .filter(item => item.moneda === 'USD' && item.estado !== 'Cancelada' && item.estado !== 'Rechazada')
       .reduce((sum, item) => sum + parseFloat(item[campo] || 0), 0);
     
     return { totalPEN, totalUSD };

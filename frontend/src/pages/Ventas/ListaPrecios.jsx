@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Plus, ChevronRight, Package, Save, X, DollarSign } from 'lucide-react';
+import { Search, FileText, Plus, ChevronRight, Package, Save, X, DollarSign, Edit, Trash2 } from 'lucide-react';
 import { clientesAPI, listasPreciosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
 import Loading from '../../components/UI/Loading';
@@ -19,10 +19,14 @@ function ListaPrecios() {
   const [listas, setListas] = useState([]);
   const [detalleLista, setDetalleLista] = useState([]);
   const [seleccionados, setSeleccionados] = useState([]);
+  const [listaSeleccionadaID, setListaSeleccionadaID] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [busquedaProdModal, setBusquedaProdModal] = useState('');
+  
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [idListaEditar, setIdListaEditar] = useState(null);
   
   const [nuevaLista, setNuevaLista] = useState({
     nombre_lista: '',
@@ -52,6 +56,7 @@ function ListaPrecios() {
   const seleccionarCliente = async (cliente) => {
     setLoading(true);
     setClienteSel(cliente);
+    setListaSeleccionadaID(null); 
     try {
       const res = await listasPreciosAPI.getByCliente(cliente.id_cliente);
       if (res.data.success) setListas(res.data.data);
@@ -66,6 +71,7 @@ function ListaPrecios() {
 
   const verDetalle = async (lista) => {
     setLoading(true);
+    setListaSeleccionadaID(lista.id_lista);
     try {
       const res = await listasPreciosAPI.getDetalle(lista.id_lista);
       if (res.data.success) {
@@ -110,12 +116,69 @@ function ListaPrecios() {
 
   const abrirModalNuevaLista = () => {
     if (!clienteSel) return;
+    setModoEdicion(false);
+    setIdListaEditar(null);
     setNuevaLista({
       nombre_lista: '',
       moneda: 'PEN',
       items: {}
     });
     setModalOpen(true);
+  };
+
+  const abrirModalEditarLista = async (e, lista) => {
+    e.stopPropagation(); 
+    if (!clienteSel) return;
+    
+    setModoEdicion(true);
+    setIdListaEditar(lista.id_lista);
+    
+    try {
+        setLoading(true);
+        const res = await listasPreciosAPI.getDetalle(lista.id_lista);
+        
+        const itemsMap = {};
+        if (res.data.success) {
+            res.data.data.forEach(item => {
+                itemsMap[item.id_producto] = item.precio_especial;
+            });
+        }
+
+        setNuevaLista({
+            nombre_lista: lista.nombre_lista,
+            moneda: lista.moneda,
+            items: itemsMap
+        });
+        
+        setModalOpen(true);
+    } catch (err) {
+        console.error(err);
+        setError('Error al cargar datos de la lista');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const eliminarLista = async (e, idLista) => {
+      e.stopPropagation();
+      if(!confirm('¿Estás seguro de eliminar esta lista de precios?')) return;
+
+      try {
+          setLoading(true);
+          const res = await listasPreciosAPI.delete(idLista);
+          if (res.data.success) {
+              setSuccess('Lista eliminada correctamente');
+              if (listaSeleccionadaID === idLista) {
+                  setDetalleLista([]);
+                  setListaSeleccionadaID(null);
+              }
+              seleccionarCliente(clienteSel);
+          }
+      } catch (err) {
+          setError('Error al eliminar la lista');
+      } finally {
+          setLoading(false);
+      }
   };
 
   const handlePrecioChange = (idProducto, valor) => {
@@ -155,11 +218,22 @@ function ListaPrecios() {
         productos: productosParaGuardar
       };
 
-      const res = await listasPreciosAPI.create(payload);
+      let res;
+      if (modoEdicion) {
+          res = await listasPreciosAPI.update(idListaEditar, payload);
+      } else {
+          res = await listasPreciosAPI.create(payload);
+      }
+
       if (res.data.success) {
-        setSuccess('Lista de precios creada correctamente');
+        setSuccess(modoEdicion ? 'Lista actualizada correctamente' : 'Lista creada correctamente');
         setModalOpen(false);
         seleccionarCliente(clienteSel); 
+        
+        // Si estábamos viendo la lista que acabamos de editar, recargar el detalle
+        if (modoEdicion && listaSeleccionadaID === idListaEditar) {
+            verDetalle({ id_lista: idListaEditar, moneda: nuevaLista.moneda });
+        }
       }
     } catch (err) {
       setError('Error al guardar la lista');
@@ -232,8 +306,8 @@ function ListaPrecios() {
                     <div 
                         key={l.id_lista} 
                         onClick={() => verDetalle(l)} 
-                        className={`p-4 border rounded-lg hover:shadow-md cursor-pointer flex justify-between items-center transition
-                            ${detalleLista.length > 0 && detalleLista[0].id_lista === l.id_lista ? 'border-primary bg-blue-50/50' : 'border-gray-200'}
+                        className={`p-4 border rounded-lg hover:shadow-md cursor-pointer flex justify-between items-center transition group relative
+                            ${listaSeleccionadaID === l.id_lista ? 'border-primary bg-blue-50/50' : 'border-gray-200'}
                         `}
                     >
                       <div>
@@ -243,7 +317,24 @@ function ListaPrecios() {
                         </p>
                         <p className="text-xs text-muted">{l.total_productos} productos asignados</p>
                       </div>
-                      <ChevronRight className="text-muted" />
+                      
+                      <div className="flex gap-2">
+                        <button 
+                            className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => abrirModalEditarLista(e, l)}
+                            title="Editar Lista"
+                        >
+                            <Edit size={16} />
+                        </button>
+                        <button 
+                            className="p-1.5 rounded-full hover:bg-red-100 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => eliminarLista(e, l.id_lista)}
+                            title="Eliminar Lista"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                        <ChevronRight className="text-muted self-center ml-1" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -325,7 +416,7 @@ function ListaPrecios() {
         </div>
       </div>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Crear Nueva Lista de Precios" size="lg">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modoEdicion ? "Editar Lista de Precios" : "Crear Nueva Lista de Precios"} size="lg">
         <div className="flex flex-col h-[70vh]">
             <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
@@ -352,14 +443,17 @@ function ListaPrecios() {
             </div>
 
             <div className="flex-1 border rounded-lg flex flex-col overflow-hidden">
-                <div className="p-2 border-b bg-gray-50">
+                <div className="p-2 border-b bg-gray-50 flex justify-between items-center">
                     <input 
                         type="text" 
-                        className="form-input form-input-sm" 
+                        className="form-input form-input-sm w-2/3" 
                         placeholder="Filtrar productos..." 
                         value={busquedaProdModal}
                         onChange={(e) => setBusquedaProdModal(e.target.value)}
                     />
+                    <div className="text-xs text-muted">
+                        {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] > 0).length} productos con precio
+                    </div>
                 </div>
                 <div className="overflow-y-auto flex-1">
                     <table className="table w-full">
@@ -372,7 +466,7 @@ function ListaPrecios() {
                         </thead>
                         <tbody>
                             {productosFiltradosModal.map(p => (
-                                <tr key={p.id_producto}>
+                                <tr key={p.id_producto} className={nuevaLista.items[p.id_producto] ? 'bg-blue-50/30' : ''}>
                                     <td>
                                         <div className="font-medium text-sm">{p.nombre}</div>
                                         <div className="text-xs text-muted">{p.codigo}</div>
@@ -387,7 +481,7 @@ function ListaPrecios() {
                                             </span>
                                             <input 
                                                 type="number" 
-                                                className={`form-input form-input-sm text-right pl-6 ${nuevaLista.items[p.id_producto] ? 'border-primary bg-blue-50 font-bold' : ''}`}
+                                                className={`form-input form-input-sm text-right pl-6 ${nuevaLista.items[p.id_producto] ? 'border-primary bg-white font-bold text-primary' : ''}`}
                                                 placeholder="0.00"
                                                 value={nuevaLista.items[p.id_producto] || ''}
                                                 onChange={(e) => handlePrecioChange(p.id_producto, e.target.value)}
@@ -404,7 +498,7 @@ function ListaPrecios() {
             <div className="mt-4 flex justify-end gap-2">
                 <button className="btn btn-outline" onClick={() => setModalOpen(false)}>Cancelar</button>
                 <button className="btn btn-primary" onClick={guardarLista} disabled={loading}>
-                    {loading ? 'Guardando...' : 'Guardar Lista'}
+                    {loading ? 'Guardando...' : (modoEdicion ? 'Actualizar Lista' : 'Guardar Lista')}
                 </button>
             </div>
         </div>

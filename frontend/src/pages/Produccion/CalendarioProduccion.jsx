@@ -433,21 +433,21 @@ const CalendarioProduccion = () => {
         </div>
       </div>
 
-      {!esComercial && (
-        <div style={{ width: '320px', minWidth: '320px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0', height: '100%' }}>
-            <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}><Package size={18} /> Por Programar</h3>
+      <div style={{ width: '320px', minWidth: '320px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0', height: '100%' }}>
+        <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}><Package size={18} /> Por Programar</h3>
+          {!esComercial && (
             <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>Arrastra al día de inicio</p>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px', backgroundColor: '#f1f5f9' }}>
-            {ordenesParaSidebar.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}><CheckCircle size={32} style={{margin:'0 auto 8px'}}/><p>Todo programado</p></div>
-            ) : (
-                ordenesParaSidebar.map(o => <OrdenCard key={o.id_orden} orden={o} />)
-            )}
-            </div>
+          )}
         </div>
-      )}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px', backgroundColor: '#f1f5f9' }}>
+          {ordenesParaSidebar.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}><CheckCircle size={32} style={{margin:'0 auto 8px'}}/><p>Todo programado</p></div>
+          ) : (
+            ordenesParaSidebar.map(o => <OrdenCard key={o.id_orden} orden={o} />)
+          )}
+        </div>
+      </div>
 
       {modalOpen && selectedDay && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>

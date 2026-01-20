@@ -5,7 +5,7 @@ import {
   Star, Package, Clock, Beaker, FileText, ClipboardList, 
   BarChart, DollarSign, Info, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, Minus, Edit, ShoppingCart,
-  UserCog, AlertCircle, Zap, Calendar as CalendarIcon
+  UserCog, AlertCircle, Zap, Calendar as CalendarIcon, Search
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -34,6 +34,10 @@ function OrdenDetalle() {
   const [rendimientoProvisional, setRendimientoProvisional] = useState('1');
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
   const [insumosDisponibles, setInsumosDisponibles] = useState([]);
+  
+  const [insumosPreview, setInsumosPreview] = useState([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
   const [nuevoInsumo, setNuevoInsumo] = useState({
     id_insumo: '',
     cantidad_requerida: ''
@@ -56,6 +60,16 @@ function OrdenDetalle() {
   useEffect(() => {
     cargarDatos();
   }, [id]);
+
+  useEffect(() => {
+    if (modoReceta === 'seleccionar' && recetaSeleccionada) {
+      cargarDetalleReceta(recetaSeleccionada);
+    } else if (modoReceta === 'provisional') {
+      calcularPreviewProvisional();
+    } else {
+      setInsumosPreview([]);
+    }
+  }, [recetaSeleccionada, modoReceta, recetaProvisional, rendimientoProvisional]);
 
   const cargarDatos = async () => {
     try {
@@ -122,10 +136,73 @@ function OrdenDetalle() {
     }
   };
 
+  const cargarDetalleReceta = async (idReceta) => {
+    try {
+      setLoadingPreview(true);
+      const response = await productosAPI.getRecetaById(idReceta); 
+      
+      if (response.data.success && orden) {
+        const receta = response.data.data;
+        const rendimiento = parseFloat(receta.rendimiento_unidades || 1);
+        const cantidadPlan = parseFloat(orden.cantidad_planificada || 0);
+        const lotes = Math.ceil(cantidadPlan / rendimiento);
+
+        const insumosCalculados = receta.detalles.map(d => {
+          const requeridoTotal = parseFloat(d.cantidad_requerida) * lotes;
+          const stock = parseFloat(d.stock_actual || 0);
+          return {
+            id_insumo: d.id_insumo,
+            nombre: d.insumo,
+            codigo: d.codigo_insumo,
+            unidad_medida: d.unidad_medida,
+            cantidad_unit: parseFloat(d.cantidad_requerida),
+            requerido_total: requeridoTotal,
+            stock_actual: stock,
+            cubre: stock >= requeridoTotal
+          };
+        });
+        setInsumosPreview(insumosCalculados);
+      }
+    } catch (err) {
+      console.error("Error al cargar detalle receta", err);
+      setInsumosPreview([]);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const calcularPreviewProvisional = () => {
+    if (!orden || recetaProvisional.length === 0) {
+      setInsumosPreview([]);
+      return;
+    }
+
+    const rendimiento = parseFloat(rendimientoProvisional || 1);
+    const cantidadPlan = parseFloat(orden.cantidad_planificada || 0);
+    const lotes = Math.ceil(cantidadPlan / rendimiento);
+
+    const insumosCalculados = recetaProvisional.map(item => {
+      const requeridoTotal = parseFloat(item.cantidad_requerida) * lotes;
+      const stock = parseFloat(item.stock_actual || 0);
+      return {
+        id_insumo: item.id_insumo,
+        nombre: item.insumo,
+        codigo: item.codigo_insumo,
+        unidad_medida: item.unidad_medida,
+        cantidad_unit: parseFloat(item.cantidad_requerida),
+        requerido_total: requeridoTotal,
+        stock_actual: stock,
+        cubre: stock >= requeridoTotal
+      };
+    });
+    setInsumosPreview(insumosCalculados);
+  };
+
   const cambiarModoReceta = (modo) => {
     setModoReceta(modo);
     if (modo === 'provisional' || modo === 'manual') {
       setRecetaSeleccionada('');
+      setInsumosPreview([]);
     }
     if (modo !== 'provisional') {
       setRecetaProvisional([]);
@@ -197,7 +274,7 @@ function OrdenDetalle() {
       const yaConsumido = parseFloat(item.cantidad_real_consumida || 0);
       const requerido = parseFloat(item.cantidad_requerida);
       const pendiente = Math.max(0, requerido - yaConsumido);
-      
+       
       return {
         id_insumo: item.id_insumo,
         codigo_insumo: item.codigo_insumo,
@@ -234,15 +311,13 @@ function OrdenDetalle() {
 
  const handleRegistroParcial = async (e) => {
     e.preventDefault();
-      
+       
     try {
       setProcesando(true);
       setError(null);
 
       const insumosConCantidad = insumosParcialesConsumo.filter(i => parseFloat(i.cantidad) > 0);
-      
-      // LOGICA CORREGIDA:
-      // Solo validamos si existen insumos cargados en el estado (es decir, no es manual)
+       
       if (insumosParcialesConsumo.length > 0 && insumosConCantidad.length === 0) {
         setError('Debe especificar al menos un insumo con cantidad mayor a 0');
         setProcesando(false);
@@ -259,7 +334,7 @@ function OrdenDetalle() {
       };
 
       const response = await ordenesProduccionAPI.registrarParcial(id, payload);
-      
+       
       if (response.data.success) {
         setSuccess(response.data.message);
         setModalParcial(false);
@@ -279,24 +354,19 @@ function OrdenDetalle() {
 
   const handleFinalizar = async (e) => {
     e.preventDefault();
-      
+       
     const mermasValidas = mermas.filter(m => 
       m.id_producto_merma && 
       m.cantidad && 
       parseFloat(m.cantidad) > 0
     );
-      
+       
     try {
       setProcesando(true);
       setError(null);
 
-      // Filtramos los que tienen cantidad > 0
       const insumosConCantidad = insumosFinalesConsumo.filter(i => parseFloat(i.cantidad) > 0);
-      
-      // LOGICA CORREGIDA:
-      // Solo lanzamos error si la orden TIENE insumos (insumosFinalesConsumo.length > 0)
-      // pero el usuario puso todo en 0 (insumosConCantidad.length === 0).
-      // Si es manual, insumosFinalesConsumo será [], por lo que saltará esta validación.
+       
       if (insumosFinalesConsumo.length > 0 && insumosConCantidad.length === 0) {
         setError('Debe especificar al menos un insumo con cantidad mayor a 0');
         setProcesando(false);
@@ -305,7 +375,6 @@ function OrdenDetalle() {
         
       const payload = {
         cantidad_final: parseFloat(cantidadFinal),
-        // Si no hay insumos con cantidad, enviamos array vacío (para manuales)
         insumos_finales: insumosConCantidad.map(i => ({
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
@@ -319,7 +388,7 @@ function OrdenDetalle() {
       };
 
       const response = await ordenesProduccionAPI.finalizar(id, payload);
-      
+       
       if (response.data.success) {
         const resumen = response.data.data.resumen;
         let mensaje = `Producción finalizada exitosamente.\n\n`;
@@ -366,11 +435,13 @@ function OrdenDetalle() {
         payload.es_orden_manual = true;
       }
        
-      await ordenesProduccionAPI.asignarRecetaYSupervisor(id, payload);
-       
-      setSuccess('Receta y supervisor asignados exitosamente. La orden está lista para iniciar.');
-      setModalAsignar(false);
-      cargarDatos();
+      const response = await ordenesProduccionAPI.asignarRecetaYSupervisor(id, payload);
+      
+      if (response.data.success) {
+         setSuccess('Receta y supervisor asignados exitosamente. La orden está lista para iniciar.');
+         setModalAsignar(false);
+         cargarDatos();
+      }
        
     } catch (err) {
       setError(err.response?.data?.error || 'Error al asignar receta y supervisor');
@@ -537,7 +608,6 @@ function OrdenDetalle() {
   const esRecetaProvisional = !orden.id_receta_producto;
   const lotesPlanificados = calcularLotesPlanificados();
   const lotesProducidos = calcularLotesProducidos();
-  const tieneReceta = orden.id_receta_producto !== null || esRecetaProvisional;
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
 
   return (
@@ -929,7 +999,7 @@ function OrdenDetalle() {
                 {consumoMateriales.map((item, idx) => {
                   const analisisItem = analisisConsumo?.detalle.find(a => a.id_insumo === item.id_insumo);
                   const diferencia = analisisItem ? parseFloat(analisisItem.diferencia) : 0;
-                   
+                    
                   return (
                     <tr key={item.id_consumo}>
                       <td className="font-mono text-xs">{item.codigo_insumo}</td>
@@ -1062,9 +1132,6 @@ function OrdenDetalle() {
                       </option>
                     ))}
                   </select>
-                  <small className="text-muted block mt-1">
-                    Seleccione la receta que se utilizará para producir este producto
-                  </small>
                 </div>
               ) : (
                 <div className="alert alert-warning">
@@ -1140,7 +1207,6 @@ function OrdenDetalle() {
                                 type="button"
                                 className="btn btn-sm btn-danger"
                                 onClick={() => eliminarInsumoProvisional(item.id_insumo)}
-                                title="Eliminar"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -1164,13 +1230,57 @@ function OrdenDetalle() {
                   </div>
                 )}
               </div>
-
-              {recetaProvisional.length > 0 && (
-                <div className="alert alert-info text-sm">
-                  <strong>Nota:</strong> Esta receta es temporal y solo se aplicará a esta orden de producción.
-                </div>
-              )}
             </>
+          )}
+
+          {(modoReceta === 'seleccionar' || modoReceta === 'provisional') && insumosPreview.length > 0 && (
+            <div className="mt-4 border rounded bg-gray-50">
+                <div className="p-2 border-b font-semibold text-sm flex items-center gap-2">
+                    <Search size={16} /> Verificación de Stock
+                    {loadingPreview && <span className="text-xs text-muted font-normal">(Actualizando...)</span>}
+                </div>
+                <div className="table-container p-0" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                    <table className="table table-sm text-xs">
+                        <thead>
+                            <tr>
+                                <th>Insumo</th>
+                                <th className="text-right">Requerido Total</th>
+                                <th className="text-right">Stock Actual</th>
+                                <th className="text-center">Cobertura</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {insumosPreview.map((item, idx) => (
+                                <tr key={idx}>
+                                    <td>
+                                        <div className="font-medium">{item.nombre}</div>
+                                        <div className="text-muted">{item.codigo}</div>
+                                    </td>
+                                    <td className="text-right">
+                                        {item.requerido_total.toFixed(4)} {item.unidad_medida}
+                                    </td>
+                                    <td className="text-right font-mono">
+                                        {item.stock_actual.toFixed(4)}
+                                    </td>
+                                    <td className="text-center">
+                                        {item.cubre ? (
+                                            <span className="badge badge-success text-xs">Cubre</span>
+                                        ) : (
+                                            <span className="badge badge-danger text-xs">Falta { (item.requerido_total - item.stock_actual).toFixed(4) }</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                {!insumosPreview.every(i => i.cubre) && (
+                    <div className="p-2 text-xs text-danger border-t border-danger bg-red-50">
+                        <AlertTriangle size={12} className="inline mr-1"/>
+                        Advertencia: No hay suficiente stock para algunos insumos.
+                    </div>
+                )}
+            </div>
           )}
 
           {modoReceta === 'manual' && (
@@ -1185,7 +1295,7 @@ function OrdenDetalle() {
             </div>
           )}
 
-          <div className="form-group">
+          <div className="form-group mt-3">
             <label className="form-label">Supervisor Responsable *</label>
             <select
               className="form-select"
@@ -1200,9 +1310,6 @@ function OrdenDetalle() {
                 </option>
               ))}
             </select>
-            <small className="text-muted block mt-1">
-              Supervisor que se encargará de esta orden de producción
-            </small>
           </div>
 
           <div className="flex gap-2 justify-end mt-6">
@@ -1351,11 +1458,11 @@ function OrdenDetalle() {
                     <div className="font-medium text-sm">{item.insumo}</div>
                     <div className="text-xs text-muted">{item.codigo_insumo}</div>
                   </div>
-                  
+                   
                   <div className="col-span-3">
                     <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
                   </div>
-                  
+                   
                   <div className="col-span-3">
                     <input
                       type="number"
@@ -1449,7 +1556,7 @@ function OrdenDetalle() {
                       <div className="font-medium text-sm">{item.insumo}</div>
                       <div className="text-xs text-muted">{item.codigo_insumo}</div>
                     </div>
-                    
+                     
                     <div className="col-span-2 text-center">
                       <div className="text-xs text-muted mb-1">Ya Consumido</div>
                       <div className="font-mono text-sm">
@@ -1465,7 +1572,7 @@ function OrdenDetalle() {
                       </div>
                       <div className="text-xs text-muted">{item.unidad_medida}</div>
                     </div>
-                    
+                     
                     <div className="col-span-3">
                       <label className="text-xs text-muted block mb-1">Cantidad Final:</label>
                       <input

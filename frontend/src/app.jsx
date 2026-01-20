@@ -33,6 +33,7 @@ import CalendarioProduccion from './pages/Produccion/CalendarioProduccion';
 import Cotizaciones from './pages/Ventas/Cotizaciones';
 import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
 import DetalleCotizacion from './pages/Ventas/DetalleCotizacion';
+import ListaPrecios from './pages/Ventas/ListaPrecios';
 import OrdenesVenta from './pages/Ventas/OrdenesVenta';
 import NuevaOrdenVenta from './pages/Ventas/NuevaOrdenVenta';
 import DetalleOrdenVenta from './pages/Ventas/DetalleOrdenVenta';
@@ -258,6 +259,14 @@ function App() {
                         element={
                           <ProtectedRouteWithPermiso modulo="cotizaciones">
                             <DetalleCotizacion />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      <Route 
+                        path="/ventas/listas-precios" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="cotizaciones">
+                            <ListaPrecios />
                           </ProtectedRouteWithPermiso>
                         } 
                       />

@@ -1840,17 +1840,17 @@ export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
 
-    // 1. MODIFICAMOS LA CONSULTA PARA TRAER FLOTA Y CONDUCTOR
     const ordenResult = await executeQuery(`
       SELECT 
         ov.numero_orden,
+        ov.orden_compra_cliente,
+        ov.direccion_entrega,
         ov.estado,
         ov.moneda,
         ov.id_cliente,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         c.numero_cotizacion,
-        -- Campos nuevos de transporte
         f.placa,
         f.marca_modelo,
         e_cond.nombre_completo AS conductor_nombre,
@@ -1858,8 +1858,8 @@ export async function descargarPDFDespacho(req, res) {
       FROM ordenes_venta ov
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
-      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo             -- JOIN Flota
-      LEFT JOIN empleados e_cond ON ov.id_conductor = e_cond.id_empleado -- JOIN Conductor
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo 
+      LEFT JOIN empleados e_cond ON ov.id_conductor = e_cond.id_empleado
       WHERE ov.id_orden_venta = ?
     `, [id]);
 
@@ -1906,10 +1906,11 @@ export async function descargarPDFDespacho(req, res) {
       });
     }
 
-    // 2. AGREGAMOS LOS DATOS AL OBJETO QUE VA AL GENERADOR
     const datosPDF = {
       id_salida: salida.id_salida,
       numero_orden: orden.numero_orden,
+      oc_cliente: orden.orden_compra_cliente,
+      direccion_despacho: orden.direccion_entrega,
       numero_cotizacion: orden.numero_cotizacion,
       fecha_movimiento: salida.fecha_movimiento,
       tipo_movimiento: salida.tipo_movimiento,
@@ -1918,7 +1919,6 @@ export async function descargarPDFDespacho(req, res) {
       moneda: orden.moneda,
       cliente: orden.cliente,
       ruc_cliente: orden.ruc_cliente,
-      // Nuevos datos pasados al PDF
       conductor: orden.conductor_nombre,
       conductor_dni: orden.conductor_dni,
       vehiculo_placa: orden.placa,

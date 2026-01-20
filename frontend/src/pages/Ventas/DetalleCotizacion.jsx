@@ -58,32 +58,22 @@ function DetalleCotizacion() {
       setLoading(true);
       setError(null);
       
-      // 1. Llamada a la API
       const response = await cotizacionesAPI.descargarPDF(id);
       
-      // 2. Crear URL
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
       const link = document.createElement('a');
       link.href = url;
       
-      // --- INICIO DE LA MODIFICACIÓN PARA TU FORMATO DESEADO ---
-      
-      // 1. Limpiamos el nombre del cliente (Mayúsculas, sin tildes, espacios por guión bajo)
       const clienteSanitizado = (cotizacion.cliente || 'CLIENTE')
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quitar tildes
-        .replace(/[^a-zA-Z0-9]/g, "_")   // Reemplazar espacios y símbolos por guiones bajos
-        .replace(/_+/g, "_")             // Evitar guiones dobles (ej: EMPRESA__SA)
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/_+/g, "_")
         .toUpperCase();
 
-      // 2. Obtenemos el número (ej: COT-2025-001)
       const nroCot = cotizacion.numero_cotizacion || id;
-      
-      // 3. Armamos el nombre final: EMPRESA_SA_COT-2025-001.pdf
       const fileName = `${clienteSanitizado}_${nroCot}.pdf`;
-      
-      // --- FIN DE LA MODIFICACIÓN ---
       
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
@@ -201,8 +191,7 @@ function DetalleCotizacion() {
   };
 
   const formatearMoneda = (valor) => {
-    if (!cotizacion) return '-';
-    const simbolo = cotizacion.moneda === 'USD' ? '$' : 'S/';
+    const simbolo = cotizacion?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
@@ -359,6 +348,24 @@ function DetalleCotizacion() {
     );
   }
 
+  const calcularTotalesReales = () => {
+    if (!cotizacion.detalle) return { sub: 0, tax: 0, tot: 0 };
+
+    const sub = cotizacion.detalle.reduce((acc, item) => {
+        const val = parseFloat(item.valor_venta) || (parseFloat(item.cantidad) * parseFloat(item.precio_unitario));
+        return acc + (isNaN(val) ? 0 : val);
+    }, 0);
+
+    const tipoImp = (cotizacion.tipo_impuesto || 'IGV').toUpperCase();
+    const esExonerado = ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImp);
+    const pct = parseFloat(cotizacion.porcentaje_impuesto || 18);
+
+    const tax = esExonerado ? 0 : sub * (pct / 100);
+    return { sub, tax, tot: sub + tax };
+  };
+
+  const { sub: subtotalReal, tax: igvReal, tot: totalReal } = calcularTotalesReales();
+
   const estadoConfig = getEstadoConfig(cotizacion.estado);
   const IconoEstado = estadoConfig.icono;
   const diasVencimiento = cotizacion.fecha_vencimiento 
@@ -367,7 +374,7 @@ function DetalleCotizacion() {
   const estaConvertida = cotizacion.convertida_venta || cotizacion.estado === 'Convertida';
 
   const disponible = estadoCredito ? (cotizacion.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible) : 0;
-  const creditoInsuficiente = estadoCredito?.usar_limite_credito && cotizacion.plazo_pago !== 'Contado' && parseFloat(cotizacion.total) > parseFloat(disponible);
+  const creditoInsuficiente = estadoCredito?.usar_limite_credito && cotizacion.plazo_pago !== 'Contado' && totalReal > parseFloat(disponible);
 
   return (
     <div className="p-6">
@@ -666,14 +673,14 @@ function DetalleCotizacion() {
             )}
             
             {cotizacion.lugar_entrega && (
-  <div className="bg-orange-50 p-2 rounded border border-orange-100"> {/* Cambio para resaltar */}
-    <p className="text-xs text-orange-800 uppercase font-semibold mb-1 flex items-center gap-1">
-      <MapPin size={12} />
-      Lugar de Entrega
-    </p>
-    <p className="text-sm font-medium text-gray-800">{cotizacion.lugar_entrega}</p>
-  </div>
-)}
+              <div className="bg-orange-50 p-2 rounded border border-orange-100">
+                <p className="text-xs text-orange-800 uppercase font-semibold mb-1 flex items-center gap-1">
+                  <MapPin size={12} />
+                  Lugar de Entrega
+                </p>
+                <p className="text-sm font-medium text-gray-800">{cotizacion.lugar_entrega}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -718,7 +725,7 @@ function DetalleCotizacion() {
             <div className="space-y-3">
               <div className="flex justify-between py-2 border-b">
                 <span className="text-muted">Sub Total:</span>
-                <span className="font-bold text-lg">{formatearMoneda(cotizacion.subtotal)}</span>
+                <span className="font-bold text-lg">{formatearMoneda(subtotalReal)}</span>
               </div>
               {cotizacion.total_comision > 0 && (
                 <div className="flex justify-between py-2 border-b text-yellow-600">
@@ -730,11 +737,11 @@ function DetalleCotizacion() {
                 <span className="text-muted">
                   {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
                 </span>
-                <span className="font-bold text-lg">{formatearMoneda(cotizacion.igv)}</span>
+                <span className="font-bold text-lg">{formatearMoneda(igvReal)}</span>
               </div>
               <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl shadow-inner">
                 <span className="font-bold text-xl">TOTAL:</span>
-                <span className="font-bold text-3xl">{formatearMoneda(cotizacion.total)}</span>
+                <span className="font-bold text-3xl">{formatearMoneda(totalReal)}</span>
               </div>
               
               {cotizacion.moneda === 'USD' && parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
@@ -742,7 +749,7 @@ function DetalleCotizacion() {
                   <div className="flex justify-between items-center text-blue-900">
                     <span className="font-medium">Equivalente en Soles:</span>
                     <span className="font-bold text-blue-900 text-lg">
-                      S/ {formatearNumero(parseFloat(cotizacion.total) * parseFloat(cotizacion.tipo_cambio))}
+                      S/ {formatearNumero(totalReal * parseFloat(cotizacion.tipo_cambio))}
                     </span>
                   </div>
                   <p className="text-xs text-blue-700 mt-1">
@@ -758,13 +765,13 @@ function DetalleCotizacion() {
                   <CreditCard size={14} /> Saldo de Crédito del Cliente
                 </h4>
                 <div className="grid grid-cols-1 gap-2">
-                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_pen.disponible) < parseFloat(cotizacion.total) && cotizacion.moneda === 'PEN' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_pen.disponible) < totalReal && cotizacion.moneda === 'PEN' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-gray-600">PEN Disponible:</span>
                       <span className="font-bold text-gray-800">S/ {formatearNumero(parseFloat(estadoCredito.credito_pen.disponible))}</span>
                     </div>
                   </div>
-                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_usd.disponible) < parseFloat(cotizacion.total) && cotizacion.moneda === 'USD' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                  <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_usd.disponible) < totalReal && cotizacion.moneda === 'USD' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-gray-600">USD Disponible:</span>
                       <span className="font-bold text-gray-800">$ {formatearNumero(parseFloat(estadoCredito.credito_usd.disponible))}</span>

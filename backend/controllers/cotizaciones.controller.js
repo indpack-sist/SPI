@@ -263,16 +263,22 @@ export async function createCotizacion(req, res) {
     let sumaComisionPorcentual = 0;
 
     for (const item of detalle) {
-      const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+
+      const montoComision = precioBase * (pctComision / 100);
       const precioFinal = precioBase + montoComision;
 
-      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
-      subtotal += valorVenta;
+      const valorVenta = (cantidad * precioFinal) * (1 - (pctDescuento / 100));
+      
+      if (!isNaN(valorVenta)) {
+        subtotal += valorVenta;
+      }
 
-      totalComision += montoComision * item.cantidad;
-      sumaComisionPorcentual += porcentajeComision;
+      totalComision += montoComision * cantidad;
+      sumaComisionPorcentual += pctComision;
     }
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
@@ -280,14 +286,18 @@ export async function createCotizacion(req, res) {
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
     
-    if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') {
+    if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
     
-    const igv = subtotal * (porcentaje / 100);
-    const total = subtotal + igv;
+    let igv = subtotal * (porcentaje / 100);
+    let total = subtotal + igv;
+
+    if (isNaN(subtotal)) subtotal = 0;
+    if (isNaN(igv)) igv = 0;
+    if (isNaN(total)) total = 0;
     
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
@@ -353,9 +363,12 @@ export async function createCotizacion(req, res) {
     
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+
+      const montoComision = precioBase * (pctComision / 100);
       const precioFinal = precioBase + montoComision;
       
       await executeQuery(`
@@ -373,12 +386,12 @@ export async function createCotizacion(req, res) {
       `, [
         idCotizacion,
         item.id_producto,
-        parseFloat(item.cantidad),
+        cantidad,
         precioFinal,
         precioBase,
-        porcentajeComision,
+        pctComision,
         montoComision,
-        parseFloat(item.descuento_porcentaje || 0),
+        pctDescuento,
         i + 1
       ]);
     }
@@ -504,16 +517,22 @@ export async function updateCotizacion(req, res) {
     let sumaComisionPorcentual = 0;
 
     for (const item of detalle) {
-      const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+
+      const montoComision = precioBase * (pctComision / 100);
       const precioFinal = precioBase + montoComision;
 
-      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
-      subtotal += valorVenta;
+      const valorVenta = (cantidad * precioFinal) * (1 - (pctDescuento / 100));
+      
+      if (!isNaN(valorVenta)) {
+        subtotal += valorVenta;
+      }
 
-      totalComision += montoComision * item.cantidad;
-      sumaComisionPorcentual += porcentajeComision;
+      totalComision += montoComision * cantidad;
+      sumaComisionPorcentual += pctComision;
     }
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
@@ -521,14 +540,18 @@ export async function updateCotizacion(req, res) {
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
     
-    if (tipoImpuestoFinal === 'EXO' || tipoImpuestoFinal === 'INA') {
+    if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
 
-    const igv = subtotal * (porcentaje / 100);
-    const total = subtotal + igv;
+    let igv = subtotal * (porcentaje / 100);
+    let total = subtotal + igv;
+
+    if (isNaN(subtotal)) subtotal = 0;
+    if (isNaN(igv)) igv = 0;
+    if (isNaN(total)) total = 0;
 
     if (cotActual.usar_limite_credito === 1 && plazo_pago !== 'Contado') {
       const deudaRes = await executeQuery(`
@@ -612,9 +635,12 @@ export async function updateCotizacion(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+
+      const montoComision = precioBase * (pctComision / 100);
       const precioFinal = precioBase + montoComision;
 
       await executeQuery(`
@@ -632,12 +658,12 @@ export async function updateCotizacion(req, res) {
       `, [
         id,
         item.id_producto,
-        item.cantidad,
+        cantidad,
         precioFinal,
         precioBase,
-        porcentajeComision,
+        pctComision,
         montoComision,
-        item.descuento_porcentaje || 0,
+        pctDescuento,
         i + 1
       ]);
     }
@@ -1049,11 +1075,11 @@ export async function descargarPDFCotizacion(req, res) {
     });
   }
 }
+
 export async function agregarDireccionClienteDesdeCotizacion(req, res) {
   try {
     const { id_cliente, direccion, referencia } = req.body;
 
-    // Validaciones básicas
     if (!id_cliente) {
       return res.status(400).json({ 
         success: false, 
@@ -1068,7 +1094,6 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
       });
     }
 
-    // Verificar que el cliente exista
     const clienteCheck = await executeQuery(
       'SELECT id_cliente FROM clientes WHERE id_cliente = ?',
       [id_cliente]
@@ -1081,8 +1106,6 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
       });
     }
 
-    // Insertar la nueva dirección
-    // Nota: Por defecto la ponemos como 'Activo' y es_principal = 0 (ya que se agrega desde una cotización específica)
     const result = await executeQuery(
       `INSERT INTO clientes_direcciones (
         id_cliente, 
@@ -1101,7 +1124,6 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
       });
     }
 
-    // Devolvemos el ID insertado para que el frontend pueda auto-seleccionar esta dirección
     res.status(201).json({
       success: true,
       message: 'Dirección agregada exitosamente',

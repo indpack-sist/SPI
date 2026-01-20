@@ -25,6 +25,7 @@ import cotizacionesRoutes from './routes/cotizaciones.routes.js';
 import ordenesVentaRoutes from './routes/ordenesVenta.routes.js';
 import guiasRemisionRoutes from './routes/guiasRemision.routes.js';
 import guiasTransportistaRoutes from './routes/guiasTransportista.routes.js';
+import listasPreciosRoutes from './routes/listas-precios.routes.js';
 
 import comprasRoutes from './routes/compras.routes.js';
 
@@ -61,7 +62,7 @@ app.get('/', (req, res) => {
       productos: ['productos', 'recetas', 'ajustes'],
       inventario: ['entradas', 'salidas', 'transferencias'],
       produccion: ['ordenes'],
-      ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista'],
+      ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista', 'listas-precios'],
       compras: ['compras'],
       analytics: ['dashboard'],
       finanzas: ['cuentas-pago', 'pagos-cobranzas']
@@ -100,6 +101,7 @@ app.use('/api/cotizaciones', verificarToken, verificarPermiso('cotizaciones'), c
 app.use('/api/ordenes-venta', verificarToken, verificarPermiso('ordenesVenta'), ordenesVentaRoutes);
 app.use('/api/guias-remision', verificarToken, verificarPermiso('guiasRemision'), guiasRemisionRoutes);
 app.use('/api/guias-transportista', verificarToken, verificarPermiso('guiasTransportista'), guiasTransportistaRoutes);
+app.use('/api/listas-precios', verificarToken, verificarPermiso('listasPrecios'), listasPreciosRoutes);
 
 app.use('/api/compras', verificarToken, verificarPermiso('compras'), comprasRoutes);
 
@@ -222,6 +224,7 @@ async function startServer() {
       console.log('   - /api/ordenes-venta [ordenesVenta]');
       console.log('   - /api/guias-remision [guiasRemision]');
       console.log('   - /api/guias-transportista [guiasTransportista]');
+      console.log('   - /api/listas-precios [listasPrecios]');
       console.log('');
       console.log('COMPRAS:');
       console.log('   - /api/compras [compras]');

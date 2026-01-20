@@ -1763,6 +1763,8 @@ export async function getEstadisticasOrdenesVenta(req, res) {
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
+    
+    console.log('ID recibido:', id, '| Tipo:', typeof id); // ← AGREGAR
 
     if (!id || id === 'undefined' || id === 'null') {
       return res.status(400).json({ success: false, error: 'ID inválido' });
@@ -1790,8 +1792,8 @@ export async function descargarPDFOrdenVenta(req, res) {
     }
 
     const orden = ordenResult.data[0];
+    console.log('Orden encontrada:', orden.numero_orden); // ← AGREGAR
 
-    // ✅ ESTE ES EL QUERY QUE FALTABA - CON EL JOIN A PRODUCTOS
     const detalleResult = await executeQuery(`
       SELECT 
         dov.id_detalle,
@@ -1808,6 +1810,15 @@ export async function descargarPDFOrdenVenta(req, res) {
       ORDER BY dov.orden ASC
     `, [id]);
 
+    console.log('Success del detalle:', detalleResult.success); // ← AGREGAR
+    console.log('Cantidad de items:', detalleResult.data?.length || 0); // ← AGREGAR
+    
+    if (detalleResult.data && detalleResult.data.length > 0) {
+      console.log('Primer item completo:', JSON.stringify(detalleResult.data[0], null, 2)); // ← AGREGAR
+    } else {
+      console.log('DETALLE VACÍO'); // ← AGREGAR
+    }
+
     if (!detalleResult.success) {
       return res.status(500).json({ 
         success: false, 
@@ -1816,6 +1827,8 @@ export async function descargarPDFOrdenVenta(req, res) {
     }
 
     orden.detalle = detalleResult.data || [];
+    
+    console.log('Items en orden.detalle antes de PDF:', orden.detalle.length); // ← AGREGAR
 
     const direccionFinal = orden.direccion_entrega && orden.direccion_entrega.trim() !== '' 
       ? orden.direccion_entrega 
@@ -1823,7 +1836,9 @@ export async function descargarPDFOrdenVenta(req, res) {
 
     orden.direccion_entrega = direccionFinal;
 
+    console.log('Llamando a generarOrdenVentaPDF...'); // ← AGREGAR
     const pdfBuffer = await generarOrdenVentaPDF(orden);
+    console.log('PDF generado, tamaño:', pdfBuffer.length, 'bytes'); // ← AGREGAR
     
     const nombreArchivo = `Orden-${orden.numero_orden}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
@@ -1831,11 +1846,10 @@ export async function descargarPDFOrdenVenta(req, res) {
     res.send(pdfBuffer);
 
   } catch (error) {
-    console.error(error);
+    console.error('ERROR:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }
-
 export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;

@@ -26,12 +26,14 @@ import {
   UserCog
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
+import { useAuth } from '../../context/AuthContext';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 
 function OrdenesProduccion() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [ordenes, setOrdenes] = useState([]);
   const [registrosParciales, setRegistrosParciales] = useState({});
@@ -46,6 +48,9 @@ function OrdenesProduccion() {
   const [fechaFin, setFechaFin] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+
+  const userRole = user?.rol || '';
+  const esComercial = ['comercial', 'ventas', 'vendedor'].includes(userRole.toLowerCase());
 
   useEffect(() => {
     cargarDatos();
@@ -385,10 +390,13 @@ function OrdenesProduccion() {
           </h1>
           <p className="text-muted text-sm mt-1">Gestión del ciclo de fabricación</p>
         </div>
-        <button className="btn btn-primary" onClick={handleNuevaOrden}>
-          <Plus size={18} />
-          Nueva Orden
-        </button>
+        
+        {!esComercial && (
+          <button className="btn btn-primary" onClick={handleNuevaOrden}>
+            <Plus size={18} />
+            Nueva Orden
+          </button>
+        )}
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -548,7 +556,7 @@ function OrdenesProduccion() {
           <h2 className="card-title">Listado</h2>
           <div className="flex gap-2 items-center text-sm text-muted">
              <span>
-                Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
+               Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
              </span>
              <button className="btn btn-sm btn-outline ml-2" onClick={cargarDatos}><RefreshCw size={16}/></button>
           </div>

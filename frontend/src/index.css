@@ -2473,3 +2473,89 @@ div:hover > div > button[title="Ver Detalle"] {
 .border-blue-100 {
   border-color: #dbeafe;
 }
+/* =========================================
+   ESTILOS PARA MÓDULO DE LISTAS DE PRECIOS
+   ========================================= */
+
+/* 1. Animación Fade In (Usada en tus componentes) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* 2. Scrollbars Personalizados (Para que se vean finos en las tablas) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* gris suave */
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8; /* gris más oscuro al hover */
+}
+
+/* 3. Ajustes de Tabla (Sticky Header) */
+/* Asegura que el encabezado de la tabla no se mueva al hacer scroll */
+.table thead.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.table thead th {
+  background-color: white; /* Evita que el contenido pase por detrás */
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/* 4. Inputs Numéricos sin flechas (Opcional, para limpieza visual en precios) */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+/* 5. Checkbox personalizado (Mejora el alineamiento en celdas pequeñas) */
+input[type="checkbox"] {
+  accent-color: var(--primary); /* Usa tu color primario */
+  vertical-align: middle;
+}
+
+/* 6. Estilos de Tarjeta (Refuerzo por si faltan clases de Tailwind) */
+.card {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  padding: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.card-body {
+  padding: 1rem;
+  flex: 1; /* Permite que el cuerpo ocupe el espacio restante */
+}

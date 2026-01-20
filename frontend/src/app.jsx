@@ -199,7 +199,7 @@ function App() {
                       <Route 
                         path="/produccion/calendario" 
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesProduccion">
+                          <ProtectedRouteWithPermiso modulos={['ordenesProduccion', 'cotizaciones']}>
                             <CalendarioProduccion />
                           </ProtectedRouteWithPermiso>
                         } 

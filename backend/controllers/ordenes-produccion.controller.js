@@ -393,7 +393,10 @@ export async function updateOrden(req, res) {
     } = req.body;
 
     const ordenExistente = await executeQuery(`
-      SELECT * FROM ordenes_produccion WHERE id_orden = ?
+      SELECT op.*, ov.id_comercial, ov.numero_orden as numero_ov
+      FROM ordenes_produccion op
+      LEFT JOIN ordenes_venta ov ON op.id_orden_venta_origen = ov.id_orden_venta
+      WHERE op.id_orden = ?
     `, [id]);
 
     if (!ordenExistente.success || ordenExistente.data.length === 0) {
@@ -448,6 +451,17 @@ export async function updateOrden(req, res) {
 
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error });
+    }
+
+    if ((fecha_programada !== undefined || fecha_programada_fin !== undefined) && orden.id_comercial) {
+      const titulo = `Producción Programada: ${orden.numero_orden}`;
+      const mensaje = `Su Orden de Venta ${orden.numero_ov || 'N/A'} ha sido programada del ${fecha_programada || '...'} al ${fecha_programada_fin || '...'}.`;
+      const ruta = `/produccion/calendario?fecha=${fecha_programada}`;
+
+      await executeQuery(`
+        INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
+        VALUES (?, ?, ?, 'info', ?)
+      `, [orden.id_comercial, titulo, mensaje, ruta]);
     }
 
     res.json({ success: true, message: 'Orden actualizada exitosamente' });

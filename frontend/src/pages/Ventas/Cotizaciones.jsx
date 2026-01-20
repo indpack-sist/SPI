@@ -124,32 +124,22 @@ function Cotizaciones() {
       setLoading(true);
       setError(null);
       
-      // 1. Llamada a la API usando el ID recibido por parámetro
       const response = await cotizacionesAPI.descargarPDF(id_cotizacion);
       
-      // 2. Crear URL
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
       const link = document.createElement('a');
       link.href = url;
       
-      // --- LOGICA DE NOMBRE ---
-      
-      // 1. Limpiamos el nombre del cliente (usamos el parámetro 'cliente')
       const clienteSanitizado = (cliente || 'CLIENTE')
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
         .replace(/[^a-zA-Z0-9]/g, "_")   
-        .replace(/_+/g, "_")             
+        .replace(/_+/g, "_")            
         .toUpperCase();
 
-      // 2. Usamos el número recibido por parámetro
       const nroCot = numero || id_cotizacion;
-      
-      // 3. Armamos el nombre final
       const fileName = `${clienteSanitizado}_${nroCot}.pdf`;
-      
-      // ------------------------
       
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
@@ -158,7 +148,7 @@ function Cotizaciones() {
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
       
-      setSuccessMessage('PDF descargado exitosamente'); // Ojo: en este archivo usas setSuccessMessage
+      setSuccessMessage('PDF descargado exitosamente');
 
     } catch (err) {
       console.error("Error original:", err);
@@ -318,7 +308,6 @@ function Cotizaciones() {
             className="btn btn-sm btn-outline"
             onClick={(e) => {
               e.stopPropagation();
-              // AQUI EL CAMBIO: Pasamos ID (value), Numero y Cliente
               handleDescargarPDF(value, row.numero_cotizacion, row.cliente);
             }}
             title="Descargar PDF"

@@ -15,7 +15,7 @@ const ETIQUETAS_IMPUESTO = {
 const fmtNum = (num) => {
   return Number(num).toLocaleString('en-US', { 
     minimumFractionDigits: 2, 
-    maximumFractionDigits: 4
+    maximumFractionDigits: 2 
   });
 };
 
@@ -56,10 +56,6 @@ export async function generarOrdenVentaPDF(orden) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const nombreCliente = orden.cliente || orden.razon_social || orden.nombre || 'CLIENTE SIN NOMBRE';
-      const rucCliente = orden.ruc_cliente || orden.ruc || orden.numero_documento || 'SIN RUC';
-      const direccionCliente = orden.direccion_entrega || orden.direccion_cliente || orden.direccion || '';
-
       let logoBuffer = null;
       try {
         logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
@@ -68,7 +64,7 @@ export async function generarOrdenVentaPDF(orden) {
 
       if (logoBuffer) {
         try {
-          doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
+          doc.image(logoBuffer, 30, 30, { width: 180 }); 
         } catch (error) {
           dibujarLogoFallback(doc);
         }
@@ -76,231 +72,195 @@ export async function generarOrdenVentaPDF(orden) {
         dibujarLogoFallback(doc);
       }
 
-      doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
-      doc.text('INDPACK S.A.C.', 50, 110);
+      const yEmpresa = 85; 
+      doc.fontSize(8).fillColor('#000000').font('Helvetica-Bold');
+      doc.text('INDPACK S.A.C.', 30, yEmpresa);
       
-      doc.fontSize(8).font('Helvetica');
-      const direccionEmpresa = 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA, Villa el Salvador, Lima - Lima (PE) - Perú';
-      doc.text(direccionEmpresa, 50, 123, { width: 250 });
-      doc.text('Teléfono: 01- 312 7858', 50, 148);
-      doc.text('E-mail: informes@indpackperu.com', 50, 160);
-      doc.text('Web: https://www.indpackperu.com/', 50, 172);
+      doc.fontSize(7).font('Helvetica').fillColor('#444444');
+      doc.text('AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA', 30, yEmpresa + 12);
+      doc.text('Villa el Salvador, Lima - Perú', 30, yEmpresa + 22);
+      doc.text('Teléfono: 01- 312 7858  |  E-mail: informes@indpackperu.com', 30, yEmpresa + 32);
+      doc.text('Web: https://www.indpackperu.com/', 30, yEmpresa + 42);
 
-      doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
-      
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
-      
-      doc.fontSize(12).font('Helvetica-Bold');
-      doc.text('ORDEN DE VENTA', 385, 65, { align: 'center', width: 155 });
-      
-      doc.fontSize(11).font('Helvetica-Bold');
-      doc.text(`No. ${orden.numero_orden}`, 385, 83, { align: 'center', width: 155 });
+      const xBox = 350;
+      const yBox = 30;
+      const wBox = 215;
+      const hBox = 75;
 
-      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
-      const alturaRecuadroCliente = Math.max(90, alturaDireccion + 75);
+      doc.roundedRect(xBox, yBox, wBox, hBox, 5).lineWidth(1).stroke('#000000');
       
-      doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
+      let yText = yBox + 18;
+      doc.fillColor('#000000').font('Helvetica-Bold').fontSize(12);
+      doc.text('R.U.C. 20550932297', xBox, yText, { width: wBox, align: 'center' });
+      yText += 20;
       
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Cliente:', 40, 203);
-      doc.font('Helvetica');
-      doc.text(nombreCliente, 100, 203, { width: 230 });
+      doc.fontSize(14).fillColor('#000000');
+      const titulo = orden.tipo_comprobante === 'Factura' ? 'FACTURA ELECTRÓNICA' : 'ORDEN DE VENTA';
+      doc.text(titulo, xBox, yText, { width: wBox, align: 'center' });
+      yText += 20;
       
-      doc.font('Helvetica-Bold');
-      doc.text('RUC:', 40, 218);
-      doc.font('Helvetica');
-      doc.text(rucCliente, 100, 218);
-      
-      doc.font('Helvetica-Bold');
-      doc.text('Dirección:', 40, 233);
-      doc.font('Helvetica');
-      doc.text(direccionCliente, 100, 233, { width: 230, lineGap: 2 });
-      
-      const yPosicionCiudad = 233 + alturaDireccion + 5;
-      
-      doc.font('Helvetica-Bold');
-      doc.text('Ciudad/Lugar:', 40, yPosicionCiudad);
-      doc.font('Helvetica');
-      const ubicacion = [orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ');
-      doc.text(ubicacion || 'Lima - Perú', 100, yPosicionCiudad, { width: 230 });
+      doc.fontSize(12).fillColor('#000000');
+      const numeroMostrar = orden.numero_comprobante || orden.numero_orden;
+      doc.text(`No. ${numeroMostrar}`, xBox, yText, { width: wBox, align: 'center' });
 
-      const yPosicionContacto = yPosicionCiudad + 15;
-      doc.font('Helvetica-Bold');
-      doc.text('Contacto:', 40, yPosicionContacto);
-      doc.font('Helvetica');
-      const contactoInfo = [orden.contacto_entrega, orden.telefono_entrega].filter(Boolean).join(' / ');
-      doc.text(contactoInfo || '-', 100, yPosicionContacto, { width: 230 });
-
-      doc.font('Helvetica-Bold');
-      doc.text('Moneda:', 360, 203);
-      doc.font('Helvetica');
-      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', 450, 203);
+      const yInfo = 145;
+      const hInfo = 95;
       
-      doc.font('Helvetica-Bold');
-      doc.text('Plazo de pago:', 360, 218);
-      doc.font('Helvetica');
-      doc.text(orden.plazo_pago || '', 450, 218);
-      
-      doc.font('Helvetica-Bold');
-      doc.text('Forma de pago:', 360, 233);
-      doc.font('Helvetica');
-      doc.text(orden.forma_pago || '', 450, 233);
-      
-      doc.font('Helvetica-Bold');
-      doc.text('O/C Cliente:', 360, 248);
-      doc.font('Helvetica');
-      doc.text(orden.orden_compra_cliente || '-', 450, 248);
+      doc.roundedRect(30, yInfo, 535, hInfo, 5).lineWidth(0.5).stroke('#000000');
 
-      const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
+      const col1X = 40;
+      const col1V = 95;
+      const col2X = 350;
+      const col2V = 420;
       
-      doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
+      let currentY = yInfo + 10;
+      const gap = 14;
+
+      doc.fontSize(8).fillColor('#000000');
+
+      doc.font('Helvetica-Bold').text('Cliente:', col1X, currentY);
+      doc.font('Helvetica').text(orden.cliente || orden.razon_social || 'VARIOS', col1V, currentY, { width: 250, ellipsis: true });
+
+      doc.font('Helvetica-Bold').text('Fecha Emisión:', col2X, currentY);
+      doc.font('Helvetica').text(new Date(orden.fecha_emision).toLocaleDateString('es-PE'), col2V, currentY);
       
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
-      doc.font('Helvetica');
-      const fechaEmision = new Date(orden.fecha_emision).toLocaleDateString('es-PE');
-      doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
+      currentY += gap;
 
-      doc.font('Helvetica-Bold');
-      doc.text('Fecha Entrega Estimada:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
-      doc.font('Helvetica');
-      const fechaEntrega = orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'Por coordinar';
-      doc.text(fechaEntrega, 310, yPosRecuadroFechas + 25, { align: 'center', width: 252 });
+      doc.font('Helvetica-Bold').text('RUC:', col1X, currentY);
+      doc.font('Helvetica').text(orden.ruc_cliente || orden.ruc || '-', col1V, currentY);
 
-      let yPos = yPosRecuadroFechas + 52;
+      doc.font('Helvetica-Bold').text('Moneda:', col2X, currentY);
+      doc.font('Helvetica').text(orden.moneda === 'USD' ? 'USD' : 'PEN', col2V, currentY);
 
-      doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
+      currentY += gap;
+
+      doc.font('Helvetica-Bold').text('Dirección:', col1X, currentY);
+      const direccionLimpia = (orden.direccion_entrega || orden.direccion_cliente || orden.direccion || '').replace(/[\r\n]+/g, " ");
+      doc.font('Helvetica').text(direccionLimpia, col1V, currentY, { width: 250, height: 26, ellipsis: true });
+
+      doc.font('Helvetica-Bold').text('Plazo/Forma:', col2X, currentY);
+      const plazoForma = orden.forma_pago || orden.plazo_pago || 'Contado';
+      doc.font('Helvetica').text(plazoForma, col2V, currentY);
+
+      currentY += gap + 6;
+
+      doc.font('Helvetica-Bold').text('Vendedor:', col1X, currentY);
+      doc.font('Helvetica').text(orden.comercial || 'Oficina', col1V, currentY, { width: 250 });
+
+      doc.font('Helvetica-Bold').text('O/C Cliente:', col2X, currentY);
+      doc.font('Helvetica-Bold').text(orden.orden_compra_cliente || '-', col2V, currentY); 
+
+      currentY += gap;
+
+      if (orden.fecha_entrega_estimada) {
+        doc.font('Helvetica-Bold').text('Entrega Est.:', col2X, currentY);
+        doc.font('Helvetica').text(new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE'), col2V, currentY);
+      }
+
+      let yTable = yInfo + hInfo + 15;
       
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('CÓDIGO', 40, yPos + 6);
-      doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
-      doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
-      doc.text('DESCRIPCIÓN', 230, yPos + 6);
-      doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
-      doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
-
-      yPos += 20;
-
-      const simboloMoneda = orden.moneda === 'USD' ? '$' : 'S/';
+      doc.rect(30, yTable, 535, 20).fill('#e0e0e0');
+      doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
       
+      doc.text('ITEM', 35, yTable + 6, { width: 30, align: 'center' });
+      doc.text('CÓDIGO', 70, yTable + 6, { width: 60 });
+      doc.text('DESCRIPCIÓN', 130, yTable + 6, { width: 220 });
+      doc.text('UND', 350, yTable + 6, { width: 30, align: 'center' });
+      doc.text('CANT.', 380, yTable + 6, { width: 50, align: 'center' });
+      doc.text('P.UNIT', 435, yTable + 6, { width: 50, align: 'right' });
+      doc.text('TOTAL', 490, yTable + 6, { width: 70, align: 'right' });
+
+      yTable += 20;
+
       if (orden.detalle && orden.detalle.length > 0) {
-        orden.detalle.forEach((item, idx) => {
-          const cantidad = fmtNum(item.cantidad);
-          const precioUnitario = fmtNum(item.precio_unitario);
-          
-          const descuento = parseFloat(item.descuento_porcentaje || 0);
-          const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
-          const valorVenta = fmtNum(totalLinea);
-          
-          const descripcion = item.producto;
-          const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
-          const alturaFila = Math.max(20, alturaDescripcion + 10);
-
-          if (yPos + alturaFila > 700) {
+        orden.detalle.forEach((item, i) => {
+          if (yTable > 700) {
             doc.addPage();
-            yPos = 50;
-            
-            doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
-            doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-            doc.text('CÓDIGO', 40, yPos + 6);
-            doc.text('CANT.', 130, yPos + 6, { width: 50, align: 'center' });
-            doc.text('UNID.', 185, yPos + 6, { width: 40, align: 'center' });
-            doc.text('DESCRIPCIÓN', 230, yPos + 6);
-            doc.text('P. UNIT.', 450, yPos + 6, { align: 'right', width: 50 });
-            doc.text('TOTAL', 505, yPos + 6, { align: 'right', width: 50 });
-            yPos += 20;
+            yTable = 40;
           }
 
-          doc.fontSize(8).font('Helvetica').fillColor('#000000');
-          
-          doc.text(item.codigo_producto, 40, yPos + 5);
-          doc.text(cantidad, 130, yPos + 5, { width: 50, align: 'center' });
-          doc.text(item.unidad_medida || 'UND', 185, yPos + 5, { width: 40, align: 'center' });
-          doc.text(descripcion, 230, yPos + 5, { width: 215, lineGap: 2 });
-          doc.text(precioUnitario, 450, yPos + 5, { align: 'right', width: 50 });
-          doc.text(`${simboloMoneda} ${valorVenta}`, 505, yPos + 5, { align: 'right', width: 50 });
+          const descuento = parseFloat(item.descuento_porcentaje || 0);
+          const precioFinal = item.precio_unitario * (1 - descuento/100);
+          const totalLinea = item.cantidad * precioFinal;
 
-          yPos += alturaFila;
+          doc.fillColor('#000000').fontSize(7).font('Helvetica');
+          
+          if (i % 2 === 0) {
+             doc.rect(30, yTable - 2, 535, 14).fillOpacity(0.3).fill('#f9f9f9').fillOpacity(1);
+          }
+
+          doc.text(String(i + 1), 35, yTable, { width: 30, align: 'center' });
+          doc.text(item.codigo_producto || '-', 70, yTable);
+          doc.text(item.producto, 130, yTable, { width: 220, ellipsis: true });
+          doc.text(item.unidad_medida || 'UND', 350, yTable, { width: 30, align: 'center' });
+          doc.text(fmtNum(item.cantidad), 380, yTable, { width: 50, align: 'center' });
+          doc.text(fmtNum(precioFinal), 435, yTable, { width: 50, align: 'right' });
+          doc.text(fmtNum(totalLinea), 490, yTable, { width: 70, align: 'right' });
+
+          yTable += 14;
         });
       }
 
-      yPos += 10;
-      
-      const yBaseFooter = yPos;
-      let yPosLeft = yBaseFooter;
-      let yPosRight = yBaseFooter;
+      doc.moveTo(30, yTable).lineTo(565, yTable).lineWidth(0.5).stroke('#aaaaaa');
+      yTable += 10;
 
+      if (yTable > 640) {
+        doc.addPage();
+        yTable = 40;
+      }
+
+      const yFooter = yTable;
+      
       const subtotal = fmtNum(orden.subtotal || 0);
       const igv = fmtNum(orden.igv || 0);
       const total = fmtNum(orden.total || 0);
       const totalNumero = parseFloat(orden.total || 0);
+      const simbolo = orden.moneda === 'USD' ? '$' : 'S/';
+      const etiquetaImp = ETIQUETAS_IMPUESTO[orden.tipo_impuesto] || 'IGV (18%)';
+
+      const xTotales = 380;
+      let yTotales = yFooter;
+
+      doc.fontSize(8).font('Helvetica-Bold');
       
-      const tipoImpuesto = orden.tipo_impuesto || 'IGV';
-      const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || tipoImpuesto;
+      doc.text('SUB TOTAL:', xTotales, yTotales);
+      doc.font('Helvetica').text(`${simbolo} ${subtotal}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
+      yTotales += 15;
 
-      doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('SUB TOTAL', 390, yPosRight + 4);
+      doc.font('Helvetica-Bold').text(etiquetaImp + ':', xTotales, yTotales);
+      doc.font('Helvetica').text(`${simbolo} ${igv}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
+      yTotales += 15;
+
+      doc.moveTo(xTotales, yTotales).lineTo(565, yTotales).stroke();
+      yTotales += 5;
+
+      doc.fontSize(9).font('Helvetica-Bold').text('TOTAL A PAGAR:', xTotales, yTotales);
+      doc.text(`${simbolo} ${total}`, xTotales + 80, yTotales, { width: 100, align: 'right' });
+
+      doc.fontSize(7).font('Helvetica-Bold').text('OBSERVACIONES:', 30, yFooter);
+      doc.font('Helvetica').text(orden.observaciones || 'Sin observaciones.', 30, yFooter + 10, { width: 330 });
+
+      const letras = numeroALetras(totalNumero, orden.moneda);
+      doc.font('Helvetica-Bold').text('SON:', 30, yFooter + 50);
+      doc.font('Helvetica').text(letras, 55, yFooter + 50, { width: 300 });
+
+      const yBank = 710;
+      doc.rect(30, yBank, 535, 55).fill('#f0f0f0');
       
-      doc.roundedRect(470, yPosRight, 92, 15, 3).stroke('#CCCCCC');
-      doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${subtotal}`, 475, yPosRight + 4, { align: 'right', width: 80 });
-
-      yPosRight += 20;
-
-      doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text(etiquetaImpuesto, 390, yPosRight + 4, { width: 80, align: 'left' });
+      doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
+      doc.text('CUENTAS BANCARIAS - INDPACK S.A.C.', 30, yBank + 6, { width: 535, align: 'center' });
       
-      doc.roundedRect(470, yPosRight, 92, 15, 3).stroke('#CCCCCC');
-      doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${igv}`, 475, yPosRight + 4, { align: 'right', width: 80 });
-
-      yPosRight += 20;
-
-      doc.roundedRect(385, yPosRight, 85, 15, 3).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('TOTAL', 390, yPosRight + 4);
+      doc.font('Helvetica');
+      const bankY = yBank + 20;
       
-      doc.roundedRect(470, yPosRight, 92, 15, 3).stroke('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${total}`, 475, yPosRight + 4, { align: 'right', width: 80 });
-
-      yPosRight += 25;
-
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('OBSERVACIONES', 40, yPosLeft);
+      doc.text('BCP SOLES: 194-2055093-0-22', 40, bankY);
+      doc.text('CCI: 002-194-002055093022-90', 40, bankY + 12);
       
-      doc.fontSize(8).font('Helvetica');
-      let alturaObservaciones = 0;
-      
-      if (orden.observaciones) {
-        alturaObservaciones = calcularAlturaTexto(doc, orden.observaciones, 330, 8);
-        doc.text(orden.observaciones, 40, yPosLeft + 15, { width: 330 });
-      } else {
-        alturaObservaciones = 10;
-      }
-      
-      yPosLeft += (15 + alturaObservaciones + 10);
+      doc.text('BBVA SOLES: 0011-0175-0100045678', 220, bankY);
+      doc.text('CCI: 011-175-000100045678-99', 220, bankY + 12);
 
-      if (orden.comercial) {
-        doc.fontSize(8).font('Helvetica-Bold');
-        doc.text('Vendedor:', 40, yPosLeft);
-        doc.font('Helvetica');
-        doc.text(orden.comercial, 90, yPosLeft);
-        yPosLeft += 15;
-      }
-
-      yPos = Math.max(yPosRight, yPosLeft) + 10;
-
-      doc.fillColor('#000000');
-      doc.fontSize(8).font('Helvetica');
-      const totalEnLetras = numeroALetras(totalNumero, orden.moneda);
-      doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
-
-      doc.fontSize(7).font('Helvetica').fillColor('#666666');
-      doc.text('Page: 1 / 1', 50, 770, { align: 'center', width: 495 });
+      doc.text('CUENTA DETRACCIÓN BN: 00-000-00000', 400, bankY);
+      doc.text('Facturas sujetas a detracción del 10%', 400, bankY + 12);
 
       doc.end();
       
@@ -312,11 +272,9 @@ export async function generarOrdenVentaPDF(orden) {
 }
 
 function dibujarLogoFallback(doc) {
-    doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
+    doc.rect(30, 30, 180, 50).fillAndStroke('#1e88e5', '#1e88e5');
     doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-    doc.text('IndPack', 60, 55);
-    doc.fontSize(10).font('Helvetica');
-    doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+    doc.text('IndPack', 40, 45);
 }
 
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
@@ -372,7 +330,7 @@ function numeroALetras(numero, moneda) {
   }
   
   const resultado = convertirNumero(entero);
-  const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
+  const nombreMoneda = moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES';
   
   return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }

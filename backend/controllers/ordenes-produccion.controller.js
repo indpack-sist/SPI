@@ -193,7 +193,11 @@ export async function asignarRecetaYSupervisor(req, res) {
     let costoMateriales = 0;
     let rendimientoUnidades = 1;
     let idRecetaProducto = null;
+    
+    // Array para almacenar el detalle que necesita tu Modal
+    let insumosReporte = []; 
 
+    // --- CASO 1: ORDEN MANUAL ---
     if (modo_receta === 'manual' || es_orden_manual) {
       const updateResult = await executeQuery(`
         UPDATE ordenes_produccion 
@@ -220,17 +224,22 @@ export async function asignarRecetaYSupervisor(req, res) {
           lotes_necesarios: 0,
           rendimiento_unidades: 1,
           estado: 'Pendiente',
-          es_manual: true
+          es_manual: true,
+          insumos: [] // Array vacío para orden manual
         }
       });
     }
 
+    // --- CASO 2: RECETA EXISTENTE (SELECCIONAR) ---
     if (modo_receta === 'seleccionar' && id_receta_producto) {
+      // Modificamos la query para traer nombre y codigo para el modal
       const recetaResult = await executeQuery(`
         SELECT 
           rd.id_insumo,
           rd.cantidad_requerida,
           rd.unidad_medida,
+          p.codigo AS codigo_insumo,    
+          p.nombre AS nombre_insumo,    
           p.costo_unitario_promedio,
           p.stock_actual,
           p.id_tipo_inventario,
@@ -253,25 +262,63 @@ export async function asignarRecetaYSupervisor(req, res) {
       const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
       
       for (const insumo of recetaData) {
-        const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
-        costoMateriales += cantidadTotal * parseFloat(insumo.costo_unitario_promedio);
+        const cantidadTotalRequerida = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
+        const costoUnitario = parseFloat(insumo.costo_unitario_promedio);
+        costoMateriales += cantidadTotalRequerida * costoUnitario;
+
+        // Construimos el objeto para el reporte del modal
+        insumosReporte.push({
+            id_insumo: insumo.id_insumo,
+            codigo: insumo.codigo_insumo,
+            nombre: insumo.nombre_insumo,
+            unidad_medida: insumo.unidad_medida,
+            cantidad_unit: parseFloat(insumo.cantidad_requerida),
+            cantidad_total_requerida: cantidadTotalRequerida,
+            stock_actual: parseFloat(insumo.stock_actual),
+            cubre_stock: parseFloat(insumo.stock_actual) >= cantidadTotalRequerida, // Booleano clave
+            costo_unitario: costoUnitario
+        });
       }
       
       idRecetaProducto = id_receta_producto;
     }
+
+    // --- CASO 3: RECETA PROVISIONAL ---
     else if (modo_receta === 'provisional' && receta_provisional && receta_provisional.length > 0) {
       rendimientoUnidades = parseFloat(rendimiento_receta) || 1;
       const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
       
       for (const item of receta_provisional) {
+        // Consultamos info completa del producto para verificar stock y nombre
         const insumoResult = await executeQuery(`
-          SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?
+          SELECT 
+            codigo, 
+            nombre, 
+            unidad_medida, 
+            costo_unitario_promedio, 
+            stock_actual 
+          FROM productos WHERE id_producto = ?
         `, [item.id_insumo]);
         
         if (insumoResult.success && insumoResult.data.length > 0) {
-          const costoUnitario = parseFloat(insumoResult.data[0].costo_unitario_promedio);
-          const cantidadTotal = parseFloat(item.cantidad_requerida) * lotesNecesarios;
-          costoMateriales += cantidadTotal * costoUnitario;
+          const prodData = insumoResult.data[0];
+          const costoUnitario = parseFloat(prodData.costo_unitario_promedio);
+          const cantidadTotalRequerida = parseFloat(item.cantidad_requerida) * lotesNecesarios;
+          
+          costoMateriales += cantidadTotalRequerida * costoUnitario;
+
+          // Agregamos al reporte
+          insumosReporte.push({
+            id_insumo: item.id_insumo,
+            codigo: prodData.codigo,
+            nombre: prodData.nombre,
+            unidad_medida: prodData.unidad_medida,
+            cantidad_unit: parseFloat(item.cantidad_requerida),
+            cantidad_total_requerida: cantidadTotalRequerida,
+            stock_actual: parseFloat(prodData.stock_actual),
+            cubre_stock: parseFloat(prodData.stock_actual) >= cantidadTotalRequerida,
+            costo_unitario: costoUnitario
+          });
         }
       }
       
@@ -288,6 +335,7 @@ export async function asignarRecetaYSupervisor(req, res) {
       });
     }
 
+    // Actualizamos la orden
     const updateResult = await executeQuery(`
       UPDATE ordenes_produccion 
       SET id_receta_producto = ?,
@@ -307,6 +355,7 @@ export async function asignarRecetaYSupervisor(req, res) {
     
     const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
     
+    // Retornamos la respuesta incluyendo el array 'insumos'
     res.json({
       success: true,
       message: 'Receta y supervisor asignados exitosamente',
@@ -315,7 +364,8 @@ export async function asignarRecetaYSupervisor(req, res) {
         lotes_necesarios: lotesNecesarios,
         rendimiento_unidades: rendimientoUnidades,
         estado: 'Pendiente',
-        modo_receta: modo_receta
+        modo_receta: modo_receta,
+        insumos: insumosReporte // <--- Aquí va la lista para tu modal
       }
     });
     

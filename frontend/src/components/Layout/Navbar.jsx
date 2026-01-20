@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle } from 'lucide-react';
+import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { notificacionesAPI } from '../../config/api';
@@ -14,15 +14,16 @@ function Navbar({ onToggleSidebar }) {
   const [showNotificaciones, setShowNotificaciones] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Cargar notificaciones al inicio y cada 30 segundos
   useEffect(() => {
     cargarNotificaciones();
-    const interval = setInterval(cargarNotificaciones, 60000);
+    const interval = setInterval(cargarNotificaciones, 30000); 
     return () => clearInterval(interval);
   }, []);
 
   const cargarNotificaciones = async () => {
     try {
-      setLoading(true);
+      // setLoading(true); // Omitimos loading global para no parpadear en el polling
       const response = await notificacionesAPI.getAll();
       if (response.data.success) {
         setNotificaciones(response.data.data);
@@ -30,8 +31,6 @@ function Navbar({ onToggleSidebar }) {
       }
     } catch (error) {
       console.error('Error al cargar notificaciones:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -44,22 +43,42 @@ function Navbar({ onToggleSidebar }) {
     }
   };
 
-  const handleNotificacionClick = async (notif) => {
+  const handleNotificacionClick = async (notif, e) => {
+    // Si se hace click, marcamos como leída y navegamos
     if (!notif.leido) {
       try {
         await notificacionesAPI.marcarLeida(notif.id_notificacion);
-        setNoLeidas(prev => Math.max(0, prev - 1));
+        
+        // Actualización optimista local para que desaparezca rápido
         setNotificaciones(prev => prev.map(n => 
           n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
         ));
+        setNoLeidas(prev => Math.max(0, prev - 1));
+
       } catch (error) {
         console.error('Error al marcar notificación:', error);
       }
     }
     
     setShowNotificaciones(false);
-    if (notif.ruta_destino) {
+    
+    // Si tiene ruta y no fue click en el botón de cerrar (X), navegamos
+    if (notif.ruta_destino && (!e || e.target.closest('.toast-close-btn') === null)) {
       navigate(notif.ruta_destino);
+    }
+  };
+
+  const handleCloseToast = async (e, notif) => {
+    e.stopPropagation(); // Evitar que se dispare el click del contenedor (navegación)
+    try {
+        await notificacionesAPI.marcarLeida(notif.id_notificacion);
+        // Actualizar estado local para quitarla de la pantalla
+        setNotificaciones(prev => prev.map(n => 
+            n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
+        ));
+        setNoLeidas(prev => Math.max(0, prev - 1));
+    } catch (error) {
+        console.error(error);
     }
   };
 
@@ -69,27 +88,16 @@ function Navbar({ onToggleSidebar }) {
     const diff = Math.floor((ahora - fechaObj) / 1000);
 
     if (diff < 60) return 'hace unos segundos';
-    if (diff < 3600) return `hace ${Math.floor(diff / 60)} minutos`;
-    if (diff < 86400) return `hace ${Math.floor(diff / 3600)} horas`;
-    if (diff < 604800) return `hace ${Math.floor(diff / 86400)} días`;
-    
-    return fechaObj.toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+    return fechaObj.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   };
 
   const handleLogout = () => {
     try {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
-      if (logout) {
-        logout();
-      }
-      
+      if (logout) logout();
       navigate('/login', { replace: true });
       window.location.href = '/login';
     } catch (error) {
@@ -107,111 +115,130 @@ function Navbar({ onToggleSidebar }) {
     }
   };
 
+  // Filtramos solo las no leídas para mostrarlas en pantalla
+  const notificacionesActivas = notificaciones.filter(n => !n.leido);
+
   return (
-    <header className="navbar">
-      <div className="navbar-left">
-        <button className="navbar-toggle" onClick={onToggleSidebar}>
-          <Menu size={24} />
-        </button>
-        <h1 className="navbar-title">Sistema de Inventario y Producción</h1>
-      </div>
-
-      <div className="navbar-right">
-        <div className="navbar-notifications-container">
-          <button 
-            className="navbar-icon-btn navbar-notifications-btn" 
-            onClick={() => setShowNotificaciones(!showNotificaciones)}
-          >
-            <Bell size={20} />
-            {noLeidas > 0 && (
-              <span className="navbar-notifications-badge">
-                {noLeidas}
-              </span>
-            )}
+    <>
+      <header className="navbar">
+        <div className="navbar-left">
+          <button className="navbar-toggle" onClick={onToggleSidebar}>
+            <Menu size={24} />
           </button>
+          <h1 className="navbar-title">Sistema de Inventario y Producción</h1>
+        </div>
 
-          {showNotificaciones && (
-            <div className="navbar-notifications-panel">
-              <div className="navbar-notifications-header">
-                <h3>Notificaciones</h3>
-                <div className="flex gap-2">
-                  {noLeidas > 0 && (
-                    <button 
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                      onClick={marcarTodasComoLeidas}
-                    >
-                      Marcar todo leído
+        <div className="navbar-right">
+          {/* Campana (Historial) */}
+          <div className="navbar-notifications-container">
+            <button 
+              className="navbar-icon-btn navbar-notifications-btn" 
+              onClick={() => setShowNotificaciones(!showNotificaciones)}
+            >
+              <Bell size={20} />
+              {noLeidas > 0 && (
+                <span className="navbar-notifications-badge">{noLeidas}</span>
+              )}
+            </button>
+
+            {/* Panel Desplegable (Historial completo) */}
+            {showNotificaciones && (
+              <div className="navbar-notifications-panel">
+                <div className="navbar-notifications-header">
+                  <h3>Notificaciones</h3>
+                  <div className="flex gap-2">
+                    {noLeidas > 0 && (
+                      <button 
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                        onClick={marcarTodasComoLeidas}
+                      >
+                        Marcar todo leído
+                      </button>
+                    )}
+                    <button className="navbar-notifications-close" onClick={() => setShowNotificaciones(false)}>
+                      <X size={18} />
                     </button>
+                  </div>
+                </div>
+
+                <div className="navbar-notifications-body">
+                  {notificaciones.length === 0 ? (
+                    <div className="navbar-notifications-empty">
+                      <Bell size={48} className="text-gray-300" />
+                      <p>No hay notificaciones</p>
+                    </div>
+                  ) : (
+                    notificaciones.map(notif => {
+                      const Icono = getIconoNotificacion(notif.tipo);
+                      return (
+                        <div 
+                          key={notif.id_notificacion}
+                          className={`navbar-notification-item ${notif.leido ? 'read' : 'unread'}`}
+                          onClick={(e) => handleNotificacionClick(notif, e)}
+                        >
+                          <div className={`navbar-notification-icon ${notif.tipo || 'info'}`}>
+                            <Icono size={20} />
+                          </div>
+                          <div className="navbar-notification-content">
+                            <h4>{notif.titulo}</h4>
+                            <p>{notif.mensaje}</p>
+                            <span className="navbar-notification-time">
+                              {formatearTiempo(notif.fecha_creacion)}
+                            </span>
+                          </div>
+                          {!notif.leido && <div className="navbar-notification-dot"></div>}
+                        </div>
+                      );
+                    })
                   )}
-                  <button 
-                    className="navbar-notifications-close"
-                    onClick={() => setShowNotificaciones(false)}
-                  >
-                    <X size={18} />
-                  </button>
                 </div>
               </div>
-
-              <div className="navbar-notifications-body">
-                {loading && notificaciones.length === 0 ? (
-                  <div className="navbar-notifications-loading">
-                    Cargando...
-                  </div>
-                ) : notificaciones.length === 0 ? (
-                  <div className="navbar-notifications-empty">
-                    <Bell size={48} className="text-gray-300" />
-                    <p>No hay notificaciones</p>
-                  </div>
-                ) : (
-                  notificaciones.map(notif => {
-                    const Icono = getIconoNotificacion(notif.tipo);
-                    return (
-                      <div 
-                        key={notif.id_notificacion}
-                        className={`navbar-notification-item ${notif.leido ? 'read' : 'unread'}`}
-                        onClick={() => handleNotificacionClick(notif)}
-                      >
-                        <div className={`navbar-notification-icon ${notif.tipo || 'info'}`}>
-                          <Icono size={20} />
-                        </div>
-                        <div className="navbar-notification-content">
-                          <h4>{notif.titulo}</h4>
-                          <p>{notif.mensaje}</p>
-                          <span className="navbar-notification-time">
-                            {formatearTiempo(notif.fecha_creacion)}
-                          </span>
-                        </div>
-                        {!notif.leido && <div className="navbar-notification-dot"></div>}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-        
-        <div className="navbar-user">
-          <User size={20} />
-          <div className="navbar-user-info">
-            <span className="navbar-user-name">
-              {user?.nombre || 'Usuario'}
-            </span>
-            <span className="navbar-user-role">
-              {user?.rol || 'Sin rol'}
-            </span>
+            )}
           </div>
-        </div>
+          
+          <div className="navbar-user">
+            <User size={20} />
+            <div className="navbar-user-info">
+              <span className="navbar-user-name">{user?.nombre || 'Usuario'}</span>
+              <span className="navbar-user-role">{user?.rol || 'Sin rol'}</span>
+            </div>
+          </div>
 
-        <button 
-          className="navbar-icon-btn navbar-logout" 
-          onClick={handleLogout}
-          title="Cerrar Sesión"
-        >
-          <LogOut size={20} />
-        </button>
+          <button className="navbar-icon-btn navbar-logout" onClick={handleLogout} title="Cerrar Sesión">
+            <LogOut size={20} />
+          </button>
+        </div>
+      </header>
+
+      {/* --- CONTENEDOR FLOTANTE DE NOTIFICACIONES (TOASTS) --- */}
+      <div className="notification-toast-container">
+        {notificacionesActivas.map((notif) => {
+            const Icono = getIconoNotificacion(notif.tipo);
+            return (
+                <div 
+                    key={`toast-${notif.id_notificacion}`} 
+                    className={`notification-toast toast-${notif.tipo || 'info'}`}
+                    onClick={(e) => handleNotificacionClick(notif, e)}
+                >
+                    <div className="toast-icon">
+                        <Icono size={24} />
+                    </div>
+                    <div className="toast-content">
+                        <h4 className="toast-title">{notif.titulo}</h4>
+                        <p className="toast-message">{notif.mensaje}</p>
+                        <span className="toast-time">{formatearTiempo(notif.fecha_creacion)}</span>
+                    </div>
+                    <button 
+                        className="toast-close-btn"
+                        onClick={(e) => handleCloseToast(e, notif)}
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+            );
+        })}
       </div>
-    </header>
+    </>
   );
 }
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Package, User, ExternalLink, Clock,
   AlertCircle, PlayCircle, PauseCircle, CheckCircle, XCircle, X, ArrowRight, RotateCcw,
-  ShoppingCart // Importado para el icono de orden de venta
+  ShoppingCart, Flag, Briefcase
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api'; 
 import Loading from '../../components/UI/Loading'; 
@@ -63,6 +63,16 @@ const CalendarioProduccion = () => {
         case 'Finalizada': return '#22c55e';
         case 'Cancelada': return '#ef4444';
         default: return '#9ca3af';
+    }
+  };
+
+  const getPriorityStyle = (prioridad) => {
+    switch(prioridad?.toUpperCase()) {
+      case 'URGENTE': return { bg: '#fee2e2', text: '#dc2626', border: '#ef4444' };
+      case 'ALTA': return { bg: '#ffedd5', text: '#ea580c', border: '#f97316' };
+      case 'MEDIA': return { bg: '#e0f2fe', text: '#0284c7', border: '#3b82f6' };
+      case 'BAJA': return { bg: '#f0fdf4', text: '#16a34a', border: '#22c55e' };
+      default: return { bg: '#f3f4f6', text: '#64748b', border: '#cbd5e1' };
     }
   };
 
@@ -188,6 +198,8 @@ const CalendarioProduccion = () => {
     const isScheduled = !!orden.fecha_programada;
     
     const borderColor = getStatusColor(orden.estado);
+    const priorityStyle = getPriorityStyle(orden.prioridad_venta);
+    
     let IconEstado = AlertCircle;
     
     switch(orden.estado) {
@@ -217,8 +229,9 @@ const CalendarioProduccion = () => {
           cursor: pendingResize ? 'crosshair' : (isDraggable ? 'grab' : 'pointer'),
           fontSize: '11px',
           opacity: draggedOrden?.id_orden === orden.id_orden ? 0.5 : 1,
-          border: '1px solid #e5e7eb',
-          borderLeftWidth: '4px',
+          borderTop: '1px solid #e5e7eb',
+          borderRight: '1px solid #e5e7eb',
+          borderBottom: '1px solid #e5e7eb',
           position: 'relative'
         }}
       >
@@ -256,13 +269,33 @@ const CalendarioProduccion = () => {
           {orden.producto}
         </div>
 
-        {/* --- MOSTRAR NUMERO DE ORDEN DE VENTA SI EXISTE --- */}
-        {orden.numero_orden_venta && (
-            <div style={{ fontSize: '9px', color: '#2563eb', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}>
-                <ShoppingCart size={10} /> 
-                Ref: {orden.numero_orden_venta}
-            </div>
-        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+            {orden.numero_orden_venta ? (
+                <div style={{ display:'flex', flexDirection:'column' }}>
+                    <div style={{ fontSize: '9px', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}>
+                        <ShoppingCart size={10} /> 
+                        {orden.numero_orden_venta}
+                    </div>
+                    {orden.comercial_venta && (
+                        <div style={{ fontSize: '9px', color: '#4b5563', display: 'flex', alignItems: 'center', gap: '3px', marginTop:'1px' }}>
+                            <Briefcase size={10} /> 
+                            {orden.comercial_venta.split(' ')[0]}
+                        </div>
+                    )}
+                </div>
+            ) : <span></span>}
+
+            {orden.prioridad_venta && (
+                <div style={{ 
+                    fontSize: '8px', fontWeight: 'bold', 
+                    color: priorityStyle.text, backgroundColor: priorityStyle.bg, 
+                    padding: '1px 4px', borderRadius: '3px', border: `1px solid ${priorityStyle.border}`,
+                    display: 'flex', alignItems: 'center', gap: '2px', textTransform: 'uppercase'
+                }}>
+                    <Flag size={8} /> {orden.prioridad_venta}
+                </div>
+            )}
+        </div>
 
         {!compact && (
              <div style={{ color: '#64748b', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '10px', marginTop: '4px' }}>

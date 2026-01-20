@@ -167,81 +167,104 @@ export async function generarReporteDeudasPDF(deudas, filtros) {
 
       let yPos = 300;
 
-      doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
-      
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('DOCUMENTO', 40, yPos + 6);
-      doc.text('EMISIÓN', 110, yPos + 6);
-      doc.text('VENCIMIENTO', 170, yPos + 6);
-      doc.text('ESTADO', 230, yPos + 6);
-      
-      if (!isCliente) {
-        doc.text('CLIENTE', 290, yPos + 6, { width: 100, ellipsis: true });
-      }
+      const grupos = [
+        {
+          titulo: 'PENDIENTES DE PAGO (CONTADO)',
+          datos: deudas.filter(d => d.tipo_venta === 'Contado'),
+          colorTitulo: '#DC2626' 
+        },
+        {
+          titulo: 'CARTERA DE CRÉDITO',
+          datos: deudas.filter(d => d.tipo_venta !== 'Contado'),
+          colorTitulo: '#2563EB' 
+        }
+      ];
 
-      doc.text('MON', isCliente ? 300 : 400, yPos + 6);
-      doc.text('TOTAL', isCliente ? 340 : 430, yPos + 6, { align: 'right', width: 60 });
-      doc.text('A CTA.', isCliente ? 410 : 490, yPos + 6, { align: 'right', width: 50 });
-      doc.text('SALDO', isCliente ? 470 : 540, yPos + 6, { align: 'right', width: 50 });
+      const dibujarCabeceraTabla = (y) => {
+        doc.rect(33, y, 529, 20).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('DOCUMENTO', 40, y + 6);
+        doc.text('EMISIÓN', 110, y + 6);
+        doc.text('VENCIMIENTO', 170, y + 6);
+        doc.text('ESTADO', 230, y + 6);
+        
+        if (!isCliente) {
+          doc.text('CLIENTE', 290, y + 6, { width: 100, ellipsis: true });
+        }
 
-      yPos += 20;
+        doc.text('MON', isCliente ? 300 : 400, y + 6);
+        doc.text('TOTAL', isCliente ? 340 : 430, y + 6, { align: 'right', width: 60 });
+        doc.text('A CTA.', isCliente ? 410 : 490, y + 6, { align: 'right', width: 50 });
+        doc.text('SALDO', isCliente ? 470 : 540, y + 6, { align: 'right', width: 50 });
+      };
+
+      grupos.forEach(grupo => {
+        if (grupo.datos.length === 0) return;
+
+        if (yPos + 40 > 700) {
+          doc.addPage();
+          yPos = 50;
+        }
+
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(grupo.colorTitulo);
+        doc.text(grupo.titulo, 33, yPos);
+        yPos += 15;
+
+        dibujarCabeceraTabla(yPos);
+        yPos += 20;
+
+        grupo.datos.forEach((item, idx) => {
+          const descripcionCliente = item.cliente || '';
+          const anchoCliente = 100;
+          
+          const alturaCliente = !isCliente ? calcularAlturaTexto(doc, descripcionCliente, anchoCliente, 8) : 0;
+          const alturaFila = Math.max(20, alturaCliente + 10);
+
+          if (yPos + alturaFila > 700) {
+            doc.addPage();
+            yPos = 50;
+            dibujarCabeceraTabla(yPos);
+            yPos += 20;
+          }
+
+          if (idx % 2 === 0) doc.rect(33, yPos, 529, alturaFila).fillOpacity(0.1).fill('#f0f0f0').fillOpacity(1);
+
+          doc.fontSize(8).font('Helvetica').fillColor('#000000');
+          
+          doc.text(item.numero_orden, 40, yPos + 5);
+          doc.text(formatearFecha(item.fecha_emision), 110, yPos + 5);
+          doc.text(formatearFecha(item.fecha_vencimiento), 170, yPos + 5);
+          
+          let colorEstado = '#000000';
+          if (item.estado_deuda === 'Vencido') colorEstado = '#CC0000';
+          if (item.estado_deuda === 'Próximo a Vencer') colorEstado = '#E65100';
+          
+          doc.fillColor(colorEstado).text(item.estado_deuda, 230, yPos + 5);
+          doc.fillColor('#000000');
+
+          if (!isCliente) {
+            doc.text(descripcionCliente, 290, yPos + 5, { width: anchoCliente, lineGap: 2 });
+          }
+
+          doc.text(item.moneda, isCliente ? 300 : 400, yPos + 5);
+          doc.text(fmtNum(item.total), isCliente ? 340 : 430, yPos + 5, { align: 'right', width: 60 });
+          doc.text(fmtNum(item.monto_pagado), isCliente ? 410 : 490, yPos + 5, { align: 'right', width: 50 });
+          doc.font('Helvetica-Bold').text(fmtNum(item.saldo_pendiente), isCliente ? 470 : 540, yPos + 5, { align: 'right', width: 50 });
+
+          yPos += alturaFila;
+        });
+
+        yPos += 20; 
+      });
 
       let totalSaldoPEN = 0;
       let totalSaldoUSD = 0;
 
-      deudas.forEach((item, idx) => {
+      deudas.forEach(item => {
         const saldo = parseFloat(item.saldo_pendiente);
         if (item.moneda === 'PEN') totalSaldoPEN += saldo;
         if (item.moneda === 'USD') totalSaldoUSD += saldo;
-
-        const alturaFila = 20;
-
-        if (yPos + alturaFila > 700) {
-          doc.addPage();
-          yPos = 50;
-          
-          doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-          doc.text('DOCUMENTO', 40, yPos + 6);
-          doc.text('EMISIÓN', 110, yPos + 6);
-          doc.text('VENCIMIENTO', 170, yPos + 6);
-          doc.text('ESTADO', 230, yPos + 6);
-          if (!isCliente) doc.text('CLIENTE', 290, yPos + 6, { width: 100 });
-          doc.text('MON', isCliente ? 300 : 400, yPos + 6);
-          doc.text('TOTAL', isCliente ? 340 : 430, yPos + 6, { align: 'right', width: 60 });
-          doc.text('A CTA.', isCliente ? 410 : 490, yPos + 6, { align: 'right', width: 50 });
-          doc.text('SALDO', isCliente ? 470 : 540, yPos + 6, { align: 'right', width: 50 });
-          yPos += 20;
-        }
-
-        if (idx % 2 === 0) doc.rect(33, yPos, 529, alturaFila).fillOpacity(0.1).fill('#f0f0f0').fillOpacity(1);
-
-        doc.fontSize(8).font('Helvetica').fillColor('#000000');
-        
-        doc.text(item.numero_orden, 40, yPos + 5);
-        doc.text(formatearFecha(item.fecha_emision), 110, yPos + 5);
-        doc.text(formatearFecha(item.fecha_vencimiento), 170, yPos + 5);
-        
-        let colorEstado = '#000000';
-        if (item.estado_deuda === 'Vencido') colorEstado = '#CC0000';
-        if (item.estado_deuda === 'Próximo a Vencer') colorEstado = '#E65100';
-        
-        doc.fillColor(colorEstado).text(item.estado_deuda, 230, yPos + 5);
-        doc.fillColor('#000000');
-
-        if (!isCliente) {
-          doc.text(item.cliente, 290, yPos + 5, { width: 100, ellipsis: true });
-        }
-
-        doc.text(item.moneda, isCliente ? 300 : 400, yPos + 5);
-        doc.text(fmtNum(item.total), isCliente ? 340 : 430, yPos + 5, { align: 'right', width: 60 });
-        doc.text(fmtNum(item.monto_pagado), isCliente ? 410 : 490, yPos + 5, { align: 'right', width: 50 });
-        doc.font('Helvetica-Bold').text(fmtNum(item.saldo_pendiente), isCliente ? 470 : 540, yPos + 5, { align: 'right', width: 50 });
-
-        yPos += alturaFila;
       });
-
-      yPos += 20;
 
       if (yPos + 60 > 700) {
         doc.addPage();

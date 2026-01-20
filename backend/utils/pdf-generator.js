@@ -420,11 +420,11 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica-Bold');
       doc.text('Cliente/Destino:', 40, yBloque2);
       doc.font('Helvetica');
-      doc.text(destino || 'N/A', 120, yBloque2, { width: 210, lineGap: 2 });
+      doc.text(destino || 'N/A', 120, yBloque2, { width: 180, lineGap: 2 });
 
       if (datos.direccion_despacho) {
           doc.fontSize(7).font('Helvetica-Oblique').fillColor('#444444');
-          doc.text(`Dirección: ${datos.direccion_despacho}`, 120, doc.y + 2, { width: 210 });
+          doc.text(`Dirección: ${datos.direccion_despacho}`, 120, doc.y + 2, { width: 180 });
           doc.fontSize(8).fillColor('#000000');
       }
 

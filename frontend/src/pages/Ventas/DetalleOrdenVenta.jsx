@@ -743,7 +743,6 @@ function DetalleOrdenVenta() {
 
   const puedeReservarStock = () => {
     if (!orden) return false;
-    // Si ya tiene todo reservado (1), no mostrar botón. Si tiene reserva parcial (2) o nada (0), se puede.
     const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
     return orden.stock_reservado !== 1 && !estadosNoPermitidos.includes(orden.estado);
   };
@@ -828,7 +827,6 @@ function DetalleOrdenVenta() {
         const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
         const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
 
-        // Validación individual de reserva por ítem
         if (row.stock_reservado === 1) {
             return (
                 <div className="flex flex-col gap-1">
@@ -1317,10 +1315,8 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* ---------------- SECCION 1: CABECERA Y DATOS DEL CLIENTE ---------------- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         
-        {/* COLUMNA 1: CLIENTE */}
         <div className="card h-full">
             <div className="card-header">
                 <h2 className="card-title"><Building size={20} /> Cliente</h2>
@@ -1356,7 +1352,6 @@ function DetalleOrdenVenta() {
             </div>
         </div>
 
-        {/* COLUMNA 2: CONDICIONES COMERCIALES */}
         <div className="card h-full">
             <div className="card-header">
                 <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
@@ -1464,7 +1459,6 @@ function DetalleOrdenVenta() {
             </div>
         </div>
 
-        {/* COLUMNA 3: LOGÍSTICA */}
         <div className="card h-full">
             <div className="card-header flex justify-between items-center">
                 <h2 className="card-title"><MapPin size={20} /> Entrega y Logística</h2>
@@ -1486,7 +1480,7 @@ function DetalleOrdenVenta() {
                 </div>
                 <div>
                     <label className="text-sm font-medium text-muted">Dirección:</label>
-                    <p className="text-sm">{orden.direccion_entrega || orden.lugar_entrega || '-'}</p>
+                    <p className="text-sm">{orden.direccion_entrega || orden.direccion_cliente || orden.lugar_entrega || '-'}</p>
                 </div>
                 {orden.ciudad_entrega && (
                     <div>
@@ -1495,7 +1489,6 @@ function DetalleOrdenVenta() {
                     </div>
                 )}
                 
-                {/* PROGRESO */}
                 <div className="pt-3 mt-2 border-t border-gray-100">
                     <label className="text-sm font-medium text-muted">Progreso Entrega:</label>
                     {(() => {
@@ -1547,7 +1540,6 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* ---------------- SECCION 2: DETALLES DEL PRODUCTO Y TOTALES ---------------- */}
       <div className="card mb-6">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title"><Package size={20} /> Detalle de Productos</h2>
@@ -1558,7 +1550,6 @@ function DetalleOrdenVenta() {
         </div>
       </div>
 
-      {/* Grid para Observaciones y Totales justo debajo de la tabla */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {orden.observaciones && (
           <div className="card h-full">
@@ -1672,7 +1663,6 @@ function DetalleOrdenVenta() {
          </div>
       )}
 
-      {/* ---------------- SECCION 3: REGISTRO E HISTORIAL DE PAGOS ---------------- */}
       <div className="mt-8 border-t-2 border-gray-100 pt-6">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700">
             <CreditCard size={24} /> Gestión de Cobranzas

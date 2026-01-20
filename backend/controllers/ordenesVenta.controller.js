@@ -1763,26 +1763,18 @@ export async function getEstadisticasOrdenesVenta(req, res) {
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    const { tipo } = req.query; 
+    const { tipo } = req.query;
 
-    console.log("=========================================");
-    console.log("🛑 DEBUG PDF - INICIO");
-    console.log(`➡️ ID Recibido: '${id}' (Tipo: ${typeof id})`);
-    
     if (!id || id === 'undefined' || id === 'null') {
-      console.log("❌ ERROR: ID es inválido.");
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    console.log("🔄 Ejecutando consulta SQL...");
-    
-    // ✅ AQUÍ ESTÁ LA SOLUCIÓN - JOIN CON LA TABLA CLIENTES
     const ordenResult = await executeQuery(`
       SELECT 
         ov.*,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
-        cl.direccion_despacho AS direccion_cliente,
+        cl.direccion_despacho AS direccion_cliente_base,
         cl.telefono AS telefono_cliente,
         e.nombre_completo AS comercial,
         e.email AS email_comercial,
@@ -1793,18 +1785,13 @@ export async function descargarPDFOrdenVenta(req, res) {
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       WHERE ov.id_orden_venta = ?
     `, [id]);
-    
-    console.log("📊 Resultado SQL:", ordenResult.data);
 
     if (!ordenResult.success || ordenResult.data.length === 0) {
-      console.log("❌ ERROR: La base de datos devolvió 0 filas.");
       return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
     }
 
     const orden = ordenResult.data[0];
-    console.log(`✅ Orden encontrada: ${orden.numero_orden}`);
-    console.log(`✅ Cliente: ${orden.cliente}, RUC: ${orden.ruc_cliente}`);
-    
+
     const detalleResult = await executeQuery(`
       SELECT 
         dov.*, 
@@ -1815,23 +1802,24 @@ export async function descargarPDFOrdenVenta(req, res) {
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
     `, [id]);
-    
+
     orden.detalle = detalleResult.data;
 
-    let pdfBuffer;
-    if (tipo === 'comprobante') {
-        pdfBuffer = await generarOrdenVentaPDF(orden);
-    } else {
-        pdfBuffer = await generarOrdenVentaPDF(orden);
-    }
+    const direccionFinal = orden.direccion_entrega && orden.direccion_entrega.trim() !== '' 
+      ? orden.direccion_entrega 
+      : orden.direccion_cliente_base;
+
+    orden.direccion_entrega = direccionFinal;
+
+    const pdfBuffer = await generarOrdenVentaPDF(orden);
     
+    const nombreArchivo = `Orden-${orden.numero_orden}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Orden-${orden.numero_orden}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
     res.send(pdfBuffer);
-    console.log("✅ PDF Enviado al cliente");
 
   } catch (error) {
-    console.error("🔥 CRASH:", error);
+    console.error(error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

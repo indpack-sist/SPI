@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { generarReporteDeudasPDF } from '../utils/pdfGenerators/reporteDeudasPDF.js';
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -82,7 +83,6 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     const paramsPagos = [];
     const paramsCobranzas = [];
     
-    // Filtros de Fecha
     if (fecha_inicio) {
       whereClausePagos += ' AND DATE(pe.fecha_pago) >= ?';
       whereClauseCobranzas += ' AND DATE(pov.fecha_pago) >= ?';
@@ -97,7 +97,6 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       paramsCobranzas.push(fecha_fin);
     }
     
-    // Filtro Metodo Pago
     if (metodo_pago) {
       whereClausePagos += ' AND pe.metodo_pago = ?';
       whereClauseCobranzas += ' AND pov.metodo_pago = ?';
@@ -105,21 +104,15 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       paramsCobranzas.push(metodo_pago);
     }
     
-    // Filtro ID Cuenta (SOLO APLICA A PAGOS/EGRESOS)
     if (id_cuenta) {
       whereClausePagos += ' AND pe.id_cuenta_destino = ?';
       paramsPagos.push(id_cuenta);
       
-      // NOTA: No filtramos cobranzas por cuenta porque la tabla no tiene esa columna
-      // Si el usuario filtra por cuenta específica, no mostraremos cobranzas.
       if (!tipo || tipo === 'cobranza') {
-         // Truco para que no traiga nada en cobranzas si se filtra por cuenta
          whereClauseCobranzas += ' AND 1=0'; 
       }
     }
     
-    // --- 1. CONSULTA DE PAGOS (EGRESOS) ---
-    // Esta tabla (pagos_entradas) SÍ suele tener id_cuenta_destino
     if (!tipo || tipo === 'pago') {
       [pagos] = await pool.query(`
         SELECT 
@@ -149,8 +142,6 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       `, paramsPagos);
     }
     
-    // --- 2. CONSULTA DE COBRANZAS (INGRESOS) ---
-    // Aquí eliminamos la referencia a id_cuenta_destino y el JOIN a cuentas_pago
     if (!tipo || tipo === 'cobranza') {
       [cobranzas] = await pool.query(`
         SELECT 
@@ -170,7 +161,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
           ov.moneda,
           cl.razon_social as tercero,
           emp.nombre_completo as registrado_por,
-          NULL as cuenta_destino, -- Se devuelve NULL porque no existe la columna
+          NULL as cuenta_destino, 
           pov.fecha_registro
         FROM pagos_ordenes_venta pov
         INNER JOIN ordenes_venta ov ON pov.id_orden_venta = ov.id_orden_venta
@@ -198,7 +189,6 @@ export const getCuentasPorCobrar = async (req, res, next) => {
   try {
     const { fecha_inicio, fecha_fin, id_cliente } = req.query;
     
-    // ✅ CONDICIÓN CORREGIDA: Incluye todas las órdenes con saldo pendiente mayor a 0
     let whereClause = `
       ov.estado != 'Cancelada' 
       AND ov.estado_pago != 'Pagado'
@@ -206,7 +196,6 @@ export const getCuentasPorCobrar = async (req, res, next) => {
     `;
     const params = [];
     
-    // Filtro por rango de fechas de vencimiento
     if (fecha_inicio) {
       whereClause += ' AND ov.fecha_vencimiento >= ?';
       params.push(fecha_inicio);
@@ -217,7 +206,6 @@ export const getCuentasPorCobrar = async (req, res, next) => {
       params.push(fecha_fin);
     }
     
-    // Filtro por cliente específico
     if (id_cliente) {
       whereClause += ' AND ov.id_cliente = ?';
       params.push(id_cliente);
@@ -281,6 +269,88 @@ export const getCuentasPorCobrar = async (req, res, next) => {
         contado_pendiente: rows.filter(r => r.estado_deuda === 'Pendiente Pago').length
       }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const descargarReporteDeudas = async (req, res, next) => {
+  try {
+    const { fecha_inicio, fecha_fin, id_cliente } = req.query;
+    
+    let whereClause = `
+      ov.estado != 'Cancelada' 
+      AND ov.estado_pago != 'Pagado'
+      AND (ov.total - COALESCE(ov.monto_pagado, 0)) >= 0.01
+    `;
+    const params = [];
+    
+    if (fecha_inicio) {
+      whereClause += ' AND ov.fecha_vencimiento >= ?';
+      params.push(fecha_inicio);
+    }
+    
+    if (fecha_fin) {
+      whereClause += ' AND ov.fecha_vencimiento <= ?';
+      params.push(fecha_fin);
+    }
+    
+    if (id_cliente) {
+      whereClause += ' AND ov.id_cliente = ?';
+      params.push(id_cliente);
+    }
+
+    const sql = `
+      SELECT 
+        ov.id_orden_venta,
+        ov.numero_orden,
+        ov.tipo_comprobante,
+        ov.numero_comprobante,
+        ov.fecha_emision,
+        ov.fecha_vencimiento,
+        ov.moneda,
+        ov.tipo_venta,
+        ov.estado,
+        ov.estado_pago,
+        ov.total,
+        COALESCE(ov.monto_pagado, 0) as monto_pagado,
+        (ov.total - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
+        cl.razon_social as cliente,
+        cl.ruc,
+        cl.direccion_despacho as direccion,
+        cl.telefono,
+        cl.email,
+        DATEDIFF(ov.fecha_vencimiento, CURDATE()) as dias_restantes,
+        CASE 
+          WHEN ov.tipo_venta = 'Contado' THEN 'Pendiente Pago'
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) < 0 THEN 'Vencido'
+          WHEN DATEDIFF(ov.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 5 THEN 'Próximo a Vencer'
+          ELSE 'Al Día'
+        END as estado_deuda
+      FROM ordenes_venta ov
+      INNER JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      WHERE ${whereClause}
+      ORDER BY 
+        cl.razon_social ASC,
+        ov.fecha_vencimiento ASC
+    `;
+
+    const [rows] = await pool.query(sql, params);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'No hay deudas pendientes para los filtros seleccionados' });
+    }
+
+    const pdfBuffer = await generarReporteDeudasPDF(rows, { fecha_inicio, fecha_fin, id_cliente });
+
+    const filename = id_cliente 
+      ? `Estado_Cuenta_${rows[0].ruc}.pdf` 
+      : `Reporte_General_Deudas_${new Date().toISOString().split('T')[0]}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+
   } catch (error) {
     next(error);
   }

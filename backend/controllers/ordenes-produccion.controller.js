@@ -197,10 +197,8 @@ export async function asignarRecetaYSupervisor(req, res) {
     let rendimientoUnidades = 1;
     let idRecetaProducto = null;
     
-    // Array para almacenar el detalle que necesita tu Modal
     let insumosReporte = []; 
 
-    // --- CASO 1: ORDEN MANUAL ---
     if (modo_receta === 'manual' || es_orden_manual) {
       const updateResult = await executeQuery(`
         UPDATE ordenes_produccion 
@@ -228,21 +226,19 @@ export async function asignarRecetaYSupervisor(req, res) {
           rendimiento_unidades: 1,
           estado: 'Pendiente',
           es_manual: true,
-          insumos: [] // Array vacío para orden manual
+          insumos: [] 
         }
       });
     }
 
-    // --- CASO 2: RECETA EXISTENTE (SELECCIONAR) ---
     if (modo_receta === 'seleccionar' && id_receta_producto) {
-      // Modificamos la query para traer nombre y codigo para el modal
       const recetaResult = await executeQuery(`
         SELECT 
           rd.id_insumo,
           rd.cantidad_requerida,
           rd.unidad_medida,
-          p.codigo AS codigo_insumo,    
-          p.nombre AS nombre_insumo,    
+          p.codigo AS codigo_insumo,     
+          p.nombre AS nombre_insumo,     
           p.costo_unitario_promedio,
           p.stock_actual,
           p.id_tipo_inventario,
@@ -269,7 +265,6 @@ export async function asignarRecetaYSupervisor(req, res) {
         const costoUnitario = parseFloat(insumo.costo_unitario_promedio);
         costoMateriales += cantidadTotalRequerida * costoUnitario;
 
-        // Construimos el objeto para el reporte del modal
         insumosReporte.push({
             id_insumo: insumo.id_insumo,
             codigo: insumo.codigo_insumo,
@@ -278,7 +273,7 @@ export async function asignarRecetaYSupervisor(req, res) {
             cantidad_unit: parseFloat(insumo.cantidad_requerida),
             cantidad_total_requerida: cantidadTotalRequerida,
             stock_actual: parseFloat(insumo.stock_actual),
-            cubre_stock: parseFloat(insumo.stock_actual) >= cantidadTotalRequerida, // Booleano clave
+            cubre_stock: parseFloat(insumo.stock_actual) >= cantidadTotalRequerida, 
             costo_unitario: costoUnitario
         });
       }
@@ -286,13 +281,11 @@ export async function asignarRecetaYSupervisor(req, res) {
       idRecetaProducto = id_receta_producto;
     }
 
-    // --- CASO 3: RECETA PROVISIONAL ---
     else if (modo_receta === 'provisional' && receta_provisional && receta_provisional.length > 0) {
       rendimientoUnidades = parseFloat(rendimiento_receta) || 1;
       const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
       
       for (const item of receta_provisional) {
-        // Consultamos info completa del producto para verificar stock y nombre
         const insumoResult = await executeQuery(`
           SELECT 
             codigo, 
@@ -310,7 +303,6 @@ export async function asignarRecetaYSupervisor(req, res) {
           
           costoMateriales += cantidadTotalRequerida * costoUnitario;
 
-          // Agregamos al reporte
           insumosReporte.push({
             id_insumo: item.id_insumo,
             codigo: prodData.codigo,
@@ -338,7 +330,6 @@ export async function asignarRecetaYSupervisor(req, res) {
       });
     }
 
-    // Actualizamos la orden
     const updateResult = await executeQuery(`
       UPDATE ordenes_produccion 
       SET id_receta_producto = ?,
@@ -358,7 +349,6 @@ export async function asignarRecetaYSupervisor(req, res) {
     
     const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
     
-    // Retornamos la respuesta incluyendo el array 'insumos'
     res.json({
       success: true,
       message: 'Receta y supervisor asignados exitosamente',
@@ -368,7 +358,7 @@ export async function asignarRecetaYSupervisor(req, res) {
         rendimiento_unidades: rendimientoUnidades,
         estado: 'Pendiente',
         modo_receta: modo_receta,
-        insumos: insumosReporte // <--- Aquí va la lista para tu modal
+        insumos: insumosReporte 
       }
     });
     
@@ -454,14 +444,27 @@ export async function updateOrden(req, res) {
     }
 
     if ((fecha_programada !== undefined || fecha_programada_fin !== undefined) && orden.id_comercial) {
-      const titulo = `Producción Programada: ${orden.numero_orden}`;
-      const mensaje = `Su Orden de Venta ${orden.numero_ov || 'N/A'} ha sido programada del ${fecha_programada || '...'} al ${fecha_programada_fin || '...'}.`;
-      const ruta = `/produccion/calendario?fecha=${fecha_programada}`;
+      let titulo = '';
+      let mensaje = '';
+      let tipo = 'info';
+      let ruta = '';
+
+      if (fecha_programada === null || fecha_programada === '') {
+        titulo = `Programación Cancelada: ${orden.numero_orden}`;
+        mensaje = `La producción de la orden ${orden.numero_orden} ha sido desprogramada y retornada a la lista de pendientes.`;
+        tipo = 'warning';
+        ruta = '/produccion/ordenes';
+      } else {
+        titulo = `Producción Programada: ${orden.numero_orden}`;
+        mensaje = `Su Orden de Venta ${orden.numero_ov || 'N/A'} ha sido programada del ${fecha_programada} al ${fecha_programada_fin}.`;
+        tipo = 'success';
+        ruta = `/produccion/calendario?fecha=${fecha_programada}`;
+      }
 
       await executeQuery(`
         INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
-        VALUES (?, ?, ?, 'info', ?)
-      `, [orden.id_comercial, titulo, mensaje, ruta]);
+        VALUES (?, ?, ?, ?, ?)
+      `, [orden.id_comercial, titulo, mensaje, tipo, ruta]);
     }
 
     res.json({ success: true, message: 'Orden actualizada exitosamente' });

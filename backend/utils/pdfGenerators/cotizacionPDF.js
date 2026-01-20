@@ -15,7 +15,7 @@ const ETIQUETAS_IMPUESTO = {
 const fmtNum = (num) => {
   return Number(num).toLocaleString('en-US', { 
     minimumFractionDigits: 2, 
-    maximumFractionDigits: 4
+    maximumFractionDigits: 2
   });
 };
 
@@ -258,11 +258,19 @@ export async function generarCotizacionPDF(cotizacion) {
 
       const simboloMoneda = cotizacion.moneda === 'USD' ? '$' : 'S/';
       
+      // RECALCULO DE TOTALES (Corrección del problema de totales en cero)
+      let subtotalCalculado = 0;
+
       cotizacion.detalle.forEach((item, idx) => {
-        const cantidad = fmtNum(item.cantidad);
-        const precioUnitario = fmtNum(item.precio_unitario);
-        const valorVenta = fmtNum(item.valor_venta || item.subtotal);
+        const cantidad = parseFloat(item.cantidad || 0);
+        const precioUnitario = parseFloat(item.precio_unitario || 0);
         
+        // Si tienes descuento por ítem, úsalo aquí
+        const descuento = parseFloat(item.descuento_porcentaje || 0);
+        const valorVentaItem = (cantidad * precioUnitario) * (1 - descuento/100);
+        
+        subtotalCalculado += valorVentaItem;
+
         const descripcion = item.producto;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
@@ -285,11 +293,11 @@ export async function generarCotizacionPDF(cotizacion) {
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         
         doc.text(item.codigo_producto, 40, yPos + 5);
-        doc.text(cantidad, 130, yPos + 5, { width: 50, align: 'center' });
+        doc.text(fmtNum(cantidad), 130, yPos + 5, { width: 50, align: 'center' });
         doc.text(item.unidad_medida, 185, yPos + 5, { width: 40, align: 'center' });
         doc.text(descripcion, 230, yPos + 5, { width: 215, lineGap: 2 });
-        doc.text(precioUnitario, 450, yPos + 5, { align: 'right', width: 50 });
-        doc.text(`${simboloMoneda} ${valorVenta}`, 505, yPos + 5, { align: 'right', width: 50 });
+        doc.text(fmtNum(precioUnitario), 450, yPos + 5, { align: 'right', width: 50 });
+        doc.text(`${simboloMoneda} ${fmtNum(valorVentaItem)}`, 505, yPos + 5, { align: 'right', width: 50 });
 
         yPos += alturaFila;
       });
@@ -304,12 +312,20 @@ export async function generarCotizacionPDF(cotizacion) {
         doc.text(cotizacion.observaciones, 40, yPos + 15, { width: 330 });
       }
 
-      const subtotal = fmtNum(cotizacion.subtotal);
-      const igv = fmtNum(cotizacion.igv);
-      const total = fmtNum(cotizacion.total);
-      
+      // Lógica de Impuestos
       const tipoImpuesto = cotizacion.tipo_impuesto || 'IGV';
-      const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || tipoImpuesto;
+      let porcentajeImpuesto = 18;
+      
+      if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuesto)) {
+        porcentajeImpuesto = 0;
+      } else if (cotizacion.porcentaje_impuesto !== undefined && cotizacion.porcentaje_impuesto !== null) {
+        porcentajeImpuesto = parseFloat(cotizacion.porcentaje_impuesto);
+      }
+
+      const montoImpuesto = subtotalCalculado * (porcentajeImpuesto / 100);
+      const totalCalculado = subtotalCalculado + montoImpuesto;
+      
+      const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || `IGV (${porcentajeImpuesto}%)`;
 
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -317,7 +333,7 @@ export async function generarCotizacionPDF(cotizacion) {
       
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${subtotal}`, 475, yPos + 4, { align: 'right', width: 80 });
+      doc.text(`${simboloMoneda} ${fmtNum(subtotalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
 
       yPos += 20;
 
@@ -327,7 +343,7 @@ export async function generarCotizacionPDF(cotizacion) {
       
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${igv}`, 475, yPos + 4, { align: 'right', width: 80 });
+      doc.text(`${simboloMoneda} ${fmtNum(montoImpuesto)}`, 475, yPos + 4, { align: 'right', width: 80 });
 
       yPos += 20;
 
@@ -337,12 +353,12 @@ export async function generarCotizacionPDF(cotizacion) {
       
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${total}`, 475, yPos + 4, { align: 'right', width: 80 });
+      doc.text(`${simboloMoneda} ${fmtNum(totalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
 
       yPos += 25;
 
       doc.fontSize(8).font('Helvetica');
-      const totalEnLetras = numeroALetras(parseFloat(cotizacion.total), cotizacion.moneda);
+      const totalEnLetras = numeroALetras(totalCalculado, cotizacion.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');

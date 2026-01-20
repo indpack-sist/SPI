@@ -13,6 +13,45 @@ const getFechaPeru = () => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
+async function notificarCambioEstado(idOrden, titulo, mensaje, tipo, req) {
+  try {
+    const datosResult = await executeQuery(`
+      SELECT ov.id_comercial, ov.numero_orden as numero_ov, op.numero_orden as numero_op
+      FROM ordenes_produccion op
+      INNER JOIN ordenes_venta ov ON op.id_orden_venta_origen = ov.id_orden_venta
+      WHERE op.id_orden = ?
+    `, [idOrden]);
+
+    if (datosResult.success && datosResult.data.length > 0) {
+      const datos = datosResult.data[0];
+      
+      if (datos.id_comercial) {
+        const ruta = `/produccion/ordenes/${idOrden}`;
+        
+        const insertResult = await executeQuery(`
+          INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
+          VALUES (?, ?, ?, ?, ?)
+        `, [datos.id_comercial, titulo, mensaje, tipo, ruta]);
+
+        const io = req.app.get('socketio');
+        if (io) {
+          io.to(`usuario_${datos.id_comercial}`).emit('nueva_notificacion', {
+            id_notificacion: insertResult.data.insertId,
+            titulo,
+            mensaje,
+            tipo,
+            ruta_destino: ruta,
+            leido: 0,
+            fecha_creacion: new Date().toISOString()
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error enviando notificación automática:', error);
+  }
+}
+
 export async function getAllOrdenes(req, res) {
   try {
     const { estado, fecha_inicio, fecha_fin, origen_tipo } = req.query;
@@ -461,10 +500,23 @@ export async function updateOrden(req, res) {
         ruta = `/produccion/calendario?fecha=${fecha_programada}`;
       }
 
-      await executeQuery(`
+      const insertResult = await executeQuery(`
         INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
         VALUES (?, ?, ?, ?, ?)
       `, [orden.id_comercial, titulo, mensaje, tipo, ruta]);
+
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to(`usuario_${orden.id_comercial}`).emit('nueva_notificacion', {
+          id_notificacion: insertResult.data.insertId,
+          titulo,
+          mensaje,
+          tipo,
+          ruta_destino: ruta,
+          leido: 0,
+          fecha_creacion: new Date().toISOString()
+        });
+      }
     }
 
     res.json({ success: true, message: 'Orden actualizada exitosamente' });
@@ -848,6 +900,8 @@ export async function iniciarProduccion(req, res) {
       if (!result.success) {
         return res.status(500).json({ error: result.error });
       }
+
+      await notificarCambioEstado(id, `Producción Iniciada: ${orden.numero_orden}`, 'La orden ha comenzado su proceso de fabricación.', 'info', req);
       
       return res.json({
         success: true,
@@ -922,6 +976,8 @@ export async function iniciarProduccion(req, res) {
     if (!result.success) {
       return res.status(500).json({ error: result.error });
     }
+
+    await notificarCambioEstado(id, `Producción Iniciada: ${orden.numero_orden}`, 'La orden ha comenzado su proceso de fabricación.', 'info', req);
     
     res.json({
       success: true,
@@ -960,6 +1016,8 @@ export async function pausarProduccion(req, res) {
     if (!result.success) {
       return res.status(500).json({ error: result.error });
     }
+
+    await notificarCambioEstado(id, `Producción Pausada: ${ordenResult.data[0].numero_orden}`, 'La orden ha sido puesta en pausa.', 'warning', req);
     
     res.json({
       success: true,
@@ -993,6 +1051,8 @@ export async function reanudarProduccion(req, res) {
     if (!result.success) {
       return res.status(500).json({ error: result.error });
     }
+
+    await notificarCambioEstado(id, `Producción Reanudada: ${ordenResult.data[0].numero_orden}`, 'La orden continúa su proceso.', 'info', req);
     
     res.json({
       success: true,
@@ -1350,6 +1410,8 @@ export async function finalizarProduccion(req, res) {
         );
     }
 
+    await notificarCambioEstado(id, `Producción Finalizada: ${orden.numero_orden}`, 'La orden ha sido completada y cerrada.', 'success', req);
+
     res.json({
       success: true,
       message: 'Producción finalizada exitosamente',
@@ -1459,6 +1521,7 @@ export async function cancelarOrden(req, res) {
         'UPDATE ordenes_produccion SET estado = ? WHERE id_orden = ?',
         ['Cancelada', id]
       );
+      await notificarCambioEstado(id, `Producción Cancelada: ${orden.numero_orden}`, 'La orden ha sido cancelada sin consumo.', 'danger', req);
       return res.json({ success: true, message: 'Orden cancelada (sin materiales devueltos)' });
     }
     
@@ -1504,6 +1567,8 @@ export async function cancelarOrden(req, res) {
     }
 
     await executeTransaction(queriesDetalle);
+
+    await notificarCambioEstado(id, `Producción Cancelada: ${orden.numero_orden}`, 'La orden ha sido cancelada y los materiales devueltos.', 'danger', req);
     
     res.json({ success: true, message: 'Orden cancelada y materiales devueltos al inventario' });
   } catch (error) {

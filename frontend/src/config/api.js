@@ -415,15 +415,21 @@ export const cotizacionesAPI = {
   },
 
   getById: (id) => api.get(`/cotizaciones/${id}`),
+  
+  getNavegacion: (id) => api.get(`/cotizaciones/${id}/navegacion`),
+
   create: (data) => api.post('/cotizaciones', data),
+  
   update: (id, data) => api.put(`/cotizaciones/${id}`, data),
   
-  // Nueva función para agregar dirección desde el modal de cotización
   addDireccion: (data) => api.post('/cotizaciones/direccion-cliente', data),
 
   duplicar: (id) => api.post(`/cotizaciones/${id}/duplicar`),
+  
   actualizarEstado: (id, estado) => api.put(`/cotizaciones/${id}/estado`, { estado }),
+  
   actualizarPrioridad: (id, prioridad) => api.put(`/cotizaciones/${id}/prioridad`, { prioridad }),
+  
   getEstadisticas: () => api.get('/cotizaciones/estadisticas'),
 
   descargarPDF: (id) => {

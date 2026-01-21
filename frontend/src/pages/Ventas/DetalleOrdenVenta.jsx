@@ -747,6 +747,22 @@ function DetalleOrdenVenta() {
     return orden.stock_reservado !== 1 && !estadosNoPermitidos.includes(orden.estado);
   };
 
+  if (loading) return <Loading message="Cargando orden de venta..." />;
+  
+  if (!orden) {
+    return (
+      <div className="p-6">
+        <Alert type="error" message="Orden de venta no encontrada" />
+        <button className="btn btn-outline mt-4" onClick={() => navigate('/ventas/ordenes')}>
+          <ArrowLeft size={20} /> Volver
+        </button>
+      </div>
+    );
+  }
+
+  const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
+  const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
+
   const columns = [
     {
       header: 'Código',
@@ -824,9 +840,6 @@ function DetalleOrdenVenta() {
         
         if (pendiente <= 0) return <span className="badge badge-success"><CheckCircle size={12}/> Completado</span>;
 
-        const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
-        const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
-
         if (row.stock_reservado === 1) {
             return (
                 <div className="flex flex-col gap-1">
@@ -841,7 +854,6 @@ function DetalleOrdenVenta() {
         const cantidadRequerida = parseFloat(row.cantidad);
         const stockSuficiente = stockDisponible >= cantidadRequerida;
 
-        // PRIORIDAD 1: Si hay stock suficiente, mostrar como cubierto
         if (stockSuficiente && mostrarAlertaStock) {
             return (
               <div className="flex flex-col gap-1">
@@ -864,7 +876,6 @@ function DetalleOrdenVenta() {
           );
         }
 
-        // PRIORIDAD 2: Si no hay stock y tiene OP (En producción)
         if (value > 0) {
           return (
             <div className="flex flex-col gap-1">
@@ -906,10 +917,7 @@ function DetalleOrdenVenta() {
         const cantidadRequerida = parseFloat(row.cantidad);
         const stockSuficiente = stockDisponible >= cantidadRequerida;
 
-        // Si ya hay OP creada, mostrar solo texto informativo, a menos que se quiera permitir crear otra
         if (row.tiene_op > 0) {
-           // Opcional: Permitir crear otra OP si falta stock a pesar de tener una OP (ej. merma alta)
-           // Por ahora, lo dejamos informativo
            return <span className="text-xs text-muted">OP Vinculada</span>;
         }
 
@@ -1012,19 +1020,6 @@ function DetalleOrdenVenta() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando orden de venta..." />;
-  
-  if (!orden) {
-    return (
-      <div className="p-6">
-        <Alert type="error" message="Orden de venta no encontrada" />
-        <button className="btn btn-outline mt-4" onClick={() => navigate('/ventas/ordenes')}>
-          <ArrowLeft size={20} /> Volver
-        </button>
-      </div>
-    );
-  }
-
   const estadoConfig = getEstadoConfig(orden.estado);
   const IconoEstado = estadoConfig.icono;
   const prioridadConfig = getPrioridadConfig(orden.prioridad);
@@ -1037,8 +1032,6 @@ function DetalleOrdenVenta() {
 
     const stockDisponible = parseFloat(item.stock_disponible || 0);
     const cantidadRequerida = parseFloat(item.cantidad);
-    // Solo marcamos como "Requiere OP" si no hay stock suficiente, independientemente de si tiene OP creada o no.
-    // Si tiene OP, igual nos falta stock hasta que se termine.
     return item.requiere_receta && 
            stockDisponible < cantidadRequerida &&
            orden.estado !== 'Cancelada' &&
@@ -2287,7 +2280,7 @@ function DetalleOrdenVenta() {
                 className="form-input"
                 value={transporteForm.transporte_nombre}
                 onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
-                placeholder="Nombre de la empresa o transportista"
+                placeholder="Nombre del empresa o transportista"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

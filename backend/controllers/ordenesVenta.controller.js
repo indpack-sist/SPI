@@ -777,22 +777,20 @@ export async function updateOrdenVenta(req, res) {
     } = req.body;
 
     const ordenExistente = await executeQuery(`
-      SELECT estado, stock_reservado FROM ordenes_venta WHERE id_orden_venta = ?
+      SELECT estado, stock_reservado, id_cotizacion FROM ordenes_venta WHERE id_orden_venta = ?
     `, [id]);
 
     if (!ordenExistente.success || ordenExistente.data.length === 0) {
       return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
     }
 
-    if (ordenExistente.data[0].estado !== 'En Espera') {
-      return res.status(400).json({ success: false, error: 'Solo se pueden editar órdenes en estado En Espera' });
-    }
+    const ordenActual = ordenExistente.data[0];
 
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({ success: false, error: 'Cliente y detalle son obligatorios' });
     }
 
-    const stockReservado = ordenExistente.data[0].stock_reservado === 1;
+    const stockReservado = ordenActual.stock_reservado === 1;
 
     if (stockReservado) {
       const detalleAnterior = await executeQuery(
@@ -956,7 +954,7 @@ export async function updateOrdenVenta(req, res) {
       tipo_venta || 'Contado',
       parseInt(dias_credito || 0),
       plazo_pago,
-      forma_pago,
+      forma_pago || null,
       orden_compra_cliente || null,
       idVehiculoFinal,
       idConductorFinal,
@@ -1004,8 +1002,9 @@ export async function updateOrdenVenta(req, res) {
           precio_base,
           porcentaje_comision,
           monto_comision,
-          descuento_porcentaje
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          descuento_porcentaje,
+          stock_reservado
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id,
           item.id_producto,
@@ -1014,7 +1013,8 @@ export async function updateOrdenVenta(req, res) {
           precioBase,
           porcentajeComision,
           montoComision,
-          parseFloat(item.descuento_porcentaje || 0)
+          parseFloat(item.descuento_porcentaje || 0),
+          stockReservado ? 1 : 0
         ]
       });
 
@@ -1031,6 +1031,66 @@ export async function updateOrdenVenta(req, res) {
           });
         }
       }
+    }
+
+    if (ordenActual.id_cotizacion) {
+        queriesNuevoDetalle.push({
+            sql: 'DELETE FROM detalle_cotizacion WHERE id_cotizacion = ?',
+            params: [ordenActual.id_cotizacion]
+        });
+
+        for (let i = 0; i < detalle.length; i++) {
+          const item = detalle[i];
+          const cantidad = parseFloat(item.cantidad);
+          const precioBase = parseFloat(item.precio_base);
+          const pctComision = parseFloat(item.porcentaje_comision || 0);
+          const montoComision = precioBase * (pctComision / 100);
+          const precioFinal = precioBase + montoComision;
+          const descuento = parseFloat(item.descuento_porcentaje || 0);
+
+          queriesNuevoDetalle.push({
+            sql: `INSERT INTO detalle_cotizacion (
+              id_cotizacion, id_producto, cantidad, precio_unitario, precio_base, 
+              porcentaje_comision, monto_comision, descuento_porcentaje, orden
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            params: [
+              ordenActual.id_cotizacion,
+              item.id_producto,
+              cantidad,
+              precioFinal,
+              precioBase,
+              pctComision,
+              montoComision,
+              descuento,
+              i + 1
+            ]
+          });
+        }
+
+        queriesNuevoDetalle.push({
+            sql: `UPDATE cotizaciones 
+                  SET 
+                    subtotal = ?, 
+                    igv = ?, 
+                    total = ?, 
+                    total_comision = ?, 
+                    porcentaje_comision_promedio = ?,
+                    observaciones = ?,
+                    moneda = ?,
+                    tipo_cambio = ?
+                  WHERE id_cotizacion = ?`,
+            params: [
+                subtotal, 
+                impuesto, 
+                total, 
+                totalComision, 
+                porcentajeComisionPromedio, 
+                observaciones, 
+                moneda, 
+                parseFloat(tipo_cambio || 1.0000),
+                ordenActual.id_cotizacion
+            ]
+        });
     }
 
     await executeTransaction(queriesNuevoDetalle);

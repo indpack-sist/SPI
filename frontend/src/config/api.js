@@ -460,6 +460,8 @@ export const ordenesVentaAPI = {
   
   update: (id, data) => api.put(`/ordenes-venta/${id}`, data),
 
+  rectificarCantidad: (id, data) => api.put(`/ordenes-venta/${id}/rectificar`, data),
+
   addDireccion: (data) => api.post('/ordenes-venta/direccion-cliente', data),
   
   reservarStock: (id) => api.post(`/ordenes-venta/${id}/reservar`),

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Download, FileText, Calendar,
   Building, AlertCircle,
   CheckCircle, XCircle, Calculator, Percent, TrendingUp,
   AlertTriangle, User, CreditCard, Package, MapPin, Copy, ExternalLink, Lock,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Save
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -16,6 +16,7 @@ import { cotizacionesAPI, clientesAPI } from '../../config/api';
 function DetalleCotizacion() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [cotizacion, setCotizacion] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,6 +25,11 @@ function DetalleCotizacion() {
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [navInfo, setNavInfo] = useState({ prev: null, next: null, current: 0, total: 0 });
+  
+  const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
+  const [productoRectificar, setProductoRectificar] = useState(null);
+  const [rectificarForm, setRectificarForm] = useState({ nueva_cantidad: '', motivo: '' });
+  const [procesando, setProcesando] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -32,9 +38,27 @@ function DetalleCotizacion() {
 
   const cargarNavegacion = async () => {
     try {
-      const response = await cotizacionesAPI.getAll();
+      const params = new URLSearchParams(location.search);
+      const estado = params.get('estado');
+      const busqueda = params.get('busqueda');
+      
+      const filtros = {};
+      if (estado) filtros.estado = estado;
+      
+      const response = await cotizacionesAPI.getAll(filtros);
       if (response.data.success) {
-        const lista = response.data.data;
+        let lista = response.data.data;
+        
+        if (busqueda) {
+          const term = busqueda.toLowerCase();
+          lista = lista.filter(c => 
+            c.numero_cotizacion?.toLowerCase().includes(term) ||
+            c.cliente?.toLowerCase().includes(term) ||
+            c.ruc_cliente?.toLowerCase().includes(term) ||
+            c.comercial?.toLowerCase().includes(term)
+          );
+        }
+        
         const currentIndex = lista.findIndex(c => String(c.id_cotizacion) === String(id));
         if (currentIndex !== -1) {
           setNavInfo({
@@ -52,8 +76,14 @@ function DetalleCotizacion() {
 
   const handleNavegar = (nuevoId) => {
     if (nuevoId) {
-      navigate(`/ventas/cotizaciones/${nuevoId}`);
+      const queryString = location.search;
+      navigate(`/ventas/cotizaciones/${nuevoId}${queryString}`);
     }
+  };
+
+  const handleVolverListado = () => {
+    const queryString = location.search;
+    navigate(`/ventas/cotizaciones${queryString}`);
   };
 
   const cargarDatos = async () => {
@@ -79,6 +109,35 @@ function DetalleCotizacion() {
       setError(err.response?.data?.error || 'Error al cargar la cotización');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRectificarCantidad = async (e) => {
+    e.preventDefault();
+    if (!productoRectificar) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await cotizacionesAPI.rectificarCantidad(id, {
+        id_producto: productoRectificar.id_producto,
+        nueva_cantidad: parseFloat(rectificarForm.nueva_cantidad),
+        motivo: rectificarForm.motivo
+      });
+
+      if (response.data.success) {
+        setSuccess(`Cantidad rectificada: ${productoRectificar.producto}`);
+        setModalRectificarOpen(false);
+        setProductoRectificar(null);
+        setRectificarForm({ nueva_cantidad: '', motivo: '' });
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al rectificar cantidad');
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -144,7 +203,8 @@ function DetalleCotizacion() {
         setSuccess(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
         
         setTimeout(() => {
-          navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
+          const queryString = location.search;
+          navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}${queryString}`);
         }, 1500);
       }
       
@@ -355,6 +415,31 @@ function DetalleCotizacion() {
       render: (value) => (
         <span className="font-bold text-lg">{formatearMoneda(value)}</span>
       )
+    },
+    {
+      header: 'Acciones',
+      accessor: 'id_producto',
+      width: '80px',
+      align: 'center',
+      render: (value, row) => {
+        return (
+          <button
+            className="btn btn-xs btn-ghost text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200"
+            onClick={() => {
+              setProductoRectificar(row);
+              setRectificarForm({ 
+                  nueva_cantidad: row.cantidad, 
+                  motivo: '' 
+              });
+              setModalRectificarOpen(true);
+            }}
+            disabled={procesando}
+            title="Rectificar Cantidad"
+          >
+            <Edit size={14} />
+          </button>
+        );
+      }
     }
   ];
 
@@ -368,7 +453,7 @@ function DetalleCotizacion() {
         <Alert type="error" message="Cotización no encontrada" />
         <button 
           className="btn btn-outline mt-4"
-          onClick={() => navigate('/ventas/cotizaciones')}
+          onClick={handleVolverListado}
         >
           <ArrowLeft size={20} />
           Volver a Cotizaciones
@@ -412,7 +497,7 @@ function DetalleCotizacion() {
           <div className="flex items-center gap-4">
             <button 
               className="btn btn-outline"
-              onClick={() => navigate('/ventas/cotizaciones')}
+              onClick={handleVolverListado}
             >
               <ArrowLeft size={20} />
             </button>
@@ -872,6 +957,76 @@ function DetalleCotizacion() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalRectificarOpen}
+        onClose={() => setModalRectificarOpen(false)}
+        title="Rectificar Cantidad de Producto"
+        size="sm"
+      >
+        {productoRectificar && (
+          <form onSubmit={handleRectificarCantidad}>
+            <div className="space-y-4">
+              <div className="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
+                <div className="flex gap-2">
+                  <AlertTriangle className="text-orange-500 shrink-0" size={20} />
+                  <div className="text-sm text-orange-800">
+                    <p className="font-bold">{productoRectificar.producto}</p>
+                    <p>Cantidad actual: <strong>{formatearNumero(productoRectificar.cantidad)}</strong></p>
+                    <p className="text-xs mt-1">
+                        Si esta cotización ya fue convertida, se actualizará también la Orden de Venta.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Nueva Cantidad *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="form-input"
+                  value={rectificarForm.nueva_cantidad}
+                  onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Motivo del Cambio *</label>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  value={rectificarForm.motivo}
+                  onChange={(e) => setRectificarForm({ ...rectificarForm, motivo: e.target.value })}
+                  placeholder="Ej: Error de digitación, cambio de requerimiento, etc."
+                  required
+                ></textarea>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setModalRectificarOpen(false)}
+                  disabled={procesando}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-warning text-white"
+                  disabled={procesando}
+                >
+                  <Save size={16} className="mr-1"/> Confirmar Rectificación
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

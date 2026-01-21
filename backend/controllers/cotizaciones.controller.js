@@ -1242,3 +1242,124 @@ export async function getNavegacionCotizacion(req, res) {
     });
   }
 }
+export async function rectificarCantidadCotizacion(req, res) {
+  try {
+    const { id } = req.params;
+    const { id_producto, nueva_cantidad, motivo } = req.body;
+    
+    // Validación básica
+    if (!id_producto || nueva_cantidad === undefined || nueva_cantidad < 0) {
+        return res.status(400).json({ success: false, error: 'Datos incompletos' });
+    }
+
+    const cotResult = await executeQuery('SELECT * FROM cotizaciones WHERE id_cotizacion = ?', [id]);
+    if (cotResult.data.length === 0) return res.status(404).json({ success: false, error: 'Cotización no encontrada' });
+    const cotizacion = cotResult.data[0];
+
+    const detResult = await executeQuery('SELECT * FROM detalle_cotizacion WHERE id_cotizacion = ? AND id_producto = ?', [id, id_producto]);
+    if (detResult.data.length === 0) return res.status(404).json({ success: false, error: 'Producto no en cotización' });
+    
+    const itemDetalle = detResult.data[0];
+    const cantidadAnterior = parseFloat(itemDetalle.cantidad);
+    const cantidadNueva = parseFloat(nueva_cantidad);
+    const diferencia = cantidadNueva - cantidadAnterior;
+
+    if (diferencia === 0) return res.json({ success: true, message: 'Sin cambios' });
+
+    const queries = [];
+
+    // 1. ACTUALIZAR COTIZACIÓN
+    queries.push({
+        sql: 'UPDATE detalle_cotizacion SET cantidad = ? WHERE id_detalle = ?',
+        params: [cantidadNueva, itemDetalle.id_detalle]
+    });
+
+    queries.push({
+        sql: `UPDATE cotizaciones c
+              SET 
+                subtotal = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion),
+                igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * (COALESCE(porcentaje_impuesto,18)/100),
+                total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * (1 + COALESCE(porcentaje_impuesto,18)/100),
+                observaciones = CONCAT(COALESCE(observaciones, ""), " [Rect: Prod ", ?, " ", ?, "->", ?, "]")
+              WHERE c.id_cotizacion = ?`,
+        params: [id_producto, cantidadAnterior, cantidadNueva, id]
+    });
+
+    // 2. SINCRONIZAR ORDEN DE VENTA (SI EXISTE)
+    if (cotizacion.convertida_venta === 1 && cotizacion.id_orden_venta) {
+        const idOrden = cotizacion.id_orden_venta;
+        
+        // --- LÓGICA DE INVENTARIO (Idéntica al controller de OV) ---
+        if (diferencia > 0) {
+            const prodCheck = await executeQuery('SELECT stock_actual, requiere_receta FROM productos WHERE id_producto = ?', [id_producto]);
+            if (prodCheck.data.length > 0 && prodCheck.data[0].requiere_receta === 0) {
+                if (parseFloat(prodCheck.data[0].stock_actual) < diferencia) {
+                    return res.status(400).json({ success: false, error: 'Stock insuficiente para reflejar el cambio en la Orden de Venta vinculada' });
+                }
+                queries.push({ sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?', params: [diferencia, id_producto] });
+            }
+        } else {
+            const prodCheck = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [id_producto]);
+            if (prodCheck.data.length > 0 && prodCheck.data[0].requiere_receta === 0) {
+                queries.push({ sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?', params: [Math.abs(diferencia), id_producto] });
+            }
+        }
+
+        // --- ACTUALIZAR DETALLE OV ---
+        // Verificamos estado de la orden para saber si actualizar 'cantidad_despachada'
+        const ordenCheck = await executeQuery('SELECT estado, numero_orden, porcentaje_impuesto FROM ordenes_venta WHERE id_orden_venta = ?', [idOrden]);
+        const ordenData = ordenCheck.data[0];
+
+        let sqlUpdateOV = 'UPDATE detalle_orden_venta SET cantidad = ? WHERE id_orden_venta = ? AND id_producto = ?';
+        let paramsUpdateOV = [cantidadNueva, idOrden, id_producto];
+
+        if (['Despachada', 'Entregada'].includes(ordenData.estado)) {
+            sqlUpdateOV = 'UPDATE detalle_orden_venta SET cantidad = ?, cantidad_despachada = ? WHERE id_orden_venta = ? AND id_producto = ?';
+            paramsUpdateOV = [cantidadNueva, cantidadNueva, idOrden, id_producto];
+        } else if (ordenData.estado === 'Despacho Parcial') {
+            sqlUpdateOV = 'UPDATE detalle_orden_venta SET cantidad = ?, cantidad_despachada = IF(cantidad_despachada > 0, ?, cantidad_despachada) WHERE id_orden_venta = ? AND id_producto = ?';
+            paramsUpdateOV = [cantidadNueva, cantidadNueva, idOrden, id_producto];
+        }
+        queries.push({ sql: sqlUpdateOV, params: paramsUpdateOV });
+
+        // --- RECALCULAR CABECERA OV ---
+        queries.push({
+            sql: `UPDATE ordenes_venta ov
+                  SET 
+                    subtotal = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta),
+                    igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) * (COALESCE(porcentaje_impuesto,18)/100),
+                    total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) * (1 + COALESCE(porcentaje_impuesto,18)/100)
+                  WHERE ov.id_orden_venta = ?`,
+            params: [idOrden]
+        });
+
+        // --- ACTUALIZAR SALIDAS (SI APLICA) ---
+        if (['Despachada', 'Entregada', 'Despacho Parcial'].includes(ordenData.estado)) {
+             const salidaRes = await executeQuery('SELECT id_salida FROM salidas WHERE observaciones LIKE ? AND estado = "Activo" ORDER BY id_salida DESC LIMIT 1', [`%${ordenData.numero_orden}%`]);
+             if (salidaRes.data.length > 0) {
+                 const idSalida = salidaRes.data[0].id_salida;
+                 // Asumimos que si existe en OV, existe en Salida si ya fue despachada. Update simple.
+                 queries.push({
+                     sql: 'UPDATE detalle_salidas SET cantidad = ? WHERE id_salida = ? AND id_producto = ?',
+                     params: [cantidadNueva, idSalida, id_producto]
+                 });
+                 // Recalculo totales salida
+                 queries.push({
+                    sql: `UPDATE salidas s SET 
+                            total_costo = (SELECT COALESCE(SUM(cantidad * costo_unitario), 0) FROM detalle_salidas WHERE id_salida = s.id_salida),
+                            total_precio = (SELECT COALESCE(SUM(cantidad * precio_unitario), 0) FROM detalle_salidas WHERE id_salida = s.id_salida)
+                          WHERE s.id_salida = ?`,
+                    params: [idSalida]
+                });
+             }
+        }
+    }
+
+    await executeTransaction(queries);
+    res.json({ success: true, message: 'Cotización (y Orden vinculada) rectificada correctamente' });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}

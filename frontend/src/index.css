@@ -2709,3 +2709,41 @@ input[type="checkbox"] {
 .overflow-y-auto {
   overflow-y: auto;
 }
+/* =================================================================
+   CORRECCIÓN VISUAL DETALLE COTIZACIÓN
+   Agregar al final de index.css
+   ================================================================= */
+
+/* 1. Forzar color blanco puro en el destino del degradado */
+.to-white {
+  --tw-gradient-to: #ffffff !important;
+}
+
+/* 2. Definir colores de inicio específicos para los encabezados */
+.from-blue-50 { --tw-gradient-from: #eff6ff; }
+.from-green-50 { --tw-gradient-from: #f0fdf4; }
+.from-purple-50 { --tw-gradient-from: #faf5ff; }
+.from-gray-50 { --tw-gradient-from: #f9fafb; }
+.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05); }
+
+/* 3. Clase maestra para el degradado horizontal */
+.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-from), var(--tw-gradient-to));
+}
+
+/* 4. Eliminar bordes extraños en las tarjetas */
+.card-header {
+  border-bottom: 1px solid var(--border); /* Asegura un borde gris suave, no negro */
+  background-color: transparent; /* El degradado lo maneja la clase utilitaria */
+}
+
+/* 5. Corrección específica para el bloque de Resumen (Subtotal/Total) */
+/* A veces el shadow-inner crea un efecto de borde oscuro indeseado */
+.shadow-inner {
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important; /* Muy sutil */
+}
+
+/* 6. Asegurar que el fondo del body de la tarjeta sea blanco */
+.card-body {
+  background-color: #ffffff;
+}

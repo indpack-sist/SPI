@@ -2778,3 +2778,46 @@ input[type="checkbox"] {
   box-shadow: none !important;
   background-color: #f3f4f6; /* Mantiene el fondo gris suave sin bordes */
 }
+/* =================================================================
+   CORRECCIÓN URGENTE DE BORDES NEGROS
+   Agregar al final de index.css
+   ================================================================= */
+
+/* 1. Corregir el borde del encabezado pegajoso (Sticky Header) */
+.sticky.border-b {
+  border-bottom-color: var(--border) !important; /* Forzar color gris suave */
+  /* Si prefieres que desaparezca por completo, usa: border-bottom: none !important; */
+}
+
+/* 2. Corregir las líneas en la sección de Resumen/Totales */
+.card-body .flex.border-b {
+  border-bottom-color: var(--border) !important; /* Forzar color gris suave */
+}
+
+/* 3. Asegurar que la clase general border-b siempre sea gris si no se especifica otro */
+.border-b {
+  border-bottom-width: 1px;
+  border-style: solid;
+  border-bottom-color: var(--border); 
+}
+
+/* 4. Asegurar que la clase general border-t siempre sea gris */
+.border-t {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--border);
+}
+
+/* 5. Asegurar que los bordes de cards (border-2) no sean negros */
+.border-2 {
+  border-width: 2px;
+  border-style: solid;
+  /* Si no tiene color específico, usar transparente o gris */
+  border-color: var(--border); 
+}
+
+/* Reglas específicas para que tus colores de estado (verde, azul, etc) funcionen sobre el borde */
+.border-green-200 { border-color: #bbf7d0 !important; }
+.border-blue-200 { border-color: #bfdbfe !important; }
+.border-yellow-200 { border-color: #fde68a !important; }
+.border-red-200 { border-color: #fecaca !important; }

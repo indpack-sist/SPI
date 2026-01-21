@@ -1478,6 +1478,7 @@ export async function anularOrdenVenta(req, res) {
 
     const queriesAnulacion = [];
 
+    // 1. REVERSION DE STOCK DE PRODUCTOS (SI ESTABAN RESERVADOS)
     const detalleOrden = await executeQuery(
       `SELECT dov.id_producto, dov.cantidad, dov.stock_reservado, p.requiere_receta 
        FROM detalle_orden_venta dov
@@ -1491,6 +1492,7 @@ export async function anularOrdenVenta(req, res) {
       mapaReservas[item.id_producto] = (item.stock_reservado === 1);
     });
 
+    // 2. ANULACIÓN DE SALIDAS (DESPACHOS)
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
       [`%${orden.numero_orden}%`, 'Activo']
@@ -1527,6 +1529,7 @@ export async function anularOrdenVenta(req, res) {
       });
     }
 
+    // 3. REVERSION DE STOCK RESERVADO EN LA ORDEN
     for (const item of detalleOrden.data) {
       if (item.stock_reservado === 1 && item.requiere_receta === 0) {
         queriesAnulacion.push({
@@ -1548,17 +1551,30 @@ export async function anularOrdenVenta(req, res) {
 
     const motivoFinal = motivo_anulacion || 'Sin motivo especificado';
     
+    // 4. ACTUALIZAR ESTADO DE LA ORDEN DE VENTA
     queriesAnulacion.push({
       sql: 'UPDATE ordenes_venta SET estado = ?, stock_reservado = 0, observaciones = CONCAT(COALESCE(observaciones, ""), " - ANULADA: ", ?) WHERE id_orden_venta = ?',
       params: ['Cancelada', motivoFinal, id]
     });
 
+    // 5. REVERTIR ESTADO DE COTIZACIÓN (SI EXISTE)
     if (orden.id_cotizacion) {
       queriesAnulacion.push({
         sql: "UPDATE cotizaciones SET estado = 'Rechazada', convertida_venta = 0, id_orden_venta = NULL WHERE id_cotizacion = ?",
         params: [orden.id_cotizacion]
       });
     }
+
+    // 6. [NUEVO] ANULAR ÓRDENES DE PRODUCCIÓN VINCULADAS
+    // Solo anulamos las que no estén ya canceladas o terminadas (para evitar corromper stock de productos ya fabricados)
+    queriesAnulacion.push({
+        sql: `UPDATE ordenes_produccion 
+              SET estado = 'Cancelada', 
+                  observaciones = CONCAT(COALESCE(observaciones, ''), ' - Cancelada autom. por anulación de OV') 
+              WHERE id_orden_venta_origen = ? 
+              AND estado NOT IN ('Cancelada', 'Terminada')`,
+        params: [id]
+    });
 
     await executeTransaction(queriesAnulacion);
 
@@ -1567,7 +1583,8 @@ export async function anularOrdenVenta(req, res) {
       message: 'Orden de venta anulada correctamente',
       data: {
         salidas_anuladas: salidasResult.data.length,
-        motivo: motivoFinal
+        motivo: motivoFinal,
+        produccion_anulada: true
       }
     });
 

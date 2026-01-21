@@ -421,6 +421,8 @@ export const cotizacionesAPI = {
   create: (data) => api.post('/cotizaciones', data),
   
   update: (id, data) => api.put(`/cotizaciones/${id}`, data),
+
+  rectificarCantidad: (id, data) => api.put(`/cotizaciones/${id}/rectificar`, data),
   
   addDireccion: (data) => api.post('/cotizaciones/direccion-cliente', data),
 

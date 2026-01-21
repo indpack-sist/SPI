@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Plus, Eye, Download, Filter, FileText, Search,
   ChevronLeft, ChevronRight, RefreshCw, Calendar,
@@ -12,6 +12,7 @@ import { cotizacionesAPI } from '../../config/api';
 
 function Cotizaciones() {
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +32,15 @@ function Cotizaciones() {
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, busqueda]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const estado = params.get('estado');
+    const search = params.get('busqueda');
+    
+    if (estado) setFiltroEstado(estado);
+    if (search) setBusqueda(search);
+  }, [location.search]);
 
   const cargarDatos = async (silencioso = false) => {
     try {
@@ -194,6 +204,15 @@ function Cotizaciones() {
     }
   };
 
+  const handleVerDetalle = (id) => {
+    const params = new URLSearchParams();
+    if (filtroEstado) params.set('estado', filtroEstado);
+    if (busqueda) params.set('busqueda', busqueda);
+    
+    const queryString = params.toString();
+    navigate(`/ventas/cotizaciones/${id}${queryString ? `?${queryString}` : ''}`);
+  };
+
   const columns = [
     {
       header: 'N° Cotización',
@@ -280,7 +299,7 @@ function Cotizaciones() {
             className="btn btn-sm btn-primary"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/ventas/cotizaciones/${value}`);
+              handleVerDetalle(value);
             }}
             title="Ver detalle"
           >
@@ -486,7 +505,7 @@ function Cotizaciones() {
             columns={columns}
             data={currentItems}
             emptyMessage="No hay cotizaciones registradas"
-            onRowClick={(row) => navigate(`/ventas/cotizaciones/${row.id_cotizacion}`)}
+            onRowClick={(row) => handleVerDetalle(row.id_cotizacion)}
           />
         </div>
 

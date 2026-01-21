@@ -10,7 +10,8 @@ import {
   getEstadisticasCotizaciones,
   descargarPDFCotizacion,
   agregarDireccionClienteDesdeCotizacion,
-  getNavegacionCotizacion
+  getNavegacionCotizacion,
+  rectificarCantidadCotizacion
 } from '../controllers/cotizaciones.controller.js';
 
 const router = express.Router();
@@ -26,6 +27,7 @@ router.get('/:id/navegacion', getNavegacionCotizacion);
 router.post('/:id/duplicar', duplicarCotizacion);
 router.put('/:id/estado', actualizarEstadoCotizacion);
 router.put('/:id/prioridad', actualizarPrioridadCotizacion);
+router.put('/:id/rectificar', rectificarCantidadCotizacion);
 
 router.get('/:id', getCotizacionById);
 router.put('/:id', updateCotizacion);

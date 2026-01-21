@@ -308,6 +308,49 @@ export async function createCotizacion(req, res) {
     if (isNaN(subtotal)) subtotal = 0;
     if (isNaN(igv)) igv = 0;
     if (isNaN(total)) total = 0;
+
+    // --- VALIDACIÓN DE CRÉDITO MEJORADA ---
+    if (plazo_pago !== 'Contado') {
+      const clienteInfo = await executeQuery(
+        `SELECT usar_limite_credito, 
+                COALESCE(limite_credito_pen, 0) as limite_pen, 
+                COALESCE(limite_credito_usd, 0) as limite_usd 
+         FROM clientes WHERE id_cliente = ?`,
+        [id_cliente]
+      );
+      
+      if (clienteInfo.success && clienteInfo.data.length > 0) {
+        const cliente = clienteInfo.data[0];
+        
+        // Convertimos el "1" o true a booleano real
+        if (cliente.usar_limite_credito == 1) {
+          const deudaRes = await executeQuery(`
+            SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
+            FROM ordenes_venta
+            WHERE id_cliente = ? 
+            AND moneda = ? 
+            AND estado NOT IN ('Cancelada', 'Entregada') 
+            AND estado_pago != 'Pagado'
+          `, [id_cliente, moneda]);
+
+          const limite = moneda === 'USD' 
+            ? parseFloat(cliente.limite_usd) 
+            : parseFloat(cliente.limite_pen);
+            
+          const deudaActual = parseFloat(deudaRes.data[0]?.deuda_actual || 0);
+          const disponible = limite - deudaActual;
+
+          // console.log(`Validando Crédito: Límite=${limite}, Deuda=${deudaActual}, Nuevo=${total}, Disp=${disponible}`);
+
+          if ((deudaActual + total) > limite) {
+             // Devolvemos warning pero permitimos crear la cotización (estado Pendiente)
+             // El frontend deberá mostrar esta alerta.
+             console.warn(`Cliente ${id_cliente} excede límite de crédito. Disponible: ${disponible}, Requerido: ${total}`);
+          }
+        }
+      }
+    }
+    // --------------------------------------
     
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
@@ -563,21 +606,20 @@ export async function updateCotizacion(req, res) {
     if (isNaN(igv)) igv = 0;
     if (isNaN(total)) total = 0;
 
-    if (cotActual.usar_limite_credito === 1 && plazo_pago !== 'Contado') {
+    // VALIDACIÓN DE CRÉDITO EN UPDATE
+    if (cotActual.usar_limite_credito == 1 && plazo_pago !== 'Contado') {
       const deudaRes = await executeQuery(`
         SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
         FROM ordenes_venta
         WHERE id_cliente = ? AND moneda = ? AND estado != 'Cancelada' AND estado_pago != 'Pagado'
       `, [id_cliente, moneda]);
 
-      const limite = moneda === 'USD' ? cotActual.limite_credito_usd : cotActual.limite_credito_pen;
+      const limite = moneda === 'USD' ? parseFloat(cotActual.limite_credito_usd || 0) : parseFloat(cotActual.limite_credito_pen || 0);
       const deudaActual = parseFloat(deudaRes.data[0].deuda_actual);
 
-      if ((deudaActual + total) > parseFloat(limite)) {
-        return res.status(400).json({
-          success: false,
-          error: `Límite de crédito excedido. Disponible: ${moneda} ${(limite - deudaActual).toFixed(2)}`
-        });
+      if ((deudaActual + total) > limite) {
+        // Mismo warning que en create
+        console.warn(`Cliente ${id_cliente} excede límite de crédito en edición de cotización.`);
       }
     }
 

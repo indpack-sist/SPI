@@ -31,6 +31,10 @@ function DetalleCotizacion() {
   const [rectificarForm, setRectificarForm] = useState({ nueva_cantidad: '', motivo: '' });
   const [procesando, setProcesando] = useState(false);
 
+  const handleWheelDisable = (e) => {
+    e.target.blur();
+  };
+
   useEffect(() => {
     cargarDatos();
     cargarNavegacion();
@@ -992,6 +996,7 @@ function DetalleCotizacion() {
                   onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
                   required
                   autoFocus
+                  onWheel={handleWheelDisable}
                 />
               </div>
 

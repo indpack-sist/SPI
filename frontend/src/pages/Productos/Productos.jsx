@@ -151,10 +151,10 @@ function Productos() {
     }
   };
 
-  const formatearMoneda = (valor) => {
+  const formatearMoneda = (valor, moneda = 'PEN') => {
     return new Intl.NumberFormat('es-ES', {
       style: 'currency',
-      currency: 'PEN'
+      currency: moneda
     }).format(valor || 0);
   };
 
@@ -184,16 +184,22 @@ function Productos() {
       render: (value, row) => `${parseFloat(value).toFixed(2)} ${row.unidad_medida}`
     },
     {
-      header: 'CUP',
+      header: 'CUP (S/)',
       accessor: 'costo_unitario_promedio',
       align: 'right',
-      render: (value) => formatearMoneda(value)
+      render: (value) => formatearMoneda(value, 'PEN')
+    },
+    {
+      header: 'CUP ($)',
+      accessor: 'costo_unitario_promedio_usd',
+      align: 'right',
+      render: (value) => formatearMoneda(value, 'USD')
     },
     {
       header: 'Precio Venta',
       accessor: 'precio_venta',
       align: 'right',
-      render: (value) => formatearMoneda(value)
+      render: (value) => formatearMoneda(value, 'PEN')
     },
     {
       header: 'Recetas',

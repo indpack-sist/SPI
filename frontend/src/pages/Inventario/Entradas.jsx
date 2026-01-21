@@ -8,7 +8,8 @@ import {
   FileText, 
   Loader,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ArrowRightLeft
 } from 'lucide-react';
 import { entradasAPI, productosAPI, proveedoresAPI, empleadosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -49,6 +50,7 @@ function Entradas() {
     documento_soporte: '',
     id_registrado_por: '',
     moneda: 'PEN',
+    tipo_cambio: '',
     observaciones: ''
   });
 
@@ -59,6 +61,15 @@ function Entradas() {
   useEffect(() => {
     setCurrentPage(1);
   }, [filtro]);
+
+  // Efecto para limpiar o establecer el tipo de cambio por defecto
+  useEffect(() => {
+    if (formData.moneda === 'PEN') {
+      setFormData(prev => ({ ...prev, tipo_cambio: '1.0000' }));
+    } else if (!formData.tipo_cambio || formData.tipo_cambio === '1.0000') {
+      setFormData(prev => ({ ...prev, tipo_cambio: '' }));
+    }
+  }, [formData.moneda]);
 
   const cargarDatos = async () => {
     try {
@@ -121,6 +132,7 @@ function Entradas() {
           documento_soporte: entradaCompleta.documento_soporte || '',
           id_registrado_por: entradaCompleta.id_registrado_por,
           moneda: entradaCompleta.moneda || 'PEN',
+          tipo_cambio: entradaCompleta.tipo_cambio || '',
           observaciones: entradaCompleta.observaciones || ''
         });
         
@@ -149,6 +161,7 @@ function Entradas() {
         documento_soporte: '',
         id_registrado_por: '',
         moneda: 'PEN',
+        tipo_cambio: '1.0000',
         observaciones: ''
       });
       setDetalles([{
@@ -241,10 +254,16 @@ function Entradas() {
     setError(null);
     setSuccess(null);
 
+    if (formData.moneda !== 'PEN' && (!formData.tipo_cambio || parseFloat(formData.tipo_cambio) <= 0)) {
+        setError(`Debe especificar un Tipo de Cambio válido para ${formData.moneda}`);
+        return;
+    }
+
     try {
       if (editando) {
         const payload = {
           ...formData,
+          tipo_cambio: parseFloat(formData.tipo_cambio),
           id_producto: editando.detalles[0]?.id_producto,
           cantidad: detalles[0].cantidad,
           costo_unitario: detalles[0].costo_unitario,
@@ -268,6 +287,7 @@ function Entradas() {
 
         const payload = {
           ...formData,
+          tipo_cambio: parseFloat(formData.tipo_cambio),
           detalles: detallesValidos
         };
         
@@ -459,8 +479,8 @@ function Entradas() {
                 position: 'absolute', 
                 left: '0.75rem', 
                 top: '50%', 
-                transform: 'translateY(-50%)',
-                color: 'var(--text-secondary)'
+                transform: 'translateY(-50%)', 
+                color: 'var(--text-secondary)' 
               }} 
             />
             <input
@@ -477,7 +497,7 @@ function Entradas() {
 
       <div className="card">
         <div className="p-3 border-b border-border text-sm text-muted">
-             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, entradasFiltradas.length)} de {entradasFiltradas.length} entradas
+              Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, entradasFiltradas.length)} de {entradasFiltradas.length} entradas
         </div>
 
         <Table
@@ -554,7 +574,7 @@ function Entradas() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="form-group">
               <label className="form-label">Documento Soporte</label>
               <input
@@ -579,6 +599,24 @@ function Entradas() {
                 <option value="EUR">Euros (€)</option>
               </select>
             </div>
+
+            {formData.moneda !== 'PEN' && (
+                <div className="form-group animate-in fade-in slide-in-from-top-2">
+                    <label className="form-label text-blue-600 flex items-center gap-1">
+                        <ArrowRightLeft size={14} /> Tipo de Cambio *
+                    </label>
+                    <input
+                        type="number"
+                        className="form-input border-blue-300 bg-blue-50 text-blue-800 font-bold"
+                        value={formData.tipo_cambio}
+                        onChange={(e) => setFormData({ ...formData, tipo_cambio: e.target.value })}
+                        placeholder="Ej: 3.75"
+                        step="0.0001"
+                        min="0.0001"
+                        required
+                    />
+                </div>
+            )}
           </div>
 
           <div className="form-group">

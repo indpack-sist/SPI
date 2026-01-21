@@ -476,23 +476,11 @@ export async function createCompra(req, res) {
 
       const [resultEntrada] = await connection.query(`
         INSERT INTO entradas ( 
-          id_tipo_inventario,
-          tipo_entrada,
-          id_proveedor,
-          documento_soporte,
-          total_costo,
-          subtotal,
-          igv,
-          total,
-          porcentaje_igv,
-          moneda,
-          monto_pagado,
-          estado_pago,
-          id_cuenta_pago,
-          id_registrado_por,
-          observaciones,
-          id_orden_compra
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id_tipo_inventario, tipo_entrada, id_proveedor, documento_soporte, 
+          total_costo, subtotal, igv, total, porcentaje_igv, 
+          moneda, tipo_cambio, monto_pagado, estado_pago, id_cuenta_pago, 
+          id_registrado_por, observaciones, id_orden_compra
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         id_tipo_inventario_entrada,
         'Compra',
@@ -500,10 +488,11 @@ export async function createCompra(req, res) {
         numeroCompra,
         subtotal,
         subtotal,
-        impuesto,
+        igv,
         total,
         porcentaje,
         moneda,
+        tipoCambioFinal,
         tipo_compra === 'Contado' ? total : 0,
         tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente',
         id_cuenta_pago,
@@ -519,6 +508,8 @@ export async function createCompra(req, res) {
         const precioUnitario = parseFloat(item.precio_unitario);
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const subtotalItem = (item.cantidad * precioUnitario) * (1 - descuento / 100);
+        
+        const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
 
         await connection.query(`
           INSERT INTO detalle_orden_compra (
@@ -540,41 +531,62 @@ export async function createCompra(req, res) {
           i + 1
         ]);
 
+        let costoPEN = 0;
+        let costoUSD = 0;
+
+        if (moneda === 'PEN') {
+          costoPEN = costoUnitarioNeto;
+          costoUSD = costoUnitarioNeto / tipoCambioFinal;
+        } else {
+          costoUSD = costoUnitarioNeto;
+          costoPEN = costoUnitarioNeto * tipoCambioFinal;
+        }
+
         await connection.query(`
           INSERT INTO detalle_entradas (
             id_entrada,
             id_producto,
             cantidad,
-            costo_unitario
-          ) VALUES (?, ?, ?, ?)
+            costo_unitario,
+            costo_unitario_calculado_pen,
+            costo_unitario_calculado_usd
+          ) VALUES (?, ?, ?, ?, ?, ?)
         `, [
           idEntrada,
           item.id_producto,
           parseFloat(item.cantidad),
-          precioUnitario * (1 - descuento / 100)
+          costoUnitarioNeto,
+          costoPEN,
+          costoUSD
         ]);
 
         const [productoInfo] = await connection.query(
-          'SELECT stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?',
+          'SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE',
           [item.id_producto]
         );
 
-        const stockActual = parseFloat(productoInfo[0].stock_actual);
-        const costoActual = parseFloat(productoInfo[0].costo_unitario_promedio);
+        const stockActual = parseFloat(productoInfo[0].stock_actual || 0);
+        const cupActualPEN = parseFloat(productoInfo[0].costo_unitario_promedio || 0);
+        const cupActualUSD = parseFloat(productoInfo[0].costo_unitario_promedio_usd || 0);
         const cantidadNueva = parseFloat(item.cantidad);
-        const costoNuevo = precioUnitario * (1 - descuento / 100);
 
         const nuevoStock = stockActual + cantidadNueva;
-        const nuevoCostoPromedio = nuevoStock > 0
-          ? ((stockActual * costoActual) + (cantidadNueva * costoNuevo)) / nuevoStock
-          : costoNuevo;
+        
+        const nuevoCostoPromedioPEN = nuevoStock > 0
+          ? ((stockActual * cupActualPEN) + (cantidadNueva * costoPEN)) / nuevoStock
+          : costoPEN;
+
+        const nuevoCostoPromedioUSD = nuevoStock > 0
+          ? ((stockActual * cupActualUSD) + (cantidadNueva * costoUSD)) / nuevoStock
+          : costoUSD;
 
         await connection.query(`
           UPDATE productos 
           SET stock_actual = ?,
-              costo_unitario_promedio = ?
+              costo_unitario_promedio = ?,
+              costo_unitario_promedio_usd = ?
           WHERE id_producto = ?
-        `, [nuevoStock, nuevoCostoPromedio, item.id_producto]);
+        `, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
       }
 
       if (tipo_compra === 'Contado') {

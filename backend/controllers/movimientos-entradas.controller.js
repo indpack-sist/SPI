@@ -109,9 +109,9 @@ export const crearProductoMultiInventario = async (req, res, next) => {
       const [result] = await connection.query(`
         INSERT INTO productos (
           codigo, nombre, descripcion, id_categoria, id_tipo_inventario,
-          unidad_medida, costo_unitario_promedio, precio_venta, stock_actual,
+          unidad_medida, costo_unitario_promedio, costo_unitario_promedio_usd, precio_venta, stock_actual,
           stock_minimo, stock_maximo, requiere_receta, estado
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'Activo')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'Activo')
       `, [
         codigo_nuevo || `${producto.codigo}-${id_tipo_inventario_destino}`,
         producto.nombre,
@@ -120,6 +120,7 @@ export const crearProductoMultiInventario = async (req, res, next) => {
         id_tipo_inventario_destino,
         producto.unidad_medida,
         producto.costo_unitario_promedio,
+        producto.costo_unitario_promedio_usd || 0,
         producto.precio_venta,
         producto.stock_minimo,
         producto.stock_maximo,
@@ -169,6 +170,7 @@ export const getAllEntradas = async (req, res, next) => {
         e.documento_soporte,
         e.total_costo,
         e.moneda,
+        e.tipo_cambio,
         e.id_registrado_por,
         emp.nombre_completo AS registrado_por,
         e.fecha_movimiento,
@@ -221,6 +223,7 @@ export const getAllEntradas = async (req, res, next) => {
         e.documento_soporte,
         e.total_costo,
         e.moneda,
+        e.tipo_cambio,
         e.id_registrado_por,
         emp.nombre_completo,
         e.fecha_movimiento,
@@ -301,7 +304,8 @@ export const createEntrada = async (req, res, next) => {
       id_proveedor,
       documento_soporte,
       id_registrado_por,
-      moneda,
+      moneda, 
+      tipo_cambio, 
       porcentaje_igv,
       id_cuenta_pago,
       observaciones,
@@ -311,6 +315,9 @@ export const createEntrada = async (req, res, next) => {
     if (!detalles || detalles.length === 0) {
       throw new AppError('Debe agregar al menos un producto', 400);
     }
+
+    const tc = parseFloat(tipo_cambio) || 1.0000;
+    const monedaEntrada = moneda || 'PEN';
     
     const subtotal = detalles.reduce((sum, d) => {
       return sum + (parseFloat(d.cantidad) * parseFloat(d.costo_unitario));
@@ -328,33 +335,23 @@ export const createEntrada = async (req, res, next) => {
     
     const [resultEntrada] = await connection.query(`
       INSERT INTO entradas ( 
-        id_tipo_inventario,
-        tipo_entrada,
-        id_proveedor,
-        documento_soporte,
-        total_costo,
-        subtotal,
-        igv,
-        total,
-        porcentaje_igv,
-        moneda,
-        monto_pagado,
-        estado_pago,
-        id_cuenta_pago,
-        id_registrado_por,
-        observaciones
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id_tipo_inventario, tipo_entrada, id_proveedor, documento_soporte, 
+        total_costo, subtotal, igv, total, porcentaje_igv, 
+        moneda, tipo_cambio, monto_pagado, estado_pago, id_cuenta_pago, 
+        id_registrado_por, observaciones
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       tipoInventarioPrincipal,
       tipoEntradaFinal,
       id_proveedor || null,
       documento_soporte || null,
-      subtotal,
+      subtotal, 
       subtotal,
       igv,
       total,
       porcentaje,
-      moneda || 'PEN',
+      monedaEntrada,
+      tc,
       0,
       tipoEntradaFinal === 'Compra' ? 'Pendiente' : null,
       id_cuenta_pago || null,
@@ -366,41 +363,57 @@ export const createEntrada = async (req, res, next) => {
     
     for (const detalle of detalles) {
       const { id_producto, cantidad, costo_unitario } = detalle;
+      const cantNueva = parseFloat(cantidad);
+      const costoUnitarioInput = parseFloat(costo_unitario);
 
       const [productoCheck] = await connection.query(
-        'SELECT id_producto, stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?',
+        'SELECT id_producto, stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE',
         [id_producto]
       );
       
       if (productoCheck.length === 0) {
         throw new AppError(`Producto ${id_producto} no encontrado`, 404);
       }
+
+      let costoUnitarioPEN = 0;
+      let costoUnitarioUSD = 0;
+
+      if (monedaEntrada === 'PEN') {
+        costoUnitarioPEN = costoUnitarioInput;
+        costoUnitarioUSD = costoUnitarioInput / tc;
+      } else {
+        costoUnitarioUSD = costoUnitarioInput;
+        costoUnitarioPEN = costoUnitarioInput * tc;
+      }
       
       await connection.query(`
         INSERT INTO detalle_entradas (
-          id_entrada,
-          id_producto,
-          cantidad,
-          costo_unitario
-        ) VALUES (?, ?, ?, ?)
-      `, [id_entrada, id_producto, cantidad, costo_unitario]);
+          id_entrada, id_producto, cantidad, costo_unitario, 
+          costo_unitario_calculado_pen, costo_unitario_calculado_usd
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [id_entrada, id_producto, cantNueva, costoUnitarioInput, costoUnitarioPEN, costoUnitarioUSD]);
       
-      const stockActual = parseFloat(productoCheck[0].stock_actual);
-      const costoActual = parseFloat(productoCheck[0].costo_unitario_promedio);
-      const cantidadNueva = parseFloat(cantidad);
-      const costoNuevo = parseFloat(costo_unitario);
+      const stockActual = parseFloat(productoCheck[0].stock_actual || 0);
+      const cupActualPEN = parseFloat(productoCheck[0].costo_unitario_promedio || 0);
+      const cupActualUSD = parseFloat(productoCheck[0].costo_unitario_promedio_usd || 0);
       
-      const nuevoStock = stockActual + cantidadNueva;
-      const nuevoCostoPromedio = nuevoStock > 0
-        ? ((stockActual * costoActual) + (cantidadNueva * costoNuevo)) / nuevoStock
-        : costoNuevo;
+      const nuevoStock = stockActual + cantNueva;
+      
+      const nuevoCostoPromedioPEN = nuevoStock > 0
+        ? ((stockActual * cupActualPEN) + (cantNueva * costoUnitarioPEN)) / nuevoStock
+        : costoUnitarioPEN;
+
+      const nuevoCostoPromedioUSD = nuevoStock > 0
+        ? ((stockActual * cupActualUSD) + (cantNueva * costoUnitarioUSD)) / nuevoStock
+        : costoUnitarioUSD;
       
       await connection.query(`
         UPDATE productos 
         SET stock_actual = ?,
-            costo_unitario_promedio = ?
+            costo_unitario_promedio = ?,
+            costo_unitario_promedio_usd = ?
         WHERE id_producto = ?
-      `, [nuevoStock, nuevoCostoPromedio, id_producto]);
+      `, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, id_producto]);
     }
     
     await connection.commit();
@@ -412,9 +425,9 @@ export const createEntrada = async (req, res, next) => {
         id_entrada,
         total_productos: detalles.length,
         subtotal,
-        igv,
         total,
-        estado_pago: tipoEntradaFinal === 'Compra' ? 'Pendiente' : null
+        moneda: monedaEntrada,
+        tipo_cambio: tc
       }
     });
   } catch (error) {
@@ -438,6 +451,7 @@ export const updateEntrada = async (req, res, next) => {
       id_proveedor,
       documento_soporte,
       moneda,
+      tipo_cambio,
       porcentaje_igv,
       id_cuenta_pago,
       observaciones,
@@ -481,6 +495,9 @@ export const updateEntrada = async (req, res, next) => {
     
     await connection.query('DELETE FROM detalle_entradas WHERE id_entrada = ?', [id]);
     
+    const tc = parseFloat(tipo_cambio) || 1.0000;
+    const monedaEntrada = moneda || 'PEN';
+
     const subtotal = detalles.reduce((sum, d) => {
       return sum + (parseFloat(d.cantidad) * parseFloat(d.costo_unitario));
     }, 0);
@@ -504,6 +521,7 @@ export const updateEntrada = async (req, res, next) => {
           total = ?,
           porcentaje_igv = ?,
           moneda = ?,
+          tipo_cambio = ?,
           id_cuenta_pago = ?,
           observaciones = ?,
           id_registrado_por = ?
@@ -518,7 +536,8 @@ export const updateEntrada = async (req, res, next) => {
       igv,
       total,
       porcentaje,
-      moneda || 'PEN',
+      monedaEntrada,
+      tc,
       id_cuenta_pago || null,
       observaciones || null,
       id_registrado_por,
@@ -527,35 +546,50 @@ export const updateEntrada = async (req, res, next) => {
     
     for (const detalle of detalles) {
       const { id_producto, cantidad, costo_unitario } = detalle;
+      const cantNueva = parseFloat(cantidad);
+      const costoUnitarioInput = parseFloat(costo_unitario);
+
+      let costoUnitarioPEN = 0;
+      let costoUnitarioUSD = 0;
+
+      if (monedaEntrada === 'PEN') {
+        costoUnitarioPEN = costoUnitarioInput;
+        costoUnitarioUSD = costoUnitarioInput / tc;
+      } else {
+        costoUnitarioUSD = costoUnitarioInput;
+        costoUnitarioPEN = costoUnitarioInput * tc;
+      }
       
       await connection.query(`
         INSERT INTO detalle_entradas (
-          id_entrada,
-          id_producto,
-          cantidad,
-          costo_unitario
-        ) VALUES (?, ?, ?, ?)
-      `, [id, id_producto, cantidad, costo_unitario]);
+          id_entrada, id_producto, cantidad, costo_unitario,
+          costo_unitario_calculado_pen, costo_unitario_calculado_usd
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [id, id_producto, cantNueva, costoUnitarioInput, costoUnitarioPEN, costoUnitarioUSD]);
       
       const [producto] = await connection.query(
-        'SELECT stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?',
+        'SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ?',
         [id_producto]
       );
       
       if (producto.length > 0) {
-        const stockActual = parseFloat(producto[0].stock_actual);
-        const costoActual = parseFloat(producto[0].costo_unitario_promedio);
-        const cantidadNueva = parseFloat(cantidad);
-        const costoNuevo = parseFloat(costo_unitario);
+        const stockActual = parseFloat(producto[0].stock_actual || 0);
+        const cupActualPEN = parseFloat(producto[0].costo_unitario_promedio || 0);
+        const cupActualUSD = parseFloat(producto[0].costo_unitario_promedio_usd || 0);
         
-        const nuevoStock = stockActual + cantidadNueva;
-        const nuevoCostoPromedio = nuevoStock > 0
-          ? ((stockActual * costoActual) + (cantidadNueva * costoNuevo)) / nuevoStock
-          : costoNuevo;
+        const nuevoStock = stockActual + cantNueva;
+
+        const nuevoCostoPromedioPEN = nuevoStock > 0
+          ? ((stockActual * cupActualPEN) + (cantNueva * costoUnitarioPEN)) / nuevoStock
+          : costoUnitarioPEN;
+
+        const nuevoCostoPromedioUSD = nuevoStock > 0
+          ? ((stockActual * cupActualUSD) + (cantNueva * costoUnitarioUSD)) / nuevoStock
+          : costoUnitarioUSD;
         
         await connection.query(
-          'UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ? WHERE id_producto = ?',
-          [nuevoStock, nuevoCostoPromedio, id_producto]
+          'UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ?, costo_unitario_promedio_usd = ? WHERE id_producto = ?',
+          [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, id_producto]
         );
       }
     }
@@ -671,8 +705,8 @@ export const createProductoRapido = async (req, res, next) => {
     const [result] = await pool.query(`
       INSERT INTO productos (
         codigo, nombre, descripcion, id_categoria, id_tipo_inventario,
-        unidad_medida, stock_minimo, stock_maximo, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Activo')
+        unidad_medida, stock_minimo, stock_maximo, estado, costo_unitario_promedio_usd
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Activo', 0)
     `, [
       codigo,
       nombre,
@@ -745,6 +779,7 @@ export const generarPDFEntradaController = async (req, res, next) => {
     next(error);
   }
 };
+
 export const registrarPagoEntrada = async (req, res, next) => {
   const connection = await pool.getConnection();
   
@@ -832,7 +867,7 @@ export const registrarPagoEntrada = async (req, res, next) => {
     
     const nuevoMontoPagado = montoPagadoActual + parseFloat(monto_pagado);
     const nuevoEstadoPago = nuevoMontoPagado >= total ? 'Pagado' : 
-                           nuevoMontoPagado > 0 ? 'Parcial' : 'Pendiente';
+                            nuevoMontoPagado > 0 ? 'Parcial' : 'Pendiente';
     
     await connection.query(
       'UPDATE entradas SET monto_pagado = ?, estado_pago = ? WHERE id_entrada = ?',
@@ -918,7 +953,7 @@ export const anularPagoEntrada = async (req, res, next) => {
     const nuevoMontoPagado = parseFloat(entrada[0].monto_pagado) - montoPago;
     const total = parseFloat(entrada[0].total);
     const nuevoEstadoPago = nuevoMontoPagado <= 0 ? 'Pendiente' : 
-                           nuevoMontoPagado >= total ? 'Pagado' : 'Parcial';
+                            nuevoMontoPagado >= total ? 'Pagado' : 'Parcial';
     
     await connection.query(
       'DELETE FROM pagos_entradas WHERE id_pago_entrada = ?',

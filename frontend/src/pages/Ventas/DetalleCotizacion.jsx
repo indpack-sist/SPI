@@ -492,7 +492,7 @@ function DetalleCotizacion() {
 
   return (
     <div className="p-6">
-      <div className="sticky top-0 bg-white z-10 pb-4 mb-6 border-b">
+      <div className="sticky top-0 bg-white z-10 pb-4 mb-6" style={{ borderBottom: '1px solid #e2e8f0' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
@@ -590,8 +590,8 @@ function DetalleCotizacion() {
         />
       )}
 
-      <div className={`card border-2 ${estadoConfig.clase} mb-6`}>
-        <div className="card-body">
+      <div className={`card mb-6`} style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : '#e2e8f0' }}>
+        <div className={`card-body rounded-lg border-2 ${estadoConfig.clase}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <div className={`p-4 rounded-xl ${estadoConfig.clase}`}>
@@ -696,7 +696,7 @@ function DetalleCotizacion() {
 
       <div className="grid grid-cols-3 gap-6 mb-6">
         <div className="card">
-          <div className="card-header bg-gradient-to-r from-blue-50 to-white">
+          <div className="card-header bg-gradient-to-r from-blue-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
             <h2 className="card-title text-blue-900">
               <Building size={20} />
               Cliente
@@ -732,7 +732,7 @@ function DetalleCotizacion() {
         </div>
 
         <div className="card">
-          <div className="card-header bg-gradient-to-r from-green-50 to-white">
+          <div className="card-header bg-gradient-to-r from-green-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
             <h2 className="card-title text-green-900">
               <CreditCard size={20} />
               Condiciones Comerciales
@@ -787,7 +787,7 @@ function DetalleCotizacion() {
         </div>
 
         <div className="card">
-          <div className="card-header bg-gradient-to-r from-purple-50 to-white">
+          <div className="card-header bg-gradient-to-r from-purple-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
             <h2 className="card-title text-purple-900">
               <User size={20} />
               Información Adicional
@@ -823,7 +823,7 @@ function DetalleCotizacion() {
       </div>
 
       <div className="card mb-6">
-        <div className="card-header bg-gradient-to-r from-gray-50 to-white">
+        <div className="card-header bg-gradient-to-r from-gray-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
           <h2 className="card-title">
             <Package size={20} />
             Productos Cotizados
@@ -842,7 +842,7 @@ function DetalleCotizacion() {
       <div className="grid grid-cols-3 gap-6">
         {cotizacion.observaciones && (
           <div className="col-span-2 card">
-            <div className="card-header">
+            <div className="card-header" style={{ borderBottom: '1px solid #e2e8f0' }}>
               <h3 className="card-title">Observaciones</h3>
             </div>
             <div className="card-body">
@@ -852,7 +852,7 @@ function DetalleCotizacion() {
         )}
 
         <div className={`card ${!cotizacion.observaciones ? 'col-span-3 ml-auto w-full max-w-md' : ''}`}>
-          <div className="card-header bg-gradient-to-r from-primary/5 to-white">
+          <div className="card-header bg-gradient-to-r from-primary/5 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
             <h3 className="card-title">
               <Calculator size={20} />
               Resumen
@@ -860,23 +860,23 @@ function DetalleCotizacion() {
           </div>
           <div className="card-body">
             <div className="space-y-3">
-              <div className="flex justify-between py-2 border-b">
+              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: '#e2e8f0' }}>
                 <span className="text-muted">Sub Total:</span>
                 <span className="font-bold text-lg">{formatearMoneda(subtotalReal)}</span>
               </div>
               {cotizacion.total_comision > 0 && (
-                <div className="flex justify-between py-2 border-b text-yellow-600">
+                <div className="flex justify-between py-2 border-b text-yellow-600" style={{ borderBottomColor: '#e2e8f0' }}>
                   <span className="font-medium">Total Comisiones ({parseFloat(cotizacion.porcentaje_comision_promedio || 0).toFixed(2)}%):</span>
                   <span className="font-bold">{formatearMoneda(cotizacion.total_comision)}</span>
                 </div>
               )}
-              <div className="flex justify-between py-2 border-b">
+              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: '#e2e8f0' }}>
                 <span className="text-muted">
                   {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
                 </span>
                 <span className="font-bold text-lg">{formatearMoneda(igvReal)}</span>
               </div>
-              <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl shadow-inner">
+              <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl shadow-none">
                 <span className="font-bold text-xl">TOTAL:</span>
                 <span className="font-bold text-3xl">{formatearMoneda(totalReal)}</span>
               </div>
@@ -897,7 +897,7 @@ function DetalleCotizacion() {
             </div>
 
             {estadoCredito && estadoCredito.usar_limite_credito && (
-              <div className="mt-6 pt-4 border-t">
+              <div className="mt-6 pt-4 border-t" style={{ borderTopColor: '#e2e8f0' }}>
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                   <CreditCard size={14} /> Saldo de Crédito del Cliente
                 </h4>

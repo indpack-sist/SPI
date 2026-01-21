@@ -4,7 +4,8 @@ import {
   ArrowLeft, Edit, Download, FileText, Calendar,
   Building, AlertCircle,
   CheckCircle, XCircle, Calculator, Percent, TrendingUp,
-  AlertTriangle, User, CreditCard, Package, MapPin, Copy, ExternalLink, Lock
+  AlertTriangle, User, CreditCard, Package, MapPin, Copy, ExternalLink, Lock,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -22,10 +23,38 @@ function DetalleCotizacion() {
   const [success, setSuccess] = useState(null);
   const [modalPrioridadOpen, setModalPrioridadOpen] = useState(false);
   const [estadoCredito, setEstadoCredito] = useState(null);
+  const [navInfo, setNavInfo] = useState({ prev: null, next: null, current: 0, total: 0 });
 
   useEffect(() => {
     cargarDatos();
+    cargarNavegacion();
   }, [id]);
+
+  const cargarNavegacion = async () => {
+    try {
+      const response = await cotizacionesAPI.getAll();
+      if (response.data.success) {
+        const lista = response.data.data;
+        const currentIndex = lista.findIndex(c => String(c.id_cotizacion) === String(id));
+        if (currentIndex !== -1) {
+          setNavInfo({
+            prev: currentIndex > 0 ? lista[currentIndex - 1].id_cotizacion : null,
+            next: currentIndex < lista.length - 1 ? lista[currentIndex + 1].id_cotizacion : null,
+            current: currentIndex + 1,
+            total: lista.length
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando navegación', err);
+    }
+  };
+
+  const handleNavegar = (nuevoId) => {
+    if (nuevoId) {
+      navigate(`/ventas/cotizaciones/${nuevoId}`);
+    }
+  };
 
   const cargarDatos = async () => {
     try {
@@ -104,28 +133,28 @@ function DetalleCotizacion() {
     }
   };
 
- const handleDuplicar = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    
-    const response = await cotizacionesAPI.duplicar(id);
-    
-    if (response.data.success) {
-      setSuccess(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
+  const handleDuplicar = async () => {
+    try {
+      setLoading(true);
+      setError(null);
       
-      setTimeout(() => {
-        navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
-      }, 1500);
+      const response = await cotizacionesAPI.duplicar(id);
+      
+      if (response.data.success) {
+        setSuccess(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
+        
+        setTimeout(() => {
+          navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
+        }, 1500);
+      }
+      
+    } catch (err) {
+      console.error('Error al duplicar cotización:', err);
+      setError(err.response?.data?.error || 'Error al duplicar cotización');
+    } finally {
+      setLoading(false);
     }
-    
-  } catch (err) {
-    console.error('Error al duplicar cotización:', err);
-    setError(err.response?.data?.error || 'Error al duplicar cotización');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleCambiarPrioridad = async (prioridad) => {
     try {
@@ -387,6 +416,29 @@ function DetalleCotizacion() {
             >
               <ArrowLeft size={20} />
             </button>
+            
+            <div className="flex items-center bg-white rounded-lg border border-gray-200 px-1 py-0.5">
+              <button 
+                className="btn btn-sm btn-ghost p-1" 
+                disabled={!navInfo.prev} 
+                onClick={() => handleNavegar(navInfo.prev)}
+                title="Cotización anterior"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <span className="text-xs font-medium text-gray-500 mx-2">
+                {navInfo.current} / {navInfo.total}
+              </span>
+              <button 
+                className="btn btn-sm btn-ghost p-1" 
+                disabled={!navInfo.next} 
+                onClick={() => handleNavegar(navInfo.next)}
+                title="Cotización siguiente"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <FileText size={32} className="text-primary" />

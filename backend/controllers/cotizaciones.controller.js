@@ -1195,3 +1195,50 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
     });
   }
 }
+export async function getNavegacionCotizacion(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const result = await executeQuery(`
+      SELECT 
+        c.id_cotizacion,
+        c.numero_cotizacion
+      FROM cotizaciones c
+      ORDER BY c.fecha_creacion DESC, c.id_cotizacion DESC
+    `);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        success: false,
+        error: result.error 
+      });
+    }
+    
+    const lista = result.data;
+    const currentIndex = lista.findIndex(c => String(c.id_cotizacion) === String(id));
+    
+    if (currentIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cotización no encontrada'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        prev: currentIndex > 0 ? lista[currentIndex - 1].id_cotizacion : null,
+        next: currentIndex < lista.length - 1 ? lista[currentIndex + 1].id_cotizacion : null,
+        current: currentIndex + 1,
+        total: lista.length
+      }
+    });
+    
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}

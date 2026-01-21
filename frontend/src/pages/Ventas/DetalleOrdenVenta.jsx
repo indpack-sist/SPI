@@ -49,12 +49,16 @@ function DetalleOrdenVenta() {
   const [modalAnularOrden, setModalAnularOrden] = useState(false);
   const [modalEditarComprobante, setModalEditarComprobante] = useState(false);
   const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
+  const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [nuevoTipoComprobante, setNuevoTipoComprobante] = useState('');
   
+  const [productoRectificar, setProductoRectificar] = useState(null);
+  const [rectificarForm, setRectificarForm] = useState({ nueva_cantidad: '', motivo: '' });
+
   const [pagoForm, setPagoForm] = useState({
     id_cuenta_destino: '',
     fecha_pago: getFechaLocal(),
@@ -650,6 +654,35 @@ function DetalleOrdenVenta() {
     }
   };
 
+  const handleRectificarCantidad = async (e) => {
+    e.preventDefault();
+    if (!productoRectificar) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.rectificarCantidad(id, {
+        id_producto: productoRectificar.id_producto,
+        nueva_cantidad: parseFloat(rectificarForm.nueva_cantidad),
+        motivo: rectificarForm.motivo
+      });
+
+      if (response.data.success) {
+        setSuccess(`Cantidad rectificada: ${productoRectificar.producto}`);
+        setModalRectificarOpen(false);
+        setProductoRectificar(null);
+        setRectificarForm({ nueva_cantidad: '', motivo: '' });
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al rectificar cantidad');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const getTipoImpuestoNombre = (valor) => {
     const codigo = String(valor || '').toUpperCase().trim();
     
@@ -913,40 +946,45 @@ function DetalleOrdenVenta() {
       width: '140px',
       align: 'center',
       render: (value, row) => {
-        const stockDisponible = parseFloat(row.stock_disponible || 0);
-        const cantidadRequerida = parseFloat(row.cantidad);
-        const stockSuficiente = stockDisponible >= cantidadRequerida;
+        if (orden?.estado === 'Cancelada') return '-';
 
-        if (row.tiene_op > 0) {
-           return <span className="text-xs text-muted">OP Vinculada</span>;
-        }
+        return (
+          <div className="flex items-center justify-center gap-1">
+            {row.requiere_receta && (
+               <button
+                 className={`btn btn-xs ${parseFloat(row.stock_disponible) >= parseFloat(row.cantidad) ? 'btn-outline btn-primary' : 'btn-primary'}`}
+                 onClick={() => {
+                   setProductoSeleccionado(row);
+                   const stockDisponible = parseFloat(row.stock_disponible || 0);
+                   const cantidadRequerida = parseFloat(row.cantidad);
+                   const faltante = Math.max(0, cantidadRequerida - stockDisponible);
+                   setCantidadOP(faltante > 0 ? faltante : cantidadRequerida);
+                   setModalCrearOP(true);
+                 }}
+                 disabled={procesando}
+                 title="Crear Orden Producción"
+               >
+                 <Factory size={12} />
+               </button>
+            )}
 
-        if (orden?.estado === 'Cancelada' || 
-            orden?.estado === 'Entregada' || 
-            orden?.estado === 'Despachada') {
-          return '-';
-        }
-
-        if (row.requiere_receta) {
-          return (
             <button
-              className={`btn btn-sm ${stockSuficiente ? 'btn-outline btn-primary' : 'btn-primary'}`}
+              className="btn btn-xs btn-ghost text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200"
               onClick={() => {
-                setProductoSeleccionado(row);
-                const faltante = Math.max(0, cantidadRequerida - stockDisponible);
-                setCantidadOP(faltante > 0 ? faltante : cantidadRequerida);
-                setModalCrearOP(true);
+                setProductoRectificar(row);
+                setRectificarForm({ 
+                    nueva_cantidad: row.cantidad, 
+                    motivo: '' 
+                });
+                setModalRectificarOpen(true);
               }}
               disabled={procesando}
-              title={stockSuficiente ? 'Crear OP adicional' : 'Crear OP requerida'}
+              title="Rectificar Cantidad / Corregir Inventario"
             >
-              <Factory size={14} />
-              {stockSuficiente ? 'Producir más' : 'Crear OP'}
+              <Edit size={12} />
             </button>
-          );
-        }
-
-        return '-';
+          </div>
+        );
       }
     },
     {
@@ -2333,6 +2371,76 @@ function DetalleOrdenVenta() {
         </div>
       </div>
     </form>
+  </Modal>
+
+  <Modal
+    isOpen={modalRectificarOpen}
+    onClose={() => setModalRectificarOpen(false)}
+    title="Rectificar Cantidad de Producto"
+    size="sm"
+  >
+    {productoRectificar && (
+      <form onSubmit={handleRectificarCantidad}>
+        <div className="space-y-4">
+          <div className="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
+            <div className="flex gap-2">
+              <AlertTriangle className="text-orange-500 shrink-0" size={20} />
+              <div className="text-sm text-orange-800">
+                <p className="font-bold">{productoRectificar.producto}</p>
+                <p>Cantidad actual: <strong>{formatearNumero(productoRectificar.cantidad)}</strong></p>
+                <p className="text-xs mt-1">
+                    Esta acción actualizará el inventario y, si corresponde, las salidas asociadas.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Nueva Cantidad *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className="form-input"
+              value={rectificarForm.nueva_cantidad}
+              onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Motivo del Cambio *</label>
+            <textarea
+              className="form-textarea"
+              rows={2}
+              value={rectificarForm.motivo}
+              onChange={(e) => setRectificarForm({ ...rectificarForm, motivo: e.target.value })}
+              placeholder="Ej: Error de digitación, devolución parcial, etc."
+              required
+            ></textarea>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setModalRectificarOpen(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn-warning text-white"
+              disabled={procesando}
+            >
+              <Save size={16} className="mr-1"/> Confirmar Rectificación
+            </button>
+          </div>
+        </div>
+      </form>
+    )}
   </Modal>
 </div>
 );

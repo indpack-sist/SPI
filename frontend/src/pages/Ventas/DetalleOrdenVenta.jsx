@@ -85,6 +85,10 @@ function DetalleOrdenVenta() {
     fecha_entrega_estimada: ''
   });
 
+  const handleWheelDisable = (e) => {
+    e.target.blur();
+  };
+
   const formatearNumero = (valor) => {
     return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
@@ -890,9 +894,9 @@ function DetalleOrdenVenta() {
         if (stockSuficiente && mostrarAlertaStock) {
             return (
               <div className="flex flex-col gap-1">
-                 <span className="text-xs text-success font-bold flex items-center justify-center gap-1">
-                     <CheckCircle size={12} /> Stock Cubierto
-                 </span>
+                  <span className="text-xs text-success font-bold flex items-center justify-center gap-1">
+                      <CheckCircle size={12} /> Stock Cubierto
+                  </span>
               </div>
             );
         }
@@ -1199,23 +1203,24 @@ function DetalleOrdenVenta() {
             </button>
           )}
           
-          {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+          {orden.estado !== 'Cancelada' && (
             <>
-              {orden.estado === 'En Espera' && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
+              >
+                <Edit size={20} /> Editar
+              </button>
+              
+              {orden.estado !== 'Entregada' && (
                 <button
-                  className="btn btn-secondary"
-                  onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
+                  className="btn btn-danger"
+                  onClick={() => setModalAnularOrden(true)}
+                  disabled={procesando}
                 >
-                  <Edit size={20} /> Editar
+                  <XCircle size={20} /> Anular Orden
                 </button>
               )}
-              <button
-                className="btn btn-danger"
-                onClick={() => setModalAnularOrden(true)}
-                disabled={procesando}
-              >
-                <XCircle size={20} /> Anular Orden
-              </button>
             </>
           )}
         </div>
@@ -1830,6 +1835,7 @@ function DetalleOrdenVenta() {
                 min="0.01"
                 max={saldoCorregido}
                 placeholder="0.00"
+                onWheel={handleWheelDisable}
               />
               {resumenPagos && (
                 <small className="text-muted">
@@ -1980,6 +1986,7 @@ function DetalleOrdenVenta() {
                   required
                   placeholder="0.00"
                   autoFocus
+                  onWheel={handleWheelDisable}
                 />
                 <small className="text-muted block mt-1">
                   Puede producir cualquier cantidad. El faltante sugerido es: {Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(2)} {productoSeleccionado.unidad_medida}
@@ -2070,6 +2077,7 @@ function DetalleOrdenVenta() {
                         step="0.01"
                         value={item.cantidad_a_despachar}
                         onChange={(e) => handleCambioCantidadDespacho(item.id_producto, e.target.value)}
+                        onWheel={handleWheelDisable}
                       />
                     </td>
                   </tr>
@@ -2406,6 +2414,7 @@ function DetalleOrdenVenta() {
               onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
               required
               autoFocus
+              onWheel={handleWheelDisable}
             />
           </div>
 

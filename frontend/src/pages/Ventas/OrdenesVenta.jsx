@@ -108,58 +108,58 @@ function OrdenesVenta() {
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
- const handleDescargarPDF = async (idOrden, numeroOrden, cliente) => {
-  try {
-    setDescargandoPDF(idOrden);
-    setError(null);
-    
-    const response = await ordenesVentaAPI.descargarPDF(idOrden);
-    
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    
-    const clienteSanitizado = (cliente || 'CLIENTE')
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-      .replace(/[^a-zA-Z0-9]/g, "_")   
-      .replace(/_+/g, "_")             
-      .toUpperCase();
+  const handleDescargarPDF = async (idOrden, numeroOrden, cliente) => {
+    try {
+      setDescargandoPDF(idOrden);
+      setError(null);
+      
+      const response = await ordenesVentaAPI.descargarPDF(idOrden);
+      
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const clienteSanitizado = (cliente || 'CLIENTE')
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+        .replace(/[^a-zA-Z0-9]/g, "_")   
+        .replace(/_+/g, "_")            
+        .toUpperCase();
 
-    const nroOrden = numeroOrden || idOrden;
-    const nombreArchivo = `${clienteSanitizado}_${nroOrden}.pdf`;
-    
-    link.setAttribute('download', nombreArchivo);
-    
-    document.body.appendChild(link);
-    link.click();
-    
-    link.parentNode.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    setSuccess('PDF descargado exitosamente');
-    setTimeout(() => setSuccess(null), 3000);
-    
-  } catch (err) {
-    console.error("Error original:", err);
+      const nroOrden = numeroOrden || idOrden;
+      const nombreArchivo = `${clienteSanitizado}_${nroOrden}.pdf`;
+      
+      link.setAttribute('download', nombreArchivo);
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      setSuccess('PDF descargado exitosamente');
+      setTimeout(() => setSuccess(null), 3000);
+      
+    } catch (err) {
+      console.error("Error original:", err);
 
-    if (err.response && err.response.data instanceof Blob) {
-      try {
-        const errorText = await err.response.data.text();
-        const errorJson = JSON.parse(errorText);
-        const mensajeError = errorJson.error || 'Error al generar el PDF';
-        setError(mensajeError);
-      } catch (e) {
-        setError('Ocurrió un error inesperado al descargar el archivo.');
+      if (err.response && err.response.data instanceof Blob) {
+        try {
+          const errorText = await err.response.data.text();
+          const errorJson = JSON.parse(errorText);
+          const mensajeError = errorJson.error || 'Error al generar el PDF';
+          setError(mensajeError);
+        } catch (e) {
+          setError('Ocurrió un error inesperado al descargar el archivo.');
+        }
+      } else {
+        setError(err.message || 'Error de conexión al descargar el PDF');
       }
-    } else {
-      setError(err.message || 'Error de conexión al descargar el PDF');
+    } finally {
+      setDescargandoPDF(null);
     }
-  } finally {
-    setDescargandoPDF(null);
-  }
-};
+  };
 
   const formatearFechaVisual = (fechaStr) => {
     if (!fechaStr) return '-';
@@ -242,7 +242,7 @@ function OrdenesVenta() {
   };
 
   const columns = [
-   {
+    {
       header: 'Comprobante / Orden',
       accessor: 'numero_orden',
       width: '200px',
@@ -431,7 +431,6 @@ function OrdenesVenta() {
               navigate(`/ventas/ordenes/${value}/editar`);
             }}
             title="Editar orden"
-            disabled={row.estado !== 'En Espera'}
           >
             <Edit size={14} />
           </button>
@@ -568,9 +567,9 @@ function OrdenesVenta() {
 
       <div className="card mb-4 shadow-sm">
         <div className="card-body">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             
-            <div className="relative w-full md:w-80">
+            <div className="relative flex-1">
               <Search 
                 size={20} 
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 

@@ -311,8 +311,7 @@ function Cotizaciones() {
               e.stopPropagation();
               navigate(`/ventas/cotizaciones/${value}/editar`);
             }}
-            title={row.convertida_venta ? "No se puede editar una cotización convertida" : "Editar"}
-            disabled={row.convertida_venta}
+            title="Editar"
           >
             <Edit size={14} />
           </button>

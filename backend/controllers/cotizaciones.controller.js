@@ -1,4 +1,4 @@
-import { executeQuery } from '../config/database.js';
+import { executeQuery, executeTransaction } from '../config/database.js';
 import pool from '../config/database.js';
 
 function getFechaPeru() {
@@ -309,7 +309,6 @@ export async function createCotizacion(req, res) {
     if (isNaN(igv)) igv = 0;
     if (isNaN(total)) total = 0;
 
-    // --- VALIDACIÓN DE CRÉDITO MEJORADA ---
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
         `SELECT usar_limite_credito, 
@@ -322,7 +321,6 @@ export async function createCotizacion(req, res) {
       if (clienteInfo.success && clienteInfo.data.length > 0) {
         const cliente = clienteInfo.data[0];
         
-        // Convertimos el "1" o true a booleano real
         if (cliente.usar_limite_credito == 1) {
           const deudaRes = await executeQuery(`
             SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
@@ -340,17 +338,12 @@ export async function createCotizacion(req, res) {
           const deudaActual = parseFloat(deudaRes.data[0]?.deuda_actual || 0);
           const disponible = limite - deudaActual;
 
-          // console.log(`Validando Crédito: Límite=${limite}, Deuda=${deudaActual}, Nuevo=${total}, Disp=${disponible}`);
-
           if ((deudaActual + total) > limite) {
-             // Devolvemos warning pero permitimos crear la cotización (estado Pendiente)
-             // El frontend deberá mostrar esta alerta.
              console.warn(`Cliente ${id_cliente} excede límite de crédito. Disponible: ${disponible}, Requerido: ${total}`);
           }
         }
       }
     }
-    // --------------------------------------
     
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
@@ -606,7 +599,6 @@ export async function updateCotizacion(req, res) {
     if (isNaN(igv)) igv = 0;
     if (isNaN(total)) total = 0;
 
-    // VALIDACIÓN DE CRÉDITO EN UPDATE
     if (cotActual.usar_limite_credito == 1 && plazo_pago !== 'Contado') {
       const deudaRes = await executeQuery(`
         SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
@@ -618,7 +610,6 @@ export async function updateCotizacion(req, res) {
       const deudaActual = parseFloat(deudaRes.data[0].deuda_actual);
 
       if ((deudaActual + total) > limite) {
-        // Mismo warning que en create
         console.warn(`Cliente ${id_cliente} excede límite de crédito en edición de cotización.`);
       }
     }
@@ -1195,6 +1186,7 @@ export async function agregarDireccionClienteDesdeCotizacion(req, res) {
     });
   }
 }
+
 export async function getNavegacionCotizacion(req, res) {
   try {
     const { id } = req.params;
@@ -1209,7 +1201,7 @@ export async function getNavegacionCotizacion(req, res) {
     
     if (!result.success) {
       return res.status(500).json({ 
-        success: false,
+        success: false, 
         error: result.error 
       });
     }
@@ -1242,12 +1234,12 @@ export async function getNavegacionCotizacion(req, res) {
     });
   }
 }
+
 export async function rectificarCantidadCotizacion(req, res) {
   try {
     const { id } = req.params;
     const { id_producto, nueva_cantidad, motivo } = req.body;
     
-    // Validación básica
     if (!id_producto || nueva_cantidad === undefined || nueva_cantidad < 0) {
         return res.status(400).json({ success: false, error: 'Datos incompletos' });
     }
@@ -1268,7 +1260,6 @@ export async function rectificarCantidadCotizacion(req, res) {
 
     const queries = [];
 
-    // 1. ACTUALIZAR COTIZACIÓN
     queries.push({
         sql: 'UPDATE detalle_cotizacion SET cantidad = ? WHERE id_detalle = ?',
         params: [cantidadNueva, itemDetalle.id_detalle]
@@ -1285,11 +1276,9 @@ export async function rectificarCantidadCotizacion(req, res) {
         params: [id_producto, cantidadAnterior, cantidadNueva, id]
     });
 
-    // 2. SINCRONIZAR ORDEN DE VENTA (SI EXISTE)
     if (cotizacion.convertida_venta === 1 && cotizacion.id_orden_venta) {
         const idOrden = cotizacion.id_orden_venta;
         
-        // --- LÓGICA DE INVENTARIO (Idéntica al controller de OV) ---
         if (diferencia > 0) {
             const prodCheck = await executeQuery('SELECT stock_actual, requiere_receta FROM productos WHERE id_producto = ?', [id_producto]);
             if (prodCheck.data.length > 0 && prodCheck.data[0].requiere_receta === 0) {
@@ -1305,8 +1294,6 @@ export async function rectificarCantidadCotizacion(req, res) {
             }
         }
 
-        // --- ACTUALIZAR DETALLE OV ---
-        // Verificamos estado de la orden para saber si actualizar 'cantidad_despachada'
         const ordenCheck = await executeQuery('SELECT estado, numero_orden, porcentaje_impuesto FROM ordenes_venta WHERE id_orden_venta = ?', [idOrden]);
         const ordenData = ordenCheck.data[0];
 
@@ -1322,7 +1309,6 @@ export async function rectificarCantidadCotizacion(req, res) {
         }
         queries.push({ sql: sqlUpdateOV, params: paramsUpdateOV });
 
-        // --- RECALCULAR CABECERA OV ---
         queries.push({
             sql: `UPDATE ordenes_venta ov
                   SET 
@@ -1333,17 +1319,16 @@ export async function rectificarCantidadCotizacion(req, res) {
             params: [idOrden]
         });
 
-        // --- ACTUALIZAR SALIDAS (SI APLICA) ---
         if (['Despachada', 'Entregada', 'Despacho Parcial'].includes(ordenData.estado)) {
              const salidaRes = await executeQuery('SELECT id_salida FROM salidas WHERE observaciones LIKE ? AND estado = "Activo" ORDER BY id_salida DESC LIMIT 1', [`%${ordenData.numero_orden}%`]);
              if (salidaRes.data.length > 0) {
                  const idSalida = salidaRes.data[0].id_salida;
-                 // Asumimos que si existe en OV, existe en Salida si ya fue despachada. Update simple.
+                 
                  queries.push({
                      sql: 'UPDATE detalle_salidas SET cantidad = ? WHERE id_salida = ? AND id_producto = ?',
                      params: [cantidadNueva, idSalida, id_producto]
                  });
-                 // Recalculo totales salida
+                 
                  queries.push({
                     sql: `UPDATE salidas s SET 
                             total_costo = (SELECT COALESCE(SUM(cantidad * costo_unitario), 0) FROM detalle_salidas WHERE id_salida = s.id_salida),

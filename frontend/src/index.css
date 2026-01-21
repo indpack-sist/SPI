@@ -2821,3 +2821,48 @@ input[type="checkbox"] {
 .border-blue-200 { border-color: #bfdbfe !important; }
 .border-yellow-200 { border-color: #fde68a !important; }
 .border-red-200 { border-color: #fecaca !important; }
+/* =================================================================
+   CORRECCIÓN FINAL DE BORDES Y DEGRADADOS EN COTIZACIONES
+   Agregar al final de index.css
+   ================================================================= */
+
+/* 1. Forzar color blanco puro en el destino del degradado */
+.to-white {
+  --tw-gradient-to: #ffffff !important;
+}
+
+/* 2. Definir correctamente los colores de inicio */
+.from-blue-50 { --tw-gradient-from: #eff6ff !important; }
+.from-green-50 { --tw-gradient-from: #f0fdf4 !important; }
+.from-purple-50 { --tw-gradient-from: #faf5ff !important; }
+.from-gray-50 { --tw-gradient-from: #f9fafb !important; }
+.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05) !important; }
+
+/* 3. Asegurar que la clase del degradado funcione */
+.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-from), var(--tw-gradient-to)) !important;
+}
+
+/* 4. ELIMINAR EL BORDE NEGRO DEL ENCABEZADO */
+/* El problema suele ser que border-bottom no tiene color definido */
+.card-header {
+  border-bottom: 1px solid #e2e8f0 !important; /* Gris suave explícito */
+  background-color: transparent; 
+}
+
+/* 5. ELIMINAR EL BORDE NEGRO DE LOS TOTALES/RESUMEN */
+.border-b {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: #e2e8f0 !important; /* Gris suave explícito */
+}
+
+/* 6. Si prefieres que NO haya borde en el header sticky: */
+.sticky.top-0 {
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* 7. Eliminar sombras internas oscuras */
+.shadow-inner {
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+}

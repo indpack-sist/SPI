@@ -2747,3 +2747,34 @@ input[type="checkbox"] {
 .card-body {
   background-color: #ffffff;
 }
+/* =================================================================
+   ELIMINAR BORDES/MÁRGENES NEGROS POR COMPLETAMENTE
+   Agregar al final de index.css
+   ================================================================= */
+
+/* 1. Eliminar línea inferior del encabezado fijo (Sticky Header) */
+.sticky.top-0 {
+  border-bottom: none !important;
+  box-shadow: none !important; /* Por si acaso tuviera sombra */
+}
+
+/* 2. Eliminar líneas divisorias en el bloque de Totales y Subtotales */
+.card-body .flex.border-b {
+  border-bottom: none !important;
+}
+
+/* 3. Eliminar línea debajo del título de todas las tarjetas (Cliente, Condiciones, etc.) */
+.card-header {
+  border-bottom: none !important;
+}
+
+/* 4. Eliminar el borde grueso de la tarjeta de Estado (la de color) */
+.border-2 {
+  border: none !important;
+}
+
+/* 5. Eliminar borde/sombra interna en el cuadro de TOTAL final */
+.shadow-inner {
+  box-shadow: none !important;
+  background-color: #f3f4f6; /* Mantiene el fondo gris suave sin bordes */
+}

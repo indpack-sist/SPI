@@ -101,6 +101,10 @@ function NuevaOrdenVenta() {
     observaciones: ''
   });
 
+  const handleWheelDisable = (e) => {
+    e.target.blur();
+  };
+
   const formatearNumero = (valor) => {
     return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
@@ -837,6 +841,7 @@ function NuevaOrdenVenta() {
                                 value={item.cantidad}
                                 onChange={(e) => handleCantidadChange(index, e.target.value)}
                                 min="0.01" step="0.01"
+                                onWheel={handleWheelDisable}
                               />
                             </td>
                             <td>
@@ -852,6 +857,7 @@ function NuevaOrdenVenta() {
                                 onChange={(e) => handlePrecioVentaChange(index, e.target.value)}
                                 min="0" step="0.001"
                                 placeholder="0.000"
+                                onWheel={handleWheelDisable}
                               />
                             </td>
                             <td>
@@ -867,6 +873,7 @@ function NuevaOrdenVenta() {
                                 value={item.descuento_porcentaje}
                                 onChange={(e) => handleDescuentoChange(index, e.target.value)}
                                 min="0" max="100" step="0.01"
+                                onWheel={handleWheelDisable}
                               />
                             </td>
                             <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
@@ -945,6 +952,7 @@ function NuevaOrdenVenta() {
                       onChange={(e) => setFormCabecera({...formCabecera, tipo_cambio: e.target.value})}
                       disabled={formCabecera.moneda === 'PEN'}
                       step="0.001"
+                      onWheel={handleWheelDisable}
                     />
                   </div>
                 </div>
@@ -1147,6 +1155,7 @@ function NuevaOrdenVenta() {
                         className="form-input form-input-sm w-20 text-center"
                         value={formCabecera.dias_credito}
                         onChange={(e) => setFormCabecera({...formCabecera, dias_credito: e.target.value})}
+                        onWheel={handleWheelDisable}
                       />
                       <span className="text-xs font-bold text-orange-700 ml-auto">
                         Vence: {new Date(formCabecera.fecha_vencimiento).toLocaleDateString()}
@@ -1271,7 +1280,7 @@ function NuevaOrdenVenta() {
           />
         </div>
         <div className="max-h-96 overflow-y-auto space-y-2">
-          {clientesFiltrados.map(c => (
+          {clientes.filter(c => c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) || c.ruc.includes(busquedaCliente)).map(c => (
             <div key={c.id_cliente} className="p-3 border rounded hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => handleSelectCliente(c)}>
               <div>
                 <div className="font-bold">{c.razon_social}</div>
@@ -1305,7 +1314,7 @@ function NuevaOrdenVenta() {
           />
         </div>
         <div className="max-h-96 overflow-y-auto space-y-2">
-          {productosFiltrados.map(p => (
+          {productos.filter(p => p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())).map(p => (
             <div key={p.id_producto} className="p-3 border rounded hover:bg-gray-50 cursor-pointer flex justify-between" onClick={() => handleAgregarProducto(p)}>
               <div>
                 <div className="font-bold">{p.nombre}</div>

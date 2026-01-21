@@ -486,57 +486,25 @@ export async function updateCotizacion(req, res) {
     } = req.body;
 
     const cotizacionExistente = await executeQuery(`
-      SELECT c.id_cotizacion, c.estado, c.convertida_venta, cl.usar_limite_credito, cl.limite_credito_pen, cl.limite_credito_usd
+      SELECT c.id_cotizacion, c.estado, c.convertida_venta, c.id_orden_venta, 
+             cl.usar_limite_credito, cl.limite_credito_pen, cl.limite_credito_usd
       FROM cotizaciones c
       INNER JOIN clientes cl ON c.id_cliente = cl.id_cliente
       WHERE c.id_cotizacion = ?
     `, [id]);
 
     if (!cotizacionExistente.success || cotizacionExistente.data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Cotización no encontrada'
-      });
+      return res.status(404).json({ success: false, error: 'Cotización no encontrada' });
     }
 
     const cotActual = cotizacionExistente.data[0];
 
-    if (cotActual.estado === 'Aprobada' || cotActual.estado === 'Convertida' || cotActual.convertida_venta === 1) {
-      return res.status(400).json({
-        success: false,
-        error: 'No se puede editar una cotización que ya ha sido aprobada o convertida'
-      });
-    }
-
-    if (!id_cliente) {
-      return res.status(400).json({
-        success: false,
-        error: 'Cliente es obligatorio'
-      });
-    }
-
-    if (!detalle || detalle.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Debe agregar al menos un producto'
-      });
-    }
-
-    if (!plazo_pago || plazo_pago.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        error: 'Plazo de pago es obligatorio'
-      });
-    }
+    if (!id_cliente) return res.status(400).json({ success: false, error: 'Cliente es obligatorio' });
+    if (!detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Debe agregar al menos un producto' });
+    if (!plazo_pago || plazo_pago.trim() === '') return res.status(400).json({ success: false, error: 'Plazo de pago es obligatorio' });
 
     const comercialFinal = id_comercial || req.user?.id_empleado;
-
-    if (!comercialFinal) {
-      return res.status(400).json({
-        success: false,
-        error: 'No se pudo determinar el comercial responsable'
-      });
-    }
+    if (!comercialFinal) return res.status(400).json({ success: false, error: 'No se pudo determinar el comercial responsable' });
 
     let fechaEmisionFinal = fecha_emision;
     if (!fechaEmisionFinal) {
@@ -548,15 +516,12 @@ export async function updateCotizacion(req, res) {
     }
 
     const validezDiasFinal = parseInt(validez_dias) || 7;
-
     const fechaEmisionDate = new Date(fechaEmisionFinal + 'T12:00:00');
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
 
     let tipoCambioFinal = parseFloat(tipo_cambio) || 1.0000;
-    if (moneda === 'PEN') {
-      tipoCambioFinal = 1.0000;
-    }
+    if (moneda === 'PEN') tipoCambioFinal = 1.0000;
 
     let subtotal = 0;
     let totalComision = 0;
@@ -567,22 +532,16 @@ export async function updateCotizacion(req, res) {
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
-
       const montoComision = precioBase * (pctComision / 100);
       const precioFinal = precioBase + montoComision;
-
       const valorVenta = (cantidad * precioFinal) * (1 - (pctDescuento / 100));
       
-      if (!isNaN(valorVenta)) {
-        subtotal += valorVenta;
-      }
-
+      if (!isNaN(valorVenta)) subtotal += valorVenta;
       totalComision += montoComision * cantidad;
       sumaComisionPorcentual += pctComision;
     }
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
-
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
     
@@ -614,67 +573,21 @@ export async function updateCotizacion(req, res) {
       }
     }
 
-    const updateResult = await executeQuery(`
-      UPDATE cotizaciones 
-      SET 
-        id_cliente = ?,
-        id_comercial = ?,
-        fecha_emision = ?,
-        fecha_vencimiento = ?,
-        prioridad = ?,
-        moneda = ?,
-        tipo_impuesto = ?,
-        porcentaje_impuesto = ?,
-        tipo_cambio = ?,
-        plazo_pago = ?,
-        forma_pago = ?,
-        direccion_entrega = ?,
-        observaciones = ?,
-        validez_dias = ?,
-        plazo_entrega = ?,
-        lugar_entrega = ?,
-        subtotal = ?,
-        igv = ?,
-        total = ?,
-        total_comision = ?,
-        porcentaje_comision_promedio = ?
-      WHERE id_cotizacion = ?
-    `, [
-      id_cliente,
-      comercialFinal,
-      fechaEmisionFinal,
-      fechaVencimientoCalculada,
-      prioridad || 'Media',
-      moneda || 'PEN',
-      tipoImpuestoFinal,
-      porcentaje,
-      tipoCambioFinal,
-      plazo_pago,
-      forma_pago || null,
-      direccion_entrega || null,
-      observaciones || null,
-      validezDiasFinal,
-      plazo_entrega || null,
-      lugar_entrega || null,
-      subtotal,
-      igv,
-      total,
-      totalComision,
-      porcentajeComisionPromedio,
-      id
-    ]);
+    const queries = [];
 
-    if (!updateResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: updateResult.error
-      });
-    }
+    queries.push({
+      sql: `UPDATE cotizaciones 
+            SET id_cliente=?, id_comercial=?, fecha_emision=?, fecha_vencimiento=?, prioridad=?, moneda=?, tipo_impuesto=?, porcentaje_impuesto=?, tipo_cambio=?, plazo_pago=?, forma_pago=?, direccion_entrega=?, observaciones=?, validez_dias=?, plazo_entrega=?, lugar_entrega=?, subtotal=?, igv=?, total=?, total_comision=?, porcentaje_comision_promedio=?
+            WHERE id_cotizacion=?`,
+      params: [
+        id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada, prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal, plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal, plazo_entrega || null, lugar_entrega || null, subtotal, igv, total, totalComision, porcentajeComisionPromedio, id
+      ]
+    });
 
-    await executeQuery(`
-      DELETE FROM detalle_cotizacion 
-      WHERE id_cotizacion = ?
-    `, [id]);
+    queries.push({
+      sql: 'DELETE FROM detalle_cotizacion WHERE id_cotizacion = ?',
+      params: [id]
+    });
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
@@ -682,46 +595,81 @@ export async function updateCotizacion(req, res) {
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
-
       const montoComision = precioBase * (pctComision / 100);
       const precioFinal = precioBase + montoComision;
 
-      await executeQuery(`
-        INSERT INTO detalle_cotizacion (
-          id_cotizacion,
-          id_producto,
-          cantidad,
-          precio_unitario,
-          precio_base,
-          porcentaje_comision,
-          monto_comision,
-          descuento_porcentaje,
-          orden
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        id,
-        item.id_producto,
-        cantidad,
-        precioFinal,
-        precioBase,
-        pctComision,
-        montoComision,
-        pctDescuento,
-        i + 1
-      ]);
+      queries.push({
+        sql: `INSERT INTO detalle_cotizacion (id_cotizacion, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, orden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [id, item.id_producto, cantidad, precioFinal, precioBase, pctComision, montoComision, pctDescuento, i + 1]
+      });
     }
 
-    res.json({
-      success: true,
-      message: 'Cotización actualizada exitosamente'
-    });
+    if (cotActual.convertida_venta === 1 && cotActual.id_orden_venta) {
+      const idOrden = cotActual.id_orden_venta;
+      
+      const ordenCheck = await executeQuery('SELECT stock_reservado FROM ordenes_venta WHERE id_orden_venta = ?', [idOrden]);
+      const stockReservado = ordenCheck.data.length > 0 && ordenCheck.data[0].stock_reservado === 1;
+
+      if (stockReservado) {
+        const detalleAnteriorOV = await executeQuery('SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?', [idOrden]);
+        for (const itemAnt of detalleAnteriorOV.data) {
+          const prodInfo = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [itemAnt.id_producto]);
+          if (prodInfo.data.length > 0 && prodInfo.data[0].requiere_receta === 0) {
+            queries.push({
+              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+              params: [parseFloat(itemAnt.cantidad), itemAnt.id_producto]
+            });
+          }
+        }
+      }
+
+      queries.push({
+        sql: `UPDATE ordenes_venta 
+              SET id_cliente=?, fecha_emision=?, fecha_vencimiento=?, prioridad=?, moneda=?, tipo_impuesto=?, porcentaje_impuesto=?, tipo_cambio=?, plazo_pago=?, forma_pago=?, direccion_entrega=?, observaciones=?, lugar_entrega=?, subtotal=?, igv=?, total=?, total_comision=?, porcentaje_comision_promedio=?
+              WHERE id_orden_venta=?`,
+        params: [
+          id_cliente, fechaEmisionFinal, fechaVencimientoCalculada, prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal, plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, lugar_entrega || null, subtotal, igv, total, totalComision, porcentajeComisionPromedio, idOrden
+        ]
+      });
+
+      queries.push({
+        sql: 'DELETE FROM detalle_orden_venta WHERE id_orden_venta = ?',
+        params: [idOrden]
+      });
+
+      for (let i = 0; i < detalle.length; i++) {
+        const item = detalle[i];
+        const cantidad = parseFloat(item.cantidad || 0);
+        const precioBase = parseFloat(item.precio_base || 0);
+        const pctComision = parseFloat(item.porcentaje_comision || 0);
+        const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+        const montoComision = precioBase * (pctComision / 100);
+        const precioFinal = precioBase + montoComision;
+
+        queries.push({
+          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [idOrden, item.id_producto, cantidad, precioFinal, precioBase, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0]
+        });
+
+        if (stockReservado) {
+          const prodCheck = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [item.id_producto]);
+          if (prodCheck.data.length > 0 && prodCheck.data[0].requiere_receta === 0) {
+            queries.push({
+              sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+              params: [cantidad, item.id_producto]
+            });
+          }
+        }
+      }
+    }
+
+    await executeTransaction(queries);
+
+    res.json({ success: true, message: 'Cotización actualizada exitosamente' + (cotActual.convertida_venta ? ' y sincronizada con Orden de Venta' : '') });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 

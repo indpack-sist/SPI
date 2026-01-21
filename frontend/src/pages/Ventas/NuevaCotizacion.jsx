@@ -90,6 +90,10 @@ function NuevaCotizacion() {
   const [listasDesplegadas, setListasDesplegadas] = useState({});
   const [busquedaLista, setBusquedaLista] = useState('');
 
+  const handleWheelDisable = (e) => {
+    e.target.blur();
+  };
+
   const getFechaPeru = () => {
     const now = new Date();
     const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -873,6 +877,7 @@ function NuevaCotizacion() {
                   min="1"
                   disabled={cotizacionConvertida}
                   required
+                  onWheel={handleWheelDisable}
                 />
               </div>
               <div className="form-group">
@@ -927,6 +932,7 @@ function NuevaCotizacion() {
                       step="0.0001"
                       min="0"
                       disabled={cotizacionConvertida}
+                      onWheel={handleWheelDisable}
                     />
                     <button 
                       type="button" 
@@ -1227,6 +1233,7 @@ function NuevaCotizacion() {
                               step="0.001"
                               disabled={cotizacionConvertida}
                               required
+                              onWheel={handleWheelDisable}
                             />
                           </td>
                           <td className="text-sm text-muted">{item.unidad_medida}</td>
@@ -1246,6 +1253,7 @@ function NuevaCotizacion() {
                               placeholder="0.000"
                               disabled={cotizacionConvertida}
                               required
+                              onWheel={handleWheelDisable}
                             />
                           </td>
                           <td>
@@ -1270,6 +1278,7 @@ function NuevaCotizacion() {
                               max="100"
                               step="0.01"
                               disabled={cotizacionConvertida}
+                              onWheel={handleWheelDisable}
                             />
                           </td>
                           <td className="text-right font-bold">{formatearMonedaGral(valorVenta)}</td>

@@ -837,32 +837,45 @@ function DetalleOrdenVenta() {
             );
         }
 
+        const stockDisponible = parseFloat(row.stock_disponible || 0);
+        const cantidadRequerida = parseFloat(row.cantidad);
+        const stockSuficiente = stockDisponible >= cantidadRequerida;
+
+        // PRIORIDAD 1: Si hay stock suficiente, mostrar como cubierto
+        if (stockSuficiente && mostrarAlertaStock) {
+            return (
+              <div className="flex flex-col gap-1">
+                 <span className="text-xs text-success font-bold flex items-center justify-center gap-1">
+                     <CheckCircle size={12} /> Stock Cubierto
+                 </span>
+              </div>
+            );
+        }
+
         if (!row.requiere_receta) {
-          const stockDisponible = parseFloat(row.stock_disponible || 0);
-          
           if (!mostrarAlertaStock) {
             return <span className="badge badge-info">En despacho</span>;
           }
-          
           return (
             <div className="flex flex-col gap-1">
-              <span className={`badge ${stockDisponible >= pendiente ? 'badge-success' : 'badge-warning'}`}>
-                {stockDisponible >= pendiente ? 'Stock Disponible' : 'Stock Insuficiente'}
-              </span>
+              <span className="badge badge-warning">Stock Insuficiente</span>
               <span className="text-xs text-muted">Stock: {stockDisponible.toFixed(2)}</span>
             </div>
           );
         }
 
-        const stockDisponible = parseFloat(row.stock_disponible || 0);
-        const cantidadRequerida = parseFloat(row.cantidad);
-
+        // PRIORIDAD 2: Si no hay stock y tiene OP (En producción)
         if (value > 0) {
           return (
-            <span className="badge badge-info">
-              <Factory size={12} />
-              En producción
-            </span>
+            <div className="flex flex-col gap-1">
+                <span className="badge badge-info">
+                    <Factory size={12} />
+                    En producción
+                </span>
+                <span className="text-[10px] text-danger text-center">
+                    Falta: {Math.max(0, cantidadRequerida - stockDisponible).toFixed(2)}
+                </span>
+            </div>
           );
         }
 
@@ -874,16 +887,10 @@ function DetalleOrdenVenta() {
               <AlertCircle size={12} />
               Pendiente OP
             </span>
-            {mostrarAlertaStock && (
-              faltante > 0 ? (
+            {mostrarAlertaStock && faltante > 0 && (
                 <span className="text-xs text-danger">
                   Falta: {faltante.toFixed(2)} {row.unidad_medida}
                 </span>
-              ) : (
-                <span className="text-xs text-success">
-                  Stock Cubierto
-                </span>
-              )
             )}
           </div>
         );
@@ -899,10 +906,11 @@ function DetalleOrdenVenta() {
         const cantidadRequerida = parseFloat(row.cantidad);
         const stockSuficiente = stockDisponible >= cantidadRequerida;
 
+        // Si ya hay OP creada, mostrar solo texto informativo, a menos que se quiera permitir crear otra
         if (row.tiene_op > 0) {
-          return (
-            <span className="text-xs text-muted">OP creada</span>
-          );
+           // Opcional: Permitir crear otra OP si falta stock a pesar de tener una OP (ej. merma alta)
+           // Por ahora, lo dejamos informativo
+           return <span className="text-xs text-muted">OP Vinculada</span>;
         }
 
         if (orden?.estado === 'Cancelada' || 
@@ -1023,17 +1031,15 @@ function DetalleOrdenVenta() {
   const estadoPagoConfig = getEstadoPagoConfig(orden.estado_pago);
   const IconoEstadoPago = estadoPagoConfig.icono;
 
-  const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
-  const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
-
   const productosRequierenOP = orden.detalle.filter(item => {
     if(item.stock_reservado === 1) return false;
     if(!mostrarAlertaStock) return false;
 
     const stockDisponible = parseFloat(item.stock_disponible || 0);
     const cantidadRequerida = parseFloat(item.cantidad);
+    // Solo marcamos como "Requiere OP" si no hay stock suficiente, independientemente de si tiene OP creada o no.
+    // Si tiene OP, igual nos falta stock hasta que se termine.
     return item.requiere_receta && 
-           item.tiene_op === 0 && 
            stockDisponible < cantidadRequerida &&
            orden.estado !== 'Cancelada' &&
            orden.estado !== 'Entregada' &&
@@ -1658,7 +1664,7 @@ function DetalleOrdenVenta() {
                      ]} 
                      data={salidas} 
                      emptyMessage="No hay despachos registrados"
-                  />
+                 />
              </div>
          </div>
       )}

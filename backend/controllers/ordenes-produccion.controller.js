@@ -1373,25 +1373,46 @@ export async function finalizarProduccion(req, res) {
       });
     }
 
+    if (orden.id_orden_venta_origen) {
+      queries.push({
+        sql: "UPDATE ordenes_venta SET estado = 'Atendido por Producción' WHERE id_orden_venta = ?",
+        params: [orden.id_orden_venta_origen]
+      });
+    }
+
     const result1 = await executeTransaction(queries);
     if (!result1.success) return res.status(500).json({ error: result1.error });
 
     if (cantidadFinalNum > 0) {
-        const idEntrada = result1.data[result1.data.length - 1].insertId;
-        const costoUnitarioProductoFinal = cantidadFinalNum > 0 ? (costoTotalFinal / cantidadFinalNum) : 0;
+        // Encontrar el ID de entrada insertado. 
+        // Nota: en una transacción con múltiples queries, result.data es un array de resultados.
+        // El insert de entrada es el ante-penúltimo o penúltimo dependiendo del id_orden_venta_origen
         
-        const queriesStock = [];
-        queriesStock.push({
-          sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
-          params: [idEntrada, orden.id_producto_terminado, cantidadFinalNum, costoUnitarioProductoFinal]
-        });
+        // Estrategia segura: Buscamos el resultado que tenga insertId
+        let idEntrada = null;
+        for (let i = result1.data.length - 1; i >= 0; i--) {
+            if (result1.data[i].insertId) {
+                idEntrada = result1.data[i].insertId;
+                break;
+            }
+        }
+        
+        if (idEntrada) {
+            const costoUnitarioProductoFinal = cantidadFinalNum > 0 ? (costoTotalFinal / cantidadFinalNum) : 0;
+            
+            const queriesStock = [];
+            queriesStock.push({
+              sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
+              params: [idEntrada, orden.id_producto_terminado, cantidadFinalNum, costoUnitarioProductoFinal]
+            });
 
-        queriesStock.push({
-          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-          params: [cantidadFinalNum, orden.id_producto_terminado]
-        });
+            queriesStock.push({
+              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+              params: [cantidadFinalNum, orden.id_producto_terminado]
+            });
 
-        await executeTransaction(queriesStock);
+            await executeTransaction(queriesStock);
+        }
     }
 
     if (mermas && mermas.length > 0) {
@@ -1409,13 +1430,6 @@ export async function finalizarProduccion(req, res) {
             }
         }
         if(queriesMermas.length > 0) await executeTransaction(queriesMermas);
-    }
-
-    if (orden.id_orden_venta_origen) {
-        await executeQuery(
-            "UPDATE ordenes_venta SET estado = 'Atendido por Producción' WHERE id_orden_venta = ?", 
-            [orden.id_orden_venta_origen]
-        );
     }
 
     await notificarCambioEstado(id, `Producción Finalizada: ${orden.numero_orden}`, 'La orden ha sido completada y cerrada.', 'success', req);

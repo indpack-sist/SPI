@@ -23,9 +23,7 @@ export async function getAllProductos(req, res) {
       params.push(estado);
     }
     
-    // ✅ CAMBIAR ESTA PARTE
     if (id_tipo_inventario) {
-      // Manejar múltiples IDs separados por coma
       const ids = id_tipo_inventario.split(',').map(id => id.trim());
       const placeholders = ids.map(() => '?').join(',');
       sql += ` AND p.id_tipo_inventario IN (${placeholders})`;
@@ -176,6 +174,7 @@ export async function createProducto(req, res) {
       id_tipo_inventario,
       unidad_medida,
       costo_unitario_promedio,
+      costo_unitario_promedio_usd,
       precio_venta,
       stock_actual,
       stock_minimo,
@@ -202,9 +201,9 @@ export async function createProducto(req, res) {
     const result = await executeQuery(
       `INSERT INTO productos (
         codigo, nombre, descripcion, id_categoria, id_tipo_inventario,
-        unidad_medida, costo_unitario_promedio, precio_venta, stock_actual, stock_minimo,
+        unidad_medida, costo_unitario_promedio, costo_unitario_promedio_usd, precio_venta, stock_actual, stock_minimo,
         stock_maximo, requiere_receta, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         codigo,
         nombre,
@@ -213,6 +212,7 @@ export async function createProducto(req, res) {
         id_tipo_inventario,
         unidad_medida,
         costo_unitario_promedio || 0,
+        costo_unitario_promedio_usd || 0,
         precio_venta || 0,
         stock_actual || 0,
         stock_minimo || 0,

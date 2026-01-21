@@ -640,7 +640,6 @@ export async function getConsumoMaterialesOrden(req, res) {
 export async function createOrden(req, res) {
   try {
     const {
-      numero_orden,
       id_producto_terminado,
       cantidad_planificada,
       id_supervisor,
@@ -653,24 +652,33 @@ export async function createOrden(req, res) {
     
     const fechaActual = getFechaPeru();
 
-    if (!numero_orden || !id_producto_terminado || !cantidad_planificada || !id_supervisor) {
+    if (!id_producto_terminado || !cantidad_planificada || !id_supervisor) {
       return res.status(400).json({ 
-        error: 'numero_orden, id_producto_terminado, cantidad_planificada e id_supervisor son requeridos' 
+        error: 'id_producto_terminado, cantidad_planificada e id_supervisor son requeridos' 
       });
     }
     
     if (cantidad_planificada <= 0) {
       return res.status(400).json({ error: 'La cantidad planificada debe ser mayor a 0' });
     }
-    
-    const checkNumero = await executeQuery(
-      'SELECT * FROM ordenes_produccion WHERE numero_orden = ?',
-      [numero_orden]
-    );
-    
-    if (checkNumero.data.length > 0) {
-      return res.status(400).json({ error: 'El número de orden ya existe' });
+
+    const ultimaOrdenResult = await executeQuery(`
+      SELECT numero_orden 
+      FROM ordenes_produccion 
+      ORDER BY id_orden DESC 
+      LIMIT 1
+    `);
+
+    let numeroSecuencia = 1;
+    if (ultimaOrdenResult.success && ultimaOrdenResult.data.length > 0) {
+      const match = ultimaOrdenResult.data[0].numero_orden.match(/(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
     }
+
+    const yearActual = new Date().getFullYear();
+    const numeroOrdenGenerado = `OP-${yearActual}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     const productoResult = await executeQuery(
       'SELECT requiere_receta, unidad_medida FROM productos WHERE id_producto = ?',
@@ -695,7 +703,7 @@ export async function createOrden(req, res) {
           id_receta_producto, rendimiento_unidades, origen_tipo, fecha_creacion
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          numero_orden,
+          numeroOrdenGenerado,
           id_producto_terminado,
           cantidad_planificada,
           id_supervisor,
@@ -718,7 +726,7 @@ export async function createOrden(req, res) {
         message: 'Orden manual creada exitosamente (sin consumo de materiales)',
         data: {
           id_orden: ordenResult.data.insertId,
-          numero_orden,
+          numero_orden: numeroOrdenGenerado,
           costo_materiales: 0,
           es_manual: true,
           estado: 'Pendiente'
@@ -811,7 +819,7 @@ export async function createOrden(req, res) {
         id_receta_producto, rendimiento_unidades, origen_tipo, fecha_creacion
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        numero_orden,
+        numeroOrdenGenerado,
         id_producto_terminado,
         cantidad_planificada,
         id_supervisor,
@@ -847,7 +855,7 @@ export async function createOrden(req, res) {
       message: 'Orden de producción creada exitosamente',
       data: {
         id_orden: idOrden,
-        numero_orden,
+        numero_orden: numeroOrdenGenerado,
         costo_materiales: costoMateriales,
         lotes_necesarios: lotesNecesarios,
         rendimiento_unidades: rendimientoUnidades,

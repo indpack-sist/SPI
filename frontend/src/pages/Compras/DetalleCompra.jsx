@@ -332,6 +332,7 @@ function DetalleCompra() {
         </div>
       </div>
 
+      {/* ✅ SECCIÓN DE CONVERSIÓN DE MONEDA - INTEGRADA */}
       {compra.tipo_cambio && parseFloat(compra.tipo_cambio) !== 1.0 && (
         <div className="card border-l-4 border-info mb-4">
           <div className="card-body">

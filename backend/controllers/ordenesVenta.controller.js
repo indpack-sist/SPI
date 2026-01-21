@@ -464,33 +464,38 @@ export async function createOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
 
-    const clienteInfo = await executeQuery('SELECT usar_limite_credito, limite_credito_pen, limite_credito_usd FROM clientes WHERE id_cliente = ?', [id_cliente]);
-
-    if (clienteInfo.success && clienteInfo.data.length > 0) {
-      const cliente = clienteInfo.data[0];
-
-      if (cliente.usar_limite_credito === 1) {
-        const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_credito_usd || 0) : parseFloat(cliente.limite_credito_pen || 0);
-
-        const deudaResult = await executeQuery(`
-          SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
-          FROM ordenes_venta
-          WHERE id_cliente = ? 
-          AND moneda = ? 
-          AND estado != 'Cancelada' 
-          AND estado_pago != 'Pagado'
-        `, [id_cliente, moneda]);
-
-        const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
-        const nuevaDeudaTotal = deudaActual + total;
-
-        if (nuevaDeudaTotal > limiteAsignado) {
-          return res.status(400).json({
-            success: false,
-            error: `Límite de crédito excedido. Límite: ${moneda} ${limiteAsignado.toFixed(2)}. Deuda actual: ${moneda} ${deudaActual.toFixed(2)}. Nueva orden: ${moneda} ${total.toFixed(2)}. Total proyectado: ${moneda} ${nuevaDeudaTotal.toFixed(2)}.`
-          });
+    // VALIDACIÓN DE CRÉDITO MEJORADA
+    if (plazo_pago !== 'Contado') {
+        const clienteInfo = await executeQuery(
+            'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?', 
+            [id_cliente]
+        );
+  
+        if (clienteInfo.success && clienteInfo.data.length > 0) {
+            const cliente = clienteInfo.data[0];
+            
+            if (cliente.usar_limite_credito == 1) {
+                const deudaResult = await executeQuery(`
+                    SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
+                    FROM ordenes_venta
+                    WHERE id_cliente = ? 
+                    AND moneda = ? 
+                    AND estado != 'Cancelada' 
+                    AND estado_pago != 'Pagado'
+                `, [id_cliente, moneda]);
+  
+                const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
+                const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
+                const nuevaDeudaTotal = deudaActual + total;
+  
+                if (nuevaDeudaTotal > limiteAsignado) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Límite de crédito excedido. Disponible: ${moneda} ${(limiteAsignado - deudaActual).toFixed(2)}. Requerido: ${moneda} ${total.toFixed(2)}.`
+                    });
+                }
+            }
         }
-      }
     }
 
     const ultimaResult = await executeQuery(`
@@ -841,6 +846,41 @@ export async function updateOrdenVenta(req, res) {
 
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
+
+    // VALIDACIÓN DE CRÉDITO EN UPDATE
+    if (plazo_pago !== 'Contado') {
+        const clienteInfo = await executeQuery(
+            'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?', 
+            [id_cliente]
+        );
+  
+        if (clienteInfo.success && clienteInfo.data.length > 0) {
+            const cliente = clienteInfo.data[0];
+            
+            if (cliente.usar_limite_credito == 1) {
+                const deudaResult = await executeQuery(`
+                    SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
+                    FROM ordenes_venta
+                    WHERE id_cliente = ? 
+                    AND moneda = ? 
+                    AND estado != 'Cancelada' 
+                    AND estado_pago != 'Pagado'
+                    AND id_orden_venta != ?
+                `, [id_cliente, moneda, id]); // Importante: Excluir la orden actual del cálculo de deuda previa
+  
+                const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
+                const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
+                const nuevaDeudaTotal = deudaActual + total;
+  
+                if (nuevaDeudaTotal > limiteAsignado) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Límite de crédito excedido en la edición. Disponible: ${moneda} ${(limiteAsignado - deudaActual).toFixed(2)}. Requerido: ${moneda} ${total.toFixed(2)}.`
+                    });
+                }
+            }
+        }
+    }
 
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal && fecha_emision) {

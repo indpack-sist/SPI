@@ -218,25 +218,18 @@ function Clientes() {
     setError(null);
     setSuccess(null);
 
-    if (editando && formData.usar_limite_credito) {
-      const limitesChanged = 
-        parseFloat(formData.limite_credito_pen) !== parseFloat(editando.limite_credito_pen) ||
-        parseFloat(formData.limite_credito_usd) !== parseFloat(editando.limite_credito_usd);
-      if (limitesChanged) {
-        setError('Para cambiar límites de crédito debe usar "Solicitar Cambio de Límite"');
-        return;
-      }
-    }
+    // ✅ CORRECCIÓN: Se eliminó el bloqueo para editar límites manualmente.
+    // Ahora puedes editar los límites directamente desde este formulario.
 
     const dataToSend = {
       ...formData,
-      usar_limite_credito: formData.usar_limite_credito ? 1 : 0
+      usar_limite_credito: formData.usar_limite_credito ? 1 : 0,
+      // Aseguramos que se envíen los límites como números
+      limite_credito_pen: parseFloat(formData.limite_credito_pen),
+      limite_credito_usd: parseFloat(formData.limite_credito_usd)
     };
 
-    if (editando) {
-      delete dataToSend.limite_credito_pen;
-      delete dataToSend.limite_credito_usd;
-    }
+    // ✅ CORRECCIÓN: Se eliminaron las líneas que borraban limite_credito_pen/usd en modo edición
 
     try {
       if (editando) {
@@ -449,7 +442,6 @@ function Clientes() {
                   onChange={(e) => setFormData({ ...formData, usar_limite_credito: e.target.checked })} 
                   className="form-checkbox" 
                   style={{ width: '18px', height: '18px' }}
-                  disabled={!editando} 
                 />
                 <CreditCard size={18} className="text-primary" />
                 <span className="font-medium">Usar límite de crédito</span>
@@ -459,34 +451,7 @@ function Clientes() {
 
             {formData.usar_limite_credito && (
               <div className="pt-3 border-t">
-                {editando ? (
-                  <div className="space-y-3">
-                    <div className="card bg-blue-50">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertCircle size={16} className="text-info" />
-                        <p className="text-sm font-medium text-info">Límites Actuales</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-xs text-muted">Límite en Soles</p>
-                          <p className="text-lg font-bold text-success">S/ {parseFloat(formData.limite_credito_pen || 0).toFixed(2)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted">Límite en Dólares</p>
-                          <p className="text-lg font-bold text-primary">$ {parseFloat(formData.limite_credito_usd || 0).toFixed(2)}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <button 
-                      type="button" 
-                      className={`btn btn-block ${editando.tiene_solicitud_pendiente ? 'btn-disabled opacity-50' : 'btn-outline'}`}
-                      onClick={() => abrirModalSolicitudCredito(editando)}
-                      disabled={editando.tiene_solicitud_pendiente}
-                    >
-                      <CreditCard size={16} /> {editando.tiene_solicitud_pendiente ? 'Solicitud en Proceso' : 'Solicitar Cambio de Límite'}
-                    </button>
-                  </div>
-                ) : (
+                  {/* Se muestra el formulario de edición de límites SIEMPRE, incluso si es edición */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="form-group mb-0">
                       <label className="form-label">Límite en Soles (S/)</label>
@@ -497,7 +462,6 @@ function Clientes() {
                       <input type="number" className="form-input" value={formData.limite_credito_usd} onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })} min="0" step="0.01" placeholder="0.00" />
                     </div>
                   </div>
-                )}
               </div>
             )}
           </div>

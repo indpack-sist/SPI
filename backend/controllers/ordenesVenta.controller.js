@@ -2640,6 +2640,7 @@ export async function rectificarCantidadProducto(req, res) {
     }
     const orden = ordenResult.data[0];
 
+    // Obtener el detalle específico del producto
     const detalleResult = await executeQuery(
       'SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ? AND id_producto = ?', 
       [id, id_producto]
@@ -2660,13 +2661,16 @@ export async function rectificarCantidadProducto(req, res) {
 
     const queries = [];
 
+    // 1. AJUSTE DE INVENTARIO (PRODUCTOS)
     if (diferencia > 0) {
+      // Si aumentamos cantidad, restamos del stock (si no requiere receta)
       const productoCheck = await executeQuery('SELECT stock_actual, requiere_receta FROM productos WHERE id_producto = ?', [id_producto]);
       if (productoCheck.data.length > 0) {
         const prod = productoCheck.data[0];
         if (prod.requiere_receta === 0) {
+          // Validar stock solo si estamos aumentando
           if (parseFloat(prod.stock_actual) < diferencia) {
-            return res.status(400).json({ success: false, error: 'Stock insuficiente para el incremento' });
+            return res.status(400).json({ success: false, error: 'Stock insuficiente para el incremento en la rectificación' });
           }
           queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
@@ -2675,6 +2679,7 @@ export async function rectificarCantidadProducto(req, res) {
         }
       }
     } else {
+      // Si disminuimos cantidad, devolvemos al stock
       const productoCheck = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [id_producto]);
       if (productoCheck.data.length > 0 && productoCheck.data[0].requiere_receta === 0) {
         queries.push({
@@ -2684,23 +2689,35 @@ export async function rectificarCantidadProducto(req, res) {
       }
     }
 
-    const precioUnitario = parseFloat(itemDetalle.precio_unitario);
-    const nuevoSubtotalItem = cantidadNueva * precioUnitario; 
-    
+    // 2. ACTUALIZAR DETALLE DE LA ORDEN (Sincronizando despacho si corresponde)
+    // Si la orden ya fue procesada (Despachada/Entregada), asumimos que la rectificación corrige lo que se envió físicamente.
+    // Por tanto, actualizamos cantidad Y cantidad_despachada para que sean iguales.
+    let sqlUpdateDetalle = 'UPDATE detalle_orden_venta SET cantidad = ? WHERE id_detalle = ?';
+    let paramsUpdateDetalle = [cantidadNueva, itemDetalle.id_detalle];
+
+    if (['Despachada', 'Entregada'].includes(orden.estado)) {
+        sqlUpdateDetalle = 'UPDATE detalle_orden_venta SET cantidad = ?, cantidad_despachada = ? WHERE id_detalle = ?';
+        paramsUpdateDetalle = [cantidadNueva, cantidadNueva, itemDetalle.id_detalle];
+    } else if (orden.estado === 'Despacho Parcial') {
+        // En parcial, solo actualizamos despachada si la nueva cantidad es MENOR a lo que ya decia que se despachó
+        // O si queremos forzar que el aumento se considere despachado (asumiremos lo segundo para consistencia con tu petición)
+        sqlUpdateDetalle = 'UPDATE detalle_orden_venta SET cantidad = ?, cantidad_despachada = IF(cantidad_despachada > 0, ?, cantidad_despachada) WHERE id_detalle = ?';
+        paramsUpdateDetalle = [cantidadNueva, cantidadNueva, itemDetalle.id_detalle];
+    }
+
     queries.push({
-      sql: 'UPDATE detalle_orden_venta SET cantidad = ?, cantidad_despachada = IF(cantidad_despachada > ?, ?, cantidad_despachada) WHERE id_detalle = ?',
-      params: [cantidadNueva, cantidadNueva, cantidadNueva, itemDetalle.id_detalle]
+      sql: sqlUpdateDetalle,
+      params: paramsUpdateDetalle
     });
 
+    // 3. RECALCULAR TOTALES DE LA ORDEN DE VENTA
     const ordenCompletaDetalle = await executeQuery('SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
     let nuevoSubtotalOrden = 0;
     
     ordenCompletaDetalle.data.forEach(d => {
-      if (d.id_producto == id_producto) {
-        nuevoSubtotalOrden += (cantidadNueva * parseFloat(d.precio_unitario)) * (1 - parseFloat(d.descuento_porcentaje || 0) / 100);
-      } else {
-        nuevoSubtotalOrden += (parseFloat(d.cantidad) * parseFloat(d.precio_unitario)) * (1 - parseFloat(d.descuento_porcentaje || 0) / 100);
-      }
+      // Usamos la nueva cantidad para el producto actual, y la existente para los demás
+      const cant = (d.id_producto == id_producto) ? cantidadNueva : parseFloat(d.cantidad);
+      nuevoSubtotalOrden += (cant * parseFloat(d.precio_unitario)) * (1 - parseFloat(d.descuento_porcentaje || 0) / 100);
     });
 
     const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
@@ -2708,11 +2725,13 @@ export async function rectificarCantidadProducto(req, res) {
     const nuevoTotal = nuevoSubtotalOrden + nuevoImpuesto;
 
     queries.push({
-      sql: 'UPDATE ordenes_venta SET subtotal = ?, igv = ?, total = ?, observaciones = CONCAT(COALESCE(observaciones, ""), " [Rectificado: ", ? ) WHERE id_orden_venta = ?',
+      sql: 'UPDATE ordenes_venta SET subtotal = ?, igv = ?, total = ?, observaciones = CONCAT(COALESCE(observaciones, ""), " [Rect: ", ? ) WHERE id_orden_venta = ?',
       params: [nuevoSubtotalOrden, nuevoImpuesto, nuevoTotal, `Prod ${id_producto}: ${cantidadAnterior}->${cantidadNueva}. ${motivo || ''}`, id]
     });
 
+    // 4. ACTUALIZAR SALIDAS (Guias de Remisión) Y SUS TOTALES
     if (['Despachada', 'Entregada', 'Despacho Parcial'].includes(orden.estado)) {
+      // Buscamos la última salida activa asociada a esta orden
       const salidaResult = await executeQuery(
         'SELECT id_salida FROM salidas WHERE observaciones LIKE ? AND estado = "Activo" ORDER BY id_salida DESC LIMIT 1', 
         [`%${orden.numero_orden}%`]
@@ -2721,6 +2740,7 @@ export async function rectificarCantidadProducto(req, res) {
       if (salidaResult.data.length > 0) {
         const idSalida = salidaResult.data[0].id_salida;
         
+        // Actualizar el detalle de la salida
         const detalleSalidaCheck = await executeQuery('SELECT * FROM detalle_salidas WHERE id_salida = ? AND id_producto = ?', [idSalida, id_producto]);
         
         if (detalleSalidaCheck.data.length > 0) {
@@ -2736,13 +2756,33 @@ export async function rectificarCantidadProducto(req, res) {
              });
           }
         } else if (cantidadNueva > 0) {
+           // Si no existía en la salida (caso raro en rectificación de algo despachado, pero posible), lo agregamos
            const infoProd = await executeQuery('SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?', [id_producto]);
            const costo = infoProd.data[0]?.costo_unitario_promedio || 0;
+           const precioUnitario = parseFloat(itemDetalle.precio_unitario);
+           
            queries.push({
              sql: 'INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) VALUES (?, ?, ?, ?, ?)',
              params: [idSalida, id_producto, cantidadNueva, costo, precioUnitario]
            });
         }
+
+        // --- CRUCIAL: RECALCULAR TOTALES DE LA SALIDA ---
+        // Necesitamos sumar todo el detalle de esa salida para actualizar la cabecera
+        // Como estamos dentro de una transacción y no podemos hacer SELECT de lo que acabamos de cambiar fácilmente en SQL puro dinámico sin stored procedures complejos,
+        // haremos una actualización relativa o recalculo manual aproximado. 
+        // Para mayor precisión, forzamos un update sumando (costo * cantidad) de la tabla detalle_salidas,
+        // PERO como JS es asíncrono y los queries en transacción se ejecutan en bloque, usamos una subquery directa en el UPDATE.
+        
+        queries.push({
+            sql: `UPDATE salidas s
+                  SET 
+                    total_costo = (SELECT COALESCE(SUM(cantidad * costo_unitario), 0) FROM detalle_salidas WHERE id_salida = s.id_salida),
+                    total_precio = (SELECT COALESCE(SUM(cantidad * precio_unitario), 0) FROM detalle_salidas WHERE id_salida = s.id_salida)
+                  WHERE s.id_salida = ?`,
+            params: [idSalida] // El ID ya es fijo, pero usamos parámetro por seguridad
+        });
+        // Nota: Esto funcionará porque en la transacción, el UPDATE del detalle ocurre antes que este UPDATE de cabecera.
       }
     }
 
@@ -2750,7 +2790,7 @@ export async function rectificarCantidadProducto(req, res) {
 
     res.json({
       success: true,
-      message: 'Cantidad rectificada e inventario actualizado correctamente',
+      message: 'Cantidad rectificada, inventario y salidas actualizados correctamente',
       data: {
         cantidad_anterior: cantidadAnterior,
         cantidad_nueva: cantidadNueva,

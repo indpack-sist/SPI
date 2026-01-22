@@ -50,30 +50,30 @@ function NuevaCotizacion() {
   const { id } = useParams();
   const location = useLocation();
   const { user } = useAuth();
-  
+   
   const modoEdicion = !!id;
   const modoDuplicar = location.state?.duplicar === true;
-  
+   
   const [loading, setLoading] = useState(false);
   const [loadingTC, setLoadingTC] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [cotizacionConvertida, setCotizacionConvertida] = useState(false);
   const [idOrdenVenta, setIdOrdenVenta] = useState(null);
-  
+   
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
-  
+   
   const [tipoCambio, setTipoCambio] = useState(null);
   const [tipoCambioFecha, setTipoCambioFecha] = useState(null);
-  
+   
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
-  
+   
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
-  
+   
   const [tabCliente, setTabCliente] = useState('lista');
   const [nuevoClienteDoc, setNuevoClienteDoc] = useState({ tipo: 'RUC', numero: '' });
   const [clienteApiData, setClienteApiData] = useState(null);
@@ -102,7 +102,7 @@ function NuevaCotizacion() {
     const day = String(peruDate.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-  
+   
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
     id_comercial: user?.id_empleado || '',
@@ -119,13 +119,13 @@ function NuevaCotizacion() {
     plazo_entrega: '',
     lugar_entrega: ''
   });
-  
+   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [direccionesCliente, setDireccionesCliente] = useState([]);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
-  
+   
   const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
 
   const formatearNumero = (valor) => {
@@ -779,7 +779,9 @@ function NuevaCotizacion() {
                         <p className="font-bold text-lg">{clienteSeleccionado.razon_social}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted">RUC:</label>
+                        <label className="text-sm font-medium text-muted">
+                            {clienteSeleccionado.tipo_documento || (clienteSeleccionado.ruc && clienteSeleccionado.ruc.length === 8 ? 'DNI' : 'RUC')}:
+                        </label>
                         <p className="font-bold">{clienteSeleccionado.ruc}</p>
                       </div>
                     </div>

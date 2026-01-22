@@ -336,15 +336,10 @@ function DetalleOrdenVenta() {
         setInfoReservaStock(response.data.data);
         setProductosReservaSeleccionados(
           response.data.data.productos.map(p => ({
-            id_producto: p.id_producto,
-            id_detalle: p.id_detalle,
-            nombre: p.nombre,
-            cantidad_requerida: p.cantidad_requerida,
-            stock_disponible: p.stock_disponible,
-            cantidad_reservable: p.cantidad_reservable,
-            estado_reserva: p.estado_reserva,
+            ...p,
+            cantidad_a_reservar: p.cantidad_reservable,
             tipo_reserva: p.estado_reserva === 'completo' ? 'completo' : 'parcial',
-            seleccionado: p.estado_reserva !== 'sin_stock' && p.estado_reserva !== 'requiere_produccion'
+            seleccionado: p.cantidad_reservable > 0 
           }))
         );
         setModalReservaStock(true);
@@ -365,17 +360,49 @@ function DetalleOrdenVenta() {
     );
   };
 
+  const handleCambioCantidadManualReserva = (id_detalle, valor) => {
+    const nuevosProductos = [...productosReservaSeleccionados];
+    const index = nuevosProductos.findIndex(p => p.id_detalle === id_detalle);
+    
+    if (index !== -1) {
+      let val = parseFloat(valor);
+      if (isNaN(val) || val < 0) val = 0;
+
+      const item = nuevosProductos[index];
+      const maximoPosible = Math.min(item.stock_disponible, item.cantidad_requerida);
+
+      if (val > maximoPosible) {
+        val = maximoPosible;
+      }
+
+      nuevosProductos[index].cantidad_a_reservar = val;
+      
+      if (val === 0) {
+         nuevosProductos[index].tipo_reserva = 'sin_stock'; 
+         nuevosProductos[index].seleccionado = false; 
+      } else if (val >= item.cantidad_requerida) {
+         nuevosProductos[index].tipo_reserva = 'completo';
+         nuevosProductos[index].seleccionado = true;
+      } else {
+         nuevosProductos[index].tipo_reserva = 'parcial';
+         nuevosProductos[index].seleccionado = true;
+      }
+
+      setProductosReservaSeleccionados(nuevosProductos);
+    }
+  };
+
   const handleEjecutarReservaStock = async () => {
     try {
       setProcesando(true);
       setError(null);
 
       const productosAReservar = productosReservaSeleccionados
-        .filter(p => p.seleccionado && p.cantidad_reservable > 0)
+        .filter(p => p.seleccionado && p.cantidad_a_reservar > 0)
         .map(p => ({
           id_producto: p.id_producto,
           id_detalle: p.id_detalle,
-          cantidad_a_reservar: parseFloat(p.cantidad_reservable),
+          cantidad_a_reservar: parseFloat(p.cantidad_a_reservar),
           tipo_reserva: p.tipo_reserva
         }));
 
@@ -2541,9 +2568,7 @@ function DetalleOrdenVenta() {
             <table className="table table-sm w-full">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
-                  <th className="w-10 text-center">
-                    #
-                  </th>
+                  <th className="w-10 text-center">#</th>
                   <th>Producto</th>
                   <th className="text-right">Requerido</th>
                   <th className="text-right">Disponible</th>
@@ -2574,8 +2599,18 @@ function DetalleOrdenVenta() {
                       <td className="text-right text-muted">
                         {formatearNumero(item.stock_disponible)}
                       </td>
-                      <td className="text-right font-bold text-primary">
-                        {formatearNumero(item.cantidad_reservable)}
+                      <td className="text-right">
+                        <input
+                          type="number"
+                          className="form-input form-input-sm text-right w-24 ml-auto"
+                          min="0"
+                          max={Math.min(item.stock_disponible, item.cantidad_requerida)}
+                          step="0.01"
+                          value={item.cantidad_a_reservar}
+                          onChange={(e) => handleCambioCantidadManualReserva(item.id_detalle, e.target.value)}
+                          onWheel={handleWheelDisable}
+                          disabled={item.stock_disponible <= 0} 
+                        />
                       </td>
                       <td className="text-center">
                         {item.estado_reserva === 'completo' && (

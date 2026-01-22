@@ -47,6 +47,11 @@ function CrearOrden() {
     cantidad_requerida: ''
   });
 
+  const productosFiltrados = productosTerminados.filter(p => 
+    p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
+    p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
+  );
+
   useEffect(() => {
     cargarDatos();
     generarSiguienteCorrelativo(); 
@@ -68,15 +73,15 @@ function CrearOrden() {
       const ordenes = response.data.data || [];
       
       const anioActual = new Date().getFullYear();
-      const prefijo = `${anioActual}-`;
+      const prefijo = `OP-${anioActual}-`;
       
       const ordenesDelAnio = ordenes.filter(o => o.numero_orden && o.numero_orden.startsWith(prefijo));
       
       let maxCorrelativo = 0;
       ordenesDelAnio.forEach(o => {
         const partes = o.numero_orden.split('-');
-        if (partes.length === 2) {
-          const numero = parseInt(partes[1]);
+        if (partes.length === 3) {
+          const numero = parseInt(partes[2]);
           if (!isNaN(numero) && numero > maxCorrelativo) {
             maxCorrelativo = numero;
           }
@@ -85,7 +90,7 @@ function CrearOrden() {
       
       const siguienteNumero = maxCorrelativo + 1;
       const correlativoStr = String(siguienteNumero).padStart(5, '0');
-      const nuevoCodigo = `${anioActual}-${correlativoStr}`;
+      const nuevoCodigo = `OP-${anioActual}-${correlativoStr}`;
       
       setFormData(prev => ({ ...prev, numero_orden: nuevoCodigo }));
       
@@ -156,7 +161,6 @@ function CrearOrden() {
     }
   };
 
-  
   const handleSeleccionarProducto = (producto) => {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
@@ -174,13 +178,13 @@ function CrearOrden() {
     setDetalleReceta([]);
     setRecetaProvisional([]);
     setMostrarDropdown(true); 
+    setTimeout(() => {
+        if (dropdownRef.current) {
+            const input = dropdownRef.current.querySelector('input');
+            if (input) input.focus();
+        }
+    }, 100);
   };
-
-  const productosFiltrados = productosTerminados.filter(p => 
-    p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
-    p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
-  );
-  
 
   const cambiarModoReceta = (modo) => {
     setModoReceta(modo);
@@ -240,7 +244,7 @@ function CrearOrden() {
     const payload = {
       ...formData,
       cantidad_planificada: parseFloat(formData.cantidad_planificada),
-      origen_tipo: 'Supervisor' // AGREGAR ESTA LÍNEA
+      origen_tipo: 'Supervisor' 
     };
 
     if (modoReceta === 'manual') {
@@ -506,14 +510,14 @@ function CrearOrden() {
               
               {/* Input oculto para la validación nativa del form si falla */}
               {!formData.id_producto_terminado && (
-                 <input 
-                   tabIndex={-1} 
-                   autoComplete="off" 
-                   style={{opacity: 0, height: 0, position: 'absolute'}} 
-                   required={true} 
-                   onInvalid={e => e.target.setCustomValidity('Seleccione un producto de la lista')} 
-                   onInput={e => e.target.setCustomValidity('')} 
-                 />
+                  <input 
+                    tabIndex={-1} 
+                    autoComplete="off" 
+                    style={{opacity: 0, height: 0, position: 'absolute'}} 
+                    required={true} 
+                    onInvalid={e => e.target.setCustomValidity('Seleccione un producto de la lista')} 
+                    onInput={e => e.target.setCustomValidity('')} 
+                  />
               )}
             </div>
             {/* ----------------------------------------------------------- */}
@@ -997,7 +1001,7 @@ function CrearOrden() {
             type="submit" 
             className="btn btn-primary"
             disabled={guardando || !formData.id_producto_terminado || 
-                     (modoReceta !== 'manual' && recetaActual.length === 0)}
+                      (modoReceta !== 'manual' && recetaActual.length === 0)}
           >
             {guardando ? 'Creando...' : 'Crear Orden de Producción'}
           </button>

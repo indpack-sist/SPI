@@ -1516,8 +1516,8 @@ export async function cancelarOrden(req, res) {
     const { id } = req.params;
     
     const ordenResult = await executeQuery(
-      'SELECT * FROM ordenes_produccion WHERE id_orden = ? AND estado IN (?, ?, ?)',
-      [id, 'Pendiente', 'En Curso', 'En Pausa']
+      'SELECT * FROM ordenes_produccion WHERE id_orden = ? AND estado IN (?, ?, ?, ?)',
+      [id, 'Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa']
     );
     
     if (ordenResult.data.length === 0) {

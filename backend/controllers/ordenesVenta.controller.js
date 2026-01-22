@@ -176,7 +176,7 @@ export async function getOrdenVentaById(req, res) {
         p.requiere_receta,
         p.stock_actual AS stock_disponible,
         ti.nombre AS tipo_inventario_nombre,
-        (SELECT COUNT(*) FROM ordenes_produccion WHERE id_orden_venta_origen = ? AND id_producto_terminado = dov.id_producto) AS tiene_op
+        (SELECT COUNT(*) FROM ordenes_produccion WHERE id_orden_venta_origen = ? AND id_producto_terminado = dov.id_producto AND estado != 'Cancelada') AS tiene_op
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
@@ -300,6 +300,11 @@ export async function ejecutarReservaStock(req, res) {
     const { id } = req.params;
     const { productos_a_reservar } = req.body;
 
+    const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenCheck.data.length > 0 && ordenCheck.data[0].estado === 'Cancelada') {
+       return res.status(400).json({ error: 'No se puede modificar reservas de una orden cancelada' });
+    }
+
     if (!productos_a_reservar || productos_a_reservar.length === 0) {
       return res.status(400).json({ success: false, error: 'No hay datos para procesar' });
     }
@@ -307,7 +312,7 @@ export async function ejecutarReservaStock(req, res) {
     const queries = [];
     
     const estadoActualResult = await executeQuery(
-      'SELECT id_detalle, cantidad, COALESCE(cantidad_reservada, 0) as reservado_bd FROM detalle_orden_venta WHERE id_orden_venta = ?',
+      'SELECT id_detalle, id_producto, cantidad, COALESCE(cantidad_reservada, 0) as reservado_bd FROM detalle_orden_venta WHERE id_orden_venta = ?',
       [id]
     );
     
@@ -315,6 +320,7 @@ export async function ejecutarReservaStock(req, res) {
     if (estadoActualResult.success) {
         estadoActualResult.data.forEach(row => {
             mapaActual[row.id_detalle] = {
+                id_producto: row.id_producto,
                 reservado: parseFloat(row.reservado_bd),
                 requerido: parseFloat(row.cantidad)
             };
@@ -330,6 +336,14 @@ export async function ejecutarReservaStock(req, res) {
       const diferencia = nuevaCantidad - cantidadAnterior;
 
       if (diferencia !== 0) {
+        if (diferencia > 0) {
+             const stockCheck = await executeQuery('SELECT stock_actual FROM productos WHERE id_producto = ?', [infoActual.id_producto]);
+             if (stockCheck.success && stockCheck.data.length > 0) {
+                 if (parseFloat(stockCheck.data[0].stock_actual) < diferencia) {
+                     return res.status(400).json({ error: `Stock insuficiente para aumentar la reserva (Faltan ${diferencia - parseFloat(stockCheck.data[0].stock_actual)})` });
+                 }
+             }
+        }
         queries.push({
           sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
           params: [diferencia, item.id_producto]
@@ -337,7 +351,7 @@ export async function ejecutarReservaStock(req, res) {
       }
 
       let nuevoEstadoItem = 0; 
-      if (nuevaCantidad >= infoActual.requerido - 0.001) {
+      if (nuevaCantidad >= infoActual.requerido - 0.001 && nuevaCantidad > 0) {
           nuevoEstadoItem = 1; 
       } else if (nuevaCantidad > 0) {
           nuevoEstadoItem = 2; 
@@ -805,6 +819,10 @@ export async function updateOrdenVenta(req, res) {
     }
 
     const ordenActual = ordenExistente.data[0];
+    
+    if (ordenActual.estado === 'Cancelada') {
+        return res.status(400).json({ success: false, error: 'No se puede editar una orden Cancelada' });
+    }
 
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({ success: false, error: 'Cliente y detalle son obligatorios' });
@@ -1155,6 +1173,13 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
     }
     
     const ordenVenta = ordenVentaResult.data[0];
+
+    if (['Cancelada', 'Despachada', 'Entregada'].includes(ordenVenta.estado)) {
+        return res.status(400).json({
+          success: false,
+          error: `No se puede crear una orden de producción para una orden ${ordenVenta.estado}`
+        });
+    }
     
     const productoResult = await executeQuery(`
       SELECT * FROM productos WHERE id_producto = ? AND requiere_receta = 1
@@ -1559,17 +1584,27 @@ export async function anularOrdenVenta(req, res) {
     const queriesAnulacion = [];
 
     const detalleOrden = await executeQuery(
-      `SELECT dov.id_producto, dov.cantidad, dov.stock_reservado, p.requiere_receta 
-       FROM detalle_orden_venta dov
-       INNER JOIN productos p ON dov.id_producto = p.id_producto
-       WHERE dov.id_orden_venta = ?`,
+      `SELECT id_producto, cantidad, cantidad_reservada, stock_reservado 
+       FROM detalle_orden_venta 
+       WHERE id_orden_venta = ?`,
       [id]
     );
-    
-    const mapaReservas = {};
-    detalleOrden.data.forEach(item => {
-      mapaReservas[item.id_producto] = (item.stock_reservado === 1);
-    });
+
+    for (const item of detalleOrden.data) {
+      const reservado = parseFloat(item.cantidad_reservada || 0);
+
+      if (reservado > 0) {
+        queriesAnulacion.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          params: [reservado, item.id_producto]
+        });
+
+        queriesAnulacion.push({
+          sql: 'UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0 WHERE id_orden_venta = ? AND id_producto = ?',
+          params: [id, item.id_producto]
+        });
+      }
+    }
 
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
@@ -1590,9 +1625,10 @@ export async function anularOrdenVenta(req, res) {
 
         if (productoInfo.success && productoInfo.data.length > 0) {
            const requiereReceta = productoInfo.data[0].requiere_receta;
-           const estabaReservado = mapaReservas[item.id_producto] || false;
+           const itemEnOrden = detalleOrden.data.find(d => d.id_producto === item.id_producto);
+           const teniaReserva = itemEnOrden && parseFloat(itemEnOrden.cantidad_reservada) > 0;
 
-           if (requiereReceta === 0 && !estabaReservado) {
+           if (requiereReceta === 0 && !teniaReserva) {
              queriesAnulacion.push({
                sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
                params: [item.cantidad, item.id_producto]
@@ -1605,20 +1641,6 @@ export async function anularOrdenVenta(req, res) {
         sql: 'UPDATE salidas SET estado = ?, observaciones = CONCAT(observaciones, " - ANULADA POR CANCELACIÓN OV") WHERE id_salida = ?',
         params: ['Anulado', salida.id_salida]
       });
-    }
-
-    for (const item of detalleOrden.data) {
-      if (item.stock_reservado === 1 && item.requiere_receta === 0) {
-        queriesAnulacion.push({
-          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-          params: [parseFloat(item.cantidad), item.id_producto]
-        });
-
-        queriesAnulacion.push({
-          sql: 'UPDATE detalle_orden_venta SET stock_reservado = 0 WHERE id_orden_venta = ? AND id_producto = ?',
-          params: [id, item.id_producto]
-        });
-      }
     }
 
     queriesAnulacion.push({
@@ -1653,7 +1675,7 @@ export async function anularOrdenVenta(req, res) {
 
     res.json({
       success: true,
-      message: 'Orden de venta anulada correctamente',
+      message: 'Orden de venta anulada correctamente y stock retornado',
       data: {
         salidas_anuladas: salidasResult.data.length,
         motivo: motivoFinal,
@@ -1762,7 +1784,7 @@ export async function actualizarPrioridadOrdenVenta(req, res) {
     }
     
     const ordenCheck = await executeQuery(`
-      SELECT id_orden_venta FROM ordenes_venta WHERE id_orden_venta = ?
+      SELECT id_orden_venta, estado FROM ordenes_venta WHERE id_orden_venta = ?
     `, [id]);
     
     if (!ordenCheck.success || ordenCheck.data.length === 0) {
@@ -1770,6 +1792,10 @@ export async function actualizarPrioridadOrdenVenta(req, res) {
         success: false,
         error: 'Orden de venta no encontrada'
       });
+    }
+
+    if (ordenCheck.data[0].estado === 'Cancelada') {
+        return res.status(400).json({ success: false, error: 'No se puede modificar una orden Cancelada' });
     }
     
     const result = await executeQuery(`
@@ -2045,6 +2071,11 @@ export async function registrarPagoOrden(req, res) {
       });
     }
     
+    const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenCheck.data.length > 0 && ordenCheck.data[0].estado === 'Cancelada') {
+        return res.status(400).json({ success: false, error: 'No se puede registrar pagos en una orden Cancelada' });
+    }
+
     if (!fecha_pago || !monto_pagado || monto_pagado <= 0) {
       return res.status(400).json({
         success: false,
@@ -2283,6 +2314,11 @@ export async function anularPagoOrden(req, res) {
         success: false,
         error: 'Usuario no autenticado'
       });
+    }
+
+    const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenCheck.data.length > 0 && ordenCheck.data[0].estado === 'Cancelada') {
+        return res.status(400).json({ success: false, error: 'No se puede modificar pagos en una orden Cancelada' });
     }
     
     const pagoResult = await executeQuery(`
@@ -2584,6 +2620,10 @@ export async function actualizarDatosTransporte(req, res) {
       return res.status(404).json({ success: false, error: 'Orden no encontrada' });
     }
     
+    if (ordenCheck.data[0].estado === 'Cancelada') {
+        return res.status(400).json({ success: false, error: 'No se pueden modificar datos de transporte en una orden Cancelada' });
+    }
+
     let idVehiculoFinal = null;
     let idConductorFinal = null;
     let transNombreFinal = null;
@@ -2729,6 +2769,10 @@ export async function rectificarCantidadProducto(req, res) {
       return res.status(404).json({ success: false, error: 'Orden no encontrada' });
     }
     const orden = ordenResult.data[0];
+
+    if (orden.estado === 'Cancelada') {
+        return res.status(400).json({ success: false, error: 'No se puede rectificar una orden Cancelada' });
+    }
 
     const detalleResult = await executeQuery(
       'SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ? AND id_producto = ?', 

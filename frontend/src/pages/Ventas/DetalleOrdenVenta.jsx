@@ -343,10 +343,10 @@ function DetalleOrdenVenta() {
             stock_disponible: parseFloat(p.stock_disponible),
             stock_maximo_disponible: parseFloat(p.stock_maximo_disponible),
             cantidad_ya_reservada: parseFloat(p.cantidad_ya_reservada),
-            cantidad_a_reservar: parseFloat(p.cantidad_reservable),
+            cantidad_a_reservar: parseFloat(p.cantidad_a_reservar),
             estado_reserva: p.estado_reserva,
             tipo_reserva: p.estado_reserva === 'completo' ? 'completo' : 'parcial',
-            seleccionado: parseFloat(p.cantidad_reservable) > 0
+            seleccionado: parseFloat(p.cantidad_a_reservar) > 0
           }))
         );
         setModalReservaStock(true);
@@ -879,7 +879,6 @@ function DetalleOrdenVenta() {
   const puedeReservarStock = () => {
     if (!orden) return false;
     const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
-    // Permitimos abrir el modal siempre que no esté en estados finales, incluso si ya reservó (para editar)
     return !estadosNoPermitidos.includes(orden.estado);
   };
 
@@ -1063,7 +1062,7 @@ function DetalleOrdenVenta() {
 
         return (
           <div className="flex items-center justify-center gap-1">
-            {row.requiere_receta && (
+            {row.requiere_receta && !estadosConDespacho.includes(orden.estado) && (
                <button
                  className={`btn btn-xs ${parseFloat(row.stock_disponible) >= parseFloat(row.cantidad) ? 'btn-outline btn-primary' : 'btn-primary'}`}
                  onClick={() => {
@@ -1163,7 +1162,7 @@ function DetalleOrdenVenta() {
           className="btn btn-sm btn-danger"
           onClick={() => handleAnularPago(value, row.numero_pago)}
           title="Anular pago"
-          disabled={procesando}
+          disabled={procesando || orden.estado === 'Cancelada'}
         >
           <Trash2 size={14} />
         </button>
@@ -1617,6 +1616,7 @@ function DetalleOrdenVenta() {
                   className="btn btn-xs btn-outline" 
                   onClick={handleAbrirTransporte}
                   title="Editar datos de transporte"
+                  disabled={orden.estado === 'Cancelada'}
                 >
                   <Edit size={14} />
                 </button>
@@ -1793,7 +1793,7 @@ function DetalleOrdenVenta() {
                                    <Download size={14}/>
                                  )}
                                </button>
-                               {row.estado === 'Activo' && (
+                               {row.estado === 'Activo' && orden.estado !== 'Cancelada' && (
                                  <button 
                                    className="btn btn-sm btn-danger" 
                                    onClick={() => handleAnularDespacho(val)}
@@ -1823,7 +1823,7 @@ function DetalleOrdenVenta() {
             <div className="card mb-4 border-l-4 border-success">
             <div className="card-header flex justify-between items-center">
                 <h2 className="card-title">Resumen de Pagos</h2>
-                {orden.estado_pago !== 'Pagado' && (
+                {orden.estado_pago !== 'Pagado' && orden.estado !== 'Cancelada' && (
                 <button className="btn btn-sm btn-success" onClick={() => setModalPagoOpen(true)}>
                     <Plus size={16} /> Registrar Pago
                 </button>
@@ -2639,7 +2639,7 @@ function DetalleOrdenVenta() {
                           value={item.cantidad_a_reservar}
                           onChange={(e) => handleCambioCantidadManualReserva(item.id_detalle, e.target.value)}
                           onWheel={handleWheelDisable}
-                          disabled={sinStockAbsoluto} 
+                          disabled={!item.seleccionado} 
                         />
                       </td>
                     </tr>

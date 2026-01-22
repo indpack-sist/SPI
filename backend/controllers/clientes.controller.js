@@ -183,13 +183,13 @@ export async function createCliente(req, res) {
       validar_documento,
       estado
     } = req.body;
-    
+
     if (!ruc || !razon_social) {
       return res.status(400).json({ 
         error: 'Documento de identidad y razón social/nombre son requeridos' 
       });
     }
-    
+
     if (validar_documento) {
       if (tipo_documento === 'DNI') {
         const resultadoValidacion = await validarDNI(ruc);
@@ -295,7 +295,6 @@ export async function createCliente(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
-
 export async function updateCliente(req, res) {
   try {
     const { id } = req.params;

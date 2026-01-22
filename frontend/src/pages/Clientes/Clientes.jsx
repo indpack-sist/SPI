@@ -220,18 +220,14 @@ function Clientes() {
 
     const dataToSend = {
       ...formData,
+      tipo_documento: formData.tipo_documento || 'RUC',
       usar_limite_credito: formData.usar_limite_credito ? 1 : 0
     };
 
-    // ✅ CORRECCIÓN CRÍTICA PARA EL FLUJO DE SOLICITUDES:
-    // Si estamos editando, NO usamos los valores del formulario para el crédito (porque están deshabilitados o podrían estar mal).
-    // Usamos los valores ORIGINALES que tiene el objeto 'editando' (que viene de la BD).
-    // Esto asegura que al guardar cambios de nombre/teléfono, el crédito NO se resetee a 0.
     if (editando) {
       dataToSend.limite_credito_pen = parseFloat(editando.limite_credito_pen || 0);
       dataToSend.limite_credito_usd = parseFloat(editando.limite_credito_usd || 0);
     } else {
-      // Si es nuevo cliente, usamos lo del formulario
       dataToSend.limite_credito_pen = parseFloat(formData.limite_credito_pen || 0);
       dataToSend.limite_credito_usd = parseFloat(formData.limite_credito_usd || 0);
     }
@@ -447,8 +443,6 @@ function Clientes() {
                   onChange={(e) => setFormData({ ...formData, usar_limite_credito: e.target.checked })} 
                   className="form-checkbox" 
                   style={{ width: '18px', height: '18px' }}
-                  // IMPORTANTE: Si estamos editando, NO permitimos cambiar el check para evitar inconsistencias
-                  // El usuario debe usar "Solicitar Cambio de Límite" para activar/desactivar y cambiar montos.
                   disabled={!!editando} 
                 />
                 <CreditCard size={18} className="text-primary" />

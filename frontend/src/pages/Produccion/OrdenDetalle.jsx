@@ -23,7 +23,7 @@ function OrdenDetalle() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [procesando, setProcesando] = useState(false);
-   
+    
   const [modalAsignar, setModalAsignar] = useState(false);
   const [recetaSeleccionada, setRecetaSeleccionada] = useState('');
   const [supervisorSeleccionado, setSupervisorSeleccionado] = useState('');
@@ -34,7 +34,7 @@ function OrdenDetalle() {
   const [rendimientoProvisional, setRendimientoProvisional] = useState('1');
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
   const [insumosDisponibles, setInsumosDisponibles] = useState([]);
-  
+   
   const [insumosPreview, setInsumosPreview] = useState([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
@@ -45,14 +45,14 @@ function OrdenDetalle() {
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadFinal, setCantidadFinal] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
-   
+    
   const [modalParcial, setModalParcial] = useState(false);
   const [cantidadParcial, setCantidadParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
-   
+    
   const [insumosParcialesConsumo, setInsumosParcialesConsumo] = useState([]);
   const [insumosFinalesConsumo, setInsumosFinalesConsumo] = useState([]);
-   
+    
   const [productosMerma, setProductosMerma] = useState([]);
   const [mermas, setMermas] = useState([]);
   const [mostrarMermas, setMostrarMermas] = useState(false);
@@ -75,17 +75,17 @@ function OrdenDetalle() {
     try {
       setLoading(true);
       setError(null);
-       
+        
       const [ordenRes, consumoRes, registrosRes] = await Promise.all([
         ordenesProduccionAPI.getById(id),
         ordenesProduccionAPI.getConsumoMateriales(id),
         ordenesProduccionAPI.getRegistrosParciales(id).catch(() => ({ data: { data: [] } }))
       ]);
-       
+        
       setOrden(ordenRes.data.data);
       setConsumoMateriales(consumoRes.data.data);
       setRegistrosParciales(registrosRes.data.data || []);
-       
+        
       if (ordenRes.data.data.estado === 'Finalizada') {
         const analisisRes = await ordenesProduccionAPI.getAnalisisConsumo(id);
         setAnalisisConsumo(analisisRes.data.data);
@@ -100,34 +100,34 @@ function OrdenDetalle() {
   const cargarRecetasYSupervisores = async () => {
     try {
       setProcesando(true);
-       
+        
       const [recetasRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getRecetasByProducto(orden.id_producto_terminado),
         empleadosAPI.getByRol('Supervisor'),
         productosAPI.getAll({ estado: 'Activo' })
       ]);
-       
+        
       if (recetasRes.data.success) {
         const recetasActivas = recetasRes.data.data.filter(r => r.es_activa);
         setRecetasDisponibles(recetasActivas);
-        
+         
         const principal = recetasActivas.find(r => r.es_principal);
         if (principal) {
           setRecetaSeleccionada(principal.id_receta_producto);
         }
       }
-       
+        
       if (supervisoresRes.data.success) {
         setSupervisoresDisponibles(supervisoresRes.data.data);
       }
-       
+        
       if (insumosRes.data.success) {
         const insumosFiltrados = insumosRes.data.data.filter(p => 
           p.id_tipo_inventario == 1 || p.id_tipo_inventario == 2
         );
         setInsumosDisponibles(insumosFiltrados);
       }
-       
+        
     } catch (err) {
       console.error('Error al cargar datos:', err);
       setError('Error al cargar recetas y supervisores disponibles');
@@ -140,7 +140,7 @@ function OrdenDetalle() {
     try {
       setLoadingPreview(true);
       const response = await productosAPI.getRecetaById(idReceta); 
-      
+       
       if (response.data.success && orden) {
         const receta = response.data.data;
         const rendimiento = parseFloat(receta.rendimiento_unidades || 1);
@@ -514,13 +514,13 @@ function OrdenDetalle() {
   };
 
   const handleCancelar = async () => {
-    if (!confirm('¿Está seguro de cancelar esta orden? Los materiales consumidos serán devueltos al inventario.')) return;
+    if (!confirm('¿Está seguro de cancelar esta orden? Si hay materiales consumidos, serán devueltos al inventario.')) return;
 
     try {
       setProcesando(true);
       setError(null);
       await ordenesProduccionAPI.cancelar(id);
-      setSuccess('Orden cancelada. Los materiales han sido devueltos al inventario.');
+      setSuccess('Orden cancelada. Estado actualizado.');
       cargarDatos();
     } catch (err) {
       setError(err.error || 'Error al cancelar orden');
@@ -603,7 +603,7 @@ function OrdenDetalle() {
   const puedePausar = orden.estado === 'En Curso';
   const puedeReanudar = orden.estado === 'En Pausa';
   const puedeFinalizar = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
-  const puedeCancelar = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
+  const puedeCancelar = ['Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa'].includes(orden.estado);
   const puedeRegistrarParcial = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
   const esRecetaProvisional = !orden.id_receta_producto;
   const lotesPlanificados = calcularLotesPlanificados();
@@ -1047,7 +1047,7 @@ function OrdenDetalle() {
           </div>
         </div>
       )}
-       
+        
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
@@ -1458,11 +1458,11 @@ function OrdenDetalle() {
                     <div className="font-medium text-sm">{item.insumo}</div>
                     <div className="text-xs text-muted">{item.codigo_insumo}</div>
                   </div>
-                   
+                    
                   <div className="col-span-3">
                     <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
                   </div>
-                   
+                    
                   <div className="col-span-3">
                     <input
                       type="number"
@@ -1556,7 +1556,7 @@ function OrdenDetalle() {
                       <div className="font-medium text-sm">{item.insumo}</div>
                       <div className="text-xs text-muted">{item.codigo_insumo}</div>
                     </div>
-                     
+                      
                     <div className="col-span-2 text-center">
                       <div className="text-xs text-muted mb-1">Ya Consumido</div>
                       <div className="font-mono text-sm">
@@ -1572,7 +1572,7 @@ function OrdenDetalle() {
                       </div>
                       <div className="text-xs text-muted">{item.unidad_medida}</div>
                     </div>
-                     
+                      
                     <div className="col-span-3">
                       <label className="text-xs text-muted block mb-1">Cantidad Final:</label>
                       <input

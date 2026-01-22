@@ -299,6 +299,95 @@ export async function reservarStockOrden(req, res) {
   }
 }
 
+export async function ejecutarReservaStock(req, res) {
+  try {
+    const { id } = req.params;
+    const { productos_a_reservar } = req.body;
+
+    if (!productos_a_reservar || productos_a_reservar.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Debe especificar los productos a reservar' 
+      });
+    }
+
+    const queries = [];
+    let itemsReservadosCompletos = 0;
+    let itemsReservadosParciales = 0;
+
+    for (const productoReserva of productos_a_reservar) {
+      const { id_producto, id_detalle, cantidad_a_reservar, tipo_reserva } = productoReserva;
+
+      if (cantidad_a_reservar > 0) {
+        queries.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+          params: [cantidad_a_reservar, id_producto]
+        });
+
+        const estadoReserva = tipo_reserva === 'completo' ? 1 : 2;
+
+        queries.push({
+          sql: 'UPDATE detalle_orden_venta SET stock_reservado = ? WHERE id_detalle = ?',
+          params: [estadoReserva, id_detalle]
+        });
+
+        if (tipo_reserva === 'completo') {
+          itemsReservadosCompletos++;
+        } else {
+          itemsReservadosParciales++;
+        }
+      }
+    }
+
+    if (queries.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No hay productos para reservar'
+      });
+    }
+
+    const verificacionTotal = await executeQuery(`
+      SELECT COUNT(*) as total_items
+      FROM detalle_orden_venta 
+      WHERE id_orden_venta = ? AND stock_reservado != 1
+    `, [id]);
+
+    const totalItemsPendientes = verificacionTotal.data[0].total_items;
+    let nuevoEstadoGlobal = 0;
+
+    if (totalItemsPendientes === productos_a_reservar.length && itemsReservadosCompletos === productos_a_reservar.length) {
+      nuevoEstadoGlobal = 1; 
+    } else if (itemsReservadosCompletos > 0 || itemsReservadosParciales > 0) {
+      nuevoEstadoGlobal = 2; 
+    }
+
+    queries.push({
+      sql: 'UPDATE ordenes_venta SET stock_reservado = ? WHERE id_orden_venta = ?',
+      params: [nuevoEstadoGlobal, id]
+    });
+
+    const result = await executeTransaction(queries);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({
+      success: true,
+      message: 'Reserva ejecutada exitosamente',
+      data: {
+        items_reservados_completos: itemsReservadosCompletos,
+        items_reservados_parciales: itemsReservadosParciales,
+        estado_reserva_orden: nuevoEstadoGlobal
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function createOrdenVenta(req, res) {
   try {
     const {
@@ -661,8 +750,8 @@ export async function createOrdenVenta(req, res) {
       await executeQuery(`
         UPDATE cotizaciones 
         SET estado = 'Convertida',
-            convertida_venta = 1,
-            id_orden_venta = ?
+        convertida_venta = 1,
+        id_orden_venta = ?
         WHERE id_cotizacion = ?
       `, [idOrden, id_cotizacion]);
     }
@@ -687,7 +776,6 @@ export async function createOrdenVenta(req, res) {
     });
   }
 }
-
 
 export async function updateOrdenVenta(req, res) {
   try {
@@ -1486,7 +1574,6 @@ export async function anularOrdenVenta(req, res) {
 
     const queriesAnulacion = [];
 
-    // 1. REVERSION DE STOCK DE PRODUCTOS (SI ESTABAN RESERVADOS)
     const detalleOrden = await executeQuery(
       `SELECT dov.id_producto, dov.cantidad, dov.stock_reservado, p.requiere_receta 
        FROM detalle_orden_venta dov
@@ -1500,7 +1587,6 @@ export async function anularOrdenVenta(req, res) {
       mapaReservas[item.id_producto] = (item.stock_reservado === 1);
     });
 
-    // 2. ANULACIÓN DE SALIDAS (DESPACHOS)
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
       [`%${orden.numero_orden}%`, 'Activo']
@@ -1537,7 +1623,6 @@ export async function anularOrdenVenta(req, res) {
       });
     }
 
-    // 3. REVERSION DE STOCK RESERVADO EN LA ORDEN
     for (const item of detalleOrden.data) {
       if (item.stock_reservado === 1 && item.requiere_receta === 0) {
         queriesAnulacion.push({
@@ -1559,13 +1644,11 @@ export async function anularOrdenVenta(req, res) {
 
     const motivoFinal = motivo_anulacion || 'Sin motivo especificado';
     
-    // 4. ACTUALIZAR ESTADO DE LA ORDEN DE VENTA
     queriesAnulacion.push({
       sql: 'UPDATE ordenes_venta SET estado = ?, stock_reservado = 0, observaciones = CONCAT(COALESCE(observaciones, ""), " - ANULADA: ", ?) WHERE id_orden_venta = ?',
       params: ['Cancelada', motivoFinal, id]
     });
 
-    // 5. REVERTIR ESTADO DE COTIZACIÓN (SI EXISTE)
     if (orden.id_cotizacion) {
       queriesAnulacion.push({
         sql: "UPDATE cotizaciones SET estado = 'Rechazada', convertida_venta = 0, id_orden_venta = NULL WHERE id_cotizacion = ?",
@@ -1573,8 +1656,6 @@ export async function anularOrdenVenta(req, res) {
       });
     }
 
-    // 6. [NUEVO] ANULAR ÓRDENES DE PRODUCCIÓN VINCULADAS
-    // Solo anulamos las que no estén ya canceladas o terminadas (para evitar corromper stock de productos ya fabricados)
     queriesAnulacion.push({
         sql: `UPDATE ordenes_produccion 
               SET estado = 'Cancelada', 
@@ -2665,7 +2746,6 @@ export async function rectificarCantidadProducto(req, res) {
     }
     const orden = ordenResult.data[0];
 
-    // Obtener el detalle específico del producto
     const detalleResult = await executeQuery(
       'SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ? AND id_producto = ?', 
       [id, id_producto]
@@ -2686,7 +2766,6 @@ export async function rectificarCantidadProducto(req, res) {
 
     const queries = [];
 
-    // 1. AJUSTE DE INVENTARIO (PRODUCTOS)
     if (diferencia > 0) {
       const productoCheck = await executeQuery('SELECT stock_actual, requiere_receta FROM productos WHERE id_producto = ?', [id_producto]);
       if (productoCheck.data.length > 0) {
@@ -2711,7 +2790,6 @@ export async function rectificarCantidadProducto(req, res) {
       }
     }
 
-    // 2. ACTUALIZAR DETALLE DE LA ORDEN
     let sqlUpdateDetalle = 'UPDATE detalle_orden_venta SET cantidad = ? WHERE id_detalle = ?';
     let paramsUpdateDetalle = [cantidadNueva, itemDetalle.id_detalle];
 
@@ -2728,7 +2806,6 @@ export async function rectificarCantidadProducto(req, res) {
       params: paramsUpdateDetalle
     });
 
-    // 3. RECALCULAR TOTALES DE LA ORDEN DE VENTA
     const ordenCompletaDetalle = await executeQuery('SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
     let nuevoSubtotalOrden = 0;
     
@@ -2746,7 +2823,6 @@ export async function rectificarCantidadProducto(req, res) {
       params: [nuevoSubtotalOrden, nuevoImpuesto, nuevoTotal, `Prod ${id_producto}: ${cantidadAnterior}->${cantidadNueva}. ${motivo || ''}`, id]
     });
 
-    // 4. ACTUALIZAR SALIDAS (SI APLICA)
     if (['Despachada', 'Entregada', 'Despacho Parcial'].includes(orden.estado)) {
       const salidaResult = await executeQuery(
         'SELECT id_salida FROM salidas WHERE observaciones LIKE ? AND estado = "Activo" ORDER BY id_salida DESC LIMIT 1', 
@@ -2780,20 +2856,12 @@ export async function rectificarCantidadProducto(req, res) {
       }
     }
 
-    // 5. SINCRONIZACIÓN AUTOMÁTICA CON COTIZACIÓN (NUEVO)
     if (orden.id_cotizacion) {
-        // Actualizar detalle de la cotización
         queries.push({
             sql: 'UPDATE detalle_cotizacion SET cantidad = ? WHERE id_cotizacion = ? AND id_producto = ?',
             params: [cantidadNueva, orden.id_cotizacion, id_producto]
         });
 
-        // Recalcular cabecera de la cotización
-        // Subquery para recalcular el subtotal sumando todos los items (con la cantidad ya actualizada virtualmente)
-        // Nota: Como no podemos leer la tabla en medio de la transacción fácilmente, usamos lógica matemática SQL:
-        // NuevoSubtotal = ViejoSubtotal - (CantVieja * Precio) + (CantNueva * Precio)
-        // O más seguro: Update directo con subquery a detalle_cotizacion (que ya tendrá el update aplicado en orden de ejecución)
-        
         queries.push({
             sql: `UPDATE cotizaciones c
                   SET 
@@ -2814,94 +2882,6 @@ export async function rectificarCantidadProducto(req, res) {
         cantidad_anterior: cantidadAnterior,
         cantidad_nueva: cantidadNueva,
         diferencia: diferencia
-      }
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-}
-export async function ejecutarReservaStock(req, res) {
-  try {
-    const { id } = req.params;
-    const { productos_a_reservar } = req.body;
-
-    if (!productos_a_reservar || productos_a_reservar.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Debe especificar los productos a reservar' 
-      });
-    }
-
-    const queries = [];
-    let itemsReservadosCompletos = 0;
-    let itemsReservadosParciales = 0;
-
-    for (const productoReserva of productos_a_reservar) {
-      const { id_producto, id_detalle, cantidad_a_reservar, tipo_reserva } = productoReserva;
-
-      if (cantidad_a_reservar > 0) {
-        queries.push({
-          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-          params: [cantidad_a_reservar, id_producto]
-        });
-
-        const estadoReserva = tipo_reserva === 'completo' ? 1 : 2;
-
-        queries.push({
-          sql: 'UPDATE detalle_orden_venta SET stock_reservado = ? WHERE id_detalle = ?',
-          params: [estadoReserva, id_detalle]
-        });
-
-        if (tipo_reserva === 'completo') {
-          itemsReservadosCompletos++;
-        } else {
-          itemsReservadosParciales++;
-        }
-      }
-    }
-
-    if (queries.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No hay productos para reservar'
-      });
-    }
-
-    const verificacionTotal = await executeQuery(`
-      SELECT COUNT(*) as total_items
-      FROM detalle_orden_venta 
-      WHERE id_orden_venta = ? AND stock_reservado != 1
-    `, [id]);
-
-    const totalItemsPendientes = verificacionTotal.data[0].total_items;
-    let nuevoEstadoGlobal = 0;
-
-    if (totalItemsPendientes === productos_a_reservar.length && itemsReservadosCompletos === productos_a_reservar.length) {
-      nuevoEstadoGlobal = 1;
-    } else if (itemsReservadosCompletos > 0 || itemsReservadosParciales > 0) {
-      nuevoEstadoGlobal = 2;
-    }
-
-    queries.push({
-      sql: 'UPDATE ordenes_venta SET stock_reservado = ? WHERE id_orden_venta = ?',
-      params: [nuevoEstadoGlobal, id]
-    });
-
-    const result = await executeTransaction(queries);
-
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
-    }
-
-    res.json({
-      success: true,
-      message: 'Reserva ejecutada exitosamente',
-      data: {
-        items_reservados_completos: itemsReservadosCompletos,
-        items_reservados_parciales: itemsReservadosParciales,
-        estado_reserva_orden: nuevoEstadoGlobal
       }
     });
 

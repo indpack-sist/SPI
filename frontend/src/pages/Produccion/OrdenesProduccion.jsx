@@ -23,7 +23,8 @@ import {
   ChevronRight,
   List,
   ShoppingCart,
-  UserCog
+  UserCog,
+  CalendarCheck
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
@@ -43,6 +44,7 @@ function OrdenesProduccion() {
   
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroOrigen, setFiltroOrigen] = useState('');
+  const [filtroProgramadasHoy, setFiltroProgramadasHoy] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
@@ -58,7 +60,7 @@ function OrdenesProduccion() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtroEstado, filtroOrigen, busqueda, fechaInicio, fechaFin]);
+  }, [filtroEstado, filtroOrigen, busqueda, fechaInicio, fechaFin, filtroProgramadasHoy]);
 
   const cargarDatos = async () => {
     try {
@@ -120,7 +122,26 @@ function OrdenesProduccion() {
     };
   };
 
+  const esProgramadaParaHoy = (orden) => {
+    if (!orden.fecha_programada) return false;
+    
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    const fechaInicio = new Date(orden.fecha_programada);
+    fechaInicio.setHours(0, 0, 0, 0);
+    
+    const fechaFin = orden.fecha_programada_fin ? new Date(orden.fecha_programada_fin) : new Date(orden.fecha_programada);
+    fechaFin.setHours(0, 0, 0, 0);
+    
+    return hoy >= fechaInicio && hoy <= fechaFin;
+  };
+
   const ordenesFiltradas = ordenes.filter(orden => {
+    if (filtroProgramadasHoy && !esProgramadaParaHoy(orden)) {
+        return false;
+    }
+
     if (!busqueda) return true;
     const searchTerm = busqueda.toLowerCase();
     return (
@@ -185,6 +206,7 @@ function OrdenesProduccion() {
   const limpiarFiltros = () => {
     setFiltroEstado(''); 
     setFiltroOrigen('');
+    setFiltroProgramadasHoy(false);
     setBusqueda(''); 
     setFechaInicio(''); 
     setFechaFin('');
@@ -351,6 +373,13 @@ function OrdenesProduccion() {
              </div>
           )}
 
+          {row.fecha_programada && (
+             <div className="flex items-center gap-1 text-blue-700 font-medium bg-blue-50 p-0.5 rounded border border-blue-100">
+               <CalendarCheck size={10} />
+               <span>Prog: {formatearFecha(row.fecha_programada)}</span>
+             </div>
+          )}
+
           {row.fecha_fin && (
              <div className="text-success font-medium">
                Fin: {formatearFecha(row.fecha_fin)}
@@ -513,7 +542,7 @@ function OrdenesProduccion() {
           <h3 className="card-title text-lg flex items-center gap-2">
             <Filter size={18} /> Filtros
           </h3>
-          {(filtroEstado || filtroOrigen || busqueda || fechaInicio || fechaFin) && (
+          {(filtroEstado || filtroOrigen || filtroProgramadasHoy || busqueda || fechaInicio || fechaFin) && (
             <button className="btn btn-sm btn-outline text-danger border-danger" onClick={limpiarFiltros}>
               <XCircle size={14} /> Limpiar
             </button>
@@ -533,6 +562,16 @@ function OrdenesProduccion() {
             </div>
             
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                className={`btn btn-sm ${filtroProgramadasHoy ? 'btn-primary' : 'btn-outline'} flex items-center gap-2`}
+                onClick={() => setFiltroProgramadasHoy(!filtroProgramadasHoy)}
+              >
+                <CalendarCheck size={14} />
+                Programadas para Hoy
+              </button>
+
+              <div className="border-l h-6 mx-2 border-gray-300"></div>
+
               <span className="text-sm font-medium text-muted">Estado:</span>
               {['Pendiente Asignación', 'Pendiente', 'En Curso', 'Finalizada', 'Cancelada'].map(est => (
                 <button

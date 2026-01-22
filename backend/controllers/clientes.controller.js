@@ -181,7 +181,8 @@ export async function createCliente(req, res) {
       limite_credito_usd,
       usar_limite_credito,
       validar_documento,
-      estado
+      estado,
+      creacion_manual 
     } = req.body;
 
     if (!ruc || !razon_social) {
@@ -190,7 +191,7 @@ export async function createCliente(req, res) {
       });
     }
 
-    if (validar_documento) {
+    if (!creacion_manual && validar_documento) {
       if (tipo_documento === 'DNI') {
         const resultadoValidacion = await validarDNI(ruc);
         
@@ -295,6 +296,7 @@ export async function createCliente(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
 export async function updateCliente(req, res) {
   try {
     const { id } = req.params;

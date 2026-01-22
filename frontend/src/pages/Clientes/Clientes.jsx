@@ -23,6 +23,7 @@ function Clientes() {
   const [validandoDocumento, setValidandoDocumento] = useState(false);
   const [documentoValidado, setDocumentoValidado] = useState(null);
   const [datosAPI, setDatosAPI] = useState(null);
+  const [creacionManual, setCreacionManual] = useState(false);
   
   const [modalSolicitudOpen, setModalSolicitudOpen] = useState(false);
   const [clienteParaSolicitud, setClienteParaSolicitud] = useState(null);
@@ -85,6 +86,7 @@ function Clientes() {
       });
       setDocumentoValidado(null);
       setDatosAPI(null);
+      setCreacionManual(false);
     } else {
       setEditando(null);
       setFormData({
@@ -103,6 +105,7 @@ function Clientes() {
       });
       setDocumentoValidado(null);
       setDatosAPI(null);
+      setCreacionManual(false);
     }
     setModalOpen(true);
   };
@@ -112,6 +115,7 @@ function Clientes() {
     setEditando(null);
     setDocumentoValidado(null);
     setDatosAPI(null);
+    setCreacionManual(false);
   };
 
   const abrirModalSolicitudCredito = (cliente) => {
@@ -213,6 +217,15 @@ function Clientes() {
     }
   };
 
+  const activarModoManual = () => {
+    setCreacionManual(true);
+    setFormData({
+      ...formData,
+      validar_documento: false
+    });
+    setDocumentoValidado(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -221,7 +234,8 @@ function Clientes() {
     const dataToSend = {
       ...formData,
       tipo_documento: formData.tipo_documento || 'RUC',
-      usar_limite_credito: formData.usar_limite_credito ? 1 : 0
+      usar_limite_credito: formData.usar_limite_credito ? 1 : 0,
+      creacion_manual: creacionManual
     };
 
     if (editando) {
@@ -393,10 +407,17 @@ function Clientes() {
             <label className="form-label">{formData.tipo_documento === 'RUC' ? 'RUC' : 'DNI'} *</label>
             <div className="flex gap-2">
               <input type="text" className="form-input" value={formData.ruc} onChange={(e) => { setFormData({ ...formData, ruc: e.target.value }); setDocumentoValidado(null); }} required maxLength={formData.tipo_documento === 'RUC' ? 11 : 8} style={{ flex: 1 }} />
-              <button type="button" className="btn btn-outline" onClick={validarDocumento} disabled={validandoDocumento || !formData.ruc} style={{ minWidth: '140px' }}>
-                {validandoDocumento ? <><Loader size={16} className="animate-spin" /> Validando...</> : <>{formData.tipo_documento === 'RUC' ? <Building2 size={16} /> : <User size={16} />} Validar {formData.tipo_documento}</>}
-              </button>
+              {!creacionManual && (
+                <button type="button" className="btn btn-outline" onClick={validarDocumento} disabled={validandoDocumento || !formData.ruc} style={{ minWidth: '140px' }}>
+                  {validandoDocumento ? <><Loader size={16} className="animate-spin" /> Validando...</> : <>{formData.tipo_documento === 'RUC' ? <Building2 size={16} /> : <User size={16} />} Validar {formData.tipo_documento}</>}
+                </button>
+              )}
             </div>
+            {!editando && !creacionManual && (
+                <button type="button" className="text-xs text-primary mt-2 hover:underline flex items-center" onClick={activarModoManual}>
+                    <Edit size={12} className="mr-1"/> Ingresar manualmente (Sin validación API)
+                </button>
+            )}
             {documentoValidado === true && <div className="mt-2 flex items-center gap-2 text-sm text-success"><CheckCircle size={16} /> Validado correctamente</div>}
             {documentoValidado === false && <div className="mt-2 flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> No válido</div>}
           </div>

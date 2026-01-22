@@ -83,6 +83,7 @@ export async function getAllOrdenes(req, res) {
         op.id_orden_venta_origen,
         ov.numero_orden AS numero_orden_venta,
         ov.prioridad AS prioridad_venta,
+        ov.fecha_entrega_estimada AS fecha_estimada_venta,
         e_comercial.nombre_completo AS comercial_venta,
         rp.nombre_receta,
         CASE 
@@ -163,6 +164,8 @@ export async function getOrdenById(req, res) {
         rp.descripcion AS descripcion_receta,
         ov.numero_orden AS numero_orden_venta,
         ov.id_orden_venta,
+        ov.prioridad AS prioridad_venta,
+        ov.fecha_entrega_estimada AS fecha_estimada_venta,
         CASE 
           WHEN op.id_receta_producto IS NULL AND op.costo_materiales = 0 THEN 1
           ELSE 0
@@ -1384,11 +1387,6 @@ export async function finalizarProduccion(req, res) {
     if (!result1.success) return res.status(500).json({ error: result1.error });
 
     if (cantidadFinalNum > 0) {
-        // Encontrar el ID de entrada insertado. 
-        // Nota: en una transacción con múltiples queries, result.data es un array de resultados.
-        // El insert de entrada es el ante-penúltimo o penúltimo dependiendo del id_orden_venta_origen
-        
-        // Estrategia segura: Buscamos el resultado que tenga insertId
         let idEntrada = null;
         for (let i = result1.data.length - 1; i >= 0; i--) {
             if (result1.data[i].insertId) {

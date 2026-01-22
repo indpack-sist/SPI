@@ -260,8 +260,8 @@ const CalendarioProduccion = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-             {!compact && <IconEstado size={10} color={borderColor} />}
-             <span style={{ fontWeight: 'bold', color: '#1e293b' }}>{orden.numero_orden}</span>
+              {!compact && <IconEstado size={10} color={borderColor} />}
+              <span style={{ fontWeight: 'bold', color: '#1e293b' }}>{orden.numero_orden}</span>
           </div>
           
           <div style={{ display: 'flex', gap: '4px' }}>
@@ -308,16 +308,29 @@ const CalendarioProduccion = () => {
                 </div>
             ) : <span></span>}
 
-            {orden.prioridad_venta && (
-                <div style={{ 
-                    fontSize: '8px', fontWeight: 'bold', 
-                    color: priorityStyle.text, backgroundColor: priorityStyle.bg, 
-                    padding: '1px 4px', borderRadius: '3px', border: `1px solid ${priorityStyle.border}`,
-                    display: 'flex', alignItems: 'center', gap: '2px', textTransform: 'uppercase'
-                }}>
-                    <Flag size={8} /> {orden.prioridad_venta}
-                </div>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                {orden.prioridad_venta && (
+                    <div style={{ 
+                        fontSize: '8px', fontWeight: 'bold', 
+                        color: priorityStyle.text, backgroundColor: priorityStyle.bg, 
+                        padding: '1px 4px', borderRadius: '3px', border: `1px solid ${priorityStyle.border}`,
+                        display: 'flex', alignItems: 'center', gap: '2px', textTransform: 'uppercase'
+                    }}>
+                        <Flag size={8} /> {orden.prioridad_venta}
+                    </div>
+                )}
+                
+                {orden.fecha_estimada_venta && (
+                    <div style={{ 
+                        fontSize: '8px', fontWeight: 'bold', 
+                        color: '#c2410c', backgroundColor: '#ffedd5',
+                        padding: '1px 4px', borderRadius: '3px',
+                        display: 'flex', alignItems: 'center', gap: '2px'
+                    }}>
+                        <Clock size={8} /> {new Date(orden.fecha_estimada_venta).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}
+                    </div>
+                )}
+            </div>
         </div>
 
         {!compact && (

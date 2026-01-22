@@ -23,9 +23,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-secondary);
@@ -37,7 +35,6 @@ body {
   min-height: 100vh;
 }
 
-/* Utilidades */
 .container {
   max-width: 1280px;
   margin: 0 auto;
@@ -59,9 +56,39 @@ body {
   text-decoration: none;
 }
 
+.btn svg {
+  flex-shrink: 0;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn:not(:disabled):active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.btn.loading {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+}
+
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin-left: -8px;
+  margin-top: -8px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
 }
 
 .btn-primary {
@@ -71,6 +98,10 @@ body {
 
 .btn-primary:hover:not(:disabled) {
   background-color: var(--primary-dark);
+}
+
+.btn-primary:disabled {
+  background-color: #94a3b8;
 }
 
 .btn-secondary {
@@ -109,6 +140,15 @@ body {
   background-color: #dc2626;
 }
 
+.btn-info {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
 .btn-outline {
   background-color: transparent;
   border: 1px solid var(--border);
@@ -119,9 +159,27 @@ body {
   background-color: var(--bg-tertiary);
 }
 
+.btn-ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: none;
+}
+
+.btn-ghost:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 .btn-sm {
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
+}
+
+.btn-xs {
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  height: auto;
 }
 
 .btn-lg {
@@ -134,22 +192,56 @@ body {
   border-radius: 0.5rem;
   box-shadow: var(--shadow);
   padding: 1.5rem;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 0.2s ease;
 }
 
 .card-header {
   margin-bottom: 1rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .card-title {
   font-size: 1.25rem;
   font-weight: 600;
   margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-body {
+  flex: 1;
+}
+
+.card-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background-color: var(--bg-secondary);
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .form-group {
   margin-bottom: 1rem;
+}
+
+.form-group label.required::after {
+  content: " *";
+  color: var(--danger);
 }
 
 .form-label {
@@ -183,20 +275,78 @@ body {
 
 .form-input:disabled,
 .form-select:disabled,
-.form-textarea:disabled {
+.form-textarea:disabled,
+.form-input:read-only {
   background-color: var(--bg-tertiary);
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
-.form-error {
-  color: var(--danger);
-  font-size: 0.75rem;
+.form-input:hover:not(:disabled):not(:focus),
+.form-select:hover:not(:disabled):not(:focus),
+.form-textarea:hover:not(:disabled):not(:focus) {
+  border-color: #cbd5e1;
+}
+
+.form-input.py-1,
+.form-select.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  min-height: 2rem;
+}
+
+.form-select optgroup {
+  font-weight: 600;
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+  padding: 0.5rem 0;
+}
+
+.form-select optgroup + optgroup {
   margin-top: 0.25rem;
+  border-top: 1px solid var(--border);
 }
 
 .form-textarea {
   resize: vertical;
   min-height: 100px;
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon input {
+  padding-left: 2.5rem;
+}
+
+.input-with-icon .icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.search-input-wrapper .search-input {
+  padding-left: 2.5rem;
+  width: 100%;
 }
 
 .table-container {
@@ -227,6 +377,23 @@ body {
   letter-spacing: 0.025em;
 }
 
+.table thead.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.table thead th {
+  background-color: white;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
 .table tbody tr:hover {
   background-color: var(--bg-secondary);
 }
@@ -235,14 +402,56 @@ body {
   border-bottom: none;
 }
 
+.table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.table tbody tr.clickable:hover {
+  background-color: #eff6ff;
+}
+
+.table td.text-center,
+.table th.text-center {
+  text-align: center;
+}
+
+.table input.form-input {
+  min-width: 60px;
+  padding: 0.25rem 0.5rem;
+  height: 2rem;
+  font-size: 0.875rem;
+}
+
+.table input.text-right {
+  text-align: right;
+}
+
+.table input.text-center {
+  text-align: center;
+}
+
+.table .btn-sm {
+  transition: all 0.2s ease;
+}
+
+.table .btn-sm:hover {
+  transform: translateY(-1px);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
   border-radius: 9999px;
   white-space: nowrap;
+}
+
+.badge svg {
+  flex-shrink: 0;
+  margin-right: 0.25rem;
+  vertical-align: middle;
 }
 
 .badge-primary {
@@ -270,35 +479,70 @@ body {
   color: #475569;
 }
 
+.badge-info {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.badge-outline {
+  background-color: transparent;
+  border: 1px solid currentColor;
+  opacity: 0.8;
+}
+
+.badge-sm {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+}
+
+.badge-xs {
+  padding: 0.1rem 0.375rem;
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.badge-pending-pay {
+  background-color: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
+.badge-paid {
+  background-color: #ecfdf5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
+}
+
+.badge-overdue {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
 .alert {
   padding: 1rem;
   border-radius: 0.375rem;
   margin-bottom: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  animation: slideIn 0.3s ease;
 }
 
-.alert-success {
-  background-color: #d1fae5;
-  border: 1px solid #a7f3d0;
-  color: #065f46;
+.alert svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
 }
 
-.alert-error {
-  background-color: #fee2e2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
+@keyframes slideIn {
+  from { transform: translateX(-10px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
-.alert-warning {
-  background-color: #fef3c7;
-  border: 1px solid #fde68a;
-  color: #92400e;
-}
-
-.alert-info {
-  background-color: #dbeafe;
-  border: 1px solid #bfdbfe;
-  color: #1e40af;
-}
+.alert-success { background-color: #d1fae5; border: 1px solid #a7f3d0; color: #065f46; }
+.alert-error { background-color: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+.alert-warning { background-color: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
+.alert-info { background-color: #dbeafe; border: 1px solid #bfdbfe; color: #1e40af; }
 
 .loading {
   display: flex;
@@ -317,114 +561,380 @@ body {
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-.text-sm {
-  font-size: 0.875rem;
+.modal-content {
+  animation: modalSlideIn 0.3s ease;
 }
 
-.text-xs {
-  font-size: 0.75rem;
+.modal-overlay {
+  animation: fadeIn 0.2s ease;
 }
 
-.text-muted {
-  color: var(--text-secondary);
+@keyframes modalSlideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-.text-center {
-  text-align: center;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.text-right {
-  text-align: right;
+.border {
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--border);
 }
 
-.mb-1 {
-  margin-bottom: 0.5rem;
+.border-t {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--border);
 }
 
-.mb-2 {
-  margin-bottom: 1rem;
+.border-b {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: var(--border);
 }
 
-.mb-3 {
-  margin-bottom: 1.5rem;
+.border-l {
+  border-left-width: 1px;
+  border-left-style: solid;
+  border-left-color: var(--border);
 }
 
-.mb-4 {
-  margin-bottom: 2rem;
+.border-r {
+  border-right-width: 1px;
+  border-right-style: solid;
+  border-right-color: var(--border);
 }
 
-.mt-1 {
-  margin-top: 0.5rem;
+.border-2 {
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--border);
 }
 
-.mt-2 {
-  margin-top: 1rem;
+.border-l-4 {
+  border-left-width: 4px;
+  border-left-style: solid;
 }
 
-.mt-3 {
-  margin-top: 1.5rem;
-}
+.border-dashed { border-style: dashed; }
+.border-transparent { border-color: transparent; }
 
-.mt-4 {
-  margin-top: 2rem;
-}
+.border-primary { border-color: var(--primary); }
+.border-success { border-color: var(--success); }
+.border-warning { border-color: var(--warning); }
+.border-danger { border-color: var(--danger); }
+.border-info { border-color: #3b82f6; }
+.border-secondary { border-color: var(--secondary); }
 
-.flex {
-  display: flex;
-}
+.border-blue-100 { border-color: #dbeafe; }
+.border-blue-200 { border-color: #bfdbfe; }
+.border-blue-500 { border-color: #3b82f6; }
+.border-green-200 { border-color: #bbf7d0; }
+.border-green-500 { border-color: #22c55e; }
+.border-yellow-200 { border-color: #fde68a; }
+.border-orange-200 { border-color: #fed7aa; }
+.border-orange-300 { border-color: #fdba74; }
+.border-orange-500 { border-color: #f97316; }
+.border-red-200 { border-color: #fecaca; }
+.border-red-500 { border-color: #ef4444; }
+.border-purple-500 { border-color: #a855f7; }
+.border-emerald-500 { border-color: #10b981; }
+.border-gray-50 { border-color: #f9fafb; }
+.border-gray-200 { border-color: #e5e7eb; }
+.border-primary\/20 { border-color: rgba(37, 99, 235, 0.2); }
 
-.flex-col {
-  flex-direction: column;
-}
+.text-sm { font-size: 0.875rem; }
+.text-xs { font-size: 0.75rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
 
-.items-center {
-  align-items: center;
-}
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.uppercase { text-transform: uppercase; }
+.italic { font-style: italic; }
+.tracking-wide { letter-spacing: 0.025em; }
+.leading-relaxed { line-height: 1.625; }
 
-.justify-between {
-  justify-content: space-between;
-}
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
 
-.justify-center {
-  justify-content: center;
-}
+.text-muted { color: var(--text-secondary); }
+.text-primary { color: var(--primary); }
+.text-primary-dark { color: var(--primary-dark); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-danger { color: var(--danger); }
+.text-info { color: #3b82f6; }
+.text-white { color: #ffffff; }
 
-.gap-2 {
-  gap: 0.5rem;
-}
+.text-blue-600 { color: #2563eb; }
+.text-blue-700 { color: #1d4ed8; }
+.text-blue-800 { color: #1e40af; }
+.text-blue-900 { color: #1e3a8a; }
+.text-green-600 { color: #16a34a; }
+.text-green-700 { color: #15803d; }
+.text-green-800 { color: #166534; }
+.text-green-900 { color: #14532d; }
+.text-yellow-600 { color: #ca8a04; }
+.text-yellow-700 { color: #a16207; }
+.text-yellow-800 { color: #854d0e; }
+.text-yellow-900 { color: #713f12; }
+.text-orange-600 { color: #ea580c; }
+.text-orange-700 { color: #c2410c; }
+.text-red-600 { color: #dc2626; }
+.text-red-800 { color: #991b1b; }
+.text-purple-600 { color: #9333ea; }
+.text-purple-900 { color: #581c87; }
+.text-emerald-600 { color: #059669; }
+.text-emerald-800 { color: #065f46; }
+.text-gray-400 { color: #9ca3af; }
+.text-gray-500 { color: #6b7280; }
+.text-gray-600 { color: #4b5563; }
+.text-gray-800 { color: #1f2937; }
 
-.gap-4 {
-  gap: 1rem;
-}
+.bg-blue-50 { background-color: #eff6ff; }
+.bg-blue-100 { background-color: #dbeafe; }
+.bg-blue-500 { background-color: #3b82f6; }
+.bg-blue-600 { background-color: #2563eb; }
+.bg-green-50 { background-color: #f0fdf4; }
+.bg-green-100 { background-color: #dcfce7; }
+.bg-green-500 { background-color: #22c55e; }
+.bg-yellow-50 { background-color: #fefce8; }
+.bg-yellow-100 { background-color: #fef9c3; }
+.bg-red-50 { background-color: #fef2f2; }
+.bg-red-100 { background-color: #fee2e2; }
+.bg-red-500 { background-color: #ef4444; }
+.bg-orange-50 { background-color: #fff7ed; }
+.bg-orange-100 { background-color: #ffedd5; }
+.bg-orange-500 { background-color: #f97316; }
+.bg-purple-50 { background-color: #faf5ff; }
+.bg-purple-100 { background-color: #f3e8ff; }
+.bg-purple-500 { background-color: #a855f7; }
+.bg-emerald-100 { background-color: #d1fae5; }
+.bg-emerald-500 { background-color: #10b981; }
+.bg-gray-50 { background-color: #f9fafb; }
+.bg-gray-100 { background-color: #f3f4f6; }
+.bg-cyan-50 { background-color: #ecfeff; }
+.bg-info-light { background-color: #f0f9ff; }
+.bg-primary\/5 { background-color: rgba(37, 99, 235, 0.05); }
+.bg-primary\/10 { background-color: rgba(37, 99, 235, 0.1); }
+.bg-blue-50\/50 { background-color: rgba(239, 246, 255, 0.5); }
 
-.grid {
-  display: grid;
-}
+.bg-gradient-to-r { background-image: linear-gradient(to right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent)); }
+.bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent)); }
 
-.grid-cols-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
+.from-blue-50 { --tw-gradient-from: #eff6ff; }
+.from-green-50 { --tw-gradient-from: #f0fdf4; }
+.from-yellow-50 { --tw-gradient-from: #fefce8; }
+.from-purple-50 { --tw-gradient-from: #faf5ff; }
+.from-gray-50 { --tw-gradient-from: #f9fafb; }
+.from-orange-100 { --tw-gradient-from: #ffedd5; }
+.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05); }
+.from-blue-100 { --tw-gradient-from: #dbeafe; --tw-gradient-to: #dbeafe; }
+.from-green-100 { --tw-gradient-from: #dcfce7; --tw-gradient-to: #dcfce7; }
+.from-yellow-100 { --tw-gradient-from: #fef9c3; --tw-gradient-to: #fef9c3; }
+.from-purple-100 { --tw-gradient-from: #f3e8ff; --tw-gradient-to: #f3e8ff; }
+.from-emerald-100 { --tw-gradient-from: #d1fae5; --tw-gradient-to: #d1fae5; }
+.from-red-100 { --tw-gradient-from: #fee2e2; --tw-gradient-to: #fee2e2; }
+.from-primary { --tw-gradient-from: var(--primary); }
 
-.grid-cols-3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
+.to-white { --tw-gradient-to: #ffffff; }
+.to-blue-200 { --tw-gradient-to: #bfdbfe; }
+.to-blue-600 { --tw-gradient-to: #2563eb; }
+.to-green-200 { --tw-gradient-to: #bbf7d0; }
+.to-yellow-200 { --tw-gradient-to: #fef08a; }
+.to-orange-200 { --tw-gradient-to: #fed7aa; }
+.to-purple-200 { --tw-gradient-to: #e9d5ff; }
+.to-emerald-200 { --tw-gradient-to: #a7f3d0; }
+.to-red-200 { --tw-gradient-to: #fecaca; }
 
-.grid-cols-4 {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
+.hover\:bg-gray-100:hover { background-color: #f3f4f6; }
+.hover\:bg-blue-50:hover { background-color: #eff6ff; }
+.hover\:text-gray-600:hover { color: #4b5563; }
+.hover\:text-gray-700:hover { color: #374151; }
+.hover\:text-white:hover { color: white !important; }
+.hover\:scale-105:hover { transform: scale(1.05); }
+.hover\:underline:hover { text-decoration: underline; }
 
-@media (max-width: 768px) {
-  .grid-cols-2,
-  .grid-cols-3,
-  .grid-cols-4 {
-    grid-template-columns: 1fr;
-  }
-}
+.ring-1 { box-shadow: 0 0 0 1px currentColor; }
+.ring-2 { box-shadow: 0 0 0 2px currentColor; }
+.ring-green-500 { color: var(--success); }
+.ring-blue-500 { color: var(--primary); }
+.ring-blue-400 { color: #60a5fa; }
+.ring-orange-500 { color: var(--warning); }
+.ring-red-600 { color: var(--danger); }
+.ring-warning { color: var(--warning); }
+.ring-danger { color: var(--danger); }
+.focus\:ring-2:focus { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.5); }
+
+.shadow-none { box-shadow: none; }
+.shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+.shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02); }
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-1 { flex: 1 1 0%; }
+.flex-shrink-0, .shrink-0 { flex-shrink: 0; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.justify-start { justify-content: flex-start; }
+.justify-end { justify-content: flex-end; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.gap-px { gap: 1px; }
+
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.grid-cols-7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.auto-rows-fr { grid-auto-rows: minmax(100px, 1fr); }
+
+.inline-flex { display: inline-flex; }
+.inline-block { display: inline-block; }
+.block { display: block; }
+.hidden { display: none; }
+.inline { display: inline-block; vertical-align: middle; }
+
+.relative { position: relative; }
+.absolute { position: absolute; }
+.sticky { position: sticky; }
+.top-0 { top: 0; }
+.top-1\/2 { top: 50%; }
+.top-2\.5 { top: 0.625rem; }
+.left-3 { left: 0.75rem; }
+.right-2 { right: 0.5rem; }
+.right-3 { right: 0.75rem; }
+.-translate-y-1\/2 { transform: translateY(-50%); }
+.z-10 { z-index: 10; }
+.z-20 { z-index: 20; }
+.z-50 { z-index: 50; }
+
+.w-full { width: 100%; }
+.w-fit { width: fit-content; }
+.w-32 { width: 8rem; }
+.w-36 { width: 9rem; }
+.w-80 { width: 20rem; }
+.w-96 { width: 24rem; }
+.max-h-96 { max-height: 24rem; }
+.h-\[calc\(100vh-100px\)\] { height: calc(100vh - 100px); }
+
+.overflow-x-auto { overflow-x: auto; }
+.overflow-y-auto { overflow-y: auto; }
+.overflow-hidden { overflow: hidden; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-tertiary); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--secondary); }
+
+.p-1 { padding: 0.25rem; }
+.p-2 { padding: 0.5rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+.pt-2 { padding-top: 0.5rem; }
+.pt-4 { padding-top: 1rem; }
+.pb-2 { padding-bottom: 0.5rem; }
+.pb-4 { padding-bottom: 1rem; }
+.pl-1 { padding-left: 0.25rem; }
+.pl-9 { padding-left: 2.25rem !important; }
+.pl-10 { padding-left: 2.5rem; }
+.pr-8 { padding-right: 2rem !important; }
+
+.m-0 { margin: 0; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mb-3 { margin-bottom: 1.5rem; }
+.mb-4 { margin-bottom: 2rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mt-4 { margin-top: 2rem; }
+.mt-6 { margin-top: 1.5rem; }
+.ml-2 { margin-left: 0.5rem; }
+.mr-2 { margin-right: 0.5rem; }
+.ml-auto { margin-left: auto; }
+
+.rounded { border-radius: 0.25rem; }
+.rounded-md { border-radius: 0.375rem; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.rounded-full { border-radius: 9999px; }
+
+.pointer-events-none { pointer-events: none; }
+.cursor-pointer { cursor: pointer; }
+.cursor-grab { cursor: grab; }
+.cursor-grab:active { cursor: grabbing; }
+.select-none { user-select: none; }
+
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.break-words { word-break: break-word; }
+.whitespace-nowrap { white-space: nowrap; }
+.whitespace-pre-wrap { white-space: pre-wrap; }
+
+.transition { transition: all 0.15s ease; }
+.transition-all { transition: all 0.2s ease; }
+.transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-transform { transition: transform 0.2s ease; }
+.transition-opacity { transition-property: opacity; transition-duration: 0.2s; }
+
+.opacity-0 { opacity: 0; }
+.opacity-20 { opacity: 0.2; }
+.opacity-30 { opacity: 0.3; }
+.opacity-50 { opacity: 0.5; }
+.opacity-60 { opacity: 0.6; }
+.opacity-70 { opacity: 0.7; }
+.opacity-80 { opacity: 0.8; }
+.opacity-90 { opacity: 0.9; }
+
+.animate-spin { animation: spin 1s linear infinite; }
+.animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+.animate-in { animation-duration: 0.3s; animation-fill-mode: forwards; animation-timing-function: ease-out; }
+.fade-in { animation-name: fadeIn; }
+.slide-in-from-top-2 { animation-name: modalSlideIn; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.list-disc { list-style-type: disc; }
+.list-inside { list-style-position: inside; }
+
 .tabs-navigation {
   display: flex;
   gap: 0.25rem;
@@ -449,77 +959,9 @@ body {
   background: transparent;
 }
 
-.tab-item:hover {
-  color: var(--primary);
-}
+.tab-item:hover { color: var(--primary); }
+.tab-item.active { background-color: var(--bg-primary); color: var(--primary); box-shadow: var(--shadow); }
 
-.tab-item.active {
-  background-color: var(--bg-primary);
-  color: var(--primary);
-  box-shadow: var(--shadow);
-}
-
-/* Selector de Recetas (Cards Horizontales) */
-.recipe-selector-container {
-  display: flex;
-  gap: 1rem;
-  overflow-x: auto;
-  padding: 0.5rem 0.25rem 1rem 0.25rem;
-}
-
-.recipe-card-btn {
-  min-width: 220px;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  border: 2px solid var(--border);
-  background-color: var(--bg-primary);
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.recipe-card-btn:hover {
-  border-color: var(--primary);
-  transform: translateY(-2px);
-}
-
-.recipe-card-btn.active {
-  border-color: var(--primary);
-  background-color: #eff6ff; /* Azul muy clarito */
-  box-shadow: var(--shadow-md);
-}
-
-/* Botones con colores de borde (Outlines coloreados) */
-.btn-outline-success {
-  background: transparent;
-  border: 1px solid var(--success);
-  color: var(--success);
-}
-.btn-outline-success:hover {
-  background-color: var(--success);
-  color: white;
-}
-
-.btn-outline-danger {
-  background: transparent;
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-.btn-outline-danger:hover {
-  background-color: var(--danger);
-  color: white;
-}
-
-/* Utilidad para degradados de encabezado */
-.header-gradient {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border-bottom: 1px solid var(--border);
-}
-/* =================================================================
-   AGREGAR AL FINAL DE INDEX.CSS (ESTILOS ESPECÍFICOS ORDENES)
-   ================================================================= */
-
-/* --- Grid de Estadísticas (Faltaba en tu CSS) --- */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -539,10 +981,9 @@ body {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.stat-card.border-l-4 { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.stat-card.border-l-4:hover { transform: translateX(4px); }
 
 .stat-icon {
   padding: 0.75rem;
@@ -554,7 +995,6 @@ body {
   color: var(--text-secondary);
 }
 
-/* Colores específicos para las tarjetas de stats */
 .stat-card.pendientes .stat-icon { background-color: #fffbeb; color: #d97706; }
 .stat-card.en-curso .stat-icon { background-color: #eff6ff; color: #2563eb; }
 .stat-card.finalizadas .stat-icon { background-color: #f0fdf4; color: #16a34a; }
@@ -565,71 +1005,59 @@ body {
 .stat-label { font-size: 0.875rem; color: var(--text-secondary); font-weight: 500; }
 .stat-sublabel { font-size: 0.75rem; color: var(--text-secondary); }
 
-/* --- Buscador con Icono (Search Input Wrapper) --- */
-.search-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.search-input-wrapper .search-icon {
-  position: absolute;
-  left: 0.75rem;
-  color: var(--text-secondary);
-  pointer-events: none;
-}
-.search-input-wrapper .search-input {
-  padding-left: 2.5rem; /* Espacio para el icono */
-}
-
-/* --- Badges faltantes --- */
-.badge-info { background-color: #e0f2fe; color: #0369a1; }
-.bg-info-light { background-color: #f0f9ff; }
-.text-info { color: #0284c7; }
-
-/* --- Barra de Progreso (Para columna Planificado) --- */
 .progress-bar {
   background-color: var(--bg-tertiary);
   border-radius: 9999px;
   overflow: hidden;
   width: 100%;
-}
-.progress-fill {
-  height: 100%;
-  border-radius: 9999px;
-  transition: width 0.5s ease;
-}
-
-/* --- MEJORA: Sección de Recetas y Movimientos --- */
-/* Sobrescribe/Mejora tus clases .recipe-card-btn existentes para que se vean pro */
-
-.recipe-card-btn {
-  /* Mantenemos tu base, mejoramos el layout */
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 240px; /* Un poco más ancho */
   position: relative;
 }
 
-.recipe-card-header {
+.progress-fill {
+  height: 100%;
+  background-color: var(--primary);
+  border-radius: 9999px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-fill.success { background-color: var(--success); }
+.progress-fill.warning { background-color: var(--warning); }
+
+.progress-wrapper {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-weight: 600;
-  color: var(--text-primary);
 }
 
-.recipe-card-details {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+.recipe-selector-container {
   display: flex;
-  justify-content: space-between;
-  border-top: 1px solid var(--border);
-  padding-top: 0.5rem;
-  margin-top: 0.25rem;
+  gap: 1rem;
+  overflow-x: auto;
+  padding: 0.5rem 0.25rem 1rem 0.25rem;
 }
 
-/* Estilo para items de Movimientos (si los agregas en el detalle) */
+.recipe-card-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 240px;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 2px solid var(--border);
+  background-color: var(--bg-primary);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.recipe-card-btn:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.recipe-card-btn.active { border-color: var(--primary); background-color: #eff6ff; box-shadow: var(--shadow-md); }
+.recipe-card-btn.active::before { content: ''; position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px; border: 2px solid var(--primary); border-radius: 0.75rem; pointer-events: none; }
+
+.recipe-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: var(--text-primary); }
+.recipe-card-details { font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 0.5rem; margin-top: 0.25rem; }
+
 .movement-item {
   display: flex;
   align-items: center;
@@ -638,2238 +1066,65 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .movement-item:last-child { border-bottom: none; }
-/* =================================================================
-   ESTILOS ADICIONALES - AGREGAR AL FINAL DE INDEX.CSS
-   Mejoras para Cotizaciones, Empleados, Guías y UI General
-   ================================================================= */
 
-/* --- ESPACIADO CONSISTENTE DE ICONOS EN BOTONES --- */
-.btn svg {
-  flex-shrink: 0; /* Evita que los iconos se compriman */
-}
+.btn.text-left { text-align: left; justify-content: flex-start; height: auto; }
 
-.btn > svg:first-child:not(:only-child) {
-  margin-right: 0; /* El gap ya maneja el espaciado */
-}
+.card-account-bank { background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%); border-left: 4px solid var(--primary); }
+.card-account-cash { background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%); border-left: 4px solid var(--success); }
+.card-account-credit { background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%); border-left: 4px solid var(--warning); }
 
-/* --- CORRECCIÓN: Iconos en badges, labels, títulos --- */
-.badge svg,
-.form-label svg,
-.card-title svg,
-.stat-label svg,
-.alert svg {
-  flex-shrink: 0;
-  vertical-align: middle;
-}
+.total-summary-container { background-color: var(--bg-secondary); border-radius: 0.5rem; padding: 1rem; border: 1px solid var(--border); }
+.total-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.875rem; }
+.total-row.final { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #cbd5e1; font-weight: 700; font-size: 1.125rem; color: var(--primary-dark); }
 
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
+.link-button { color: var(--primary); text-decoration: none; font-weight: 500; transition: color 0.2s ease; }
+.link-button:hover { color: var(--primary-dark); text-decoration: underline; }
 
-/* --- INTERACCIONES MEJORADAS --- */
+html { scroll-behavior: smooth; }
+*:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 0.25rem; }
 
-/* Botones con efecto de presión */
-.btn:not(:disabled):active {
-  transform: translateY(1px);
-  box-shadow: none;
-}
-
-/* Cards con hover mejorado */
-.card:hover {
-  box-shadow: var(--shadow-md);
-  transition: box-shadow 0.2s ease;
-}
-
-/* Inputs con animación de hover */
-.form-input:hover:not(:disabled):not(:focus),
-.form-select:hover:not(:disabled):not(:focus),
-.form-textarea:hover:not(:disabled):not(:focus) {
-  border-color: #cbd5e1;
-}
-
-/* Input de solo lectura */
-.form-input:read-only,
-.form-select:disabled {
-  background-color: var(--bg-tertiary);
-  cursor: default;
-  opacity: 0.7;
-}
-
-/* --- BADGES ADICIONALES PARA ROLES --- */
-.badge-info {
-  background-color: #dbeafe;
-  color: #1e40af;
-}
-
-/* Badge pequeño para sub-etiquetas */
-.badge-sm {
-  padding: 0.125rem 0.5rem;
-  font-size: 0.625rem;
-  font-weight: 600;
-}
-
-/* --- ANIMACIONES DE CARGA --- */
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-/* --- ESPACIADO VERTICAL (SPACE-Y) --- */
-.space-y-1 > * + * { margin-top: 0.25rem; }
-.space-y-2 > * + * { margin-top: 0.5rem; }
-.space-y-3 > * + * { margin-top: 0.75rem; }
-.space-y-4 > * + * { margin-top: 1rem; }
-
-/* --- BORDERS LATERALES PARA ESTADOS --- */
-.border-l-4 {
-  border-left-width: 4px;
-  border-left-style: solid;
-}
-
-.border-primary { border-color: var(--primary); }
-.border-success { border-color: var(--success); }
-.border-warning { border-color: var(--warning); }
-.border-danger { border-color: var(--danger); }
-.border-info { border-color: #3b82f6; }
-.border-secondary { border-color: var(--secondary); }
-
-/* --- BACKGROUNDS DE COLOR --- */
-.bg-blue-50 { background-color: #eff6ff; }
-.bg-blue-100 { background-color: #dbeafe; }
-.bg-yellow-50 { background-color: #fefce8; }
-.bg-red-50 { background-color: #fef2f2; }
-.bg-green-50 { background-color: #f0fdf4; }
-.bg-gray-50 { background-color: #f9fafb; }
-.bg-gray-100 { background-color: #f3f4f6; }
-
-/* Background con opacidad para iconos de estado */
-.bg-opacity-10 {
-  background-color: rgba(37, 99, 235, 0.1);
-}
-
-/* --- COLORES DE TEXTO ADICIONALES --- */
-.text-primary { color: var(--primary); }
-.text-success { color: var(--success); }
-.text-warning { color: var(--warning); }
-.text-danger { color: var(--danger); }
-.text-info { color: #3b82f6; }
-.text-blue-900 { color: #1e3a8a; }
-.text-blue-700 { color: #1d4ed8; }
-
-/* --- TAMAÑOS DE FUENTE ADICIONALES --- */
-.text-2xl {
-  font-size: 1.5rem;
-  line-height: 2rem;
-}
-
-.text-xl {
-  font-size: 1.25rem;
-  line-height: 1.75rem;
-}
-
-.text-lg {
-  font-size: 1.125rem;
-  line-height: 1.75rem;
-}
-
-/* --- FONT WEIGHTS --- */
-.font-medium { font-weight: 500; }
-.font-semibold { font-weight: 600; }
-.font-bold { font-weight: 700; }
-
-/* --- PADDING ADICIONAL --- */
-.p-1 { padding: 0.25rem; }
-.p-2 { padding: 0.5rem; }
-.p-3 { padding: 0.75rem; }
-.p-4 { padding: 1rem; }
-.p-6 { padding: 1.5rem; }
-
-.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
-.px-4 { padding-left: 1rem; padding-right: 1rem; }
-
-.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
-.py-12 { padding-top: 3rem; padding-bottom: 3rem; }
-
-/* --- MARGIN ADICIONALES --- */
-.ml-2 { margin-left: 0.5rem; }
-.mr-2 { margin-right: 0.5rem; }
-
-/* --- ROUNDED CORNERS --- */
-.rounded { border-radius: 0.25rem; }
-.rounded-md { border-radius: 0.375rem; }
-.rounded-lg { border-radius: 0.5rem; }
-.rounded-xl { border-radius: 0.75rem; }
-.rounded-full { border-radius: 9999px; }
-
-/* --- SHADOWS MEJORADAS --- */
-.shadow-none { box-shadow: none; }
-.shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
-
-/* --- OVERFLOW --- */
-.overflow-x-auto { overflow-x: auto; }
-.overflow-y-auto { overflow-y: auto; }
-.overflow-hidden { overflow: hidden; }
-
-/* --- DISPLAYS --- */
-.inline-flex { display: inline-flex; }
-.inline-block { display: inline-block; }
-.block { display: block; }
-.hidden { display: none; }
-
-/* --- POSITION --- */
-.relative { position: relative; }
-.absolute { position: absolute; }
-
-/* --- WIDTH & HEIGHT --- */
-.w-full { width: 100%; }
-.w-80 { width: 20rem; }
-.max-h-96 { max-height: 24rem; }
-
-/* --- FLEX UTILITIES ADICIONALES --- */
-.flex-1 { flex: 1 1 0%; }
-.flex-shrink-0 { flex-shrink: 0; }
-.items-start { align-items: flex-start; }
-.items-end { align-items: flex-end; }
-.justify-start { justify-content: flex-start; }
-.justify-end { justify-content: flex-end; }
-.gap-1 { gap: 0.25rem; }
-.gap-3 { gap: 0.75rem; }
-
-/* --- WHITESPACE --- */
-.whitespace-nowrap { white-space: nowrap; }
-.whitespace-pre-wrap { white-space: pre-wrap; }
-
-/* --- CURSOR --- */
-.cursor-pointer { cursor: pointer; }
-.cursor-not-allowed { cursor: not-allowed; }
-
-/* --- TRANSITIONS --- */
-.transition { transition: all 0.15s ease; }
-.transition-all { transition: all 0.2s ease; }
-
-/* --- HOVER STATES ESPECÍFICOS --- */
-.hover\:bg-blue-50:hover {
-  background-color: #eff6ff;
-}
-
-.hover\:bg-gray-100:hover {
-  background-color: #f3f4f6;
-}
-
-.hover\:shadow-md:hover {
-  box-shadow: var(--shadow-md);
-}
-
-/* --- TABLA MEJORADA --- */
-.table tbody tr {
-  transition: background-color 0.15s ease;
-}
-
-.table tbody tr:hover {
-  background-color: var(--bg-secondary);
-}
-
-/* Alineación específica en celdas */
-.table td.text-center,
-.table th.text-center {
-  text-align: center;
-}
-
-/* --- ALERTAS CON ICONOS MEJORADAS --- */
-.alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  animation: slideIn 0.3s ease;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(-10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.alert svg {
-  flex-shrink: 0;
-  margin-top: 0.125rem;
-}
-
-/* --- MODALES MEJORADOS --- */
-.modal-overlay {
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* --- FORM ENHANCEMENTS --- */
-.form-group label.required::after {
-  content: " *";
-  color: var(--danger);
-}
-
-/* --- OPTGROUPS EN SELECTS --- */
-.form-select optgroup {
-  font-weight: 600;
-  color: var(--text-primary);
-  background-color: var(--bg-tertiary);
-  padding: 0.5rem 0;
-}
-
-.form-select option {
-  padding: 0.5rem 1rem;
-}
-
-/* Separación visual entre optgroups */
-.form-select optgroup + optgroup {
-  margin-top: 0.25rem;
-  border-top: 1px solid var(--border);
-}
-
-/* --- ESTADO DISABLED MEJORADO --- */
-.btn-primary:disabled {
-  background-color: #94a3b8;
-  cursor: not-allowed;
-}
-
-/* --- PROGRESS BAR --- */
-.progress-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 0.5rem;
-  background-color: var(--bg-tertiary);
-  border-radius: 9999px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background-color: var(--primary);
-  border-radius: 9999px;
-  transition: width 0.5s ease;
-}
-
-.progress-fill.success {
-  background-color: var(--success);
-}
-
-.progress-fill.warning {
-  background-color: var(--warning);
-}
-
-/* --- SCROLLBAR PERSONALIZADO --- */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--secondary);
-}
-
-/* --- FOCUS VISIBLE MEJORADO --- */
-*:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-radius: 0.25rem;
-}
-
-/* --- UTILIDADES FINALES --- */
-.pointer-events-none { pointer-events: none; }
-.select-none { user-select: none; }
-.break-words { word-break: break-word; }
-
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* --- Z-INDEX LAYERS --- */
-.z-10 { z-index: 10; }
-.z-20 { z-index: 20; }
-.z-50 { z-index: 50; }
-
-/* --- MODO RESPONSIVO MEJORADO --- */
-@media (max-width: 1024px) {
-  .grid-cols-3 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  /* Botones full-width en móvil */
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  /* Stack de botones */
-  .flex.gap-2 {
-    flex-direction: column;
-  }
-  
-  /* Texto alineado a la izquierda en móvil */
-  .text-right {
-    text-align: left;
-  }
-  
-  /* Cards sin padding excesivo */
-  .card {
-    padding: 1rem;
-  }
-  
-  /* Stats grid en móvil */
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* --- CARDS DE BODY ESPECÍFICO --- */
-.card-body {
-  padding: 1.5rem;
-}
-
-.card.border-l-4 .card-body {
-  padding-left: 1.25rem;
-}
-
-/* --- MEJORAS PARA BADGES EN TABLA --- */
-.table .badge {
-  font-weight: 600;
-}
-
-/* --- INPUT CON ICONO (Como el de búsqueda) --- */
-.input-with-icon {
-  position: relative;
-}
-
-.input-with-icon input {
-  padding-left: 2.5rem;
-}
-
-.input-with-icon .icon {
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-secondary);
-  pointer-events: none;
-}
-
-/* --- TOOLTIPS SIMPLES --- */
-[title] {
-  cursor: help;
-}
-
-/* --- ESTADOS ESPECÍFICOS DE COTIZACIONES --- */
-.estado-pendiente {
-  background-color: #fef3c7;
-  color: #92400e;
-  font-weight: 600;
-}
-
-.estado-aprobada {
-  background-color: #d1fae5;
-  color: #065f46;
-  font-weight: 600;
-}
-
-.estado-rechazada {
-  background-color: #fee2e2;
-  color: #991b1b;
-  font-weight: 600;
-}
-
-.estado-convertida {
-  background-color: #dbeafe;
-  color: #1e40af;
-  font-weight: 600;
-}
-
-/* --- MEJORAS PARA RECIPE CARDS --- */
-.recipe-card-btn {
-  position: relative;
-  transition: all 0.2s ease;
-}
-
-.recipe-card-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.recipe-card-btn.active::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border: 2px solid var(--primary);
-  border-radius: 0.75rem;
-  pointer-events: none;
-}
-
-/* --- CARD HEADER MEJORADO --- */
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-/* --- BOTÓN DE LOADING STATE --- */
-.btn.loading {
-  position: relative;
-  color: transparent;
-  pointer-events: none;
-}
-
-.btn.loading::after {
-  content: '';
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  top: 50%;
-  left: 50%;
-  margin-left: -8px;
-  margin-top: -8px;
-  border: 2px solid transparent;
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-/* --- PRINT STYLES --- */
-@media print {
-  .btn,
-  .navbar,
-  .sidebar {
-    display: none !important;
-  }
-  
-  .card {
-    box-shadow: none;
-    border: 1px solid var(--border);
-    page-break-inside: avoid;
-  }
-  
-  .table {
-    font-size: 0.75rem;
-  }
-}
-
-/* --- MEJORAS DE ACCESIBILIDAD --- */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-
-/* --- SKELETON LOADER (OPCIONAL) --- */
-.skeleton {
-  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s ease-in-out infinite;
-  border-radius: 0.25rem;
-}
-
-@keyframes loading {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-.skeleton-text {
-  height: 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.skeleton-text:last-child {
-  width: 60%;
-}
-/* =================================================================
-   ESTILOS ADICIONALES PARA GUÍAS DE REMISIÓN Y TRANSPORTISTA
-   Agregar al final de index.css
-   ================================================================= */
-
-/* --- GRADIENTES ESPECÍFICOS PARA CARDS --- */
-.bg-gradient-to-r {
-  background-image: linear-gradient(to right, var(--from-color), var(--to-color));
-}
-
-.bg-gradient-to-br {
-  background-image: linear-gradient(to bottom right, var(--from-color), var(--to-color));
-}
-
-.from-blue-50 { --from-color: #eff6ff; }
-.to-white { --to-color: #ffffff; }
-.from-green-50 { --from-color: #f0fdf4; }
-.from-yellow-50 { --from-color: #fefce8; }
-.from-purple-50 { --from-color: #faf5ff; }
-.from-gray-50 { --from-color: #f9fafb; }
-.from-primary { --from-color: var(--primary); }
-.to-blue-600 { --to-color: #2563eb; }
-
-/* --- COLORES DE TEXTO ESPECÍFICOS --- */
-.text-blue-900 { color: #1e3a8a; }
-.text-blue-700 { color: #1d4ed8; }
-.text-blue-800 { color: #1e40af; }
-.text-green-900 { color: #14532d; }
-.text-green-700 { color: #15803d; }
-.text-yellow-900 { color: #713f12; }
-.text-yellow-700 { color: #a16207; }
-.text-purple-900 { color: #581c87; }
-
-/* --- BORDES ESPECÍFICOS --- */
-.border-2 {
-  border-width: 2px;
-  border-color: var(--border); /* Esto lo pone gris suave en lugar de negro */
-  border-style: solid;
-}
-.border-blue-200 { border-color: #bfdbfe; }
-.border-green-200 { border-color: #bbf7d0; }
-.border-yellow-200 { border-color: #fde68a; }
-.border-blue-500 { border-color: #3b82f6; }
-.border-green-500 { border-color: #22c55e; }
-
-/* --- BACKGROUNDS ADICIONALES --- */
-.bg-purple-50 { background-color: #faf5ff; }
-.bg-blue-600 { background-color: #2563eb; }
-.bg-primary\/5 { background-color: rgba(37, 99, 235, 0.05); }
-.bg-primary\/10 { background-color: rgba(37, 99, 235, 0.1); }
-
-/* --- OPACIDAD --- */
-.opacity-20 { opacity: 0.2; }
-.opacity-90 { opacity: 0.9; }
-
-/* --- TAMAÑO DE FUENTE ADICIONAL --- */
-.text-3xl {
-  font-size: 1.875rem;
-  line-height: 2.25rem;
-}
-
-/* --- UPPERCASE --- */
-.uppercase {
-  text-transform: uppercase;
-}
-
-/* --- LETTER SPACING --- */
-.tracking-wide {
-  letter-spacing: 0.025em;
-}
-
-/* --- GRID COLS ESPECÍFICO --- */
-.grid-cols-5 {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-/* --- MAX-WIDTH --- */
-.w-96 {
-  width: 24rem;
-}
-
-/* --- CARD FOOTER --- */
-.card-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border);
-  background-color: var(--bg-secondary);
-}
-
-/* --- BORDERS EN TABLA Y GENERALES --- */
-.border-t {
-  border-top-width: 1px;
-  border-top-style: solid;
-  border-top-color: var(--border);
-}
-
-.border-b {
-  border-bottom-width: 1px;
-  border-bottom-style: solid;
-  border-bottom-color: var(--border); /* Fundamental para que no sea negro */
-}
-
-.border-border {
-  border-color: var(--border);
-}
-
-/* --- STICKY POSITIONING --- */
-.sticky {
-  position: sticky;
-}
-
-.top-0 {
-  top: 0;
-}
-
-/* --- PADDING BOTTOM --- */
-.pb-2 {
-  padding-bottom: 0.5rem;
-}
-
-.pb-4 {
-  padding-bottom: 1rem;
-}
-
-/* --- PADDING LEFT --- */
-.pl-10 {
-  padding-left: 2.5rem;
-}
-
-/* --- MARGIN LEFT --- */
-.ml-auto {
-  margin-left: auto;
-}
-
-/* --- SHADOW ESPECÍFICA --- */
-.shadow-sm {
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-}
-
-/* --- CARDS DE BODY SIN PADDING (p-0) --- */
-.card-body.p-0 {
-  padding: 0;
-}
-
-/* --- HOVER ESPECÍFICO PARA FILAS DE TABLA CLICKEABLES --- */
-.table tbody tr.clickable {
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.table tbody tr.clickable:hover {
-  background-color: #eff6ff;
-}
-
-/* --- FONT-MONO --- */
-.font-mono {
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-}
-
-/* --- FLEX-WRAP --- */
-.flex-wrap {
-  flex-wrap: wrap;
-}
-
-/* --- MIN-WIDTH --- */
-.min-w-0 {
-  min-width: 0;
-}
-
-/* --- TRANSFORM --- */
-.transform {
-  transform: translateX(0) translateY(0) rotate(0) skewX(0) skewY(0) scaleX(1) scaleY(1);
-}
-
-.-translate-y-1\/2 {
-  transform: translateY(-50%);
-}
-
-/* --- LEFT POSITIONING --- */
-.left-3 {
-  left: 0.75rem;
-}
-
-/* --- MODAL MEJORADO --- */
-.modal-content {
-  animation: modalSlideIn 0.3s ease;
-}
-
-@keyframes modalSlideIn {
-  from {
-    transform: translateY(-20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-/* --- SCROLLBAR PARA MODALES --- */
-.max-h-96 {
-  max-height: 24rem;
-}
-
-.max-h-96::-webkit-scrollbar {
-  width: 6px;
-}
-
-/* --- BADGE CON FLEX ITEMS --- */
-.badge.flex {
-  display: inline-flex;
-}
-
-/* --- TEXT COLOR WHITE --- */
-.text-white {
-  color: #ffffff;
-}
-
-/* --- BORDER YELLOW --- */
-.border-yellow-200 {
-  border-color: #fde68a;
-}
-
-/* --- PADDING TOP --- */
-.pt-2 {
-  padding-top: 0.5rem;
-}
-
-.pt-4 {
-  padding-top: 1rem;
-}
-
-/* --- ESTADOS ESPECÍFICOS GUÍAS --- */
-.badge-info.border-info {
-  border: 1px solid #3b82f6;
-}
-
-/* --- GRID ESPECÍFICO PARA INFO --- */
-.grid.gap-6 {
-  gap: 1.5rem;
-}
-
-/* --- SEMIBOLD UPPERCASE --- */
-.font-semibold.uppercase {
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-/* --- BUTTONS CON INFO COLOR --- */
-.btn-info {
-  background-color: #3b82f6;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background-color: #2563eb;
-}
-
-/* --- LOADING STATE PARA REFRESH --- */
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* --- RESPONSIVE: MOBILE FIRST --- */
-@media (max-width: 1024px) {
-  .grid-cols-5 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  /* Grid cols se vuelven 1 columna */
-  .grid-cols-5,
-  .grid-cols-4,
-  .grid-cols-3,
-  .grid-cols-2 {
-    grid-template-columns: 1fr;
-  }
-  
-  /* Stack de elementos flex */
-  .flex.gap-2,
-  .flex.gap-3,
-  .flex.gap-4 {
-    flex-direction: column;
-  }
-  
-  /* Botones full width en móvil si no están en flex column */
-  .sticky .flex {
-    flex-wrap: wrap;
-  }
-  
-  /* Headers sticky menos padding */
-  .sticky.top-0 {
-    padding-bottom: 0.5rem;
-  }
-  
-  /* Cards con menos padding en móvil */
-  .card {
-    padding: 1rem;
-  }
-  
-  .card-body {
-    padding: 1rem;
-  }
-  
-  /* Tablas con scroll horizontal */
-  .table-container,
-  .overflow-x-auto {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  /* Stats grid ajustado */
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  /* Texto más pequeño en móvil */
-  .text-3xl {
-    font-size: 1.5rem;
-    line-height: 2rem;
-  }
-  
-  .text-2xl {
-    font-size: 1.25rem;
-    line-height: 1.75rem;
-  }
-  
-  /* Badges más pequeños en móvil */
-  .badge {
-    font-size: 0.65rem;
-    padding: 0.2rem 0.6rem;
-  }
-  
-  /* Botones de paginación más compactos */
-  .card-footer {
-    padding: 0.75rem 1rem;
-  }
-  
-  /* Modales en móvil */
-  .modal-content {
-    max-width: 95%;
-    margin: 1rem;
-  }
-  
-  /* Search input en móvil */
-  .search-input-wrapper {
-    width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  /* Ajustes para pantallas muy pequeñas */
-  .text-xl {
-    font-size: 1.125rem;
-  }
-  
-  .text-lg {
-    font-size: 1rem;
-  }
-  
-  /* Padding reducido */
-  .p-6 {
-    padding: 1rem;
-  }
-  
-  /* Cards sin sombra en móvil pequeño */
-  .card {
-    box-shadow: none;
-    border: 1px solid var(--border);
-  }
-  
-  /* Botones stack vertical */
-  .flex.justify-end,
-  .flex.justify-between {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  /* Iconos más pequeños en móvil */
-  .btn svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-/* --- UTILITIES ADICIONALES --- */
-
-/* Grid gap específico */
-.gap-6 {
-  gap: 1.5rem;
-}
-
-/* Aspect ratio para iconos */
-.aspect-square {
-  aspect-ratio: 1 / 1;
-}
-
-/* Transition específica */
-.transition-transform {
-  transition: transform 0.2s ease;
-}
-
-/* Hover transform */
-.hover\:scale-105:hover {
-  transform: scale(1.05);
-}
-
-/* Focus ring */
-.focus\:ring-2:focus {
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.5);
-}
-
-/* Backdrop blur para modales */
-.backdrop-blur-sm {
-  backdrop-filter: blur(4px);
-}
-
-/* --- MEJORAS PARA DASHBOARD STATS --- */
-.stat-card.border-l-4 {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.stat-card.border-l-4:hover {
-  transform: translateX(4px);
-}
-
-/* --- MEJORAS PARA BADGES EN ESTADOS --- */
-.badge.flex.items-center {
-  display: inline-flex;
-  align-items: center;
-}
-
-.badge svg {
-  margin-right: 0.25rem;
-}
-
-/* --- CARD CON GRADIENTE DE HEADER --- */
-.card-header.bg-gradient-to-r {
-  background-image: linear-gradient(to right, var(--from-color), var(--to-color));
-}
-
-/* --- PROGRESS BAR MEJORADO --- */
-.progress-bar {
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-fill {
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* --- LINK BUTTONS --- */
-.link-button {
-  color: var(--primary);
-  text-decoration: none;
-  font-weight: 500;
-  transition: color 0.2s ease;
-}
-
-.link-button:hover {
-  color: var(--primary-dark);
-  text-decoration: underline;
-}
-
-/* --- DISABLED STATE MEJORADO --- */
-button:disabled,
-input:disabled,
-select:disabled,
-textarea:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* --- SCROLL BEHAVIOR --- */
-html {
-  scroll-behavior: smooth;
-}
-
-/* --- PRINT OPTIMIZATION --- */
-@media print {
-  .sticky,
-  .modal,
-  button {
-    display: none !important;
-  }
-  
-  .card {
-    break-inside: avoid;
-  }
-}
-
-/* =================================================================
-   FIN DE ESTILOS ADICIONALES
-   ================================================================= */
-/* =================================================================
-   FIN DE ESTILOS ADICIONALES
-   ================================================================= */
-   /* =================================================================
-   AGREGAR AL FINAL DE INDEX.CSS - SOPORTE PARA DETALLE ORDEN VENTA
-   ================================================================= */
-
-/* --- 1. Paleta de Colores Extendida (Faltantes en la base) --- */
-.text-yellow-600 { color: #ca8a04; }
-.text-blue-600   { color: #2563eb; }
-.text-green-600  { color: #16a34a; }
-.text-purple-600 { color: #9333ea; }
-.text-emerald-600{ color: #059669; }
-.text-red-600    { color: #dc2626; }
-
-/* Botones sólidos para cambio de estado */
-.bg-blue-500    { background-color: #3b82f6; }
-.bg-green-500   { background-color: #22c55e; }
-.bg-purple-500  { background-color: #a855f7; }
-.bg-emerald-500 { background-color: #10b981; }
-.bg-red-500     { background-color: #ef4444; }
-
-/* Bordes para los botones de estado (outline) */
-.border-blue-500    { border-color: #3b82f6; }
-.border-green-500   { border-color: #22c55e; }
-.border-purple-500  { border-color: #a855f7; }
-.border-emerald-500 { border-color: #10b981; }
-.border-red-500     { border-color: #ef4444; }
-
-/* Fondos pasteles para badges y alertas */
-.bg-emerald-100 { background-color: #d1fae5; }
-.bg-purple-100  { background-color: #f3e8ff; }
-.text-emerald-800 { color: #065f46; } /* Para texto sobre fondo esmeralda */
-
-/* --- 2. Utilidades de Degradados (Gradients) --- */
-/* Tu JSX usa "bg-gradient-to-br" con colores "from-X to-Y" */
-
-.bg-gradient-to-br {
-  background-image: linear-gradient(to bottom right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent));
-}
-
-/* Definición de colores DE (From) */
-.from-yellow-100 { --tw-gradient-from: #fef9c3; --tw-gradient-to: #fef9c3; } /* Fallback */
-.from-blue-100   { --tw-gradient-from: #dbeafe; --tw-gradient-to: #dbeafe; }
-.from-green-100  { --tw-gradient-from: #dcfce7; --tw-gradient-to: #dcfce7; }
-.from-purple-100 { --tw-gradient-from: #f3e8ff; --tw-gradient-to: #f3e8ff; }
-.from-emerald-100{ --tw-gradient-from: #d1fae5; --tw-gradient-to: #d1fae5; }
-.from-red-100    { --tw-gradient-from: #fee2e2; --tw-gradient-to: #fee2e2; }
-
-/* Definición de colores A (To) */
-.to-yellow-200 { --tw-gradient-to: #fef08a; }
-.to-blue-200   { --tw-gradient-to: #bfdbfe; }
-.to-green-200  { --tw-gradient-to: #bbf7d0; }
-.to-purple-200 { --tw-gradient-to: #e9d5ff; }
-.to-emerald-200{ --tw-gradient-to: #a7f3d0; }
-.to-red-200    { --tw-gradient-to: #fecaca; }
-
-/* --- 3. Utilidades de Grid y Layout Específicas --- */
-.shrink-0 {
-  flex-shrink: 0;
-}
-
-.border-2 {
-  border-width: 2px;
-}
-
-/* Badge grande para el modal de prioridad */
-.text-2xl {
-  font-size: 1.5rem;
-  line-height: 2rem;
-}
-/* =================================================================
-   ESTILOS ESPECÍFICOS PARA CALENDARIO DE PRODUCCIÓN
-   Agregar al final de index.css
-   ================================================================= */
-
-/* --- 1. Grid de 7 Columnas (Esencial para la semana) --- */
-.grid-cols-7 {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-}
-
-/* Responsivo para el calendario en móviles: scroll horizontal */
-@media (max-width: 1024px) {
-  .grid-cols-7 {
-    min-width: 800px; /* Fuerza ancho mínimo para no aplastar los días */
-  }
-}
-
-/* --- 2. Filas Automáticas (Para que el calendario ocupe el alto disponible) --- */
-.auto-rows-fr {
-  grid-auto-rows: minmax(100px, 1fr);
-}
-
-/* --- 3. Cursores para Drag & Drop --- */
-.cursor-grab {
-  cursor: grab;
-  cursor: -webkit-grab;
-}
-
-.cursor-grab:active {
-  cursor: grabbing;
-  cursor: -webkit-grabbing;
-}
-
-/* --- 4. Scrollbars Finos y Elegantes para las Listas --- */
-/* Firefox */
-.scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-/* Webkit (Chrome, Edge, Safari) */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
-  border-radius: 20px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
-}
-
-/* --- 5. Utilidades de Altura y Layout para el Calendario --- */
-/* Asegura que el contenedor principal ocupe el espacio correcto sin desbordar */
-.h-\[calc\(100vh-100px\)\] {
-  height: calc(100vh - 100px);
-}
-
-/* Gap de 1 pixel para bordes finos en la grilla */
-.gap-px {
-  gap: 1px;
-}
-
-/* Efecto hover suave en las celdas del día */
-.transition-colors {
-  transition-property: background-color, border-color, color, fill, stroke;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
-/* Sombra suave interna para el día actual */
-.shadow-inner {
-  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
-}
-
-/* --- 6. Estilos Visuales de las Tarjetas (OrdenCard) --- */
-/* Ajuste para que el texto truncado no rompa el diseño */
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-  display: block;
-}
-
-/* Hover effect específico para la tarjeta arrastrable */
-.hover\:shadow-md:hover {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
-  transform: translateY(-1px);
-}
-
-/* Botón de detalle pequeño */
-button[title="Ver Detalle"] {
-  opacity: 0.6;
-  transition: opacity 0.2s, background-color 0.2s;
-}
-
-div:hover > div > button[title="Ver Detalle"] {
-  opacity: 1;
-}
-/* =================================================================
-   ESTILOS ESPECÍFICOS PARA FINANZAS Y COMPRAS (Cuentas, Pagos, Nueva Compra)
-   Agregar al final de index.css
-   ================================================================= */
-
-/* --- 1. Bordes y Anillos (Focus Rings & Selection States) --- */
-/* Necesario para la selección de moneda y tipo de compra en NuevaCompra */
-.ring-1 {
-  box-shadow: 0 0 0 1px currentColor;
-}
-
-.ring-2 {
-  box-shadow: 0 0 0 2px currentColor;
-}
-
-.ring-green-500 { color: var(--success); }
-.ring-blue-500 { color: var(--primary); }
-.ring-orange-500 { color: var(--warning); }
-.ring-red-600 { color: var(--danger); }
-.ring-warning { color: var(--warning); }
-.ring-danger { color: var(--danger); }
-.ring-blue-400 { color: #60a5fa; }
-
-/* Borde discontinuo para estados vacíos o áreas de carga */
-.border-dashed {
-  border-style: dashed;
-}
-
-/* --- 2. Animaciones para Nueva Compra (Sección Crédito) --- */
-/* Simulación de las clases 'animate-in' usadas en el formulario */
-.animate-in {
-  animation-duration: 0.3s;
-  animation-fill-mode: forwards;
-  animation-timing-function: ease-out;
-}
-
-.fade-in {
-  animation-name: fadeInOpacity;
-}
-
-.slide-in-from-top-2 {
-  animation-name: slideInTop;
-}
-
-@keyframes fadeInOpacity {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideInTop {
-  from { transform: translateY(-0.5rem); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-/* --- 3. Inputs Compactos para Tablas de Detalle --- */
-/* Para los inputs de cantidad, precio y descuento dentro de la tabla de productos */
-.table input.form-input {
-  min-width: 60px;
-  padding: 0.25rem 0.5rem;
-  height: 2rem; /* h-8 */
-  font-size: 0.875rem;
-}
-
-/* Alinear inputs numéricos a la derecha */
-.table input.text-right {
-  text-align: right;
-}
-
-.table input.text-center {
-  text-align: center;
-}
-
-/* --- 4. Estilos de Tarjetas de Crédito y Cuentas --- */
-/* Gradientes sutiles para diferenciar tipos de cuenta visualmente */
-.card-account-bank {
-  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
-  border-left: 4px solid var(--primary);
-}
-
-.card-account-cash {
-  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
-  border-left: 4px solid var(--success);
-}
-
-.card-account-credit {
-  background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
-  border-left: 4px solid var(--warning);
-}
-
-/* --- 5. Utilidades de Texto y Fondo Faltantes --- */
-.text-orange-600 { color: #ea580c; }
-.text-orange-700 { color: #c2410c; }
-.bg-orange-50 { background-color: #fff7ed; }
-.border-orange-200 { border-color: #fed7aa; }
-.border-orange-300 { border-color: #fdba74; }
-.border-orange-500 { border-color: #f97316; }
-
-.bg-cyan-50 { background-color: #ecfeff; } /* Para pagos parciales */
-
-/* --- 6. Layout Grid Responsivo Específico (lg:grid-cols-3) --- */
 @media (min-width: 1024px) {
-  .lg\:grid-cols-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  
-  .lg\:col-span-2 {
-    grid-column: span 2 / span 2;
-  }
-}
-
-/* --- 7. Badges de Estado Financiero Específicos --- */
-/* Sobrescribimos o añadimos variantes para Pago */
-.badge-pending-pay {
-  background-color: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fcd34d;
-}
-
-.badge-paid {
-  background-color: #ecfdf5;
-  color: #047857;
-  border: 1px solid #6ee7b7;
-}
-
-.badge-overdue {
-  background-color: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-}
-
-/* --- 8. Utilidades de Tooltip y Hover --- */
-.group:hover .group-hover\:opacity-100 {
-  opacity: 1;
-}
-
-.opacity-0 {
-  opacity: 0;
-}
-
-.transition-opacity {
-  transition-property: opacity;
-  transition-duration: 0.2s;
-}
-
-/* --- 9. Botón Outline para Tablas (Pequeño) --- */
-.btn-xs {
-  padding: 0.125rem 0.375rem;
-  font-size: 0.75rem;
-  line-height: 1rem;
-  height: auto;
-}
-
-/* --- 10. Estilos de Totales (Resumen de Compra) --- */
-.total-summary-container {
-  background-color: var(--bg-secondary);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  border: 1px solid var(--border);
-}
-
-.total-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.total-row.final {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #cbd5e1;
-  font-weight: 700;
-  font-size: 1.125rem;
-  color: var(--primary-dark);
-}
-/* =================================================================
-   ESTILOS ESPECÍFICOS PARA ÓRDENES DE PRODUCCIÓN
-   Agregar al final de index.css
-   ================================================================= */
-
-/* --- 1. Barra de Progreso (Columna Progreso) --- */
-.progress-bar {
-  background-color: var(--bg-tertiary); /* Fondo gris claro */
-  border-radius: 9999px;
-  overflow: hidden;
-  width: 100%;
-  position: relative;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 9999px;
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); /* Animación suave */
-}
-
-/* --- 2. Buscador con Icono (Filtros) --- */
-.search-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.search-input-wrapper .search-icon {
-  position: absolute;
-  left: 0.75rem;
-  color: var(--text-secondary);
-  pointer-events: none; /* Permite hacer clic a través del icono */
-  z-index: 10;
-}
-
-.search-input-wrapper .search-input {
-  padding-left: 2.5rem; /* Espacio para el icono a la izquierda */
-  width: 100%;
-}
-
-/* --- 3. Utilidades de Ancho y Layout --- */
-.w-fit {
-  width: fit-content;
-}
-
-.w-full {
-  width: 100%;
-}
-
-/* Grid de 5 columnas para las tarjetas de estadísticas */
-.md\:grid-cols-5 {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lg\:col-span-2 { grid-column: span 2 / span 2; }
 }
 
 @media (max-width: 1024px) {
-  .md\:grid-cols-5 {
-    grid-template-columns: repeat(3, minmax(0, 1fr)); /* 3 columnas en tablet */
-  }
+  .grid-cols-5, .md\:grid-cols-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid-cols-7 { min-width: 800px; }
+}
+
+@media (max-width: 768px) {
+  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5 { grid-template-columns: 1fr; }
+  .flex.gap-2, .flex.gap-3, .flex.gap-4 { flex-direction: column; }
+  .flex.justify-end, .flex.justify-between { flex-direction: column; align-items: stretch; }
+  .sticky .flex { flex-wrap: wrap; }
+  .sticky.top-0 { padding-bottom: 0.5rem; }
+  .btn { width: 100%; justify-content: center; }
+  .text-right { text-align: left; }
+  .card, .card-body, .p-6 { padding: 1rem; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .table-container, .overflow-x-auto { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .text-3xl { font-size: 1.5rem; line-height: 2rem; }
+  .text-2xl { font-size: 1.25rem; line-height: 1.75rem; }
+  .badge { font-size: 0.65rem; padding: 0.2rem 0.6rem; }
+  .card-footer { padding: 0.75rem 1rem; }
+  .modal-content { max-width: 95%; margin: 1rem; }
+  .search-input-wrapper { width: 100%; }
 }
 
 @media (max-width: 640px) {
-  .md\:grid-cols-5 {
-    grid-template-columns: 1fr; /* 1 columna en móvil */
-  }
+  .md\:grid-cols-5 { grid-template-columns: 1fr; }
 }
 
-/* --- 4. Estilos de Texto y Fuente --- */
-.font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+@media (max-width: 480px) {
+  .text-xl { font-size: 1.125rem; }
+  .text-lg { font-size: 1rem; }
+  .card { box-shadow: none; border: 1px solid var(--border); }
+  .btn svg { width: 16px; height: 16px; }
 }
 
-.text-primary-dark {
-  color: var(--primary-dark);
-}
-
-/* --- 5. Colores de Fondo Específicos (Badges y Etiquetas) --- */
-.bg-info-light {
-  background-color: #f0f9ff; /* Azul muy claro para receta */
-}
-
-/* --- 6. Footer de la Tarjeta (Paginación) --- */
-.card-footer {
-  background-color: var(--bg-secondary);
-  border-top: 1px solid var(--border);
-  padding: 1rem;
-  border-bottom-left-radius: 0.5rem;
-  border-bottom-right-radius: 0.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* --- 7. Bordes Laterales para Tarjetas de Estadísticas --- */
-/* (Aseguramos que existan si no estaban antes) */
-.border-l-4 {
-  border-left-width: 4px;
-  border-left-style: solid;
-}
-
-/* --- 8. Transiciones para Botones de Tabla --- */
-.table .btn-sm {
-  transition: all 0.2s ease;
-}
-
-.table .btn-sm:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-/* =================================================================
-   AGREGAR AL FINAL DE INDEX.CSS - SOPORTE PARA ORDENES DE VENTA
-   ================================================================= */
-
-/* --- 1. Paleta de Colores Extendida (Texto y Fondos) --- */
-.text-yellow-600 { color: #ca8a04; }
-.text-blue-600   { color: #2563eb; }
-.text-green-600  { color: #16a34a; }
-.text-orange-600 { color: #ea580c; }
-.text-purple-600 { color: #9333ea; }
-.text-emerald-600{ color: #059669; }
-.text-red-600    { color: #dc2626; }
-
-/* Fondos sólidos para botones de acción */
-.bg-blue-500    { background-color: #3b82f6; }
-.bg-green-500   { background-color: #22c55e; }
-.bg-orange-500  { background-color: #f97316; }
-.bg-purple-500  { background-color: #a855f7; }
-.bg-emerald-500 { background-color: #10b981; }
-.bg-red-500     { background-color: #ef4444; }
-
-/* Bordes para botones outline */
-.border-blue-500    { border-color: #3b82f6; }
-.border-green-500   { border-color: #22c55e; }
-.border-orange-500  { border-color: #f97316; }
-.border-purple-500  { border-color: #a855f7; }
-.border-emerald-500 { border-color: #10b981; }
-.border-red-500     { border-color: #ef4444; }
-
-/* Fondos claros para áreas de información */
-.bg-emerald-100 { background-color: #d1fae5; }
-.bg-purple-100  { background-color: #f3e8ff; }
-.bg-orange-100  { background-color: #ffedd5; }
-
-/* --- 2. Sistema de Degradados (Gradients) para Tarjetas de Estado --- */
-.bg-gradient-to-br {
-  background-image: linear-gradient(to bottom right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent));
-}
-
-/* Colores de inicio (From) */
-.from-yellow-100 { --tw-gradient-from: #fef9c3; --tw-gradient-to: #fef9c3; } 
-.from-blue-100   { --tw-gradient-from: #dbeafe; --tw-gradient-to: #dbeafe; }
-.from-green-100  { --tw-gradient-from: #dcfce7; --tw-gradient-to: #dcfce7; }
-.from-orange-100 { --tw-gradient-from: #ffedd5; --tw-gradient-to: #ffedd5; }
-.from-purple-100 { --tw-gradient-from: #f3e8ff; --tw-gradient-to: #f3e8ff; }
-.from-emerald-100{ --tw-gradient-from: #d1fae5; --tw-gradient-to: #d1fae5; }
-.from-red-100    { --tw-gradient-from: #fee2e2; --tw-gradient-to: #fee2e2; }
-
-/* Colores de fin (To) */
-.to-yellow-200 { --tw-gradient-to: #fef08a; }
-.to-blue-200   { --tw-gradient-to: #bfdbfe; }
-.to-green-200  { --tw-gradient-to: #bbf7d0; }
-.to-orange-200 { --tw-gradient-to: #fed7aa; }
-.to-purple-200 { --tw-gradient-to: #e9d5ff; }
-.to-emerald-200{ --tw-gradient-to: #a7f3d0; }
-.to-red-200    { --tw-gradient-to: #fecaca; }
-
-/* --- 3. Utilidades de Botones y Badges --- */
-
-/* Botón Ghost (para navegación) */
-.btn-ghost {
-  background-color: transparent;
-  color: var(--text-secondary);
-  border: none;
-}
-.btn-ghost:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-/* Tamaños de Badge faltantes */
-.badge-sm {
-  padding: 0.125rem 0.5rem;
-  font-size: 0.7rem;
-}
-.badge-xs {
-  padding: 0.1rem 0.375rem;
-  font-size: 0.65rem;
-  line-height: 1;
-}
-
-/* Efectos Hover Específicos para Botones de Estado */
-.hover\:bg-blue-500:hover   { background-color: #3b82f6; border-color: #3b82f6; }
-.hover\:bg-green-500:hover  { background-color: #22c55e; border-color: #22c55e; }
-.hover\:bg-orange-500:hover { background-color: #f97316; border-color: #f97316; }
-.hover\:bg-purple-500:hover { background-color: #a855f7; border-color: #a855f7; }
-.hover\:bg-emerald-500:hover{ background-color: #10b981; border-color: #10b981; }
-.hover\:bg-red-500:hover    { background-color: #ef4444; border-color: #ef4444; }
-
-.hover\:text-white:hover { color: white !important; }
-
-/* --- 4. Utilidades de Espaciado y Layout --- */
-.shrink-0 {
-  flex-shrink: 0;
-}
-
-/* Padding Left 10 (2.5rem) para input de búsqueda con icono */
-.pl-10 {
-  padding-left: 2.5rem;
-}
-
-/* --- 5. Estilos Específicos de PDF/Documentos --- */
-.text-2xl {
-  font-size: 1.5rem;
-  line-height: 2rem;
-}
-
-.border-2 {
-  border-width: 2px;
-}
-
-/* Corrección de z-index para elementos superpuestos */
-.relative { position: relative; }
-.absolute { position: absolute; }
-.top-1\/2 { top: 50%; }
-.-translate-y-1\/2 { transform: translateY(-50%); }
-.left-3 { left: 0.75rem; }
-/* =================================================================
-   AGREGAR AL FINAL DE INDEX.CSS - SOPORTE PARA COTIZACIONES
-   ================================================================= */
-
-/* --- 1. Utilidades de Posicionamiento Sticky (Barra superior detalle) --- */
-.sticky {
-  position: sticky;
-}
-
-.top-0 {
-  top: 0;
-}
-
-.z-10 {
-  z-index: 10;
-}
-
-/* --- 2. Degradados Horizontales (Usados en cards de detalle) --- */
-.bg-gradient-to-r {
-  background-image: linear-gradient(to right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent));
-}
-
-/* Definición de colores 'From' adicionales */
-.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05); --tw-gradient-to: rgba(37, 99, 235, 0.05); }
-.from-gray-50    { --tw-gradient-from: #f9fafb; --tw-gradient-to: #f9fafb; }
-
-/* --- 3. Paleta de Colores Pastel y Contraste (Para Estados) --- */
-
-/* Fondos muy claros (100) */
-.bg-yellow-100 { background-color: #fef9c3; }
-.bg-blue-100   { background-color: #dbeafe; }
-.bg-green-100  { background-color: #dcfce7; }
-.bg-red-100    { background-color: #fee2e2; }
-.bg-primary\/10{ background-color: rgba(37, 99, 235, 0.1); }
-
-/* Textos muy oscuros (800/900) */
-.text-yellow-800 { color: #854d0e; }
-.text-blue-800   { color: #1e40af; }
-.text-green-800  { color: #166534; }
-.text-red-800    { color: #991b1b; }
-.text-gray-800   { color: #1f2937; }
-
-.text-blue-900   { color: #1e3a8a; }
-.text-green-900  { color: #14532d; }
-.text-purple-900 { color: #581c87; }
-
-/* Bordes Pastel (200) */
-.border-yellow-200 { border-color: #fef08a; }
-.border-blue-200   { border-color: #bfdbfe; }
-.border-green-200  { border-color: #bbf7d0; }
-.border-red-200    { border-color: #fecaca; }
-.border-gray-200   { border-color: #e5e7eb; }
-.border-primary\/20{ border-color: rgba(37, 99, 235, 0.2); }
-
-/* --- 4. Sombras Internas (Para totales) --- */
-.shadow-inner {
-  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
-}
-
-/* --- 5. Utilidades de Opacidad --- */
-.opacity-20 { opacity: 0.2; }
-.opacity-50 { opacity: 0.5; }
-.opacity-60 { opacity: 0.6; }
-.opacity-70 { opacity: 0.7; }
-.opacity-90 { opacity: 0.9; }
-
-/* --- 6. Iconos en línea (Inline) --- */
-.inline {
-  display: inline-block;
-  vertical-align: middle;
-}
-
-/* --- 7. Ajustes de Texto --- */
-.italic {
-  font-style: italic;
-}
-
-.leading-relaxed {
-  line-height: 1.625;
-}
-
-/* --- 8. Badge Outline Personalizado (Check2) --- */
-.text-success { color: var(--success); }
-
-/* Ajuste específico para el botón de conversión a venta */
-.hover\:underline:hover {
-  text-decoration: underline;
-}
-/* =================================================================
-   ESTILOS ESPECÍFICOS PARA FINANZAS (Cuentas y Pagos)
-   Agregar al final de index.css
-   ================================================================= */
-
-/* --- 1. Utilidades de Ancho Fijo (Para filtros de fecha) --- */
-.w-32 { width: 8rem; }
-.w-36 { width: 9rem; }
-
-/* --- 2. Listas (Usadas en el Modal de Renovación) --- */
-.list-disc {
-  list-style-type: disc;
-}
-
-.list-inside {
-  list-style-position: inside;
-}
-
-.pl-1 {
-  padding-left: 0.25rem;
-}
-
-/* --- 3. Bordes Específicos para Tabs --- */
-.border-b-2 {
-  border-bottom-width: 2px;
-  border-bottom-style: solid;
-}
-
-.border-transparent {
-  border-color: transparent;
-}
-
-/* Hover suave para textos en tabs */
-.hover\:text-gray-700:hover {
-  color: #374151;
-}
-
-/* --- 4. Badges Outline (Contadores en Tabs) --- */
-.badge-outline {
-  background-color: transparent;
-  border: 1px solid currentColor;
-  opacity: 0.8;
-}
-
-/* --- 5. Fondos con Opacidad (Para estado activo de tabs) --- */
-.bg-blue-50\/50 {
-  background-color: rgba(239, 246, 255, 0.5);
-}
-
-/* --- 6. Degradados Diagonales (Cards de Saldos) --- */
-/* Ya tenías bg-gradient-to-r, agregamos to-br para las tarjetas de finanzas */
-.bg-gradient-to-br {
-  background-image: linear-gradient(to bottom right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent));
-}
-
-/* Colores específicos para Finanzas */
-.from-blue-50 { --tw-gradient-from: #eff6ff; }
-.to-white { --tw-gradient-to: #ffffff; }
-.border-blue-100 { border-color: #dbeafe; }
-
-/* --- 7. Texto Específico --- */
-.text-blue-800 { color: #1e40af; }
-
-/* --- 8. Inputs Pequeños (py-1) --- */
-.form-input.py-1, 
-.form-select.py-1 {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
-  min-height: 2rem;
-}
-
-/* --- 9. Estilos para Mensaje de Confirmación (Modal) --- */
-.border-blue-100 {
-  border-color: #dbeafe;
-}
-/* =========================================
-   ESTILOS PARA MÓDULO DE LISTAS DE PRECIOS
-   ========================================= */
-
-/* 1. Animación Fade In (Usada en tus componentes) */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-/* 2. Scrollbars Personalizados (Para que se vean finos en las tablas) */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* gris suave */
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* gris más oscuro al hover */
-}
-
-/* 3. Ajustes de Tabla (Sticky Header) */
-/* Asegura que el encabezado de la tabla no se mueva al hacer scroll */
-.table thead.sticky {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.table thead th {
-  background-color: white; /* Evita que el contenido pase por detrás */
-  padding-top: 12px;
-  padding-bottom: 12px;
-}
-
-/* 4. Inputs Numéricos sin flechas (Opcional, para limpieza visual en precios) */
-input[type=number]::-webkit-inner-spin-button, 
-input[type=number]::-webkit-outer-spin-button { 
-  -webkit-appearance: none; 
-  margin: 0; 
-}
-
-/* 5. Checkbox personalizado (Mejora el alineamiento en celdas pequeñas) */
-input[type="checkbox"] {
-  accent-color: var(--primary); /* Usa tu color primario */
-  vertical-align: middle;
-}
-
-/* 6. Estilos de Tarjeta (Refuerzo por si faltan clases de Tailwind) */
-.card {
-  background-color: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  border: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-}
-
-.card-header {
-  padding: 1rem;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.card-body {
-  padding: 1rem;
-  flex: 1; /* Permite que el cuerpo ocupe el espacio restante */
-}
-/* =================================================================
-   ESTILOS ESPECÍFICOS PARA CREAR ORDEN (Formulario de Producción)
-   Agregar al final de index.css
-   ================================================================= */
-
-/* --- 1. Utilidades de Posicionamiento para el Buscador --- */
-.relative {
-  position: relative;
-}
-
-.absolute {
-  position: absolute;
-}
-
-.top-2\.5 {
-  top: 0.625rem; /* Alineación vertical del icono de búsqueda */
-}
-
-.left-3 {
-  left: 0.75rem;
-}
-
-.right-2 {
-  right: 0.5rem;
-}
-
-.right-3 {
-  right: 0.75rem;
-}
-
-.top-1\/2 {
-  top: 50%;
-}
-
-.transform {
-  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
-}
-
-.-translate-y-1\/2 {
-  --tw-translate-y: -50%;
-  transform: translateY(-50%);
-}
-
-/* --- 2. Padding para Inputs con Iconos --- */
-/* Espacio a la izquierda para la lupa */
-.pl-9 {
-  padding-left: 2.25rem !important; 
-}
-
-/* Espacio a la derecha para el botón de borrar/flecha */
-.pr-8 {
-  padding-right: 2rem !important;
-}
-
-/* --- 3. Dropdown de Resultados (Z-Index) --- */
-.z-50 {
-  z-index: 50;
-}
-
-/* Bordes en la lista de resultados */
-.last\:border-0:last-child {
-  border-bottom-width: 0;
-}
-
-.border-b {
-  border-bottom-width: 1px;
-  border-style: solid;
-}
-
-.border-gray-50 {
-  border-color: #f9fafb;
-}
-
-/* --- 4. Tipografía y Colores Específicos --- */
-.font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-.font-bold {
-  font-weight: 700;
-}
-
-.text-gray-400 {
-  color: #9ca3af;
-}
-
-.text-gray-600 {
-  color: #4b5563;
-}
-
-.text-gray-500 {
-  color: #6b7280;
-}
-
-.bg-gray-100 {
-  background-color: #f3f4f6;
-}
-
-.hover\:bg-gray-100:hover {
-  background-color: #f3f4f6;
-}
-
-.hover\:text-gray-600:hover {
-  color: #4b5563;
-}
-
-/* --- 5. Responsividad del Grid (lg:grid-cols-3) --- */
-/* Tu CSS base ya tiene .grid-cols-3, pero necesitamos asegurar 
-   que se comporte como Tailwind (1 columna en móvil, 3 en escritorio) */
-
-@media (min-width: 1024px) {
-  .lg\:grid-cols-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* --- 6. Animación de Carga (Refresh) --- */
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* --- 7. Estilos para los Botones de Selección de Receta --- */
-/* Alineación del contenido dentro del botón */
-.btn.text-left {
-  text-align: left;
-  justify-content: flex-start; /* Importante para el flexbox del botón */
-  height: auto; /* Permitir que crezca si el texto es largo */
-}
-
-/* Opacidad para subtítulos */
-.opacity-80 {
-  opacity: 0.8;
-}
-.opacity-30 {
-  opacity: 0.3;
-}
-
-/* --- 8. Scrollbar para el Dropdown y Tablas --- */
-.overflow-y-auto {
-  overflow-y: auto;
-}
-/* =================================================================
-   CORRECCIÓN VISUAL DETALLE COTIZACIÓN
-   Agregar al final de index.css
-   ================================================================= */
-
-/* 1. Forzar color blanco puro en el destino del degradado */
-.to-white {
-  --tw-gradient-to: #ffffff !important;
-}
-
-/* 2. Definir colores de inicio específicos para los encabezados */
-.from-blue-50 { --tw-gradient-from: #eff6ff; }
-.from-green-50 { --tw-gradient-from: #f0fdf4; }
-.from-purple-50 { --tw-gradient-from: #faf5ff; }
-.from-gray-50 { --tw-gradient-from: #f9fafb; }
-.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05); }
-
-/* 3. Clase maestra para el degradado horizontal */
-.bg-gradient-to-r {
-  background-image: linear-gradient(to right, var(--tw-gradient-from), var(--tw-gradient-to));
-}
-
-/* 4. Eliminar bordes extraños en las tarjetas */
-.card-header {
-  border-bottom: 1px solid var(--border); /* Asegura un borde gris suave, no negro */
-  background-color: transparent; /* El degradado lo maneja la clase utilitaria */
-}
-
-/* 5. Corrección específica para el bloque de Resumen (Subtotal/Total) */
-/* A veces el shadow-inner crea un efecto de borde oscuro indeseado */
-.shadow-inner {
-  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important; /* Muy sutil */
-}
-
-/* 6. Asegurar que el fondo del body de la tarjeta sea blanco */
-.card-body {
-  background-color: #ffffff;
-}
-/* =================================================================
-   ELIMINAR BORDES/MÁRGENES NEGROS POR COMPLETAMENTE
-   Agregar al final de index.css
-   ================================================================= */
-
-/* 1. Eliminar línea inferior del encabezado fijo (Sticky Header) */
-.sticky.top-0 {
-  border-bottom: none !important;
-  box-shadow: none !important; /* Por si acaso tuviera sombra */
-}
-
-/* 2. Eliminar líneas divisorias en el bloque de Totales y Subtotales */
-.card-body .flex.border-b {
-  border-bottom: none !important;
-}
-
-/* 3. Eliminar línea debajo del título de todas las tarjetas (Cliente, Condiciones, etc.) */
-.card-header {
-  border-bottom: none !important;
-}
-
-/* 4. Eliminar el borde grueso de la tarjeta de Estado (la de color) */
-.border-2 {
-  border: none !important;
-}
-
-/* 5. Eliminar borde/sombra interna en el cuadro de TOTAL final */
-.shadow-inner {
-  box-shadow: none !important;
-  background-color: #f3f4f6; /* Mantiene el fondo gris suave sin bordes */
-}
-/* =================================================================
-   CORRECCIÓN URGENTE DE BORDES NEGROS
-   Agregar al final de index.css
-   ================================================================= */
-
-/* 1. Corregir el borde del encabezado pegajoso (Sticky Header) */
-.sticky.border-b {
-  border-bottom-color: var(--border) !important; /* Forzar color gris suave */
-  /* Si prefieres que desaparezca por completo, usa: border-bottom: none !important; */
-}
-
-/* 2. Corregir las líneas en la sección de Resumen/Totales */
-.card-body .flex.border-b {
-  border-bottom-color: var(--border) !important; /* Forzar color gris suave */
-}
-
-/* 3. Asegurar que la clase general border-b siempre sea gris si no se especifica otro */
-.border-b {
-  border-bottom-width: 1px;
-  border-style: solid;
-  border-bottom-color: var(--border); 
-}
-
-/* 4. Asegurar que la clase general border-t siempre sea gris */
-.border-t {
-  border-top-width: 1px;
-  border-top-style: solid;
-  border-top-color: var(--border);
-}
-
-/* 5. Asegurar que los bordes de cards (border-2) no sean negros */
-.border-2 {
-  border-width: 2px;
-  border-style: solid;
-  /* Si no tiene color específico, usar transparente o gris */
-  border-color: var(--border); 
-}
-
-/* Reglas específicas para que tus colores de estado (verde, azul, etc) funcionen sobre el borde */
-.border-green-200 { border-color: #bbf7d0 !important; }
-.border-blue-200 { border-color: #bfdbfe !important; }
-.border-yellow-200 { border-color: #fde68a !important; }
-.border-red-200 { border-color: #fecaca !important; }
-/* =================================================================
-   CORRECCIÓN FINAL DE BORDES Y DEGRADADOS EN COTIZACIONES
-   Agregar al final de index.css
-   ================================================================= */
-
-/* 1. Forzar color blanco puro en el destino del degradado */
-.to-white {
-  --tw-gradient-to: #ffffff !important;
-}
-
-/* 2. Definir correctamente los colores de inicio */
-.from-blue-50 { --tw-gradient-from: #eff6ff !important; }
-.from-green-50 { --tw-gradient-from: #f0fdf4 !important; }
-.from-purple-50 { --tw-gradient-from: #faf5ff !important; }
-.from-gray-50 { --tw-gradient-from: #f9fafb !important; }
-.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05) !important; }
-
-/* 3. Asegurar que la clase del degradado funcione */
-.bg-gradient-to-r {
-  background-image: linear-gradient(to right, var(--tw-gradient-from), var(--tw-gradient-to)) !important;
-}
-
-/* 4. ELIMINAR EL BORDE NEGRO DEL ENCABEZADO */
-/* El problema suele ser que border-bottom no tiene color definido */
-.card-header {
-  border-bottom: 1px solid #e2e8f0 !important; /* Gris suave explícito */
-  background-color: transparent; 
-}
-
-/* 5. ELIMINAR EL BORDE NEGRO DE LOS TOTALES/RESUMEN */
-.border-b {
-  border-bottom-width: 1px;
-  border-bottom-style: solid;
-  border-bottom-color: #e2e8f0 !important; /* Gris suave explícito */
-}
-
-/* 6. Si prefieres que NO haya borde en el header sticky: */
-.sticky.top-0 {
-  border-bottom: 1px solid #e2e8f0 !important;
-}
-
-/* 7. Eliminar sombras internas oscuras */
-.shadow-inner {
-  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+@media print {
+  .btn, .navbar, .sidebar, .sticky, .modal, button { display: none !important; }
+  .card { box-shadow: none; border: 1px solid var(--border); page-break-inside: avoid; break-inside: avoid; }
+  .table { font-size: 0.75rem; }
 }

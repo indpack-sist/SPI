@@ -727,8 +727,9 @@ export async function createOrdenVenta(req, res) {
           precio_base,
           porcentaje_comision,
           monto_comision,
-          descuento_porcentaje
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          descuento_porcentaje,
+          stock_reservado
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           idOrden,
           item.id_producto,
@@ -737,9 +738,31 @@ export async function createOrdenVenta(req, res) {
           precioBase,
           porcentajeComision,
           montoComision,
-          parseFloat(item.descuento_porcentaje || 0)
+          parseFloat(item.descuento_porcentaje || 0),
+          reservar_stock ? 1 : 0
         ]
       });
+
+      if (reservar_stock) {
+        const productoCheck = await executeQuery(
+          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
+          [item.id_producto]
+        );
+
+        if (productoCheck.success && productoCheck.data.length > 0 && productoCheck.data[0].requiere_receta === 0) {
+          queriesDetalle.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+            params: [parseFloat(item.cantidad), item.id_producto]
+          });
+        }
+      }
+    }
+
+    if (reservar_stock) {
+        queriesDetalle.push({
+            sql: 'UPDATE ordenes_venta SET stock_reservado = 1 WHERE id_orden_venta = ?',
+            params: [idOrden]
+        });
     }
 
     await executeTransaction(queriesDetalle);
@@ -761,7 +784,7 @@ export async function createOrdenVenta(req, res) {
         numero_orden: numeroOrden,
         tipo_comprobante: tipoComp,
         numero_comprobante: numeroComprobante,
-        stock_reservado: 0
+        stock_reservado: reservar_stock ? 1 : 0
       },
       message: 'Orden de venta creada exitosamente'
     });

@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock, Save, Box
+  ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -503,6 +503,36 @@ function DetalleOrdenVenta() {
       setProcesando(false);
     }
   };
+
+  // --- NUEVA FUNCIÓN: GENERAR GUÍA INTERNA ---
+  const handleGenerarGuiaInterna = async () => {
+    if (!confirm('¿Está seguro de generar la Guía Interna? Se generará un despacho automático y se descontará el stock.')) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      // Llamada al endpoint integrado en el backend
+      const response = await ordenesVentaAPI.generarGuiaInterna(id);
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        // Recargar datos para ver el cambio de estado y la nueva salida
+        await cargarDatos();
+        
+        // Si el backend nos devuelve el ID de la salida, descargamos el PDF automáticamente
+        if (response.data.data && response.data.data.id_salida) {
+            handleDescargarSalidaEspecificaPDF(response.data.data.id_salida);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al generar la guía interna');
+    } finally {
+      setProcesando(false);
+    }
+  };
+  // -------------------------------------------
 
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
@@ -1258,6 +1288,18 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
+          {/* BOTÓN NUEVO: GENERAR GUÍA INTERNA */}
+          {orden.tipo_comprobante === 'Nota de Venta' && !estadosConDespacho.includes(orden.estado) && orden.estado !== 'Cancelada' && (
+            <button
+              className="btn btn-primary bg-indigo-600 hover:bg-indigo-700 border-indigo-600 text-white"
+              onClick={handleGenerarGuiaInterna}
+              disabled={procesando}
+              title="Generar Guía Interna y Despachar Automáticamente"
+            >
+              <ClipboardList size={20} /> Generar Guía Interna
+            </button>
+          )}
+
           {puedeReservarStock() && (
             <button
               className="btn btn-warning border-yellow-400 text-yellow-800 hover:bg-yellow-100"
@@ -1359,6 +1401,8 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
+      {/* ... Resto del componente (Cards de estado, cliente, tablas, modales) se mantienen igual ... */}
+      
       <div className="card mb-6 border-l-4 border-primary">
         <div className="card-header">
           <h2 className="card-title">
@@ -2016,6 +2060,7 @@ function DetalleOrdenVenta() {
         </form>
       </Modal>
 
+      {/* ... Modales restantes se mantienen igual (CrearOP, Despacho, Anular, etc.) ... */}
       <Modal 
         isOpen={modalCrearOP} 
         onClose={() => {
@@ -2627,7 +2672,7 @@ function DetalleOrdenVenta() {
                         {formatearNumero(item.stock_maximo_disponible)}
                       </td>
                       <td className="text-right text-blue-600 font-medium">
-                         {formatearNumero(item.cantidad_ya_reservada)}
+                          {formatearNumero(item.cantidad_ya_reservada)}
                       </td>
                       <td className="text-right">
                         <input

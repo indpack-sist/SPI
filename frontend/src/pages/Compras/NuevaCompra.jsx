@@ -608,10 +608,6 @@ function NuevaCompra() {
                         >
                           <option value="Factura">Factura</option>
                           <option value="Boleta">Boleta</option>
-                          <option value="Guia Remision">Guía Remisión</option>
-                          <option value="Nota de Venta">Nota de Venta</option>
-                          <option value="Recibo por Honorarios">Recibo por Honorarios</option>
-                          <option value="Otro">Otro</option>
                         </select>
                       </div>
                       <div className="form-group">

@@ -231,14 +231,10 @@ export async function reservarStockOrden(req, res) {
     }
 
     const detalles = detalleResult.data;
-    const queries = [];
-    let itemsProcesados = 0;
-    let itemsPendientes = 0;
+    const productosParaReservar = [];
 
     for (const item of detalles) {
-      
       if (item.item_reservado === 1) {
-        itemsProcesados++;
         continue;
       }
 
@@ -246,63 +242,56 @@ export async function reservarStockOrden(req, res) {
         const stockActual = parseFloat(item.stock_actual);
         const cantidadRequerida = parseFloat(item.cantidad);
 
+        let estadoReserva = 'sin_stock';
+        let cantidadReservable = 0;
+
         if (stockActual >= cantidadRequerida) {
-          queries.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [cantidadRequerida, item.id_producto]
-          });
-
-          queries.push({
-            sql: 'UPDATE detalle_orden_venta SET stock_reservado = 1 WHERE id_detalle = ?',
-            params: [item.id_detalle]
-          });
-
-          itemsProcesados++;
-        } else {
-          itemsPendientes++;
+          estadoReserva = 'completo';
+          cantidadReservable = cantidadRequerida;
+        } else if (stockActual > 0) {
+          estadoReserva = 'parcial';
+          cantidadReservable = stockActual;
         }
+
+        productosParaReservar.push({
+          id_producto: item.id_producto,
+          id_detalle: item.id_detalle,
+          nombre: item.nombre,
+          cantidad_requerida: cantidadRequerida,
+          stock_disponible: stockActual,
+          cantidad_reservable: cantidadReservable,
+          faltante: cantidadRequerida - cantidadReservable,
+          estado_reserva: estadoReserva
+        });
       } else {
-        itemsPendientes++; 
+        productosParaReservar.push({
+          id_producto: item.id_producto,
+          id_detalle: item.id_detalle,
+          nombre: item.nombre,
+          cantidad_requerida: parseFloat(item.cantidad),
+          stock_disponible: 0,
+          cantidad_reservable: 0,
+          faltante: parseFloat(item.cantidad),
+          estado_reserva: 'requiere_produccion'
+        });
       }
     }
 
-    let nuevoEstadoGlobal = 0;
-    const totalItems = detalles.length;
+    const resumen = {
+      total_productos: productosParaReservar.length,
+      con_stock_completo: productosParaReservar.filter(p => p.estado_reserva === 'completo').length,
+      con_stock_parcial: productosParaReservar.filter(p => p.estado_reserva === 'parcial').length,
+      sin_stock: productosParaReservar.filter(p => p.estado_reserva === 'sin_stock').length,
+      requieren_produccion: productosParaReservar.filter(p => p.estado_reserva === 'requiere_produccion').length
+    };
 
-    if (itemsProcesados === totalItems) {
-      nuevoEstadoGlobal = 1; 
-    } else if (itemsProcesados > 0) {
-      nuevoEstadoGlobal = 2; 
-    }
-
-    if (queries.length > 0) {
-      queries.push({
-        sql: 'UPDATE ordenes_venta SET stock_reservado = ? WHERE id_orden_venta = ?',
-        params: [nuevoEstadoGlobal, id]
-      });
-
-      const result = await executeTransaction(queries);
-
-      if (!result.success) {
-        return res.status(500).json({ success: false, error: result.error });
+    res.json({
+      success: true,
+      data: {
+        productos: productosParaReservar,
+        resumen: resumen
       }
-
-      const msg = itemsPendientes > 0 
-        ? `Reserva Parcial realizada. ${itemsPendientes} productos sin stock suficiente.` 
-        : 'Stock reservado exitosamente para todos los productos.';
-
-      res.json({ success: true, message: msg, estado_reserva: nuevoEstadoGlobal });
-
-    } else {
-      if (itemsProcesados === totalItems) {
-         return res.status(200).json({ success: true, message: 'La orden ya tiene todo el stock reservado.' });
-      }
-      
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No hay stock suficiente para reservar ninguno de los productos pendientes.' 
-      });
-    }
+    });
 
   } catch (error) {
     console.error(error);
@@ -361,31 +350,6 @@ export async function createOrdenVenta(req, res) {
         success: false,
         error: 'Usuario no autenticado'
       });
-    }
-
-    if (reservar_stock) {
-      for (const item of detalle) {
-        const productoResult = await executeQuery(
-          'SELECT stock_actual, requiere_receta FROM productos WHERE id_producto = ?',
-          [item.id_producto]
-        );
-
-        if (productoResult.success && productoResult.data.length > 0) {
-          const producto = productoResult.data[0];
-
-          if (producto.requiere_receta === 0) {
-            const stockActual = parseFloat(producto.stock_actual);
-            const cantidadRequerida = parseFloat(item.cantidad);
-
-            if (stockActual < cantidadRequerida) {
-              return res.status(400).json({
-                success: false,
-                error: `Stock insuficiente para el producto ID ${item.id_producto}. Disponible: ${stockActual}, Requerido: ${cantidadRequerida}`
-              });
-            }
-          }
-        }
-      }
     }
 
     let idVehiculoFinal = null;
@@ -607,7 +571,7 @@ export async function createOrdenVenta(req, res) {
         porcentaje_comision_promedio,
         estado,
         stock_reservado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 0)
     `, [
       numeroOrden,
       tipoComp,
@@ -646,8 +610,7 @@ export async function createOrdenVenta(req, res) {
       impuesto,
       total,
       totalComision,
-      porcentajeComisionPromedio,
-      reservar_stock ? 1 : 0
+      porcentajeComisionPromedio
     ]);
 
     if (!result.success) {
@@ -690,20 +653,6 @@ export async function createOrdenVenta(req, res) {
           parseFloat(item.descuento_porcentaje || 0)
         ]
       });
-
-      if (reservar_stock) {
-        const productoCheck = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-          [item.id_producto]
-        );
-
-        if (productoCheck.success && productoCheck.data.length > 0 && productoCheck.data[0].requiere_receta === 0) {
-          queriesDetalle.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [parseFloat(item.cantidad), item.id_producto]
-          });
-        }
-      }
     }
 
     await executeTransaction(queriesDetalle);
@@ -725,11 +674,9 @@ export async function createOrdenVenta(req, res) {
         numero_orden: numeroOrden,
         tipo_comprobante: tipoComp,
         numero_comprobante: numeroComprobante,
-        stock_reservado: reservar_stock ? 1 : 0
+        stock_reservado: 0
       },
-      message: reservar_stock ?
-        'Orden de venta creada exitosamente y stock reservado' :
-        'Orden de venta creada exitosamente'
+      message: 'Orden de venta creada exitosamente'
     });
 
   } catch (error) {
@@ -740,6 +687,7 @@ export async function createOrdenVenta(req, res) {
     });
   }
 }
+
 
 export async function updateOrdenVenta(req, res) {
   try {
@@ -2866,6 +2814,94 @@ export async function rectificarCantidadProducto(req, res) {
         cantidad_anterior: cantidadAnterior,
         cantidad_nueva: cantidadNueva,
         diferencia: diferencia
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+export async function ejecutarReservaStock(req, res) {
+  try {
+    const { id } = req.params;
+    const { productos_a_reservar } = req.body;
+
+    if (!productos_a_reservar || productos_a_reservar.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Debe especificar los productos a reservar' 
+      });
+    }
+
+    const queries = [];
+    let itemsReservadosCompletos = 0;
+    let itemsReservadosParciales = 0;
+
+    for (const productoReserva of productos_a_reservar) {
+      const { id_producto, id_detalle, cantidad_a_reservar, tipo_reserva } = productoReserva;
+
+      if (cantidad_a_reservar > 0) {
+        queries.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+          params: [cantidad_a_reservar, id_producto]
+        });
+
+        const estadoReserva = tipo_reserva === 'completo' ? 1 : 2;
+
+        queries.push({
+          sql: 'UPDATE detalle_orden_venta SET stock_reservado = ? WHERE id_detalle = ?',
+          params: [estadoReserva, id_detalle]
+        });
+
+        if (tipo_reserva === 'completo') {
+          itemsReservadosCompletos++;
+        } else {
+          itemsReservadosParciales++;
+        }
+      }
+    }
+
+    if (queries.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No hay productos para reservar'
+      });
+    }
+
+    const verificacionTotal = await executeQuery(`
+      SELECT COUNT(*) as total_items
+      FROM detalle_orden_venta 
+      WHERE id_orden_venta = ? AND stock_reservado != 1
+    `, [id]);
+
+    const totalItemsPendientes = verificacionTotal.data[0].total_items;
+    let nuevoEstadoGlobal = 0;
+
+    if (totalItemsPendientes === productos_a_reservar.length && itemsReservadosCompletos === productos_a_reservar.length) {
+      nuevoEstadoGlobal = 1;
+    } else if (itemsReservadosCompletos > 0 || itemsReservadosParciales > 0) {
+      nuevoEstadoGlobal = 2;
+    }
+
+    queries.push({
+      sql: 'UPDATE ordenes_venta SET stock_reservado = ? WHERE id_orden_venta = ?',
+      params: [nuevoEstadoGlobal, id]
+    });
+
+    const result = await executeTransaction(queries);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({
+      success: true,
+      message: 'Reserva ejecutada exitosamente',
+      data: {
+        items_reservados_completos: itemsReservadosCompletos,
+        items_reservados_parciales: itemsReservadosParciales,
+        estado_reserva_orden: nuevoEstadoGlobal
       }
     });
 

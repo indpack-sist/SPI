@@ -50,6 +50,7 @@ function DetalleOrdenVenta() {
   const [modalEditarComprobante, setModalEditarComprobante] = useState(false);
   const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
+  const [modalReservaStock, setModalReservaStock] = useState(false);
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
@@ -58,6 +59,9 @@ function DetalleOrdenVenta() {
   
   const [productoRectificar, setProductoRectificar] = useState(null);
   const [rectificarForm, setRectificarForm] = useState({ nueva_cantidad: '', motivo: '' });
+
+  const [infoReservaStock, setInfoReservaStock] = useState(null);
+  const [productosReservaSeleccionados, setProductosReservaSeleccionados] = useState([]);
 
   const [pagoForm, setPagoForm] = useState({
     id_cuenta_destino: '',
@@ -321,9 +325,7 @@ function DetalleOrdenVenta() {
     }
   };
 
-  const handleReservarStock = async () => {
-    if (!confirm('¿Desea reservar el stock para esta orden? Se descontarán las existencias del inventario.')) return;
-
+  const handleAbrirReservaStock = async () => {
     try {
       setProcesando(true);
       setError(null);
@@ -331,12 +333,57 @@ function DetalleOrdenVenta() {
       const response = await ordenesVentaAPI.reservarStock(id);
 
       if (response.data.success) {
+        setInfoReservaStock(response.data.data);
+        setProductosReservaSeleccionados(
+          response.data.data.productos.map(p => ({
+            id_producto: p.id_producto,
+            id_detalle: p.id_detalle,
+            cantidad_a_reservar: p.cantidad_reservable,
+            tipo_reserva: p.estado_reserva === 'completo' ? 'completo' : 'parcial',
+            seleccionado: p.estado_reserva !== 'sin_stock' && p.estado_reserva !== 'requiere_produccion'
+          }))
+        );
+        setModalReservaStock(true);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al consultar reserva de stock');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleEjecutarReservaStock = async () => {
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const productosAReservar = productosReservaSeleccionados
+        .filter(p => p.seleccionado && p.cantidad_a_reservar > 0)
+        .map(p => ({
+          id_producto: p.id_producto,
+          id_detalle: p.id_detalle,
+          cantidad_a_reservar: parseFloat(p.cantidad_a_reservar),
+          tipo_reserva: p.tipo_reserva
+        }));
+
+      if (productosAReservar.length === 0) {
+        setError('Debe seleccionar al menos un producto para reservar');
+        return;
+      }
+
+      const response = await ordenesVentaAPI.ejecutarReservaStock(id, {
+        productos_a_reservar: productosAReservar
+      });
+
+      if (response.data.success) {
         setSuccess(response.data.message);
+        setModalReservaStock(false);
         await cargarDatos();
       }
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || 'Error al reservar stock');
+      setError(err.response?.data?.error || 'Error al ejecutar reserva de stock');
     } finally {
       setProcesando(false);
     }
@@ -1153,7 +1200,7 @@ function DetalleOrdenVenta() {
           {puedeReservarStock() && (
             <button
               className="btn btn-warning border-yellow-400 text-yellow-800 hover:bg-yellow-100"
-              onClick={handleReservarStock}
+              onClick={handleAbrirReservaStock}
               disabled={procesando}
               title="Reservar stock físico disponible para esta orden"
             >
@@ -2040,11 +2087,10 @@ function DetalleOrdenVenta() {
         <div className="space-y-4">
           <div className="bg-blue-50 p-3 rounded border border-blue-200">
             <p className="text-sm text-blue-700">
-              Seleccione la cantidad a despachar para cada producto. 
+              Seleccione la cantidad a despachar para cada producto.
               Se generará una <strong>Salida de Inventario</strong> automáticamente.
             </p>
           </div>
-
           <div className="table-container max-h-80 overflow-y-auto">
             <table className="table table-sm">
               <thead>
@@ -2225,233 +2271,233 @@ function DetalleOrdenVenta() {
               
               <button
                 type="button" className={`btn py-4 text-left ${
-              nuevoTipoComprobante === 'Nota de Venta' 
-                ? 'btn-info text-white shadow-md' 
-                : 'btn-outline hover:bg-blue-50'
-            }`}
-            onClick={() => setNuevoTipoComprobante('Nota de Venta')}
-          >
-            <div className="flex items-center gap-3">
-              <FileText size={24} />
-              <div>
-                <div className="font-bold">NOTA DE VENTA</div>
-                <div className="text-xs opacity-80">Comprobante simple para ventas menores</div>
-              </div>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      <div className="flex gap-2 justify-end pt-3 border-t">
-        <button
-          className="btn btn-outline"
-          onClick={() => {
-            setModalEditarComprobante(false);
-            setNuevoTipoComprobante('');
-          }}
-          disabled={procesando}
-        >
-          Cancelar
-        </button>
-        <button
-          className="btn btn-primary"
-          onClick={handleCambiarTipoComprobante}
-          disabled={procesando || !nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante}
-        >
-          <Edit size={20} />
-          {procesando ? 'Actualizando...' : 'Confirmar Cambio'}
-        </button>
-      </div>
-    </div>
-  </Modal>
-
-  <Modal
-    isOpen={modalTransporteOpen}
-    onClose={() => setModalTransporteOpen(false)}
-    title="Editar Datos de Transporte"
-    size="md"
-  >
-    <form onSubmit={handleGuardarTransporte}>
-      <div className="space-y-4">
-        <div className="form-group">
-          <label className="form-label">Tipo de Entrega</label>
-          <select 
-            className="form-select"
-            value={transporteForm.tipo_entrega}
-            onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
-          >
-            <option value="Vehiculo Empresa">Vehículo Empresa</option>
-            <option value="Transporte Privado">Transporte Privado / Tercero</option>
-            <option value="Recojo Tienda">Recojo en Tienda</option>
-          </select>
-        </div>
-
-        {transporteForm.tipo_entrega === 'Vehiculo Empresa' && (
-          <>
-            <div className="form-group">
-              <label className="form-label">Vehículo</label>
-              <select 
-                className="form-select"
-                value={transporteForm.id_vehiculo}
-                onChange={(e) => setTransporteForm({ ...transporteForm, id_vehiculo: e.target.value })}
+                  nuevoTipoComprobante === 'Nota de Venta' 
+                    ? 'btn-info text-white shadow-md' 
+                    : 'btn-outline hover:bg-blue-50'
+                }`}
+                onClick={() => setNuevoTipoComprobante('Nota de Venta')}
               >
-                <option value="">Seleccione vehículo</option>
-                {vehiculos.map(v => (
-                  <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa} - {v.marca_modelo}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Conductor</label>
-              <select 
-                className="form-select"
-                value={transporteForm.id_conductor}
-                onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
-              >
-                <option value="">Seleccione conductor</option>
-                {conductores.map(c => (
-                  <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo}</option>
-                ))}
-              </select>
-            </div>
-          </>
-        )}
-
-        {transporteForm.tipo_entrega === 'Transporte Privado' && (
-          <>
-            <div className="form-group">
-              <label className="form-label">Empresa Transporte</label>
-              <input 
-                type="text" 
-                className="form-input"
-                value={transporteForm.transporte_nombre}
-                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
-                placeholder="Nombre del empresa o transportista"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="form-group">
-                <label className="form-label">Placa Vehículo</label>
-                <input 
-                  type="text" 
-                  className="form-input"
-                  value={transporteForm.transporte_placa}
-                  onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">DNI Chofer</label>
-                <input 
-                  type="text" 
-                  className="form-input"
-                  value={transporteForm.transporte_dni}
-                  onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Nombre Chofer</label>
-              <input 
-                type="text" 
-                className="form-input"
-                value={transporteForm.transporte_conductor}
-                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
-              />
-            </div>
-          </>
-        )}
-
-        <div className="form-group">
-          <label className="form-label">Fecha Estimada Entrega</label>
-          <input 
-            type="date" 
-            className="form-input"
-            value={transporteForm.fecha_entrega_estimada}
-            onChange={(e) => setTransporteForm({ ...transporteForm, fecha_entrega_estimada: e.target.value })}
-          />
-        </div>
-
-        <div className="flex gap-2 justify-end pt-2">
-          <button type="button" className="btn btn-outline" onClick={() => setModalTransporteOpen(false)}>Cancelar</button>
-          <button type="submit" className="btn btn-primary" disabled={procesando}>
-            <Save size={20} /> Guardar Cambios
-          </button>
-        </div>
-      </div>
-    </form>
-  </Modal>
-
-  <Modal
-    isOpen={modalRectificarOpen}
-    onClose={() => setModalRectificarOpen(false)}
-    title="Rectificar Cantidad de Producto"
-    size="sm"
-  >
-    {productoRectificar && (
-      <form onSubmit={handleRectificarCantidad}>
-        <div className="space-y-4">
-          <div className="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
-            <div className="flex gap-2">
-              <AlertTriangle className="text-orange-500 shrink-0" size={20} />
-              <div className="text-sm text-orange-800">
-                <p className="font-bold">{productoRectificar.producto}</p>
-                <p>Cantidad actual: <strong>{formatearNumero(productoRectificar.cantidad)}</strong></p>
-                <p className="text-xs mt-1">
-                    Esta acción actualizará el inventario y, si corresponde, las salidas asociadas.
-                </p>
-              </div>
+                <div className="flex items-center gap-3">
+                  <FileText size={24} />
+                  <div>
+                    <div className="font-bold">NOTA DE VENTA</div>
+                    <div className="text-xs opacity-80">Comprobante simple para ventas menores</div>
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Nueva Cantidad *</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="form-input"
-              value={rectificarForm.nueva_cantidad}
-              onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
-              required
-              autoFocus
-              onWheel={handleWheelDisable}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Motivo del Cambio *</label>
-            <textarea
-              className="form-textarea"
-              rows={2}
-              value={rectificarForm.motivo}
-              onChange={(e) => setRectificarForm({ ...rectificarForm, motivo: e.target.value })}
-              placeholder="Ej: Error de digitación, devolución parcial, etc."
-              required
-            ></textarea>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex gap-2 justify-end pt-3 border-t">
             <button
-              type="button"
               className="btn btn-outline"
-              onClick={() => setModalRectificarOpen(false)}
+              onClick={() => {
+                setModalEditarComprobante(false);
+                setNuevoTipoComprobante('');
+              }}
               disabled={procesando}
             >
               Cancelar
             </button>
             <button
-              type="submit"
-              className="btn btn-warning text-white"
-              disabled={procesando}
+              className="btn btn-primary"
+              onClick={handleCambiarTipoComprobante}
+              disabled={procesando || !nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante}
             >
-              <Save size={16} className="mr-1"/> Confirmar Rectificación
+              <Edit size={20} />
+              {procesando ? 'Actualizando...' : 'Confirmar Cambio'}
             </button>
           </div>
         </div>
-      </form>
-    )}
-  </Modal>
-</div>
-);
+      </Modal>
+
+      <Modal
+        isOpen={modalTransporteOpen}
+        onClose={() => setModalTransporteOpen(false)}
+        title="Editar Datos de Transporte"
+        size="md"
+      >
+        <form onSubmit={handleGuardarTransporte}>
+          <div className="space-y-4">
+            <div className="form-group">
+              <label className="form-label">Tipo de Entrega</label>
+              <select 
+                className="form-select"
+                value={transporteForm.tipo_entrega}
+                onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
+              >
+                <option value="Vehiculo Empresa">Vehículo Empresa</option>
+                <option value="Transporte Privado">Transporte Privado / Tercero</option>
+                <option value="Recojo Tienda">Recojo en Tienda</option>
+              </select>
+            </div>
+
+            {transporteForm.tipo_entrega === 'Vehiculo Empresa' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Vehículo</label>
+                  <select 
+                    className="form-select"
+                    value={transporteForm.id_vehiculo}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, id_vehiculo: e.target.value })}
+                  >
+                    <option value="">Seleccione vehículo</option>
+                    {vehiculos.map(v => (
+                      <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa} - {v.marca_modelo}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Conductor</label>
+                  <select 
+                    className="form-select"
+                    value={transporteForm.id_conductor}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
+                  >
+                    <option value="">Seleccione conductor</option>
+                    {conductores.map(c => (
+                      <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {transporteForm.tipo_entrega === 'Transporte Privado' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Empresa Transporte</label>
+                  <input 
+                    type="text" 
+                    className="form-input"
+                    value={transporteForm.transporte_nombre}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
+                    placeholder="Nombre del empresa o transportista"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">Placa Vehículo</label>
+                    <input 
+                      type="text" 
+                      className="form-input"
+                      value={transporteForm.transporte_placa}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">DNI Chofer</label>
+                    <input 
+                      type="text" 
+                      className="form-input"
+                      value={transporteForm.transporte_dni}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nombre Chofer</label>
+                  <input 
+                    type="text" 
+                    className="form-input"
+                    value={transporteForm.transporte_conductor}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">Fecha Estimada Entrega</label>
+              <input 
+                type="date" 
+                className="form-input"
+                value={transporteForm.fecha_entrega_estimada}
+                onChange={(e) => setTransporteForm({ ...transporteForm, fecha_entrega_estimada: e.target.value })}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" className="btn btn-outline" onClick={() => setModalTransporteOpen(false)}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={procesando}>
+                <Save size={20} /> Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </form>
+      </Modal>
+      
+      <Modal
+        isOpen={modalRectificarOpen}
+        onClose={() => setModalRectificarOpen(false)}
+        title="Rectificar Cantidad de Producto"
+        size="sm"
+      >
+        {productoRectificar && (
+          <form onSubmit={handleRectificarCantidad}>
+            <div className="space-y-4">
+              <div className="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
+                <div className="flex gap-2">
+                  <AlertTriangle className="text-orange-500 shrink-0" size={20} />
+                  <div className="text-sm text-orange-800">
+                    <p className="font-bold">{productoRectificar.producto}</p>
+                    <p>Cantidad actual: <strong>{formatearNumero(productoRectificar.cantidad)}</strong></p>
+                    <p className="text-xs mt-1">
+                        Esta acción actualizará el inventario y, si corresponde, las salidas asociadas.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Nueva Cantidad *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="form-input"
+                  value={rectificarForm.nueva_cantidad}
+                  onChange={(e) => setRectificarForm({ ...rectificarForm, nueva_cantidad: e.target.value })}
+                  required
+                  autoFocus
+                  onWheel={handleWheelDisable}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Motivo del Cambio *</label>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  value={rectificarForm.motivo}
+                  onChange={(e) => setRectificarForm({ ...rectificarForm, motivo: e.target.value })}
+                  placeholder="Ej: Error de digitación, devolución parcial, etc."
+                  required
+                ></textarea>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setModalRectificarOpen(false)}
+                  disabled={procesando}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-warning text-white"
+                  disabled={procesando}
+                >
+                  <Save size={16} className="mr-1"/> Confirmar Rectificación
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
+    </div>
+  );
 }
 export default DetalleOrdenVenta;

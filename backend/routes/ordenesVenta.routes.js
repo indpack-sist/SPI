@@ -22,8 +22,9 @@ import {
   anularDespacho,
   anularOrdenVenta,
   reservarStockOrden,
+  ejecutarReservaStock,
   agregarDireccionClienteDesdeOrden,
-  rectificarCantidadProducto // <--- 1. IMPORTAR EL NUEVO CONTROLADOR
+  rectificarCantidadProducto
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -44,15 +45,13 @@ router.get('/:id/salidas/:idSalida/pdf', verificarToken, descargarPDFDespacho);
 
 router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionDesdeVenta);
 router.post('/:id/reservar', verificarToken, reservarStockOrden);
+router.post('/:id/ejecutar-reserva', verificarToken, ejecutarReservaStock);
 
 router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
 router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
 router.put('/:id/tipo-comprobante', verificarToken, actualizarTipoComprobante);
 router.put('/:id/transporte', verificarToken, actualizarDatosTransporte);
-
-// --- 2. AGREGAR ESTA RUTA PARA RECTIFICACIÓN ---
 router.put('/:id/rectificar', verificarToken, rectificarCantidadProducto);
-// -----------------------------------------------
 
 router.delete('/:id/anular', verificarToken, anularOrdenVenta);
 

@@ -1268,8 +1268,9 @@ body {
 /* --- BORDES ESPECÍFICOS --- */
 .border-2 {
   border-width: 2px;
+  border-color: var(--border); /* Esto lo pone gris suave en lugar de negro */
+  border-style: solid;
 }
-
 .border-blue-200 { border-color: #bfdbfe; }
 .border-green-200 { border-color: #bbf7d0; }
 .border-yellow-200 { border-color: #fde68a; }
@@ -1319,11 +1320,17 @@ body {
   background-color: var(--bg-secondary);
 }
 
-/* --- BORDERS EN TABLA --- */
+/* --- BORDERS EN TABLA Y GENERALES --- */
 .border-t {
   border-top-width: 1px;
   border-top-style: solid;
   border-top-color: var(--border);
+}
+
+.border-b {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: var(--border); /* Fundamental para que no sea negro */
 }
 
 .border-border {

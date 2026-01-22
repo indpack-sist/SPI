@@ -217,7 +217,8 @@ export async function reservarStockOrden(req, res) {
         dov.id_detalle, 
         dov.id_producto, 
         dov.cantidad, 
-        dov.stock_reservado AS item_reservado,
+        COALESCE(dov.cantidad_reservada, 0) AS cantidad_reservada_actual,
+        dov.stock_reservado AS estado_reserva_item,
         p.stock_actual, 
         p.nombre, 
         p.requiere_receta 
@@ -234,31 +235,29 @@ export async function reservarStockOrden(req, res) {
     const productosParaReservar = [];
 
     for (const item of detalles) {
-      // Si ya está reservado (1), lo saltamos
-      if (item.item_reservado === 1) {
-        continue;
-      }
-
-      // CAMBIO: Leemos el stock siempre, sin importar si requiere receta
-      const stockActual = parseFloat(item.stock_actual || 0);
+      const stockEnAlmacen = parseFloat(item.stock_actual || 0);
       const cantidadRequerida = parseFloat(item.cantidad);
+      const yaReservado = parseFloat(item.cantidad_reservada_actual);
 
-      let estadoReserva = 'sin_stock';
-      let cantidadReservable = 0;
+      const stockTotalDisponibleParaLinea = stockEnAlmacen + yaReservado;
 
-      // Lógica unificada: Si hay stock, se puede reservar (parcial o completo)
-      if (stockActual >= cantidadRequerida) {
-        estadoReserva = 'completo';
-        cantidadReservable = cantidadRequerida;
-      } else if (stockActual > 0) {
-        estadoReserva = 'parcial';
-        cantidadReservable = stockActual;
+      let estadoSugerido = 'sin_stock';
+      let cantidadSugerida = yaReservado;
+
+      if (yaReservado >= cantidadRequerida - 0.001) {
+        estadoSugerido = 'completo';
+      } else if (yaReservado > 0) {
+        estadoSugerido = 'parcial';
       } else {
-        // Si no hay stock y requiere receta, sugerimos producción
-        if (item.requiere_receta === 1) {
-            estadoReserva = 'requiere_produccion';
+        if (stockEnAlmacen >= cantidadRequerida) {
+             cantidadSugerida = cantidadRequerida;
+             estadoSugerido = 'completo'; 
+        } else if (stockEnAlmacen > 0) {
+             cantidadSugerida = stockEnAlmacen; 
+             estadoSugerido = 'parcial';
         } else {
-            estadoReserva = 'sin_stock';
+             cantidadSugerida = 0;
+             estadoSugerido = item.requiere_receta === 1 ? 'requiere_produccion' : 'sin_stock';
         }
       }
 
@@ -267,16 +266,15 @@ export async function reservarStockOrden(req, res) {
         id_detalle: item.id_detalle,
         nombre: item.nombre,
         cantidad_requerida: cantidadRequerida,
-        stock_disponible: stockActual, // Ahora enviamos el stock real
-        cantidad_reservable: cantidadReservable, // Cantidad sugerida inicial
-        faltante: Math.max(0, cantidadRequerida - stockActual),
-        estado_reserva: estadoReserva,
-        requiere_receta: item.requiere_receta // Útil para el frontend
+        stock_maximo_disponible: stockTotalDisponibleParaLinea, 
+        cantidad_ya_reservada: yaReservado,
+        cantidad_reservable: cantidadSugerida, 
+        estado_reserva: estadoSugerido
       });
     }
 
     const resumen = {
-      total_items: productosParaReservar.length, // Corregido nombre para coincidir con frontend
+      total_items: productosParaReservar.length,
       con_stock_completo: productosParaReservar.filter(p => p.estado_reserva === 'completo').length,
       con_stock_parcial: productosParaReservar.filter(p => p.estado_reserva === 'parcial').length,
       sin_stock: productosParaReservar.filter(p => p.estado_reserva === 'sin_stock').length,
@@ -296,87 +294,76 @@ export async function reservarStockOrden(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function ejecutarReservaStock(req, res) {
   try {
     const { id } = req.params;
     const { productos_a_reservar } = req.body;
 
     if (!productos_a_reservar || productos_a_reservar.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Debe especificar los productos a reservar' 
-      });
+      return res.status(400).json({ success: false, error: 'No hay datos para procesar' });
     }
 
     const queries = [];
-    let itemsReservadosCompletos = 0;
-    let itemsReservadosParciales = 0;
-
-    for (const productoReserva of productos_a_reservar) {
-      const { id_producto, id_detalle, cantidad_a_reservar, tipo_reserva } = productoReserva;
-
-      if (cantidad_a_reservar > 0) {
-        queries.push({
-          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-          params: [cantidad_a_reservar, id_producto]
+    
+    const estadoActualResult = await executeQuery(
+      'SELECT id_detalle, cantidad, COALESCE(cantidad_reservada, 0) as reservado_bd FROM detalle_orden_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+    
+    const mapaActual = {};
+    if (estadoActualResult.success) {
+        estadoActualResult.data.forEach(row => {
+            mapaActual[row.id_detalle] = {
+                reservado: parseFloat(row.reservado_bd),
+                requerido: parseFloat(row.cantidad)
+            };
         });
-
-        const estadoReserva = tipo_reserva === 'completo' ? 1 : 2;
-
-        queries.push({
-          sql: 'UPDATE detalle_orden_venta SET stock_reservado = ? WHERE id_detalle = ?',
-          params: [estadoReserva, id_detalle]
-        });
-
-        if (tipo_reserva === 'completo') {
-          itemsReservadosCompletos++;
-        } else {
-          itemsReservadosParciales++;
-        }
-      }
     }
 
-    if (queries.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No hay productos para reservar'
+    for (const item of productos_a_reservar) {
+      const infoActual = mapaActual[item.id_detalle];
+      if (!infoActual) continue;
+
+      const nuevaCantidad = parseFloat(item.nueva_cantidad_reserva);
+      const cantidadAnterior = infoActual.reservado;
+      const diferencia = nuevaCantidad - cantidadAnterior;
+
+      if (diferencia !== 0) {
+        queries.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+          params: [diferencia, item.id_producto]
+        });
+      }
+
+      let nuevoEstadoItem = 0; 
+      if (nuevaCantidad >= infoActual.requerido - 0.001) {
+          nuevoEstadoItem = 1; 
+      } else if (nuevaCantidad > 0) {
+          nuevoEstadoItem = 2; 
+      }
+
+      queries.push({
+        sql: 'UPDATE detalle_orden_venta SET stock_reservado = ?, cantidad_reservada = ? WHERE id_detalle = ?',
+        params: [nuevoEstadoItem, nuevaCantidad, item.id_detalle]
       });
     }
 
-    const verificacionTotal = await executeQuery(`
-      SELECT COUNT(*) as total_items
-      FROM detalle_orden_venta 
-      WHERE id_orden_venta = ? AND stock_reservado != 1
-    `, [id]);
+    await executeTransaction(queries);
 
-    const totalItemsPendientes = verificacionTotal.data[0].total_items;
-    let nuevoEstadoGlobal = 0;
-
-    if (totalItemsPendientes === productos_a_reservar.length && itemsReservadosCompletos === productos_a_reservar.length) {
-      nuevoEstadoGlobal = 1; 
-    } else if (itemsReservadosCompletos > 0 || itemsReservadosParciales > 0) {
-      nuevoEstadoGlobal = 2; 
-    }
-
-    queries.push({
-      sql: 'UPDATE ordenes_venta SET stock_reservado = ? WHERE id_orden_venta = ?',
-      params: [nuevoEstadoGlobal, id]
-    });
-
-    const result = await executeTransaction(queries);
-
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
-    }
+    await executeQuery(`
+        UPDATE ordenes_venta 
+        SET stock_reservado = CASE 
+            WHEN (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ? AND stock_reservado != 1) = 0 THEN 1 
+            WHEN (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ? AND stock_reservado > 0) > 0 THEN 2 
+            ELSE 0 
+        END
+        WHERE id_orden_venta = ?
+    `, [id, id, id]);
 
     res.json({
       success: true,
-      message: 'Reserva ejecutada exitosamente',
-      data: {
-        items_reservados_completos: itemsReservadosCompletos,
-        items_reservados_parciales: itemsReservadosParciales,
-        estado_reserva_orden: nuevoEstadoGlobal
-      }
+      message: 'Reserva actualizada correctamente'
     });
 
   } catch (error) {

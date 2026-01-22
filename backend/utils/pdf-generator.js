@@ -13,6 +13,8 @@ const EMPRESA = {
   email: 'informes@indpackperu.com'
 };
 
+const TIMEZONE = 'America/Lima';
+
 async function cargarLogoURL() {
   try {
     const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
@@ -28,37 +30,50 @@ async function cargarLogoURL() {
 function formatearFecha(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${day}/${month}/${year}`;
+  // Validar fecha inválida
+  if (isNaN(date.getTime())) return 'N/A';
+
+  return date.toLocaleDateString('es-PE', {
+    timeZone: TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
 }
 
 function formatearHora(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
-  let hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12; 
-  return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+  if (isNaN(date.getTime())) return 'N/A';
+
+  return date.toLocaleTimeString('en-US', {
+    timeZone: TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
 }
 
 function formatearFechaHora(fecha) {
   if (!fecha) return 'N/A';
   const date = new Date(fecha);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  
-  let hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  
-  return `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+  if (isNaN(date.getTime())) return 'N/A';
+
+  const fechaStr = date.toLocaleDateString('es-PE', {
+    timeZone: TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+
+  const horaStr = date.toLocaleTimeString('en-US', {
+    timeZone: TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  return `${fechaStr} ${horaStr}`;
 }
 
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
@@ -626,19 +641,12 @@ export async function generarPDFTransferencia(datos) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
@@ -791,19 +799,12 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
@@ -1057,19 +1058,12 @@ export async function generarPDFCotizacion(cotizacion) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
@@ -1152,8 +1146,8 @@ export async function generarPDFCotizacion(cotizacion) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha de Pedido:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
       doc.font('Helvetica');
-      const fechaEmision = new Date(cotizacion.fecha_emision).toLocaleDateString('es-PE');
-      doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
+      
+      doc.text(formatearFecha(cotizacion.fecha_emision), 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
 
       doc.font('Helvetica-Bold');
       doc.text('Comercial:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
@@ -1300,19 +1294,12 @@ export async function generarPDFOrdenVenta(orden) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
@@ -1383,8 +1370,8 @@ export async function generarPDFOrdenVenta(orden) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
       doc.font('Helvetica');
-      const fechaEmision = formatearFecha(orden.fecha_emision);
-      doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
+      
+      doc.text(formatearFecha(orden.fecha_emision), 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
 
       doc.font('Helvetica-Bold');
       doc.text('Fecha Entrega Estimada:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
@@ -1530,19 +1517,12 @@ export async function generarPDFGuiaRemision(guia) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
@@ -1679,6 +1659,15 @@ export async function generarPDFGuiaRemision(guia) {
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`${parseFloat(guia.peso_bruto_kg).toFixed(2)} kg`, 475, yPos + 4, { align: 'right', width: 80 });
+      yPos += 20;
+
+      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+      doc.text('N° BULTOS', 390, yPos + 4);
+      
+      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text(guia.numero_bultos || '', 475, yPos + 4, { align: 'right', width: 80 });
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Esta guía de remisión ampara el traslado de mercadería - INDPACK S.A.C.', 50, 770, { align: 'center', width: 495 });
@@ -1719,19 +1708,12 @@ export async function generarPDFGuiaTransportista(guia) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
@@ -1887,19 +1869,12 @@ export async function generarPDFOrdenCompra(orden) {
         try {
           doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
         } catch (error) {
-          console.error('Error al insertar logo:', error);
           doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-          doc.text('IndPack', 60, 55);
-          doc.fontSize(10).font('Helvetica');
-          doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+          doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
         }
       } else {
         doc.rect(50, 40, 200, 60).fillAndStroke('#1e88e5', '#1e88e5');
-        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold');
-        doc.text('IndPack', 60, 55);
-        doc.fontSize(10).font('Helvetica');
-        doc.text('EMBALAJE INDUSTRIAL', 60, 80);
+        doc.fontSize(24).fillColor('#FFFFFF').font('Helvetica-Bold').text('IndPack', 60, 55);
       }
 
       doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');

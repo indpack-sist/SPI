@@ -4,7 +4,7 @@ import {
   ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
   XCircle, Clock, AlertCircle, Building, Calendar,
   MapPin, CreditCard, Wallet, DollarSign, TrendingUp,
-  ArrowRightLeft, PackageCheck
+  ArrowRightLeft, PackageCheck, FileText
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -380,7 +380,7 @@ function DetalleCompra() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
@@ -406,9 +406,37 @@ function DetalleCompra() {
         </div>
 
         <div className="card">
+            <div className="card-header">
+                <h2 className="card-title">
+                    <FileText size={20} /> Documento Físico
+                </h2>
+            </div>
+            <div className="card-body space-y-2">
+                <div>
+                    <label className="text-sm font-medium text-muted">Tipo Documento:</label>
+                    <p className="font-bold">{compra.tipo_documento || '-'}</p>
+                </div>
+                <div className="flex gap-2">
+                    <div>
+                        <label className="text-sm font-medium text-muted">Serie:</label>
+                        <p className="font-mono">{compra.serie_documento || '-'}</p>
+                    </div>
+                    <div>
+                        <label className="text-sm font-medium text-muted">Número:</label>
+                        <p className="font-mono">{compra.numero_documento || '-'}</p>
+                    </div>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-muted">Fecha Emisión Doc:</label>
+                    <p className="text-sm">{formatearFecha(compra.fecha_emision_documento)}</p>
+                </div>
+            </div>
+        </div>
+
+        <div className="card">
           <div className="card-header">
             <h2 className="card-title">
-              <Wallet size={20} /> Cuenta de Pago Inicial
+              <Wallet size={20} /> Cuenta de Pago
             </h2>
           </div>
           <div className="card-body space-y-2">
@@ -430,7 +458,7 @@ function DetalleCompra() {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">
-              <Calendar size={20} /> Información General
+              <Calendar size={20} /> Información
             </h2>
           </div>
           <div className="card-body space-y-2">

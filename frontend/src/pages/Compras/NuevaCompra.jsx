@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, ShoppingCart, Building, Calendar,
   MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard, Clock,
-  Calculator, DollarSign, ArrowRightLeft, XCircle, PackageCheck
+  Calculator, DollarSign, ArrowRightLeft, XCircle, PackageCheck, FileText, Hash
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -53,7 +53,11 @@ function NuevaCompra() {
     observaciones: '',
     contacto_proveedor: '',
     direccion_entrega: '',
-    tipo_recepcion: 'Total'
+    tipo_recepcion: 'Total',
+    tipo_documento: 'Factura',
+    serie_documento: '',
+    numero_documento: '',
+    fecha_emision_documento: new Date().toISOString().split('T')[0]
   });
   
   const [detalle, setDetalle] = useState([]);
@@ -449,7 +453,7 @@ function NuevaCompra() {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label text-xs">Fecha Emisión</label>
+                                    <label className="form-label text-xs">Fecha Registro (Sistema)</label>
                                     <input type="date" className="form-input form-input-sm" 
                                         value={formData.fecha_emision}
                                         onChange={(e) => setFormData({ ...formData, fecha_emision: e.target.value })}
@@ -459,6 +463,62 @@ function NuevaCompra() {
                             </div>
                         )}
                     </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header bg-gray-50/50">
+                    <h2 className="card-title flex items-center gap-2">
+                      <FileText size={18} /> Datos del Documento (Físico)
+                    </h2>
+                  </div>
+                  <div className="card-body">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="form-group">
+                        <label className="form-label text-xs">Tipo Documento</label>
+                        <select 
+                          className="form-select form-input-sm"
+                          value={formData.tipo_documento}
+                          onChange={(e) => setFormData({ ...formData, tipo_documento: e.target.value })}
+                        >
+                          <option value="Factura">Factura</option>
+                          <option value="Boleta">Boleta</option>
+                          <option value="Guia Remision">Guía Remisión</option>
+                          <option value="Nota de Venta">Nota de Venta</option>
+                          <option value="Recibo por Honorarios">Recibo por Honorarios</option>
+                          <option value="Otro">Otro</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs">Serie</label>
+                        <input 
+                          type="text" 
+                          className="form-input form-input-sm"
+                          value={formData.serie_documento}
+                          onChange={(e) => setFormData({ ...formData, serie_documento: e.target.value.toUpperCase() })}
+                          placeholder="F001"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs">Número</label>
+                        <input 
+                          type="text" 
+                          className="form-input form-input-sm"
+                          value={formData.numero_documento}
+                          onChange={(e) => setFormData({ ...formData, numero_documento: e.target.value })}
+                          placeholder="00012345"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs">Fecha Emisión Doc.</label>
+                        <input 
+                          type="date" 
+                          className="form-input form-input-sm"
+                          value={formData.fecha_emision_documento}
+                          onChange={(e) => setFormData({ ...formData, fecha_emision_documento: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {proveedorSeleccionado && (

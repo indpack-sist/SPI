@@ -37,6 +37,10 @@ export async function getAllCompras(req, res) {
         oc.monto_pagado,
         oc.estado_pago,
         oc.numero_cuotas,
+        oc.tipo_documento,
+        oc.serie_documento,
+        oc.numero_documento,
+        oc.fecha_emision_documento,
         pr.razon_social AS proveedor,
         pr.ruc AS ruc_proveedor,
         e_responsable.nombre_completo AS responsable,
@@ -270,7 +274,11 @@ export async function createCompra(req, res) {
       direccion_entrega,
       tipo_cambio,
       detalle,
-      tipo_recepcion 
+      tipo_recepcion,
+      tipo_documento,
+      serie_documento,
+      numero_documento,
+      fecha_emision_documento
     } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
@@ -456,8 +464,12 @@ export async function createCompra(req, res) {
           igv,
           total,
           estado,
-          estado_pago
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          estado_pago,
+          tipo_documento,
+          serie_documento,
+          numero_documento,
+          fecha_emision_documento
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         numeroCompra,
         id_proveedor,
@@ -483,7 +495,11 @@ export async function createCompra(req, res) {
         impuesto,
         total,
         estadoOrden,
-        tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente'
+        tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente',
+        tipo_documento || null,
+        serie_documento || null,
+        numero_documento || null,
+        fecha_emision_documento || null
       ]);
 
       const idCompra = resultCompra.insertId;
@@ -512,7 +528,7 @@ export async function createCompra(req, res) {
           id_tipo_inventario_entrada,
           'Compra',
           id_proveedor,
-          numeroCompra,
+          numero_documento ? `${serie_documento}-${numero_documento}` : numeroCompra,
           subtotalRecepcion,
           subtotalRecepcion,
           impuestoRecepcion,
@@ -666,7 +682,7 @@ export async function createCompra(req, res) {
           id_cuenta_pago,
           montoAPagar,
           conceptoPago,
-          numeroCompra,
+          numero_documento ? `${serie_documento}-${numero_documento}` : numeroCompra,
           idCompra,
           saldoAnterior,
           saldoNuevo,

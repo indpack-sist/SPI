@@ -101,7 +101,15 @@ const CalendarioProduccion = () => {
     } 
     else if (orden.fecha_inicio) {
         start = orden.fecha_inicio.split('T')[0];
-        end = (orden.fecha_fin || orden.fecha_inicio).split('T')[0];
+        if (orden.fecha_fin) {
+            end = orden.fecha_fin.split('T')[0];
+        } else {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            end = `${year}-${month}-${day}`;
+        }
     } else {
         return { start: null, end: null };
     }

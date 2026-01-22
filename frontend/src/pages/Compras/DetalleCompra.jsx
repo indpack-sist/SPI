@@ -144,7 +144,8 @@ function DetalleCompra() {
       setError(null);
       const response = await comprasAPI.registrarPago(id, datosPago);
       if (response.data.success) {
-        setSuccess(`Pago registrado exitosamente.`);
+        const estadoFinal = response.data.data.estado_pago;
+        setSuccess(`Pago registrado exitosamente (${estadoFinal === 'Pagado' ? 'Total' : 'Parcial'}).`);
         setModalPagoDirectoOpen(false);
         await cargarDatos();
       } else {
@@ -728,13 +729,16 @@ function DetalleCompra() {
                 <label className="form-label">Monto a Pagar *</label>
                 <input
                   type="number"
-                  className="form-input"
+                  className="form-input text-right font-bold"
                   value={datosPago.monto_pagado}
                   onChange={(e) => setDatosPago({ ...datosPago, monto_pagado: e.target.value })}
                   step="0.01"
                   min="0.01"
                   required
                 />
+                {parseFloat(datosPago.monto_pagado) > (parseFloat(cuotaSeleccionada.monto_cuota) - parseFloat(cuotaSeleccionada.monto_pagado || 0)) && (
+                    <small className="text-danger block mt-1">El monto excede la deuda de la cuota</small>
+                )}
               </div>
 
               <div className="form-group">
@@ -764,7 +768,7 @@ function DetalleCompra() {
               <div className="flex gap-2 justify-end pt-4 border-t">
                 <button type="button" className="btn btn-outline" onClick={() => setModalPagarCuotaOpen(false)} disabled={loading}>Cancelar</button>
                 <button type="submit" className="btn btn-success" disabled={loading}>
-                  <DollarSign size={20} /> {loading ? 'Procesando...' : 'Registrar Pago'}
+                  <DollarSign size={20} /> {loading ? 'Procesando...' : 'Confirmar Pago Cuota'}
                 </button>
               </div>
             </div>
@@ -780,14 +784,18 @@ function DetalleCompra() {
       >
         <form onSubmit={handlePagoDirecto}>
             <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                 <div className="flex justify-between mb-2">
                   <span className="text-sm text-muted">Total Compra:</span>
                   <span className="font-bold">{formatearMoneda(compra.total)}</span>
                 </div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-muted">Abonado:</span>
+                  <span className="font-bold text-success">{formatearMoneda(compra.monto_pagado || 0)}</span>
+                </div>
                 <div className="flex justify-between border-t pt-2">
-                  <span className="text-sm font-bold">Saldo pendiente:</span>
-                  <span className="font-bold text-danger">
+                  <span className="text-sm font-bold">Deuda Actual:</span>
+                  <span className="font-bold text-danger text-lg">
                     {formatearMoneda(parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0))}
                   </span>
                 </div>
@@ -814,40 +822,67 @@ function DetalleCompra() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Monto a Pagar *</label>
-                <input type="number" className="form-input" value={datosPago.monto_pagado}
+                <div className="flex justify-between items-center mb-1">
+                    <label className="form-label mb-0">Monto a Pagar *</label>
+                    <button type="button" className="text-xs text-primary hover:underline"
+                        onClick={() => {
+                            const deuda = parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0);
+                            setDatosPago({ ...datosPago, monto_pagado: deuda.toFixed(2) });
+                        }}>
+                        Pagar Todo
+                    </button>
+                </div>
+                <input type="number" className="form-input text-right font-bold text-lg" value={datosPago.monto_pagado}
                   onChange={(e) => setDatosPago({ ...datosPago, monto_pagado: e.target.value })}
                   step="0.01" min="0.01" required />
+                
+                {datosPago.monto_pagado && (
+                    <div className="text-right mt-1">
+                        {parseFloat(datosPago.monto_pagado) < (parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0)) ? (
+                            <span className="text-xs text-info font-bold flex justify-end items-center gap-1">
+                                <TrendingUp size={12} /> Pago Parcial
+                            </span>
+                        ) : parseFloat(datosPago.monto_pagado) > (parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0) + 0.01) ? (
+                            <span className="text-xs text-danger font-bold">Monto excede la deuda</span>
+                        ) : (
+                            <span className="text-xs text-success font-bold flex justify-end items-center gap-1">
+                                <CheckCircle size={12} /> Pago Total
+                            </span>
+                        )}
+                    </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="form-group">
+                    <label className="form-label">Fecha de Pago *</label>
+                    <input type="date" className="form-input" value={datosPago.fecha_pago}
+                    onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Método</label>
+                    <select className="form-select" value={datosPago.metodo_pago}
+                    onChange={(e) => setDatosPago({ ...datosPago, metodo_pago: e.target.value })}>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Tarjeta">Tarjeta</option>
+                    </select>
+                </div>
               </div>
 
               <div className="form-group">
-                <label className="form-label">Fecha de Pago *</label>
-                <input type="date" className="form-input" value={datosPago.fecha_pago}
-                  onChange={(e) => setDatosPago({ ...datosPago, fecha_pago: e.target.value })} required />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Método de Pago</label>
-                <select className="form-select" value={datosPago.metodo_pago}
-                  onChange={(e) => setDatosPago({ ...datosPago, metodo_pago: e.target.value })}>
-                  <option value="Transferencia">Transferencia</option>
-                  <option value="Efectivo">Efectivo</option>
-                  <option value="Cheque">Cheque</option>
-                  <option value="Tarjeta">Tarjeta</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Referencia</label>
+                <label className="form-label">Referencia / Observación</label>
                 <input type="text" className="form-input" value={datosPago.referencia}
                   onChange={(e) => setDatosPago({ ...datosPago, referencia: e.target.value })}
-                  placeholder="Número de operación" />
+                  placeholder="Ej: Pago a cuenta..." />
               </div>
 
               <div className="flex gap-2 justify-end pt-4 border-t">
                 <button type="button" className="btn btn-outline" onClick={() => setModalPagoDirectoOpen(false)} disabled={loading}>Cancelar</button>
-                <button type="submit" className="btn btn-success" disabled={loading}>
-                  <DollarSign size={20} /> {loading ? 'Procesando...' : 'Registrar Pago'}
+                <button type="submit" className="btn btn-success" 
+                    disabled={loading || parseFloat(datosPago.monto_pagado) > (parseFloat(compra.total) - parseFloat(compra.monto_pagado || 0) + 0.01)}>
+                  <DollarSign size={20} /> {loading ? 'Procesando...' : 'Confirmar Pago'}
                 </button>
               </div>
             </div>

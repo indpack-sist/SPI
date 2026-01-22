@@ -336,10 +336,17 @@ function DetalleOrdenVenta() {
         setInfoReservaStock(response.data.data);
         setProductosReservaSeleccionados(
           response.data.data.productos.map(p => ({
-            ...p,
-            cantidad_a_reservar: p.cantidad_reservable,
+            id_producto: p.id_producto,
+            id_detalle: p.id_detalle,
+            nombre: p.nombre,
+            cantidad_requerida: parseFloat(p.cantidad_requerida),
+            stock_disponible: parseFloat(p.stock_disponible),
+            stock_maximo_disponible: parseFloat(p.stock_maximo_disponible),
+            cantidad_ya_reservada: parseFloat(p.cantidad_ya_reservada),
+            cantidad_a_reservar: parseFloat(p.cantidad_reservable),
+            estado_reserva: p.estado_reserva,
             tipo_reserva: p.estado_reserva === 'completo' ? 'completo' : 'parcial',
-            seleccionado: p.cantidad_reservable > 0 
+            seleccionado: parseFloat(p.cantidad_reservable) > 0
           }))
         );
         setModalReservaStock(true);
@@ -354,9 +361,21 @@ function DetalleOrdenVenta() {
 
   const handleToggleProductoReserva = (id_detalle) => {
     setProductosReservaSeleccionados(prev => 
-      prev.map(p => 
-        p.id_detalle === id_detalle ? { ...p, seleccionado: !p.seleccionado } : p
-      )
+      prev.map(p => {
+        if (p.id_detalle === id_detalle) {
+          const nuevoSeleccionado = !p.seleccionado;
+          const maximoPosible = Math.min(p.stock_maximo_disponible, p.cantidad_requerida);
+          return { 
+             ...p, 
+             seleccionado: nuevoSeleccionado,
+             cantidad_a_reservar: nuevoSeleccionado ? maximoPosible : 0,
+             tipo_reserva: nuevoSeleccionado 
+                ? (maximoPosible >= p.cantidad_requerida ? 'completo' : 'parcial') 
+                : 'sin_stock'
+          };
+        }
+        return p;
+      })
     );
   };
 
@@ -369,7 +388,7 @@ function DetalleOrdenVenta() {
       if (isNaN(val) || val < 0) val = 0;
 
       const item = nuevosProductos[index];
-      const maximoPosible = Math.min(item.stock_disponible, item.cantidad_requerida);
+      const maximoPosible = Math.min(item.stock_maximo_disponible, item.cantidad_requerida);
 
       if (val > maximoPosible) {
         val = maximoPosible;
@@ -380,12 +399,13 @@ function DetalleOrdenVenta() {
       if (val === 0) {
          nuevosProductos[index].tipo_reserva = 'sin_stock'; 
          nuevosProductos[index].seleccionado = false; 
-      } else if (val >= item.cantidad_requerida) {
-         nuevosProductos[index].tipo_reserva = 'completo';
-         nuevosProductos[index].seleccionado = true;
       } else {
-         nuevosProductos[index].tipo_reserva = 'parcial';
          nuevosProductos[index].seleccionado = true;
+         if (val >= item.cantidad_requerida - 0.001) {
+            nuevosProductos[index].tipo_reserva = 'completo';
+         } else {
+            nuevosProductos[index].tipo_reserva = 'parcial';
+         }
       }
 
       setProductosReservaSeleccionados(nuevosProductos);
@@ -397,19 +417,11 @@ function DetalleOrdenVenta() {
       setProcesando(true);
       setError(null);
 
-      const productosAReservar = productosReservaSeleccionados
-        .filter(p => p.seleccionado && p.cantidad_a_reservar > 0)
-        .map(p => ({
+      const productosAReservar = productosReservaSeleccionados.map(p => ({
           id_producto: p.id_producto,
           id_detalle: p.id_detalle,
-          cantidad_a_reservar: parseFloat(p.cantidad_a_reservar),
-          tipo_reserva: p.tipo_reserva
-        }));
-
-      if (productosAReservar.length === 0) {
-        setError('Debe seleccionar al menos un producto válido para reservar');
-        return;
-      }
+          nueva_cantidad_reserva: parseFloat(p.cantidad_a_reservar)
+      }));
 
       const response = await ordenesVentaAPI.ejecutarReservaStock(id, {
         productos_a_reservar: productosAReservar
@@ -867,7 +879,8 @@ function DetalleOrdenVenta() {
   const puedeReservarStock = () => {
     if (!orden) return false;
     const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
-    return orden.stock_reservado !== 1 && !estadosNoPermitidos.includes(orden.estado);
+    // Permitimos abrir el modal siempre que no esté en estados finales, incluso si ya reservó (para editar)
+    return !estadosNoPermitidos.includes(orden.estado);
   };
 
   if (loading) return <Loading message="Cargando orden de venta..." />;
@@ -968,6 +981,16 @@ function DetalleOrdenVenta() {
                 <div className="flex flex-col gap-1">
                     <span className="badge badge-success bg-green-100 text-green-700 border-green-200">
                         <Lock size={10} className="mr-1"/> Reservado
+                    </span>
+                </div>
+            );
+        }
+        
+        if (row.stock_reservado === 2) {
+             return (
+                <div className="flex flex-col gap-1">
+                    <span className="badge badge-warning bg-yellow-100 text-yellow-800 border-yellow-200">
+                        <Lock size={10} className="mr-1"/> Res. Parcial
                     </span>
                 </div>
             );
@@ -1241,9 +1264,9 @@ function DetalleOrdenVenta() {
               className="btn btn-warning border-yellow-400 text-yellow-800 hover:bg-yellow-100"
               onClick={handleAbrirReservaStock}
               disabled={procesando}
-              title="Reservar stock físico disponible para esta orden"
+              title="Reservar/Editar stock físico"
             >
-              <Lock size={20} /> {orden.stock_reservado === 2 ? 'Completar Reserva' : 'Reservar Stock'}
+              <Lock size={20} /> {orden.stock_reservado > 0 ? 'Editar Reserva' : 'Reservar Stock'}
             </button>
           )}
 
@@ -2554,7 +2577,7 @@ function DetalleOrdenVenta() {
                 </p>
                 {infoReservaStock && (
                   <div className="mt-2 flex gap-4 text-xs font-semibold">
-                    <span>Total Items: {infoReservaStock.resumen.total_productos}</span>
+                    <span>Total Items: {infoReservaStock.resumen.total_items}</span>
                     <span className="text-green-700">Stock Completo: {infoReservaStock.resumen.con_stock_completo}</span>
                     <span className="text-orange-700">Stock Parcial: {infoReservaStock.resumen.con_stock_parcial}</span>
                     <span className="text-red-700">Sin Stock: {infoReservaStock.resumen.sin_stock}</span>
@@ -2571,23 +2594,27 @@ function DetalleOrdenVenta() {
                   <th className="w-10 text-center">#</th>
                   <th>Producto</th>
                   <th className="text-right">Requerido</th>
-                  <th className="text-right">Disponible</th>
-                  <th className="text-right">A Reservar</th>
-                  <th className="text-center">Estado</th>
+                  <th className="text-right">Disponible Total</th>
+                  <th className="text-right">Reserva Actual</th>
+                  <th className="text-right">Nueva Reserva</th>
                 </tr>
               </thead>
               <tbody>
                 {productosReservaSeleccionados.map((item) => {
-                  const isDisabled = item.estado_reserva === 'sin_stock' || item.estado_reserva === 'requiere_produccion';
+                  const sinStockAbsoluto = item.stock_maximo_disponible <= 0;
+                  
                   return (
-                    <tr key={item.id_detalle} className={isDisabled ? 'bg-gray-50 opacity-60' : ''}>
+                    <tr key={item.id_detalle} className={sinStockAbsoluto ? 'bg-gray-50 opacity-60' : ''}>
                       <td className="text-center">
                         <input 
                           type="checkbox"
                           className="checkbox checkbox-sm checkbox-primary"
                           checked={item.seleccionado}
-                          onChange={() => handleToggleProductoReserva(item.id_detalle)}
-                          disabled={isDisabled}
+                          onChange={() => {
+                             const nuevoVal = !item.seleccionado ? item.stock_maximo_disponible : 0;
+                             handleCambioCantidadManualReserva(item.id_detalle, nuevoVal);
+                          }}
+                          disabled={sinStockAbsoluto}
                         />
                       </td>
                       <td>
@@ -2597,45 +2624,27 @@ function DetalleOrdenVenta() {
                         {formatearNumero(item.cantidad_requerida)}
                       </td>
                       <td className="text-right text-muted">
-                        {formatearNumero(item.stock_disponible)}
+                        {formatearNumero(item.stock_maximo_disponible)}
+                      </td>
+                      <td className="text-right text-blue-600 font-medium">
+                         {formatearNumero(item.cantidad_ya_reservada)}
                       </td>
                       <td className="text-right">
                         <input
                           type="number"
                           className="form-input form-input-sm text-right w-24 ml-auto"
                           min="0"
-                          max={Math.min(item.stock_disponible, item.cantidad_requerida)}
+                          max={Math.min(item.stock_maximo_disponible, item.cantidad_requerida)}
                           step="0.01"
                           value={item.cantidad_a_reservar}
                           onChange={(e) => handleCambioCantidadManualReserva(item.id_detalle, e.target.value)}
                           onWheel={handleWheelDisable}
-                          disabled={item.stock_disponible <= 0} 
+                          disabled={sinStockAbsoluto} 
                         />
-                      </td>
-                      <td className="text-center">
-                        {item.estado_reserva === 'completo' && (
-                          <span className="badge badge-success badge-sm">Completo</span>
-                        )}
-                        {item.estado_reserva === 'parcial' && (
-                          <span className="badge badge-warning badge-sm">Parcial</span>
-                        )}
-                        {item.estado_reserva === 'sin_stock' && (
-                          <span className="badge badge-danger badge-sm">Sin Stock</span>
-                        )}
-                        {item.estado_reserva === 'requiere_produccion' && (
-                          <span className="badge badge-info badge-sm">Requiere OP</span>
-                        )}
                       </td>
                     </tr>
                   );
                 })}
-                {productosReservaSeleccionados.length === 0 && (
-                  <tr>
-                    <td colSpan="6" className="text-center py-4 text-muted">
-                      Cargando información de stock...
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
@@ -2651,7 +2660,7 @@ function DetalleOrdenVenta() {
             <button
               className="btn btn-primary"
               onClick={handleEjecutarReservaStock}
-              disabled={procesando || productosReservaSeleccionados.filter(p => p.seleccionado).length === 0}
+              disabled={procesando}
             >
               <Lock size={16} className="mr-1"/> Confirmar Reserva
             </button>

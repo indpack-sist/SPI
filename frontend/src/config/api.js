@@ -468,6 +468,8 @@ export const ordenesVentaAPI = {
   
   reservarStock: (id) => api.post(`/ordenes-venta/${id}/reservar`),
 
+  ejecutarReservaStock: (id, data) => api.post(`/ordenes-venta/${id}/ejecutar-reserva`, data),
+
   crearOrdenProduccion: (id, data) => api.post(`/ordenes-venta/${id}/crear-orden-produccion`, data),
 
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 

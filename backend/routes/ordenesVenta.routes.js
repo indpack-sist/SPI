@@ -24,7 +24,8 @@ import {
   reservarStockOrden,
   ejecutarReservaStock,
   agregarDireccionClienteDesdeOrden,
-  rectificarCantidadProducto
+  rectificarCantidadProducto,
+  generarGuiaInterna
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -46,6 +47,7 @@ router.get('/:id/salidas/:idSalida/pdf', verificarToken, descargarPDFDespacho);
 router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionDesdeVenta);
 router.post('/:id/reservar', verificarToken, reservarStockOrden);
 router.post('/:id/ejecutar-reserva', verificarToken, ejecutarReservaStock);
+router.post('/:id/guia-interna', verificarToken, generarGuiaInterna);
 
 router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
 router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);

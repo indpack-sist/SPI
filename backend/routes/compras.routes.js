@@ -1,4 +1,5 @@
 import express from 'express';
+import { verificarToken } from '../middleware/auth.js';
 import {
   getAllCompras,
   getCompraById,
@@ -19,25 +20,32 @@ import {
 
 const router = express.Router();
 
-router.get('/alertas', getAlertasCompras);
-router.get('/estadisticas', getEstadisticasCompras);
-router.get('/por-cuenta', getComprasPorCuenta);
+// Rutas de Reportes y Estadísticas
+router.get('/alertas', verificarToken, getAlertasCompras);
+router.get('/estadisticas', verificarToken, getEstadisticasCompras);
+router.get('/por-cuenta', verificarToken, getComprasPorCuenta);
 
-router.get('/', getAllCompras);
-router.post('/', createCompra);
+// Rutas Principales (CRUD)
+// Nota: El POST '/' ahora soporta los campos de documento (tipo, serie, numero, fecha)
+router.get('/', verificarToken, getAllCompras);
+router.post('/', verificarToken, createCompra); 
 
-router.get('/:id/pdf', descargarPDFCompra);
+// Rutas de Documentos
+router.get('/:id/pdf', verificarToken, descargarPDFCompra);
 
-router.get('/:id/pagos/resumen', getResumenPagosCompra);
-router.get('/:id/pagos/historial', getHistorialPagosCompra);
-router.post('/:id/pagos', registrarPagoCompra);
+// Rutas de Pagos
+router.get('/:id/pagos/resumen', verificarToken, getResumenPagosCompra);
+router.get('/:id/pagos/historial', verificarToken, getHistorialPagosCompra);
+router.post('/:id/pagos', verificarToken, registrarPagoCompra);
 
-router.get('/:id/cuotas', getCuotasCompra);
-router.get('/:id/cuotas/:idCuota', getCuotaById);
-router.post('/:id/cuotas/:idCuota/pagar', pagarCuota);
+// Rutas de Cuotas (Compras a Crédito)
+router.get('/:id/cuotas', verificarToken, getCuotasCompra);
+router.get('/:id/cuotas/:idCuota', verificarToken, getCuotaById);
+router.post('/:id/cuotas/:idCuota/pagar', verificarToken, pagarCuota);
 
-router.get('/:id', getCompraById);
-router.put('/:id', updateCompra);
-router.patch('/:id/cancelar', cancelarCompra);
+// Rutas de Operaciones sobre una Compra Específica
+router.get('/:id', verificarToken, getCompraById);
+router.put('/:id', verificarToken, updateCompra);
+router.patch('/:id/cancelar', verificarToken, cancelarCompra);
 
 export default router;

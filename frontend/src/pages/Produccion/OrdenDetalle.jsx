@@ -514,13 +514,13 @@ function OrdenDetalle() {
   };
 
   const handleCancelar = async () => {
-    if (!confirm('¿Está seguro de cancelar esta orden? Si hay materiales consumidos, serán devueltos al inventario.')) return;
+    if (!confirm('¿Está seguro de cancelar esta orden? Los materiales consumidos serán devueltos al inventario.')) return;
 
     try {
       setProcesando(true);
       setError(null);
       await ordenesProduccionAPI.cancelar(id);
-      setSuccess('Orden cancelada. Estado actualizado.');
+      setSuccess('Orden cancelada. Los materiales han sido devueltos al inventario.');
       cargarDatos();
     } catch (err) {
       setError(err.error || 'Error al cancelar orden');
@@ -622,21 +622,41 @@ function OrdenDetalle() {
 
       {desdeOrdenVenta && (
         <div className="card border-l-4 border-info bg-blue-50 mb-4">
-          <div className="card-body">
-            <div className="flex items-center gap-3">
-              <ShoppingCart size={24} className="text-info" />
-              <div>
-                <p className="font-medium text-blue-900 flex items-center gap-2">
-                  Orden de Producción generada desde Orden de Venta
-                  {orden.numero_orden_venta && (
-                    <span className="badge badge-info">{orden.numero_orden_venta}</span>
-                  )}
-                </p>
-                {orden.id_orden_venta && (
-                  <p className="text-sm text-blue-700 mt-1">
-                    Orden de Venta: {orden.numero_orden_venta}
+          <div className="card-body py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShoppingCart size={24} className="text-info" />
+                <div>
+                  <p className="font-medium text-blue-900 flex items-center gap-2">
+                    Orden de Venta: {orden.numero_orden_venta || 'N/A'}
                   </p>
-                )}
+                  <p className="text-sm text-blue-700">
+                    Cliente a la espera de producción
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex gap-4 text-sm">
+                 {orden.prioridad_venta && (
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs text-blue-600 uppercase font-semibold">Prioridad</span>
+                      <span className={`badge ${
+                        orden.prioridad_venta === 'Alta' ? 'badge-error' : 
+                        orden.prioridad_venta === 'Media' ? 'badge-warning' : 'badge-success'
+                      }`}>
+                        {orden.prioridad_venta}
+                      </span>
+                    </div>
+                 )}
+                 
+                 {orden.fecha_estimada_venta && (
+                    <div className="flex flex-col items-end">
+                      <span className="text-xs text-blue-600 uppercase font-semibold">Fecha Prometida</span>
+                      <span className="font-bold text-blue-900">
+                        {formatearFecha(orden.fecha_estimada_venta)}
+                      </span>
+                    </div>
+                 )}
               </div>
             </div>
           </div>

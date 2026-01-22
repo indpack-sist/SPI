@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, ShoppingCart, Building, Calendar,
   MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard, Clock,
-  Calculator, DollarSign, ArrowRightLeft, XCircle, PackageCheck, FileText, Hash
+  Calculator, DollarSign, ArrowRightLeft, XCircle, PackageCheck, FileText, PackagePlus, UserPlus, Loader
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -22,10 +22,19 @@ function NuevaCompra() {
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos] = useState([]);
   const [cuentasPago, setCuentasPago] = useState([]);
+  const [tiposInventario, setTiposInventario] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   
   const [modalProveedorOpen, setModalProveedorOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
   const [modalHistorialOpen, setModalHistorialOpen] = useState(false);
+  
+  const [modalCrearProveedorOpen, setModalCrearProveedorOpen] = useState(false);
+  const [modalCrearProductoOpen, setModalCrearProductoOpen] = useState(false);
+  const [buscandoRuc, setBuscandoRuc] = useState(false);
+
+  const [busquedaProveedor, setBusquedaProveedor] = useState('');
+  const [busquedaProducto, setBusquedaProducto] = useState('');
   
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState(null);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
@@ -59,10 +68,41 @@ function NuevaCompra() {
     numero_documento: '',
     fecha_emision_documento: new Date().toISOString().split('T')[0]
   });
+
+  const [formNuevoProveedor, setFormNuevoProveedor] = useState({
+    ruc: '',
+    razon_social: '',
+    direccion: '', 
+    contacto: '',
+    telefono: '',
+    email: '',
+    terminos_pago: 'Contado'
+  });
+
+  const [formNuevoProducto, setFormNuevoProducto] = useState({
+    codigo: '',
+    nombre: '',
+    descripcion: '',
+    id_tipo_inventario: '',
+    id_categoria: '',
+    unidad_medida: 'UND',
+    stock_minimo: 0,
+    requiere_receta: false
+  });
   
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
   const [cronograma, setCronograma] = useState([]);
+
+  const proveedoresFiltrados = proveedores.filter(p => 
+    p.razon_social.toLowerCase().includes(busquedaProveedor.toLowerCase()) || 
+    p.ruc.includes(busquedaProveedor)
+  );
+
+  const productosFiltrados = productos.filter(p => 
+    p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
+    p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
+  );
 
   useEffect(() => {
     cargarCatalogos();
@@ -107,24 +147,108 @@ function NuevaCompra() {
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
-      const [resProveedores, resProductos, resCuentas] = await Promise.all([
+      const [resProveedores, resProductos, resCuentas, resTiposInv, resCategorias] = await Promise.all([
         proveedoresAPI.getAll({ estado: 'Activo' }),
-        productosAPI.getAll({ 
-          estado: 'Activo',
-          id_tipo_inventario: '1,2,4,5,6'
-        }),
-        cuentasPagoAPI.getAll({ estado: 'Activo' })
+        productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: '1,2,4,5,6' }),
+        cuentasPagoAPI.getAll({ estado: 'Activo' }),
+        productosAPI.getTiposInventario(),
+        productosAPI.getCategorias()
       ]);
       
       if (resProveedores.data.success) setProveedores(resProveedores.data.data || []);
       if (resProductos.data.success) setProductos(resProductos.data.data || []);
       if (resCuentas.data.success) setCuentasPago(resCuentas.data.data || []);
+      if (resTiposInv.data.success) setTiposInventario(resTiposInv.data.data || []);
+      if (resCategorias.data.success) setCategorias(resCategorias.data.data || []);
       
     } catch (err) {
       console.error(err);
       setError('Error al cargar catálogos: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBuscarRUC = async () => {
+    if (formNuevoProveedor.ruc.length !== 11) {
+      setError('El RUC debe tener 11 dígitos');
+      return;
+    }
+    
+    try {
+      setBuscandoRuc(true);
+      setError(null);
+      const response = await proveedoresAPI.validarRUC(formNuevoProveedor.ruc);
+      
+      if (response.data.success) {
+        if (response.data.ya_registrado) {
+           setError('ATENCIÓN: Este RUC ya está registrado en el sistema.');
+        }
+        
+        const datos = response.data.datos;
+        setFormNuevoProveedor(prev => ({
+            ...prev,
+            razon_social: datos.razon_social || '',
+            direccion: datos.direccion || prev.direccion,
+            estado: datos.estado
+        }));
+        
+        if (!response.data.ya_registrado) {
+            setSuccess('Datos encontrados en SUNAT');
+        }
+      }
+    } catch (err) {
+        console.error(err);
+        setError('Error al validar RUC: ' + (err.response?.data?.error || err.message));
+    } finally {
+        setBuscandoRuc(false);
+    }
+  };
+
+  const handleGuardarNuevoProveedor = async (e) => {
+    e.preventDefault();
+    try {
+        setLoading(true);
+        const response = await proveedoresAPI.create(formNuevoProveedor);
+        if (response.data.success) {
+            const nuevoProv = {
+                id_proveedor: response.data.data.id_proveedor,
+                ...formNuevoProveedor
+            };
+            setProveedores([...proveedores, nuevoProv]);
+            handleSelectProveedor(nuevoProv);
+            setModalCrearProveedorOpen(false);
+            setFormNuevoProveedor({ ruc: '', razon_social: '', direccion: '', contacto: '', telefono: '', email: '', terminos_pago: 'Contado' });
+            setSuccess('Proveedor creado y seleccionado correctamente');
+        }
+    } catch (err) {
+        setError(err.response?.data?.error || 'Error al crear proveedor');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleGuardarNuevoProducto = async (e) => {
+    e.preventDefault();
+    try {
+        setLoading(true);
+        const response = await productosAPI.create(formNuevoProducto);
+        if (response.data.success) {
+            const nuevoProd = {
+                id_producto: response.data.data.id_producto,
+                stock_actual: 0, 
+                ...formNuevoProducto
+            };
+            setProductos([...productos, nuevoProd]);
+            handleSelectProducto(nuevoProd);
+            setModalCrearProductoOpen(false);
+            setFormNuevoProducto({ codigo: '', nombre: '', descripcion: '', id_tipo_inventario: '', id_categoria: '', unidad_medida: 'UND', stock_minimo: 0, requiere_receta: false });
+            setSuccess('Producto creado y agregado al detalle');
+        }
+    } catch (err) {
+        setError(err.response?.data?.error || 'Error al crear producto');
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -153,6 +277,7 @@ function NuevaCompra() {
       contacto_proveedor: proveedor.contacto || ''
     });
     setModalProveedorOpen(false);
+    setBusquedaProveedor('');
   };
 
   const handleSelectProducto = (producto) => {
@@ -173,6 +298,7 @@ function NuevaCompra() {
     };
     setDetalle([...detalle, nuevoItem]);
     setModalProductoOpen(false);
+    setBusquedaProducto('');
   };
 
   const handleCantidadChange = (index, cantidad) => {
@@ -880,40 +1006,76 @@ function NuevaCompra() {
 
       <Modal
         isOpen={modalProveedorOpen}
-        onClose={() => setModalProveedorOpen(false)}
+        onClose={() => { setModalProveedorOpen(false); setBusquedaProveedor(''); }}
         title="Seleccionar Proveedor"
         size="lg"
       >
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {proveedores.map((prov) => (
-            <div
-              key={prov.id_proveedor}
-              className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition flex justify-between items-center"
-              onClick={() => handleSelectProveedor(prov)}
-            >
-              <div>
-                <div className="font-bold text-blue-900">{prov.razon_social}</div>
-                <div className="text-xs text-muted mt-1">RUC: {prov.ruc}</div>
-              </div>
-              <div className="text-right text-xs text-muted">
-                {prov.direccion}
-              </div>
+        <div className="mb-4">
+             <button type="button" className="btn btn-sm btn-success w-full mb-3" onClick={() => { setModalProveedorOpen(false); setModalCrearProveedorOpen(true); }}>
+                <UserPlus size={16} className="mr-2" /> Crear Nuevo Proveedor
+            </button>
+            <div className="relative">
+                <input 
+                    type="text" 
+                    className="form-input pl-10" 
+                    placeholder="Buscar proveedor por nombre o RUC..."
+                    value={busquedaProveedor}
+                    onChange={(e) => setBusquedaProveedor(e.target.value)}
+                    autoFocus
+                />
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
             </div>
-          ))}
+        </div>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {proveedoresFiltrados.length > 0 ? (
+              proveedoresFiltrados.map((prov) => (
+                <div
+                  key={prov.id_proveedor}
+                  className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition flex justify-between items-center"
+                  onClick={() => handleSelectProveedor(prov)}
+                >
+                  <div>
+                    <div className="font-bold text-blue-900">{prov.razon_social}</div>
+                    <div className="text-xs text-muted mt-1">RUC: {prov.ruc}</div>
+                  </div>
+                  <div className="text-right text-xs text-muted">
+                    {prov.direccion}
+                  </div>
+                </div>
+              ))
+          ) : (
+              <div className="text-center py-4 text-muted">No se encontraron proveedores</div>
+          )}
         </div>
       </Modal>
 
       <Modal
         isOpen={modalProductoOpen}
-        onClose={() => setModalProductoOpen(false)}
+        onClose={() => { setModalProductoOpen(false); setBusquedaProducto(''); }}
         title="Seleccionar Producto"
         size="xl"
       >
+        <div className="mb-4">
+             <button type="button" className="btn btn-sm btn-success w-full mb-3" onClick={() => { setModalProductoOpen(false); setModalCrearProductoOpen(true); }}>
+                <PackagePlus size={16} className="mr-2" /> Crear Nuevo Producto
+            </button>
+            <div className="relative">
+                <input 
+                    type="text" 
+                    className="form-input pl-10" 
+                    placeholder="Buscar producto por nombre o código..."
+                    value={busquedaProducto}
+                    onChange={(e) => setBusquedaProducto(e.target.value)}
+                    autoFocus
+                />
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+            </div>
+        </div>
         <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            {productos.length === 0 ? (
-                <div className="text-center py-8 text-muted">No hay productos disponibles</div>
+            {productosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-muted">No se encontraron productos</div>
             ) : (
-                productos.map((prod) => (
+                productosFiltrados.map((prod) => (
                     <div key={prod.id_producto} className="p-3 border rounded-lg hover:bg-gray-50 transition flex justify-between items-center group">
                         <div className="cursor-pointer flex-1" onClick={() => handleSelectProducto(prod)}>
                             <div className="font-bold text-gray-800 text-sm">[{prod.codigo}] {prod.nombre}</div>
@@ -930,6 +1092,117 @@ function NuevaCompra() {
                 ))
             )}
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalCrearProveedorOpen}
+        onClose={() => setModalCrearProveedorOpen(false)}
+        title="Crear Nuevo Proveedor"
+        size="md"
+      >
+        <form onSubmit={handleGuardarNuevoProveedor} className="space-y-4">
+            <div className="form-group">
+                <label className="form-label">RUC *</label>
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        className="form-input" 
+                        value={formNuevoProveedor.ruc} 
+                        onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, ruc: e.target.value})} 
+                        required 
+                        maxLength={11} 
+                    />
+                    <button 
+                        type="button" 
+                        className="btn btn-secondary px-3" 
+                        onClick={handleBuscarRUC}
+                        disabled={buscandoRuc || formNuevoProveedor.ruc.length !== 11}
+                        title="Buscar en SUNAT"
+                    >
+                        {buscandoRuc ? <Loader size={18} className="animate-spin" /> : <Search size={18} />}
+                    </button>
+                </div>
+            </div>
+            <div className="form-group">
+                <label className="form-label">Razón Social *</label>
+                <input type="text" className="form-input" value={formNuevoProveedor.razon_social} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, razon_social: e.target.value})} required />
+            </div>
+             <div className="form-group">
+                <label className="form-label">Dirección</label>
+                <input type="text" className="form-input" value={formNuevoProveedor.direccion} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, direccion: e.target.value})} />
+            </div>
+            <div className="form-group">
+                <label className="form-label">Contacto</label>
+                <input type="text" className="form-input" value={formNuevoProveedor.contacto} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, contacto: e.target.value})} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+                <div className="form-group">
+                    <label className="form-label">Teléfono</label>
+                    <input type="text" className="form-input" value={formNuevoProveedor.telefono} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, telefono: e.target.value})} />
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Email</label>
+                    <input type="email" className="form-input" value={formNuevoProveedor.email} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, email: e.target.value})} />
+                </div>
+            </div>
+            <div className="flex justify-end pt-2">
+                <button type="submit" className="btn btn-primary" disabled={loading}>Guardar Proveedor</button>
+            </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={modalCrearProductoOpen}
+        onClose={() => setModalCrearProductoOpen(false)}
+        title="Crear Nuevo Producto"
+        size="lg"
+      >
+        <form onSubmit={handleGuardarNuevoProducto} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                    <label className="form-label">Código *</label>
+                    <input type="text" className="form-input" value={formNuevoProducto.codigo} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, codigo: e.target.value})} required />
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Unidad de Medida *</label>
+                    <select className="form-select" value={formNuevoProducto.unidad_medida} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, unidad_medida: e.target.value})} required>
+                        <option value="UND">Unidad (UND)</option>
+                        <option value="KG">Kilogramos (KG)</option>
+                        <option value="LIT">Litros (LIT)</option>
+                        <option value="MTR">Metros (MTR)</option>
+                        <option value="CJA">Caja (CJA)</option>
+                        <option value="MLL">Millar (MLL)</option>
+                    </select>
+                </div>
+            </div>
+            <div className="form-group">
+                <label className="form-label">Nombre *</label>
+                <input type="text" className="form-input" value={formNuevoProducto.nombre} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, nombre: e.target.value})} required />
+            </div>
+            <div className="form-group">
+                <label className="form-label">Descripción</label>
+                <textarea className="form-textarea" rows="2" value={formNuevoProducto.descripcion} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, descripcion: e.target.value})}></textarea>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                    <label className="form-label">Tipo Inventario *</label>
+                    <select className="form-select" value={formNuevoProducto.id_tipo_inventario} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, id_tipo_inventario: e.target.value})} required>
+                        <option value="">Seleccione...</option>
+                        {tiposInventario.map(t => <option key={t.id_tipo_inventario} value={t.id_tipo_inventario}>{t.nombre}</option>)}
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Categoría</label>
+                    <select className="form-select" value={formNuevoProducto.id_categoria} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, id_categoria: e.target.value})}>
+                        <option value="">Ninguna</option>
+                        {categorias.map(c => <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>)}
+                    </select>
+                </div>
+            </div>
+            <div className="flex justify-end pt-2">
+                <button type="submit" className="btn btn-primary" disabled={loading}>Guardar Producto</button>
+            </div>
+        </form>
       </Modal>
 
       <Modal

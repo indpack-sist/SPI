@@ -160,6 +160,15 @@ function OrdenesProduccion() {
     return configs[estado] || configs['Pendiente'];
   };
 
+  const getPrioridadBadge = (prioridad) => {
+    if (!prioridad) return '';
+    const p = prioridad.toLowerCase();
+    if (p === 'urgente') return 'badge-error animate-pulse';
+    if (p === 'alta') return 'badge-error';
+    if (p === 'media') return 'badge-warning';
+    return 'badge-success';
+  };
+
   const handleNuevaOrden = () => navigate('/produccion/ordenes/nueva');
   const handleVerDetalle = (id) => navigate(`/produccion/ordenes/${id}`);
   
@@ -185,14 +194,21 @@ function OrdenesProduccion() {
     {
       header: 'N° Orden',
       accessor: 'numero_orden',
-      width: '140px',
+      width: '150px',
       render: (value, row) => (
         <div>
           <span className="font-mono font-bold text-primary">{value}</span>
           {row.numero_orden_venta && (
-            <div className="text-xs text-muted mt-1 flex items-center gap-1">
-              <ShoppingCart size={10} />
-              De: {row.numero_orden_venta}
+            <div className="flex flex-col mt-1 gap-1">
+              <div className="text-xs text-muted flex items-center gap-1">
+                <ShoppingCart size={10} />
+                De: {row.numero_orden_venta}
+              </div>
+              {row.prioridad_venta && (
+                <span className={`badge ${getPrioridadBadge(row.prioridad_venta)} badge-xs w-fit`}>
+                  {row.prioridad_venta}
+                </span>
+              )}
             </div>
           )}
           {row.es_manual === 1 && (
@@ -226,21 +242,21 @@ function OrdenesProduccion() {
     {
       header: 'Origen',
       accessor: 'origen_tipo',
-      width: '120px',
+      width: '110px',
       align: 'center',
       render: (value) => {
         if (value === 'Orden de Venta') {
           return (
             <span className="badge badge-info flex items-center gap-1 justify-center">
               <ShoppingCart size={12} />
-              Orden Venta
+              Venta
             </span>
           );
         }
         return (
           <span className="badge badge-secondary flex items-center gap-1 justify-center">
             <UserCog size={12} />
-            Supervisor
+            Interno
           </span>
         );
       }
@@ -249,7 +265,7 @@ function OrdenesProduccion() {
       header: 'Progreso',
       accessor: 'cantidad_planificada',
       align: 'left',
-      width: '200px',
+      width: '180px',
       render: (value, row) => {
         const planificada = parseFloat(value);
         const producida = parseFloat(row.cantidad_producida || 0);
@@ -282,7 +298,7 @@ function OrdenesProduccion() {
               {numRegistros > 0 && (
                 <div className="flex items-center gap-1 text-xs text-primary font-medium">
                   <List size={12} />
-                  {numRegistros} registro{numRegistros !== 1 ? 's' : ''}
+                  {numRegistros} reg.
                 </div>
               )}
             </div>
@@ -293,7 +309,7 @@ function OrdenesProduccion() {
     {
       header: 'Supervisor',
       accessor: 'supervisor',
-      width: '140px',
+      width: '130px',
       render: (value) => (
         <div className="flex items-center gap-2">
           <Users size={14} className="text-muted" />
@@ -302,19 +318,10 @@ function OrdenesProduccion() {
       )
     },
     {
-      header: 'Costo',
-      accessor: 'costo_materiales',
-      align: 'right',
-      width: '120px',
-      render: (value) => (
-        <span className="font-bold text-primary text-sm">{formatearMoneda(value)}</span>
-      )
-    },
-    {
       header: 'Estado',
       accessor: 'estado',
       align: 'center',
-      width: '140px',
+      width: '130px',
       render: (value) => {
         const config = getEstadoConfig(value);
         const Icono = config.icono;
@@ -329,13 +336,21 @@ function OrdenesProduccion() {
     {
       header: 'Fechas',
       accessor: 'fecha_creacion',
-      width: '140px',
+      width: '150px',
       render: (value, row) => (
         <div className="text-xs flex flex-col gap-1">
           <div className="flex items-center gap-1 text-muted">
             <Calendar size={12} />
             <span>Creación: {formatearFecha(value)}</span>
           </div>
+          
+          {row.fecha_estimada_venta && (
+             <div className="flex items-center gap-1 text-orange-700 font-medium bg-orange-50 p-0.5 rounded border border-orange-100">
+               <AlertCircle size={10} />
+               <span>Entrega: {formatearFecha(row.fecha_estimada_venta)}</span>
+             </div>
+          )}
+
           {row.fecha_fin && (
              <div className="text-success font-medium">
                Fin: {formatearFecha(row.fecha_fin)}

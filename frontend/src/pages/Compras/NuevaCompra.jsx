@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, ShoppingCart, Building, Calendar,
   MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard, Clock,
-  Calculator, DollarSign, ArrowRightLeft, XCircle
+  Calculator, DollarSign, ArrowRightLeft, XCircle, PackageCheck
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -52,7 +52,8 @@ function NuevaCompra() {
     porcentaje_impuesto: 18.00,
     observaciones: '',
     contacto_proveedor: '',
-    direccion_entrega: ''
+    direccion_entrega: '',
+    tipo_recepcion: 'Total'
   });
   
   const [detalle, setDetalle] = useState([]);
@@ -162,6 +163,7 @@ function NuevaCompra() {
       producto: producto.nombre,
       unidad_medida: producto.unidad_medida,
       cantidad: 1.00,
+      cantidad_a_recibir: 1.00,
       precio_unitario: 0.00,
       descuento_porcentaje: 0.00
     };
@@ -171,7 +173,15 @@ function NuevaCompra() {
 
   const handleCantidadChange = (index, cantidad) => {
     const newDetalle = [...detalle];
-    newDetalle[index].cantidad = parseFloat(cantidad) || 0;
+    const val = parseFloat(cantidad) || 0;
+    newDetalle[index].cantidad = val;
+    newDetalle[index].cantidad_a_recibir = val;
+    setDetalle(newDetalle);
+  };
+
+  const handleCantidadRecibirChange = (index, cantidad) => {
+    const newDetalle = [...detalle];
+    newDetalle[index].cantidad_a_recibir = parseFloat(cantidad) || 0;
     setDetalle(newDetalle);
   };
 
@@ -306,6 +316,18 @@ function NuevaCompra() {
     const invalidos = detalle.filter(item => parseFloat(item.cantidad) <= 0 || parseFloat(item.precio_unitario) <= 0);
     if (invalidos.length > 0) { setError('Hay productos con cantidad o precio inválido'); return; }
 
+    if (formData.tipo_recepcion === 'Parcial') {
+      const recepcionInvalida = detalle.filter(item => {
+        const cant = parseFloat(item.cantidad);
+        const recep = parseFloat(item.cantidad_a_recibir);
+        return recep < 0 || recep > cant;
+      });
+      if (recepcionInvalida.length > 0) {
+        setError('La cantidad a recibir no puede ser negativa ni mayor a la cantidad de compra');
+        return;
+      }
+    }
+
     if (formData.tipo_compra === 'Credito' && formData.numero_cuotas <= 0) {
       setError('Número de cuotas inválido'); return;
     }
@@ -326,6 +348,7 @@ function NuevaCompra() {
         detalle: detalle.map(item => ({
           id_producto: item.id_producto,
           cantidad: parseFloat(item.cantidad),
+          cantidad_a_recibir: formData.tipo_recepcion === 'Parcial' ? parseFloat(item.cantidad_a_recibir) : parseFloat(item.cantidad),
           precio_unitario: parseFloat(item.precio_unitario),
           descuento_porcentaje: parseFloat(item.descuento_porcentaje)
         }))
@@ -470,14 +493,23 @@ function NuevaCompra() {
 
                 {formData.moneda && (
                     <div className="card">
-                        <div className="card-header bg-gray-50/50 flex justify-between items-center">
+                        <div className="card-header bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <h2 className="card-title flex items-center gap-2">
                                 <MapPin size={18} /> Detalle de Productos
                             </h2>
-                            <button type="button" className="btn btn-sm btn-primary" 
-                                onClick={() => setModalProductoOpen(true)}>
-                                <Plus size={16} /> Agregar
-                            </button>
+                            <div className="flex items-center gap-2 w-full md:w-auto">
+                                <select className="form-select text-xs w-full md:w-48"
+                                    value={formData.tipo_recepcion}
+                                    onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}>
+                                    <option value="Total">Recepción Total</option>
+                                    <option value="Parcial">Recepción Parcial</option>
+                                    <option value="Ninguna">Solo Orden (Sin Recepción)</option>
+                                </select>
+                                <button type="button" className="btn btn-sm btn-primary whitespace-nowrap" 
+                                    onClick={() => setModalProductoOpen(true)}>
+                                    <Plus size={16} /> Agregar
+                                </button>
+                            </div>
                         </div>
                         <div className="card-body p-0">
                             {detalle.length > 0 ? (
@@ -488,6 +520,9 @@ function NuevaCompra() {
                                                 <th className="w-12 text-center">#</th>
                                                 <th>Producto</th>
                                                 <th className="w-24 text-right">Cant.</th>
+                                                {formData.tipo_recepcion === 'Parcial' && (
+                                                    <th className="w-24 text-right bg-blue-50 text-blue-800">A Recibir</th>
+                                                )}
                                                 <th className="w-28 text-right">Precio</th>
                                                 <th className="w-20 text-center">Desc%</th>
                                                 <th className="w-28 text-right">Total</th>
@@ -507,6 +542,13 @@ function NuevaCompra() {
                                                             value={item.cantidad} onChange={(e) => handleCantidadChange(index, e.target.value)}
                                                             min="0" step="0.01" />
                                                     </td>
+                                                    {formData.tipo_recepcion === 'Parcial' && (
+                                                        <td className="bg-blue-50/30">
+                                                            <input type="number" className="form-input text-right h-8 text-sm border-blue-300 focus:ring-blue-200"
+                                                                value={item.cantidad_a_recibir} onChange={(e) => handleCantidadRecibirChange(index, e.target.value)}
+                                                                min="0" max={item.cantidad} step="0.01" />
+                                                        </td>
+                                                    )}
                                                     <td>
                                                         <input type="number" className="form-input text-right h-8 text-sm"
                                                             value={item.precio_unitario} onChange={(e) => handlePrecioChange(index, e.target.value)}
@@ -660,13 +702,13 @@ function NuevaCompra() {
                                             ? (parseFloat(cuentaSeleccionada.saldo_actual) >= montoConvertido ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
                                             : (parseFloat(cuentaSeleccionada.saldo_actual) >= totales.total ? 'bg-green-100 border-green-200 text-green-800' : 'bg-red-100 border-red-200 text-red-800')
                                     }`}>
-                                        {(() => {
-                                            const montoRequerido = montoConvertido || totales.total;
-                                            const suficiente = parseFloat(cuentaSeleccionada.saldo_actual) >= montoRequerido;
-                                            return suficiente 
-                                                ? 'Saldo disponible suficiente.' 
-                                                : `Saldo insuficiente. Faltan ${formatearMoneda(montoRequerido - parseFloat(cuentaSeleccionada.saldo_actual), cuentaSeleccionada.moneda)}`;
-                                        })()}
+                                            {(() => {
+                                                const montoRequerido = montoConvertido || totales.total;
+                                                const suficiente = parseFloat(cuentaSeleccionada.saldo_actual) >= montoRequerido;
+                                                return suficiente 
+                                                    ? 'Saldo disponible suficiente.' 
+                                                    : `Saldo insuficiente. Faltan ${formatearMoneda(montoRequerido - parseFloat(cuentaSeleccionada.saldo_actual), cuentaSeleccionada.moneda)}`;
+                                            })()}
                                     </div>
                                 )}
 

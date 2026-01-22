@@ -4,7 +4,7 @@ import {
   ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
   XCircle, Clock, AlertCircle, Building, Calendar,
   MapPin, CreditCard, Wallet, DollarSign, TrendingUp,
-  ArrowRightLeft
+  ArrowRightLeft, PackageCheck
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -251,9 +251,19 @@ function DetalleCompra() {
               <ShoppingCart size={32} />
               Compra {compra.numero_orden}
             </h1>
-            <p className="text-muted">
-              Emitida el {formatearFecha(compra.fecha_emision)}
-            </p>
+            <div className="flex items-center gap-2 text-muted">
+                <p>Emitida el {formatearFecha(compra.fecha_emision)}</p>
+                {compra.estado === 'Recibida' && (
+                    <span className="badge badge-success flex items-center gap-1 text-xs">
+                        <CheckCircle size={12} /> Recibida
+                    </span>
+                )}
+                {compra.estado === 'Confirmada' && (
+                    <span className="badge badge-info flex items-center gap-1 text-xs">
+                        <Clock size={12} /> Confirmada
+                    </span>
+                )}
+            </div>
           </div>
         </div>
         
@@ -332,7 +342,6 @@ function DetalleCompra() {
         </div>
       </div>
 
-      {/* ✅ SECCIÓN DE CONVERSIÓN DE MONEDA - INTEGRADA */}
       {compra.tipo_cambio && parseFloat(compra.tipo_cambio) !== 1.0 && (
         <div className="card border-l-4 border-info mb-4">
           <div className="card-body">
@@ -580,8 +589,10 @@ function DetalleCompra() {
       )}
 
       <div className="card mb-4">
-        <div className="card-header">
-          <h2 className="card-title">Detalle de Productos</h2>
+        <div className="card-header flex items-center gap-2">
+          <h2 className="card-title flex items-center gap-2">
+            <PackageCheck size={20} /> Detalle de Productos
+          </h2>
         </div>
         <div className="card-body">
           <div className="overflow-x-auto">
@@ -590,8 +601,9 @@ function DetalleCompra() {
                 <tr>
                   <th style={{ width: '80px' }}>Código</th>
                   <th>Descripción</th>
-                  <th style={{ width: '120px' }} className="text-right">Cantidad</th>
                   <th style={{ width: '60px' }} className="text-center">Unidad</th>
+                  <th style={{ width: '100px' }} className="text-right">Solicitado</th>
+                  <th style={{ width: '100px' }} className="text-right">Recibido</th>
                   <th style={{ width: '120px' }} className="text-right">Precio</th>
                   <th style={{ width: '80px' }} className="text-right">Desc.</th>
                   <th style={{ width: '120px' }} className="text-right">Subtotal</th>
@@ -604,10 +616,19 @@ function DetalleCompra() {
                     <td>
                       <div className="font-medium">{item.producto}</div>
                     </td>
+                    <td className="text-center text-sm text-muted">{item.unidad_medida}</td>
                     <td className="text-right font-mono">
                       {parseFloat(item.cantidad).toFixed(2)}
                     </td>
-                    <td className="text-center text-sm text-muted">{item.unidad_medida}</td>
+                    <td className="text-right font-mono">
+                      <span className={`${
+                        parseFloat(item.cantidad_recibida) < parseFloat(item.cantidad) 
+                            ? 'text-orange-600 font-bold' 
+                            : 'text-success font-bold'
+                      }`}>
+                        {parseFloat(item.cantidad_recibida || 0).toFixed(2)}
+                      </span>
+                    </td>
                     <td className="text-right font-mono">
                       {formatearMoneda(item.precio_unitario)}
                     </td>

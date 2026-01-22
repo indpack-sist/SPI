@@ -234,51 +234,49 @@ export async function reservarStockOrden(req, res) {
     const productosParaReservar = [];
 
     for (const item of detalles) {
+      // Si ya está reservado (1), lo saltamos
       if (item.item_reservado === 1) {
         continue;
       }
 
-      if (item.requiere_receta === 0) {
-        const stockActual = parseFloat(item.stock_actual);
-        const cantidadRequerida = parseFloat(item.cantidad);
+      // CAMBIO: Leemos el stock siempre, sin importar si requiere receta
+      const stockActual = parseFloat(item.stock_actual || 0);
+      const cantidadRequerida = parseFloat(item.cantidad);
 
-        let estadoReserva = 'sin_stock';
-        let cantidadReservable = 0;
+      let estadoReserva = 'sin_stock';
+      let cantidadReservable = 0;
 
-        if (stockActual >= cantidadRequerida) {
-          estadoReserva = 'completo';
-          cantidadReservable = cantidadRequerida;
-        } else if (stockActual > 0) {
-          estadoReserva = 'parcial';
-          cantidadReservable = stockActual;
-        }
-
-        productosParaReservar.push({
-          id_producto: item.id_producto,
-          id_detalle: item.id_detalle,
-          nombre: item.nombre,
-          cantidad_requerida: cantidadRequerida,
-          stock_disponible: stockActual,
-          cantidad_reservable: cantidadReservable,
-          faltante: cantidadRequerida - cantidadReservable,
-          estado_reserva: estadoReserva
-        });
+      // Lógica unificada: Si hay stock, se puede reservar (parcial o completo)
+      if (stockActual >= cantidadRequerida) {
+        estadoReserva = 'completo';
+        cantidadReservable = cantidadRequerida;
+      } else if (stockActual > 0) {
+        estadoReserva = 'parcial';
+        cantidadReservable = stockActual;
       } else {
-        productosParaReservar.push({
-          id_producto: item.id_producto,
-          id_detalle: item.id_detalle,
-          nombre: item.nombre,
-          cantidad_requerida: parseFloat(item.cantidad),
-          stock_disponible: 0,
-          cantidad_reservable: 0,
-          faltante: parseFloat(item.cantidad),
-          estado_reserva: 'requiere_produccion'
-        });
+        // Si no hay stock y requiere receta, sugerimos producción
+        if (item.requiere_receta === 1) {
+            estadoReserva = 'requiere_produccion';
+        } else {
+            estadoReserva = 'sin_stock';
+        }
       }
+
+      productosParaReservar.push({
+        id_producto: item.id_producto,
+        id_detalle: item.id_detalle,
+        nombre: item.nombre,
+        cantidad_requerida: cantidadRequerida,
+        stock_disponible: stockActual, // Ahora enviamos el stock real
+        cantidad_reservable: cantidadReservable, // Cantidad sugerida inicial
+        faltante: Math.max(0, cantidadRequerida - stockActual),
+        estado_reserva: estadoReserva,
+        requiere_receta: item.requiere_receta // Útil para el frontend
+      });
     }
 
     const resumen = {
-      total_productos: productosParaReservar.length,
+      total_items: productosParaReservar.length, // Corregido nombre para coincidir con frontend
       con_stock_completo: productosParaReservar.filter(p => p.estado_reserva === 'completo').length,
       con_stock_parcial: productosParaReservar.filter(p => p.estado_reserva === 'parcial').length,
       sin_stock: productosParaReservar.filter(p => p.estado_reserva === 'sin_stock').length,
@@ -298,7 +296,6 @@ export async function reservarStockOrden(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-
 export async function ejecutarReservaStock(req, res) {
   try {
     const { id } = req.params;

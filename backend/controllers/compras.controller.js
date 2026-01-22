@@ -269,7 +269,8 @@ export async function createCompra(req, res) {
       contacto_proveedor,
       direccion_entrega,
       tipo_cambio,
-      detalle
+      detalle,
+      tipo_recepcion 
     } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
@@ -311,10 +312,26 @@ export async function createCompra(req, res) {
     }
 
     let subtotal = 0;
+    let subtotalRecepcion = 0;
+    let tieneItemsParaRecepcion = false;
+
     for (const item of detalle) {
       const precioUnitario = parseFloat(item.precio_unitario);
       const valorCompra = (item.cantidad * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorCompra;
+
+      let cantidadRecibirAhora = 0;
+      if (tipo_recepcion === 'Total') {
+        cantidadRecibirAhora = parseFloat(item.cantidad);
+      } else if (tipo_recepcion === 'Parcial') {
+        cantidadRecibirAhora = parseFloat(item.cantidad_a_recibir || 0);
+      }
+
+      if (cantidadRecibirAhora > 0) {
+        const valorRecepcion = (cantidadRecibirAhora * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+        subtotalRecepcion += valorRecepcion;
+        tieneItemsParaRecepcion = true;
+      }
     }
 
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
@@ -328,6 +345,9 @@ export async function createCompra(req, res) {
 
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
+
+    const impuestoRecepcion = subtotalRecepcion * (porcentaje / 100);
+    const totalRecepcion = subtotalRecepcion + impuestoRecepcion;
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -405,6 +425,11 @@ export async function createCompra(req, res) {
         fechaVencimientoFinal = fechaBase.toISOString().split('T')[0];
       }
 
+      let estadoOrden = 'Confirmada';
+      if (tipo_recepcion === 'Total') {
+        estadoOrden = 'Recibida';
+      }
+
       const [resultCompra] = await connection.query(`
         INSERT INTO ordenes_compra (
           numero_orden,
@@ -457,51 +482,54 @@ export async function createCompra(req, res) {
         subtotal,
         impuesto,
         total,
-        'Recibida',
+        estadoOrden,
         tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente'
       ]);
 
       const idCompra = resultCompra.insertId;
-      
-      const [primerProducto] = await connection.query(
-        'SELECT id_tipo_inventario FROM productos WHERE id_producto = ?',
-        [detalle[0].id_producto]
-      );
+      let idEntrada = null;
 
-      const id_tipo_inventario_entrada = primerProducto[0]?.id_tipo_inventario;
+      if (tieneItemsParaRecepcion) {
+        const [primerProducto] = await connection.query(
+          'SELECT id_tipo_inventario FROM productos WHERE id_producto = ?',
+          [detalle[0].id_producto]
+        );
 
-      if (!id_tipo_inventario_entrada) {
-        throw new Error('No se pudo determinar el tipo de inventario para crear la entrada');
+        const id_tipo_inventario_entrada = primerProducto[0]?.id_tipo_inventario;
+
+        if (!id_tipo_inventario_entrada) {
+          throw new Error('No se pudo determinar el tipo de inventario para crear la entrada');
+        }
+
+        const [resultEntrada] = await connection.query(`
+          INSERT INTO entradas ( 
+            id_tipo_inventario, tipo_entrada, id_proveedor, documento_soporte, 
+            total_costo, subtotal, igv, total, porcentaje_igv, 
+            moneda, tipo_cambio, monto_pagado, estado_pago, id_cuenta_pago, 
+            id_registrado_por, observaciones, id_orden_compra
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          id_tipo_inventario_entrada,
+          'Compra',
+          id_proveedor,
+          numeroCompra,
+          subtotalRecepcion,
+          subtotalRecepcion,
+          impuestoRecepcion,
+          totalRecepcion,
+          porcentaje,
+          moneda,
+          tipoCambioFinal,
+          tipo_compra === 'Contado' ? totalRecepcion : 0, 
+          tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente',
+          id_cuenta_pago,
+          id_registrado_por,
+          `Entrada por ${tipo_recepcion === 'Parcial' ? 'Recepción Parcial' : 'Compra'} ${numeroCompra}`,
+          idCompra
+        ]);
+
+        idEntrada = resultEntrada.insertId;
       }
-
-      const [resultEntrada] = await connection.query(`
-        INSERT INTO entradas ( 
-          id_tipo_inventario, tipo_entrada, id_proveedor, documento_soporte, 
-          total_costo, subtotal, igv, total, porcentaje_igv, 
-          moneda, tipo_cambio, monto_pagado, estado_pago, id_cuenta_pago, 
-          id_registrado_por, observaciones, id_orden_compra
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        id_tipo_inventario_entrada,
-        'Compra',
-        id_proveedor,
-        numeroCompra,
-        subtotal,
-        subtotal,
-        igv,
-        total,
-        porcentaje,
-        moneda,
-        tipoCambioFinal,
-        tipo_compra === 'Contado' ? total : 0,
-        tipo_compra === 'Contado' ? 'Pagado' : 'Pendiente',
-        id_cuenta_pago,
-        id_registrado_por,
-        `Entrada automática de compra ${numeroCompra}`,
-        idCompra
-      ]);
-
-      const idEntrada = resultEntrada.insertId;
 
       for (let i = 0; i < detalle.length; i++) {
         const item = detalle[i];
@@ -509,84 +537,93 @@ export async function createCompra(req, res) {
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const subtotalItem = (item.cantidad * precioUnitario) * (1 - descuento / 100);
         
-        const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
+        let cantidadRecibida = 0;
+        if (tipo_recepcion === 'Total') {
+          cantidadRecibida = parseFloat(item.cantidad);
+        } else if (tipo_recepcion === 'Parcial') {
+          cantidadRecibida = parseFloat(item.cantidad_a_recibir || 0);
+        }
 
         await connection.query(`
           INSERT INTO detalle_orden_compra (
             id_orden_compra,
             id_producto,
             cantidad,
+            cantidad_recibida,
             precio_unitario,
             descuento_porcentaje,
             subtotal,
             orden
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           idCompra,
           item.id_producto,
           parseFloat(item.cantidad),
+          cantidadRecibida,
           precioUnitario,
           descuento,
           subtotalItem,
           i + 1
         ]);
 
-        let costoPEN = 0;
-        let costoUSD = 0;
+        if (idEntrada && cantidadRecibida > 0) {
+          const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
+          let costoPEN = 0;
+          let costoUSD = 0;
 
-        if (moneda === 'PEN') {
-          costoPEN = costoUnitarioNeto;
-          costoUSD = costoUnitarioNeto / tipoCambioFinal;
-        } else {
-          costoUSD = costoUnitarioNeto;
-          costoPEN = costoUnitarioNeto * tipoCambioFinal;
+          if (moneda === 'PEN') {
+            costoPEN = costoUnitarioNeto;
+            costoUSD = costoUnitarioNeto / tipoCambioFinal;
+          } else {
+            costoUSD = costoUnitarioNeto;
+            costoPEN = costoUnitarioNeto * tipoCambioFinal;
+          }
+
+          await connection.query(`
+            INSERT INTO detalle_entradas (
+              id_entrada,
+              id_producto,
+              cantidad,
+              costo_unitario,
+              costo_unitario_calculado_pen,
+              costo_unitario_calculado_usd
+            ) VALUES (?, ?, ?, ?, ?, ?)
+          `, [
+            idEntrada,
+            item.id_producto,
+            cantidadRecibida,
+            costoUnitarioNeto,
+            costoPEN,
+            costoUSD
+          ]);
+
+          const [productoInfo] = await connection.query(
+            'SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE',
+            [item.id_producto]
+          );
+
+          const stockActual = parseFloat(productoInfo[0].stock_actual || 0);
+          const cupActualPEN = parseFloat(productoInfo[0].costo_unitario_promedio || 0);
+          const cupActualUSD = parseFloat(productoInfo[0].costo_unitario_promedio_usd || 0);
+          
+          const nuevoStock = stockActual + cantidadRecibida;
+          
+          const nuevoCostoPromedioPEN = nuevoStock > 0
+            ? ((stockActual * cupActualPEN) + (cantidadRecibida * costoPEN)) / nuevoStock
+            : costoPEN;
+
+          const nuevoCostoPromedioUSD = nuevoStock > 0
+            ? ((stockActual * cupActualUSD) + (cantidadRecibida * costoUSD)) / nuevoStock
+            : costoUSD;
+
+          await connection.query(`
+            UPDATE productos 
+            SET stock_actual = ?,
+                costo_unitario_promedio = ?,
+                costo_unitario_promedio_usd = ?
+            WHERE id_producto = ?
+          `, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
         }
-
-        await connection.query(`
-          INSERT INTO detalle_entradas (
-            id_entrada,
-            id_producto,
-            cantidad,
-            costo_unitario,
-            costo_unitario_calculado_pen,
-            costo_unitario_calculado_usd
-          ) VALUES (?, ?, ?, ?, ?, ?)
-        `, [
-          idEntrada,
-          item.id_producto,
-          parseFloat(item.cantidad),
-          costoUnitarioNeto,
-          costoPEN,
-          costoUSD
-        ]);
-
-        const [productoInfo] = await connection.query(
-          'SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE',
-          [item.id_producto]
-        );
-
-        const stockActual = parseFloat(productoInfo[0].stock_actual || 0);
-        const cupActualPEN = parseFloat(productoInfo[0].costo_unitario_promedio || 0);
-        const cupActualUSD = parseFloat(productoInfo[0].costo_unitario_promedio_usd || 0);
-        const cantidadNueva = parseFloat(item.cantidad);
-
-        const nuevoStock = stockActual + cantidadNueva;
-        
-        const nuevoCostoPromedioPEN = nuevoStock > 0
-          ? ((stockActual * cupActualPEN) + (cantidadNueva * costoPEN)) / nuevoStock
-          : costoPEN;
-
-        const nuevoCostoPromedioUSD = nuevoStock > 0
-          ? ((stockActual * cupActualUSD) + (cantidadNueva * costoUSD)) / nuevoStock
-          : costoUSD;
-
-        await connection.query(`
-          UPDATE productos 
-          SET stock_actual = ?,
-              costo_unitario_promedio = ?,
-              costo_unitario_promedio_usd = ?
-          WHERE id_producto = ?
-        `, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
       }
 
       if (tipo_compra === 'Contado') {
@@ -679,6 +716,15 @@ export async function createCompra(req, res) {
         mensajeAdicional = ` (Conversión aplicada: ${moneda} ${total.toFixed(2)} → ${monedaCuenta} ${montoAPagar.toFixed(2)})`;
       }
 
+      let mensajeExito = '';
+      if (tipo_recepcion === 'Total') {
+        mensajeExito = 'Compra y recepción completa registradas exitosamente';
+      } else if (tipo_recepcion === 'Parcial') {
+        mensajeExito = 'Compra y recepción parcial registradas exitosamente';
+      } else {
+        mensajeExito = 'Orden de compra registrada exitosamente (Pendiente de recepción)';
+      }
+
       res.status(201).json({
         success: true,
         data: {
@@ -689,9 +735,7 @@ export async function createCompra(req, res) {
           cuenta_utilizada: cuenta.nombre,
           tipo_cambio_aplicado: tipoCambioFinal
         },
-        message: tipo_compra === 'Contado' ?
-          `Compra creada, pagada y entrada de inventario registrada exitosamente${mensajeAdicional}` :
-          `Compra a crédito y entrada de inventario creadas exitosamente`
+        message: `${mensajeExito}${mensajeAdicional}`
       });
 
     } catch (err) {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, ShoppingCart, Filter, Clock, CheckCircle,
   XCircle, AlertCircle, TrendingUp, Wallet, CreditCard,
-  Calendar
+  Calendar, PackageCheck, Truck, Package
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -107,6 +107,16 @@ function Compras() {
     return configs[estado] || configs['Pendiente'];
   };
 
+  const getEstadoRecepcionConfig = (estado) => {
+    const configs = {
+      'Recibida': { clase: 'bg-green-100 text-green-800 border-green-200', icono: PackageCheck, texto: 'Recibido' },
+      'Confirmada': { clase: 'bg-blue-100 text-blue-800 border-blue-200', icono: Clock, texto: 'Por Recibir' },
+      'En Tránsito': { clase: 'bg-yellow-100 text-yellow-800 border-yellow-200', icono: Truck, texto: 'En Tránsito' },
+      'Cancelada': { clase: 'bg-red-100 text-red-800 border-red-200', icono: XCircle, texto: 'Cancelada' }
+    };
+    return configs[estado] || { clase: 'bg-gray-100 text-gray-800 border-gray-200', icono: Package, texto: estado };
+  };
+
   const getTipoCompraConfig = (tipo) => {
     const configs = {
       'Contado': { clase: 'badge-success', icono: Wallet },
@@ -143,18 +153,19 @@ function Compras() {
       )
     },
     {
-      header: 'Método Pago',
-      accessor: 'cuenta_pago',
-      width: '160px',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium text-sm">{value || 'Sin asignar'}</div>
-          <div className="text-xs text-muted flex gap-1">
-             {row.tipo_cuenta_pago}
-             {row.moneda_cuenta && <span className="font-mono">({row.moneda_cuenta})</span>}
-          </div>
-        </div>
-      )
+      header: 'Recepción',
+      accessor: 'estado',
+      width: '120px',
+      align: 'center',
+      render: (value) => {
+        const config = getEstadoRecepcionConfig(value);
+        const Icono = config.icono;
+        return (
+            <span className={`px-2 py-1 rounded text-xs font-semibold flex items-center justify-center gap-1 border ${config.clase}`}>
+                <Icono size={12} /> {config.texto}
+            </span>
+        );
+      }
     },
     {
       header: 'Tipo',
@@ -198,7 +209,7 @@ function Compras() {
       )
     },
     {
-      header: 'Estado',
+      header: 'Pago',
       accessor: 'estado_pago',
       width: '120px',
       align: 'center',

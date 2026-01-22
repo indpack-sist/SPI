@@ -656,14 +656,27 @@ export async function createOrden(req, res) {
     
     const fechaActual = getFechaPeru();
 
-    if (!id_producto_terminado || !cantidad_planificada || !id_supervisor) {
+    if (!id_producto_terminado || !cantidad_planificada) {
       return res.status(400).json({ 
-        error: 'id_producto_terminado, cantidad_planificada e id_supervisor son requeridos' 
+        error: 'id_producto_terminado y cantidad_planificada son requeridos' 
       });
     }
     
     if (cantidad_planificada <= 0) {
       return res.status(400).json({ error: 'La cantidad planificada debe ser mayor a 0' });
+    }
+
+    let estadoInicial = 'Pendiente';
+    if (es_orden_manual) {
+        estadoInicial = 'Pendiente'; 
+        if (!id_supervisor) estadoInicial = 'Pendiente Asignación';
+    } else {
+        if (!id_receta_producto && (!receta_provisional || receta_provisional.length === 0)) {
+            estadoInicial = 'Pendiente Asignación';
+        }
+        if (!id_supervisor) {
+            estadoInicial = 'Pendiente Asignación';
+        }
     }
 
     const ultimaOrdenResult = await executeQuery(`
@@ -712,9 +725,9 @@ export async function createOrden(req, res) {
           numeroOrdenGenerado,
           id_producto_terminado,
           cantidad_planificada,
-          id_supervisor,
+          id_supervisor || null,
           0, 
-          'Pendiente',
+          estadoInicial,
           (observaciones || '') + '\n[ORDEN MANUAL - Sin receta ni consumo de materiales]',
           null, 
           1,
@@ -729,89 +742,74 @@ export async function createOrden(req, res) {
       }
 
       if (id_orden_venta_origen) {
-        const titulo = 'Nueva Producción Asignada';
-        const mensaje = `Se le ha asignado la OP ${numeroOrdenGenerado} proveniente de Ventas.`;
-        const ruta = `/produccion/ordenes/${ordenResult.data.insertId}`;
-        
-        const insertResult = await executeQuery(`
-          INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
-          VALUES (?, ?, ?, ?, ?)
-        `, [id_supervisor, titulo, mensaje, 'warning', ruta]);
+        let destinatarios = [];
+        if (id_supervisor) {
+          destinatarios.push(id_supervisor);
+        } else {
+          const supervisoresRes = await executeQuery("SELECT id_empleado FROM empleados WHERE rol = 'Supervisor' AND estado = 'Activo'");
+          if (supervisoresRes.success) {
+            destinatarios = supervisoresRes.data.map(s => s.id_empleado);
+          }
+        }
 
-        const io = req.app.get('socketio');
-        if (io) {
-          io.to(`usuario_${id_supervisor}`).emit('nueva_notificacion', {
-            id_notificacion: insertResult.data.insertId,
-            titulo,
-            mensaje,
-            tipo: 'warning',
-            ruta_destino: ruta,
-            leido: 0,
-            fecha_creacion: new Date().toISOString()
-          });
+        const titulo = 'Nueva OP Pendiente de Asignación';
+        const mensaje = `La OP ${numeroOrdenGenerado} (desde Ventas) requiere receta y asignación.`;
+        const ruta = `/produccion/ordenes/${ordenResult.data.insertId}`;
+
+        for (const idDestino of destinatarios) {
+          const insertResult = await executeQuery(`
+            INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
+            VALUES (?, ?, ?, ?, ?)
+          `, [idDestino, titulo, mensaje, 'warning', ruta]);
+
+          const io = req.app.get('socketio');
+          if (io) {
+            io.to(`usuario_${idDestino}`).emit('nueva_notificacion', {
+              id_notificacion: insertResult.data.insertId,
+              titulo,
+              mensaje,
+              tipo: 'warning',
+              ruta_destino: ruta,
+              leido: 0,
+              fecha_creacion: new Date().toISOString()
+            });
+          }
         }
       }
       
-      return res.status(201).json({
-        success: true,
-        message: 'Orden manual creada exitosamente (sin consumo de materiales)',
-        data: {
-          id_orden: ordenResult.data.insertId,
-          numero_orden: numeroOrdenGenerado,
-          costo_materiales: 0,
-          es_manual: true,
-          estado: 'Pendiente'
-        }
-      });
+      return res.status(201).json({ success: true, data: { id_orden: ordenResult.data.insertId, numero_orden: numeroOrdenGenerado, estado: estadoInicial }});
     }
   
     let recetaData = [];
     let rendimientoUnidades = parseFloat(rendimiento_receta) || 1;
+    let costoMateriales = 0;
+
     if (id_receta_producto) {
       const recetaResult = await executeQuery(
         `SELECT 
-          rd.id_insumo,
-          rd.cantidad_requerida,
-          rd.unidad_medida,
-          p.costo_unitario_promedio,
-          p.stock_actual,
-          p.id_tipo_inventario,
-          rp.rendimiento_unidades
+          rd.id_insumo, rd.cantidad_requerida, rd.unidad_medida,
+          p.costo_unitario_promedio, p.stock_actual, p.id_tipo_inventario, rp.rendimiento_unidades
         FROM recetas_detalle rd
         INNER JOIN recetas_productos rp ON rd.id_receta_producto = rp.id_receta_producto
         INNER JOIN productos p ON rd.id_insumo = p.id_producto
         WHERE rd.id_receta_producto = ?`,
         [id_receta_producto]
       );
-      
-      if (recetaResult.data.length === 0) {
-        return res.status(400).json({ error: 'La receta seleccionada no tiene insumos configurados' });
+      if (recetaResult.data.length > 0) {
+          recetaData = recetaResult.data;
+          rendimientoUnidades = parseFloat(recetaResult.data[0].rendimiento_unidades) || 1;
       }
-      
-      recetaData = recetaResult.data;
-      rendimientoUnidades = parseFloat(recetaResult.data[0].rendimiento_unidades) || 1;
     }
     else if (receta_provisional && Array.isArray(receta_provisional) && receta_provisional.length > 0) {
-      const insumosIds = receta_provisional.map(i => i.id_insumo);
-      
-      const insumosResult = await executeQuery(
-        `SELECT 
-          id_producto,
-          costo_unitario_promedio,
-          stock_actual,
-          id_tipo_inventario,
-          unidad_medida
-        FROM productos 
-        WHERE id_producto IN (${insumosIds.map(() => '?').join(',')})`,
+       const insumosIds = receta_provisional.map(i => i.id_insumo);
+       const insumosResult = await executeQuery(
+        `SELECT id_producto, costo_unitario_promedio, stock_actual, id_tipo_inventario, unidad_medida
+        FROM productos WHERE id_producto IN (${insumosIds.map(() => '?').join(',')})`,
         insumosIds
       );
-      
       recetaData = receta_provisional.map(item => {
         const insumo = insumosResult.data.find(i => i.id_producto == item.id_insumo);
-        if (!insumo) {
-          throw new Error(`Insumo ${item.id_insumo} no encontrado`);
-        }
-        
+        if (!insumo) throw new Error(`Insumo ${item.id_insumo} no encontrado`);
         return {
           id_insumo: item.id_insumo,
           cantidad_requerida: parseFloat(item.cantidad_requerida),
@@ -821,19 +819,15 @@ export async function createOrden(req, res) {
           id_tipo_inventario: insumo.id_tipo_inventario
         };
       });
-    } else {
-      return res.status(400).json({ 
-        error: 'Debe proporcionar id_receta_producto, receta_provisional o es_orden_manual' 
-      });
     }
-    
-    const cantidadPlan = parseFloat(cantidad_planificada);
-    const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
-    
-    let costoMateriales = 0;
-    for (const insumo of recetaData) {
-      const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
-      costoMateriales += cantidadTotal * parseFloat(insumo.costo_unitario_promedio);
+
+    if (recetaData.length > 0) {
+        const cantidadPlan = parseFloat(cantidad_planificada);
+        const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
+        for (const insumo of recetaData) {
+            const cantidadTotal = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
+            costoMateriales += cantidadTotal * parseFloat(insumo.costo_unitario_promedio);
+        }
     }
     
     const ordenResult = await executeQuery(
@@ -846,9 +840,9 @@ export async function createOrden(req, res) {
         numeroOrdenGenerado,
         id_producto_terminado,
         cantidad_planificada,
-        id_supervisor,
+        id_supervisor || null, 
         costoMateriales,
-        'Pendiente',
+        estadoInicial,
         observaciones || null,
         id_receta_producto || null,
         rendimientoUnidades,
@@ -864,38 +858,47 @@ export async function createOrden(req, res) {
     
     const idOrden = ordenResult.data.insertId;
     
-    if (!id_receta_producto && receta_provisional) {
+    if (!id_receta_producto && receta_provisional && receta_provisional.length > 0) {
       const queries = receta_provisional.map(item => ({
-        sql: `INSERT INTO op_recetas_provisionales (
-          id_orden, id_insumo, cantidad_requerida
-        ) VALUES (?, ?, ?)`,
+        sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
         params: [idOrden, item.id_insumo, item.cantidad_requerida]
       }));
-      
       await executeTransaction(queries);
     }
 
     if (id_orden_venta_origen) {
-      const titulo = 'Nueva Producción Asignada';
-      const mensaje = `Se le ha asignado la OP ${numeroOrdenGenerado} proveniente de Ventas.`;
-      const ruta = `/produccion/ordenes/${idOrden}`;
-      
-      const insertResult = await executeQuery(`
-        INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
-        VALUES (?, ?, ?, ?, ?)
-      `, [id_supervisor, titulo, mensaje, 'warning', ruta]);
+      let destinatarios = [];
+      if (id_supervisor) {
+        destinatarios.push(id_supervisor);
+      } else {
+        const supervisoresRes = await executeQuery("SELECT id_empleado FROM empleados WHERE rol = 'Supervisor' AND estado = 'Activo'");
+        if (supervisoresRes.success) {
+          destinatarios = supervisoresRes.data.map(s => s.id_empleado);
+        }
+      }
 
-      const io = req.app.get('socketio');
-      if (io) {
-        io.to(`usuario_${id_supervisor}`).emit('nueva_notificacion', {
-          id_notificacion: insertResult.data.insertId,
-          titulo,
-          mensaje,
-          tipo: 'warning',
-          ruta_destino: ruta,
-          leido: 0,
-          fecha_creacion: new Date().toISOString()
-        });
+      const titulo = 'Nueva OP Pendiente de Asignación';
+      const mensaje = `La OP ${numeroOrdenGenerado} (desde Ventas) requiere receta y asignación.`;
+      const ruta = `/produccion/ordenes/${idOrden}`;
+
+      for (const idDestino of destinatarios) {
+        const insertResult = await executeQuery(`
+          INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
+          VALUES (?, ?, ?, ?, ?)
+        `, [idDestino, titulo, mensaje, 'warning', ruta]);
+
+        const io = req.app.get('socketio');
+        if (io) {
+          io.to(`usuario_${idDestino}`).emit('nueva_notificacion', {
+            id_notificacion: insertResult.data.insertId,
+            titulo,
+            mensaje,
+            tipo: 'warning',
+            ruta_destino: ruta,
+            leido: 0,
+            fecha_creacion: new Date().toISOString()
+          });
+        }
       }
     }
     
@@ -905,10 +908,7 @@ export async function createOrden(req, res) {
       data: {
         id_orden: idOrden,
         numero_orden: numeroOrdenGenerado,
-        costo_materiales: costoMateriales,
-        lotes_necesarios: lotesNecesarios,
-        rendimiento_unidades: rendimientoUnidades,
-        estado: 'Pendiente'
+        estado: estadoInicial
       }
     });
   } catch (error) {

@@ -472,6 +472,10 @@ export const ordenesVentaAPI = {
 
   crearOrdenProduccion: (id, data) => api.post(`/ordenes-venta/${id}/crear-orden-produccion`, data),
 
+  // --- ESTA ES LA LÍNEA QUE FALTABA ---
+  generarGuiaInterna: (id) => api.post(`/ordenes-venta/${id}/guia-interna`),
+  // ------------------------------------
+
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 
     api.put(`/ordenes-venta/${id}/estado`, { estado, fecha_entrega_real }),
 

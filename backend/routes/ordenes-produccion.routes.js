@@ -1,5 +1,4 @@
 import express from 'express';
-
 import {
   getAllOrdenes,
   getOrdenById,
@@ -13,12 +12,12 @@ import {
   finalizarProduccion,
   cancelarOrden,
   generarPDFOrdenController,
-  getProductosMerma, 
+  getProductosMerma,
   getMermasOrden,
   registrarProduccionParcial,
   getRegistrosParcialesOrden,
   getAnalisisConsumoOrden
-} from '../controllers/ordenes-produccion.controller.js';
+} from '../controllers/ordenesController.js';
 
 const router = express.Router();
 

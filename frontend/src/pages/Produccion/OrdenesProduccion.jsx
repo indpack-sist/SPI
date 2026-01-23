@@ -24,7 +24,9 @@ import {
   List,
   ShoppingCart,
   UserCog,
-  CalendarCheck
+  CalendarCheck,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
@@ -149,6 +151,7 @@ function OrdenesProduccion() {
       orden.producto?.toLowerCase().includes(searchTerm) ||
       orden.codigo_producto?.toLowerCase().includes(searchTerm) ||
       orden.supervisor?.toLowerCase().includes(searchTerm) ||
+      orden.maquinista?.toLowerCase().includes(searchTerm) ||
       orden.numero_orden_venta?.toLowerCase().includes(searchTerm)
     );
   });
@@ -329,13 +332,21 @@ function OrdenesProduccion() {
       }
     },
     {
-      header: 'Supervisor',
+      header: 'Supervisor / Turno',
       accessor: 'supervisor',
-      width: '130px',
-      render: (value) => (
-        <div className="flex items-center gap-2">
-          <Users size={14} className="text-muted" />
-          <span className="text-sm truncate">{value || '-'}</span>
+      width: '150px',
+      render: (value, row) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <Users size={14} className="text-muted" />
+            <span className="text-sm font-medium truncate">{value || 'Sin asignar'}</span>
+          </div>
+          {row.turno && (
+            <div className="flex items-center gap-1 text-xs text-muted ml-5">
+               {row.turno === 'Noche' ? <Moon size={10} /> : <Sun size={10} />}
+               {row.turno}
+            </div>
+          )}
         </div>
       )
     },
@@ -555,7 +566,7 @@ function OrdenesProduccion() {
               <input
                 type="text"
                 className="form-input search-input"
-                placeholder="Buscar orden, producto, supervisor..."
+                placeholder="Buscar orden, producto, supervisor, maquinista..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />

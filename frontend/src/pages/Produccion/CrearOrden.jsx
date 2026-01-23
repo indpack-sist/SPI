@@ -53,9 +53,9 @@ function CrearOrden() {
 
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
     if (filtroTipoInsumo) {
-        return insumo.id_tipo_inventario === filtroTipoInsumo || insumo.id_tipo_inventario === 11;
+        return insumo.id_tipo_inventario === filtroTipoInsumo || insumo.id_tipo_inventario === 2; 
     }
-    return insumo.id_tipo_inventario === 2 || insumo.id_tipo_inventario === 11; 
+    return insumo.id_tipo_inventario === 2 || insumo.id_tipo_inventario === 13; 
   });
 
   useEffect(() => {
@@ -128,7 +128,7 @@ function CrearOrden() {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
     setMostrarDropdown(false);
-    setFiltroTipoInsumo(producto.id_tipo_insumo_relacionado); 
+    setFiltroTipoInsumo(producto.id_tipo_insumo_sugerido); 
     setListaInsumos([]);
   };
 
@@ -239,6 +239,8 @@ function CrearOrden() {
     return <Loading message="Cargando formulario..." />;
   }
 
+  const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
+  
   const costoTotalEstimado = listaInsumos.reduce((sum, item) => {
       const cantidad = calcularCantidadInsumo(item.porcentaje);
       return sum + (cantidad * item.costo_unitario);
@@ -294,7 +296,7 @@ function CrearOrden() {
                         <input
                             type="text"
                             className="form-input pl-9 pr-8"
-                            placeholder="Buscar producto por nombre o código..."
+                            placeholder="Buscar producto por código o nombre..."
                             value={busquedaProducto}
                             onChange={(e) => {
                                 setBusquedaProducto(e.target.value);
@@ -322,7 +324,10 @@ function CrearOrden() {
                     </div>
 
                     {mostrarDropdown && (
-                        <div className="absolute z-50 w-full mt-1 border border-gray-200 rounded-md shadow-lg overflow-y-auto bg-white max-h-60">
+                        <div 
+                          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg overflow-y-auto max-h-60"
+                          style={{ backgroundColor: 'white' }}
+                        >
                             {productosFiltrados.length > 0 ? (
                                 productosFiltrados.map((prod) => (
                                     <div

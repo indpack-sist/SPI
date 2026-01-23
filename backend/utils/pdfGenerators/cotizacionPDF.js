@@ -360,10 +360,35 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.fontSize(8).font('Helvetica');
       const totalEnLetras = numeroALetras(totalCalculado, cotizacion.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
+       yPos += 25;
 
+      // Recuadro para cuentas bancarias
+      doc.roundedRect(33, yPos, 529, 50, 3).stroke('#000000');
+      
+      // Título de la sección
+      doc.rect(33, yPos, 529, 18).fill('#1e88e5');
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#FFFFFF');
+      doc.text('CUENTAS PARA PAGO', 40, yPos + 5, { width: 522, align: 'center' });
+      
+      // Contenido de cuentas bancarias
+      yPos += 23;
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('BCP - BANCO DE CRÉDITO DEL PERÚ', 40, yPos);
+      
+      yPos += 14;
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('N° de Cuenta:', 40, yPos);
+      doc.font('Helvetica').fillColor('#000000');
+      doc.text('194-2134322-0-07', 130, yPos);
+      
+      doc.font('Helvetica-Bold');
+      doc.text('CCI:', 300, yPos);
+      doc.font('Helvetica');
+      doc.text('002-194-002134322007-91', 330, yPos);
+
+      // Pie de página
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Page: 1 / 1', 50, 770, { align: 'center', width: 495 });
-
       doc.end();
       
     } catch (error) {

@@ -10,6 +10,7 @@ export async function getAllProductos(req, res) {
         p.*,
         ti.nombre AS tipo_inventario,
         c.nombre AS categoria,
+        c.id_tipo_insumo_sugerido,
         (SELECT COUNT(*) FROM recetas_productos WHERE id_producto_terminado = p.id_producto AND es_activa = 1) AS total_recetas
       FROM productos p
       INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
@@ -67,6 +68,7 @@ export async function getProductoById(req, res) {
         p.*,
         ti.nombre AS tipo_inventario,
         c.nombre AS categoria,
+        c.id_tipo_insumo_sugerido,
         (SELECT COUNT(*) FROM recetas_productos WHERE id_producto_terminado = p.id_producto AND es_activa = 1) AS total_recetas,
         (SELECT nombre_receta FROM recetas_productos WHERE id_producto_terminado = p.id_producto AND es_principal = 1 LIMIT 1) AS receta_principal
       FROM productos p
@@ -103,6 +105,7 @@ export async function getAllProductosConCosto(req, res) {
         p.*,
         ti.nombre AS tipo_inventario,
         c.nombre AS categoria,
+        c.id_tipo_insumo_sugerido,
         COALESCE(
           (
             SELECT SUM(op.costo_materiales) / SUM(op.cantidad_producida)
@@ -1466,7 +1469,6 @@ export async function getHistorialComprasProducto(req, res) {
       LIMIT ?
     `;
     
-    // ✅ CAMBIO: Usar pool.query directamente en lugar de executeQuery
     const [rows] = await pool.query(sql, [id, parseInt(limite)]);
     
     let totalCompras = 0;

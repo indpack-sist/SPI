@@ -2196,7 +2196,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       yPos += 8;
 
       const cantidadBase = orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : 20; 
-      const totalSlots = cantidadBase + 10;
+      const totalSlots = Math.min(cantidadBase + 10, 200);
 
       doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN (${totalSlots} SLOTS)`, 25, yPos);
       yPos += 10;
@@ -2277,7 +2277,6 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       doc.fontSize(6);
       
-      // Cuadros de Pie de Página (Totales)
       doc.rect(25, yPos, 130, 20).stroke();
       doc.font('Helvetica-Bold').text('TOTAL UNIDADES (UDS):', 30, yPos + 7, { width: 120, align: 'left' });
 

@@ -2286,16 +2286,20 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       doc.fontSize(6);
       
-      doc.rect(25, yPos, 170, 20).stroke();
-      doc.font('Helvetica-Bold').text('TOTAL PRODUCIDO (KG):', 30, yPos + 7, { width: 160, align: 'left' });
+      // Cuadros de Pie de Página (Totales)
+      doc.rect(25, yPos, 130, 20).stroke();
+      doc.font('Helvetica-Bold').text('TOTAL UNIDADES (UDS):', 30, yPos + 7, { width: 120, align: 'left' });
+
+      doc.rect(160, yPos, 130, 20).stroke();
+      doc.text('TOTAL PRODUCIDO (KG):', 165, yPos + 7, { width: 120, align: 'left' });
       
-      doc.rect(205, yPos, 170, 20).stroke();
-      doc.text('TOTAL MERMA (KG):', 210, yPos + 7, { width: 160, align: 'left' });
+      doc.rect(295, yPos, 130, 20).stroke();
+      doc.text('TOTAL MERMA (KG):', 300, yPos + 7, { width: 120, align: 'left' });
 
-      doc.rect(385, yPos, 180, 20).stroke();
-      doc.text('OBSERVACIONES FINALES:', 390, yPos + 7, { width: 170, align: 'left' });
+      doc.rect(430, yPos, 135, 20).stroke();
+      doc.text('OBSERVACIONES:', 435, yPos + 7, { width: 125, align: 'left' });
 
-      yPos += 45;
+      yPos += 50; 
       
       doc.moveTo(50, yPos).lineTo(200, yPos).stroke();
       doc.text('FIRMA MAQUINISTA', 50, yPos + 5, { width: 150, align: 'center' });

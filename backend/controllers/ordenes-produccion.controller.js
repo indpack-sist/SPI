@@ -665,7 +665,8 @@ export async function createOrden(req, res) {
   try {
     const {
       id_producto_terminado,
-      cantidad_planificada,
+      cantidad_planificada, // ESTO SON LOS KILOS TOTALES (Base para la receta)
+      cantidad_unidades,    // <--- NUEVO: CANTIDAD DE PRODUCTOS (Ej: 50 rollos)
       id_supervisor,
       observaciones,
       insumos, 
@@ -679,7 +680,7 @@ export async function createOrden(req, res) {
 
     if (!id_producto_terminado || !cantidad_planificada) {
       return res.status(400).json({ 
-        error: 'id_producto_terminado y cantidad_planificada son requeridos' 
+        error: 'id_producto_terminado y cantidad_planificada (Kilos) son requeridos' 
       });
     }
     
@@ -696,6 +697,7 @@ export async function createOrden(req, res) {
       estadoInicial = 'Pendiente Asignación';
     }
 
+    // --- GENERACIÓN DE CORRELATIVO ---
     const ultimaOrdenResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_produccion 
@@ -714,6 +716,7 @@ export async function createOrden(req, res) {
     const yearActual = new Date().getFullYear();
     const numeroOrdenGenerado = `OP-${yearActual}-${String(numeroSecuencia).padStart(4, '0')}`;
     
+    // --- VALIDACIÓN DE PRODUCTO ---
     const productoResult = await executeQuery(
       'SELECT unidad_medida FROM productos WHERE id_producto = ?',
       [id_producto_terminado]
@@ -727,6 +730,7 @@ export async function createOrden(req, res) {
     let costoMateriales = 0;
     let recetaCalculada = [];
 
+    // --- CÁLCULO DE RECETA (BASADO EN KILOS/CANTIDAD_PLANIFICADA) ---
     if (insumos && Array.isArray(insumos) && insumos.length > 0) {
       const insumosIds = insumos.map(i => i.id_insumo);
       const insumosResult = await executeQuery(
@@ -739,6 +743,7 @@ export async function createOrden(req, res) {
         const insumoDb = insumosResult.data.find(i => i.id_producto == item.id_insumo);
         if (!insumoDb) throw new Error(`Insumo ${item.id_insumo} no encontrado`);
         
+        // El cálculo se mantiene sobre cantidad_planificada (Kilos totales)
         const porcentaje = parseFloat(item.porcentaje);
         const cantidadCalculada = (parseFloat(cantidad_planificada) * porcentaje) / 100;
         
@@ -751,17 +756,20 @@ export async function createOrden(req, res) {
       });
     }
 
+    // --- INSERTAR ORDEN (CON EL NUEVO CAMPO) ---
     const ordenResult = await executeQuery(
       `INSERT INTO ordenes_produccion (
-        numero_orden, id_producto_terminado, cantidad_planificada,
+        numero_orden, id_producto_terminado, 
+        cantidad_planificada, cantidad_unidades,  -- <--- AGREGADO AQUÍ
         id_supervisor, costo_materiales, estado, observaciones,
         origen_tipo, id_orden_venta_origen, fecha_creacion,
         turno, maquinista, ayudante
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
       [
         numeroOrdenGenerado,
         id_producto_terminado,
-        cantidad_planificada,
+        cantidad_planificada,      // Total Kilos
+        cantidad_unidades || 0,    // Total Unidades (Nuevo)
         id_supervisor || null, 
         costoMateriales,
         estadoInicial,
@@ -774,13 +782,13 @@ export async function createOrden(req, res) {
         ayudante || null
       ]
     );
-    
     if (!ordenResult.success) {
       return res.status(500).json({ error: ordenResult.error });
     }
     
     const idOrden = ordenResult.data.insertId;
     
+    // --- INSERTAR RECETA PROVISIONAL ---
     if (recetaCalculada.length > 0) {
       const queries = recetaCalculada.map(item => ({
         sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
@@ -789,6 +797,7 @@ export async function createOrden(req, res) {
       await executeTransaction(queries);
     }
 
+    // --- NOTIFICACIONES ---
     if (id_orden_venta_origen) {
       let destinatarios = [];
       if (id_supervisor) {
@@ -832,6 +841,8 @@ export async function createOrden(req, res) {
         id_orden: idOrden,
         numero_orden: numeroOrdenGenerado,
         estado: estadoInicial,
+        cantidad_kilos: cantidad_planificada,
+        cantidad_unidades: cantidad_unidades || 0,
         insumos_calculados: recetaCalculada
       }
     });

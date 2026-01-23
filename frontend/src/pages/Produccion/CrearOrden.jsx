@@ -28,6 +28,8 @@ function CrearOrden() {
   const [modoReceta, setModoReceta] = useState('porcentaje'); 
   const [listaInsumos, setListaInsumos] = useState([]);
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
+  
+  // Este estado guarda el ID del tipo de insumo que requiere la CATEGORÍA del producto seleccionado
   const [filtroTipoInsumo, setFiltroTipoInsumo] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -46,16 +48,22 @@ function CrearOrden() {
     porcentaje: ''
   });
 
+  // Filtro del buscador de productos
   const productosFiltrados = productosTerminados.filter(p => 
     p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
+  // Filtro lógico de insumos para el Modal
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
+    // Si ya seleccionamos un producto (tenemos filtro), mostramos SOLO lo que coincida
     if (filtroTipoInsumo) {
-        return insumo.id_tipo_inventario === filtroTipoInsumo || insumo.id_tipo_inventario === 2; 
+        // Muestra si coincide el tipo O si es un insumo genérico (tipo 2) si lo deseas
+        return insumo.id_tipo_inventario === filtroTipoInsumo;
     }
-    return insumo.id_tipo_inventario === 2 || insumo.id_tipo_inventario === 13; 
+    // Si no hay producto seleccionado, no mostrar nada o mostrar todo (según prefieras)
+    // Aquí mostramos todo excepto productos terminados para evitar errores
+    return insumo.id_tipo_inventario !== 3; 
   });
 
   useEffect(() => {
@@ -111,7 +119,7 @@ function CrearOrden() {
       const [productosRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getAll({ requiere_receta: 'true', estado: 'Activo' }),
         empleadosAPI.getByRol('Supervisor'),
-        productosAPI.getAll({ estado: 'Activo' })
+        productosAPI.getAll({ estado: 'Activo' }) // Traemos todos los activos, el filtro lo hacemos en memoria
       ]);
       
       setProductosTerminados(productosRes.data.data);
@@ -128,8 +136,11 @@ function CrearOrden() {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
     setMostrarDropdown(false);
+    
+    // AQUÍ ESTÁ LA CLAVE: Usamos el ID que viene de la CATEGORÍA
     setFiltroTipoInsumo(producto.id_tipo_insumo_sugerido); 
-    setListaInsumos([]);
+    
+    setListaInsumos([]); // Reiniciar insumos si cambia el producto
   };
 
   const handleLimpiarProducto = () => {
@@ -239,8 +250,6 @@ function CrearOrden() {
     return <Loading message="Cargando formulario..." />;
   }
 
-  const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
-  
   const costoTotalEstimado = listaInsumos.reduce((sum, item) => {
       const cantidad = calcularCantidadInsumo(item.porcentaje);
       return sum + (cantidad * item.costo_unitario);
@@ -325,8 +334,8 @@ function CrearOrden() {
 
                     {mostrarDropdown && (
                         <div 
-                          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg overflow-y-auto max-h-60"
-                          style={{ backgroundColor: 'white' }}
+                          className="absolute w-full mt-1 border border-gray-200 rounded-md shadow-2xl overflow-y-auto max-h-60"
+                          style={{ backgroundColor: 'white', zIndex: 9999 }} // Corrección visual
                         >
                             {productosFiltrados.length > 0 ? (
                                 productosFiltrados.map((prod) => (
@@ -337,7 +346,10 @@ function CrearOrden() {
                                     >
                                         <div className="font-bold text-gray-800">{prod.codigo}</div>
                                         <div className="text-gray-600">{prod.nombre}</div>
-                                        <div className="text-xs text-muted mt-1">Stock: {parseFloat(prod.stock_actual).toFixed(2)}</div>
+                                        <div className="text-xs text-muted mt-1">
+                                            Stock: {parseFloat(prod.stock_actual).toFixed(2)} | 
+                                            Cat: {prod.categoria || 'Sin Cat'}
+                                        </div>
                                     </div>
                                 ))
                             ) : (
@@ -588,7 +600,7 @@ function CrearOrden() {
         size="md"
       >
         <div className="form-group">
-          <label className="form-label">Insumo (Filtrado por producto) *</label>
+          <label className="form-label">Insumo (Filtrado Automático) *</label>
           <select
             className="form-select"
             value={nuevoInsumo.id_insumo}
@@ -604,7 +616,9 @@ function CrearOrden() {
               ))}
           </select>
           {filtroTipoInsumo && (
-             <small className="text-xs text-blue-600">Mostrando insumos compatibles con el producto seleccionado.</small>
+             <small className="text-xs text-blue-600 block mt-1">
+                Mostrando solo insumos compatibles con este producto (Tipo ID: {filtroTipoInsumo})
+             </small>
           )}
         </div>
 

@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users,
-  Info // <--- AGREGADO: Soluciona el "Uncaught ReferenceError: Info is not defined"
+  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Info 
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
@@ -29,7 +28,6 @@ function CrearOrden() {
   const [modoReceta, setModoReceta] = useState('porcentaje'); 
   const [listaInsumos, setListaInsumos] = useState([]);
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
-  const [filtroTipoInsumo, setFiltroTipoInsumo] = useState(null);
 
   const [formData, setFormData] = useState({
     numero_orden: '', 
@@ -47,16 +45,80 @@ function CrearOrden() {
     porcentaje: ''
   });
 
-  const productosFiltrados = productosTerminados.filter(p => 
-    p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
-    p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
-  );
-
+  // --- LÓGICA DE FILTRADO DE INSUMOS POR NOMBRE DE PRODUCTO (ACTUALIZADA) ---
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
-    if (filtroTipoInsumo) {
-        return insumo.id_tipo_inventario === filtroTipoInsumo || insumo.id_tipo_inventario === 2; 
+    // 1. Obtenemos el producto seleccionado actualmente
+    const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
+
+    // Si no hay producto seleccionado, mostramos solo insumos generales (Tipo 2)
+    if (!productoSeleccionado) {
+        return insumo.id_tipo_inventario === 2; 
     }
-    return insumo.id_tipo_inventario === 2 || insumo.id_tipo_inventario === 13; 
+
+    const nombreProd = productoSeleccionado.nombre.toUpperCase();
+    const nombreInsumo = insumo.nombre.toUpperCase();
+
+    // 2. Reglas de Negocio Exactas según tu lista:
+
+    // CASO: ESQUINEROS
+    if (nombreProd.includes('ESQUINERO')) {
+        return (
+            nombreInsumo.includes('PELETIZADO VERDE') || 
+            nombreInsumo.includes('BATERIA') ||
+            nombreInsumo.includes('BEIGE DURO') || 
+            nombreInsumo.includes('PLOMO DURO') ||
+            nombreInsumo.includes('CHANCACA VERDE') ||
+            nombreInsumo.includes('ESQUINERO MOLIDO') ||
+            nombreInsumo.includes('TUTI') ||
+            nombreInsumo.includes('PIGMENTO VERDE')
+        );
+    }
+
+    // CASO: BURBUPACK
+    if (nombreProd.includes('BURBUPACK')) {
+        return (
+            nombreInsumo.includes('POLIETILENO DE BAJA') || 
+            nombreInsumo.includes('POLIETILENO DE ALTA') ||
+            nombreInsumo.includes('PELETIZADO POLIETILENO')
+        );
+    }
+
+    // CASO: ZUNCHOS (PP o PET)
+    if (nombreProd.includes('ZUNCHO')) {
+        return (
+            nombreInsumo.includes('PELETIZADO NEGRO') || 
+            nombreInsumo.includes('CHATARRA') ||
+            nombreInsumo.includes('CHANCACA NEGRA') ||
+            nombreInsumo.includes('ZUNCHO MOLIDO') ||
+            nombreInsumo.includes('PIGMENTO NEGRO') ||
+            nombreInsumo.includes('OTROS')
+        );
+    }
+
+    // CASO: FABRICACIÓN DE PELETIZADO NEGRO
+    if (nombreProd.includes('PELETIZADO NEGRO')) {
+        return (
+            nombreInsumo.includes('ETIQUETA MOLIDA') ||
+            nombreInsumo.includes('CHANCACA NEGRA') ||
+            nombreInsumo.includes('ZUNCHO MOLIDO') ||
+            nombreInsumo.includes('SACA MOLIDA') ||
+            nombreInsumo.includes('OTROS')
+        );
+    }
+
+    // CASO: FABRICACIÓN DE PELETIZADO VERDE
+    if (nombreProd.includes('PELETIZADO VERDE')) {
+        return (
+            nombreInsumo.includes('ETIQUETA MOLIDA') ||
+            nombreInsumo.includes('CHANCACA VERDE') ||
+            nombreInsumo.includes('SACA MOLIDA') ||
+            nombreInsumo.includes('OTROS')
+        );
+    }
+
+    // Por defecto, si no cae en ninguna regla anterior, mostramos insumos generales (Tipo 2)
+    // Esto asegura que materiales como "Cinta de Embalaje" o auxiliares siempre estén disponibles si se necesitan
+    return insumo.id_tipo_inventario === 2; 
   });
 
   useEffect(() => {
@@ -112,7 +174,7 @@ function CrearOrden() {
       const [productosRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getAll({ requiere_receta: 'true', estado: 'Activo' }),
         empleadosAPI.getByRol('Supervisor'),
-        productosAPI.getAll({ estado: 'Activo' })
+        productosAPI.getAll({ estado: 'Activo' }) // Traemos TODOS los activos
       ]);
       
       setProductosTerminados(productosRes.data.data);
@@ -129,15 +191,13 @@ function CrearOrden() {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
     setMostrarDropdown(false);
-    setFiltroTipoInsumo(producto.id_tipo_insumo_sugerido); 
-    setListaInsumos([]);
+    setListaInsumos([]); // Reiniciar lista al cambiar producto
   };
 
   const handleLimpiarProducto = () => {
     setFormData({ ...formData, id_producto_terminado: '' });
     setBusquedaProducto('');
     setListaInsumos([]);
-    setFiltroTipoInsumo(null);
     setMostrarDropdown(true); 
     setTimeout(() => {
         if (dropdownRef.current) {
@@ -207,15 +267,13 @@ function CrearOrden() {
             return;
         }
 
-        // --- VALIDACIÓN DEL 100% ---
+        // VALIDACIÓN 100%
         const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
-        // Usamos una pequeña tolerancia (0.01) para errores de punto flotante
         if (Math.abs(totalPorcentaje - 100) > 0.01) {
-            setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para poder crear la orden.`);
+            setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para crear la orden.`);
             setGuardando(false);
             return;
         }
-        // ---------------------------
 
         payload.insumos = listaInsumos.map(i => ({
             id_insumo: i.id_insumo,
@@ -315,7 +373,6 @@ function CrearOrden() {
                                 setMostrarDropdown(true); 
                                 if (e.target.value === '') {
                                     setFormData({ ...formData, id_producto_terminado: '' });
-                                    setFiltroTipoInsumo(null);
                                 }
                             }}
                             onFocus={() => setMostrarDropdown(true)} 
@@ -606,7 +663,7 @@ function CrearOrden() {
         size="md"
       >
         <div className="form-group">
-          <label className="form-label">Insumo (Filtrado Automático) *</label>
+          <label className="form-label">Insumo (Sugerido por nombre) *</label>
           <select
             className="form-select"
             value={nuevoInsumo.id_insumo}
@@ -621,11 +678,9 @@ function CrearOrden() {
                 </option>
               ))}
           </select>
-          {filtroTipoInsumo && (
-             <small className="text-xs text-blue-600 block mt-1">
-                Mostrando solo insumos compatibles con este producto
-             </small>
-          )}
+          <small className="text-xs text-blue-600 block mt-1">
+             Filtrando insumos relacionados al nombre del producto.
+          </small>
         </div>
 
         <div className="form-group">

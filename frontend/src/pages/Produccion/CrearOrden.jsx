@@ -410,6 +410,7 @@ function CrearOrden() {
                     )}
                 </div>
 
+                {/* PRIORIDAD 1: CANTIDAD DE UNIDADES (META DE PRODUCTO) */}
                 <div className="form-group">
                     <label className="form-label">Cantidad Unidades (Meta) *</label>
                     <div className="relative">
@@ -427,8 +428,9 @@ function CrearOrden() {
                     </div>
                 </div>
 
+                {/* PRIORIDAD 2: CANTIDAD DE INSUMOS (KILOS TOTALES) */}
                 <div className="form-group">
-                    <label className="form-label">Total Kilos Estimados *</label>
+                    <label className="form-label">Total Kilos Estimados (Insumos) *</label>
                     <div className="relative">
                         <input
                             type="number"

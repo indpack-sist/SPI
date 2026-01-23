@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale
+  Users, Clipboard, Info, Hash, Scale, PieChart
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -100,7 +100,6 @@ function OrdenDetalle() {
     }
   };
 
-  // --- FILTRADO INTELIGENTE DE MERMAS ---
   const mermasFiltradas = productosMerma.filter(merma => {
       if (!orden) return false;
       const nombreProducto = orden.producto.toUpperCase();
@@ -111,7 +110,7 @@ function OrdenDetalle() {
       if (nombreProducto.includes('ZUNCHO')) return nombreMerma.includes('ZUNCHO');
       if (nombreProducto.includes('GRAPA')) return nombreMerma.includes('GRAPA');
       
-      return true; // Si no coincide con nada, muestra todas (fallback)
+      return true;
   });
 
   const inicializarInsumosParaParcial = () => {
@@ -424,11 +423,12 @@ function OrdenDetalle() {
     return badges[estado] || 'badge-secondary';
   };
 
-  // --- CÁLCULO DE BALANCE DE MASAS ---
   const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
   const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
   const totalKilosProd = parseFloat(cantidadKilosFinal || 0);
   const diferenciaMasa = totalInsumosReales - (totalKilosProd + totalMerma);
+
+  const totalMasaRealConsumida = consumoMateriales.reduce((acc, item) => acc + parseFloat(item.cantidad_real_consumida || 0), 0);
 
   if (loading) {
     return <Loading message="Cargando orden..." />;
@@ -655,30 +655,50 @@ function OrdenDetalle() {
         <div className="card">
           <div className="card-header flex items-center gap-2">
             <BarChart size={18} className="text-gray-500" />
-            <h2 className="card-title">Producción Planificada</h2>
+            <h2 className="card-title">Producción</h2>
           </div>
           <div className="p-4 grid gap-3">
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Total Kilos Estimados</p>
-              <p className="font-bold text-lg">
-                {parseFloat(orden.cantidad_planificada).toFixed(2)} Kg
-              </p>
-            </div>
-            {orden.cantidad_unidades > 0 && (
+            <div className="grid grid-cols-2 gap-2 pb-2 border-b border-gray-100">
                 <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Meta de Unidades</p>
+                    <p className="text-xs text-muted uppercase font-semibold">Meta Unidades</p>
                     <p className="font-bold text-lg text-blue-600">
-                        {parseInt(orden.cantidad_unidades)} uds.
+                        {orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">uds</span>
                     </p>
                 </div>
-            )}
-            <div className="border-t border-gray-100 pt-2 mt-2">
-              <p className="text-xs text-muted uppercase font-semibold">Estado Actual</p>
-              <p className={`font-bold ${orden.cantidad_producida > 0 ? 'text-success' : 'text-gray-500'}`}>
-                {orden.cantidad_producida > 0 
-                    ? `Producido: ${parseFloat(orden.cantidad_producida).toFixed(2)} Kg` 
-                    : 'Sin producción registrada'}
-              </p>
+                <div>
+                    <p className="text-xs text-muted uppercase font-semibold">Meta Kilos</p>
+                    <p className="font-bold text-lg">
+                        {parseFloat(orden.cantidad_planificada).toFixed(2)} <span className="text-xs font-normal text-muted">Kg</span>
+                    </p>
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                <div>
+                    <p className="text-xs text-muted uppercase font-semibold">Real Unidades</p>
+                    <p className={`font-bold text-lg ${orden.cantidad_unidades_producida > 0 ? 'text-success' : 'text-gray-400'}`}>
+                        {orden.cantidad_unidades_producida ? parseInt(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">uds</span>
+                    </p>
+                </div>
+                <div>
+                    <p className="text-xs text-muted uppercase font-semibold">Real Kilos</p>
+                    <p className={`font-bold text-lg ${orden.cantidad_producida > 0 ? 'text-success' : 'text-gray-400'}`}>
+                        {parseFloat(orden.cantidad_producida || 0).toFixed(2)} <span className="text-xs font-normal text-muted">Kg</span>
+                    </p>
+                </div>
+            </div>
+            <div className="pt-1">
+              <p className="text-xs text-muted uppercase font-semibold">Eficiencia (Kilos)</p>
+              <div className="flex items-center gap-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div className="bg-blue-600 h-2.5 rounded-full" 
+                           style={{ width: `${Math.min(100, (parseFloat(orden.cantidad_producida || 0) / parseFloat(orden.cantidad_planificada)) * 100)}%` }}></div>
+                  </div>
+                  <span className="text-xs font-bold">
+                    {orden.cantidad_producida > 0 
+                      ? `${((parseFloat(orden.cantidad_producida) / parseFloat(orden.cantidad_planificada)) * 100).toFixed(1)}%`
+                      : '0%'}
+                  </span>
+              </div>
             </div>
           </div>
         </div>
@@ -739,7 +759,8 @@ function OrdenDetalle() {
               <thead>
                 <tr>
                   <th>Fecha y Hora</th>
-                  <th className="text-right">Cantidad Registrada</th>
+                  <th className="text-center">Cant. Productos</th>
+                  <th className="text-right">Peso (Kg)</th>
                   <th>Registrado Por</th>
                   <th>Observaciones</th>
                 </tr>
@@ -748,6 +769,9 @@ function OrdenDetalle() {
                 {registrosParciales.map(registro => (
                   <tr key={registro.id_registro}>
                     <td>{formatearFecha(registro.fecha_registro)}</td>
+                    <td className="text-center font-bold text-blue-600">
+                        {registro.cantidad_unidades_registrada ? parseInt(registro.cantidad_unidades_registrada) : '-'}
+                    </td>
                     <td className="text-right font-bold">
                       {parseFloat(registro.cantidad_registrada).toFixed(2)} Kg
                     </td>
@@ -760,6 +784,294 @@ function OrdenDetalle() {
           </div>
         </div>
       )}
+
+      {orden.observaciones && (
+        <div className="card mb-4">
+          <div className="card-header flex items-center gap-2">
+            <FileText size={18} className="text-gray-500" />
+            <h2 className="card-title">Observaciones</h2>
+          </div>
+          <div className="p-4">
+            <p className="text-sm text-gray-700" style={{ whiteSpace: 'pre-line' }}>{orden.observaciones}</p>
+          </div>
+        </div>
+      )}
+
+      {consumoMateriales.length > 0 && (
+        <div className="card mb-4">
+          <div className="card-header flex items-center gap-2">
+            <Package size={18} className="text-gray-500" />
+            <h2 className="card-title">Materiales Consumidos ({consumoMateriales.length})</h2>
+            {analisisConsumo && analisisConsumo.resumen.diferencia !== 0 && (
+              <span className={`badge ml-auto ${analisisConsumo.resumen.diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>
+                {analisisConsumo.resumen.diferencia > 0 ? (
+                  <><TrendingUp size={14} /> Sobrecosto: {formatearMoneda(analisisConsumo.resumen.diferencia)}</>
+                ) : (
+                  <><TrendingDown size={14} /> Ahorro: {formatearMoneda(Math.abs(analisisConsumo.resumen.diferencia))}</>
+                )}
+              </span>
+            )}
+          </div>
+
+          <div className="table-container p-0">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Insumo</th>
+                  <th className="text-right">Estimado (Plan)</th>
+                  <th className="text-right">Real Consumido</th>
+                  <th className="text-center">Avance</th>
+                  <th className="text-center">% Mezcla Real</th>
+                  {analisisConsumo && <th className="text-right">Diferencia</th>}
+                  <th className="text-right">Costo Unit.</th>
+                  <th className="text-right">Costo Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {consumoMateriales.map((item, idx) => {
+                  const analisisItem = analisisConsumo?.detalle.find(a => a.id_insumo === item.id_insumo);
+                  const diferencia = analisisItem ? parseFloat(analisisItem.diferencia) : 0;
+                  const plan = parseFloat(item.cantidad_requerida);
+                  const real = parseFloat(item.cantidad_real_consumida || 0);
+                  const porcentajeAvance = plan > 0 ? Math.min(100, (real / plan) * 100) : 0;
+                  const porcentajeMezcla = totalMasaRealConsumida > 0 ? (real / totalMasaRealConsumida) * 100 : 0;
+                    
+                  return (
+                    <tr key={item.id_consumo}>
+                      <td className="font-mono text-xs">{item.codigo_insumo}</td>
+                      <td className="font-medium">{item.insumo}</td>
+                      <td className="text-right text-muted">
+                        {plan.toFixed(4)} <span className="text-xs">{item.unidad_medida}</span>
+                      </td>
+                      <td className="text-right font-bold">
+                         {real.toFixed(4)} <span className="text-xs text-muted">{item.unidad_medida}</span>
+                      </td>
+                      <td className="text-center" style={{ width: '120px' }}>
+                         <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                            <div className={`h-1.5 rounded-full ${porcentajeAvance > 100 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, porcentajeAvance)}%` }}></div>
+                         </div>
+                         <span className="text-xs text-muted">{porcentajeAvance.toFixed(0)}%</span>
+                      </td>
+                      <td className="text-center text-xs font-medium text-blue-600">
+                         {porcentajeMezcla.toFixed(2)}%
+                      </td>
+                      {analisisConsumo && (
+                        <td className="text-right">
+                          {diferencia !== 0 ? (
+                            <span className={`badge ${diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>
+                              {diferencia > 0 ? '+' : ''}{diferencia.toFixed(4)}
+                            </span>
+                          ) : (
+                            <span className="text-muted">-</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="text-right">{formatearMoneda(item.costo_unitario)}</td>
+                      <td className="text-right font-bold">
+                        {formatearMoneda(analisisItem ? analisisItem.costo_real : (real * parseFloat(item.costo_unitario)))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50 font-bold">
+                  <td colSpan={analisisConsumo ? 8 : 7} className="text-right">
+                    TOTAL MATERIALES:
+                  </td>
+                  <td className="text-right text-lg text-primary">
+                    {analisisConsumo ? formatearMoneda(analisisConsumo.resumen.costo_real) : formatearMoneda(orden.costo_materiales)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+        
+      <Modal
+        isOpen={modalAsignar}
+        onClose={() => setModalAsignar(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <Users className="text-warning" /> Asignar Personal
+          </span>
+        }
+        size="md"
+      >
+        <form onSubmit={handleAsignarSupervisor}>
+          <div className="space-y-4">
+            <div className="form-group">
+                <label className="form-label">Supervisor *</label>
+                <select
+                    className="form-select"
+                    value={asignacionData.id_supervisor}
+                    onChange={(e) => setAsignacionData({...asignacionData, id_supervisor: e.target.value})}
+                    required
+                >
+                    <option value="">Seleccione...</option>
+                    {supervisoresDisponibles.map(sup => (
+                        <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>
+                    ))}
+                </select>
+            </div>
+            
+            <div className="form-group">
+                <label className="form-label">Turno</label>
+                <select
+                    className="form-select"
+                    value={asignacionData.turno}
+                    onChange={(e) => setAsignacionData({...asignacionData, turno: e.target.value})}
+                >
+                    <option value="Mañana">Mañana</option>
+                    <option value="Noche">Noche</option>
+                </select>
+            </div>
+
+            <div className="form-group">
+                <label className="form-label">Maquinista</label>
+                <input 
+                    className="form-input" 
+                    value={asignacionData.maquinista}
+                    onChange={(e) => setAsignacionData({...asignacionData, maquinista: e.target.value})}
+                    placeholder="Nombre del maquinista"
+                />
+            </div>
+
+            <div className="form-group">
+                <label className="form-label">Ayudante</label>
+                <input 
+                    className="form-input" 
+                    value={asignacionData.ayudante}
+                    onChange={(e) => setAsignacionData({...asignacionData, ayudante: e.target.value})}
+                    placeholder="Nombre del ayudante"
+                />
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end mt-6">
+            <button 
+              type="button" 
+              className="btn btn-outline" 
+              onClick={() => setModalAsignar(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-warning"
+              disabled={procesando || !asignacionData.id_supervisor}
+            >
+              {procesando ? 'Procesando...' : 'Guardar Asignación'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={modalParcial}
+        onClose={() => setModalParcial(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <Layers className="text-info" /> Registrar Producción Parcial
+          </span>
+        }
+        size="lg"
+      >
+        <form onSubmit={handleRegistroParcial}>
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
+            <Info className="text-blue-500 shrink-0" size={20} />
+            <div className="text-sm text-blue-700">
+              <p><strong>Registro Parcial:</strong> Permite registrar producción sin finalizar la orden.</p>
+              <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> de <strong>{parseFloat(orden.cantidad_planificada).toFixed(2)}</strong> Kg</p>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Cantidad a Registrar (Kg) *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              className="form-input"
+              value={cantidadParcial}
+              onChange={(e) => setCantidadParcial(e.target.value)}
+              required
+              placeholder="0.00"
+            />
+            <small className="text-muted block mt-1">
+              Restante: {(parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0)).toFixed(2)} Kg
+            </small>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Observaciones</label>
+            <textarea
+              className="form-textarea"
+              value={observacionesParcial}
+              onChange={(e) => setObservacionesParcial(e.target.value)}
+              placeholder="Comentarios sobre este registro..."
+              rows={2}
+            />
+          </div>
+
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Package size={18} className="text-primary" />
+              <h3 className="font-semibold">Consumo de Insumos *</h3>
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {insumosParcialesConsumo.map(item => (
+                <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
+                  <div className="col-span-6">
+                    <div className="font-medium text-sm">{item.insumo}</div>
+                    <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                  </div>
+                    
+                  <div className="col-span-3">
+                    <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
+                  </div>
+                    
+                  <div className="col-span-3">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      className="form-input form-input-sm"
+                      value={item.cantidad}
+                      onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
+                      placeholder="0.0000"
+                      required
+                    />
+                    <div className="text-xs text-muted mt-1">{item.unidad_medida}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end mt-6">
+            <button 
+              type="button" 
+              className="btn btn-outline" 
+              onClick={() => setModalParcial(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-info"
+              disabled={procesando || !cantidadParcial}
+            >
+              {procesando ? 'Procesando...' : 'Registrar Producción Parcial'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal
         isOpen={modalFinalizar}
@@ -970,190 +1282,6 @@ function OrdenDetalle() {
               disabled={procesando || !cantidadKilosFinal}
             >
               {procesando ? 'Procesando...' : 'Finalizar Producción'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* MODALES ANTERIORES (ASIGNAR, PARCIAL) SE MANTIENEN IGUAL... */}
-      <Modal
-        isOpen={modalAsignar}
-        onClose={() => setModalAsignar(false)}
-        title={
-          <span className="flex items-center gap-2">
-            <Users className="text-warning" /> Asignar Personal
-          </span>
-        }
-        size="md"
-      >
-        <form onSubmit={handleAsignarSupervisor}>
-          <div className="space-y-4">
-            <div className="form-group">
-                <label className="form-label">Supervisor *</label>
-                <select
-                    className="form-select"
-                    value={asignacionData.id_supervisor}
-                    onChange={(e) => setAsignacionData({...asignacionData, id_supervisor: e.target.value})}
-                    required
-                >
-                    <option value="">Seleccione...</option>
-                    {supervisoresDisponibles.map(sup => (
-                        <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>
-                    ))}
-                </select>
-            </div>
-            
-            <div className="form-group">
-                <label className="form-label">Turno</label>
-                <select
-                    className="form-select"
-                    value={asignacionData.turno}
-                    onChange={(e) => setAsignacionData({...asignacionData, turno: e.target.value})}
-                >
-                    <option value="Mañana">Mañana</option>
-                    <option value="Noche">Noche</option>
-                </select>
-            </div>
-
-            <div className="form-group">
-                <label className="form-label">Maquinista</label>
-                <input 
-                    className="form-input" 
-                    value={asignacionData.maquinista}
-                    onChange={(e) => setAsignacionData({...asignacionData, maquinista: e.target.value})}
-                    placeholder="Nombre del maquinista"
-                />
-            </div>
-
-            <div className="form-group">
-                <label className="form-label">Ayudante</label>
-                <input 
-                    className="form-input" 
-                    value={asignacionData.ayudante}
-                    onChange={(e) => setAsignacionData({...asignacionData, ayudante: e.target.value})}
-                    placeholder="Nombre del ayudante"
-                />
-            </div>
-          </div>
-
-          <div className="flex gap-2 justify-end mt-6">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalAsignar(false)}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-warning"
-              disabled={procesando || !asignacionData.id_supervisor}
-            >
-              {procesando ? 'Procesando...' : 'Guardar Asignación'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={modalParcial}
-        onClose={() => setModalParcial(false)}
-        title={
-          <span className="flex items-center gap-2">
-            <Layers className="text-info" /> Registrar Producción Parcial
-          </span>
-        }
-        size="lg"
-      >
-        <form onSubmit={handleRegistroParcial}>
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
-            <Info className="text-blue-500 shrink-0" size={20} />
-            <div className="text-sm text-blue-700">
-              <p><strong>Registro Parcial:</strong> Permite registrar producción sin finalizar la orden.</p>
-              <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> de <strong>{parseFloat(orden.cantidad_planificada).toFixed(2)}</strong> {orden.unidad_medida}</p>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Cantidad a Registrar *</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="form-input"
-              value={cantidadParcial}
-              onChange={(e) => setCantidadParcial(e.target.value)}
-              required
-              placeholder="0.00"
-            />
-            <small className="text-muted block mt-1">
-              Restante: {(parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0)).toFixed(2)} {orden.unidad_medida}
-            </small>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Observaciones</label>
-            <textarea
-              className="form-textarea"
-              value={observacionesParcial}
-              onChange={(e) => setObservacionesParcial(e.target.value)}
-              placeholder="Comentarios sobre este registro..."
-              rows={2}
-            />
-          </div>
-
-          <div className="border-t border-gray-200 pt-4 mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Package size={18} className="text-primary" />
-              <h3 className="font-semibold">Consumo de Insumos *</h3>
-            </div>
-
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {insumosParcialesConsumo.map(item => (
-                <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
-                  <div className="col-span-6">
-                    <div className="font-medium text-sm">{item.insumo}</div>
-                    <div className="text-xs text-muted">{item.codigo_insumo}</div>
-                  </div>
-                    
-                  <div className="col-span-3">
-                    <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
-                  </div>
-                    
-                  <div className="col-span-3">
-                    <input
-                      type="number"
-                      step="0.0001"
-                      min="0"
-                      className="form-input form-input-sm"
-                      value={item.cantidad}
-                      onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
-                      placeholder="0.0000"
-                      required
-                    />
-                    <div className="text-xs text-muted mt-1">{item.unidad_medida}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2 justify-end mt-6">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalParcial(false)}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-info"
-              disabled={procesando || !cantidadParcial}
-            >
-              {procesando ? 'Procesando...' : 'Registrar Producción Parcial'}
             </button>
           </div>
         </form>

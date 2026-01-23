@@ -17,7 +17,7 @@ import {
   registrarProduccionParcial,
   getRegistrosParcialesOrden,
   getAnalisisConsumoOrden
-} from '../controllers/ordenesController.js';
+} from '../controllers/ordenes-produccion.controller.js';
 
 const router = express.Router();
 

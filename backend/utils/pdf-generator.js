@@ -811,27 +811,26 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
-
+      doc.text('Dirección de la Empresa, Calle 123', 50, 123, { width: 250 });
+      doc.text('Lima, Lima - Perú', 50, 135);
+      
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-      doc.text(`R.U.C. ${EMPRESA.ruc}`, 385, 48, { align: 'center', width: 155 });
+      doc.text('R.U.C. 20123456789', 385, 48, { align: 'center', width: 155 });
       doc.fontSize(12).font('Helvetica-Bold');
       doc.text('ORDEN DE PRODUCCIÓN', 385, 65, { align: 'center', width: 155 });
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${datos.numero_orden || 'N/A'}`, 385, 83, { align: 'center', width: 155 });
 
-      const alturaInfoProduccion = 105;
+      // Aumentamos altura para que quepan las fechas de inicio/fin
+      const alturaInfoProduccion = 125; 
       doc.roundedRect(33, 205, 529, alturaInfoProduccion, 3).stroke('#000000');
       
+      // COLUMNA IZQUIERDA
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha:', 40, 213);
+      doc.text('F. Creación:', 40, 213);
       doc.font('Helvetica');
-      doc.text(formatearFecha(datos.fecha_creacion), 100, 213);
+      doc.text(formatearFechaHora(datos.fecha_creacion), 100, 213);
       
       doc.font('Helvetica-Bold');
       doc.text('Producto:', 40, 228);
@@ -849,10 +848,16 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
       doc.text(datos.supervisor || 'N/A', 100, 258, { width: 230 });
       
       doc.font('Helvetica-Bold');
-      doc.text('Cant. Planificada:', 40, 273);
+      doc.text('Cant. Planif.:', 40, 273);
       doc.font('Helvetica');
       doc.text(`${datos.cantidad_planificada || 0} ${datos.unidad_medida || ''}`, 100, 273);
 
+      doc.font('Helvetica-Bold');
+      doc.text('Inicio Real:', 40, 288);
+      doc.font('Helvetica');
+      doc.text(formatearFechaHora(datos.fecha_inicio), 100, 288);
+
+      // COLUMNA DERECHA
       doc.font('Helvetica-Bold');
       doc.text('Estado:', 360, 213);
       doc.font('Helvetica');
@@ -860,12 +865,33 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
       
       if (datos.cantidad_producida > 0) {
         doc.font('Helvetica-Bold');
-        doc.text('Cant. Producida:', 360, 228);
+        doc.text('Cant. Prod.:', 360, 228);
         doc.font('Helvetica');
         doc.text(`${datos.cantidad_producida} ${datos.unidad_medida || ''}`, 450, 228);
       }
 
-      let yPos = 320;
+      doc.font('Helvetica-Bold');
+      doc.text('Turno:', 360, 243);
+      doc.font('Helvetica');
+      doc.text(datos.turno || '-', 450, 243);
+
+      doc.font('Helvetica-Bold');
+      doc.text('Maquinista:', 360, 258);
+      doc.font('Helvetica');
+      doc.text(datos.maquinista || '-', 450, 258);
+
+      doc.font('Helvetica-Bold');
+      doc.text('Duración:', 360, 273);
+      doc.font('Helvetica');
+      doc.text(formatearDuracion(datos.tiempo_total_minutos), 450, 273);
+
+      doc.font('Helvetica-Bold');
+      doc.text('Fin Real:', 360, 288);
+      doc.font('Helvetica');
+      doc.text(formatearFechaHora(datos.fecha_fin), 450, 288);
+
+      // Ajustamos posición Y inicial para el contenido
+      let yPos = 345;
 
       if (consumoMateriales.length > 0) {
         doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
@@ -878,7 +904,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
 
         yPos += 20;
 
-        consumoMateriales.forEach((item, idx) => {
+        consumoMateriales.forEach((item) => {
           const descripcion = item.insumo || '';
           const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 300, 8);
           const alturaFila = Math.max(20, alturaDescripcion + 10);
@@ -886,7 +912,6 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
           if (yPos + alturaFila > 700) {
             doc.addPage();
             yPos = 50;
-            
             doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
             doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
             doc.text('INSUMO', 40, yPos + 6);
@@ -898,10 +923,18 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
 
           doc.fontSize(8).font('Helvetica').fillColor('#000000');
           
+          const cantidadMostrar = item.cantidad_real_consumida > 0 
+            ? item.cantidad_real_consumida 
+            : item.cantidad_requerida;
+
+          const costoTotalItem = item.cantidad_real_consumida > 0 
+             ? (item.cantidad_real_consumida * item.costo_unitario)
+             : item.costo_total;
+
           doc.text(descripcion, 40, yPos + 5, { width: 300, lineGap: 2 });
-          doc.text(`${item.cantidad_requerida} ${item.unidad_medida || ''}`, 350, yPos + 5);
+          doc.text(`${parseFloat(cantidadMostrar).toFixed(4)} ${item.unidad_medida || ''}`, 350, yPos + 5);
           doc.text(`S/ ${parseFloat(item.costo_unitario).toFixed(2)}`, 430, yPos + 5, { align: 'right', width: 50 });
-          doc.text(`S/ ${parseFloat(item.costo_total).toFixed(2)}`, 490, yPos + 5, { align: 'right', width: 60 });
+          doc.text(`S/ ${parseFloat(costoTotalItem).toFixed(2)}`, 490, yPos + 5, { align: 'right', width: 60 });
 
           yPos += alturaFila;
         });
@@ -928,7 +961,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
 
         yPos += 18;
 
-        registrosParciales.forEach((reg, idx) => {
+        registrosParciales.forEach((reg) => {
           if (yPos + 16 > 750) {
             doc.addPage();
             yPos = 50;
@@ -965,7 +998,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
 
         yPos += 18;
 
-        mermas.forEach((merma, idx) => {
+        mermas.forEach((merma) => {
           if (yPos + 16 > 750) {
             doc.addPage();
             yPos = 50;
@@ -1004,18 +1037,25 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
           yPos = 50;
         }
 
+        let totalCosto = 0;
+        consumoMateriales.forEach(c => {
+             const cant = c.cantidad_real_consumida > 0 ? c.cantidad_real_consumida : c.cantidad_requerida;
+             totalCosto += (cant * c.costo_unitario);
+        });
+
         doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
         doc.text('COSTO MATERIALES', 390, yPos + 4);
         
         doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-        doc.text(`S/ ${parseFloat(datos.costo_materiales).toFixed(2)}`, 475, yPos + 4, { align: 'right', width: 80 });
+        doc.text(`S/ ${totalCosto.toFixed(2)}`, 475, yPos + 4, { align: 'right', width: 80 });
 
         yPos += 25;
 
         doc.fontSize(8).font('Helvetica');
-        const totalEnLetras = numeroALetras(parseFloat(datos.costo_materiales), 'PEN');
+        // Si no tienes la funcion numeroALetras, puedes comentar esta linea o implementarla
+        const totalEnLetras = numeroALetras(totalCosto, 'PEN'); 
         doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
       }
 

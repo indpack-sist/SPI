@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Hash 
+  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Info, Hash, Ruler, Scale 
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
@@ -40,7 +40,10 @@ function CrearOrden() {
     maquinista: '',
     ayudante: '',
     operario_corte: '',
-    operario_embalaje: ''
+    operario_embalaje: '',
+    medida: '',        // Nuevo
+    peso_producto: '', // Nuevo
+    gramaje: ''        // Nuevo
   });
   
   const [nuevoInsumo, setNuevoInsumo] = useState({
@@ -53,9 +56,9 @@ function CrearOrden() {
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
-  const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
-
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
+    const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
+
     if (!productoSeleccionado) {
         return insumo.id_tipo_inventario === 2; 
     }
@@ -415,9 +418,7 @@ function CrearOrden() {
                 </div>
 
                 <div className="form-group">
-                    <label className="form-label">
-                        Cantidad {productoSeleccionado ? `(${productoSeleccionado.unidad_medida})` : '(Unidades)'} (Meta) *
-                    </label>
+                    <label className="form-label">Cantidad Unidades (Meta) *</label>
                     <div className="relative">
                         <input
                             type="number"
@@ -463,6 +464,49 @@ function CrearOrden() {
                             <option value="Noche">Noche</option>
                         </select>
                         <Clock className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                    </div>
+                </div>
+            </div>
+
+            {/* --- CAMPOS OPCIONALES NUEVOS --- */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 bg-gray-50 p-3 rounded border border-gray-100">
+                <div className="form-group">
+                    <label className="form-label text-xs">Medida (Opcional)</label>
+                    <div className="relative">
+                        <input
+                            type="text"
+                            className="form-input text-sm pl-8"
+                            value={formData.medida}
+                            onChange={(e) => setFormData({ ...formData, medida: e.target.value })}
+                            placeholder="Ej: 50x70 cm"
+                        />
+                        <Ruler className="absolute left-2.5 top-2.5 text-gray-400" size={14} />
+                    </div>
+                </div>
+                <div className="form-group">
+                    <label className="form-label text-xs">Peso Unitario (Opcional)</label>
+                    <div className="relative">
+                        <input
+                            type="text"
+                            className="form-input text-sm pl-8"
+                            value={formData.peso_producto}
+                            onChange={(e) => setFormData({ ...formData, peso_producto: e.target.value })}
+                            placeholder="Ej: 200g"
+                        />
+                        <Scale className="absolute left-2.5 top-2.5 text-gray-400" size={14} />
+                    </div>
+                </div>
+                <div className="form-group">
+                    <label className="form-label text-xs">Gramaje (Opcional)</label>
+                    <div className="relative">
+                        <input
+                            type="text"
+                            className="form-input text-sm pl-8"
+                            value={formData.gramaje}
+                            onChange={(e) => setFormData({ ...formData, gramaje: e.target.value })}
+                            placeholder="Ej: 150 micras"
+                        />
+                        <Info className="absolute left-2.5 top-2.5 text-gray-400" size={14} />
                     </div>
                 </div>
             </div>

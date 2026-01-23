@@ -114,7 +114,7 @@ function NuevaCotizacion() {
     plazo_pago: 'Contado',
     forma_pago: '',
     direccion_entrega: '',
-    observaciones: '',
+    observaciones: 'OBSERVACIONES\nPlazo de entrega: 1-2 DÍAS CONFIRMADO EL ABONO\nLugar de entrega: RECOJO\nValidez de la oferta: 7 DÍAS / DE ACUERDO AL PRECIO DE LA MATERIA PRIMA',
     validez_dias: 7,
     plazo_entrega: '',
     lugar_entrega: ''

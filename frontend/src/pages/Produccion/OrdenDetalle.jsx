@@ -454,6 +454,8 @@ function OrdenDetalle() {
   const puedeCancelar = ['Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa'].includes(orden.estado);
   const puedeRegistrarParcial = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
+  
+  const esLamina = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
 
   return (
     <div>
@@ -643,6 +645,20 @@ function OrdenDetalle() {
                     </div>
                 )}
             </div>
+            
+            {esLamina && (
+                <div className="grid grid-cols-2 gap-2 mt-2 bg-blue-50 p-2 rounded border border-blue-100">
+                    <div>
+                        <p className="text-xs text-blue-800 uppercase font-semibold">Corte</p>
+                        <p className="text-sm">{orden.operario_corte || '-'}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-blue-800 uppercase font-semibold">Embalaje</p>
+                        <p className="text-sm">{orden.operario_embalaje || '-'}</p>
+                    </div>
+                </div>
+            )}
+
             {desdeOrdenVenta && orden.numero_orden_venta && (
               <div>
                 <p className="text-xs text-muted uppercase font-semibold">Orden de Venta</p>

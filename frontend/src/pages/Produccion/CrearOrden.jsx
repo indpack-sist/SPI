@@ -38,7 +38,9 @@ function CrearOrden() {
     observaciones: '',
     turno: 'Mañana',
     maquinista: '',
-    ayudante: ''
+    ayudante: '',
+    operario_corte: '',
+    operario_embalaje: ''
   });
   
   const [nuevoInsumo, setNuevoInsumo] = useState({
@@ -114,6 +116,8 @@ function CrearOrden() {
 
     return insumo.id_tipo_inventario === 2; 
   });
+
+  const esProductoLamina = busquedaProducto.toUpperCase().includes('LÁMINA') || busquedaProducto.toUpperCase().includes('LAMINA');
 
   useEffect(() => {
     cargarDatos();
@@ -410,7 +414,6 @@ function CrearOrden() {
                     )}
                 </div>
 
-                {/* PRIORIDAD 1: CANTIDAD DE UNIDADES (META DE PRODUCTO) */}
                 <div className="form-group">
                     <label className="form-label">Cantidad Unidades (Meta) *</label>
                     <div className="relative">
@@ -428,7 +431,6 @@ function CrearOrden() {
                     </div>
                 </div>
 
-                {/* PRIORIDAD 2: CANTIDAD DE INSUMOS (KILOS TOTALES) */}
                 <div className="form-group">
                     <label className="form-label">Total Kilos Estimados (Insumos) *</label>
                     <div className="relative">
@@ -467,7 +469,7 @@ function CrearOrden() {
                 <h3 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
                     <Users size={16} /> Personal Asignado
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div className="form-group">
                         <label className="form-label text-xs">Supervisor *</label>
                         <select
@@ -503,6 +505,31 @@ function CrearOrden() {
                         />
                     </div>
                 </div>
+
+                {esProductoLamina && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50 p-3 rounded border border-blue-100">
+                        <div className="form-group">
+                            <label className="form-label text-xs text-blue-800 font-semibold">Operario de Corte</label>
+                            <input
+                                type="text"
+                                className="form-input text-sm border-blue-200"
+                                value={formData.operario_corte}
+                                onChange={(e) => setFormData({ ...formData, operario_corte: e.target.value })}
+                                placeholder="Encargado del corte"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label text-xs text-blue-800 font-semibold">Operario de Embalaje</label>
+                            <input
+                                type="text"
+                                className="form-input text-sm border-blue-200"
+                                value={formData.operario_embalaje}
+                                onChange={(e) => setFormData({ ...formData, operario_embalaje: e.target.value })}
+                                placeholder="Encargado de embalaje"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="form-group">

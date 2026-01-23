@@ -15,8 +15,8 @@ const EMPRESA = {
 
 const fmtNum = (num) => {
   return Number(num).toLocaleString('en-US', { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: 2
+    minimumFractionDigits: 3, 
+    maximumFractionDigits: 3
   });
 };
 

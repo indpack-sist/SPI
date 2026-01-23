@@ -1,6 +1,6 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarPDFOrdenProduccion } from '../utils/pdf-generator.js';
-
+import { generarPDFHojaRuta } from '../utils/pdf-generator.js'; // Importar la nueva función
 const getFechaPeru = () => {
   const now = new Date();
   const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -1603,6 +1603,74 @@ export const generarPDFOrdenController = async (req, res) => {
     res.send(pdfBuffer);
   } catch (error) {
     console.error('Error al generar PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+export const descargarHojaRutaController = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Obtener datos de la orden
+    const ordenResult = await executeQuery(`
+      SELECT 
+        op.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida,
+        e.nombre_completo AS supervisor
+      FROM ordenes_produccion op
+      LEFT JOIN productos p ON op.id_producto_terminado = p.id_producto
+      LEFT JOIN empleados e ON op.id_supervisor = e.id_empleado
+      WHERE op.id_orden = ?
+    `, [id]);
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    // 2. Obtener la "receta" o insumos calculados/registrados para mostrar en la hoja
+    let receta = [];
+    
+    if (orden.id_receta_producto) {
+       // Si viene de receta estándar
+       const recetaRes = await executeQuery(`
+         SELECT 
+           p.codigo AS codigo_insumo,
+           p.nombre AS insumo,
+           p.unidad_medida,
+           (rd.cantidad_requerida * CEIL(? / rp.rendimiento_unidades)) as cantidad_requerida
+         FROM recetas_detalle rd
+         JOIN recetas_productos rp ON rd.id_receta_producto = rp.id_receta_producto
+         JOIN productos p ON rd.id_insumo = p.id_producto
+         WHERE rd.id_receta_producto = ?
+       `, [orden.cantidad_planificada, orden.id_receta_producto]);
+       receta = recetaRes.data;
+    } else {
+       // Si es manual o usa receta provisional
+       const recetaProv = await executeQuery(`
+         SELECT 
+           p.codigo AS codigo_insumo,
+           p.nombre AS insumo,
+           p.unidad_medida,
+           rp.cantidad_requerida
+         FROM op_recetas_provisionales rp
+         JOIN productos p ON rp.id_insumo = p.id_producto
+         WHERE rp.id_orden = ?
+       `, [id]);
+       receta = recetaProv.data;
+    }
+
+    // 3. Generar el PDF
+    const pdfBuffer = await generarPDFHojaRuta(orden, receta);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="hoja_ruta_${orden.numero_orden}.pdf"`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('Error generando Hoja de Ruta:', error);
     res.status(500).json({ error: error.message });
   }
 };

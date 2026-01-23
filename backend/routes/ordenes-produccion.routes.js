@@ -16,7 +16,8 @@ import {
   getMermasOrden,
   registrarProduccionParcial,
   getRegistrosParcialesOrden,
-  getAnalisisConsumoOrden
+  getAnalisisConsumoOrden,
+  descargarHojaRutaController
 } from '../controllers/ordenes-produccion.controller.js';
 
 const router = express.Router();
@@ -47,5 +48,5 @@ router.post('/:id/registrar-parcial', registrarProduccionParcial);
 router.post('/:id/finalizar', finalizarProduccion);
 
 router.post('/:id/cancelar', cancelarOrden);
-
+router.get('/:id/hoja-ruta', descargarHojaRutaController);
 export default router;

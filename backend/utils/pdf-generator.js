@@ -2193,7 +2193,35 @@ export async function generarPDFHojaRuta(orden, receta = []) {
               yPos += 10;
           });
       }
-      yPos += 8;
+      yPos += 10;
+
+      doc.rect(25, yPos, 540, 22).fill('#FFCC80').stroke(); 
+      doc.fillColor('black');
+
+      doc.fontSize(6).font('Helvetica-Bold').text('PRODUCTO A PRODUCIR:', 30, yPos + 3);
+      doc.fontSize(8).text(orden.producto, 30, yPos + 11, { width: 320, ellipsis: true });
+
+      let textoMedida = orden.medida || '-';
+      if (orden.medida && orden.producto) {
+          const prodLimpio = orden.producto.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const medLimpia = orden.medida.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (prodLimpio.includes(medLimpia)) {
+             textoMedida = ''; 
+          }
+      }
+
+      if (textoMedida) {
+          doc.fontSize(6).text('MEDIDA:', 360, yPos + 3);
+          doc.font('Helvetica').text(textoMedida, 360, yPos + 11);
+      }
+
+      doc.font('Helvetica-Bold').text('GRAMAJE:', 430, yPos + 3);
+      doc.font('Helvetica').text(orden.gramaje || '-', 430, yPos + 11);
+
+      doc.font('Helvetica-Bold').text('PESO UND:', 500, yPos + 3);
+      doc.font('Helvetica').text(orden.peso_producto || '-', 500, yPos + 11);
+
+      yPos += 28;
 
       const cantidadBase = orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : 20; 
       const totalSlots = Math.min(cantidadBase + 10, 200);
@@ -2203,19 +2231,17 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       const drawHeaders = (xBase, y) => {
           doc.rect(xBase, y, 265, 10).fill('#E0E0E0').stroke();
-          doc.fillColor('black').fontSize(5);
-          doc.text('N°', xBase, y + 3, { width: 20, align: 'center' });
-          doc.text('PESO', xBase + 20, y + 3, { width: 40, align: 'center' });
-          doc.text('MTS', xBase + 60, y + 3, { width: 40, align: 'center' });
-          doc.text('OBSERVACIÓN', xBase + 100, y + 3, { width: 120, align: 'center' });
-          doc.text('OK', xBase + 225, y + 3, { width: 35, align: 'center' });
+          doc.fillColor('black').fontSize(6).font('Helvetica-Bold');
+          doc.text('N°', xBase, y + 3, { width: 30, align: 'center' });
+          doc.text('CANTIDAD (UDS)', xBase + 30, y + 3, { width: 110, align: 'center' });
+          doc.text('PESO (KG)', xBase + 140, y + 3, { width: 110, align: 'center' });
       };
 
       drawHeaders(25, yPos);
       drawHeaders(300, yPos);
       yPos += 10;
 
-      const rowHeight = 11; 
+      const rowHeight = 12; 
       const totalRows = Math.ceil(totalSlots / 2);
       
       let currentYGrid = yPos;
@@ -2233,17 +2259,24 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           const rightIndex = i + 1 + totalRows;
 
           doc.rect(25, currentYGrid, 265, rowHeight).stroke();
-          doc.fontSize(6).font('Helvetica');
-          doc.text(leftIndex.toString(), 25, currentYGrid + 3, { width: 20, align: 'center' });
+          doc.fontSize(7).font('Helvetica');
+          
+          doc.moveTo(55, currentYGrid).lineTo(55, currentYGrid + rowHeight).stroke(); 
+          doc.moveTo(165, currentYGrid).lineTo(165, currentYGrid + rowHeight).stroke(); 
+          
+          doc.text(leftIndex.toString(), 25, currentYGrid + 4, { width: 30, align: 'center' });
 
           if (rightIndex <= totalSlots) {
               doc.rect(300, currentYGrid, 265, rowHeight).stroke();
-              doc.text(rightIndex.toString(), 300, currentYGrid + 3, { width: 20, align: 'center' });
+              doc.moveTo(330, currentYGrid).lineTo(330, currentYGrid + rowHeight).stroke(); 
+              doc.moveTo(440, currentYGrid).lineTo(440, currentYGrid + rowHeight).stroke(); 
+              
+              doc.text(rightIndex.toString(), 300, currentYGrid + 4, { width: 30, align: 'center' });
           }
 
           currentYGrid += rowHeight;
       }
-      yPos = currentYGrid + 10;
+      yPos = currentYGrid + 12;
 
       const espacioDisponible = 790 - yPos; 
       const alturaMinimaParadas = 40; 

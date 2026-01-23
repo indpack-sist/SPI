@@ -665,15 +665,20 @@ export async function createOrden(req, res) {
   try {
     const {
       id_producto_terminado,
-      cantidad_planificada, // Kilos Totales (Base para receta)
-      cantidad_unidades,    // Unidades / Rollos (Meta de producción)
+      cantidad_planificada, // Kilos Totales
+      cantidad_unidades,    // Unidades (Meta)
       id_supervisor,
       observaciones,
       insumos, 
       id_orden_venta_origen,
       turno,
       maquinista,
-      ayudante
+      ayudante,
+      operario_corte,    // <--- Nuevo
+      operario_embalaje, // <--- Nuevo
+      medida,            // <--- Nuevo
+      peso_producto,     // <--- Nuevo
+      gramaje            // <--- Nuevo
     } = req.body;
     
     const fechaActual = getFechaPeru();
@@ -698,7 +703,7 @@ export async function createOrden(req, res) {
       estadoInicial = 'Pendiente Asignación';
     }
 
-    // --- GENERACIÓN DE CORRELATIVO (OP-YYYY-XXXX) ---
+    // --- GENERACIÓN DE CORRELATIVO ---
     const ultimaOrdenResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_produccion 
@@ -731,7 +736,7 @@ export async function createOrden(req, res) {
     let costoMateriales = 0;
     let recetaCalculada = [];
 
-    // --- CÁLCULO DE RECETA (Basado en Kilos) ---
+    // --- CÁLCULO DE RECETA ---
     if (insumos && Array.isArray(insumos) && insumos.length > 0) {
       const insumosIds = insumos.map(i => i.id_insumo);
       const insumosResult = await executeQuery(
@@ -744,7 +749,6 @@ export async function createOrden(req, res) {
         const insumoDb = insumosResult.data.find(i => i.id_producto == item.id_insumo);
         if (!insumoDb) throw new Error(`Insumo ${item.id_insumo} no encontrado`);
         
-        // El cálculo se hace sobre los Kilos (cantidad_planificada)
         const porcentaje = parseFloat(item.porcentaje);
         const cantidadCalculada = (parseFloat(cantidad_planificada) * porcentaje) / 100;
         
@@ -764,13 +768,15 @@ export async function createOrden(req, res) {
         cantidad_planificada, cantidad_unidades,
         id_supervisor, costo_materiales, estado, observaciones,
         origen_tipo, id_orden_venta_origen, fecha_creacion,
-        turno, maquinista, ayudante
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+        turno, maquinista, ayudante,
+        operario_corte, operario_embalaje,
+        medida, peso_producto, gramaje
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
       [
         numeroOrdenGenerado,
         id_producto_terminado,
-        cantidad_planificada, // Kilos
-        cantidad_unidades || 0, // Unidades (Meta)
+        cantidad_planificada,
+        cantidad_unidades || 0,
         id_supervisor || null, 
         costoMateriales,
         estadoInicial,
@@ -780,7 +786,12 @@ export async function createOrden(req, res) {
         fechaActual,
         turno,
         maquinista || null,
-        ayudante || null
+        ayudante || null,
+        operario_corte || null,
+        operario_embalaje || null,
+        medida || null,
+        peso_producto || null,
+        gramaje || null
       ]
     );
 
@@ -799,10 +810,9 @@ export async function createOrden(req, res) {
       await executeTransaction(queries);
     }
 
-    // --- SISTEMA DE NOTIFICACIONES ---
+    // --- NOTIFICACIONES ---
     if (id_orden_venta_origen) {
       let destinatarios = [];
-      // Si hay supervisor asignado, notificarle. Si no, a todos los supervisores.
       if (id_supervisor) {
         destinatarios.push(id_supervisor);
       } else {

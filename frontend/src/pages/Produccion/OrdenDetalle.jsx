@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale, PieChart
+  Users, Clipboard, Info, Hash, Scale, PieChart, Ruler
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -625,6 +625,31 @@ function OrdenDetalle() {
               <p className="text-xs text-muted uppercase font-semibold">Código</p>
               <p>{orden.codigo_producto}</p>
             </div>
+            
+            {/* --- DATOS OPCIONALES NUEVOS --- */}
+            {(orden.medida || orden.peso_producto || orden.gramaje) && (
+                <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded border border-gray-100 mt-1">
+                    {orden.medida && (
+                        <div>
+                            <p className="text-xs text-gray-500 uppercase font-semibold flex items-center gap-1"><Ruler size={10}/> Medida</p>
+                            <p className="text-xs font-bold">{orden.medida}</p>
+                        </div>
+                    )}
+                    {orden.peso_producto && (
+                        <div>
+                            <p className="text-xs text-gray-500 uppercase font-semibold flex items-center gap-1"><Scale size={10}/> Peso</p>
+                            <p className="text-xs font-bold">{orden.peso_producto}</p>
+                        </div>
+                    )}
+                    {orden.gramaje && (
+                        <div>
+                            <p className="text-xs text-gray-500 uppercase font-semibold flex items-center gap-1"><Info size={10}/> Gramaje</p>
+                            <p className="text-xs font-bold">{orden.gramaje}</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div>
               <p className="text-xs text-muted uppercase font-semibold">Supervisor</p>
               <p>{orden.supervisor || '-'}</p>

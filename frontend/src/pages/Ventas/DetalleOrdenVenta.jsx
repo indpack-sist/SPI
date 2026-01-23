@@ -537,8 +537,15 @@ function DetalleOrdenVenta() {
     link.parentNode.removeChild(link);
     window.URL.revokeObjectURL(url);
     
-    setSuccess('Guía Interna generada y descargada exitosamente');
-    await cargarDatos();
+    const mensaje = orden.numero_guia_interna 
+      ? 'Guía Interna descargada exitosamente' 
+      : 'Guía Interna generada y descargada exitosamente';
+    
+    setSuccess(mensaje);
+    
+    if (!orden.numero_guia_interna) {
+      await cargarDatos();
+    }
 
   } catch (err) {
     console.error("Error al generar guía interna:", err);
@@ -1312,17 +1319,17 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
-          {/* BOTÓN NUEVO: GENERAR GUÍA INTERNA */}
-          {orden.tipo_comprobante === 'Nota de Venta' && !estadosConDespacho.includes(orden.estado) && orden.estado !== 'Cancelada' && (
-            <button
-              className="btn btn-primary bg-indigo-600 hover:bg-indigo-700 border-indigo-600 text-white"
-              onClick={handleGenerarGuiaInterna}
-              disabled={procesando}
-              title="Generar Guía Interna y Despachar Automáticamente"
-            >
-              <ClipboardList size={20} /> Generar Guía Interna
-            </button>
-          )}
+          {orden.tipo_comprobante === 'Nota de Venta' && orden.estado !== 'Cancelada' && (
+  <button
+    className="btn btn-outline border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+    onClick={handleGenerarGuiaInterna}
+    disabled={procesando}
+    title={orden.numero_guia_interna ? "Descargar Guía Interna generada" : "Generar Guía Interna"}
+  >
+    <ClipboardList size={20} /> 
+    {orden.numero_guia_interna ? `GI: ${orden.numero_guia_interna}` : 'Generar Guía Interna'}
+  </button>
+)}
 
           {puedeReservarStock() && (
             <button

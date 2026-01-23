@@ -365,7 +365,6 @@ export const ordenesProduccionAPI = {
   getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
   getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`),
 
-  // PDF Reporte Final (Ya existente)
   generarPDF: async (id) => {
     try {
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/pdf`, {
@@ -402,8 +401,7 @@ export const ordenesProduccionAPI = {
     }
   },
 
-  // NUEVO: PDF Hoja de Ruta (Guía para Operario)
-  ownloadHojaRuta: async (id) => {
+  downloadHojaRuta: async (id) => {
     try {
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/hoja-ruta`, {
         method: 'GET',
@@ -421,16 +419,14 @@ export const ordenesProduccionAPI = {
       
       const blob = await response.blob();
       
-      // CAMBIO IMPORTANTE: No descargamos aquí. Retornamos el blob.
       return { success: true, data: blob }; 
       
     } catch (error) {
       console.error('Error al descargar Hoja de Ruta:', error);
       throw error;
     }
-}
+  }
 };
-
 export const cotizacionesAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();

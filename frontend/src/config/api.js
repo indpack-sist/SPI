@@ -340,9 +340,6 @@ export const dashboard = {
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
 
-import api from './api'; 
-import { API_URL } from '../config'; 
-
 export const ordenesProduccionAPI = {
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),

@@ -403,7 +403,7 @@ export const ordenesProduccionAPI = {
   },
 
   // NUEVO: PDF Hoja de Ruta (Guía para Operario)
-  downloadHojaRuta: async (id) => {
+  ownloadHojaRuta: async (id) => {
     try {
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/hoja-ruta`, {
         method: 'GET',
@@ -420,25 +420,15 @@ export const ordenesProduccionAPI = {
       }
       
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      // Nombre de archivo sugerido: hoja-ruta-{id}.pdf
-      link.download = `hoja-ruta-orden-${id}.pdf`;
-
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
       
-      return { success: true };
+      // CAMBIO IMPORTANTE: No descargamos aquí. Retornamos el blob.
+      return { success: true, data: blob }; 
+      
     } catch (error) {
       console.error('Error al descargar Hoja de Ruta:', error);
       throw error;
     }
-  }
+}
 };
 
 export const cotizacionesAPI = {

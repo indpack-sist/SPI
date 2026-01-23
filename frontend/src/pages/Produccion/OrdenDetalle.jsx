@@ -153,22 +153,31 @@ function OrdenDetalle() {
   const handleDescargarHojaRuta = async () => {
     try {
         setProcesando(true);
+        // Llamamos a la API corregida
         const response = await ordenesProduccionAPI.downloadHojaRuta(id);
         
-        const url = window.URL.createObjectURL(new Blob([response.data]));
+        // response.data ahora es el Blob directo del PDF
+        const url = window.URL.createObjectURL(response.data);
+        
         const link = document.createElement('a');
         link.href = url;
+        // Aquí usamos el nombre correcto con el número de orden
         link.setAttribute('download', `Hoja_Ruta_${orden.numero_orden}.pdf`);
+        
         document.body.appendChild(link);
         link.click();
-        link.remove();
+        
+        // Limpieza
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
         setProcesando(false);
     } catch (err) {
         console.error("Error descargando hoja de ruta", err);
         setError("Error al descargar la hoja de ruta");
         setProcesando(false);
     }
-  };
+};
 
  const handleRegistroParcial = async (e) => {
     e.preventDefault();

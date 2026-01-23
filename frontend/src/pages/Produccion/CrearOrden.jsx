@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown, User, Clock, Users 
+  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users 
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
@@ -239,8 +239,6 @@ function CrearOrden() {
     return <Loading message="Cargando formulario..." />;
   }
 
-  const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
-  
   const costoTotalEstimado = listaInsumos.reduce((sum, item) => {
       const cantidad = calcularCantidadInsumo(item.porcentaje);
       return sum + (cantidad * item.costo_unitario);
@@ -296,13 +294,14 @@ function CrearOrden() {
                         <input
                             type="text"
                             className="form-input pl-9 pr-8"
-                            placeholder="Buscar producto..."
+                            placeholder="Buscar producto por nombre o código..."
                             value={busquedaProducto}
                             onChange={(e) => {
                                 setBusquedaProducto(e.target.value);
                                 setMostrarDropdown(true); 
                                 if (e.target.value === '') {
                                     setFormData({ ...formData, id_producto_terminado: '' });
+                                    setFiltroTipoInsumo(null);
                                 }
                             }}
                             onFocus={() => setMostrarDropdown(true)} 
@@ -333,6 +332,7 @@ function CrearOrden() {
                                     >
                                         <div className="font-bold text-gray-800">{prod.codigo}</div>
                                         <div className="text-gray-600">{prod.nombre}</div>
+                                        <div className="text-xs text-muted mt-1">Stock: {parseFloat(prod.stock_actual).toFixed(2)}</div>
                                     </div>
                                 ))
                             ) : (
@@ -583,7 +583,7 @@ function CrearOrden() {
         size="md"
       >
         <div className="form-group">
-          <label className="form-label">Insumo *</label>
+          <label className="form-label">Insumo (Filtrado por producto) *</label>
           <select
             className="form-select"
             value={nuevoInsumo.id_insumo}
@@ -598,6 +598,9 @@ function CrearOrden() {
                 </option>
               ))}
           </select>
+          {filtroTipoInsumo && (
+             <small className="text-xs text-blue-600">Mostrando insumos compatibles con el producto seleccionado.</small>
+          )}
         </div>
 
         <div className="form-group">

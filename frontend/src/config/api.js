@@ -339,7 +339,6 @@ export const dashboard = {
   getTipoCambio: (params) => api.get('/dashboard/tipo-cambio', { params }),
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
-
 export const ordenesProduccionAPI = {
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
@@ -366,6 +365,7 @@ export const ordenesProduccionAPI = {
   getProductosMerma: () => api.get('/produccion/ordenes/auxiliar/productos-merma'),
   getMermasOrden: (id) => api.get(`/produccion/ordenes/${id}/mermas`),
 
+  // PDF Reporte Final (Ya existente)
   generarPDF: async (id) => {
     try {
       const response = await fetch(`${API_URL}/produccion/ordenes/${id}/pdf`, {
@@ -398,6 +398,44 @@ export const ordenesProduccionAPI = {
       return { success: true };
     } catch (error) {
       console.error('Error al descargar PDF orden producción:', error);
+      throw error;
+    }
+  },
+
+  // NUEVO: PDF Hoja de Ruta (Guía para Operario)
+  downloadHojaRuta: async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/produccion/ordenes/${id}/hoja-ruta`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: 'Error al generar Hoja de Ruta' 
+        }));
+        throw new Error(errorData.error || 'Error al generar Hoja de Ruta');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Nombre de archivo sugerido: hoja-ruta-{id}.pdf
+      link.download = `hoja-ruta-orden-${id}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar Hoja de Ruta:', error);
       throw error;
     }
   }

@@ -2097,15 +2097,6 @@ export async function generarPDFOrdenCompra(orden) {
   });
 }
 
-import PDFDocument from 'pdfkit';
-import { cargarLogoURL } from './helpers.js';
-
-const formatearFecha = (fecha) => {
-  if (!fecha) return '-';
-  const date = new Date(fecha);
-  return date.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
-
 export async function generarPDFHojaRuta(orden, receta = []) {
   const logoBuffer = await cargarLogoURL();
 

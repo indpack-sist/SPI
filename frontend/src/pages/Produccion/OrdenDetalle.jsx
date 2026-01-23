@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info 
+  Users, Clipboard, Info, Hash, Scale
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -35,7 +35,8 @@ function OrdenDetalle() {
   });
 
   const [modalFinalizar, setModalFinalizar] = useState(false);
-  const [cantidadFinal, setCantidadFinal] = useState('');
+  const [cantidadKilosFinal, setCantidadKilosFinal] = useState('');
+  const [cantidadUnidadesFinal, setCantidadUnidadesFinal] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
     
   const [modalParcial, setModalParcial] = useState(false);
@@ -98,6 +99,20 @@ function OrdenDetalle() {
       console.error('Error al cargar productos de merma:', err);
     }
   };
+
+  // --- FILTRADO INTELIGENTE DE MERMAS ---
+  const mermasFiltradas = productosMerma.filter(merma => {
+      if (!orden) return false;
+      const nombreProducto = orden.producto.toUpperCase();
+      const nombreMerma = merma.nombre.toUpperCase();
+
+      if (nombreProducto.includes('BURBUPACK')) return nombreMerma.includes('BURBUPACK');
+      if (nombreProducto.includes('ESQUINERO')) return nombreMerma.includes('ESQUINERO');
+      if (nombreProducto.includes('ZUNCHO')) return nombreMerma.includes('ZUNCHO');
+      if (nombreProducto.includes('GRAPA')) return nombreMerma.includes('GRAPA');
+      
+      return true; // Si no coincide con nada, muestra todas (fallback)
+  });
 
   const inicializarInsumosParaParcial = () => {
     const insumos = consumoMateriales.map(item => ({
@@ -230,7 +245,8 @@ function OrdenDetalle() {
       setError(null);
 
       const payload = {
-        cantidad_final: parseFloat(cantidadFinal),
+        cantidad_kilos_final: parseFloat(cantidadKilosFinal),
+        cantidad_unidades_final: parseFloat(cantidadUnidadesFinal || 0),
         insumos_reales: insumosFinalesConsumo.map(i => ({
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
@@ -408,6 +424,12 @@ function OrdenDetalle() {
     return badges[estado] || 'badge-secondary';
   };
 
+  // --- CÁLCULO DE BALANCE DE MASAS ---
+  const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+  const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
+  const totalKilosProd = parseFloat(cantidadKilosFinal || 0);
+  const diferenciaMasa = totalInsumosReales - (totalKilosProd + totalMerma);
+
   if (loading) {
     return <Loading message="Cargando orden..." />;
   }
@@ -565,7 +587,7 @@ function OrdenDetalle() {
               className="btn btn-success" 
               onClick={() => {
                 const cantidadRestante = parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0);
-                setCantidadFinal(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
+                setCantidadKilosFinal(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
                 setObservacionesFinal('');
                 setMermas([]);
                 setMostrarMermas(false);
@@ -614,6 +636,12 @@ function OrdenDetalle() {
                     <p className="text-xs text-muted uppercase font-semibold">Maquinista</p>
                     <p>{orden.maquinista || '-'}</p>
                 </div>
+                {orden.ayudante && (
+                    <div className="col-span-2">
+                        <p className="text-xs text-muted uppercase font-semibold">Ayudante</p>
+                        <p>{orden.ayudante}</p>
+                    </div>
+                )}
             </div>
             {desdeOrdenVenta && orden.numero_orden_venta && (
               <div>
@@ -627,13 +655,13 @@ function OrdenDetalle() {
         <div className="card">
           <div className="card-header flex items-center gap-2">
             <BarChart size={18} className="text-gray-500" />
-            <h2 className="card-title">Producción</h2>
+            <h2 className="card-title">Producción Planificada</h2>
           </div>
           <div className="p-4 grid gap-3">
             <div>
-              <p className="text-xs text-muted uppercase font-semibold">Cantidad Planificada</p>
+              <p className="text-xs text-muted uppercase font-semibold">Total Kilos Estimados</p>
               <p className="font-bold text-lg">
-                {parseFloat(orden.cantidad_planificada).toFixed(2)} {orden.unidad_medida}
+                {parseFloat(orden.cantidad_planificada).toFixed(2)} Kg
               </p>
             </div>
             {orden.cantidad_unidades > 0 && (
@@ -644,24 +672,12 @@ function OrdenDetalle() {
                     </p>
                 </div>
             )}
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Cantidad Producida</p>
-              <p className="font-bold text-lg text-success">
-                {parseFloat(orden.cantidad_producida).toFixed(2)} {orden.unidad_medida}
-              </p>
-              {orden.cantidad_producida > 0 && registrosParciales.length > 0 && (
-                <p className="text-xs text-info italic">
-                  {registrosParciales.length} registro(s) parcial(es)
-                </p>
-              )}
-            </div>
-            <div>
-              <p className="text-xs text-muted uppercase font-semibold">Eficiencia</p>
-              <p className="font-bold">
+            <div className="border-t border-gray-100 pt-2 mt-2">
+              <p className="text-xs text-muted uppercase font-semibold">Estado Actual</p>
+              <p className={`font-bold ${orden.cantidad_producida > 0 ? 'text-success' : 'text-gray-500'}`}>
                 {orden.cantidad_producida > 0 
-                  ? `${((parseFloat(orden.cantidad_producida) / parseFloat(orden.cantidad_planificada)) * 100).toFixed(1)}%`
-                  : '-'
-                }
+                    ? `Producido: ${parseFloat(orden.cantidad_producida).toFixed(2)} Kg` 
+                    : 'Sin producción registrada'}
               </p>
             </div>
           </div>
@@ -707,11 +723,6 @@ function OrdenDetalle() {
               <p className="font-bold text-lg text-primary flex items-center gap-1">
                 {formatearMoneda(orden.costo_materiales)}
               </p>
-              {orden.cantidad_producida > 0 && (
-                <p className="text-xs text-muted italic">
-                  {formatearMoneda(parseFloat(orden.costo_materiales) / parseFloat(orden.cantidad_producida))} por unidad
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -738,7 +749,7 @@ function OrdenDetalle() {
                   <tr key={registro.id_registro}>
                     <td>{formatearFecha(registro.fecha_registro)}</td>
                     <td className="text-right font-bold">
-                      {parseFloat(registro.cantidad_registrada).toFixed(2)} {orden.unidad_medida}
+                      {parseFloat(registro.cantidad_registrada).toFixed(2)} Kg
                     </td>
                     <td>{registro.registrado_por || '-'}</td>
                     <td className="text-sm text-muted">{registro.observaciones || '-'}</td>
@@ -750,96 +761,221 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {orden.observaciones && (
-        <div className="card mb-4">
-          <div className="card-header flex items-center gap-2">
-            <FileText size={18} className="text-gray-500" />
-            <h2 className="card-title">Observaciones</h2>
+      <Modal
+        isOpen={modalFinalizar}
+        onClose={() => setModalFinalizar(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <CheckCircle className="text-success" /> Finalizar Producción
+          </span>
+        }
+        size="xl"
+      >
+        <form onSubmit={handleFinalizar}>
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
+            <Info className="text-blue-500 shrink-0" size={20} />
+            <div className="text-sm text-blue-700">
+              <p><strong>Cierre de Orden:</strong> Ingrese los valores reales obtenidos al finalizar el turno.</p>
+            </div>
           </div>
-          <div className="p-4">
-            <p className="text-sm text-gray-700" style={{ whiteSpace: 'pre-line' }}>{orden.observaciones}</p>
-          </div>
-        </div>
-      )}
 
-      {consumoMateriales.length > 0 && (
-        <div className="card mb-4">
-          <div className="card-header flex items-center gap-2">
-            <Package size={18} className="text-gray-500" />
-            <h2 className="card-title">Materiales Consumidos ({consumoMateriales.length})</h2>
-            {analisisConsumo && analisisConsumo.resumen.diferencia !== 0 && (
-              <span className={`badge ml-auto ${analisisConsumo.resumen.diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>
-                {analisisConsumo.resumen.diferencia > 0 ? (
-                  <><TrendingUp size={14} /> Sobrecosto: {formatearMoneda(analisisConsumo.resumen.diferencia)}</>
-                ) : (
-                  <><TrendingDown size={14} /> Ahorro: {formatearMoneda(Math.abs(analisisConsumo.resumen.diferencia))}</>
-                )}
-              </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="form-group">
+                <label className="form-label">Total Kilos Producidos (Real) *</label>
+                <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-input pl-8"
+                      value={cantidadKilosFinal}
+                      onChange={(e) => setCantidadKilosFinal(e.target.value)}
+                      required
+                      placeholder="0.00"
+                    />
+                    <Scale className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Total Unidades Producidas (Real)</label>
+                <div className="relative">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      className="form-input pl-8"
+                      value={cantidadUnidadesFinal}
+                      onChange={(e) => setCantidadUnidadesFinal(e.target.value)}
+                      placeholder="0"
+                    />
+                    <Hash className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
+                </div>
+              </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Package size={18} className="text-primary" />
+              <h3 className="font-semibold">Consumo Final de Insumos (Real)</h3>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
+              {insumosFinalesConsumo.map(item => (
+                <div key={item.id_insumo} className="bg-gray-50 p-2 rounded border flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{item.insumo}</div>
+                      <div className="text-xs text-muted">Planificado: {item.cantidad_requerida.toFixed(2)} {item.unidad_medida}</div>
+                    </div>
+                    <div className="w-32">
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        className="form-input form-input-sm text-right"
+                        value={item.cantidad}
+                        onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
+                        required
+                      />
+                    </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4 mt-4 bg-gray-50 p-4 rounded mb-4">
+            <h3 className="font-semibold text-sm mb-3">Balance de Masas</h3>
+            <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                <div className="p-2 bg-white rounded border">
+                    <div className="text-muted text-xs">Total Insumos</div>
+                    <div className="font-bold">{totalInsumosReales.toFixed(2)} Kg</div>
+                </div>
+                <div className="p-2 bg-white rounded border border-blue-200">
+                    <div className="text-blue-600 text-xs">(-) Prod. Terminado</div>
+                    <div className="font-bold">{totalKilosProd.toFixed(2)} Kg</div>
+                </div>
+                <div className="p-2 bg-white rounded border border-red-200">
+                    <div className="text-red-600 text-xs">(-) Mermas</div>
+                    <div className="font-bold">{totalMerma.toFixed(2)} Kg</div>
+                </div>
+                <div className={`p-2 rounded border ${Math.abs(diferenciaMasa) < 0.1 ? 'bg-green-100 border-green-300' : 'bg-yellow-100 border-yellow-300'}`}>
+                    <div className="text-xs font-bold">Diferencia</div>
+                    <div className="font-bold">{diferenciaMasa.toFixed(2)} Kg</div>
+                </div>
+            </div>
+            {Math.abs(diferenciaMasa) > 1 && (
+                <p className="text-xs text-warning mt-2 flex items-center gap-1">
+                    <AlertTriangle size={12}/> La diferencia de peso es considerable. Verifique los datos.
+                </p>
             )}
           </div>
 
-          <div className="table-container p-0">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Insumo</th>
-                  <th className="text-right">Estimado</th>
-                  <th className="text-right">Real Consumido</th>
-                  {analisisConsumo && <th className="text-right">Diferencia</th>}
-                  <th className="text-right">Costo Unit.</th>
-                  <th className="text-right">Costo Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {consumoMateriales.map((item, idx) => {
-                  const analisisItem = analisisConsumo?.detalle.find(a => a.id_insumo === item.id_insumo);
-                  const diferencia = analisisItem ? parseFloat(analisisItem.diferencia) : 0;
-                    
-                  return (
-                    <tr key={item.id_consumo}>
-                      <td className="font-mono text-xs">{item.codigo_insumo}</td>
-                      <td className="font-medium">{item.insumo}</td>
-                      <td className="text-right">
-                        {parseFloat(item.cantidad_requerida).toFixed(4)} <span className="text-xs text-muted">{item.unidad_medida}</span>
-                      </td>
-                      <td className="text-right font-bold">
-                         {parseFloat(item.cantidad_real_consumida || 0).toFixed(4)} <span className="text-xs text-muted">{item.unidad_medida}</span>
-                      </td>
-                      {analisisConsumo && (
-                        <td className="text-right">
-                          {diferencia !== 0 ? (
-                            <span className={`badge ${diferencia > 0 ? 'badge-warning' : 'badge-success'}`}>
-                              {diferencia > 0 ? '+' : ''}{diferencia.toFixed(4)}
-                            </span>
-                          ) : (
-                            <span className="text-muted">-</span>
-                          )}
-                        </td>
-                      )}
-                      <td className="text-right">{formatearMoneda(item.costo_unitario)}</td>
-                      <td className="text-right font-bold">
-                        {formatearMoneda(analisisItem ? analisisItem.costo_real : (parseFloat(item.cantidad_real_consumida || 0) * parseFloat(item.costo_unitario)))}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-50 font-bold">
-                  <td colSpan={analisisConsumo ? 6 : 5} className="text-right">
-                    TOTAL MATERIALES:
-                  </td>
-                  <td className="text-right text-lg text-primary">
-                    {analisisConsumo ? formatearMoneda(analisisConsumo.resumen.costo_real) : formatearMoneda(orden.costo_materiales)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-warning" />
+                <h3 className="font-semibold">Registro de Mermas</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => setMostrarMermas(!mostrarMermas)}
+              >
+                {mostrarMermas ? 'Ocultar' : 'Agregar Mermas'}
+              </button>
+            </div>
+
+            {mostrarMermas && (
+              <div className="space-y-3">
+                {mermas.map((merma) => (
+                  <div key={merma.id_temp} className="bg-gray-50 p-3 rounded border border-gray-200">
+                    <div className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-5">
+                        <label className="form-label text-xs">Tipo de Merma</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={merma.id_producto_merma}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'id_producto_merma', e.target.value)}
+                          required={mermas.length > 0}
+                        >
+                          <option value="">Seleccione...</option>
+                          {mermasFiltradas.map(p => (
+                            <option key={p.id_producto} value={p.id_producto}>
+                              {p.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-3">
+                        <label className="form-label text-xs">Cantidad (Kg)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          className="form-input form-input-sm"
+                          value={merma.cantidad}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'cantidad', e.target.value)}
+                          placeholder="0.00"
+                          required={mermas.length > 0}
+                        />
+                      </div>
+
+                      <div className="col-span-3">
+                         <label className="form-label text-xs">Observación</label>
+                         <input
+                          type="text"
+                          className="form-input form-input-sm"
+                          value={merma.observaciones}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'observaciones', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="col-span-1 flex items-end">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger w-full"
+                          onClick={() => eliminarMerma(merma.id_temp)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline w-full"
+                  onClick={agregarMerma}
+                >
+                  <Plus size={16} className="mr-1" /> Agregar Línea de Merma
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
-        
+
+          <div className="flex gap-2 justify-end mt-6">
+            <button 
+              type="button" 
+              className="btn btn-outline" 
+              onClick={() => setModalFinalizar(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-success"
+              disabled={procesando || !cantidadKilosFinal}
+            >
+              {procesando ? 'Procesando...' : 'Finalizar Producción'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODALES ANTERIORES (ASIGNAR, PARCIAL) SE MANTIENEN IGUAL... */}
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
@@ -1018,209 +1154,6 @@ function OrdenDetalle() {
               disabled={procesando || !cantidadParcial}
             >
               {procesando ? 'Procesando...' : 'Registrar Producción Parcial'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={modalFinalizar}
-        onClose={() => setModalFinalizar(false)}
-        title={
-          <span className="flex items-center gap-2">
-            <CheckCircle className="text-success" /> Finalizar Producción
-          </span>
-        }
-        size="xl"
-      >
-        <form onSubmit={handleFinalizar}>
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
-            <Info className="text-blue-500 shrink-0" size={20} />
-            <div className="text-sm text-blue-700">
-              <p><strong>Importante:</strong> Al finalizar, los productos terminados serán agregados automáticamente al inventario.</p>
-              <p className="mt-1">Ya producido en registros parciales: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> {orden.unidad_medida}</p>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Cantidad Final a Registrar *</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="form-input"
-              value={cantidadFinal}
-              onChange={(e) => setCantidadFinal(e.target.value)}
-              required
-              placeholder="0.00"
-            />
-            <small className="text-muted block mt-1 italic">
-              Total final será: {(parseFloat(orden.cantidad_producida || 0) + parseFloat(cantidadFinal || 0)).toFixed(2)} {orden.unidad_medida}
-            </small>
-          </div>
-
-          <div className="border-t border-gray-200 pt-4 mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Package size={18} className="text-primary" />
-              <h3 className="font-semibold">Consumo Final de Insumos *</h3>
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {insumosFinalesConsumo.map(item => (
-                <div key={item.id_insumo} className="bg-gray-50 p-3 rounded border">
-                  <div className="grid grid-cols-12 gap-3 items-center">
-                    <div className="col-span-5">
-                      <div className="font-medium text-sm">{item.insumo}</div>
-                      <div className="text-xs text-muted">{item.codigo_insumo}</div>
-                    </div>
-                      
-                    <div className="col-span-2 text-center">
-                      <div className="text-xs text-muted mb-1">Ya Consumido</div>
-                      <div className="font-mono text-sm">
-                        {item.cantidad_ya_consumida.toFixed(4)}
-                      </div>
-                      <div className="text-xs text-muted">{item.unidad_medida}</div>
-                    </div>
-
-                    <div className="col-span-2 text-center">
-                      <div className="text-xs text-muted mb-1">Pendiente</div>
-                      <div className="font-mono text-sm text-warning">
-                        {item.cantidad_pendiente.toFixed(4)}
-                      </div>
-                      <div className="text-xs text-muted">{item.unidad_medida}</div>
-                    </div>
-                      
-                    <div className="col-span-3">
-                      <label className="text-xs text-muted block mb-1">Cantidad Final Real:</label>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        className="form-input form-input-sm"
-                        value={item.cantidad}
-                        onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
-                        placeholder="0.0000"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group mt-4">
-            <label className="form-label">Observaciones Finales</label>
-            <textarea
-              className="form-textarea"
-              value={observacionesFinal}
-              onChange={(e) => setObservacionesFinal(e.target.value)}
-              placeholder="Explique diferencias entre lo planificado y producido..."
-              rows={3}
-            />
-          </div>
-
-          <div className="border-t border-gray-200 pt-4 mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={18} className="text-warning" />
-                <h3 className="font-semibold">Registro de Mermas (Opcional)</h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-sm btn-outline"
-                onClick={() => setMostrarMermas(!mostrarMermas)}
-              >
-                {mostrarMermas ? 'Ocultar' : 'Agregar Mermas'}
-              </button>
-            </div>
-
-            {mostrarMermas && (
-              <div className="space-y-3">
-                {mermas.map((merma) => (
-                  <div key={merma.id_temp} className="bg-gray-50 p-3 rounded border border-gray-200">
-                    <div className="grid grid-cols-12 gap-2 items-start">
-                      <div className="col-span-5">
-                        <label className="form-label text-xs">Tipo de Merma *</label>
-                        <select
-                          className="form-select form-select-sm"
-                          value={merma.id_producto_merma}
-                          onChange={(e) => actualizarMerma(merma.id_temp, 'id_producto_merma', e.target.value)}
-                          required={mermas.length > 0}
-                        >
-                          <option value="">Seleccione...</option>
-                          {productosMerma.map(p => (
-                            <option key={p.id_producto} value={p.id_producto}>
-                              {p.nombre} ({p.unidad_medida})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="col-span-2">
-                        <label className="form-label text-xs">Cantidad *</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          className="form-input form-input-sm"
-                          value={merma.cantidad}
-                          onChange={(e) => actualizarMerma(merma.id_temp, 'cantidad', e.target.value)}
-                          placeholder="0.00"
-                          required={mermas.length > 0}
-                        />
-                      </div>
-
-                      <div className="col-span-4">
-                        <label className="form-label text-xs">Observaciones</label>
-                        <input
-                          type="text"
-                          className="form-input form-input-sm"
-                          value={merma.observaciones}
-                          onChange={(e) => actualizarMerma(merma.id_temp, 'observaciones', e.target.value)}
-                          placeholder="Ej: Material defectuoso"
-                        />
-                      </div>
-
-                      <div className="col-span-1 flex items-end">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-danger w-full"
-                          onClick={() => eliminarMerma(merma.id_temp)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline w-full"
-                  onClick={agregarMerma}
-                >
-                  <Plus size={16} className="mr-1" /> Agregar Línea de Merma
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-2 justify-end mt-6">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalFinalizar(false)}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-success"
-              disabled={procesando || !cantidadFinal}
-            >
-              {procesando ? 'Procesando...' : 'Finalizar Producción'}
             </button>
           </div>
         </form>

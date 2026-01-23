@@ -3073,3 +3073,116 @@ export async function generarGuiaInterna(req, res) {
         res.status(500).json({ success: false, error: error.message });
     }
 }
+export async function descargarPDFGuiaInterna(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+
+    const ordenResult = await executeQuery(`
+      SELECT 
+        ov.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente_base,
+        cl.telefono AS telefono_cliente,
+        e.nombre_completo AS comercial,
+        e.email AS email_comercial,
+        e_conductor.nombre_completo AS conductor_nombre,
+        e_conductor.dni AS conductor_dni,
+        f.placa AS vehiculo_placa,
+        f.marca_modelo AS vehiculo_modelo,
+        c.numero_cotizacion
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.tipo_comprobante !== 'Nota de Venta') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'La Guía Interna solo está disponible para Notas de Venta' 
+      });
+    }
+
+    const detalleResult = await executeQuery(`
+      SELECT 
+        dov.id_detalle,
+        dov.id_producto,
+        dov.cantidad,
+        dov.precio_unitario,
+        dov.descuento_porcentaje,
+        p.codigo AS codigo_producto, 
+        p.nombre AS producto, 
+        p.unidad_medida
+      FROM detalle_orden_venta dov
+      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      WHERE dov.id_orden_venta = ?
+      ORDER BY dov.orden ASC
+    `, [id]);
+
+    if (!detalleResult.success) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error al obtener detalle de la orden' 
+      });
+    }
+
+    orden.detalle = detalleResult.data || [];
+
+    const direccionFinal = orden.direccion_entrega && orden.direccion_entrega.trim() !== '' 
+      ? orden.direccion_entrega 
+      : orden.direccion_cliente_base;
+
+    orden.direccion_entrega = direccionFinal;
+
+    const ultimaGuia = await executeQuery(`
+      SELECT numero_guia_interna 
+      FROM ordenes_venta 
+      WHERE numero_guia_interna IS NOT NULL
+      ORDER BY id_orden_venta DESC 
+      LIMIT 1
+    `);
+
+    let numeroSecuencia = 1;
+    const year = new Date().getFullYear();
+    
+    if (ultimaGuia.success && ultimaGuia.data.length > 0) {
+      const match = ultimaGuia.data[0].numero_guia_interna.match(/GI-\d{4}-(\d+)$/);
+      if (match) {
+        numeroSecuencia = parseInt(match[1]) + 1;
+      }
+    }
+
+    const numeroGuiaInterna = `GI-${year}-${String(numeroSecuencia).padStart(4, '0')}`;
+
+    await executeQuery(
+      'UPDATE ordenes_venta SET numero_guia_interna = ? WHERE id_orden_venta = ?',
+      [numeroGuiaInterna, id]
+    );
+
+    const { generarPDFGuiaInterna } = await import('../utils/pdfGenerators/guiaInternaPDF.js');
+    const pdfBuffer = await generarPDFGuiaInterna(orden, numeroGuiaInterna);
+    
+    const nombreArchivo = `Guia-Interna-${numeroGuiaInterna}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}

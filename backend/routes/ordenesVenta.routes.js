@@ -13,6 +13,7 @@ import {
   getEstadisticasOrdenesVenta,
   descargarPDFOrdenVenta,
   descargarPDFDespacho,
+  descargarPDFGuiaInterna,
   registrarPagoOrden,
   getPagosOrden,
   anularPagoOrden,
@@ -42,6 +43,7 @@ router.get('/', verificarToken, getAllOrdenesVenta);
 router.post('/', verificarToken, createOrdenVenta);
 
 router.get('/:id/pdf', verificarToken, descargarPDFOrdenVenta);
+router.get('/:id/pdf-guia-interna', verificarToken, descargarPDFGuiaInterna);
 router.get('/:id/salidas/:idSalida/pdf', verificarToken, descargarPDFDespacho);
 
 router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionDesdeVenta);

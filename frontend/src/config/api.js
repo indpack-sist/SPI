@@ -472,9 +472,7 @@ export const ordenesVentaAPI = {
 
   crearOrdenProduccion: (id, data) => api.post(`/ordenes-venta/${id}/crear-orden-produccion`, data),
 
-  // --- ESTA ES LA LÍNEA QUE FALTABA ---
   generarGuiaInterna: (id) => api.post(`/ordenes-venta/${id}/guia-interna`),
-  // ------------------------------------
 
   actualizarEstado: (id, estado, fecha_entrega_real = null) => 
     api.put(`/ordenes-venta/${id}/estado`, { estado, fecha_entrega_real }),
@@ -514,6 +512,12 @@ export const ordenesVentaAPI = {
     });
   },
 
+  descargarPDFGuiaInterna: (id) => {
+    return api.get(`/ordenes-venta/${id}/pdf-guia-interna`, {
+      responseType: 'blob'
+    });
+  },
+
   descargarPDFDespacho: (id, idSalida) => {
     return api.get(`/ordenes-venta/${id}/salidas/${idSalida}/pdf`, {
       responseType: 'blob'
@@ -524,7 +528,6 @@ export const ordenesVentaAPI = {
 
   getVehiculos: () => api.get('/ordenes-venta/catalogo/vehiculos')
 };
-
 export const guiasRemisionAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();

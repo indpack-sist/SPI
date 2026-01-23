@@ -504,36 +504,60 @@ function DetalleOrdenVenta() {
     }
   };
 
-  // --- NUEVA FUNCIÓN: GENERAR GUÍA INTERNA ---
   const handleGenerarGuiaInterna = async () => {
-    if (!confirm('¿Está seguro de generar la Guía Interna? Se generará un despacho automático y se descontará el stock.')) return;
-
-    try {
-      setProcesando(true);
-      setError(null);
-
-      // Llamada al endpoint integrado en el backend
-      const response = await ordenesVentaAPI.generarGuiaInterna(id);
-
-      if (response.data.success) {
-        setSuccess(response.data.message);
-        // Recargar datos para ver el cambio de estado y la nueva salida
-        await cargarDatos();
-        
-        // Si el backend nos devuelve el ID de la salida, descargamos el PDF automáticamente
-        if (response.data.data && response.data.data.id_salida) {
-            handleDescargarSalidaEspecificaPDF(response.data.data.id_salida);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || 'Error al generar la guía interna');
-    } finally {
-      setProcesando(false);
+  try {
+    setDescargandoPDF('guia-interna');
+    setError(null);
+    
+    const response = await ordenesVentaAPI.descargarPDFGuiaInterna(id);
+    
+    if (response.data.type === 'application/json') {
+      const errorText = await response.data.text();
+      const errorJson = JSON.parse(errorText);
+      throw new Error(errorJson.error || "Error generado por el servidor");
     }
-  };
-  // -------------------------------------------
 
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    
+    const clienteSanitizado = (orden.cliente || 'CLIENTE')
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .toUpperCase();
+
+    const nombreArchivo = `${clienteSanitizado}_GUIA_INTERNA_${orden.numero_orden}.pdf`;
+    
+    link.setAttribute('download', nombreArchivo);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    setSuccess('Guía Interna generada y descargada exitosamente');
+    await cargarDatos();
+
+  } catch (err) {
+    console.error("Error al generar guía interna:", err);
+
+    if (err.response && err.response.data instanceof Blob && err.response.data.type === 'application/json') {
+      try {
+        const errorText = await err.response.data.text();
+        const errorJson = JSON.parse(errorText);
+        setError(errorJson.error || 'Error desconocido del servidor');
+      } catch (e) {
+        setError('Error al procesar la respuesta del servidor');
+      }
+    } else {
+      setError(err.response?.data?.error || err.message || 'Error al generar la guía interna');
+    }
+  } finally {
+    setDescargandoPDF(null);
+  }
+};
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
     

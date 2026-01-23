@@ -10,7 +10,7 @@ export async function getAllProductos(req, res) {
         p.*,
         ti.nombre AS tipo_inventario,
         c.nombre AS categoria,
-        c.id_tipo_insumo_sugerido,
+        c.id_tipo_insumo_sugerido,  -- <<<< ¡ESTA LÍNEA ES OBLIGATORIA! >>>>
         (SELECT COUNT(*) FROM recetas_productos WHERE id_producto_terminado = p.id_producto AND es_activa = 1) AS total_recetas
       FROM productos p
       INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario

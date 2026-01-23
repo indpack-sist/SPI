@@ -2115,7 +2115,6 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       }
       
       doc.font('Helvetica-Bold').fontSize(14).text('HOJA DE RUTA DE PRODUCCIÓN', 120, 28, { align: 'center', width: 300 });
-      doc.fontSize(8).font('Helvetica').text('CONTROL EN PLANTA - FORMATO DINÁMICO', 120, 45, { align: 'center', width: 300 });
 
       // Cuadro N° Orden
       doc.roundedRect(450, 25, 115, 35, 4).stroke();

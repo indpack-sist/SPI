@@ -1518,13 +1518,99 @@ export async function cancelarOrden(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+export async function registrarParcial(req, res) {
+  try {
+    const { id } = req.params;
+    const { 
+      cantidad_kilos,      // Peso Real (lo que antes era cantidad_parcial)
+      cantidad_unidades,   // Cantidad de Productos (NUEVO)
+      insumos_consumidos, 
+      observaciones 
+    } = req.body;
+    
+    const id_registrado_por = req.user.id_usuario; // Asumiendo que usas JWT
+    const fechaActual = getFechaPeru();
 
+    // 1. Validar estado de la orden
+    const ordenCheck = await executeQuery(
+      "SELECT estado, cantidad_planificada, cantidad_producida, cantidad_unidades, cantidad_unidades_producida FROM ordenes_produccion WHERE id_orden = ?",
+      [id]
+    );
+
+    if (ordenCheck.data.length === 0) return res.status(404).json({ error: 'Orden no encontrada' });
+    if (!['En Curso', 'En Pausa'].includes(ordenCheck.data[0].estado)) {
+      return res.status(400).json({ error: 'La orden no está en estado válido para registrar avances.' });
+    }
+
+    const queries = [];
+
+    // 2. Insertar en el historial (op_registros_produccion)
+    // Guardamos Kilos (cantidad_registrada) y Unidades (cantidad_unidades_registrada)
+    queries.push({
+      sql: `INSERT INTO op_registros_produccion 
+            (id_orden, cantidad_registrada, cantidad_unidades_registrada, id_registrado_por, fecha_registro, observaciones) 
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      params: [
+        id, 
+        cantidad_kilos, 
+        cantidad_unidades || 0, 
+        id_registrado_por, 
+        fechaActual, 
+        observaciones
+      ]
+    });
+
+    // 3. Actualizar acumulados en la Orden Maestra
+    queries.push({
+      sql: `UPDATE ordenes_produccion 
+            SET cantidad_producida = cantidad_producida + ?,
+                cantidad_unidades_producida = cantidad_unidades_producida + ?
+            WHERE id_orden = ?`,
+      params: [cantidad_kilos, cantidad_unidades || 0, id]
+    });
+
+    // 4. Descontar Insumos (op_consumo_materiales y Stock)
+    if (insumos_consumidos && insumos_consumidos.length > 0) {
+      for (const insumo of insumos_consumidos) {
+        const cantidad = parseFloat(insumo.cantidad);
+        if (cantidad > 0) {
+          // Actualizar tabla de consumo acumulado
+          queries.push({
+            sql: `UPDATE op_consumo_materiales 
+                  SET cantidad_real_consumida = IFNULL(cantidad_real_consumida, 0) + ? 
+                  WHERE id_orden = ? AND id_insumo = ?`,
+            params: [cantidad, id, insumo.id_insumo]
+          });
+
+          // Descontar del inventario físico
+          queries.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+            params: [cantidad, insumo.id_insumo]
+          });
+        }
+      }
+    }
+
+    const result = await executeTransaction(queries);
+    if (!result.success) return res.status(500).json({ error: result.error });
+
+    res.json({ success: true, message: 'Avance registrado correctamente' });
+
+  } catch (error) {
+    console.error('Error en registrarParcial:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
 export async function getRegistrosParcialesOrden(req, res) {
   try {
     const { id } = req.params;
     const result = await executeQuery(
       `SELECT 
-        orp.*, 
+        orp.id_registro,
+        orp.fecha_registro,
+        orp.cantidad_registrada,           -- Kilos
+        orp.cantidad_unidades_registrada,  -- Unidades (NUEVO)
+        orp.observaciones,
         e.nombre_completo as registrado_por
        FROM op_registros_produccion orp
        LEFT JOIN empleados e ON orp.id_registrado_por = e.id_empleado

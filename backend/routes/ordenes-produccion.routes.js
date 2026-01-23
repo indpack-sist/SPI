@@ -14,7 +14,7 @@ import {
   generarPDFOrdenController,
   getProductosMerma,
   getMermasOrden,
-  registrarProduccionParcial,
+  registrarParcial, 
   getRegistrosParcialesOrden,
   getAnalisisConsumoOrden,
   descargarHojaRutaController
@@ -43,10 +43,12 @@ router.post('/:id/iniciar', iniciarProduccion);
 router.post('/:id/pausar', pausarProduccion);
 router.post('/:id/reanudar', reanudarProduccion);
 
-router.post('/:id/registrar-parcial', registrarProduccionParcial);
+// Aquí se usa la nueva función que soporta Kilos y Unidades
+router.post('/:id/registrar-parcial', registrarParcial);
 
 router.post('/:id/finalizar', finalizarProduccion);
 
 router.post('/:id/cancelar', cancelarOrden);
 router.get('/:id/hoja-ruta', descargarHojaRutaController);
+
 export default router;

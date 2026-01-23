@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Info 
+  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Info, Hash 
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
@@ -33,6 +33,7 @@ function CrearOrden() {
     numero_orden: '', 
     id_producto_terminado: '',
     cantidad_planificada: '',
+    cantidad_unidades: '',
     id_supervisor: '',
     observaciones: '',
     turno: 'Mañana',
@@ -45,12 +46,14 @@ function CrearOrden() {
     porcentaje: ''
   });
 
-  // --- LÓGICA DE FILTRADO DE INSUMOS POR NOMBRE DE PRODUCTO (ACTUALIZADA) ---
+  const productosFiltrados = productosTerminados.filter(p => 
+    p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
+    p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
+  );
+
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
-    // 1. Obtenemos el producto seleccionado actualmente
     const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
 
-    // Si no hay producto seleccionado, mostramos solo insumos generales (Tipo 2)
     if (!productoSeleccionado) {
         return insumo.id_tipo_inventario === 2; 
     }
@@ -58,9 +61,6 @@ function CrearOrden() {
     const nombreProd = productoSeleccionado.nombre.toUpperCase();
     const nombreInsumo = insumo.nombre.toUpperCase();
 
-    // 2. Reglas de Negocio Exactas según tu lista:
-
-    // CASO: ESQUINEROS
     if (nombreProd.includes('ESQUINERO')) {
         return (
             nombreInsumo.includes('PELETIZADO VERDE') || 
@@ -74,7 +74,6 @@ function CrearOrden() {
         );
     }
 
-    // CASO: BURBUPACK
     if (nombreProd.includes('BURBUPACK')) {
         return (
             nombreInsumo.includes('POLIETILENO DE BAJA') || 
@@ -83,7 +82,6 @@ function CrearOrden() {
         );
     }
 
-    // CASO: ZUNCHOS (PP o PET)
     if (nombreProd.includes('ZUNCHO')) {
         return (
             nombreInsumo.includes('PELETIZADO NEGRO') || 
@@ -95,7 +93,6 @@ function CrearOrden() {
         );
     }
 
-    // CASO: FABRICACIÓN DE PELETIZADO NEGRO
     if (nombreProd.includes('PELETIZADO NEGRO')) {
         return (
             nombreInsumo.includes('ETIQUETA MOLIDA') ||
@@ -106,7 +103,6 @@ function CrearOrden() {
         );
     }
 
-    // CASO: FABRICACIÓN DE PELETIZADO VERDE
     if (nombreProd.includes('PELETIZADO VERDE')) {
         return (
             nombreInsumo.includes('ETIQUETA MOLIDA') ||
@@ -116,8 +112,6 @@ function CrearOrden() {
         );
     }
 
-    // Por defecto, si no cae en ninguna regla anterior, mostramos insumos generales (Tipo 2)
-    // Esto asegura que materiales como "Cinta de Embalaje" o auxiliares siempre estén disponibles si se necesitan
     return insumo.id_tipo_inventario === 2; 
   });
 
@@ -174,7 +168,7 @@ function CrearOrden() {
       const [productosRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getAll({ requiere_receta: 'true', estado: 'Activo' }),
         empleadosAPI.getByRol('Supervisor'),
-        productosAPI.getAll({ estado: 'Activo' }) // Traemos TODOS los activos
+        productosAPI.getAll({ estado: 'Activo' })
       ]);
       
       setProductosTerminados(productosRes.data.data);
@@ -191,7 +185,7 @@ function CrearOrden() {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
     setMostrarDropdown(false);
-    setListaInsumos([]); // Reiniciar lista al cambiar producto
+    setListaInsumos([]);
   };
 
   const handleLimpiarProducto = () => {
@@ -257,6 +251,7 @@ function CrearOrden() {
       const payload = {
         ...formData,
         cantidad_planificada: parseFloat(formData.cantidad_planificada),
+        cantidad_unidades: formData.cantidad_unidades ? parseFloat(formData.cantidad_unidades) : 0,
         es_orden_manual: modoReceta === 'manual'
       };
 
@@ -267,7 +262,6 @@ function CrearOrden() {
             return;
         }
 
-        // VALIDACIÓN 100%
         const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
         if (Math.abs(totalPorcentaje - 100) > 0.01) {
             setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para crear la orden.`);
@@ -417,7 +411,24 @@ function CrearOrden() {
                 </div>
 
                 <div className="form-group">
-                    <label className="form-label">Cantidad Total (Kilos) *</label>
+                    <label className="form-label">Cantidad Unidades (Meta) *</label>
+                    <div className="relative">
+                        <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            className="form-input pl-9"
+                            value={formData.cantidad_unidades}
+                            onChange={(e) => setFormData({ ...formData, cantidad_unidades: e.target.value })}
+                            required
+                            placeholder="0"
+                        />
+                        <Hash className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                    </div>
+                </div>
+
+                <div className="form-group">
+                    <label className="form-label">Total Kilos Estimados *</label>
                     <div className="relative">
                         <input
                             type="number"

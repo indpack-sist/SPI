@@ -2102,185 +2102,214 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      const doc = new PDFDocument({ margin: 25, size: 'A4' }); // Margen reducido a 25 para ganar espacio
       const chunks = [];
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
 
-      // --- ENCABEZADO ---
-      // Logo (Izquierda)
+      // --- 1. ENCABEZADO (Compacto) ---
       if (logoBuffer) {
-        doc.image(logoBuffer, 30, 30, { width: 100 });
+        doc.image(logoBuffer, 25, 25, { width: 90 });
       } else {
-        doc.fontSize(20).font('Helvetica-Bold').text('IndPack', 30, 40);
+        doc.fontSize(18).font('Helvetica-Bold').text('IndPack', 25, 30);
       }
       
-      // Título (Centro)
-      doc.font('Helvetica-Bold').fontSize(16).text('HOJA DE RUTA DE PRODUCCIÓN', 140, 35, { align: 'center', width: 280 });
-      doc.fontSize(9).font('Helvetica').text('CONTROL EN PLANTA', 140, 55, { align: 'center', width: 280 });
+      doc.font('Helvetica-Bold').fontSize(14).text('HOJA DE RUTA DE PRODUCCIÓN', 120, 28, { align: 'center', width: 300 });
+      doc.fontSize(8).font('Helvetica').text('CONTROL EN PLANTA - FORMATO DINÁMICO', 120, 45, { align: 'center', width: 300 });
 
-      // Cuadro N° Orden (Derecha) - Ajustado para no salir del margen
-      doc.roundedRect(445, 30, 120, 40, 4).stroke();
-      doc.fontSize(8).font('Helvetica-Bold').text('N° ORDEN', 445, 36, { align: 'center', width: 120 });
-      doc.fontSize(12).text(orden.numero_orden, 445, 50, { align: 'center', width: 120 });
+      // Cuadro N° Orden
+      doc.roundedRect(450, 25, 115, 35, 4).stroke();
+      doc.fontSize(7).font('Helvetica-Bold').text('N° ORDEN', 450, 29, { align: 'center', width: 115 });
+      doc.fontSize(11).text(orden.numero_orden, 450, 42, { align: 'center', width: 115 });
 
-      // --- SECCIÓN 1: DATOS GENERALES ---
-      const yInfo = 85; // Subimos un poco
-      doc.rect(30, yInfo, 535, 65).stroke(); // Reducimos altura
+      // --- 2. DATOS GENERALES (Súper Compacto) ---
+      const yInfo = 70; 
+      doc.rect(25, yInfo, 545, 55).stroke(); 
       
-      doc.fontSize(8).font('Helvetica-Bold');
+      doc.fontSize(7).font('Helvetica-Bold');
       
       // Fila 1
-      doc.text('PRODUCTO:', 35, yInfo + 10);
-      doc.font('Helvetica').text(orden.producto, 90, yInfo + 10, { width: 280 });
+      doc.text('PRODUCTO:', 30, yInfo + 8);
+      doc.font('Helvetica').text(orden.producto, 80, yInfo + 8, { width: 300 });
       
-      doc.font('Helvetica-Bold').text('CANT. PLAN.:', 380, yInfo + 10);
-      doc.font('Helvetica').text(`${orden.cantidad_planificada} ${orden.unidad_medida}`, 440, yInfo + 10);
+      // Mostrar la meta de unidades si existe
+      const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} uds.` : '---';
+      
+      doc.font('Helvetica-Bold').text('META UDS:', 390, yInfo + 8);
+      doc.font('Helvetica').text(metaUnidades, 440, yInfo + 8);
+
+      doc.font('Helvetica-Bold').text('META KG:', 485, yInfo + 8);
+      doc.font('Helvetica').text(`${orden.cantidad_planificada}`, 525, yInfo + 8);
 
       // Fila 2
-      const yFila2 = yInfo + 28;
-      doc.font('Helvetica-Bold').text('MAQUINISTA:', 35, yFila2);
-      doc.font('Helvetica').text(orden.maquinista || '________________', 90, yFila2);
+      const yFila2 = yInfo + 22;
+      doc.font('Helvetica-Bold').text('MAQUINISTA:', 30, yFila2);
+      doc.font('Helvetica').text(orden.maquinista || '________________', 80, yFila2);
 
       doc.font('Helvetica-Bold').text('AYUDANTE:', 200, yFila2);
       doc.font('Helvetica').text(orden.ayudante || '________________', 250, yFila2);
 
-      doc.font('Helvetica-Bold').text('TURNO:', 380, yFila2);
-      doc.font('Helvetica').text(orden.turno || '___', 420, yFila2);
+      doc.font('Helvetica-Bold').text('TURNO:', 390, yFila2);
+      doc.font('Helvetica').text(orden.turno || '___', 425, yFila2);
 
-      // Línea divisoria
-      doc.moveTo(30, yInfo + 45).lineTo(565, yInfo + 45).lineWidth(0.5).stroke(); 
+      doc.moveTo(25, yInfo + 35).lineTo(570, yInfo + 35).lineWidth(0.5).stroke(); 
       
-      // Fila 3 (Manual)
-      const yFila3 = yInfo + 52;
-      doc.font('Helvetica-Bold').text('FECHA INICIO:', 35, yFila3);
-      doc.font('Helvetica').text(formatearFecha(orden.fecha_inicio) || '___/___/____', 100, yFila3);
+      // Fila 3
+      const yFila3 = yInfo + 40;
+      doc.font('Helvetica-Bold').text('FECHA:', 30, yFila3);
+      doc.font('Helvetica').text(formatearFecha(orden.fecha_inicio) || '__/__/__', 65, yFila3);
 
-      doc.font('Helvetica-Bold').text('HORA INICIO:', 200, yFila3);
-      doc.text('__:__', 260, yFila3); 
+      doc.font('Helvetica-Bold').text('INICIO:', 160, yFila3);
+      doc.text('__:__', 200, yFila3); 
 
-      doc.font('Helvetica-Bold').text('HORA FIN:', 380, yFila3);
-      doc.text('__:__', 430, yFila3); 
+      doc.font('Helvetica-Bold').text('FIN:', 280, yFila3);
+      doc.text('__:__', 310, yFila3); 
 
-      // --- SECCIÓN 2: RECETA / MEZCLA (Compacta) ---
-      let yPos = yInfo + 80;
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('black').text('1. PREPARACIÓN DE MEZCLA (INSUMOS)', 30, yPos);
-      yPos += 12;
-
-      // Encabezados Tabla Receta
-      const rCol1 = 30, rCol2 = 90, rCol3 = 380, rCol4 = 480;
-      doc.rect(rCol1, yPos, 535, 15).fill('#E0E0E0').stroke();
-      doc.fillColor('black').fontSize(7);
-      doc.text('CÓDIGO', rCol1 + 5, yPos + 4);
-      doc.text('INSUMO / MATERIAL', rCol2 + 5, yPos + 4);
-      doc.text('SOLICITADO', rCol3 + 5, yPos + 4, { width: 90, align: 'right' });
-      doc.text('REAL', rCol4 + 5, yPos + 4, { width: 80, align: 'center' });
-
-      yPos += 15;
+      // --- 3. RECETA (Compacta) ---
+      let yPos = yInfo + 65;
       
+      // Solo mostramos encabezado si hay receta, para ahorrar espacio
       if (receta.length > 0) {
-        receta.forEach(item => {
-            // Altura dinámica por si el nombre del insumo es largo
-            doc.fontSize(8);
-            const height = Math.max(18, doc.heightOfString(item.insumo, { width: 280 }) + 6);
-            
-            if (yPos + height > 750) { doc.addPage(); yPos = 40; }
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('black').text('1. MEZCLA / INSUMOS', 25, yPos);
+          yPos += 10;
 
-            doc.rect(rCol1, yPos, 535, height).stroke();
-            
-            doc.font('Helvetica').text(item.codigo_insumo || '', rCol1 + 5, yPos + 5);
-            doc.text(item.insumo || '', rCol2 + 5, yPos + 5, { width: 280 });
-            doc.text(`${parseFloat(item.cantidad_requerida).toFixed(2)} ${item.unidad_medida}`, rCol3 + 5, yPos + 5, { width: 90, align: 'right' });
-            
-            yPos += height;
-        });
-      } else {
-          doc.rect(rCol1, yPos, 535, 20).stroke();
-          doc.fontSize(8).text('Sin receta predefinida (Orden Manual)', rCol1 + 5, yPos + 6);
-          yPos += 20;
+          // Cabecera Receta
+          const rCol1 = 25, rCol2 = 80, rCol3 = 380, rCol4 = 480;
+          doc.rect(rCol1, yPos, 545, 12).fill('#E0E0E0').stroke();
+          doc.fillColor('black').fontSize(6);
+          doc.text('CÓDIGO', rCol1 + 5, yPos + 3);
+          doc.text('INSUMO', rCol2 + 5, yPos + 3);
+          doc.text('SOLICITADO', rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
+          doc.text('REAL', rCol4 + 5, yPos + 3, { width: 80, align: 'center' });
+
+          yPos += 12;
+          
+          receta.forEach(item => {
+              doc.rect(rCol1, yPos, 545, 12).stroke();
+              doc.fontSize(7).font('Helvetica');
+              doc.text(item.codigo_insumo || '', rCol1 + 5, yPos + 3);
+              doc.text(item.insumo || '', rCol2 + 5, yPos + 3, { width: 290, height: 10, lineBreak: false, ellipsis: true });
+              doc.text(`${parseFloat(item.cantidad_requerida).toFixed(2)} ${item.unidad_medida}`, rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
+              yPos += 12;
+          });
       }
-
-      // --- SECCIÓN 3: CONTROL DE PRODUCCIÓN (Optimizada) ---
-      yPos += 15;
-      if (yPos + 100 > 750) { doc.addPage(); yPos = 40; }
-
-      doc.fontSize(9).font('Helvetica-Bold').text('2. REGISTRO DE BOBINAS / PRODUCTO TERMINADO', 30, yPos);
-      yPos += 12;
-
-      // Encabezados
-      const pCol1 = 30, pCol2 = 70, pCol3 = 140, pCol4 = 210, pCol5 = 280, pCol6 = 480;
-      doc.rect(pCol1, yPos, 535, 15).fill('#E0E0E0').stroke();
-      doc.fillColor('black').fontSize(7);
-      doc.text('N°', pCol1, yPos + 4, { width: 40, align: 'center' });
-      doc.text('HORA', pCol2, yPos + 4, { width: 70, align: 'center' });
-      doc.text('PESO (KG)', pCol3, yPos + 4, { width: 70, align: 'center' });
-      doc.text('METRAJE', pCol4, yPos + 4, { width: 70, align: 'center' });
-      doc.text('OBSERVACIONES / CALIDAD', pCol5, yPos + 4, { width: 200, align: 'center' });
-      doc.text('OK/NOK', pCol6, yPos + 4, { width: 85, align: 'center' });
-
-      yPos += 15;
-
-      // Filas para llenar (reducimos altura a 18px para que entren más)
-      const rowHeight = 18;
-      // Calculamos cuántas filas caben antes del pie de página (aprox y=700)
-      let filasPosibles = Math.floor((680 - yPos) / rowHeight);
-      if (filasPosibles < 5) filasPosibles = 10; // Si queda poco espacio, forzamos pocas o nueva página luego
-
-      for (let i = 1; i <= filasPosibles; i++) {
-          if (yPos + rowHeight > 750) { 
-              doc.addPage(); 
-              yPos = 40; 
-              // Repetir encabezado si hay salto de página (opcional, pero útil)
-          }
-          doc.rect(pCol1, yPos, 535, rowHeight).stroke();
-          doc.fontSize(8).text(i.toString(), pCol1, yPos + 5, { width: 40, align: 'center' });
-          yPos += rowHeight;
-      }
-
-      // --- SECCIÓN 4: PARADAS ---
-      yPos += 15;
-      if (yPos + 80 > 750) { doc.addPage(); yPos = 40; }
-
-      doc.fontSize(9).font('Helvetica-Bold').text('3. PARADAS DE MÁQUINA', 30, yPos);
-      yPos += 12;
-
-      const sCol1 = 30, sCol2 = 110, sCol3 = 190;
-      doc.rect(sCol1, yPos, 535, 15).fill('#FFCCBC').stroke();
-      doc.fillColor('black').fontSize(7);
-      doc.text('INICIO', sCol1, yPos + 4, { width: 80, align: 'center' });
-      doc.text('FIN', sCol2, yPos + 4, { width: 80, align: 'center' });
-      doc.text('MOTIVO / CAUSA', sCol3 + 10, yPos + 4);
-
-      yPos += 15;
-      // 3 Filas fijas para paradas
-      for (let i = 0; i < 3; i++) {
-          if (yPos + 18 > 750) { doc.addPage(); yPos = 40; }
-          doc.rect(sCol1, yPos, 535, 18).stroke();
-          yPos += 18;
-      }
-
-      // --- PIE DE PÁGINA (Totales y Firmas) ---
-      yPos += 20;
-      if (yPos + 60 > 780) { doc.addPage(); yPos = 40; }
-
-      doc.fontSize(8);
-      // Totales
-      doc.rect(30, yPos, 160, 30).stroke();
-      doc.font('Helvetica-Bold').text('TOTAL PRODUCIDO (KG)', 30, yPos + 5, { width: 160, align: 'center' });
       
-      doc.rect(200, yPos, 160, 30).stroke();
-      doc.text('TOTAL MERMA (KG)', 200, yPos + 5, { width: 160, align: 'center' });
+      yPos += 10;
 
-      doc.rect(370, yPos, 195, 30).stroke();
-      doc.text('EFICIENCIA %', 370, yPos + 5, { width: 195, align: 'center' });
+      // --- 4. REGISTRO DE PRODUCCIÓN (DINÁMICO) ---
+      // Calculamos slots: Cantidad ingresada + 10 de buffer
+      const cantidadBase = orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : 20; // Default 20 si es 0
+      const totalSlots = cantidadBase + 10;
 
-      // Firmas
-      yPos += 60;
-      doc.moveTo(80, yPos).lineTo(230, yPos).stroke();
-      doc.text('FIRMA MAQUINISTA', 80, yPos + 5, { width: 150, align: 'center' });
+      doc.fontSize(8).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN (${totalSlots} SLOTS)`, 25, yPos);
+      yPos += 12;
 
-      doc.moveTo(350, yPos).lineTo(500, yPos).stroke();
-      doc.text('FIRMA SUPERVISOR', 350, yPos + 5, { width: 150, align: 'center' });
+      // Definición de columnas
+      // Ancho total = 545. Mitad = 272.5. Bloque = 265. Gap = 15.
+      // Bloque IZQ: x=25. Bloque DER: x=305.
+      
+      const drawHeaders = (xBase, y) => {
+          doc.rect(xBase, y, 265, 12).fill('#E0E0E0').stroke();
+          doc.fillColor('black').fontSize(6);
+          doc.text('N°', xBase, y + 3, { width: 20, align: 'center' });
+          doc.text('PESO', xBase + 20, y + 3, { width: 40, align: 'center' });
+          doc.text('MTS', xBase + 60, y + 3, { width: 40, align: 'center' });
+          doc.text('OBSERVACIÓN', xBase + 100, y + 3, { width: 120, align: 'center' });
+          doc.text('OK', xBase + 225, y + 3, { width: 35, align: 'center' });
+      };
+
+      drawHeaders(25, yPos);
+      drawHeaders(305, yPos);
+      yPos += 12;
+
+      const rowHeight = 13; // Muy compacto para que entren más
+      
+      // Lógica de llenado Zig-Zag (1 Izq, 2 Der, 3 Izq...) para optimizar espacio vertical
+      let currentY = yPos;
+      
+      for (let i = 1; i <= totalSlots; i++) {
+          // Si nos pasamos de la hoja, nueva página
+          if (currentY + rowHeight > 750) {
+              doc.addPage();
+              currentY = 40;
+              // Repetir cabeceras en nueva página
+              drawHeaders(25, currentY);
+              drawHeaders(305, currentY);
+              currentY += 12;
+          }
+
+          const isLeft = i % 2 !== 0; // Impares a la izquierda
+          const xPos = isLeft ? 25 : 305;
+          
+          doc.rect(xPos, currentY, 265, rowHeight).stroke();
+          doc.fontSize(7).font('Helvetica');
+          doc.text(i.toString(), xPos, currentY + 3, { width: 20, align: 'center' });
+
+          // Solo bajamos de línea después de llenar el par derecho
+          if (!isLeft) {
+              currentY += rowHeight;
+          }
+      }
+      
+      // Ajustar yPos final dependiendo de si terminó en par o impar
+      if (totalSlots % 2 !== 0) {
+          currentY += rowHeight; // Bajar si quedó uno colgado a la izquierda
+      }
+      yPos = currentY + 15;
+
+      // --- 5. PARADAS DE MÁQUINA (FLEXIBLE) ---
+      // Verificamos cuánto espacio queda antes de saltar o comprimir
+      const espacioDisponible = 780 - yPos; // 780 es aprox límite antes del pie
+      const alturaMinimaParadas = 50; 
+
+      if (espacioDisponible < alturaMinimaParadas) {
+          doc.addPage();
+          yPos = 40;
+      }
+
+      doc.fontSize(8).font('Helvetica-Bold').text('3. PARADAS DE MÁQUINA', 25, yPos);
+      yPos += 10;
+
+      const sCol1 = 25, sCol2 = 95, sCol3 = 165;
+      doc.rect(sCol1, yPos, 545, 12).fill('#FFCCBC').stroke();
+      doc.fillColor('black').fontSize(6);
+      doc.text('INICIO', sCol1, yPos + 3, { width: 70, align: 'center' });
+      doc.text('FIN', sCol2, yPos + 3, { width: 70, align: 'center' });
+      doc.text('MOTIVO / CAUSA', sCol3 + 10, yPos + 3);
+
+      yPos += 12;
+      
+      // Decidimos cuántas líneas de paradas dibujar según el espacio
+      // Si hay mucho espacio (nueva hoja), dibuja 5. Si hay poco, dibuja 2.
+      const lineasParadas = espacioDisponible > 150 ? 5 : 2; 
+
+      for (let i = 0; i < lineasParadas; i++) {
+          if (yPos + 15 > 780) break; // Seguridad
+          doc.rect(sCol1, yPos, 545, 15).stroke();
+          yPos += 15;
+      }
+
+      // --- PIE DE PÁGINA (Siempre al final) ---
+      yPos += 10;
+      if (yPos + 50 > 800) { doc.addPage(); yPos = 40; }
+
+      doc.fontSize(7);
+      // Cuadros resumen
+      doc.rect(25, yPos, 140, 25).stroke();
+      doc.font('Helvetica-Bold').text('TOTAL PRODUCIDO (KG)', 25, yPos + 9, { width: 140, align: 'center' });
+      
+      doc.rect(175, yPos, 140, 25).stroke();
+      doc.text('TOTAL MERMA (KG)', 175, yPos + 9, { width: 140, align: 'center' });
+
+      doc.rect(325, yPos, 245, 25).stroke();
+      doc.text('OBSERVACIONES FINALES', 325, yPos + 9, { width: 245, align: 'center' });
+
+      yPos += 45;
+      doc.moveTo(80, yPos).lineTo(200, yPos).stroke();
+      doc.text('FIRMA MAQUINISTA', 80, yPos + 5, { width: 120, align: 'center' });
+
+      doc.moveTo(350, yPos).lineTo(470, yPos).stroke();
+      doc.text('FIRMA SUPERVISOR', 350, yPos + 5, { width: 120, align: 'center' });
 
       doc.end();
     } catch (error) {

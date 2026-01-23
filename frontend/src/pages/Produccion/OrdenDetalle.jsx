@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info // <--- AQUÍ FALTABA IMPORTAR "Info"
+  Users, Clipboard, Info 
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -153,21 +153,15 @@ function OrdenDetalle() {
   const handleDescargarHojaRuta = async () => {
     try {
         setProcesando(true);
-        // Llamamos a la API corregida
         const response = await ordenesProduccionAPI.downloadHojaRuta(id);
         
-        // response.data ahora es el Blob directo del PDF
         const url = window.URL.createObjectURL(response.data);
-        
         const link = document.createElement('a');
         link.href = url;
-        // Aquí usamos el nombre correcto con el número de orden
         link.setAttribute('download', `Hoja_Ruta_${orden.numero_orden}.pdf`);
-        
         document.body.appendChild(link);
         link.click();
         
-        // Limpieza
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
         
@@ -177,7 +171,7 @@ function OrdenDetalle() {
         setError("Error al descargar la hoja de ruta");
         setProcesando(false);
     }
-};
+  };
 
  const handleRegistroParcial = async (e) => {
     e.preventDefault();
@@ -642,6 +636,14 @@ function OrdenDetalle() {
                 {parseFloat(orden.cantidad_planificada).toFixed(2)} {orden.unidad_medida}
               </p>
             </div>
+            {orden.cantidad_unidades > 0 && (
+                <div>
+                    <p className="text-xs text-muted uppercase font-semibold">Meta de Unidades</p>
+                    <p className="font-bold text-lg text-blue-600">
+                        {parseInt(orden.cantidad_unidades)} uds.
+                    </p>
+                </div>
+            )}
             <div>
               <p className="text-xs text-muted uppercase font-semibold">Cantidad Producida</p>
               <p className="font-bold text-lg text-success">

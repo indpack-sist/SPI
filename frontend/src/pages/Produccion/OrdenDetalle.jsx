@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard
+  Users, Clipboard, Info // <--- AQUÍ FALTABA IMPORTAR "Info"
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';

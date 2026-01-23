@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users 
+  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users,
+  Info // <--- AGREGADO: Soluciona el "Uncaught ReferenceError: Info is not defined"
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
@@ -28,8 +29,6 @@ function CrearOrden() {
   const [modoReceta, setModoReceta] = useState('porcentaje'); 
   const [listaInsumos, setListaInsumos] = useState([]);
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
-  
-  // Este estado guarda el ID del tipo de insumo que requiere la CATEGORÍA del producto seleccionado
   const [filtroTipoInsumo, setFiltroTipoInsumo] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -48,22 +47,16 @@ function CrearOrden() {
     porcentaje: ''
   });
 
-  // Filtro del buscador de productos
   const productosFiltrados = productosTerminados.filter(p => 
     p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || 
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
-  // Filtro lógico de insumos para el Modal
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
-    // Si ya seleccionamos un producto (tenemos filtro), mostramos SOLO lo que coincida
     if (filtroTipoInsumo) {
-        // Muestra si coincide el tipo O si es un insumo genérico (tipo 2) si lo deseas
-        return insumo.id_tipo_inventario === filtroTipoInsumo;
+        return insumo.id_tipo_inventario === filtroTipoInsumo || insumo.id_tipo_inventario === 2; 
     }
-    // Si no hay producto seleccionado, no mostrar nada o mostrar todo (según prefieras)
-    // Aquí mostramos todo excepto productos terminados para evitar errores
-    return insumo.id_tipo_inventario !== 3; 
+    return insumo.id_tipo_inventario === 2 || insumo.id_tipo_inventario === 13; 
   });
 
   useEffect(() => {
@@ -119,7 +112,7 @@ function CrearOrden() {
       const [productosRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getAll({ requiere_receta: 'true', estado: 'Activo' }),
         empleadosAPI.getByRol('Supervisor'),
-        productosAPI.getAll({ estado: 'Activo' }) // Traemos todos los activos, el filtro lo hacemos en memoria
+        productosAPI.getAll({ estado: 'Activo' })
       ]);
       
       setProductosTerminados(productosRes.data.data);
@@ -136,11 +129,8 @@ function CrearOrden() {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
     setMostrarDropdown(false);
-    
-    // AQUÍ ESTÁ LA CLAVE: Usamos el ID que viene de la CATEGORÍA
     setFiltroTipoInsumo(producto.id_tipo_insumo_sugerido); 
-    
-    setListaInsumos([]); // Reiniciar insumos si cambia el producto
+    setListaInsumos([]);
   };
 
   const handleLimpiarProducto = () => {
@@ -216,6 +206,17 @@ function CrearOrden() {
             setGuardando(false);
             return;
         }
+
+        // --- VALIDACIÓN DEL 100% ---
+        const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
+        // Usamos una pequeña tolerancia (0.01) para errores de punto flotante
+        if (Math.abs(totalPorcentaje - 100) > 0.01) {
+            setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para poder crear la orden.`);
+            setGuardando(false);
+            return;
+        }
+        // ---------------------------
+
         payload.insumos = listaInsumos.map(i => ({
             id_insumo: i.id_insumo,
             porcentaje: i.porcentaje
@@ -254,6 +255,8 @@ function CrearOrden() {
       const cantidad = calcularCantidadInsumo(item.porcentaje);
       return sum + (cantidad * item.costo_unitario);
   }, 0);
+
+  const porcentajeActualTotal = listaInsumos.reduce((sum, item) => sum + item.porcentaje, 0);
 
   return (
     <div>
@@ -334,8 +337,8 @@ function CrearOrden() {
 
                     {mostrarDropdown && (
                         <div 
-                          className="absolute w-full mt-1 border border-gray-200 rounded-md shadow-2xl overflow-y-auto max-h-60"
-                          style={{ backgroundColor: 'white', zIndex: 9999 }} // Corrección visual
+                          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg overflow-y-auto max-h-60"
+                          style={{ backgroundColor: 'white', zIndex: 9999 }}
                         >
                             {productosFiltrados.length > 0 ? (
                                 productosFiltrados.map((prod) => (
@@ -346,10 +349,7 @@ function CrearOrden() {
                                     >
                                         <div className="font-bold text-gray-800">{prod.codigo}</div>
                                         <div className="text-gray-600">{prod.nombre}</div>
-                                        <div className="text-xs text-muted mt-1">
-                                            Stock: {parseFloat(prod.stock_actual).toFixed(2)} | 
-                                            Cat: {prod.categoria || 'Sin Cat'}
-                                        </div>
+                                        <div className="text-xs text-muted mt-1">Stock: {parseFloat(prod.stock_actual).toFixed(2)}</div>
                                     </div>
                                 ))
                             ) : (
@@ -491,6 +491,12 @@ function CrearOrden() {
                                 <p className="text-lg font-bold">{listaInsumos.length}</p>
                             </div>
                         </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                            <span className="text-xs font-medium">Suma Porcentajes:</span>
+                            <span className={`text-sm font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                                {porcentajeActualTotal.toFixed(2)}%
+                            </span>
+                        </div>
                     </div>
                 </div>
             )}
@@ -617,7 +623,7 @@ function CrearOrden() {
           </select>
           {filtroTipoInsumo && (
              <small className="text-xs text-blue-600 block mt-1">
-                Mostrando solo insumos compatibles con este producto (Tipo ID: {filtroTipoInsumo})
+                Mostrando solo insumos compatibles con este producto
              </small>
           )}
         </div>

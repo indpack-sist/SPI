@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, AlertCircle, Plus, Trash2, Star, 
-  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Info, Hash 
+  Package, Zap, Search, X, RefreshCw, ChevronDown, Clock, Users, Hash 
 } from 'lucide-react';
 import { ordenesProduccionAPI, productosAPI, empleadosAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
@@ -53,9 +53,9 @@ function CrearOrden() {
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
-  const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
-    const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
+  const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
 
+  const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
     if (!productoSeleccionado) {
         return insumo.id_tipo_inventario === 2; 
     }
@@ -415,7 +415,9 @@ function CrearOrden() {
                 </div>
 
                 <div className="form-group">
-                    <label className="form-label">Cantidad Unidades (Meta) *</label>
+                    <label className="form-label">
+                        Cantidad {productoSeleccionado ? `(${productoSeleccionado.unidad_medida})` : '(Unidades)'} (Meta) *
+                    </label>
                     <div className="relative">
                         <input
                             type="number"
@@ -469,7 +471,7 @@ function CrearOrden() {
                 <h3 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
                     <Users size={16} /> Personal Asignado
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="form-group">
                         <label className="form-label text-xs">Supervisor *</label>
                         <select
@@ -484,52 +486,55 @@ function CrearOrden() {
                             ))}
                         </select>
                     </div>
-                    <div className="form-group">
-                        <label className="form-label text-xs">Maquinista</label>
-                        <input
-                            type="text"
-                            className="form-input text-sm"
-                            value={formData.maquinista}
-                            onChange={(e) => setFormData({ ...formData, maquinista: e.target.value })}
-                            placeholder="Nombre del maquinista"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label text-xs">Ayudante</label>
-                        <input
-                            type="text"
-                            className="form-input text-sm"
-                            value={formData.ayudante}
-                            onChange={(e) => setFormData({ ...formData, ayudante: e.target.value })}
-                            placeholder="Nombre del ayudante"
-                        />
-                    </div>
-                </div>
 
-                {esProductoLamina && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50 p-3 rounded border border-blue-100">
-                        <div className="form-group">
-                            <label className="form-label text-xs text-blue-800 font-semibold">Operario de Corte</label>
-                            <input
-                                type="text"
-                                className="form-input text-sm border-blue-200"
-                                value={formData.operario_corte}
-                                onChange={(e) => setFormData({ ...formData, operario_corte: e.target.value })}
-                                placeholder="Encargado del corte"
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label text-xs text-blue-800 font-semibold">Operario de Embalaje</label>
-                            <input
-                                type="text"
-                                className="form-input text-sm border-blue-200"
-                                value={formData.operario_embalaje}
-                                onChange={(e) => setFormData({ ...formData, operario_embalaje: e.target.value })}
-                                placeholder="Encargado de embalaje"
-                            />
-                        </div>
-                    </div>
-                )}
+                    {esProductoLamina ? (
+                        <>
+                            <div className="form-group">
+                                <label className="form-label text-xs">Operario de Corte</label>
+                                <input
+                                    type="text"
+                                    className="form-input text-sm"
+                                    value={formData.operario_corte}
+                                    onChange={(e) => setFormData({ ...formData, operario_corte: e.target.value })}
+                                    placeholder="Encargado del corte"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label text-xs">Operario de Embalaje</label>
+                                <input
+                                    type="text"
+                                    className="form-input text-sm"
+                                    value={formData.operario_embalaje}
+                                    onChange={(e) => setFormData({ ...formData, operario_embalaje: e.target.value })}
+                                    placeholder="Encargado de embalaje"
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="form-group">
+                                <label className="form-label text-xs">Maquinista</label>
+                                <input
+                                    type="text"
+                                    className="form-input text-sm"
+                                    value={formData.maquinista}
+                                    onChange={(e) => setFormData({ ...formData, maquinista: e.target.value })}
+                                    placeholder="Nombre del maquinista"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label text-xs">Ayudante</label>
+                                <input
+                                    type="text"
+                                    className="form-input text-sm"
+                                    value={formData.ayudante}
+                                    onChange={(e) => setFormData({ ...formData, ayudante: e.target.value })}
+                                    placeholder="Nombre del ayudante"
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
 
             <div className="form-group">

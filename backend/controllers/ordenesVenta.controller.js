@@ -1978,6 +1978,11 @@ export async function descargarPDFDespacho(req, res) {
         ov.estado,
         ov.moneda,
         ov.id_cliente,
+        ov.tipo_entrega,
+        ov.transporte_nombre,
+        ov.transporte_placa,
+        ov.transporte_conductor,
+        ov.transporte_dni,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         c.numero_cotizacion,
@@ -2049,10 +2054,22 @@ export async function descargarPDFDespacho(req, res) {
       moneda: orden.moneda,
       cliente: orden.cliente,
       ruc_cliente: orden.ruc_cliente,
+      
+      // Tipo de entrega
+      tipo_entrega: orden.tipo_entrega,
+      
+      // Datos para Vehículo Empresa
       conductor: orden.conductor_nombre,
       conductor_dni: orden.conductor_dni,
       vehiculo_placa: orden.placa,
       vehiculo_modelo: orden.marca_modelo,
+      
+      // Datos para Transporte Privado
+      transporte_privado_nombre: orden.transporte_nombre,
+      transporte_privado_placa: orden.transporte_placa,
+      transporte_privado_conductor: orden.transporte_conductor,
+      transporte_privado_dni: orden.transporte_dni,
+      
       detalles: detalleResult.data
     };
 

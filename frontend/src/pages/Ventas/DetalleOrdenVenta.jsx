@@ -79,15 +79,16 @@ function DetalleOrdenVenta() {
   });
 
   const [transporteForm, setTransporteForm] = useState({
-    tipo_entrega: 'Vehiculo Empresa',
-    id_vehiculo: '',
-    id_conductor: '',
-    transporte_nombre: '',
-    transporte_placa: '',
-    transporte_conductor: '',
-    transporte_dni: '',
-    fecha_entrega_estimada: ''
-  });
+  tipo_entrega: 'Vehiculo Empresa',
+  id_vehiculo: '',
+  id_conductor: '',
+  transporte_nombre: '',
+  transporte_placa: '',
+  transporte_conductor: '',
+  transporte_dni: '',
+  transporte_licencia: '',  // ← AGREGAR ESTA LÍNEA
+  fecha_entrega_estimada: ''
+});
 
   const handleWheelDisable = (e) => {
     e.target.blur();
@@ -438,9 +439,7 @@ function DetalleOrdenVenta() {
     } finally {
       setProcesando(false);
     }
-  };
-
-  const handleCambiarTipoComprobante = async () => {
+  };const handleCambiarTipoComprobante = async () => {
     if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
       setError('Debe seleccionar un tipo de comprobante diferente');
       return;
@@ -470,101 +469,103 @@ function DetalleOrdenVenta() {
   };
 
   const handleAbrirTransporte = () => {
-    setTransporteForm({
-      tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
-      id_vehiculo: orden.id_vehiculo || '',
-      id_conductor: orden.id_conductor || '',
-      transporte_nombre: orden.transporte_nombre || '',
-      transporte_placa: orden.transporte_placa || '',
-      transporte_conductor: orden.transporte_conductor || '',
-      transporte_dni: orden.transporte_dni || '',
-      fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
-    });
-    setModalTransporteOpen(true);
-  };
+  setTransporteForm({
+    tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
+    id_vehiculo: orden.id_vehiculo || '',
+    id_conductor: orden.id_conductor || '',
+    transporte_nombre: orden.transporte_nombre || '',
+    transporte_placa: orden.transporte_placa || '',
+    transporte_conductor: orden.transporte_conductor || '',
+    transporte_dni: orden.transporte_dni || '',
+    transporte_licencia: orden.transporte_licencia || '',  // ← AGREGAR ESTA LÍNEA
+    fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
+  });
+  setModalTransporteOpen(true);
+};
 
   const handleGuardarTransporte = async (e) => {
-  e.preventDefault();
-  try {
-    setProcesando(true);
-    setError(null);
-    
-    const response = await ordenesVentaAPI.actualizarTransporte(id, transporteForm);
-    
-    if (response.data.success) {
-      setSuccess('Datos de transporte actualizados');
-      setModalTransporteOpen(false);
-      await cargarDatos(); // ✅ Importante: recarga los datos
+    e.preventDefault();
+    try {
+      setProcesando(true);
+      setError(null);
+      
+      const response = await ordenesVentaAPI.actualizarTransporte(id, transporteForm);
+      
+      if (response.data.success) {
+        setSuccess('Datos de transporte actualizados');
+        setModalTransporteOpen(false);
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al actualizar transporte');
+    } finally {
+      setProcesando(false);
     }
-  } catch (err) {
-    console.error(err);
-    setError(err.response?.data?.error || 'Error al actualizar transporte');
-  } finally {
-    setProcesando(false);
-  }
-};
+  };
 
   const handleGenerarGuiaInterna = async () => {
-  try {
-    setDescargandoPDF('guia-interna');
-    setError(null);
-    
-    const response = await ordenesVentaAPI.descargarPDFGuiaInterna(id);
-    
-    if (response.data.type === 'application/json') {
-      const errorText = await response.data.text();
-      const errorJson = JSON.parse(errorText);
-      throw new Error(errorJson.error || "Error generado por el servidor");
-    }
-
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    
-    const clienteSanitizado = (orden.cliente || 'CLIENTE')
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9]/g, "_")
-      .replace(/_+/g, "_")
-      .toUpperCase();
-
-    const nombreArchivo = `${clienteSanitizado}_GUIA_INTERNA_${orden.numero_orden}.pdf`;
-    
-    link.setAttribute('download', nombreArchivo);
-    document.body.appendChild(link);
-    link.click();
-    link.parentNode.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    const mensaje = orden.numero_guia_interna 
-      ? 'Guía Interna descargada exitosamente' 
-      : 'Guía Interna generada y descargada exitosamente';
-    
-    setSuccess(mensaje);
-    
-    if (!orden.numero_guia_interna) {
-      await cargarDatos();
-    }
-
-  } catch (err) {
-    console.error("Error al generar guía interna:", err);
-
-    if (err.response && err.response.data instanceof Blob && err.response.data.type === 'application/json') {
-      try {
-        const errorText = await err.response.data.text();
+    try {
+      setDescargandoPDF('guia-interna');
+      setError(null);
+      
+      const response = await ordenesVentaAPI.descargarPDFGuiaInterna(id);
+      
+      if (response.data.type === 'application/json') {
+        const errorText = await response.data.text();
         const errorJson = JSON.parse(errorText);
-        setError(errorJson.error || 'Error desconocido del servidor');
-      } catch (e) {
-        setError('Error al procesar la respuesta del servidor');
+        throw new Error(errorJson.error || "Error generado por el servidor");
       }
-    } else {
-      setError(err.response?.data?.error || err.message || 'Error al generar la guía interna');
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const clienteSanitizado = (orden.cliente || 'CLIENTE')
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .toUpperCase();
+
+      const nombreArchivo = `${clienteSanitizado}_GUIA_INTERNA_${orden.numero_orden}.pdf`;
+      
+      link.setAttribute('download', nombreArchivo);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      const mensaje = orden.numero_guia_interna 
+        ? 'Guía Interna descargada exitosamente' 
+        : 'Guía Interna generada y descargada exitosamente';
+      
+      setSuccess(mensaje);
+      
+      if (!orden.numero_guia_interna) {
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error("Error al generar guía interna:", err);
+
+      if (err.response && err.response.data instanceof Blob && err.response.data.type === 'application/json') {
+        try {
+          const errorText = await err.response.data.text();
+          const errorJson = JSON.parse(errorText);
+          setError(errorJson.error || 'Error desconocido del servidor');
+        } catch (e) {
+          setError('Error al procesar la respuesta del servidor');
+        }
+      } else {
+        setError(err.response?.data?.error || err.message || 'Error al generar la guía interna');
+      }
+    } finally {
+      setDescargandoPDF(null);
     }
-  } finally {
-    setDescargandoPDF(null);
-  }
-};
+  };
+
   const handleRegistrarPago = async (e) => {
     e.preventDefault();
     
@@ -1285,51 +1286,51 @@ function DetalleOrdenVenta() {
           </div>
 
           <div>
-  <h1 className="text-2xl font-bold flex items-center gap-2">
-    <ShoppingCart size={32} />
-    Orden de Venta {orden.numero_orden}
-    {orden.stock_reservado === 1 && (
-      <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para toda la orden">
-        <Lock size={12} className="mr-1"/> Reserva Total
-      </span>
-    )}
-    {orden.stock_reservado === 2 && (
-      <span className="badge badge-sm badge-warning ml-2 border border-yellow-500 text-yellow-800" title="Stock reservado parcialmente">
-        <Lock size={12} className="mr-1"/> Reserva Parcial
-      </span>
-    )}
-  </h1>
-  <div className="flex items-center gap-3 mt-2">
-    <p className="text-xl font-bold text-gray-700 bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 rounded-lg border border-blue-200 shadow-sm">
-      Emitida el {formatearFecha(orden.fecha_emision)}
-    </p>
-    
-    {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
-      <div className="flex items-center gap-2">
-        <span className="badge badge-info">
-          {orden.tipo_comprobante}
-        </span>
-        <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
-          {orden.numero_comprobante || 'Pendiente'}
-        </span>
-      </div>
-    )}
-  </div>
-</div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ShoppingCart size={32} />
+              Orden de Venta {orden.numero_orden}
+              {orden.stock_reservado === 1 && (
+                <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para toda la orden">
+                  <Lock size={12} className="mr-1"/> Reserva Total
+                </span>
+              )}
+              {orden.stock_reservado === 2 && (
+                <span className="badge badge-sm badge-warning ml-2 border border-yellow-500 text-yellow-800" title="Stock reservado parcialmente">
+                  <Lock size={12} className="mr-1"/> Reserva Parcial
+                </span>
+              )}
+            </h1>
+            <div className="flex items-center gap-3 mt-2">
+              <p className="text-xl font-bold text-gray-700 bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 rounded-lg border border-blue-200 shadow-sm">
+                Emitida el {formatearFecha(orden.fecha_emision)}
+              </p>
+              
+              {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+                <div className="flex items-center gap-2">
+                  <span className="badge badge-info">
+                    {orden.tipo_comprobante}
+                  </span>
+                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
+                    {orden.numero_comprobante || 'Pendiente'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         
         <div className="flex gap-2">
           {orden.tipo_comprobante === 'Nota de Venta' && orden.estado !== 'Cancelada' && (
-  <button
-    className="btn btn-outline border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-    onClick={handleGenerarGuiaInterna}
-    disabled={procesando}
-    title={orden.numero_guia_interna ? "Descargar Guía Interna generada" : "Generar Guía Interna"}
-  >
-    <ClipboardList size={20} /> 
-    {orden.numero_guia_interna ? `GI: ${orden.numero_guia_interna}` : 'Generar Guía Interna'}
-  </button>
-)}
+            <button
+              className="btn btn-outline border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+              onClick={handleGenerarGuiaInterna}
+              disabled={procesando}
+              title={orden.numero_guia_interna ? "Descargar Guía Interna generada" : "Generar Guía Interna"}
+            >
+              <ClipboardList size={20} /> 
+              {orden.numero_guia_interna ? `GI: ${orden.numero_guia_interna}` : 'Generar Guía Interna'}
+            </button>
+          )}
 
           {puedeReservarStock() && (
             <button
@@ -1430,11 +1431,7 @@ function DetalleOrdenVenta() {
             <small>Puede descargar el PDF de salida usando el botón "PDF Salida" en la parte superior.</small>
           </div>
         </div>
-      )}
-
-      {/* ... Resto del componente (Cards de estado, cliente, tablas, modales) se mantienen igual ... */}
-      
-      <div className="card mb-6 border-l-4 border-primary">
+      )}<div className="card mb-6 border-l-4 border-primary">
         <div className="card-header">
           <h2 className="card-title">
             <TrendingUp size={20} />
@@ -1734,34 +1731,56 @@ function DetalleOrdenVenta() {
                     })()}
                 </div>
 
-                <div className="pt-3 mt-2 border-t border-gray-100">
-                    <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
-                    {orden.tipo_entrega === 'Vehiculo Empresa' ? (
-                      <>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Truck size={14} className="text-indigo-600" />
-                            <div>
-                                <span className="text-xs text-muted">Vehículo:</span>
-                                <span className="font-bold ml-1">{orden.vehiculo_placa_interna || orden.vehiculo_placa || 'No asignado'}</span>
-                                {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <User size={14} className="text-indigo-600" />
-                            <div>
-                                <span className="text-xs text-muted">Conductor:</span>
-                                <span className="font-bold ml-1">{orden.conductor_nombre || orden.conductor || 'No asignado'}</span>
-                            </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-sm">
-                        <p><span className="font-bold">Privado:</span> {orden.transporte_nombre}</p>
-                        <p><span className="font-bold">Placa:</span> {orden.transporte_placa}</p>
-                        <p><span className="font-bold">Chofer:</span> {orden.transporte_conductor}</p>
-                      </div>
-                    )}
-                </div>
+               <div className="pt-3 mt-2 border-t border-gray-100">
+    <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
+    {orden.tipo_entrega === 'Vehiculo Empresa' ? (
+      <>
+        <div className="flex items-center gap-2 mb-1">
+            <Truck size={14} className="text-indigo-600" />
+            <div>
+                <span className="text-xs text-muted">Vehículo:</span>
+                <span className="font-bold ml-1">{orden.vehiculo_placa_interna || orden.vehiculo_placa || 'No asignado'}</span>
+                {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
+            </div>
+        </div>
+        <div className="flex items-center gap-2 mb-1">
+            <User size={14} className="text-indigo-600" />
+            <div>
+                <span className="text-xs text-muted">Conductor:</span>
+                <span className="font-bold ml-1">{orden.conductor_nombre || orden.conductor || 'No asignado'}</span>
+            </div>
+        </div>
+        {/* ← AGREGAR ESTE BLOQUE */}
+        {orden.transporte_licencia && (
+          <div className="flex items-center gap-2">
+              <div className="ml-7">
+                  <span className="text-xs text-muted">Licencia:</span>
+                  <span className="font-bold ml-1">{orden.transporte_licencia}</span>
+              </div>
+          </div>
+        )}
+      </>
+    ) : orden.tipo_entrega === 'Transporte Privado' ? (
+      <div className="text-sm space-y-1">
+        <p><span className="font-bold">Privado:</span> {orden.transporte_nombre || '-'}</p>
+        <p><span className="font-bold">Placa:</span> {orden.transporte_placa || '-'}</p>
+        <p><span className="font-bold">Chofer:</span> {orden.transporte_conductor || '-'}</p>
+        {orden.transporte_dni && (
+          <p><span className="font-bold">DNI:</span> {orden.transporte_dni}</p>
+        )}
+        {orden.transporte_licencia && (
+          <p><span className="font-bold">Licencia:</span> {orden.transporte_licencia}</p>
+        )}
+      </div>
+    ) : (
+      <div className="text-sm">
+        <p className="flex items-center gap-1">
+          <Box size={14} className="text-indigo-600" />
+          <span>Recojo en tienda</span>
+        </p>
+      </div>
+    )}
+</div>
             </div>
         </div>
       </div>
@@ -1792,12 +1811,6 @@ function DetalleOrdenVenta() {
               <span>Sub Total:</span>
               <span className="font-bold">{formatearMoneda(orden.subtotal)}</span>
             </div>
-            {orden.total_comision > 0 && (
-              <div className="flex justify-between py-2 border-b text-yellow-600">
-                <span className="font-medium">Total Comisiones ({parseFloat(orden.porcentaje_comision_promedio || 0).toFixed(2)}%):</span>
-                <span className="font-bold">{formatearMoneda(orden.total_comision)}</span>
-              </div>
-            )}
             <div className="flex justify-between py-2 border-b">
               <span className="flex items-center gap-1">
                 <Percent size={14} />
@@ -2091,7 +2104,6 @@ function DetalleOrdenVenta() {
         </form>
       </Modal>
 
-      {/* ... Modales restantes se mantienen igual (CrearOP, Despacho, Anular, etc.) ... */}
       <Modal 
         isOpen={modalCrearOP} 
         onClose={() => {
@@ -2450,120 +2462,143 @@ function DetalleOrdenVenta() {
       </Modal>
 
       <Modal
-        isOpen={modalTransporteOpen}
-        onClose={() => setModalTransporteOpen(false)}
-        title="Editar Datos de Transporte"
-        size="md"
-      >
-        <form onSubmit={handleGuardarTransporte}>
-          <div className="space-y-4">
+  isOpen={modalTransporteOpen}
+  onClose={() => setModalTransporteOpen(false)}
+  title="Editar Datos de Transporte"
+  size="md"
+>
+  <form onSubmit={handleGuardarTransporte}>
+    <div className="space-y-4">
+      <div className="form-group">
+        <label className="form-label">Tipo de Entrega</label>
+        <select 
+          className="form-select"
+          value={transporteForm.tipo_entrega}
+          onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
+        >
+          <option value="Vehiculo Empresa">Vehículo Empresa</option>
+          <option value="Transporte Privado">Transporte Privado / Tercero</option>
+          <option value="Recojo Tienda">Recojo en Tienda</option>
+        </select>
+      </div>
+
+      {transporteForm.tipo_entrega === 'Vehiculo Empresa' && (
+        <>
+          <div className="form-group">
+            <label className="form-label">Vehículo</label>
+            <select 
+              className="form-select"
+              value={transporteForm.id_vehiculo}
+              onChange={(e) => setTransporteForm({ ...transporteForm, id_vehiculo: e.target.value })}
+            >
+              <option value="">Seleccione vehículo</option>
+              {vehiculos.map(v => (
+                <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa} - {v.marca_modelo}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Conductor</label>
+            <select 
+              className="form-select"
+              value={transporteForm.id_conductor}
+              onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
+            >
+              <option value="">Seleccione conductor</option>
+              {conductores.map(c => (
+                <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo}</option>
+              ))}
+            </select>
+          </div>
+          {/* ← AGREGAR ESTE BLOQUE PARA VEHÍCULO EMPRESA */}
+          <div className="form-group">
+            <label className="form-label">Licencia de Conducir</label>
+            <input 
+              type="text" 
+              className="form-input"
+              value={transporteForm.transporte_licencia}
+              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}
+              placeholder="Nº Licencia"
+              maxLength={20}
+            />
+          </div>
+        </>
+      )}
+
+      {transporteForm.tipo_entrega === 'Transporte Privado' && (
+        <>
+          <div className="form-group">
+            <label className="form-label">Empresa Transporte</label>
+            <input 
+              type="text" 
+              className="form-input"
+              value={transporteForm.transporte_nombre}
+              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
+              placeholder="Nombre del empresa o transportista"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="form-group">
-              <label className="form-label">Tipo de Entrega</label>
-              <select 
-                className="form-select"
-                value={transporteForm.tipo_entrega}
-                onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
-              >
-                <option value="Vehiculo Empresa">Vehículo Empresa</option>
-                <option value="Transporte Privado">Transporte Privado / Tercero</option>
-                <option value="Recojo Tienda">Recojo en Tienda</option>
-              </select>
-            </div>
-
-            {transporteForm.tipo_entrega === 'Vehiculo Empresa' && (
-              <>
-                <div className="form-group">
-                  <label className="form-label">Vehículo</label>
-                  <select 
-                    className="form-select"
-                    value={transporteForm.id_vehiculo}
-                    onChange={(e) => setTransporteForm({ ...transporteForm, id_vehiculo: e.target.value })}
-                  >
-                    <option value="">Seleccione vehículo</option>
-                    {vehiculos.map(v => (
-                      <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa} - {v.marca_modelo}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Conductor</label>
-                  <select 
-                    className="form-select"
-                    value={transporteForm.id_conductor}
-                    onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
-                  >
-                    <option value="">Seleccione conductor</option>
-                    {conductores.map(c => (
-                      <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo}</option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            )}
-
-            {transporteForm.tipo_entrega === 'Transporte Privado' && (
-              <>
-                <div className="form-group">
-                  <label className="form-label">Empresa Transporte</label>
-                  <input 
-                    type="text" 
-                    className="form-input"
-                    value={transporteForm.transporte_nombre}
-                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
-                    placeholder="Nombre del empresa o transportista"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="form-group">
-                    <label className="form-label">Placa Vehículo</label>
-                    <input 
-                      type="text" 
-                      className="form-input"
-                      value={transporteForm.transporte_placa}
-                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">DNI Chofer</label>
-                    <input 
-                      type="text" 
-                      className="form-input"
-                      value={transporteForm.transporte_dni}
-                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Nombre Chofer</label>
-                  <input 
-                    type="text" 
-                    className="form-input"
-                    value={transporteForm.transporte_conductor}
-                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="form-group">
-              <label className="form-label">Fecha Estimada Entrega</label>
+              <label className="form-label">Placa Vehículo</label>
               <input 
-                type="date" 
+                type="text" 
                 className="form-input"
-                value={transporteForm.fecha_entrega_estimada}
-                onChange={(e) => setTransporteForm({ ...transporteForm, fecha_entrega_estimada: e.target.value })}
+                value={transporteForm.transporte_placa}
+                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
               />
             </div>
-
-            <div className="flex gap-2 justify-end pt-2">
-              <button type="button" className="btn btn-outline" onClick={() => setModalTransporteOpen(false)}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" disabled={procesando}>
-                <Save size={20} /> Guardar Cambios
-              </button>
+            <div className="form-group">
+              <label className="form-label">DNI Chofer</label>
+              <input 
+                type="text" 
+                className="form-input"
+                value={transporteForm.transporte_dni}
+                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
+              />
             </div>
           </div>
-        </form>
-      </Modal>
+          <div className="form-group">
+            <label className="form-label">Nombre Chofer</label>
+            <input 
+              type="text" 
+              className="form-input"
+              value={transporteForm.transporte_conductor}
+              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Licencia de Conducir</label>
+            <input 
+              type="text" 
+              className="form-input"
+              value={transporteForm.transporte_licencia}
+              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}
+              placeholder="Nº Licencia"
+              maxLength={20}
+            />
+          </div>
+        </>
+      )}
+
+      <div className="form-group">
+        <label className="form-label">Fecha Estimada Entrega</label>
+        <input 
+          type="date" 
+          className="form-input"
+          value={transporteForm.fecha_entrega_estimada}
+          onChange={(e) => setTransporteForm({ ...transporteForm, fecha_entrega_estimada: e.target.value })}
+        />
+      </div>
+
+      <div className="flex gap-2 justify-end pt-2">
+        <button type="button" className="btn btn-outline" onClick={() => setModalTransporteOpen(false)}>Cancelar</button>
+        <button type="submit" className="btn btn-primary" disabled={procesando}>
+          <Save size={20} /> Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </form>
+</Modal>
       
       <Modal
         isOpen={modalRectificarOpen}

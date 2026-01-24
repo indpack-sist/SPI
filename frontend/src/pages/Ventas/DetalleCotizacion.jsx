@@ -379,22 +379,7 @@ function DetalleCotizacion() {
       )
     },
     {
-      header: 'Comisión',
-      width: '110px',
-      align: 'right',
-      render: (_, row) => (
-        <div className="flex flex-col items-end">
-          <span className="text-xs font-medium text-yellow-600">
-            {parseFloat(row.porcentaje_comision || 0).toFixed(2)}%
-          </span>
-          <span className="text-xs text-success">
-            +{formatearMoneda(row.monto_comision)}
-          </span>
-        </div>
-      )
-    },
-    {
-      header: 'P. Final',
+      header: 'P. Venta',
       accessor: 'precio_unitario',
       width: '120px',
       align: 'right',
@@ -543,7 +528,7 @@ function DetalleCotizacion() {
                 Emitida el {formatearFecha(cotizacion.fecha_emision)}
                 {diasVencimiento !== null && diasVencimiento > 0 && !estaConvertida && (
                   <span className="ml-2 text-warning">
-                    • Vence en {diasVencimiento} día(s)
+                    Vence en {diasVencimiento} día(s)
                   </span>
                 )}
               </p>
@@ -665,7 +650,7 @@ function DetalleCotizacion() {
                   title={creditoInsuficiente ? "Crédito insuficiente para aprobar" : ""}
                 >
                   {creditoInsuficiente ? <Lock size={16} className="mr-1.5" /> : <CheckCircle size={16} className="mr-1.5" />}
-                  Aprobar (→ Nueva OV)
+                  Aprobar (Nueva OV)
                 </button>
 
                 <button
@@ -868,12 +853,6 @@ function DetalleCotizacion() {
                 <span className="text-muted">Sub Total:</span>
                 <span className="font-bold text-lg">{formatearMoneda(subtotalReal)}</span>
               </div>
-              {cotizacion.total_comision > 0 && (
-                <div className="flex justify-between py-2 border-b text-yellow-600" style={{ borderBottomColor: '#e2e8f0' }}>
-                  <span className="font-medium">Total Comisiones ({parseFloat(cotizacion.porcentaje_comision_promedio || 0).toFixed(2)}%):</span>
-                  <span className="font-bold">{formatearMoneda(cotizacion.total_comision)}</span>
-                </div>
-              )}
               <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: '#e2e8f0' }}>
                 <span className="text-muted">
                   {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:

@@ -2227,11 +2227,14 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       const yInfo = 60; 
       const alturaDatos = 45; 
       
+      // Box outline
       doc.rect(20, yInfo, 555, alturaDatos).stroke(); 
       doc.fontSize(6).font('Helvetica-Bold');
       
-      doc.text('PRODUCTO:', 25, yInfo + 6);
-      doc.font('Helvetica').text(orden.producto, 70, yInfo + 6, { width: 300, ellipsis: true });
+      // Highlighted Field: PRODUCTO
+      doc.rect(22, yInfo + 2, 350, 10).fill('#F5F5F5'); // Background highlight
+      doc.fillColor('black').text('PRODUCTO:', 25, yInfo + 5);
+      doc.font('Helvetica').text(orden.producto, 70, yInfo + 5, { width: 300, ellipsis: true });
       
       const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} ${unidadProduccion}` : '---';
       doc.font('Helvetica-Bold').text(`META ${unidadProduccion}:`, 380, yInfo + 6);
@@ -2271,11 +2274,18 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.font('Helvetica-Bold').text('FIN:', 250, yFechas);
       doc.text('__:__', 270, yFechas); 
 
+      // Highlighted Fields: GRAMAJE, MEDIDA, PESO
+      // Backgrounds
+      doc.rect(308, yFechas - 2, 80, 10).fill('#F5F5F5');
+      doc.rect(390, yFechas - 2, 90, 10).fill('#F5F5F5');
+      doc.rect(482, yFechas - 2, 70, 10).fill('#F5F5F5');
+      doc.fillColor('black');
+
       doc.font('Helvetica-Bold').text('GRAMAJE:', 310, yFechas);
       doc.font('Helvetica').text(orden.gramaje || '-', 350, yFechas);
 
-      doc.font('Helvetica-Bold').text('MEDIDA:', 390, yFechas);
-      doc.font('Helvetica').text(orden.medida || '-', 425, yFechas);
+      doc.font('Helvetica-Bold').text('MEDIDA:', 392, yFechas);
+      doc.font('Helvetica').text(orden.medida || '-', 427, yFechas);
 
       doc.font('Helvetica-Bold').text('PESO:', 485, yFechas);
       doc.font('Helvetica').text(orden.peso_producto || '-', 510, yFechas);
@@ -2312,26 +2322,28 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           yPos += 5;
       }
 
-      const cantidadInput = orden.cantidad_unidades ? parseFloat(orden.cantidad_unidades) : 0;
+      // Dynamic filling logic
+      // Height of footer block (Observations + Totals + Signature)
+      const footerHeight = 70; // Approx height needed at bottom
+      const pageBottomLimit = 800; // Safe bottom limit for A4
       
-      let paquetesEstimados = 0;
-      if (esLamina) {
-          paquetesEstimados = cantidadInput * 2; 
-      } else {
-          paquetesEstimados = cantidadInput;
-      }
+      // Current Y position is where grid starts
+      const availableHeight = pageBottomLimit - footerHeight - yPos;
+      const headerHeight = 10;
+      const rowHeight = 11;
+      
+      // Calculate how many rows fit in remaining space
+      const maxRowsPossible = Math.floor((availableHeight - headerHeight) / rowHeight);
+      
+      const columnasGrid = 4;
+      // Total slots that fit in the page
+      const totalSlots = maxRowsPossible * columnasGrid;
 
-      const slotsConBuffer = Math.ceil(paquetesEstimados + 10);
-      const totalSlots = Math.min(Math.max(slotsConBuffer, 20), 240);
-
-      doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN (${totalSlots} ESPACIOS)`, 20, yPos);
+      doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN`, 20, yPos);
       yPos += 10;
 
-      const columnasGrid = 4;
       const anchoPagina = 555;
       const anchoColumna = anchoPagina / columnasGrid; 
-      const rowHeight = 11;
-      const headerHeight = 10;
 
       const dibujarEncabezadosGrid = (y) => {
           for (let c = 0; c < columnasGrid; c++) {
@@ -2354,22 +2366,10 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       dibujarEncabezadosGrid(yPos);
       yPos += headerHeight;
 
-      const filasPorColumna = Math.ceil(totalSlots / columnasGrid);
-      let yInicialGrid = yPos;
-      
-      for (let i = 0; i < filasPorColumna; i++) {
-          if (yPos + rowHeight > 760) {
-              doc.addPage();
-              yPos = 30;
-              dibujarEncabezadosGrid(yPos);
-              yPos += headerHeight;
-              yInicialGrid = yPos;
-          }
-
+      // Draw rows to fill the calculated space
+      for (let i = 0; i < maxRowsPossible; i++) {
           for (let c = 0; c < columnasGrid; c++) {
-              const numeroSlot = i + 1 + (c * filasPorColumna);
-              if (numeroSlot > totalSlots) continue;
-
+              const numeroSlot = i + 1 + (c * maxRowsPossible);
               const xBase = 20 + (c * anchoColumna);
               
               doc.rect(xBase, yPos, anchoColumna, rowHeight).stroke();
@@ -2393,12 +2393,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       yPos += 10;
       
-      const espacioRestante = 800 - yPos;
-      if (espacioRestante < 60) {
-          doc.addPage();
-          yPos = 30;
-      }
-
+      // Footer Section
       doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS Y OBSERVACIONES', 20, yPos);
       yPos += 8;
 
@@ -2409,8 +2404,8 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.text('MOTIVO / CAUSA', 145, yPos + 3);
 
       yPos += 10;
+      // Fixed 3 rows for observations
       for (let i = 0; i < 3; i++) {
-          if (yPos + 10 > 790) break;
           doc.rect(20, yPos, 555, 10).stroke();
           yPos += 10;
       }
@@ -2418,6 +2413,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       yPos += 5;
       
       const alturaCierre = 30;
+      // Check if footer fits, if not add page (unlikely with dynamic calc, but safe)
       if (yPos + alturaCierre > 800) { doc.addPage(); yPos = 30; }
 
       doc.fontSize(6);

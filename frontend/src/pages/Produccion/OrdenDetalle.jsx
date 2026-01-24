@@ -29,7 +29,7 @@ function OrdenDetalle() {
   const [supervisoresDisponibles, setSupervisoresDisponibles] = useState([]);
   const [asignacionData, setAsignacionData] = useState({
       id_supervisor: '',
-      turno: 'Mañana',
+      turno: 'Día',
       maquinista: '',
       ayudante: ''
   });
@@ -968,7 +968,7 @@ function OrdenDetalle() {
                     value={asignacionData.turno}
                     onChange={(e) => setAsignacionData({...asignacionData, turno: e.target.value})}
                 >
-                    <option value="Mañana">Mañana</option>
+                    <option value="Día">Día</option>
                     <option value="Noche">Noche</option>
                 </select>
             </div>

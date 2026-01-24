@@ -1970,6 +1970,7 @@ export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
 
+    // ✅ Query mejorada con todos los campos necesarios
     const ordenResult = await executeQuery(`
       SELECT 
         ov.numero_orden,
@@ -1986,8 +1987,8 @@ export async function descargarPDFDespacho(req, res) {
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         c.numero_cotizacion,
-        f.placa,
-        f.marca_modelo,
+        f.placa AS vehiculo_placa,
+        f.marca_modelo AS vehiculo_modelo,
         e_cond.nombre_completo AS conductor_nombre,
         e_cond.dni AS conductor_dni
       FROM ordenes_venta ov
@@ -2015,7 +2016,7 @@ export async function descargarPDFDespacho(req, res) {
     if (!salidaResult.success || salidaResult.data.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Salida no encontrada'
+        error: 'Salida no encontrada para esta orden'
       });
     }
 
@@ -2032,6 +2033,7 @@ export async function descargarPDFDespacho(req, res) {
       FROM detalle_salidas ds
       INNER JOIN productos p ON ds.id_producto = p.id_producto
       WHERE ds.id_salida = ?
+      ORDER BY p.codigo
     `, [idSalida]);
 
     if (!detalleResult.success) {
@@ -2041,54 +2043,74 @@ export async function descargarPDFDespacho(req, res) {
       });
     }
 
+    // ✅ Estructura completa para el PDF - incluye TODOS los campos posibles
     const datosPDF = {
+      // Datos básicos de la salida
       id_salida: salida.id_salida,
-      numero_orden: orden.numero_orden,
-      oc_cliente: orden.orden_compra_cliente,
-      direccion_despacho: orden.direccion_entrega,
-      numero_cotizacion: orden.numero_cotizacion,
       fecha_movimiento: salida.fecha_movimiento,
       tipo_movimiento: salida.tipo_movimiento,
       estado: salida.estado,
       observaciones: salida.observaciones,
+      tipo_inventario: 'Venta',
+      
+      // Datos de la orden
+      numero_orden: orden.numero_orden,
+      oc_cliente: orden.orden_compra_cliente,
+      numero_cotizacion: orden.numero_cotizacion,
       moneda: orden.moneda,
+      
+      // Datos del cliente
       cliente: orden.cliente,
       ruc_cliente: orden.ruc_cliente,
+      direccion_despacho: orden.direccion_entrega,
       
-      // Tipo de entrega
+      // ✅ DATOS DE TRANSPORTE - Siempre incluye todos
       tipo_entrega: orden.tipo_entrega,
       
-      // Datos para Vehículo Empresa
+      // Datos para Vehículo Empresa (desde JOINs)
       conductor: orden.conductor_nombre,
       conductor_dni: orden.conductor_dni,
-      vehiculo_placa: orden.placa,
-      vehiculo_modelo: orden.marca_modelo,
+      vehiculo_placa: orden.vehiculo_placa,
+      vehiculo_modelo: orden.vehiculo_modelo,
       
-      // Datos para Transporte Privado
+      // Datos para Transporte Privado (desde ordenes_venta directamente)
       transporte_privado_nombre: orden.transporte_nombre,
       transporte_privado_placa: orden.transporte_placa,
       transporte_privado_conductor: orden.transporte_conductor,
       transporte_privado_dni: orden.transporte_dni,
       
+      // Detalles de productos
       detalles: detalleResult.data
     };
 
+    // ✅ Debug temporal - puedes comentar después de verificar
+    console.log('PDF Despacho - Datos de transporte:', {
+      tipo_entrega: datosPDF.tipo_entrega,
+      vehiculo_empresa: {
+        placa: datosPDF.vehiculo_placa,
+        conductor: datosPDF.conductor
+      },
+      transporte_privado: {
+        nombre: datosPDF.transporte_privado_nombre,
+        placa: datosPDF.transporte_privado_placa
+      }
+    });
+
     const pdfBuffer = await generarPDFSalida(datosPDF);
-    const filename = `Salida-${orden.numero_orden}-Salida-${salida.id_salida}.pdf`;
+    const filename = `GuiaRemision-${orden.numero_orden}-Despacho-${salida.id_salida}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
 
   } catch (error) {
-    console.error(error);
+    console.error('Error en descargarPDFDespacho:', error);
     res.status(500).json({
       success: false,
       error: error.message
     });
   }
 }
-
 export async function registrarPagoOrden(req, res) {
   try {
     const { id } = req.params;
@@ -2661,9 +2683,13 @@ export async function actualizarDatosTransporte(req, res) {
     }
     
     if (ordenCheck.data[0].estado === 'Cancelada') {
-        return res.status(400).json({ success: false, error: 'No se pueden modificar datos de transporte en una orden Cancelada' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No se pueden modificar datos de transporte en una orden Cancelada' 
+      });
     }
 
+    // ✅ Preparar valores según tipo de entrega
     let idVehiculoFinal = null;
     let idConductorFinal = null;
     let transNombreFinal = null;
@@ -2672,19 +2698,32 @@ export async function actualizarDatosTransporte(req, res) {
     let transDniFinal = null;
 
     if (tipo_entrega === 'Vehiculo Empresa') {
-      idVehiculoFinal = id_vehiculo;
-      idConductorFinal = id_conductor;
+      idVehiculoFinal = id_vehiculo || null;
+      idConductorFinal = id_conductor || null;
       
+      // Validar que el vehículo exista si se proporcionó
       if (idVehiculoFinal) {
-         const vCheck = await executeQuery('SELECT id_vehiculo FROM flota WHERE id_vehiculo = ?', [idVehiculoFinal]);
-         if (!vCheck.success || vCheck.data.length === 0) return res.status(400).json({success: false, error: 'Vehículo no válido'});
+        const vCheck = await executeQuery('SELECT id_vehiculo FROM flota WHERE id_vehiculo = ?', [idVehiculoFinal]);
+        if (!vCheck.success || vCheck.data.length === 0) {
+          return res.status(400).json({ success: false, error: 'Vehículo no válido' });
+        }
       }
+      
+      // Validar que el conductor exista si se proporcionó
+      if (idConductorFinal) {
+        const cCheck = await executeQuery('SELECT id_empleado FROM empleados WHERE id_empleado = ?', [idConductorFinal]);
+        if (!cCheck.success || cCheck.data.length === 0) {
+          return res.status(400).json({ success: false, error: 'Conductor no válido' });
+        }
+      }
+      
     } else if (tipo_entrega === 'Transporte Privado') {
-      transNombreFinal = transporte_nombre;
-      transPlacaFinal = transporte_placa;
-      transCondFinal = transporte_conductor;
-      transDniFinal = transporte_dni;
-    } 
+      transNombreFinal = transporte_nombre || null;
+      transPlacaFinal = transporte_placa || null;
+      transCondFinal = transporte_conductor || null;
+      transDniFinal = transporte_dni || null;
+    }
+    // Si es 'Recojo Tienda', todos quedan null
 
     const result = await executeQuery(`
       UPDATE ordenes_venta 
@@ -2714,10 +2753,20 @@ export async function actualizarDatosTransporte(req, res) {
       return res.status(500).json({ success: false, error: result.error });
     }
 
-    res.json({ success: true, message: 'Datos de transporte actualizados correctamente' });
+    res.json({ 
+      success: true, 
+      message: 'Datos de transporte actualizados correctamente',
+      data: {
+        tipo_entrega,
+        id_vehiculo: idVehiculoFinal,
+        id_conductor: idConductorFinal,
+        transporte_nombre: transNombreFinal,
+        transporte_placa: transPlacaFinal
+      }
+    });
 
   } catch (error) {
-    console.error(error);
+    console.error('Error en actualizarDatosTransporte:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

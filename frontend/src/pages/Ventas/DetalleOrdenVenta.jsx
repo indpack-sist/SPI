@@ -484,25 +484,25 @@ function DetalleOrdenVenta() {
   };
 
   const handleGuardarTransporte = async (e) => {
-    e.preventDefault();
-    try {
-      setProcesando(true);
-      setError(null);
-      
-      const response = await ordenesVentaAPI.actualizarTransporte(id, transporteForm);
-      
-      if (response.data.success) {
-        setSuccess('Datos de transporte actualizados');
-        setModalTransporteOpen(false);
-        await cargarDatos();
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || 'Error al actualizar transporte');
-    } finally {
-      setProcesando(false);
+  e.preventDefault();
+  try {
+    setProcesando(true);
+    setError(null);
+    
+    const response = await ordenesVentaAPI.actualizarTransporte(id, transporteForm);
+    
+    if (response.data.success) {
+      setSuccess('Datos de transporte actualizados');
+      setModalTransporteOpen(false);
+      await cargarDatos(); // ✅ Importante: recarga los datos
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setError(err.response?.data?.error || 'Error al actualizar transporte');
+  } finally {
+    setProcesando(false);
+  }
+};
 
   const handleGenerarGuiaInterna = async () => {
   try {

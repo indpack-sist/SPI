@@ -284,9 +284,7 @@ function NuevaCotizacion() {
             unidad_medida: item.unidad_medida,
             cantidad: parseFloat(item.cantidad),
             precio_base: parseFloat(item.precio_base || item.precio_unitario),
-            porcentaje_comision: parseFloat(item.porcentaje_comision || 0),
-            monto_comision: parseFloat(item.monto_comision || 0),
-            precio_unitario: parseFloat(item.precio_unitario),
+            precio_venta: parseFloat(item.precio_unitario),
             descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
             stock_actual: item.stock_disponible
           })));
@@ -480,17 +478,15 @@ function NuevaCotizacion() {
       setError('El producto ya está en el detalle');
       return;
     }
-    const precioBase = producto.precio_venta || 0;
+    const precioVenta = producto.precio_venta || 0;
     const nuevoItem = {
       id_producto: producto.id_producto,
       codigo_producto: producto.codigo,
       producto: producto.nombre,
       unidad_medida: producto.unidad_medida,
       cantidad: 1,
-      precio_base: precioBase,
-      porcentaje_comision: 0,
-      monto_comision: 0,
-      precio_unitario: precioBase,
+      precio_base: precioVenta,
+      precio_venta: precioVenta,
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual
     };
@@ -516,9 +512,7 @@ function NuevaCotizacion() {
               unidad_medida: prod.unidad_medida,
               cantidad: 1,
               precio_base: parseFloat(prod.precio_especial),
-              porcentaje_comision: 0,
-              monto_comision: 0,
-              precio_unitario: parseFloat(prod.precio_especial),
+              precio_venta: parseFloat(prod.precio_especial),
               descuento_porcentaje: 0,
               stock_actual: 0 
           };
@@ -526,20 +520,37 @@ function NuevaCotizacion() {
       }
   };
 
+  const handlePrecioBaseChange = (index, valor) => {
+    const newDetalle = [...detalle];
+    const precioBase = parseFloat(valor) || 0;
+    newDetalle[index].precio_base = precioBase;
+    
+    const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
+    
+    if (precioBase > 0 && precioVenta > precioBase) {
+      const descuento = ((precioVenta - precioBase) / precioVenta) * 100;
+      newDetalle[index].descuento_porcentaje = descuento;
+    } else {
+      newDetalle[index].descuento_porcentaje = 0;
+    }
+    
+    setDetalle(newDetalle);
+  };
+
   const handlePrecioVentaChange = (index, valor) => {
     const newDetalle = [...detalle];
-    newDetalle[index].precio_unitario = valor;
-    const precioVenta = parseFloat(valor);
-    const precioBase = parseFloat(newDetalle[index].precio_base);
-    if (!isNaN(precioVenta) && precioBase > 0) {
-      const ganancia = precioVenta - precioBase;
-      const porcentaje = (ganancia / precioBase) * 100;
-      newDetalle[index].porcentaje_comision = porcentaje;
-      newDetalle[index].monto_comision = ganancia;
+    const precioVenta = parseFloat(valor) || 0;
+    newDetalle[index].precio_venta = precioVenta;
+    
+    const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
+    
+    if (precioBase > 0 && precioVenta > precioBase) {
+      const descuento = ((precioVenta - precioBase) / precioVenta) * 100;
+      newDetalle[index].descuento_porcentaje = descuento;
     } else {
-      newDetalle[index].porcentaje_comision = 0;
-      newDetalle[index].monto_comision = 0;
+      newDetalle[index].descuento_porcentaje = 0;
     }
+    
     setDetalle(newDetalle);
   };
 
@@ -551,7 +562,16 @@ function NuevaCotizacion() {
 
   const handleDescuentoChange = (index, valor) => {
     const newDetalle = [...detalle];
-    newDetalle[index].descuento_porcentaje = parseFloat(valor) || 0;
+    const descuento = parseFloat(valor) || 0;
+    newDetalle[index].descuento_porcentaje = descuento;
+    
+    const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
+    
+    if (descuento > 0 && precioVenta > 0) {
+      const precioBase = precioVenta * (1 - descuento / 100);
+      newDetalle[index].precio_base = precioBase;
+    }
+    
     setDetalle(newDetalle);
   };
 
@@ -562,17 +582,15 @@ function NuevaCotizacion() {
 
   const calcularTotales = () => {
     let subtotal = 0;
-    let totalComisiones = 0;
     detalle.forEach(item => {
-      const precioVenta = parseFloat(item.precio_unitario) || 0;
+      const precioVenta = parseFloat(item.precio_venta) || 0;
       const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
       subtotal += valorVenta;
-      totalComisiones += (item.monto_comision || 0) * item.cantidad;
     });
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
-    setTotales({ subtotal, impuesto, total, totalComisiones });
+    setTotales({ subtotal, impuesto, total });
   };
 
   const handleTipoImpuestoChange = (codigo) => {
@@ -631,7 +649,7 @@ function NuevaCotizacion() {
       setError('Debe agregar al menos un producto');
       return;
     }
-    const productosSinPrecio = detalle.some(item => !item.precio_unitario || parseFloat(item.precio_unitario) <= 0);
+    const productosSinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
     if (productosSinPrecio) {
       setError('Todos los productos deben tener un precio de venta válido');
       return;
@@ -658,21 +676,14 @@ function NuevaCotizacion() {
         validez_dias: parseInt(formCabecera.validez_dias) || 7,
         observaciones: formCabecera.observaciones || null,
         detalle: detalle.map((item, index) => {
-          const precioVenta = parseFloat(item.precio_unitario);
-          let precioBase = parseFloat(item.precio_base);
-          let porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-
-          if (!precioBase || precioBase <= 0) {
-            precioBase = precioVenta;
-            porcentajeComision = 0;
-          }
+          const precioVenta = parseFloat(item.precio_venta);
+          const precioBase = parseFloat(item.precio_base) || precioVenta;
 
           return {
             id_producto: item.id_producto,
             cantidad: parseFloat(item.cantidad),
             precio_base: precioBase,
-            porcentaje_comision: porcentajeComision,
-            precio_unitario: precioVenta,
+            precio_venta: precioVenta,
             descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
             orden: index + 1
           };
@@ -947,7 +958,7 @@ function NuevaCotizacion() {
                   </div>
                   {tipoCambioFecha && (
                     <small className="text-success block mt-1">
-                      ✓ API: {new Date(tipoCambioFecha).toLocaleDateString()}
+                      API: {new Date(tipoCambioFecha).toLocaleDateString()}
                     </small>
                   )}
                 </div>
@@ -1211,7 +1222,6 @@ function NuevaCotizacion() {
                       <th>UM</th>
                       <th className="text-right">P. Base</th>
                       <th className="text-right">P. Venta</th>
-                      <th className="text-right">% Comis.</th>
                       <th className="text-right">Desc. %</th>
                       <th className="text-right">Subtotal</th>
                       <th></th>
@@ -1219,7 +1229,7 @@ function NuevaCotizacion() {
                   </thead>
                   <tbody>
                     {detalle.map((item, index) => {
-                      const precioVenta = parseFloat(item.precio_unitario) || 0;
+                      const precioVenta = parseFloat(item.precio_venta) || 0;
                       const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
                       return (
                         <tr key={index}>
@@ -1239,16 +1249,23 @@ function NuevaCotizacion() {
                             />
                           </td>
                           <td className="text-sm text-muted">{item.unidad_medida}</td>
-                          <td className="text-right">
-                            <div className="form-input text-right bg-gray-100 border-none">
-                              {formatearMonedaGral(item.precio_base)}
-                            </div>
+                          <td>
+                            <input
+                              type="number"
+                              className="form-input text-right bg-gray-100"
+                              value={item.precio_base}
+                              onChange={(e) => handlePrecioBaseChange(index, e.target.value)}
+                              min="0"
+                              step="0.001"
+                              disabled={cotizacionConvertida}
+                              onWheel={handleWheelDisable}
+                            />
                           </td>
                           <td>
                             <input
                               type="number"
                               className="form-input text-right bg-blue-50"
-                              value={item.precio_unitario}
+                              value={item.precio_venta}
                               onChange={(e) => handlePrecioVentaChange(index, e.target.value)}
                               min="0"
                               step="0.001"
@@ -1261,20 +1278,8 @@ function NuevaCotizacion() {
                           <td>
                             <input
                               type="number"
-                              className="form-input text-right bg-gray-100"
-                              value={parseFloat(item.porcentaje_comision).toFixed(2)}
-                              readOnly
-                              disabled
-                            />
-                            <div className="text-xs text-success text-right mt-1">
-                              +{formatearMonedaGral(item.monto_comision || 0)}
-                            </div>
-                          </td>
-                          <td>
-                            <input
-                              type="number"
                               className="form-input text-right"
-                              value={item.descuento_porcentaje}
+                              value={parseFloat(item.descuento_porcentaje).toFixed(2)}
                               onChange={(e) => handleDescuentoChange(index, e.target.value)}
                               min="0"
                               max="100"
@@ -1326,12 +1331,6 @@ function NuevaCotizacion() {
                     <span className="font-medium">Sub Total:</span>
                     <span className="font-bold">{formatearMonedaGral(totales.subtotal)}</span>
                   </div>
-                  {totales.totalComisiones > 0 && (
-                    <div className="flex justify-between py-2 border-b text-success">
-                      <span className="font-medium">💰 Mis Comisiones:</span>
-                      <span className="font-bold">{formatearMonedaGral(totales.totalComisiones)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between py-2 border-b">
                     <span className="font-medium">
                       {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:

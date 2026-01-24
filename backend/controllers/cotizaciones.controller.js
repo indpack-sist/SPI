@@ -269,29 +269,18 @@ export async function createCotizacion(req, res) {
     const numeroCotizacion = `COT-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
     
     let subtotal = 0;
-    let totalComision = 0;
-    let sumaComisionPorcentual = 0;
 
     for (const item of detalle) {
       const cantidad = parseFloat(item.cantidad || 0);
-      const precioBase = parseFloat(item.precio_base || 0);
-      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const precioVenta = parseFloat(item.precio_venta || 0);
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
 
-      const montoComision = precioBase * (pctComision / 100);
-      const precioFinal = precioBase + montoComision;
-
-      const valorVenta = (cantidad * precioFinal) * (1 - (pctDescuento / 100));
+      const valorVenta = (cantidad * precioVenta) * (1 - (pctDescuento / 100));
       
       if (!isNaN(valorVenta)) {
         subtotal += valorVenta;
       }
-
-      totalComision += montoComision * cantidad;
-      sumaComisionPorcentual += pctComision;
     }
-
-    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
     
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
@@ -367,11 +356,9 @@ export async function createCotizacion(req, res) {
         subtotal,
         igv,
         total,
-        total_comision,
-        porcentaje_comision_promedio,
         estado,
         id_creado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
     `, [
       numeroCotizacion,
       id_cliente,
@@ -393,8 +380,6 @@ export async function createCotizacion(req, res) {
       subtotal,
       igv,
       total,
-      totalComision,
-      porcentajeComisionPromedio,
       comercialFinal                    
     ]);
     
@@ -411,11 +396,8 @@ export async function createCotizacion(req, res) {
       const item = detalle[i];
       const cantidad = parseFloat(item.cantidad || 0);
       const precioBase = parseFloat(item.precio_base || 0);
-      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const precioVenta = parseFloat(item.precio_venta || 0);
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
-
-      const montoComision = precioBase * (pctComision / 100);
-      const precioFinal = precioBase + montoComision;
       
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
@@ -424,19 +406,15 @@ export async function createCotizacion(req, res) {
           cantidad,
           precio_unitario,
           precio_base,
-          porcentaje_comision,
-          monto_comision,
           descuento_porcentaje,
           orden
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `, [
         idCotizacion,
         item.id_producto,
         cantidad,
-        precioFinal,
+        precioVenta,
         precioBase,
-        pctComision,
-        montoComision,
         pctDescuento,
         i + 1
       ]);
@@ -447,9 +425,7 @@ export async function createCotizacion(req, res) {
       data: {
         id_cotizacion: idCotizacion,
         numero_cotizacion: numeroCotizacion,
-        fecha_vencimiento: fechaVencimientoCalculada,
-        total_comision: totalComision,
-        porcentaje_comision_promedio: porcentajeComisionPromedio
+        fecha_vencimiento: fechaVencimientoCalculada
       },
       message: 'Cotización creada exitosamente'
     });

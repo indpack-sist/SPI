@@ -382,35 +382,40 @@ export async function generarPDFSalida(datos) {
         : (datos.departamento || datos.tipo_movimiento);
 
       const calcularAlturaTexto = (doc, text, width, fontSize) => {
+        const currentSize = doc._fontSize;
         doc.fontSize(fontSize);
-        return doc.heightOfString(text, { width: width });
+        const h = doc.heightOfString(text || '', { width: width });
+        doc.fontSize(currentSize);
+        return h;
       };
 
       doc.fontSize(8).font('Helvetica');
       const alturaDestino = calcularAlturaTexto(doc, destino || 'N/A', 195, 8);
       
-      let alturaTransporte = 0;
+      let alturaTransporte = 60; 
       
       if (datos.tipo_entrega === 'Vehiculo Empresa') {
-        if (datos.conductor) {
-          alturaTransporte += calcularAlturaTexto(doc, datos.conductor, 190, 8) + 10;
-        }
-        if (datos.vehiculo_placa) {
-          const vTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
-          alturaTransporte += calcularAlturaTexto(doc, vTxt, 190, 8) + 10;
-        }
+        alturaTransporte = 0;
+        if (datos.conductor) alturaTransporte += calcularAlturaTexto(doc, datos.conductor, 190, 8) + 4;
+        if (datos.conductor_dni) alturaTransporte += 12;
+        if (datos.transporte_licencia) alturaTransporte += 12;
+        if (datos.vehiculo_placa) alturaTransporte += 12;
+
       } else if (datos.tipo_entrega === 'Transporte Privado') {
-        alturaTransporte = 60;
-        if (datos.transporte_privado_nombre) {
-          alturaTransporte += calcularAlturaTexto(doc, datos.transporte_privado_nombre, 190, 8);
-        }
+        alturaTransporte = 12; 
+        if (datos.transporte_privado_nombre) alturaTransporte += calcularAlturaTexto(doc, datos.transporte_privado_nombre, 190, 8) + 4;
+        if (datos.transporte_privado_conductor) alturaTransporte += calcularAlturaTexto(doc, datos.transporte_privado_conductor, 190, 8) + 4;
+        if (datos.transporte_privado_dni) alturaTransporte += 12;
+        if (datos.transporte_licencia) alturaTransporte += 12;
+        if (datos.transporte_privado_placa) alturaTransporte += 12;
+
       } else if (datos.tipo_entrega === 'Recojo Tienda') {
         alturaTransporte = 45;
       }
 
-      const alturaInfoSalida = Math.max(115, 55 + Math.max(alturaDestino + (datos.ruc_cliente ? 12 : 0) + (datos.direccion_despacho ? 15 : 0), alturaTransporte)); 
+      const alturaInfoSalida = Math.max(115, 65 + Math.max(alturaDestino + (datos.ruc_cliente ? 12 : 0) + (datos.direccion_despacho ? 25 : 0), alturaTransporte)); 
       
-      doc.roundedRect(33, 205, 529, alturaInfoSalida + 15, 3).stroke('#000000');
+      doc.roundedRect(33, 205, 529, alturaInfoSalida, 3).stroke('#000000');
       
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Fecha:', 40, 213);
@@ -437,16 +442,18 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica');
       doc.text(destino || 'N/A', 120, yBloque2, { width: 180, lineGap: 2 });
 
+      let currentYLeft = yBloque2 + calcularAlturaTexto(doc, destino || 'N/A', 180, 8) + 2;
+
       if (datos.direccion_despacho) {
           doc.fontSize(7).font('Helvetica-Oblique').fillColor('#444444');
-          doc.text(`Dirección: ${datos.direccion_despacho}`, 120, doc.y + 2, { width: 180 });
+          doc.text(`Dirección: ${datos.direccion_despacho}`, 120, currentYLeft, { width: 180 });
           doc.fontSize(8).fillColor('#000000');
+          currentYLeft += calcularAlturaTexto(doc, datos.direccion_despacho, 180, 7) + 2;
       }
 
       if (datos.ruc_cliente) {
-          const currentY = doc.y; 
           doc.font('Helvetica-Bold');
-          doc.text(`RUC: ${datos.ruc_cliente}`, 120, currentY + 2);
+          doc.text(`RUC: ${datos.ruc_cliente}`, 120, currentYLeft + 2);
       }
 
       const xLabelRight = 310;
@@ -480,10 +487,25 @@ export async function generarPDFSalida(datos) {
           doc.font('Helvetica-Bold');
           doc.text('Conductor:', xLabelRight, yDerecha);
           doc.font('Helvetica');
-          const conductorTxt = `${datos.conductor}${datos.conductor_dni ? ` (DNI: ${datos.conductor_dni})` : ''}`;
-          const heightC = doc.heightOfString(conductorTxt, { width: wValueRight });
-          doc.text(conductorTxt, xValueRight, yDerecha, { width: wValueRight });
-          yDerecha += heightC + 4;
+          const heightC = calcularAlturaTexto(doc, datos.conductor, wValueRight, 8);
+          doc.text(datos.conductor, xValueRight, yDerecha, { width: wValueRight });
+          yDerecha += heightC + 2;
+        }
+
+        if (datos.conductor_dni) {
+          doc.font('Helvetica-Bold');
+          doc.text('DNI:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          doc.text(datos.conductor_dni, xValueRight, yDerecha);
+          yDerecha += 12;
+        }
+
+        if (datos.transporte_licencia) {
+          doc.font('Helvetica-Bold');
+          doc.text('Licencia:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          doc.text(datos.transporte_licencia, xValueRight, yDerecha);
+          yDerecha += 12;
         }
 
         if (datos.vehiculo_placa) {
@@ -491,9 +513,8 @@ export async function generarPDFSalida(datos) {
           doc.text('Vehículo:', xLabelRight, yDerecha);
           doc.font('Helvetica');
           const vehiculoTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
-          const heightV = doc.heightOfString(vehiculoTxt, { width: wValueRight });
           doc.text(vehiculoTxt, xValueRight, yDerecha, { width: wValueRight });
-          yDerecha += heightV + 4;
+          yDerecha += 12;
         }
         
       } else if (datos.tipo_entrega === 'Transporte Privado') {
@@ -507,19 +528,34 @@ export async function generarPDFSalida(datos) {
           doc.font('Helvetica-Bold');
           doc.text('Empresa:', xLabelRight, yDerecha);
           doc.font('Helvetica');
-          const heightN = doc.heightOfString(datos.transporte_privado_nombre, { width: wValueRight });
+          const heightN = calcularAlturaTexto(doc, datos.transporte_privado_nombre, wValueRight, 8);
           doc.text(datos.transporte_privado_nombre, xValueRight, yDerecha, { width: wValueRight });
-          yDerecha += heightN + 4;
+          yDerecha += heightN + 2;
         }
 
         if (datos.transporte_privado_conductor) {
           doc.font('Helvetica-Bold');
           doc.text('Chofer:', xLabelRight, yDerecha);
           doc.font('Helvetica');
-          const choferTxt = `${datos.transporte_privado_conductor}${datos.transporte_privado_dni ? ` (DNI: ${datos.transporte_privado_dni})` : ''}`;
-          const heightCh = doc.heightOfString(choferTxt, { width: wValueRight });
-          doc.text(choferTxt, xValueRight, yDerecha, { width: wValueRight });
-          yDerecha += heightCh + 4;
+          const heightCh = calcularAlturaTexto(doc, datos.transporte_privado_conductor, wValueRight, 8);
+          doc.text(datos.transporte_privado_conductor, xValueRight, yDerecha, { width: wValueRight });
+          yDerecha += heightCh + 2;
+        }
+
+        if (datos.transporte_privado_dni) {
+          doc.font('Helvetica-Bold');
+          doc.text('DNI:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          doc.text(datos.transporte_privado_dni, xValueRight, yDerecha);
+          yDerecha += 12;
+        }
+
+        if (datos.transporte_licencia) {
+          doc.font('Helvetica-Bold');
+          doc.text('Licencia:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          doc.text(datos.transporte_licencia, xValueRight, yDerecha);
+          yDerecha += 12;
         }
 
         if (datos.transporte_privado_placa) {

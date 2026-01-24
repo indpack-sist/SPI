@@ -485,23 +485,12 @@ export async function createOrdenVenta(req, res) {
     }
 
     let subtotal = 0;
-    let totalComision = 0;
-    let sumaComisionPorcentual = 0;
 
     for (const item of detalle) {
-      const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
-      const precioFinal = precioBase + montoComision;
-
-      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+      const precioVenta = parseFloat(item.precio_venta);
+      const valorVenta = (item.cantidad * precioVenta) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorVenta;
-
-      totalComision += montoComision * item.cantidad;
-      sumaComisionPorcentual += porcentajeComision;
     }
-
-    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
 
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
@@ -654,11 +643,9 @@ export async function createOrdenVenta(req, res) {
         subtotal,
         igv,
         total,
-        total_comision,
-        porcentaje_comision_promedio,
         estado,
         stock_reservado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 0)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 0)
     `, [
       numeroOrden,
       tipoComp,
@@ -695,9 +682,7 @@ export async function createOrdenVenta(req, res) {
       id_registrado_por,
       subtotal,
       impuesto,
-      total,
-      totalComision,
-      porcentajeComisionPromedio
+      total
     ]);
 
     if (!result.success) {
@@ -714,9 +699,7 @@ export async function createOrdenVenta(req, res) {
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
-      const precioFinal = precioBase + montoComision;
+      const precioVenta = parseFloat(item.precio_venta);
 
       queriesDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
@@ -725,19 +708,15 @@ export async function createOrdenVenta(req, res) {
           cantidad,
           precio_unitario,
           precio_base,
-          porcentaje_comision,
-          monto_comision,
           descuento_porcentaje,
           stock_reservado
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         params: [
           idOrden,
           item.id_producto,
           parseFloat(item.cantidad),
-          precioFinal,
+          precioVenta,
           precioBase,
-          porcentajeComision,
-          montoComision,
           parseFloat(item.descuento_porcentaje || 0),
           reservar_stock ? 1 : 0
         ]
@@ -1970,7 +1949,6 @@ export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
 
-    // ✅ Query mejorada con todos los campos necesarios
     const ordenResult = await executeQuery(`
       SELECT 
         ov.numero_orden,
@@ -1984,6 +1962,7 @@ export async function descargarPDFDespacho(req, res) {
         ov.transporte_placa,
         ov.transporte_conductor,
         ov.transporte_dni,
+        ov.transporte_licencia,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         c.numero_cotizacion,
@@ -2043,58 +2022,32 @@ export async function descargarPDFDespacho(req, res) {
       });
     }
 
-    // ✅ Estructura completa para el PDF - incluye TODOS los campos posibles
     const datosPDF = {
-      // Datos básicos de la salida
       id_salida: salida.id_salida,
       fecha_movimiento: salida.fecha_movimiento,
       tipo_movimiento: salida.tipo_movimiento,
       estado: salida.estado,
       observaciones: salida.observaciones,
       tipo_inventario: 'Venta',
-      
-      // Datos de la orden
       numero_orden: orden.numero_orden,
       oc_cliente: orden.orden_compra_cliente,
       numero_cotizacion: orden.numero_cotizacion,
       moneda: orden.moneda,
-      
-      // Datos del cliente
       cliente: orden.cliente,
       ruc_cliente: orden.ruc_cliente,
       direccion_despacho: orden.direccion_entrega,
-      
-      // ✅ DATOS DE TRANSPORTE - Siempre incluye todos
       tipo_entrega: orden.tipo_entrega,
-      
-      // Datos para Vehículo Empresa (desde JOINs)
       conductor: orden.conductor_nombre,
       conductor_dni: orden.conductor_dni,
       vehiculo_placa: orden.vehiculo_placa,
       vehiculo_modelo: orden.vehiculo_modelo,
-      
-      // Datos para Transporte Privado (desde ordenes_venta directamente)
       transporte_privado_nombre: orden.transporte_nombre,
       transporte_privado_placa: orden.transporte_placa,
       transporte_privado_conductor: orden.transporte_conductor,
       transporte_privado_dni: orden.transporte_dni,
-      
-      // Detalles de productos
+      transporte_licencia: orden.transporte_licencia,
       detalles: detalleResult.data
     };
-
-    // ✅ Debug temporal - puedes comentar después de verificar
-    console.log('PDF Despacho - Datos de transporte:', {
-      tipo_entrega: datosPDF.tipo_entrega,
-      vehiculo_empresa: {
-        placa: datosPDF.vehiculo_placa,
-        conductor: datosPDF.conductor
-      },
-      transporte_privado: {
-        nombre: datosPDF.transporte_privado_nombre,
-        placa: datosPDF.transporte_privado_placa
-      }
-    });
 
     const pdfBuffer = await generarPDFSalida(datosPDF);
     const filename = `GuiaRemision-${orden.numero_orden}-Despacho-${salida.id_salida}.pdf`;

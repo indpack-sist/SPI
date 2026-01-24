@@ -41,9 +41,9 @@ function CrearOrden() {
     ayudante: '',
     operario_corte: '',
     operario_embalaje: '',
-    medida: '',        // Nuevo
-    peso_producto: '', // Nuevo
-    gramaje: ''        // Nuevo
+    medida: '',
+    peso_producto: '',
+    gramaje: ''
   });
   
   const [nuevoInsumo, setNuevoInsumo] = useState({
@@ -56,6 +56,8 @@ function CrearOrden() {
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
+  const esProductoLamina = busquedaProducto.toUpperCase().includes('LÁMINA') || busquedaProducto.toUpperCase().includes('LAMINA');
+
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
     const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
 
@@ -65,6 +67,11 @@ function CrearOrden() {
 
     const nombreProd = productoSeleccionado.nombre.toUpperCase();
     const nombreInsumo = insumo.nombre.toUpperCase();
+
+    // LÓGICA ESPECÍFICA PARA LÁMINAS: Solo Rollos Burbupack
+    if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
+        return nombreInsumo.includes('ROLLO BURBUPACK');
+    }
 
     if (nombreProd.includes('ESQUINERO')) {
         return (
@@ -119,8 +126,6 @@ function CrearOrden() {
 
     return insumo.id_tipo_inventario === 2; 
   });
-
-  const esProductoLamina = busquedaProducto.toUpperCase().includes('LÁMINA') || busquedaProducto.toUpperCase().includes('LAMINA');
 
   useEffect(() => {
     cargarDatos();
@@ -269,11 +274,14 @@ function CrearOrden() {
             return;
         }
 
-        const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
-        if (Math.abs(totalPorcentaje - 100) > 0.01) {
-            setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para crear la orden.`);
-            setGuardando(false);
-            return;
+        // Si es lámina, omitimos la validación del 100% porque el consumo es por unidad (rollos)
+        if (!esProductoLamina) {
+            const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
+            if (Math.abs(totalPorcentaje - 100) > 0.01) {
+                setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para crear la orden.`);
+                setGuardando(false);
+                return;
+            }
         }
 
         payload.insumos = listaInsumos.map(i => ({
@@ -302,6 +310,11 @@ function CrearOrden() {
   };
 
   const calcularCantidadInsumo = (porcentaje) => {
+      // Si es lámina, el valor 'porcentaje' representa la cantidad de unidades (rollos)
+      if (esProductoLamina) {
+          return parseFloat(porcentaje); 
+      }
+      // Si no, cálculo estándar por porcentaje
       const total = parseFloat(formData.cantidad_planificada) || 0;
       return (total * parseFloat(porcentaje)) / 100;
   };
@@ -468,7 +481,6 @@ function CrearOrden() {
                 </div>
             </div>
 
-            {/* --- CAMPOS OPCIONALES NUEVOS --- */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 bg-gray-50 p-3 rounded border border-gray-100">
                 <div className="form-group">
                     <label className="form-label text-xs">Medida (Opcional)</label>
@@ -606,8 +618,8 @@ function CrearOrden() {
                     >
                         <Star size={18} className="mr-2" />
                         <div>
-                            <div className="font-bold">Por Porcentajes</div>
-                            <div className="text-xs opacity-80">Calcula kilos autom.</div>
+                            <div className="font-bold">{esProductoLamina ? 'Por Cantidad (Rollos)' : 'Por Porcentajes'}</div>
+                            <div className="text-xs opacity-80">{esProductoLamina ? 'Definir rollos a usar' : 'Calcula kilos autom.'}</div>
                         </div>
                     </button>
                     <button
@@ -637,12 +649,15 @@ function CrearOrden() {
                                 <p className="text-lg font-bold">{listaInsumos.length}</p>
                             </div>
                         </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                            <span className="text-xs font-medium">Suma Porcentajes:</span>
-                            <span className={`text-sm font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>
-                                {porcentajeActualTotal.toFixed(2)}%
-                            </span>
-                        </div>
+                        
+                        {!esProductoLamina && (
+                            <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                <span className="text-xs font-medium">Suma Porcentajes:</span>
+                                <span className={`text-sm font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                                    {porcentajeActualTotal.toFixed(2)}%
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -674,8 +689,8 @@ function CrearOrden() {
                             <thead>
                                 <tr>
                                     <th>Insumo</th>
-                                    <th className="text-center">Porcentaje (%)</th>
-                                    <th className="text-right">Calculado (Kg)</th>
+                                    <th className="text-center">{esProductoLamina ? 'Cantidad' : 'Porcentaje (%)'}</th>
+                                    <th className="text-right">{esProductoLamina ? 'Unidades' : 'Calculado (Kg)'}</th>
                                     <th className="text-right">Stock</th>
                                     <th></th>
                                 </tr>
@@ -696,10 +711,10 @@ function CrearOrden() {
                                                     <div className="text-xs text-muted">{item.insumo}</div>
                                                 </td>
                                                 <td className="text-center font-bold text-blue-600">
-                                                    {item.porcentaje}%
+                                                    {esProductoLamina ? parseInt(item.porcentaje) : `${item.porcentaje}%`}
                                                 </td>
                                                 <td className="text-right font-mono font-bold">
-                                                    {calculado.toFixed(2)} Kg
+                                                    {esProductoLamina ? `${calculado} Und` : `${calculado.toFixed(2)} Kg`}
                                                 </td>
                                                 <td className="text-right">
                                                     <span className={tieneStock ? 'text-success' : 'text-danger'}>
@@ -748,11 +763,11 @@ function CrearOrden() {
       <Modal
         isOpen={modalAgregarInsumo}
         onClose={() => setModalAgregarInsumo(false)}
-        title="Agregar Insumo a la Mezcla"
+        title={esProductoLamina ? "Agregar Rollo a la Orden" : "Agregar Insumo a la Mezcla"}
         size="md"
       >
         <div className="form-group">
-          <label className="form-label">Insumo (Sugerido por nombre) *</label>
+          <label className="form-label">{esProductoLamina ? 'Rollo Burbupack *' : 'Insumo (Sugerido por nombre) *'}</label>
           <select
             className="form-select"
             value={nuevoInsumo.id_insumo}
@@ -768,26 +783,26 @@ function CrearOrden() {
               ))}
           </select>
           <small className="text-xs text-blue-600 block mt-1">
-             Filtrando insumos relacionados al nombre del producto.
+             {esProductoLamina ? 'Mostrando solo rollos burbupack.' : 'Filtrando insumos relacionados al nombre del producto.'}
           </small>
         </div>
 
         <div className="form-group">
-          <label className="form-label">Porcentaje (%) *</label>
+          <label className="form-label">{esProductoLamina ? 'Cantidad (Unidades) *' : 'Porcentaje (%) *'}</label>
           <div className="relative">
             <input
                 type="number"
-                step="0.01"
+                step={esProductoLamina ? "1" : "0.01"}
                 min="0.01"
-                max="100"
+                max={esProductoLamina ? "" : "100"}
                 className="form-input pr-8"
                 value={nuevoInsumo.porcentaje}
                 onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, porcentaje: e.target.value })}
-                placeholder="Ej: 50"
+                placeholder={esProductoLamina ? "Ej: 5" : "Ej: 50"}
             />
-            <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
+            {!esProductoLamina && <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>}
           </div>
-          {formData.cantidad_planificada && nuevoInsumo.porcentaje && (
+          {formData.cantidad_planificada && nuevoInsumo.porcentaje && !esProductoLamina && (
              <p className="text-sm text-blue-600 mt-1 text-right font-medium">
                 Equivale a: {((parseFloat(formData.cantidad_planificada) * parseFloat(nuevoInsumo.porcentaje)) / 100).toFixed(2)} Kg
              </p>

@@ -390,10 +390,22 @@ export async function generarPDFSalida(datos) {
       const alturaDestino = calcularAlturaTexto(doc, destino || 'N/A', 195, 8);
       
       let alturaTransporte = 0;
-      if (datos.conductor) alturaTransporte += calcularAlturaTexto(doc, datos.conductor, 190, 8) + 10;
-      if (datos.vehiculo_placa) {
-        const vTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
-        alturaTransporte += calcularAlturaTexto(doc, vTxt, 190, 8) + 10;
+      
+      if (datos.tipo_entrega === 'Vehiculo Empresa') {
+        if (datos.conductor) {
+          alturaTransporte += calcularAlturaTexto(doc, datos.conductor, 190, 8) + 10;
+        }
+        if (datos.vehiculo_placa) {
+          const vTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
+          alturaTransporte += calcularAlturaTexto(doc, vTxt, 190, 8) + 10;
+        }
+      } else if (datos.tipo_entrega === 'Transporte Privado') {
+        alturaTransporte = 60;
+        if (datos.transporte_privado_nombre) {
+          alturaTransporte += calcularAlturaTexto(doc, datos.transporte_privado_nombre, 190, 8);
+        }
+      } else if (datos.tipo_entrega === 'Recojo Tienda') {
+        alturaTransporte = 45;
       }
 
       const alturaInfoSalida = Math.max(115, 55 + Math.max(alturaDestino + (datos.ruc_cliente ? 12 : 0) + (datos.direccion_despacho ? 15 : 0), alturaTransporte)); 
@@ -463,23 +475,73 @@ export async function generarPDFSalida(datos) {
 
       let yDerecha = 273;
 
-      if (datos.conductor) {
-        doc.font('Helvetica-Bold');
-        doc.text('Conductor:', xLabelRight, yDerecha);
-        doc.font('Helvetica');
-        const conductorTxt = datos.conductor.substring(0, 40); 
-        const heightC = doc.heightOfString(conductorTxt, { width: wValueRight });
-        doc.text(conductorTxt, xValueRight, yDerecha, { width: wValueRight });
-        yDerecha += heightC + 4;
-      }
+      if (datos.tipo_entrega === 'Vehiculo Empresa') {
+        if (datos.conductor) {
+          doc.font('Helvetica-Bold');
+          doc.text('Conductor:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          const conductorTxt = `${datos.conductor}${datos.conductor_dni ? ` (DNI: ${datos.conductor_dni})` : ''}`;
+          const heightC = doc.heightOfString(conductorTxt, { width: wValueRight });
+          doc.text(conductorTxt, xValueRight, yDerecha, { width: wValueRight });
+          yDerecha += heightC + 4;
+        }
 
-      if (datos.vehiculo_placa) {
+        if (datos.vehiculo_placa) {
+          doc.font('Helvetica-Bold');
+          doc.text('Vehículo:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          const vehiculoTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
+          const heightV = doc.heightOfString(vehiculoTxt, { width: wValueRight });
+          doc.text(vehiculoTxt, xValueRight, yDerecha, { width: wValueRight });
+          yDerecha += heightV + 4;
+        }
+        
+      } else if (datos.tipo_entrega === 'Transporte Privado') {
         doc.font('Helvetica-Bold');
-        doc.text('Vehículo:', xLabelRight, yDerecha);
+        doc.text('Transporte:', xLabelRight, yDerecha);
         doc.font('Helvetica');
-        const vehiculoTxt = `${datos.vehiculo_placa} ${datos.vehiculo_modelo ? `(${datos.vehiculo_modelo})` : ''}`;
-        const heightV = doc.heightOfString(vehiculoTxt, { width: wValueRight });
-        doc.text(vehiculoTxt, xValueRight, yDerecha, { width: wValueRight });
+        doc.text('PRIVADO / TERCERO', xValueRight, yDerecha, { width: wValueRight });
+        yDerecha += 12;
+
+        if (datos.transporte_privado_nombre) {
+          doc.font('Helvetica-Bold');
+          doc.text('Empresa:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          const heightN = doc.heightOfString(datos.transporte_privado_nombre, { width: wValueRight });
+          doc.text(datos.transporte_privado_nombre, xValueRight, yDerecha, { width: wValueRight });
+          yDerecha += heightN + 4;
+        }
+
+        if (datos.transporte_privado_conductor) {
+          doc.font('Helvetica-Bold');
+          doc.text('Chofer:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          const choferTxt = `${datos.transporte_privado_conductor}${datos.transporte_privado_dni ? ` (DNI: ${datos.transporte_privado_dni})` : ''}`;
+          const heightCh = doc.heightOfString(choferTxt, { width: wValueRight });
+          doc.text(choferTxt, xValueRight, yDerecha, { width: wValueRight });
+          yDerecha += heightCh + 4;
+        }
+
+        if (datos.transporte_privado_placa) {
+          doc.font('Helvetica-Bold');
+          doc.text('Placa:', xLabelRight, yDerecha);
+          doc.font('Helvetica');
+          doc.text(datos.transporte_privado_placa, xValueRight, yDerecha);
+          yDerecha += 12;
+        }
+        
+      } else if (datos.tipo_entrega === 'Recojo Tienda') {
+        doc.font('Helvetica-Bold');
+        doc.text('Entrega:', xLabelRight, yDerecha);
+        doc.font('Helvetica');
+        doc.text('RECOJO EN TIENDA', xValueRight, yDerecha, { width: wValueRight });
+        yDerecha += 12;
+        
+        doc.fontSize(7).font('Helvetica-Oblique').fillColor('#666666');
+        doc.text('El cliente retirará la mercadería', xValueRight, yDerecha, { width: wValueRight });
+        doc.text('en nuestras instalaciones', xValueRight, yDerecha + 9, { width: wValueRight });
+        doc.fontSize(8).fillColor('#000000');
+        yDerecha += 22;
       }
 
       let yPos = 205 + alturaInfoSalida + 25;
@@ -2120,8 +2182,10 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fontSize(6).font('Helvetica-Bold').text('N° ORDEN', 460, 28, { align: 'center', width: 105 });
       doc.fontSize(10).text(orden.numero_orden, 460, 38, { align: 'center', width: 105 });
 
-      const tieneCorte = orden.operario_corte || orden.operario_embalaje;
-      const alturaDatos = tieneCorte ? 65 : 50; 
+      const esLamina = (orden.producto && (orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA'))) || orden.operario_corte;
+      const unidadProduccion = esLamina ? 'millares' : 'uds.';
+      
+      const alturaDatos = esLamina ? 65 : 50; 
       const yInfo = 65; 
       
       doc.rect(25, yInfo, 540, alturaDatos).stroke(); 
@@ -2130,8 +2194,8 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.text('PRODUCTO:', 30, yInfo + 6);
       doc.font('Helvetica').text(orden.producto, 75, yInfo + 6, { width: 310 });
       
-      const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} uds.` : '---';
-      doc.font('Helvetica-Bold').text('META UDS:', 395, yInfo + 6);
+      const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} ${unidadProduccion}` : '---';
+      doc.font('Helvetica-Bold').text(`META ${esLamina ? 'MILL' : 'UDS'}:`, 395, yInfo + 6);
       doc.font('Helvetica').text(metaUnidades, 440, yInfo + 6);
       doc.font('Helvetica-Bold').text('META KG:', 490, yInfo + 6);
       doc.font('Helvetica').text(`${parseFloat(orden.cantidad_planificada).toFixed(2)}`, 525, yInfo + 6);
@@ -2146,7 +2210,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.font('Helvetica-Bold').text('TURNO:', 395, currentY);
       doc.font('Helvetica').text(orden.turno || '___', 425, currentY);
 
-      if (tieneCorte) {
+      if (esLamina) {
           currentY += 12; 
           doc.font('Helvetica-Bold').text('OP. CORTE:', 30, currentY);
           doc.font('Helvetica').text(orden.operario_corte || '________________', 75, currentY);
@@ -2185,11 +2249,15 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           yPos += 10;
           
           receta.forEach(item => {
+              const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+              const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+              const cantidadFormateada = esRollo ? parseInt(item.cantidad_requerida) : parseFloat(item.cantidad_requerida).toFixed(2);
+              
               doc.rect(rCol1, yPos, 540, 10).stroke();
               doc.fontSize(6).font('Helvetica');
               doc.text(item.codigo_insumo || '', rCol1 + 5, yPos + 3);
               doc.text(item.insumo || '', rCol2 + 5, yPos + 3, { width: 300, height: 8, lineBreak: false, ellipsis: true });
-              doc.text(`${parseFloat(item.cantidad_requerida).toFixed(2)} ${item.unidad_medida}`, rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
+              doc.text(`${cantidadFormateada} ${unidadMostrar}`, rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
               yPos += 10;
           });
       }
@@ -2232,9 +2300,17 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       const drawHeaders = (xBase, y) => {
           doc.rect(xBase, y, 265, 10).fill('#E0E0E0').stroke();
           doc.fillColor('black').fontSize(6).font('Helvetica-Bold');
+          
           doc.text('N°', xBase, y + 3, { width: 30, align: 'center' });
-          doc.text('CANTIDAD (UDS)', xBase + 30, y + 3, { width: 110, align: 'center' });
-          doc.text('PESO (KG)', xBase + 140, y + 3, { width: 110, align: 'center' });
+          
+          if (esLamina) {
+            doc.text('CANTIDAD', xBase + 30, y + 3, { width: 60, align: 'center' });
+            doc.text('ROLLO USADO', xBase + 90, y + 3, { width: 90, align: 'center' });
+            doc.text('PESO', xBase + 180, y + 3, { width: 85, align: 'center' });
+          } else {
+            doc.text('CANTIDAD (UDS)', xBase + 30, y + 3, { width: 110, align: 'center' });
+            doc.text('PESO (KG)', xBase + 140, y + 3, { width: 110, align: 'center' });
+          }
       };
 
       drawHeaders(25, yPos);
@@ -2261,15 +2337,28 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           doc.rect(25, currentYGrid, 265, rowHeight).stroke();
           doc.fontSize(7).font('Helvetica');
           
-          doc.moveTo(55, currentYGrid).lineTo(55, currentYGrid + rowHeight).stroke(); 
-          doc.moveTo(165, currentYGrid).lineTo(165, currentYGrid + rowHeight).stroke(); 
+          doc.moveTo(55, currentYGrid).lineTo(55, currentYGrid + rowHeight).stroke();
+          
+          if (esLamina) {
+             doc.moveTo(115, currentYGrid).lineTo(115, currentYGrid + rowHeight).stroke();
+             doc.moveTo(205, currentYGrid).lineTo(205, currentYGrid + rowHeight).stroke();
+          } else {
+             doc.moveTo(165, currentYGrid).lineTo(165, currentYGrid + rowHeight).stroke();
+          }
           
           doc.text(leftIndex.toString(), 25, currentYGrid + 4, { width: 30, align: 'center' });
 
           if (rightIndex <= totalSlots) {
               doc.rect(300, currentYGrid, 265, rowHeight).stroke();
-              doc.moveTo(330, currentYGrid).lineTo(330, currentYGrid + rowHeight).stroke(); 
-              doc.moveTo(440, currentYGrid).lineTo(440, currentYGrid + rowHeight).stroke(); 
+              
+              doc.moveTo(330, currentYGrid).lineTo(330, currentYGrid + rowHeight).stroke();
+
+              if (esLamina) {
+                 doc.moveTo(390, currentYGrid).lineTo(390, currentYGrid + rowHeight).stroke();
+                 doc.moveTo(480, currentYGrid).lineTo(480, currentYGrid + rowHeight).stroke();
+              } else {
+                 doc.moveTo(440, currentYGrid).lineTo(440, currentYGrid + rowHeight).stroke();
+              }
               
               doc.text(rightIndex.toString(), 300, currentYGrid + 4, { width: 30, align: 'center' });
           }
@@ -2311,7 +2400,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fontSize(6);
       
       doc.rect(25, yPos, 130, 20).stroke();
-      doc.font('Helvetica-Bold').text('TOTAL UNIDADES (UDS):', 30, yPos + 7, { width: 120, align: 'left' });
+      doc.font('Helvetica-Bold').text(`TOTAL ${esLamina ? 'MILLARES' : 'UNIDADES'}:`, 30, yPos + 7, { width: 120, align: 'left' });
 
       doc.rect(160, yPos, 130, 20).stroke();
       doc.text('TOTAL PRODUCIDO (KG):', 165, yPos + 7, { width: 120, align: 'left' });

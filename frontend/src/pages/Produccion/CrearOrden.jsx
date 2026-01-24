@@ -36,7 +36,7 @@ function CrearOrden() {
     cantidad_unidades: '',
     id_supervisor: '',
     observaciones: '',
-    turno: 'Mañana',
+    turno: 'Día',
     maquinista: '',
     ayudante: '',
     operario_corte: '',
@@ -460,7 +460,7 @@ function CrearOrden() {
                             onChange={(e) => setFormData({ ...formData, turno: e.target.value })}
                             required
                         >
-                            <option value="Mañana">Mañana</option>
+                            <option value="Día">Día</option>
                             <option value="Noche">Noche</option>
                         </select>
                         <Clock className="absolute left-3 top-2.5 text-gray-400" size={18} />

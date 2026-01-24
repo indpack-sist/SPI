@@ -2271,11 +2271,14 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.font('Helvetica-Bold').text('FIN:', 250, yFechas);
       doc.text('__:__', 270, yFechas); 
 
-      doc.font('Helvetica-Bold').text('GRAMAJE:', 350, yFechas);
-      doc.font('Helvetica').text(orden.gramaje || '-', 390, yFechas);
+      doc.font('Helvetica-Bold').text('GRAMAJE:', 310, yFechas);
+      doc.font('Helvetica').text(orden.gramaje || '-', 350, yFechas);
 
-      doc.font('Helvetica-Bold').text('MEDIDA:', 450, yFechas);
-      doc.font('Helvetica').text(orden.medida || '-', 485, yFechas);
+      doc.font('Helvetica-Bold').text('MEDIDA:', 390, yFechas);
+      doc.font('Helvetica').text(orden.medida || '-', 425, yFechas);
+
+      doc.font('Helvetica-Bold').text('PESO:', 485, yFechas);
+      doc.font('Helvetica').text(orden.peso_producto || '-', 510, yFechas);
 
       let yPos = yInfo + alturaDatos + 6;
       
@@ -2309,8 +2312,17 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           yPos += 5;
       }
 
-      const cantidadBase = orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : 50; 
-      const totalSlots = Math.min(Math.max(cantidadBase + 20, 60), 240);
+      const cantidadInput = orden.cantidad_unidades ? parseFloat(orden.cantidad_unidades) : 0;
+      
+      let paquetesEstimados = 0;
+      if (esLamina) {
+          paquetesEstimados = cantidadInput * 2; 
+      } else {
+          paquetesEstimados = cantidadInput;
+      }
+
+      const slotsConBuffer = Math.ceil(paquetesEstimados + 10);
+      const totalSlots = Math.min(Math.max(slotsConBuffer, 20), 240);
 
       doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN (${totalSlots} ESPACIOS)`, 20, yPos);
       yPos += 10;

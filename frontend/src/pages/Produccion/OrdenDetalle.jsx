@@ -456,6 +456,7 @@ function OrdenDetalle() {
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
   
   const esLamina = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
+  const unidadProduccion = esLamina ? 'Millares' : 'Unidades';
 
   return (
     <div>
@@ -626,7 +627,6 @@ function OrdenDetalle() {
               <p>{orden.codigo_producto}</p>
             </div>
             
-            {/* --- DATOS OPCIONALES NUEVOS --- */}
             {(orden.medida || orden.peso_producto || orden.gramaje) && (
                 <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded border border-gray-100 mt-1">
                     {orden.medida && (
@@ -701,9 +701,9 @@ function OrdenDetalle() {
           <div className="p-4 grid gap-3">
             <div className="grid grid-cols-2 gap-2 pb-2 border-b border-gray-100">
                 <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Meta Unidades</p>
+                    <p className="text-xs text-muted uppercase font-semibold">Meta {unidadProduccion}</p>
                     <p className="font-bold text-lg text-blue-600">
-                        {orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">uds</span>
+                        {orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">{esLamina ? 'mill' : 'uds'}</span>
                     </p>
                 </div>
                 <div>
@@ -715,9 +715,9 @@ function OrdenDetalle() {
             </div>
             <div className="grid grid-cols-2 gap-2">
                 <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Real Unidades</p>
+                    <p className="text-xs text-muted uppercase font-semibold">Real {unidadProduccion}</p>
                     <p className={`font-bold text-lg ${orden.cantidad_unidades_producida > 0 ? 'text-success' : 'text-gray-400'}`}>
-                        {orden.cantidad_unidades_producida ? parseInt(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">uds</span>
+                        {orden.cantidad_unidades_producida ? parseInt(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">{esLamina ? 'mill' : 'uds'}</span>
                     </p>
                 </div>
                 <div>
@@ -877,16 +877,19 @@ function OrdenDetalle() {
                   const real = parseFloat(item.cantidad_real_consumida || 0);
                   const porcentajeAvance = plan > 0 ? Math.min(100, (real / plan) * 100) : 0;
                   const porcentajeMezcla = totalMasaRealConsumida > 0 ? (real / totalMasaRealConsumida) * 100 : 0;
+                  
+                  const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+                  const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
                     
                   return (
                     <tr key={item.id_consumo}>
                       <td className="font-mono text-xs">{item.codigo_insumo}</td>
                       <td className="font-medium">{item.insumo}</td>
                       <td className="text-right text-muted">
-                        {plan.toFixed(4)} <span className="text-xs">{item.unidad_medida}</span>
+                        {plan.toFixed(esRollo ? 0 : 4)} <span className="text-xs">{unidadMostrar}</span>
                       </td>
                       <td className="text-right font-bold">
-                         {real.toFixed(4)} <span className="text-xs text-muted">{item.unidad_medida}</span>
+                         {real.toFixed(esRollo ? 0 : 4)} <span className="text-xs text-muted">{unidadMostrar}</span>
                       </td>
                       <td className="text-center" style={{ width: '120px' }}>
                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
@@ -1065,32 +1068,37 @@ function OrdenDetalle() {
             </div>
 
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {insumosParcialesConsumo.map(item => (
-                <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
-                  <div className="col-span-6">
-                    <div className="font-medium text-sm">{item.insumo}</div>
-                    <div className="text-xs text-muted">{item.codigo_insumo}</div>
+              {insumosParcialesConsumo.map(item => {
+                const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+                const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+                
+                return (
+                  <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
+                    <div className="col-span-6">
+                      <div className="font-medium text-sm">{item.insumo}</div>
+                      <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                    </div>
+                      
+                    <div className="col-span-3">
+                      <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
+                    </div>
+                      
+                    <div className="col-span-3">
+                      <input
+                        type="number"
+                        step={esRollo ? "1" : "0.0001"}
+                        min="0"
+                        className="form-input form-input-sm"
+                        value={item.cantidad}
+                        onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
+                        placeholder="0.0000"
+                        required
+                      />
+                      <div className="text-xs text-muted mt-1">{unidadMostrar}</div>
+                    </div>
                   </div>
-                    
-                  <div className="col-span-3">
-                    <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
-                  </div>
-                    
-                  <div className="col-span-3">
-                    <input
-                      type="number"
-                      step="0.0001"
-                      min="0"
-                      className="form-input form-input-sm"
-                      value={item.cantidad}
-                      onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
-                      placeholder="0.0000"
-                      required
-                    />
-                    <div className="text-xs text-muted mt-1">{item.unidad_medida}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1151,7 +1159,7 @@ function OrdenDetalle() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Total Unidades Producidas (Real)</label>
+                <label className="form-label">Total {unidadProduccion} Producidas (Real)</label>
                 <div className="relative">
                     <input
                       type="number"
@@ -1174,25 +1182,30 @@ function OrdenDetalle() {
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-              {insumosFinalesConsumo.map(item => (
-                <div key={item.id_insumo} className="bg-gray-50 p-2 rounded border flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{item.insumo}</div>
-                      <div className="text-xs text-muted">Planificado: {item.cantidad_requerida.toFixed(2)} {item.unidad_medida}</div>
-                    </div>
-                    <div className="w-32">
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        className="form-input form-input-sm text-right"
-                        value={item.cantidad}
-                        onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
-                        required
-                      />
-                    </div>
-                </div>
-              ))}
+              {insumosFinalesConsumo.map(item => {
+                const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+                const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+                
+                return (
+                  <div key={item.id_insumo} className="bg-gray-50 p-2 rounded border flex items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{item.insumo}</div>
+                        <div className="text-xs text-muted">Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}</div>
+                      </div>
+                      <div className="w-32">
+                        <input
+                          type="number"
+                          step={esRollo ? "1" : "0.0001"}
+                          min="0"
+                          className="form-input form-input-sm text-right"
+                          value={item.cantidad}
+                          onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
+                          required
+                        />
+                      </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

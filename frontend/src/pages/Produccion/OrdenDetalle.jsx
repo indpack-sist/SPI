@@ -523,7 +523,8 @@ function OrdenDetalle() {
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
   
   const esLamina = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
-  const unidadProduccion = esLamina ? 'Millares' : 'Unidades';
+  // AQUÍ ESTÁ LA INTEGRACIÓN: Usamos la unidad del producto si existe, sino aplicamos la lógica anterior
+  const unidadProduccion = orden.unidad_medida || (esLamina ? 'Millares' : 'Unidades');
 
   return (
     <div>
@@ -776,7 +777,7 @@ function OrdenDetalle() {
                 <div>
                     <p className="text-xs text-muted uppercase font-semibold">Meta {unidadProduccion}</p>
                     <p className="font-bold text-lg text-blue-600">
-                        {orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">{esLamina ? 'mill' : 'uds'}</span>
+                        {orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : '-'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
                     </p>
                 </div>
                 <div>
@@ -790,7 +791,7 @@ function OrdenDetalle() {
                 <div>
                     <p className="text-xs text-muted uppercase font-semibold">Real {unidadProduccion}</p>
                     <p className={`font-bold text-lg ${orden.cantidad_unidades_producida > 0 ? 'text-success' : 'text-gray-400'}`}>
-                        {orden.cantidad_unidades_producida ? parseInt(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">{esLamina ? 'mill' : 'uds'}</span>
+                        {orden.cantidad_unidades_producida ? parseInt(orden.cantidad_unidades_producida) : '0'} <span className="text-xs font-normal text-muted">{unidadProduccion}</span>
                     </p>
                 </div>
                 <div>

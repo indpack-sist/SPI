@@ -24,6 +24,9 @@ function CrearOrden() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
   const [generandoCorrelativo, setGenerandoCorrelativo] = useState(false);
+  
+  // NUEVO ESTADO: Para guardar la unidad de medida del producto seleccionado
+  const [unidadMedidaSeleccionada, setUnidadMedidaSeleccionada] = useState('');
 
   const [modoReceta, setModoReceta] = useState('porcentaje'); 
   const [listaInsumos, setListaInsumos] = useState([]);
@@ -203,6 +206,10 @@ function CrearOrden() {
   const handleSeleccionarProducto = (producto) => {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
+    
+    // CAMBIO: Capturar la unidad de medida y guardarla en el estado
+    setUnidadMedidaSeleccionada(producto.unidad_medida || 'UND');
+    
     setMostrarDropdown(false);
     setListaInsumos([]);
   };
@@ -210,6 +217,10 @@ function CrearOrden() {
   const handleLimpiarProducto = () => {
     setFormData({ ...formData, id_producto_terminado: '' });
     setBusquedaProducto('');
+    
+    // CAMBIO: Limpiar la unidad de medida
+    setUnidadMedidaSeleccionada('');
+    
     setListaInsumos([]);
     setMostrarDropdown(true); 
     setTimeout(() => {
@@ -445,8 +456,14 @@ function CrearOrden() {
                 </div>
 
                 <div className="form-group">
+                    {/* CAMBIO: Mostrar unidad dinámica en el label */}
                     <label className="form-label">
                         {esProductoLamina ? 'Cantidad Unidades (Meta) *' : 'Cantidad Unidades (Meta)'}
+                        {unidadMedidaSeleccionada && (
+                            <span className="text-blue-600 ml-2 text-xs font-bold">
+                                ({unidadMedidaSeleccionada})
+                            </span>
+                        )}
                     </label>
                     <div className="relative">
                         <input
@@ -457,7 +474,7 @@ function CrearOrden() {
                             value={formData.cantidad_unidades}
                             onChange={(e) => setFormData({ ...formData, cantidad_unidades: e.target.value })}
                             required={esProductoLamina}
-                            placeholder="0"
+                            placeholder={unidadMedidaSeleccionada ? `Ej: 100 ${unidadMedidaSeleccionada}` : "0"}
                         />
                         <Hash className="absolute left-3 top-2.5 text-gray-400" size={18} />
                     </div>
@@ -772,7 +789,7 @@ function CrearOrden() {
           </button>
           <button 
             type="submit" 
-            className="btn btn-primary"
+            className="btn btn-primary" 
             disabled={guardando || !formData.id_producto_terminado}
           >
             {guardando ? 'Creando...' : 'Crear Orden'}
@@ -803,7 +820,7 @@ function CrearOrden() {
               ))}
           </select>
           <small className="text-xs text-blue-600 block mt-1">
-             Filtrando insumos relacionados al nombre del producto.
+              Filtrando insumos relacionados al nombre del producto.
           </small>
         </div>
 
@@ -835,7 +852,7 @@ function CrearOrden() {
           </button>
           <button 
             type="button" 
-            className="btn btn-primary"
+            className="btn btn-primary" 
             onClick={agregarInsumoLista}
             disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.porcentaje}
           >

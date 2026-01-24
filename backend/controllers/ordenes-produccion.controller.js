@@ -1730,3 +1730,89 @@ export const descargarHojaRutaController = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+export async function cancelarOrden(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const ordenResult = await executeQuery(
+      'SELECT * FROM ordenes_produccion WHERE id_orden = ? AND estado IN (?, ?, ?, ?)',
+      [id, 'Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa']
+    );
+    
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({ error: 'Orden no encontrada o no puede ser cancelada' });
+    }
+    
+    const orden = ordenResult.data[0];
+    
+    const consumoResult = await executeQuery(
+      `SELECT 
+        cm.id_insumo,
+        cm.cantidad_real_consumida,
+        cm.costo_unitario,
+        p.id_tipo_inventario
+      FROM op_consumo_materiales cm
+      INNER JOIN productos p ON cm.id_insumo = p.id_producto
+      WHERE cm.id_orden = ? AND cm.cantidad_real_consumida > 0`,
+      [id]
+    );
+    
+    if (consumoResult.data.length === 0) {
+      await executeQuery(
+        'UPDATE ordenes_produccion SET estado = ? WHERE id_orden = ?',
+        ['Cancelada', id]
+      );
+      // await notificarCambioEstado(...) // Si usas notificaciones
+      return res.json({ success: true, message: 'Orden cancelada (sin materiales devueltos)' });
+    }
+    
+    const totalCostoDevolucion = consumoResult.data.reduce((sum, item) => 
+      sum + (parseFloat(item.cantidad_real_consumida) * parseFloat(item.costo_unitario)), 0
+    );
+    
+    const queries = [];
+    queries.push({
+        sql: 'UPDATE ordenes_produccion SET estado = ? WHERE id_orden = ?',
+        params: ['Cancelada', id]
+    });
+
+    queries.push({
+        sql: `INSERT INTO entradas (
+          id_tipo_inventario, documento_soporte, total_costo,
+          id_registrado_por, observaciones
+        ) VALUES (?, ?, ?, ?, ?)`,
+        params: [
+          consumoResult.data[0].id_tipo_inventario,
+          `Cancelación O.P. ${orden.numero_orden}`,
+          totalCostoDevolucion,
+          orden.id_supervisor,
+          `Devolución por cancelación de O.P. ${orden.numero_orden}`
+        ]
+    });
+
+    const resultTransaction = await executeTransaction(queries);
+    if (!resultTransaction.success) return res.status(500).json({ error: resultTransaction.error });
+
+    const idEntrada = resultTransaction.data[1].insertId;
+    const queriesDetalle = [];
+
+    for (const consumo of consumoResult.data) {
+        queriesDetalle.push({
+            sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
+            params: [idEntrada, consumo.id_insumo, consumo.cantidad_real_consumida, consumo.costo_unitario]
+        });
+        queriesDetalle.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+            params: [consumo.cantidad_real_consumida, consumo.id_insumo]
+        });
+    }
+
+    await executeTransaction(queriesDetalle);
+
+    // await notificarCambioEstado(...) // Si usas notificaciones
+    
+    res.json({ success: true, message: 'Orden cancelada y materiales devueltos al inventario' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}

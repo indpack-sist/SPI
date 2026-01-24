@@ -1285,37 +1285,37 @@ function DetalleOrdenVenta() {
           </div>
 
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ShoppingCart size={32} />
-              Orden de Venta {orden.numero_orden}
-              {orden.stock_reservado === 1 && (
-                  <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para toda la orden">
-                      <Lock size={12} className="mr-1"/> Reserva Total
-                  </span>
-              )}
-              {orden.stock_reservado === 2 && (
-                  <span className="badge badge-sm badge-warning ml-2 border border-yellow-500 text-yellow-800" title="Stock reservado parcialmente">
-                      <Lock size={12} className="mr-1"/> Reserva Parcial
-                  </span>
-              )}
-            </h1>
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-muted">
-                Emitida el {formatearFecha(orden.fecha_emision)}
-              </p>
-              
-              {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-info">
-                    {orden.tipo_comprobante}
-                  </span>
-                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
-                    {orden.numero_comprobante || 'Pendiente'}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
+  <h1 className="text-2xl font-bold flex items-center gap-2">
+    <ShoppingCart size={32} />
+    Orden de Venta {orden.numero_orden}
+    {orden.stock_reservado === 1 && (
+      <span className="badge badge-sm badge-success ml-2 border border-green-500 text-white" title="Stock reservado físicamente para toda la orden">
+        <Lock size={12} className="mr-1"/> Reserva Total
+      </span>
+    )}
+    {orden.stock_reservado === 2 && (
+      <span className="badge badge-sm badge-warning ml-2 border border-yellow-500 text-yellow-800" title="Stock reservado parcialmente">
+        <Lock size={12} className="mr-1"/> Reserva Parcial
+      </span>
+    )}
+  </h1>
+  <div className="flex items-center gap-3 mt-2">
+    <p className="text-xl font-bold text-gray-700 bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 rounded-lg border border-blue-200 shadow-sm">
+      Emitida el {formatearFecha(orden.fecha_emision)}
+    </p>
+    
+    {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+      <div className="flex items-center gap-2">
+        <span className="badge badge-info">
+          {orden.tipo_comprobante}
+        </span>
+        <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
+          {orden.numero_comprobante || 'Pendiente'}
+        </span>
+      </div>
+    )}
+  </div>
+</div>
         </div>
         
         <div className="flex gap-2">

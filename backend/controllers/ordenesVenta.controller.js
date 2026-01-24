@@ -1,8 +1,13 @@
+const getIO = (req) => req.app.get('socketio');
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
-
+import { 
+  verificarOrdenAprobada, 
+  esVerificador, 
+  puedeEditarOrdenRechazada 
+} from '../middleware/verificacionOrden.js';
 function getFechaPeru() {
   const now = new Date();
   return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -18,7 +23,7 @@ function getFechaISOPeru() {
 
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, prioridad, fecha_inicio, fecha_fin } = req.query;
+    const { estado, prioridad, fecha_inicio, fecha_fin, estado_verificacion } = req.query;
     
     let sql = `
       SELECT 
@@ -33,6 +38,7 @@ export async function getAllOrdenesVenta(req, res) {
         ov.tipo_venta,
         ov.dias_credito,
         ov.estado,
+        ov.estado_verificacion,
         ov.prioridad,
         ov.subtotal,
         ov.igv,
@@ -50,17 +56,21 @@ export async function getAllOrdenesVenta(req, res) {
         ov.transporte_placa,
         ov.transporte_conductor,
         ov.transporte_dni,
+        ov.fecha_verificacion,
+        ov.motivo_rechazo,
         c.numero_cotizacion,
         cl.id_cliente,
         cl.razon_social AS cliente,
         cl.ruc AS ruc_cliente,
         e_comercial.nombre_completo AS comercial,
         e_registrado.nombre_completo AS registrado_por,
+        e_verificador.nombre_completo AS verificado_por,
         e_conductor.nombre_completo AS conductor,
         f.placa AS vehiculo_placa,
         f.marca_modelo AS vehiculo_modelo,
         ov.id_comercial,
         ov.id_registrado_por,
+        ov.id_verificador,
         (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
         (SELECT COUNT(*) FROM salidas WHERE observaciones LIKE CONCAT('%', ov.numero_orden, '%') AND estado = 'Activo') AS total_despachos
       FROM ordenes_venta ov
@@ -68,6 +78,7 @@ export async function getAllOrdenesVenta(req, res) {
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
       LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN empleados e_verificador ON ov.id_verificador = e_verificador.id_empleado
       LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
       LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
       WHERE 1=1
@@ -93,6 +104,12 @@ export async function getAllOrdenesVenta(req, res) {
     if (fecha_fin) {
       sql += ` AND DATE(ov.fecha_emision) <= ?`;
       params.push(fecha_fin);
+    }
+
+    // ✅ NUEVO FILTRO POR ESTADO DE VERIFICACIÓN
+    if (estado_verificacion) {
+      sql += ` AND ov.estado_verificacion = ?`;
+      params.push(estado_verificacion);
     }
     
     sql += ` ORDER BY ov.fecha_emision DESC, ov.id_orden_venta DESC`;
@@ -133,6 +150,7 @@ export async function getOrdenVentaById(req, res) {
         cl.telefono AS telefono_cliente,
         e.nombre_completo AS comercial,
         e_conductor.nombre_completo AS conductor_nombre,
+        e_verificador.nombre_completo AS verificado_por,
         f.placa AS vehiculo_placa_interna,
         f.marca_modelo AS vehiculo_modelo,
         f.capacidad_kg AS vehiculo_capacidad_kg,
@@ -141,6 +159,7 @@ export async function getOrdenVentaById(req, res) {
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
       LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
+      LEFT JOIN empleados e_verificador ON ov.id_verificador = e_verificador.id_empleado
       LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       WHERE ov.id_orden_venta = ?
@@ -301,9 +320,22 @@ export async function ejecutarReservaStock(req, res) {
     const { id } = req.params;
     const { productos_a_reservar } = req.body;
 
-    const ordenCheck = await executeQuery('SELECT estado FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
-    if (ordenCheck.data.length > 0 && ordenCheck.data[0].estado === 'Cancelada') {
+    const ordenCheck = await executeQuery('SELECT estado, estado_verificacion FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
+    if (ordenCheck.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenCheck.data[0];
+
+    if (orden.estado === 'Cancelada') {
        return res.status(400).json({ error: 'No se puede modificar reservas de una orden cancelada' });
+    }
+
+    if (orden.estado_verificacion !== 'Aprobada') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Solo se puede reservar stock en órdenes aprobadas' 
+      });
     }
 
     if (!productos_a_reservar || productos_a_reservar.length === 0) {
@@ -420,11 +452,11 @@ export async function createOrdenVenta(req, res) {
       telefono_entrega,
       observaciones,
       id_comercial,
-      detalle,
-      reservar_stock
+      detalle
     } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
+    const nombre_registrador = req.user?.nombre_completo || 'Desconocido';
 
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
@@ -645,8 +677,9 @@ export async function createOrdenVenta(req, res) {
         igv,
         total,
         estado,
+        estado_verificacion,
         stock_reservado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 0)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
     `, [
       numeroOrden,
       tipoComp,
@@ -711,38 +744,16 @@ export async function createOrdenVenta(req, res) {
           precio_base,
           descuento_porcentaje,
           stock_reservado
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, 0)`,
         params: [
           idOrden,
           item.id_producto,
           parseFloat(item.cantidad),
           precioVenta,
           precioBase,
-          parseFloat(item.descuento_porcentaje || 0),
-          reservar_stock ? 1 : 0
+          parseFloat(item.descuento_porcentaje || 0)
         ]
       });
-
-      if (reservar_stock) {
-        const productoCheck = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-          [item.id_producto]
-        );
-
-        if (productoCheck.success && productoCheck.data.length > 0 && productoCheck.data[0].requiere_receta === 0) {
-          queriesDetalle.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [parseFloat(item.cantidad), item.id_producto]
-          });
-        }
-      }
-    }
-
-    if (reservar_stock) {
-        queriesDetalle.push({
-            sql: 'UPDATE ordenes_venta SET stock_reservado = 1 WHERE id_orden_venta = ?',
-            params: [idOrden]
-        });
     }
 
     await executeTransaction(queriesDetalle);
@@ -757,6 +768,20 @@ export async function createOrdenVenta(req, res) {
       `, [idOrden, id_cotizacion]);
     }
 
+    const clienteResult = await executeQuery(
+      'SELECT razon_social FROM clientes WHERE id_cliente = ?',
+      [id_cliente]
+    );
+    const clienteNombre = clienteResult.data[0]?.razon_social || 'Cliente';
+
+    const { notificarNuevaOrdenPendiente } = await import('../utils/notificacionesHelper.js');
+    await notificarNuevaOrdenPendiente(
+      idOrden,
+      numeroOrden,
+      nombre_registrador,
+      getIO(req)
+    );
+
     res.status(201).json({
       success: true,
       data: {
@@ -764,9 +789,10 @@ export async function createOrdenVenta(req, res) {
         numero_orden: numeroOrden,
         tipo_comprobante: tipoComp,
         numero_comprobante: numeroComprobante,
-        stock_reservado: reservar_stock ? 1 : 0
+        estado_verificacion: 'Pendiente',
+        stock_reservado: 0
       },
-      message: 'Orden de venta creada exitosamente'
+      message: 'Orden de venta creada exitosamente. Pendiente de verificación administrativa.'
     });
 
   } catch (error) {
@@ -1582,6 +1608,13 @@ export async function anularOrdenVenta(req, res) {
 
     if (['Cancelada', 'Entregada'].includes(orden.estado)) {
       return res.status(400).json({ error: `No se puede anular una orden en estado ${orden.estado}` });
+    }
+
+    if (orden.estado_verificacion !== 'Aprobada') {
+      return res.status(400).json({
+        success: false,
+        error: 'Solo se pueden anular órdenes aprobadas'
+      });
     }
 
     const queriesAnulacion = [];
@@ -3219,5 +3252,566 @@ export async function descargarPDFGuiaInterna(req, res) {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: error.message });
+  }
+}
+export async function getOrdenesPendientesVerificacion(req, res) {
+  try {
+    const { rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({
+        success: false,
+        error: 'No tienes permisos para acceder a este módulo'
+      });
+    }
+
+    const { fecha_inicio, fecha_fin } = req.query;
+
+    let sql = `
+      SELECT 
+        ov.id_orden_venta,
+        ov.numero_orden,
+        ov.tipo_comprobante,
+        ov.numero_comprobante,
+        ov.fecha_emision,
+        ov.fecha_entrega_estimada,
+        ov.estado,
+        ov.estado_verificacion,
+        ov.prioridad,
+        ov.subtotal,
+        ov.igv,
+        ov.total,
+        ov.moneda,
+        ov.tipo_venta,
+        ov.plazo_pago,
+        ov.dias_credito,
+        ov.orden_compra_cliente,
+        cl.id_cliente,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        e_comercial.nombre_completo AS comercial,
+        e_registrado.nombre_completo AS registrado_por,
+        ov.id_comercial,
+        ov.id_registrado_por,
+        (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+      WHERE ov.estado_verificacion = 'Pendiente'
+    `;
+
+    const params = [];
+
+    if (fecha_inicio) {
+      sql += ` AND DATE(ov.fecha_emision) >= ?`;
+      params.push(fecha_inicio);
+    }
+
+    if (fecha_fin) {
+      sql += ` AND DATE(ov.fecha_emision) <= ?`;
+      params.push(fecha_fin);
+    }
+
+    sql += ` ORDER BY ov.prioridad DESC, ov.fecha_emision ASC, ov.id_orden_venta ASC`;
+
+    const result = await executeQuery(sql, params);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.data.length
+    });
+
+  } catch (error) {
+    console.error('Error en getOrdenesPendientesVerificacion:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function getDatosVerificacionOrden(req, res) {
+  try {
+    const { id } = req.params;
+    const { rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({
+        success: false,
+        error: 'No tienes permisos para verificar órdenes'
+      });
+    }
+
+    // 1. DATOS DE LA ORDEN
+    const ordenResult = await executeQuery(`
+      SELECT 
+        ov.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente,
+        cl.telefono AS telefono_cliente,
+        cl.email AS email_cliente,
+        cl.usar_limite_credito,
+        cl.limite_credito_pen,
+        cl.limite_credito_usd,
+        e_comercial.nombre_completo AS comercial,
+        e_comercial.email AS email_comercial,
+        e_registrado.nombre_completo AS registrado_por,
+        e_conductor.nombre_completo AS conductor,
+        f.placa AS vehiculo_placa,
+        f.marca_modelo AS vehiculo_modelo,
+        c.numero_cotizacion
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
+      LEFT JOIN empleados e_registrado ON ov.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden no encontrada'
+      });
+    }
+
+    const orden = ordenResult.data[0];
+
+    // 2. DETALLE DE LA ORDEN
+    const detalleResult = await executeQuery(`
+      SELECT 
+        dov.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida,
+        p.stock_actual
+      FROM detalle_orden_venta dov
+      INNER JOIN productos p ON dov.id_producto = p.id_producto
+      WHERE dov.id_orden_venta = ?
+      ORDER BY dov.orden ASC
+    `, [id]);
+
+    orden.detalle = detalleResult.data || [];
+
+    // 3. HISTORIAL DE ÓRDENES DEL CLIENTE (últimas 10)
+    const historialResult = await executeQuery(`
+      SELECT 
+        id_orden_venta,
+        numero_orden,
+        fecha_emision,
+        fecha_vencimiento,
+        total,
+        monto_pagado,
+        estado_pago,
+        estado,
+        moneda,
+        tipo_venta,
+        DATEDIFF(
+          COALESCE(
+            CASE 
+              WHEN estado_pago = 'Pagado' THEN (
+                SELECT MAX(fecha_pago) 
+                FROM pagos_ordenes_venta 
+                WHERE id_orden_venta = ordenes_venta.id_orden_venta
+              )
+              ELSE CURDATE()
+            END,
+            fecha_vencimiento
+          ),
+          fecha_vencimiento
+        ) AS dias_retraso
+      FROM ordenes_venta
+      WHERE id_cliente = ?
+        AND id_orden_venta != ?
+        AND estado != 'Cancelada'
+      ORDER BY fecha_emision DESC
+      LIMIT 10
+    `, [orden.id_cliente, id]);
+
+    const historial = historialResult.data || [];
+
+    // 4. CALCULAR DEUDA ACTUAL DEL CLIENTE
+    const deudaResult = await executeQuery(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN moneda = 'PEN' THEN (total - monto_pagado) ELSE 0 END), 0) AS deuda_pen,
+        COALESCE(SUM(CASE WHEN moneda = 'USD' THEN (total - monto_pagado) ELSE 0 END), 0) AS deuda_usd,
+        COUNT(*) AS total_ordenes_pendientes
+      FROM ordenes_venta
+      WHERE id_cliente = ?
+        AND estado != 'Cancelada'
+        AND estado_pago != 'Pagado'
+    `, [orden.id_cliente]);
+
+    const deuda = deudaResult.data[0] || { deuda_pen: 0, deuda_usd: 0, total_ordenes_pendientes: 0 };
+
+    // 5. ÓRDENES VENCIDAS DEL CLIENTE
+    const vencidasResult = await executeQuery(`
+      SELECT 
+        numero_orden,
+        fecha_vencimiento,
+        total,
+        monto_pagado,
+        (total - monto_pagado) AS saldo_pendiente,
+        moneda,
+        DATEDIFF(CURDATE(), fecha_vencimiento) AS dias_vencido
+      FROM ordenes_venta
+      WHERE id_cliente = ?
+        AND estado != 'Cancelada'
+        AND estado_pago != 'Pagado'
+        AND fecha_vencimiento < CURDATE()
+      ORDER BY fecha_vencimiento ASC
+    `, [orden.id_cliente]);
+
+    const ordenes_vencidas = vencidasResult.data || [];
+
+    // 6. ESTADÍSTICAS DE PAGO DEL CLIENTE
+    const estadisticasResult = await executeQuery(`
+      SELECT 
+        COUNT(*) AS total_ordenes,
+        SUM(CASE WHEN estado_pago = 'Pagado' THEN 1 ELSE 0 END) AS ordenes_pagadas,
+        SUM(CASE WHEN estado_pago = 'Pendiente' THEN 1 ELSE 0 END) AS ordenes_pendientes,
+        SUM(CASE WHEN estado_pago = 'Parcial' THEN 1 ELSE 0 END) AS ordenes_parciales,
+        AVG(
+          CASE 
+            WHEN estado_pago = 'Pagado' THEN
+              DATEDIFF(
+                (SELECT MAX(fecha_pago) FROM pagos_ordenes_venta WHERE id_orden_venta = ordenes_venta.id_orden_venta),
+                fecha_vencimiento
+              )
+            ELSE NULL
+          END
+        ) AS promedio_dias_retraso
+      FROM ordenes_venta
+      WHERE id_cliente = ?
+        AND estado != 'Cancelada'
+        AND fecha_emision >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+    `, [orden.id_cliente]);
+
+    const estadisticas = estadisticasResult.data[0] || {
+      total_ordenes: 0,
+      ordenes_pagadas: 0,
+      ordenes_pendientes: 0,
+      ordenes_parciales: 0,
+      promedio_dias_retraso: 0
+    };
+
+    // 7. ANÁLISIS DE CRÉDITO
+    let analisis_credito = null;
+
+    if (orden.plazo_pago !== 'Contado' && orden.usar_limite_credito) {
+      const limiteAsignado = orden.moneda === 'USD' 
+        ? parseFloat(orden.limite_credito_usd || 0) 
+        : parseFloat(orden.limite_credito_pen || 0);
+
+      const deudaActual = orden.moneda === 'USD' 
+        ? parseFloat(deuda.deuda_usd) 
+        : parseFloat(deuda.deuda_pen);
+
+      const disponible = limiteAsignado - deudaActual;
+      const disponibleDespuesOrden = disponible - parseFloat(orden.total);
+
+      analisis_credito = {
+        limite_asignado: limiteAsignado,
+        deuda_actual: deudaActual,
+        disponible: disponible,
+        monto_orden: parseFloat(orden.total),
+        disponible_despues_orden: disponibleDespuesOrden,
+        excede_limite: disponibleDespuesOrden < 0,
+        porcentaje_uso_actual: limiteAsignado > 0 ? ((deudaActual / limiteAsignado) * 100).toFixed(2) : 0,
+        porcentaje_uso_despues: limiteAsignado > 0 ? (((deudaActual + parseFloat(orden.total)) / limiteAsignado) * 100).toFixed(2) : 0
+      };
+    }
+
+    // 8. RESPUESTA COMPLETA
+    res.json({
+      success: true,
+      data: {
+        orden: orden,
+        historial_cliente: historial,
+        deuda_actual: deuda,
+        ordenes_vencidas: ordenes_vencidas,
+        estadisticas_pago: estadisticas,
+        analisis_credito: analisis_credito,
+        alertas: {
+          tiene_ordenes_vencidas: ordenes_vencidas.length > 0,
+          excede_limite_credito: analisis_credito?.excede_limite || false,
+          promedio_retraso_alto: parseFloat(estadisticas.promedio_dias_retraso || 0) > 7,
+          tasa_pago_baja: estadisticas.total_ordenes > 0 && 
+            ((estadisticas.ordenes_pagadas / estadisticas.total_ordenes) * 100) < 70
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en getDatosVerificacionOrden:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function aprobarOrdenVerificacion(req, res) {
+  try {
+    const { id } = req.params;
+    const { observaciones_verificador } = req.body;
+    const { id_empleado, nombre_completo, rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({
+        success: false,
+        error: 'No tienes permisos para aprobar órdenes'
+      });
+    }
+
+    const ordenResult = await executeQuery(
+      'SELECT * FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden no encontrada'
+      });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.estado_verificacion !== 'Pendiente') {
+      return res.status(400).json({
+        success: false,
+        error: `Esta orden ya fue ${orden.estado_verificacion.toLowerCase()}`
+      });
+    }
+
+    const updateResult = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET 
+        estado_verificacion = 'Aprobada',
+        id_verificador = ?,
+        fecha_verificacion = NOW(),
+        observaciones_verificador = ?,
+        motivo_rechazo = NULL
+      WHERE id_orden_venta = ?
+    `, [id_empleado, observaciones_verificador || null, id]);
+
+    if (!updateResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: updateResult.error
+      });
+    }
+
+    const { notificarOrdenAprobada } = await import('../utils/notificacionesHelper.js');
+    await notificarOrdenAprobada(
+      id,
+      orden.numero_orden,
+      orden.id_registrado_por,
+      nombre_completo,
+      getIO(req)
+    );
+
+    res.json({
+      success: true,
+      message: 'Orden aprobada exitosamente',
+      data: {
+        id_orden_venta: id,
+        numero_orden: orden.numero_orden,
+        estado_verificacion: 'Aprobada',
+        verificado_por: nombre_completo,
+        fecha_verificacion: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en aprobarOrdenVerificacion:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function rechazarOrdenVerificacion(req, res) {
+  try {
+    const { id } = req.params;
+    const { motivo_rechazo, observaciones_verificador } = req.body;
+    const { id_empleado, nombre_completo, rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({
+        success: false,
+        error: 'No tienes permisos para rechazar órdenes'
+      });
+    }
+
+    if (!motivo_rechazo || motivo_rechazo.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'El motivo de rechazo es obligatorio'
+      });
+    }
+
+    const ordenResult = await executeQuery(
+      'SELECT * FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden no encontrada'
+      });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.estado_verificacion !== 'Pendiente') {
+      return res.status(400).json({
+        success: false,
+        error: `Esta orden ya fue ${orden.estado_verificacion.toLowerCase()}`
+      });
+    }
+
+    const updateResult = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET 
+        estado_verificacion = 'Rechazada',
+        id_verificador = ?,
+        fecha_verificacion = NOW(),
+        motivo_rechazo = ?,
+        observaciones_verificador = ?
+      WHERE id_orden_venta = ?
+    `, [id_empleado, motivo_rechazo.trim(), observaciones_verificador || null, id]);
+
+    if (!updateResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: updateResult.error
+      });
+    }
+
+    const { notificarOrdenRechazada } = await import('../utils/notificacionesHelper.js');
+    await notificarOrdenRechazada(
+      id,
+      orden.numero_orden,
+      orden.id_registrado_por,
+      nombre_completo,
+      motivo_rechazo.trim(),
+      getIO(req)
+    );
+
+    res.json({
+      success: true,
+      message: 'Orden rechazada exitosamente',
+      data: {
+        id_orden_venta: id,
+        numero_orden: orden.numero_orden,
+        estado_verificacion: 'Rechazada',
+        verificado_por: nombre_completo,
+        fecha_verificacion: new Date(),
+        motivo_rechazo: motivo_rechazo.trim()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en rechazarOrdenVerificacion:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+export async function reenviarOrdenVerificacion(req, res) {
+  try {
+    const { id } = req.params;
+    const { id_empleado, nombre_completo, rol } = req.user;
+
+    const ordenResult = await executeQuery(
+      'SELECT * FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden no encontrada'
+      });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.estado_verificacion !== 'Rechazada') {
+      return res.status(400).json({
+        success: false,
+        error: 'Solo puedes reenviar órdenes que fueron rechazadas'
+      });
+    }
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      if (orden.id_registrado_por !== id_empleado) {
+        return res.status(403).json({
+          success: false,
+          error: 'Solo puedes reenviar órdenes que tú creaste'
+        });
+      }
+    }
+
+    const updateResult = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET 
+        estado_verificacion = 'Pendiente',
+        id_verificador = NULL,
+        fecha_verificacion = NULL,
+        motivo_rechazo = NULL,
+        observaciones_verificador = NULL
+      WHERE id_orden_venta = ?
+    `, [id]);
+
+    if (!updateResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: updateResult.error
+      });
+    }
+
+    const { notificarOrdenReenviada } = await import('../utils/notificacionesHelper.js');
+    await notificarOrdenReenviada(
+      id,
+      orden.numero_orden,
+      nombre_completo,
+      getIO(req)
+    );
+
+    res.json({
+      success: true,
+      message: 'Orden reenviada para verificación exitosamente',
+      data: {
+        id_orden_venta: id,
+        numero_orden: orden.numero_orden,
+        estado_verificacion: 'Pendiente'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en reenviarOrdenVerificacion:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }

@@ -1,6 +1,11 @@
 import express from 'express';
 import { verificarToken } from '../middleware/auth.js';
 import {
+  verificarOrdenAprobada,
+  esVerificador,
+  puedeEditarOrdenRechazada
+} from '../middleware/verificacionOrden.js';
+import {
   getAllOrdenesVenta,
   getOrdenVentaById,
   createOrdenVenta,
@@ -26,7 +31,12 @@ import {
   ejecutarReservaStock,
   agregarDireccionClienteDesdeOrden,
   rectificarCantidadProducto,
-  generarGuiaInterna
+  generarGuiaInterna,
+  getOrdenesPendientesVerificacion,
+  getDatosVerificacionOrden,
+  aprobarOrdenVerificacion,
+  rechazarOrdenVerificacion,
+  reenviarOrdenVerificacion
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -39,6 +49,8 @@ router.get('/catalogo/vehiculos', verificarToken, getVehiculosParaOrdenes);
 
 router.post('/direccion-cliente', verificarToken, agregarDireccionClienteDesdeOrden);
 
+router.get('/verificacion/pendientes', verificarToken, esVerificador, getOrdenesPendientesVerificacion);
+
 router.get('/', verificarToken, getAllOrdenesVenta);
 router.post('/', verificarToken, createOrdenVenta);
 
@@ -46,29 +58,34 @@ router.get('/:id/pdf', verificarToken, descargarPDFOrdenVenta);
 router.get('/:id/pdf-guia-interna', verificarToken, descargarPDFGuiaInterna);
 router.get('/:id/salidas/:idSalida/pdf', verificarToken, descargarPDFDespacho);
 
-router.post('/:id/crear-orden-produccion', verificarToken, crearOrdenProduccionDesdeVenta);
-router.post('/:id/reservar', verificarToken, reservarStockOrden);
-router.post('/:id/ejecutar-reserva', verificarToken, ejecutarReservaStock);
-router.post('/:id/guia-interna', verificarToken, generarGuiaInterna);
+router.get('/:id/verificacion/datos', verificarToken, esVerificador, getDatosVerificacionOrden);
+router.post('/:id/verificacion/aprobar', verificarToken, esVerificador, aprobarOrdenVerificacion);
+router.post('/:id/verificacion/rechazar', verificarToken, esVerificador, rechazarOrdenVerificacion);
+router.post('/:id/verificacion/reenviar', verificarToken, puedeEditarOrdenRechazada, reenviarOrdenVerificacion);
 
-router.put('/:id/estado', verificarToken, actualizarEstadoOrdenVenta);
-router.put('/:id/prioridad', verificarToken, actualizarPrioridadOrdenVenta);
-router.put('/:id/tipo-comprobante', verificarToken, actualizarTipoComprobante);
-router.put('/:id/transporte', verificarToken, actualizarDatosTransporte);
-router.put('/:id/rectificar', verificarToken, rectificarCantidadProducto);
+router.post('/:id/crear-orden-produccion', verificarToken, verificarOrdenAprobada, crearOrdenProduccionDesdeVenta);
+router.post('/:id/reservar', verificarToken, verificarOrdenAprobada, reservarStockOrden);
+router.post('/:id/ejecutar-reserva', verificarToken, verificarOrdenAprobada, ejecutarReservaStock);
+router.post('/:id/guia-interna', verificarToken, verificarOrdenAprobada, generarGuiaInterna);
 
-router.delete('/:id/anular', verificarToken, anularOrdenVenta);
+router.put('/:id/estado', verificarToken, verificarOrdenAprobada, actualizarEstadoOrdenVenta);
+router.put('/:id/prioridad', verificarToken, verificarOrdenAprobada, actualizarPrioridadOrdenVenta);
+router.put('/:id/tipo-comprobante', verificarToken, verificarOrdenAprobada, actualizarTipoComprobante);
+router.put('/:id/transporte', verificarToken, verificarOrdenAprobada, actualizarDatosTransporte);
+router.put('/:id/rectificar', verificarToken, verificarOrdenAprobada, rectificarCantidadProducto);
 
-router.post('/:id/despacho', verificarToken, registrarDespacho);
+router.delete('/:id/anular', verificarToken, verificarOrdenAprobada, anularOrdenVenta);
+
+router.post('/:id/despacho', verificarToken, verificarOrdenAprobada, registrarDespacho);
 router.get('/:id/salidas', verificarToken, getSalidasOrden);
-router.delete('/:id/salidas/:idSalida', verificarToken, anularDespacho);
+router.delete('/:id/salidas/:idSalida', verificarToken, verificarOrdenAprobada, anularDespacho);
 
 router.get('/:id/pagos/resumen', verificarToken, getResumenPagosOrden);
 router.get('/:id/pagos', verificarToken, getPagosOrden);
-router.post('/:id/pagos', verificarToken, registrarPagoOrden);
-router.delete('/:id/pagos/:idPago', verificarToken, anularPagoOrden);
+router.post('/:id/pagos', verificarToken, verificarOrdenAprobada, registrarPagoOrden);
+router.delete('/:id/pagos/:idPago', verificarToken, verificarOrdenAprobada, anularPagoOrden);
 
-router.put('/:id', verificarToken, updateOrdenVenta);
+router.put('/:id', verificarToken, puedeEditarOrdenRechazada, updateOrdenVenta);
 router.get('/:id', verificarToken, getOrdenVentaById);
 
 export default router;

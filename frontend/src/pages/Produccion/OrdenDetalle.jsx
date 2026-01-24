@@ -6,9 +6,9 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale, PieChart, Ruler
+  Users, Clipboard, Info, Hash, Scale, Ruler
 } from 'lucide-react';
-import { ordenesProduccionAPI, empleadosAPI } from '../../config/api';
+import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -16,10 +16,13 @@ import Loading from '../../components/UI/Loading';
 function OrdenDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
+  
   const [orden, setOrden] = useState(null);
   const [consumoMateriales, setConsumoMateriales] = useState([]);
   const [registrosParciales, setRegistrosParciales] = useState([]);
   const [analisisConsumo, setAnalisisConsumo] = useState(null);
+  const [insumosDisponibles, setInsumosDisponibles] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -31,7 +34,9 @@ function OrdenDetalle() {
       id_supervisor: '',
       turno: 'Día',
       maquinista: '',
-      ayudante: ''
+      ayudante: '',
+      operario_corte: '',
+      operario_embalaje: ''
   });
 
   const [modalFinalizar, setModalFinalizar] = useState(false);
@@ -59,20 +64,32 @@ function OrdenDetalle() {
       setLoading(true);
       setError(null);
         
-      const [ordenRes, consumoRes, registrosRes] = await Promise.all([
+      const [ordenRes, consumoRes, registrosRes, insumosRes] = await Promise.all([
         ordenesProduccionAPI.getById(id),
         ordenesProduccionAPI.getConsumoMateriales(id),
-        ordenesProduccionAPI.getRegistrosParciales(id).catch(() => ({ data: { data: [] } }))
+        ordenesProduccionAPI.getRegistrosParciales(id).catch(() => ({ data: { data: [] } })),
+        productosAPI.getAll({ estado: 'Activo' }).catch(() => ({ data: { data: [] } }))
       ]);
         
       setOrden(ordenRes.data.data);
       setConsumoMateriales(consumoRes.data.data);
       setRegistrosParciales(registrosRes.data.data || []);
+      setInsumosDisponibles(insumosRes.data.data || []);
         
       if (ordenRes.data.data.estado === 'Finalizada') {
         const analisisRes = await ordenesProduccionAPI.getAnalisisConsumo(id);
         setAnalisisConsumo(analisisRes.data.data);
       }
+
+      setAsignacionData({
+        id_supervisor: ordenRes.data.data.id_supervisor || '',
+        turno: ordenRes.data.data.turno || 'Día',
+        maquinista: ordenRes.data.data.maquinista || '',
+        ayudante: ordenRes.data.data.ayudante || '',
+        operario_corte: ordenRes.data.data.operario_corte || '',
+        operario_embalaje: ordenRes.data.data.operario_embalaje || ''
+      });
+
     } catch (err) {
       setError(err.error || 'Error al cargar la orden');
     } finally {
@@ -113,6 +130,17 @@ function OrdenDetalle() {
       return true;
   });
 
+  const insumosParaAgregarFiltrados = insumosDisponibles.filter(insumo => {
+      if (!orden) return false;
+      const nombreProd = orden.producto.toUpperCase();
+      const nombreInsumo = insumo.nombre.toUpperCase();
+
+      if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
+          return nombreInsumo.includes('ROLLO BURBUPACK');
+      }
+      return insumo.id_tipo_inventario === 2; 
+  });
+
   const inicializarInsumosParaParcial = () => {
     const insumos = consumoMateriales.map(item => ({
       id_insumo: item.id_insumo,
@@ -138,10 +166,44 @@ function OrdenDetalle() {
         cantidad_requerida: requerido,
         cantidad_ya_consumida: yaConsumido,
         cantidad_pendiente: pendiente,
-        cantidad: (yaConsumido + pendiente).toFixed(4) 
+        cantidad: (yaConsumido + pendiente).toFixed(4),
+        es_nuevo: false 
       };
     });
     setInsumosFinalesConsumo(insumos);
+  };
+
+  const agregarLineaInsumoFinal = () => {
+      setInsumosFinalesConsumo([
+          ...insumosFinalesConsumo,
+          {
+              id_insumo: '',
+              cantidad: '',
+              es_nuevo: true
+          }
+      ]);
+  };
+
+  const eliminarLineaInsumoFinal = (idx) => {
+      const nuevos = [...insumosFinalesConsumo];
+      nuevos.splice(idx, 1);
+      setInsumosFinalesConsumo(nuevos);
+  };
+
+  const actualizarInsumoFinalNuevo = (idx, campo, valor) => {
+      const nuevos = [...insumosFinalesConsumo];
+      if (campo === 'id_insumo') {
+          const insumoData = insumosDisponibles.find(i => i.id_producto == valor);
+          if (insumoData) {
+              nuevos[idx].id_insumo = insumoData.id_producto;
+              nuevos[idx].insumo = insumoData.nombre;
+              nuevos[idx].unidad_medida = insumoData.unidad_medida;
+              nuevos[idx].cantidad_requerida = 0;
+          }
+      } else {
+          nuevos[idx][campo] = valor;
+      }
+      setInsumosFinalesConsumo(nuevos);
   };
 
   const actualizarCantidadInsumoParcial = (id_insumo, valor) => {
@@ -203,7 +265,8 @@ function OrdenDetalle() {
       }
         
       const payload = {
-        cantidad_parcial: parseFloat(cantidadParcial),
+        cantidad_kilos: parseFloat(cantidadParcial),
+        cantidad_unidades: 0, 
         insumos_consumidos: insumosConCantidad.map(i => ({
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
@@ -238,15 +301,17 @@ function OrdenDetalle() {
       m.cantidad && 
       parseFloat(m.cantidad) > 0
     );
-        
+    
+    const insumosValidos = insumosFinalesConsumo.filter(i => i.id_insumo && parseFloat(i.cantidad) > 0);
+
     try {
       setProcesando(true);
       setError(null);
 
       const payload = {
-        cantidad_kilos_final: parseFloat(cantidadKilosFinal),
+        cantidad_kilos_final: parseFloat(cantidadKilosFinal || 0),
         cantidad_unidades_final: parseFloat(cantidadUnidadesFinal || 0),
-        insumos_reales: insumosFinalesConsumo.map(i => ({
+        insumos_reales: insumosValidos.map(i => ({
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
         })),
@@ -287,7 +352,9 @@ function OrdenDetalle() {
         id_supervisor: parseInt(asignacionData.id_supervisor),
         turno: asignacionData.turno,
         maquinista: asignacionData.maquinista,
-        ayudante: asignacionData.ayudante
+        ayudante: asignacionData.ayudante,
+        operario_corte: asignacionData.operario_corte,
+        operario_embalaje: asignacionData.operario_embalaje
       };
         
       await ordenesProduccionAPI.update(id, payload);
@@ -591,6 +658,7 @@ function OrdenDetalle() {
               onClick={() => {
                 const cantidadRestante = parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0);
                 setCantidadKilosFinal(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
+                setCantidadUnidadesFinal('');
                 setObservacionesFinal('');
                 setMermas([]);
                 setMostrarMermas(false);
@@ -659,30 +727,35 @@ function OrdenDetalle() {
                     <p className="text-xs text-muted uppercase font-semibold">Turno</p>
                     <p>{orden.turno || '-'}</p>
                 </div>
-                <div>
-                    <p className="text-xs text-muted uppercase font-semibold">Maquinista</p>
-                    <p>{orden.maquinista || '-'}</p>
-                </div>
-                {orden.ayudante && (
-                    <div className="col-span-2">
-                        <p className="text-xs text-muted uppercase font-semibold">Ayudante</p>
-                        <p>{orden.ayudante}</p>
-                    </div>
+                
+                {esLamina ? (
+                    <>
+                        <div className="col-span-2 grid grid-cols-2 gap-2 bg-blue-50 p-2 rounded border border-blue-100">
+                            <div>
+                                <p className="text-xs text-blue-800 uppercase font-semibold">Corte</p>
+                                <p className="text-sm font-medium">{orden.operario_corte || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-blue-800 uppercase font-semibold">Embalaje</p>
+                                <p className="text-sm font-medium">{orden.operario_embalaje || '-'}</p>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div>
+                            <p className="text-xs text-muted uppercase font-semibold">Maquinista</p>
+                            <p>{orden.maquinista || '-'}</p>
+                        </div>
+                        {orden.ayudante && (
+                            <div className="col-span-2">
+                                <p className="text-xs text-muted uppercase font-semibold">Ayudante</p>
+                                <p>{orden.ayudante}</p>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
-            
-            {esLamina && (
-                <div className="grid grid-cols-2 gap-2 mt-2 bg-blue-50 p-2 rounded border border-blue-100">
-                    <div>
-                        <p className="text-xs text-blue-800 uppercase font-semibold">Corte</p>
-                        <p className="text-sm">{orden.operario_corte || '-'}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-blue-800 uppercase font-semibold">Embalaje</p>
-                        <p className="text-sm">{orden.operario_embalaje || '-'}</p>
-                    </div>
-                </div>
-            )}
 
             {desdeOrdenVenta && orden.numero_orden_venta && (
               <div>
@@ -800,7 +873,7 @@ function OrdenDetalle() {
               <thead>
                 <tr>
                   <th>Fecha y Hora</th>
-                  <th className="text-center">Cant. Productos</th>
+                  <th className="text-center">Cant. {unidadProduccion}</th>
                   <th className="text-right">Peso (Kg)</th>
                   <th>Registrado Por</th>
                   <th>Observaciones</th>
@@ -889,16 +962,16 @@ function OrdenDetalle() {
                         {plan.toFixed(esRollo ? 0 : 4)} <span className="text-xs">{unidadMostrar}</span>
                       </td>
                       <td className="text-right font-bold">
-                         {real.toFixed(esRollo ? 0 : 4)} <span className="text-xs text-muted">{unidadMostrar}</span>
+                          {real.toFixed(esRollo ? 0 : 4)} <span className="text-xs text-muted">{unidadMostrar}</span>
                       </td>
                       <td className="text-center" style={{ width: '120px' }}>
-                         <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                            <div className={`h-1.5 rounded-full ${porcentajeAvance > 100 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, porcentajeAvance)}%` }}></div>
-                         </div>
-                         <span className="text-xs text-muted">{porcentajeAvance.toFixed(0)}%</span>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                             <div className={`h-1.5 rounded-full ${porcentajeAvance > 100 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, porcentajeAvance)}%` }}></div>
+                          </div>
+                          <span className="text-xs text-muted">{porcentajeAvance.toFixed(0)}%</span>
                       </td>
                       <td className="text-center text-xs font-medium text-blue-600">
-                         {porcentajeMezcla.toFixed(2)}%
+                          {porcentajeMezcla.toFixed(2)}%
                       </td>
                       {analisisConsumo && (
                         <td className="text-right">
@@ -973,25 +1046,49 @@ function OrdenDetalle() {
                 </select>
             </div>
 
-            <div className="form-group">
-                <label className="form-label">Maquinista</label>
-                <input 
-                    className="form-input" 
-                    value={asignacionData.maquinista}
-                    onChange={(e) => setAsignacionData({...asignacionData, maquinista: e.target.value})}
-                    placeholder="Nombre del maquinista"
-                />
-            </div>
-
-            <div className="form-group">
-                <label className="form-label">Ayudante</label>
-                <input 
-                    className="form-input" 
-                    value={asignacionData.ayudante}
-                    onChange={(e) => setAsignacionData({...asignacionData, ayudante: e.target.value})}
-                    placeholder="Nombre del ayudante"
-                />
-            </div>
+            {esLamina ? (
+                <>
+                    <div className="form-group">
+                        <label className="form-label">Operario de Corte</label>
+                        <input 
+                            className="form-input" 
+                            value={asignacionData.operario_corte}
+                            onChange={(e) => setAsignacionData({...asignacionData, operario_corte: e.target.value})}
+                            placeholder="Encargado del corte"
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Operario de Embalaje</label>
+                        <input 
+                            className="form-input" 
+                            value={asignacionData.operario_embalaje}
+                            onChange={(e) => setAsignacionData({...asignacionData, operario_embalaje: e.target.value})}
+                            placeholder="Encargado de embalaje"
+                        />
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="form-group">
+                        <label className="form-label">Maquinista</label>
+                        <input 
+                            className="form-input" 
+                            value={asignacionData.maquinista}
+                            onChange={(e) => setAsignacionData({...asignacionData, maquinista: e.target.value})}
+                            placeholder="Nombre del maquinista"
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Ayudante</label>
+                        <input 
+                            className="form-input" 
+                            value={asignacionData.ayudante}
+                            onChange={(e) => setAsignacionData({...asignacionData, ayudante: e.target.value})}
+                            placeholder="Nombre del ayudante"
+                        />
+                    </div>
+                </>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end mt-6">
@@ -1068,37 +1165,41 @@ function OrdenDetalle() {
             </div>
 
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {insumosParcialesConsumo.map(item => {
-                const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
-                const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
-                
-                return (
-                  <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
-                    <div className="col-span-6">
-                      <div className="font-medium text-sm">{item.insumo}</div>
-                      <div className="text-xs text-muted">{item.codigo_insumo}</div>
-                    </div>
-                      
-                    <div className="col-span-3">
-                      <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
-                    </div>
-                      
-                    <div className="col-span-3">
-                      <input
-                        type="number"
-                        step={esRollo ? "1" : "0.0001"}
-                        min="0"
-                        className="form-input form-input-sm"
-                        value={item.cantidad}
-                        onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
-                        placeholder="0.0000"
-                        required
-                      />
-                      <div className="text-xs text-muted mt-1">{unidadMostrar}</div>
-                    </div>
-                  </div>
-                );
-              })}
+              {insumosParcialesConsumo.length > 0 ? (
+                  insumosParcialesConsumo.map(item => {
+                    const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+                    const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+                    
+                    return (
+                      <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
+                        <div className="col-span-6">
+                          <div className="font-medium text-sm">{item.insumo}</div>
+                          <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                        </div>
+                          
+                        <div className="col-span-3">
+                          <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
+                        </div>
+                          
+                        <div className="col-span-3">
+                          <input
+                            type="number"
+                            step={esRollo ? "1" : "0.0001"}
+                            min="0"
+                            className="form-input form-input-sm"
+                            value={item.cantidad}
+                            onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
+                            placeholder="0.0000"
+                            required
+                          />
+                          <div className="text-xs text-muted mt-1">{unidadMostrar}</div>
+                        </div>
+                      </div>
+                    );
+                  })
+              ) : (
+                  <p className="text-sm text-gray-500 italic text-center p-2">No hay insumos configurados para esta orden.</p>
+              )}
             </div>
           </div>
 
@@ -1176,21 +1277,52 @@ function OrdenDetalle() {
           </div>
 
           <div className="border-t border-gray-200 pt-4 mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Package size={18} className="text-primary" />
-              <h3 className="font-semibold">Consumo Final de Insumos (Real)</h3>
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <Package size={18} className="text-primary" />
+                    <h3 className="font-semibold">Consumo Final de Insumos (Real)</h3>
+                </div>
+                {esLamina && (
+                    <button 
+                        type="button" 
+                        className="btn btn-sm btn-outline"
+                        onClick={agregarLineaInsumoFinal}
+                    >
+                        <Plus size={14} className="mr-1"/> Agregar Insumo/Rollo
+                    </button>
+                )}
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-              {insumosFinalesConsumo.map(item => {
+              {insumosFinalesConsumo.length === 0 && (
+                  <p className="text-center text-sm text-muted italic">No hay insumos registrados. Agregue uno manualmente si es necesario.</p>
+              )}
+              {insumosFinalesConsumo.map((item, idx) => {
                 const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
                 const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
                 
                 return (
-                  <div key={item.id_insumo} className="bg-gray-50 p-2 rounded border flex items-center justify-between gap-4">
+                  <div key={idx} className="bg-gray-50 p-2 rounded border flex items-center justify-between gap-4">
                       <div className="flex-1">
-                        <div className="font-medium text-sm">{item.insumo}</div>
-                        <div className="text-xs text-muted">Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}</div>
+                        {item.es_nuevo ? (
+                            <select 
+                                className="form-select form-select-sm"
+                                value={item.id_insumo}
+                                onChange={(e) => actualizarInsumoFinalNuevo(idx, 'id_insumo', e.target.value)}
+                            >
+                                <option value="">Seleccionar Insumo...</option>
+                                {insumosParaAgregarFiltrados.map(ins => (
+                                    <option key={ins.id_producto} value={ins.id_producto}>
+                                        {ins.nombre} (Stock: {parseFloat(ins.stock_actual).toFixed(2)})
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <>
+                                <div className="font-medium text-sm">{item.insumo}</div>
+                                <div className="text-xs text-muted">Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}</div>
+                            </>
+                        )}
                       </div>
                       <div className="w-32">
                         <input
@@ -1199,10 +1331,20 @@ function OrdenDetalle() {
                           min="0"
                           className="form-input form-input-sm text-right"
                           value={item.cantidad}
-                          onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
+                          onChange={(e) => item.es_nuevo ? actualizarInsumoFinalNuevo(idx, 'cantidad', e.target.value) : actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
                           required
+                          placeholder="Cantidad"
                         />
                       </div>
+                      {item.es_nuevo && (
+                          <button 
+                            type="button" 
+                            className="btn btn-sm btn-danger p-1"
+                            onClick={() => eliminarLineaInsumoFinal(idx)}
+                          >
+                              <Trash2 size={14} />
+                          </button>
+                      )}
                   </div>
                 );
               })}
@@ -1288,8 +1430,8 @@ function OrdenDetalle() {
                       </div>
 
                       <div className="col-span-3">
-                         <label className="form-label text-xs">Observación</label>
-                         <input
+                          <label className="form-label text-xs">Observación</label>
+                          <input
                           type="text"
                           className="form-input form-input-sm"
                           value={merma.observaciones}
@@ -1333,7 +1475,7 @@ function OrdenDetalle() {
             <button 
               type="submit" 
               className="btn btn-success"
-              disabled={procesando || !cantidadKilosFinal}
+              disabled={procesando || (!cantidadKilosFinal && !cantidadUnidadesFinal)}
             >
               {procesando ? 'Procesando...' : 'Finalizar Producción'}
             </button>

@@ -1,5 +1,6 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
+import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 
 function getFechaPeru() {
@@ -1872,7 +1873,7 @@ export async function getEstadisticasOrdenesVenta(req, res) {
 export async function descargarPDFOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    const { tipo } = req.query;
+    const { tipo } = req.query; // 'orden' o 'comprobante'
 
     if (!id || id === 'undefined' || id === 'null') {
       return res.status(400).json({ success: false, error: 'ID inválido' });
@@ -1932,9 +1933,24 @@ export async function descargarPDFOrdenVenta(req, res) {
 
     orden.direccion_entrega = direccionFinal;
 
-    const pdfBuffer = await generarOrdenVentaPDF(orden);
+    let pdfBuffer;
+    let nombreArchivo;
+
+    // 2. LÓGICA PARA SELECCIONAR EL GENERADOR CORRECTO
+    // Si el frontend solicita específicamente el "comprobante" Y es una Nota de Venta
+    if (tipo === 'comprobante' && orden.tipo_comprobante === 'Nota de Venta') {
+        pdfBuffer = await generarNotaVentaPDF(orden);
+        const correlativo = orden.numero_comprobante || orden.numero_orden;
+        nombreArchivo = `NotaVenta-${correlativo}.pdf`;
+    } 
+    // Si tienes un generador de Factura, agrégalo aquí con un else if
+    // else if (tipo === 'comprobante' && orden.tipo_comprobante === 'Factura') { ... }
+    else {
+        // Por defecto o si piden tipo 'orden', genera la Orden Interna
+        pdfBuffer = await generarOrdenVentaPDF(orden);
+        nombreArchivo = `Orden-${orden.numero_orden}.pdf`;
+    }
     
-    const nombreArchivo = `Orden-${orden.numero_orden}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
     res.send(pdfBuffer);

@@ -212,10 +212,17 @@ export async function generarOrdenVentaPDF(orden) {
 
       const yFooter = yTable;
       
-      const subtotal = fmtNum(orden.subtotal || 0);
-      const igv = fmtNum(orden.igv || 0);
-      const total = fmtNum(orden.total || 0);
-      const totalNumero = parseFloat(orden.total || 0);
+      const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase());
+
+      const rawSubtotal = parseFloat(orden.subtotal || 0);
+      const rawIgv = esSinImpuesto ? 0 : parseFloat(orden.igv || 0);
+      const rawTotal = esSinImpuesto ? rawSubtotal : parseFloat(orden.total || 0);
+
+      const subtotal = fmtNum(rawSubtotal);
+      const igv = fmtNum(rawIgv);
+      const total = fmtNum(rawTotal);
+      const totalNumero = rawTotal;
+
       const simbolo = orden.moneda === 'USD' ? '$' : 'S/';
       const etiquetaImp = ETIQUETAS_IMPUESTO[orden.tipo_impuesto] || 'IGV (18%)';
 

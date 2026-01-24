@@ -337,7 +337,8 @@ function OrdenesVenta() {
       align: 'right',
       width: '140px',
       render: (value, row) => {
-        const total = parseFloat(value);
+        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(row.tipo_impuesto || '').toUpperCase());
+        const total = esSinImpuesto && row.subtotal ? parseFloat(row.subtotal) : parseFloat(value);
         const pagado = parseFloat(row.monto_pagado || 0);
         const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
         
@@ -691,7 +692,7 @@ function OrdenesVenta() {
             <span className="badge badge-primary ml-2">{ordenesFiltradas.length}</span>
           </h2>
           <div className="text-sm text-muted">
-             Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
+              Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
           </div>
         </div>
         

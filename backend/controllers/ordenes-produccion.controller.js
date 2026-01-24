@@ -1,6 +1,7 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarPDFOrdenProduccion } from '../utils/pdf-generator.js';
-import { generarPDFHojaRuta } from '../utils/pdf-generator.js'; // Importar la nueva función
+import { generarPDFHojaRuta } from '../utils/pdf-generator.js';
+
 const getFechaPeru = () => {
   const now = new Date();
   const peruDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
@@ -427,7 +428,9 @@ export async function updateOrden(req, res) {
       fecha_programada_fin,
       turno,
       maquinista,
-      ayudante
+      ayudante,
+      operario_corte,
+      operario_embalaje
     } = req.body;
 
     const ordenExistente = await executeQuery(`
@@ -491,6 +494,16 @@ export async function updateOrden(req, res) {
     if (ayudante !== undefined) {
       updates.push('ayudante = ?');
       params.push(ayudante);
+    }
+
+    if (operario_corte !== undefined) {
+        updates.push('operario_corte = ?');
+        params.push(operario_corte);
+    }
+
+    if (operario_embalaje !== undefined) {
+        updates.push('operario_embalaje = ?');
+        params.push(operario_embalaje);
     }
 
     if (updates.length === 0) {
@@ -665,8 +678,8 @@ export async function createOrden(req, res) {
   try {
     const {
       id_producto_terminado,
-      cantidad_planificada, // Kilos Totales
-      cantidad_unidades,    // Unidades (Meta)
+      cantidad_planificada,
+      cantidad_unidades,
       id_supervisor,
       observaciones,
       insumos, 
@@ -674,24 +687,42 @@ export async function createOrden(req, res) {
       turno,
       maquinista,
       ayudante,
-      operario_corte,    // <--- Nuevo
-      operario_embalaje, // <--- Nuevo
-      medida,            // <--- Nuevo
-      peso_producto,     // <--- Nuevo
-      gramaje            // <--- Nuevo
+      operario_corte,
+      operario_embalaje,
+      medida,
+      peso_producto,
+      gramaje
     } = req.body;
     
     const fechaActual = getFechaPeru();
 
-    // --- VALIDACIONES ---
-    if (!id_producto_terminado || !cantidad_planificada) {
+    if (!id_producto_terminado) {
       return res.status(400).json({ 
-        error: 'id_producto_terminado y cantidad_planificada (Kilos) son requeridos' 
+        error: 'El producto terminado es requerido' 
       });
     }
+
+    const productoResult = await executeQuery(
+      'SELECT nombre, unidad_medida FROM productos WHERE id_producto = ?',
+      [id_producto_terminado]
+    );
     
-    if (cantidad_planificada <= 0) {
-      return res.status(400).json({ error: 'La cantidad planificada debe ser mayor a 0' });
+    if (productoResult.data.length === 0) {
+      return res.status(404).json({ error: 'Producto terminado no encontrado' });
+    }
+
+    const producto = productoResult.data[0];
+    const nombreProd = producto.nombre.toUpperCase();
+    const esLamina = nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA');
+
+    if (esLamina) {
+        if (!cantidad_unidades || cantidad_unidades <= 0) {
+            return res.status(400).json({ error: 'Para Láminas, la cantidad en Unidades/Millares es requerida' });
+        }
+    } else {
+        if (!cantidad_planificada || cantidad_planificada <= 0) {
+            return res.status(400).json({ error: 'La cantidad planificada (Kilos) es requerida para este proceso' });
+        }
     }
 
     if (!turno) {
@@ -703,7 +734,6 @@ export async function createOrden(req, res) {
       estadoInicial = 'Pendiente Asignación';
     }
 
-    // --- GENERACIÓN DE CORRELATIVO ---
     const ultimaOrdenResult = await executeQuery(`
       SELECT numero_orden 
       FROM ordenes_produccion 
@@ -722,21 +752,11 @@ export async function createOrden(req, res) {
     const yearActual = new Date().getFullYear();
     const numeroOrdenGenerado = `OP-${yearActual}-${String(numeroSecuencia).padStart(4, '0')}`;
     
-    // --- VERIFICAR PRODUCTO ---
-    const productoResult = await executeQuery(
-      'SELECT unidad_medida FROM productos WHERE id_producto = ?',
-      [id_producto_terminado]
-    );
-    
-    if (productoResult.data.length === 0) {
-      return res.status(404).json({ error: 'Producto terminado no encontrado' });
-    }
-
     const origenTipo = id_orden_venta_origen ? 'Orden de Venta' : 'Supervisor';
     let costoMateriales = 0;
     let recetaCalculada = [];
+    const kilosFinalesPlan = cantidad_planificada || 0;
 
-    // --- CÁLCULO DE RECETA ---
     if (insumos && Array.isArray(insumos) && insumos.length > 0) {
       const insumosIds = insumos.map(i => i.id_insumo);
       const insumosResult = await executeQuery(
@@ -750,7 +770,8 @@ export async function createOrden(req, res) {
         if (!insumoDb) throw new Error(`Insumo ${item.id_insumo} no encontrado`);
         
         const porcentaje = parseFloat(item.porcentaje);
-        const cantidadCalculada = (parseFloat(cantidad_planificada) * porcentaje) / 100;
+        const baseCalculo = kilosFinalesPlan > 0 ? kilosFinalesPlan : (parseFloat(cantidad_unidades) * 1); 
+        const cantidadCalculada = (baseCalculo * porcentaje) / 100;
         
         costoMateriales += cantidadCalculada * parseFloat(insumoDb.costo_unitario_promedio);
 
@@ -761,7 +782,6 @@ export async function createOrden(req, res) {
       });
     }
 
-    // --- INSERTAR ORDEN EN BD ---
     const ordenResult = await executeQuery(
       `INSERT INTO ordenes_produccion (
         numero_orden, id_producto_terminado, 
@@ -770,12 +790,13 @@ export async function createOrden(req, res) {
         origen_tipo, id_orden_venta_origen, fecha_creacion,
         turno, maquinista, ayudante,
         operario_corte, operario_embalaje,
-        medida, peso_producto, gramaje
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+        medida, peso_producto, gramaje,
+        es_orden_manual
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
       [
         numeroOrdenGenerado,
         id_producto_terminado,
-        cantidad_planificada,
+        kilosFinalesPlan,
         cantidad_unidades || 0,
         id_supervisor || null, 
         costoMateriales,
@@ -791,7 +812,8 @@ export async function createOrden(req, res) {
         operario_embalaje || null,
         medida || null,
         peso_producto || null,
-        gramaje || null
+        gramaje || null,
+        esLamina ? 1 : 0 
       ]
     );
 
@@ -801,7 +823,6 @@ export async function createOrden(req, res) {
     
     const idOrden = ordenResult.data.insertId;
     
-    // --- INSERTAR DETALLE DE RECETA ---
     if (recetaCalculada.length > 0) {
       const queries = recetaCalculada.map(item => ({
         sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
@@ -810,7 +831,6 @@ export async function createOrden(req, res) {
       await executeTransaction(queries);
     }
 
-    // --- NOTIFICACIONES ---
     if (id_orden_venta_origen) {
       let destinatarios = [];
       if (id_supervisor) {
@@ -854,7 +874,7 @@ export async function createOrden(req, res) {
         id_orden: idOrden,
         numero_orden: numeroOrdenGenerado,
         estado: estadoInicial,
-        cantidad_kilos: cantidad_planificada,
+        cantidad_kilos: kilosFinalesPlan,
         cantidad_unidades: cantidad_unidades || 0,
         insumos_calculados: recetaCalculada
       }
@@ -1026,6 +1046,7 @@ export async function registrarProduccionParcial(req, res) {
     const { id } = req.params;
     const { 
       cantidad_parcial,
+      cantidad_unidades,
       insumos_consumidos,
       observaciones
     } = req.body;
@@ -1052,6 +1073,7 @@ export async function registrarProduccionParcial(req, res) {
     
     const orden = ordenResult.data[0];
     const cantidadParcialNum = parseFloat(cantidad_parcial);
+    const cantidadUnidadesNum = parseFloat(cantidad_unidades || 0);
     
     const queries = [];
     let costoTotalParcial = 0;
@@ -1097,16 +1119,17 @@ export async function registrarProduccionParcial(req, res) {
 
     queries.push({
       sql: `UPDATE ordenes_produccion 
-            SET cantidad_producida = cantidad_producida + ?
+            SET cantidad_producida = cantidad_producida + ?,
+                cantidad_unidades_producida = cantidad_unidades_producida + ?
             WHERE id_orden = ?`,
-      params: [cantidadParcialNum, id]
+      params: [cantidadParcialNum, cantidadUnidadesNum, id]
     });
 
     queries.push({
       sql: `INSERT INTO op_registros_produccion (
-        id_orden, cantidad_registrada, observaciones, id_registrado_por
-      ) VALUES (?, ?, ?, ?)`,
-      params: [id, cantidadParcialNum, observaciones || null, orden.id_supervisor]
+        id_orden, cantidad_registrada, cantidad_unidades_registrada, observaciones, id_registrado_por, fecha_registro
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      params: [id, cantidadParcialNum, cantidadUnidadesNum, observaciones || null, orden.id_supervisor, getFechaPeru()]
     });
 
     queries.push({
@@ -1120,7 +1143,7 @@ export async function registrarProduccionParcial(req, res) {
         costoTotalParcial,
         'PEN',
         orden.id_supervisor,
-        `Producción Parcial - Cantidad: ${cantidadParcialNum}`
+        `Producción Parcial - Cantidad: ${cantidadParcialNum} Kg / ${cantidadUnidadesNum} Und`
       ]
     });
     
@@ -1157,6 +1180,7 @@ export async function registrarProduccionParcial(req, res) {
       message: 'Registro parcial guardado exitosamente',
       data: {
         cantidad_registrada: cantidadParcialNum,
+        cantidad_unidades_registrada: cantidadUnidadesNum,
         costo_total: costoTotalParcial,
         insumos_consumidos: insumos_consumidos.length
       }
@@ -1172,8 +1196,8 @@ export async function finalizarProduccion(req, res) {
   try {
     const { id } = req.params;
     const { 
-      cantidad_kilos_final,    // TOTAL KILOS REALES (Lo que pesaste en balanza)
-      cantidad_unidades_final, // TOTAL UNIDADES REALES (Lo que contaste, ej: 50 rollos)
+      cantidad_kilos_final,
+      cantidad_unidades_final,
       insumos_reales, 
       observaciones,
       mermas
@@ -1181,7 +1205,6 @@ export async function finalizarProduccion(req, res) {
     
     const fechaActual = getFechaPeru();
 
-    // 1. Obtener datos de la orden y del producto terminado
     const ordenResult = await executeQuery(
       `SELECT op.*, p.id_tipo_inventario, p.unidad_medida, p.nombre as nombre_producto
        FROM ordenes_produccion op
@@ -1198,7 +1221,6 @@ export async function finalizarProduccion(req, res) {
     const kilosFinales = parseFloat(cantidad_kilos_final || 0);
     const unidadesFinales = parseFloat(cantidad_unidades_final || 0);
 
-    // 2. Procesar Consumo de Insumos (Calculo de Costos)
     const consumoMaterialesData = await executeQuery(
       `SELECT cm.id_insumo, cm.cantidad_real_consumida, cm.costo_unitario
        FROM op_consumo_materiales cm
@@ -1217,10 +1239,8 @@ export async function finalizarProduccion(req, res) {
         const insumoPrevio = consumoMaterialesData.data.find(cm => cm.id_insumo === insumo.id_insumo);
         
         if (insumoPrevio) {
-            // Actualizar consumo existente
             const diferencia = cantidadReal - parseFloat(insumoPrevio.cantidad_real_consumida || 0);
             
-            // Ajustar stock del insumo
             if (diferencia !== 0) {
                 queries.push({
                     sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
@@ -1228,7 +1248,6 @@ export async function finalizarProduccion(req, res) {
                 });
             }
 
-            // Actualizar tabla de consumo
             queries.push({
               sql: `UPDATE op_consumo_materiales SET cantidad_real_consumida = ? WHERE id_orden = ? AND id_insumo = ?`,
               params: [cantidadReal, id, insumo.id_insumo]
@@ -1236,7 +1255,6 @@ export async function finalizarProduccion(req, res) {
 
             costoTotalOrden += cantidadReal * parseFloat(insumoPrevio.costo_unitario);
         } else {
-            // Insumo nuevo no planificado
             const prodInfo = await executeQuery('SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?', [insumo.id_insumo]);
             if (prodInfo.success && prodInfo.data.length > 0) {
                 const costo = parseFloat(prodInfo.data[0].costo_unitario_promedio);
@@ -1257,15 +1275,13 @@ export async function finalizarProduccion(req, res) {
       }
     }
 
-    // 3. Actualizar la Orden de Producción
-    // Guardamos AMBOS datos: Kilos producidos y Unidades producidas
     const tiempoMinutos = Math.floor((new Date() - new Date(orden.fecha_inicio)) / 60000);
     
     queries.push({
       sql: `UPDATE ordenes_produccion 
             SET estado = 'Finalizada', 
-                cantidad_producida = ?,           -- Kilos Reales
-                cantidad_unidades_producida = ?,  -- Unidades Reales (NUEVO)
+                cantidad_producida = ?,
+                cantidad_unidades_producida = ?,
                 fecha_fin = ?, 
                 tiempo_total_minutos = ?, 
                 observaciones = ?
@@ -1273,25 +1289,20 @@ export async function finalizarProduccion(req, res) {
       params: [kilosFinales, unidadesFinales, fechaActual, tiempoMinutos, observaciones, id]
     });
 
-    // 4. Ingreso al Inventario (Producto Terminado)
-    // Determinamos qué cantidad ingresa al kardex según la unidad de medida del producto
     let cantidadParaStock = 0;
     let costoUnitarioFinal = 0;
 
-    const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'PIEZA'].includes(orden.unidad_medida.toUpperCase());
+    const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'PIEZA', 'MILLAR', 'MLL'].includes(orden.unidad_medida.toUpperCase()) || orden.nombre_producto.toUpperCase().includes('LÁMINA');
 
     if (esPorUnidad && unidadesFinales > 0) {
-        // Si el producto se mide en Unidades/Rollos, usamos las unidades
         cantidadParaStock = unidadesFinales;
         costoUnitarioFinal = costoTotalOrden / unidadesFinales;
     } else {
-        // Si es Kilos u otra cosa, o no hay unidades definidas, usamos Kilos
         cantidadParaStock = kilosFinales;
         costoUnitarioFinal = kilosFinales > 0 ? (costoTotalOrden / kilosFinales) : 0;
     }
 
     if (cantidadParaStock > 0) {
-      // Crear Entrada
       queries.push({
         sql: `INSERT INTO entradas (
           id_tipo_inventario, documento_soporte, total_costo, moneda,
@@ -1303,7 +1314,7 @@ export async function finalizarProduccion(req, res) {
           costoTotalOrden,
           'PEN',
           orden.id_supervisor,
-          `Producción Final: ${cantidadParaStock} ${orden.unidad_medida} (${kilosFinales} Kg)`
+          `Producción Final: ${cantidadParaStock} ${orden.unidad_medida}`
         ]
       });
     }
@@ -1315,26 +1326,18 @@ export async function finalizarProduccion(req, res) {
       });
     }
 
-    // Ejecutar Transacción Principal
     const result1 = await executeTransaction(queries);
     if (!result1.success) return res.status(500).json({ error: result1.error });
 
-    // 5. Actualizar Stock y Detalle Entrada (Usando el ID de la entrada creada)
     if (cantidadParaStock > 0) {
         let idEntrada = null;
-        // Buscar el ID de la entrada en los resultados de la transacción
         for (let i = result1.data.length - 1; i >= 0; i--) {
             if (result1.data[i].insertId && !idEntrada) { 
-                // Asumimos que el último insertId relevante es la entrada. 
-                // Ojo: Si hubo inserts de insumos nuevos antes, hay que tener cuidado.
-                // Mejor lógica: El insert de entradas es el último INSERT grande antes de ordenes_venta.
-                // Como está en el código, el insert de entrada está casi al final.
                 idEntrada = result1.data[i].insertId;
                 break;
             }
         }
         
-        // Si no capturamos el ID correctamente por la mezcla de queries, hacemos un fetch rápido del último ID de entrada
         if (!idEntrada) {
              const lastEntrada = await executeQuery('SELECT MAX(id_entrada) as id FROM entradas');
              idEntrada = lastEntrada.data[0].id;
@@ -1343,13 +1346,11 @@ export async function finalizarProduccion(req, res) {
         if (idEntrada) {
             const queriesStock = [];
             
-            // Detalle de entrada
             queriesStock.push({
               sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
               params: [idEntrada, orden.id_producto_terminado, cantidadParaStock, costoUnitarioFinal]
             });
 
-            // Aumentar Stock
             queriesStock.push({
               sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
               params: [cantidadParaStock, orden.id_producto_terminado]
@@ -1359,22 +1360,70 @@ export async function finalizarProduccion(req, res) {
         }
     }
 
-    // 6. Mermas
     if (mermas && mermas.length > 0) {
         const queriesMermas = [];
+        let totalCostoMermas = 0;
+        const mermasValidas = [];
+
         for (const m of mermas) {
             if (m.cantidad > 0) {
                 queriesMermas.push({
                     sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
                     params: [id, m.id_producto_merma, m.cantidad, m.observaciones]
                 });
-                queriesMermas.push({
-                    sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-                    params: [m.cantidad, m.id_producto_merma]
-                });
+                
+                const prodMermaInfo = await executeQuery('SELECT id_tipo_inventario, costo_unitario_promedio FROM productos WHERE id_producto = ?', [m.id_producto_merma]);
+                
+                if (prodMermaInfo.success && prodMermaInfo.data.length > 0) {
+                    const dataMerma = prodMermaInfo.data[0];
+                    const costoMerma = parseFloat(dataMerma.costo_unitario_promedio || 0);
+                    totalCostoMermas += m.cantidad * costoMerma;
+                    
+                    mermasValidas.push({
+                        id_producto: m.id_producto_merma,
+                        cantidad: m.cantidad,
+                        costo_unitario: costoMerma,
+                        id_tipo_inventario: dataMerma.id_tipo_inventario
+                    });
+                }
             }
         }
-        if(queriesMermas.length > 0) await executeTransaction(queriesMermas);
+
+        if (mermasValidas.length > 0) {
+            queriesMermas.push({
+                sql: `INSERT INTO entradas (
+                  id_tipo_inventario, documento_soporte, total_costo, moneda,
+                  id_registrado_por, observaciones
+                ) VALUES (?, ?, ?, ?, ?, ?)`,
+                params: [
+                  mermasValidas[0].id_tipo_inventario, 
+                  `Recuperación Merma O.P. ${orden.numero_orden}`,
+                  totalCostoMermas,
+                  'PEN',
+                  orden.id_supervisor,
+                  'Ingreso por merma de producción'
+                ]
+            });
+        }
+
+        const resultMermas = await executeTransaction(queriesMermas);
+        
+        if (resultMermas.success && mermasValidas.length > 0) {
+             const idEntradaMerma = resultMermas.data[resultMermas.data.length - 1].insertId;
+             const queriesDetalleMerma = [];
+             
+             for (const m of mermasValidas) {
+                 queriesDetalleMerma.push({
+                     sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
+                     params: [idEntradaMerma, m.id_producto, m.cantidad, m.costo_unitario]
+                 });
+                 queriesDetalleMerma.push({
+                     sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+                     params: [m.cantidad, m.id_producto]
+                 });
+             }
+             await executeTransaction(queriesDetalleMerma);
+        }
     }
 
     await notificarCambioEstado(id, `Producción Finalizada: ${orden.numero_orden}`, 'La orden ha sido completada.', 'success', req);
@@ -1384,7 +1433,8 @@ export async function finalizarProduccion(req, res) {
       message: 'Producción finalizada exitosamente',
       data: {
         kilos_finales: kilosFinales,
-        unidades_finales: unidadesFinales
+        unidades_finales: unidadesFinales,
+        costo_total: costoTotalOrden
       }
     });
 
@@ -1393,160 +1443,20 @@ export async function finalizarProduccion(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
-export async function getProductosMerma(req, res) {
-  try {
-    const result = await executeQuery(
-      `SELECT 
-        id_producto,
-        codigo,
-        nombre,
-        unidad_medida,
-        stock_actual,
-        id_tipo_inventario,
-        costo_unitario_promedio
-      FROM productos
-      WHERE id_categoria = 10 AND estado = 'Activo'
-      ORDER BY nombre ASC`,
-      []
-    );
-    
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
-    }
-    
-    res.json({ success: true, data: result.data });
-  } catch (error) {
-    console.error('Error al obtener productos de merma:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-}
 
-export async function getMermasOrden(req, res) {
-  try {
-    const { id } = req.params;
-    const result = await executeQuery(
-      `SELECT 
-        mp.*,
-        p.codigo,
-        p.nombre AS producto_merma,
-        p.unidad_medida
-       FROM mermas_produccion mp
-       INNER JOIN productos p ON mp.id_producto_merma = p.id_producto
-       WHERE mp.id_orden_produccion = ?`,
-      [id]
-    );
-    
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
-    }
-    
-    res.json({ success: true, data: result.data });
-  } catch (error) {
-    console.error('Error al obtener mermas:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-}
-
-export async function cancelarOrden(req, res) {
-  try {
-    const { id } = req.params;
-    
-    const ordenResult = await executeQuery(
-      'SELECT * FROM ordenes_produccion WHERE id_orden = ? AND estado IN (?, ?, ?, ?)',
-      [id, 'Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa']
-    );
-    
-    if (ordenResult.data.length === 0) {
-      return res.status(404).json({ error: 'Orden no encontrada o no puede ser cancelada' });
-    }
-    
-    const orden = ordenResult.data[0];
-    
-    const consumoResult = await executeQuery(
-      `SELECT 
-        cm.id_insumo,
-        cm.cantidad_real_consumida,
-        cm.costo_unitario,
-        p.id_tipo_inventario
-      FROM op_consumo_materiales cm
-      INNER JOIN productos p ON cm.id_insumo = p.id_producto
-      WHERE cm.id_orden = ? AND cm.cantidad_real_consumida > 0`,
-      [id]
-    );
-    
-    if (consumoResult.data.length === 0) {
-      await executeQuery(
-        'UPDATE ordenes_produccion SET estado = ? WHERE id_orden = ?',
-        ['Cancelada', id]
-      );
-      await notificarCambioEstado(id, `Producción Cancelada: ${orden.numero_orden}`, 'La orden ha sido cancelada sin consumo.', 'danger', req);
-      return res.json({ success: true, message: 'Orden cancelada (sin materiales devueltos)' });
-    }
-    
-    const totalCostoDevolucion = consumoResult.data.reduce((sum, item) => 
-      sum + (parseFloat(item.cantidad_real_consumida) * parseFloat(item.costo_unitario)), 0
-    );
-    
-    const queries = [];
-    queries.push({
-        sql: 'UPDATE ordenes_produccion SET estado = ? WHERE id_orden = ?',
-        params: ['Cancelada', id]
-    });
-
-    queries.push({
-        sql: `INSERT INTO entradas (
-          id_tipo_inventario, documento_soporte, total_costo,
-          id_registrado_por, observaciones
-        ) VALUES (?, ?, ?, ?, ?)`,
-        params: [
-          consumoResult.data[0].id_tipo_inventario,
-          `Cancelación O.P. ${orden.numero_orden}`,
-          totalCostoDevolucion,
-          orden.id_supervisor,
-          `Devolución por cancelación de O.P. ${orden.numero_orden}`
-        ]
-    });
-
-    const resultTransaction = await executeTransaction(queries);
-    if (!resultTransaction.success) return res.status(500).json({ error: resultTransaction.error });
-
-    const idEntrada = resultTransaction.data[1].insertId;
-    const queriesDetalle = [];
-
-    for (const consumo of consumoResult.data) {
-        queriesDetalle.push({
-            sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
-            params: [idEntrada, consumo.id_insumo, consumo.cantidad_real_consumida, consumo.costo_unitario]
-        });
-        queriesDetalle.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [consumo.cantidad_real_consumida, consumo.id_insumo]
-        });
-    }
-
-    await executeTransaction(queriesDetalle);
-
-    await notificarCambioEstado(id, `Producción Cancelada: ${orden.numero_orden}`, 'La orden ha sido cancelada y los materiales devueltos.', 'danger', req);
-    
-    res.json({ success: true, message: 'Orden cancelada y materiales devueltos al inventario' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-}
 export async function registrarParcial(req, res) {
   try {
     const { id } = req.params;
     const { 
-      cantidad_kilos,      // Peso Real (lo que antes era cantidad_parcial)
-      cantidad_unidades,   // Cantidad de Productos (NUEVO)
+      cantidad_kilos, 
+      cantidad_unidades,
       insumos_consumidos, 
       observaciones 
     } = req.body;
     
-    const id_registrado_por = req.user.id_usuario; // Asumiendo que usas JWT
+    const id_registrado_por = req.user.id_usuario; 
     const fechaActual = getFechaPeru();
 
-    // 1. Validar estado de la orden
     const ordenCheck = await executeQuery(
       "SELECT estado, cantidad_planificada, cantidad_producida, cantidad_unidades, cantidad_unidades_producida FROM ordenes_produccion WHERE id_orden = ?",
       [id]
@@ -1559,8 +1469,6 @@ export async function registrarParcial(req, res) {
 
     const queries = [];
 
-    // 2. Insertar en el historial (op_registros_produccion)
-    // Guardamos Kilos (cantidad_registrada) y Unidades (cantidad_unidades_registrada)
     queries.push({
       sql: `INSERT INTO op_registros_produccion 
             (id_orden, cantidad_registrada, cantidad_unidades_registrada, id_registrado_por, fecha_registro, observaciones) 
@@ -1575,7 +1483,6 @@ export async function registrarParcial(req, res) {
       ]
     });
 
-    // 3. Actualizar acumulados en la Orden Maestra
     queries.push({
       sql: `UPDATE ordenes_produccion 
             SET cantidad_producida = cantidad_producida + ?,
@@ -1584,12 +1491,10 @@ export async function registrarParcial(req, res) {
       params: [cantidad_kilos, cantidad_unidades || 0, id]
     });
 
-    // 4. Descontar Insumos (op_consumo_materiales y Stock)
     if (insumos_consumidos && insumos_consumidos.length > 0) {
       for (const insumo of insumos_consumidos) {
         const cantidad = parseFloat(insumo.cantidad);
         if (cantidad > 0) {
-          // Actualizar tabla de consumo acumulado
           queries.push({
             sql: `UPDATE op_consumo_materiales 
                   SET cantidad_real_consumida = IFNULL(cantidad_real_consumida, 0) + ? 
@@ -1597,7 +1502,6 @@ export async function registrarParcial(req, res) {
             params: [cantidad, id, insumo.id_insumo]
           });
 
-          // Descontar del inventario físico
           queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
             params: [cantidad, insumo.id_insumo]
@@ -1616,6 +1520,7 @@ export async function registrarParcial(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
 export async function getRegistrosParcialesOrden(req, res) {
   try {
     const { id } = req.params;
@@ -1623,8 +1528,8 @@ export async function getRegistrosParcialesOrden(req, res) {
       `SELECT 
         orp.id_registro,
         orp.fecha_registro,
-        orp.cantidad_registrada,           -- Kilos
-        orp.cantidad_unidades_registrada,  -- Unidades (NUEVO)
+        orp.cantidad_registrada,
+        orp.cantidad_unidades_registrada,
         orp.observaciones,
         e.nombre_completo as registrado_por
        FROM op_registros_produccion orp
@@ -1761,11 +1666,11 @@ export const generarPDFOrdenController = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 export const descargarHojaRutaController = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. Obtener datos de la orden
     const ordenResult = await executeQuery(`
       SELECT 
         op.*,
@@ -1785,11 +1690,9 @@ export const descargarHojaRutaController = async (req, res) => {
 
     const orden = ordenResult.data[0];
 
-    // 2. Obtener la "receta" o insumos calculados/registrados para mostrar en la hoja
     let receta = [];
     
     if (orden.id_receta_producto) {
-       // Si viene de receta estándar
        const recetaRes = await executeQuery(`
          SELECT 
            p.codigo AS codigo_insumo,
@@ -1803,7 +1706,6 @@ export const descargarHojaRutaController = async (req, res) => {
        `, [orden.cantidad_planificada, orden.id_receta_producto]);
        receta = recetaRes.data;
     } else {
-       // Si es manual o usa receta provisional
        const recetaProv = await executeQuery(`
          SELECT 
            p.codigo AS codigo_insumo,
@@ -1817,7 +1719,6 @@ export const descargarHojaRutaController = async (req, res) => {
        receta = recetaProv.data;
     }
 
-    // 3. Generar el PDF
     const pdfBuffer = await generarPDFHojaRuta(orden, receta);
 
     res.setHeader('Content-Type', 'application/pdf');

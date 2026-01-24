@@ -3,24 +3,28 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import https from 'https';
 
-// ... (Copiar las mismas funciones helper descargarImagen, calcularAlturaTexto, numeroALetras del archivo anterior) ...
-// Para abreviar, incluyo la exportación principal con los cambios clave:
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function descargarImagen(url) { /* ... misma implementación ... */
+function descargarImagen(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
+    const request = https.get(url, { timeout: 3000 }, (response) => {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return reject(new Error(`Status Code: ${response.statusCode}`));
+      }
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
-    }).on('error', reject);
+    });
+    request.on('error', (err) => reject(err));
+    request.on('timeout', () => {
+        request.destroy();
+        reject(new Error("Timeout al descargar imagen"));
+    });
   });
 }
 
-function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) { /* ... misma implementación ... */
+function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
   const currentFontSize = doc._fontSize || 12;
   doc.fontSize(fontSize);
   const heightOfString = doc.heightOfString(texto || '', {
@@ -31,7 +35,7 @@ function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) { /* ... misma imp
   return Math.ceil(heightOfString);
 }
 
-function numeroALetras(numero, moneda) { /* ... misma implementación ... */
+function numeroALetras(numero, moneda) {
   const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
   const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
   const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
@@ -73,7 +77,7 @@ function numeroALetras(numero, moneda) { /* ... misma implementación ... */
   }
   
   const resultado = convertirNumero(entero);
-  const nombreMoneda = moneda === 'USD' ? 'DÓLARES' : 'SOLES';
+  const nombreMoneda = moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES';
   
   return `${resultado} CON ${String(decimales).padStart(2, '0')}/100 ${nombreMoneda}`;
 }
@@ -132,15 +136,12 @@ export async function generarNotaVentaPDF(orden) {
       doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
       
       doc.fontSize(12).font('Helvetica-Bold');
-      // CAMBIO AQUÍ: Título Nota de Venta
       doc.text('NOTA DE VENTA', 385, 65, { align: 'center', width: 155 });
       
       doc.fontSize(11).font('Helvetica-Bold');
-      // CAMBIO AQUÍ: Uso de serie_correlativo o numero_comprobante
       const numeroCorrelativo = orden.serie_correlativo || orden.numero_comprobante || orden.numero_orden;
       doc.text(`No. ${numeroCorrelativo}`, 385, 83, { align: 'center', width: 155 });
 
-      // ... resto del cuerpo igual ...
       const direccionCliente = orden.direccion_entrega || 
                                orden.direccion_cliente || 
                                '';
@@ -156,7 +157,7 @@ export async function generarNotaVentaPDF(orden) {
       doc.text(orden.cliente || '', 100, 203, { width: 230 });
       
       doc.font('Helvetica-Bold');
-      doc.text('RUC/DNI:', 40, 218); // Ajuste leve para Notas de Venta que pueden ser a DNI
+      doc.text('RUC/DNI:', 40, 218);
       doc.font('Helvetica');
       doc.text(orden.ruc_cliente || orden.documento_cliente || '', 100, 218);
       
@@ -282,12 +283,31 @@ export async function generarNotaVentaPDF(orden) {
         doc.text(orden.comercial, 90, yPos + 40);
       }
 
-      const subtotal = parseFloat(orden.subtotal).toFixed(2);
-      const igv = parseFloat(orden.igv).toFixed(2);
-      const total = parseFloat(orden.total).toFixed(2);
-      const tipoImpuesto = orden.tipo_impuesto || 'IGV';
-      const porcImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
-      const etiquetaImpuesto = `${tipoImpuesto} (${porcImpuesto}%)`;
+      const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase());
+      
+      const rawSubtotal = parseFloat(orden.subtotal || 0);
+      const rawIgv = esSinImpuesto ? 0 : parseFloat(orden.igv || 0);
+      const rawTotal = esSinImpuesto ? rawSubtotal : parseFloat(orden.total || 0);
+
+      const subtotal = rawSubtotal.toFixed(2);
+      const igv = rawIgv.toFixed(2);
+      const total = rawTotal.toFixed(2);
+
+      let etiquetaImpuesto = 'IGV (18%)';
+      const tipoImp = String(orden.tipo_impuesto || '').toUpperCase();
+      
+      if (esSinImpuesto) {
+        if (tipoImp.includes('INA') || tipoImp.includes('INAFECTO')) {
+            etiquetaImpuesto = 'INAFECTO (0%)';
+        } else if (tipoImp.includes('EXO') || tipoImp.includes('EXONERADO')) {
+            etiquetaImpuesto = 'EXONERADO (0%)';
+        } else {
+            etiquetaImpuesto = `${tipoImp} (0%)`;
+        }
+      } else {
+        const porc = orden.porcentaje_impuesto || 18;
+        etiquetaImpuesto = `${orden.tipo_impuesto || 'IGV'} (${porc}%)`;
+      }
 
       doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
@@ -321,7 +341,7 @@ export async function generarNotaVentaPDF(orden) {
       }
 
       doc.fontSize(8).font('Helvetica');
-      const totalEnLetras = numeroALetras(parseFloat(total), orden.moneda);
+      const totalEnLetras = numeroALetras(rawTotal, orden.moneda);
       doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Page: 1 / 1', 50, 770, { align: 'center', width: 495 });

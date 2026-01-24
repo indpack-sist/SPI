@@ -58,6 +58,14 @@ function CrearOrden() {
 
   const esProductoLamina = busquedaProducto.toUpperCase().includes('LÁMINA') || busquedaProducto.toUpperCase().includes('LAMINA');
 
+  useEffect(() => {
+    if (esProductoLamina) {
+        setModoReceta('manual'); 
+    } else {
+        setModoReceta('porcentaje');
+    }
+  }, [esProductoLamina]);
+
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
     const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
 
@@ -68,7 +76,6 @@ function CrearOrden() {
     const nombreProd = productoSeleccionado.nombre.toUpperCase();
     const nombreInsumo = insumo.nombre.toUpperCase();
 
-    // LÓGICA ESPECÍFICA PARA LÁMINAS: Solo Rollos Burbupack
     if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
         return nombreInsumo.includes('ROLLO BURBUPACK');
     }
@@ -262,26 +269,35 @@ function CrearOrden() {
     try {
       const payload = {
         ...formData,
-        cantidad_planificada: parseFloat(formData.cantidad_planificada),
+        cantidad_planificada: formData.cantidad_planificada ? parseFloat(formData.cantidad_planificada) : 0,
         cantidad_unidades: formData.cantidad_unidades ? parseFloat(formData.cantidad_unidades) : 0,
         es_orden_manual: modoReceta === 'manual'
       };
 
-      if (modoReceta === 'porcentaje') {
+      if (!esProductoLamina && (!payload.cantidad_planificada || payload.cantidad_planificada <= 0)) {
+         setError('La Cantidad Planificada en Kilos es requerida para este producto');
+         setGuardando(false);
+         return;
+      }
+      
+      if (esProductoLamina && (!payload.cantidad_unidades || payload.cantidad_unidades <= 0)) {
+         setError('La Cantidad en Unidades/Millares es requerida para Láminas');
+         setGuardando(false);
+         return;
+      }
+
+      if (modoReceta === 'porcentaje' && !esProductoLamina) {
         if (listaInsumos.length === 0) {
             setError('Debe agregar al menos un insumo o cambiar a modo manual');
             setGuardando(false);
             return;
         }
 
-        // Si es lámina, omitimos la validación del 100% porque el consumo es por unidad (rollos)
-        if (!esProductoLamina) {
-            const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
-            if (Math.abs(totalPorcentaje - 100) > 0.01) {
-                setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para crear la orden.`);
-                setGuardando(false);
-                return;
-            }
+        const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
+        if (Math.abs(totalPorcentaje - 100) > 0.01) {
+            setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100% para crear la orden.`);
+            setGuardando(false);
+            return;
         }
 
         payload.insumos = listaInsumos.map(i => ({
@@ -310,11 +326,9 @@ function CrearOrden() {
   };
 
   const calcularCantidadInsumo = (porcentaje) => {
-      // Si es lámina, el valor 'porcentaje' representa la cantidad de unidades (rollos)
       if (esProductoLamina) {
           return parseFloat(porcentaje); 
       }
-      // Si no, cálculo estándar por porcentaje
       const total = parseFloat(formData.cantidad_planificada) || 0;
       return (total * parseFloat(porcentaje)) / 100;
   };
@@ -431,7 +445,9 @@ function CrearOrden() {
                 </div>
 
                 <div className="form-group">
-                    <label className="form-label">Cantidad Unidades (Meta) *</label>
+                    <label className="form-label">
+                        {esProductoLamina ? 'Cantidad Unidades (Meta) *' : 'Cantidad Unidades (Meta)'}
+                    </label>
                     <div className="relative">
                         <input
                             type="number"
@@ -440,29 +456,31 @@ function CrearOrden() {
                             className="form-input pl-9"
                             value={formData.cantidad_unidades}
                             onChange={(e) => setFormData({ ...formData, cantidad_unidades: e.target.value })}
-                            required
+                            required={esProductoLamina}
                             placeholder="0"
                         />
                         <Hash className="absolute left-3 top-2.5 text-gray-400" size={18} />
                     </div>
                 </div>
 
-                <div className="form-group">
-                    <label className="form-label">Total Kilos Estimados (Insumos) *</label>
-                    <div className="relative">
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            className="form-input pl-9"
-                            value={formData.cantidad_planificada}
-                            onChange={(e) => setFormData({ ...formData, cantidad_planificada: e.target.value })}
-                            required
-                            placeholder="0.00"
-                        />
-                        <Package className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                {!esProductoLamina && (
+                    <div className="form-group">
+                        <label className="form-label">Total Kilos Estimados (Insumos) *</label>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                className="form-input pl-9"
+                                value={formData.cantidad_planificada}
+                                onChange={(e) => setFormData({ ...formData, cantidad_planificada: e.target.value })}
+                                required
+                                placeholder="0.00"
+                            />
+                            <Package className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                        </div>
                     </div>
-                </div>
+                )}
 
                 <div className="form-group">
                     <label className="form-label">Turno *</label>
@@ -613,30 +631,34 @@ function CrearOrden() {
                 <div className="flex flex-col gap-2">
                     <button
                         type="button"
-                        className={`btn text-left ${modoReceta === 'porcentaje' ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => setModoReceta('porcentaje')}
+                        className={`btn text-left ${modoReceta === 'porcentaje' && !esProductoLamina ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => {
+                            if (!esProductoLamina) setModoReceta('porcentaje');
+                        }}
+                        disabled={esProductoLamina}
                     >
                         <Star size={18} className="mr-2" />
                         <div>
-                            <div className="font-bold">{esProductoLamina ? 'Por Cantidad (Rollos)' : 'Por Porcentajes'}</div>
-                            <div className="text-xs opacity-80">{esProductoLamina ? 'Definir rollos a usar' : 'Calcula kilos autom.'}</div>
+                            <div className="font-bold">Por Porcentajes</div>
+                            <div className="text-xs opacity-80">Calcula kilos autom.</div>
                         </div>
                     </button>
                     <button
                         type="button"
                         className={`btn text-left ${modoReceta === 'manual' ? 'btn-warning' : 'btn-outline'}`}
                         onClick={() => setModoReceta('manual')}
+                        disabled={esProductoLamina}
                     >
                         <Zap size={18} className="mr-2" />
                         <div>
-                            <div className="font-bold">Orden Manual</div>
-                            <div className="text-xs opacity-80">Sin insumos iniciales</div>
+                            <div className="font-bold">{esProductoLamina ? 'Orden de Conversión' : 'Orden Manual'}</div>
+                            <div className="text-xs opacity-80">{esProductoLamina ? 'Selección de rollos posterior' : 'Sin insumos iniciales'}</div>
                         </div>
                     </button>
                 </div>
             </div>
 
-            {modoReceta === 'porcentaje' && (
+            {modoReceta === 'porcentaje' && !esProductoLamina && (
                 <div className="card bg-gray-50">
                     <div className="p-3">
                         <div className="flex justify-between items-end mb-2">
@@ -650,21 +672,19 @@ function CrearOrden() {
                             </div>
                         </div>
                         
-                        {!esProductoLamina && (
-                            <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                <span className="text-xs font-medium">Suma Porcentajes:</span>
-                                <span className={`text-sm font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>
-                                    {porcentajeActualTotal.toFixed(2)}%
-                                </span>
-                            </div>
-                        )}
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                            <span className="text-xs font-medium">Suma Porcentajes:</span>
+                            <span className={`text-sm font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>
+                                {porcentajeActualTotal.toFixed(2)}%
+                            </span>
+                        </div>
                     </div>
                 </div>
             )}
           </div>
         </div>
 
-        {modoReceta === 'porcentaje' && (
+        {modoReceta === 'porcentaje' && !esProductoLamina && (
             <div className="card">
                 <div className="card-header flex justify-between items-center">
                     <h2 className="card-title">Composición de la Mezcla</h2>
@@ -689,8 +709,8 @@ function CrearOrden() {
                             <thead>
                                 <tr>
                                     <th>Insumo</th>
-                                    <th className="text-center">{esProductoLamina ? 'Cantidad' : 'Porcentaje (%)'}</th>
-                                    <th className="text-right">{esProductoLamina ? 'Unidades' : 'Calculado (Kg)'}</th>
+                                    <th className="text-center">Porcentaje (%)</th>
+                                    <th className="text-right">Calculado (Kg)</th>
                                     <th className="text-right">Stock</th>
                                     <th></th>
                                 </tr>
@@ -711,10 +731,10 @@ function CrearOrden() {
                                                     <div className="text-xs text-muted">{item.insumo}</div>
                                                 </td>
                                                 <td className="text-center font-bold text-blue-600">
-                                                    {esProductoLamina ? parseInt(item.porcentaje) : `${item.porcentaje}%`}
+                                                    {`${item.porcentaje}%`}
                                                 </td>
                                                 <td className="text-right font-mono font-bold">
-                                                    {esProductoLamina ? `${calculado} Und` : `${calculado.toFixed(2)} Kg`}
+                                                    {`${calculado.toFixed(2)} Kg`}
                                                 </td>
                                                 <td className="text-right">
                                                     <span className={tieneStock ? 'text-success' : 'text-danger'}>
@@ -763,11 +783,11 @@ function CrearOrden() {
       <Modal
         isOpen={modalAgregarInsumo}
         onClose={() => setModalAgregarInsumo(false)}
-        title={esProductoLamina ? "Agregar Rollo a la Orden" : "Agregar Insumo a la Mezcla"}
+        title="Agregar Insumo a la Mezcla"
         size="md"
       >
         <div className="form-group">
-          <label className="form-label">{esProductoLamina ? 'Rollo Burbupack *' : 'Insumo (Sugerido por nombre) *'}</label>
+          <label className="form-label">Insumo (Sugerido por nombre) *</label>
           <select
             className="form-select"
             value={nuevoInsumo.id_insumo}
@@ -783,26 +803,26 @@ function CrearOrden() {
               ))}
           </select>
           <small className="text-xs text-blue-600 block mt-1">
-             {esProductoLamina ? 'Mostrando solo rollos burbupack.' : 'Filtrando insumos relacionados al nombre del producto.'}
+             Filtrando insumos relacionados al nombre del producto.
           </small>
         </div>
 
         <div className="form-group">
-          <label className="form-label">{esProductoLamina ? 'Cantidad (Unidades) *' : 'Porcentaje (%) *'}</label>
+          <label className="form-label">Porcentaje (%) *</label>
           <div className="relative">
             <input
                 type="number"
-                step={esProductoLamina ? "1" : "0.01"}
+                step="0.01"
                 min="0.01"
-                max={esProductoLamina ? "" : "100"}
+                max="100"
                 className="form-input pr-8"
                 value={nuevoInsumo.porcentaje}
                 onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, porcentaje: e.target.value })}
-                placeholder={esProductoLamina ? "Ej: 5" : "Ej: 50"}
+                placeholder="Ej: 50"
             />
-            {!esProductoLamina && <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>}
+            <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
           </div>
-          {formData.cantidad_planificada && nuevoInsumo.porcentaje && !esProductoLamina && (
+          {formData.cantidad_planificada && nuevoInsumo.porcentaje && (
              <p className="text-sm text-blue-600 mt-1 text-right font-medium">
                 Equivale a: {((parseFloat(formData.cantidad_planificada) * parseFloat(nuevoInsumo.porcentaje)) / 100).toFixed(2)} Kg
              </p>

@@ -2200,260 +2200,225 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 25, size: 'A4' });
+      const doc = new PDFDocument({ margin: 20, size: 'A4' });
       const chunks = [];
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
 
       if (logoBuffer) {
-        doc.image(logoBuffer, 25, 25, { width: 80 });
+        doc.image(logoBuffer, 20, 20, { width: 80 });
       } else {
-        doc.fontSize(16).font('Helvetica-Bold').text('IndPack', 25, 30);
+        doc.fontSize(16).font('Helvetica-Bold').text('IndPack', 20, 25);
       }
       
-      doc.font('Helvetica-Bold').fontSize(12).text('HOJA DE RUTA DE PRODUCCIÓN', 110, 28, { align: 'center', width: 320 });
-      doc.fontSize(7).font('Helvetica').text('CONTROL EN PLANTA', 110, 42, { align: 'center', width: 320 });
+      doc.font('Helvetica-Bold').fontSize(12).text('HOJA DE RUTA DE PRODUCCIÓN', 110, 25, { align: 'center', width: 350 });
+      doc.fontSize(7).font('Helvetica').text('CONTROL EN PLANTA', 110, 38, { align: 'center', width: 350 });
 
-      doc.roundedRect(460, 25, 105, 30, 4).stroke();
-      doc.fontSize(6).font('Helvetica-Bold').text('N° ORDEN', 460, 28, { align: 'center', width: 105 });
-      doc.fontSize(10).text(orden.numero_orden, 460, 38, { align: 'center', width: 105 });
+      doc.roundedRect(470, 20, 105, 30, 4).stroke();
+      doc.fontSize(6).font('Helvetica-Bold').text('N° ORDEN', 470, 23, { align: 'center', width: 105 });
+      doc.fontSize(10).text(orden.numero_orden, 470, 33, { align: 'center', width: 105 });
 
       const esLamina = (orden.producto && (orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA'))) || orden.operario_corte;
-      const unidadProduccion = esLamina ? 'millares' : 'uds.';
+      const unidadProduccion = esLamina ? 'mill' : 'uds';
       
-      const alturaDatos = esLamina ? 65 : 50; 
-      const yInfo = 65; 
+      const yInfo = 60; 
+      const alturaDatos = 45; 
       
-      doc.rect(25, yInfo, 540, alturaDatos).stroke(); 
+      doc.rect(20, yInfo, 555, alturaDatos).stroke(); 
       doc.fontSize(6).font('Helvetica-Bold');
       
-      doc.text('PRODUCTO:', 30, yInfo + 6);
-      doc.font('Helvetica').text(orden.producto, 75, yInfo + 6, { width: 310 });
+      doc.text('PRODUCTO:', 25, yInfo + 6);
+      doc.font('Helvetica').text(orden.producto, 70, yInfo + 6, { width: 300, ellipsis: true });
       
       const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} ${unidadProduccion}` : '---';
-      doc.font('Helvetica-Bold').text(`META ${esLamina ? 'MILL' : 'UDS'}:`, 395, yInfo + 6);
-      doc.font('Helvetica').text(metaUnidades, 440, yInfo + 6);
-      doc.font('Helvetica-Bold').text('META KG:', 490, yInfo + 6);
-      doc.font('Helvetica').text(`${parseFloat(orden.cantidad_planificada).toFixed(2)}`, 525, yInfo + 6);
+      doc.font('Helvetica-Bold').text(`META ${unidadProduccion.toUpperCase()}:`, 380, yInfo + 6);
+      doc.font('Helvetica').text(metaUnidades, 430, yInfo + 6);
+      doc.font('Helvetica-Bold').text('META KG:', 480, yInfo + 6);
+      doc.font('Helvetica').text(`${parseFloat(orden.cantidad_planificada || 0).toFixed(2)}`, 520, yInfo + 6);
 
       let currentY = yInfo + 18;
-      doc.font('Helvetica-Bold').text('MAQUINISTA:', 30, currentY);
-      doc.font('Helvetica').text(orden.maquinista || '________________', 75, currentY);
-
-      doc.font('Helvetica-Bold').text('AYUDANTE:', 200, currentY);
-      doc.font('Helvetica').text(orden.ayudante || '________________', 245, currentY);
-
-      doc.font('Helvetica-Bold').text('TURNO:', 395, currentY);
-      doc.font('Helvetica').text(orden.turno || '___', 425, currentY);
 
       if (esLamina) {
-          currentY += 12; 
-          doc.font('Helvetica-Bold').text('OP. CORTE:', 30, currentY);
-          doc.font('Helvetica').text(orden.operario_corte || '________________', 75, currentY);
+          doc.font('Helvetica-Bold').text('OP. CORTE:', 25, currentY);
+          doc.font('Helvetica').text(orden.operario_corte || '____________________', 70, currentY);
 
           doc.font('Helvetica-Bold').text('OP. EMBALAJE:', 200, currentY);
-          doc.font('Helvetica').text(orden.operario_embalaje || '________________', 260, currentY);
+          doc.font('Helvetica').text(orden.operario_embalaje || '____________________', 260, currentY);
+      } else {
+          doc.font('Helvetica-Bold').text('MAQUINISTA:', 25, currentY);
+          doc.font('Helvetica').text(orden.maquinista || '____________________', 75, currentY);
+
+          doc.font('Helvetica-Bold').text('AYUDANTE:', 200, currentY);
+          doc.font('Helvetica').text(orden.ayudante || '____________________', 245, currentY);
       }
 
-      const yLinea = yInfo + alturaDatos - 16;
-      doc.moveTo(25, yLinea).lineTo(565, yLinea).lineWidth(0.5).stroke(); 
+      doc.font('Helvetica-Bold').text('TURNO:', 380, currentY);
+      doc.font('Helvetica').text(orden.turno || '___', 410, currentY);
+
+      const yLinea = yInfo + alturaDatos - 14;
+      doc.moveTo(20, yLinea).lineTo(575, yLinea).lineWidth(0.5).stroke(); 
       
-      const yFechas = yLinea + 5;
-      doc.font('Helvetica-Bold').text('FECHA:', 30, yFechas);
-      doc.font('Helvetica').text(formatearFecha(orden.fecha_inicio) || '__/__/__', 60, yFechas);
+      const yFechas = yLinea + 4;
+      doc.font('Helvetica-Bold').text('FECHA:', 25, yFechas);
+      doc.font('Helvetica').text(formatearFecha(orden.fecha_inicio) || '__/__/__', 55, yFechas);
 
-      doc.font('Helvetica-Bold').text('INICIO:', 160, yFechas);
-      doc.text('__:__', 190, yFechas); 
+      doc.font('Helvetica-Bold').text('INICIO:', 150, yFechas);
+      doc.text('__:__', 180, yFechas); 
 
-      doc.font('Helvetica-Bold').text('FIN:', 280, yFechas);
-      doc.text('__:__', 300, yFechas); 
+      doc.font('Helvetica-Bold').text('FIN:', 250, yFechas);
+      doc.text('__:__', 270, yFechas); 
 
-      let yPos = yInfo + alturaDatos + 8;
+      doc.font('Helvetica-Bold').text('GRAMAJE:', 350, yFechas);
+      doc.font('Helvetica').text(orden.gramaje || '-', 390, yFechas);
+
+      doc.font('Helvetica-Bold').text('MEDIDA:', 450, yFechas);
+      doc.font('Helvetica').text(orden.medida || '-', 485, yFechas);
+
+      let yPos = yInfo + alturaDatos + 6;
       
       if (receta.length > 0) {
-          doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('1. MEZCLA / INSUMOS', 25, yPos);
+          const tituloReceta = esLamina ? '1. HISTORIAL DE ROLLOS BURBUPACK USADOS' : '1. MEZCLA / INSUMOS';
+          doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text(tituloReceta, 20, yPos);
           yPos += 8;
 
-          const rCol1 = 25, rCol2 = 75, rCol3 = 380, rCol4 = 480;
-          doc.rect(rCol1, yPos, 540, 10).fill('#E0E0E0').stroke();
+          const rCol1 = 20, rCol2 = 70, rCol3 = 380, rCol4 = 480;
+          doc.rect(rCol1, yPos, 555, 10).fill('#E0E0E0').stroke();
           doc.fillColor('black').fontSize(5);
           doc.text('CÓDIGO', rCol1 + 5, yPos + 3);
-          doc.text('INSUMO', rCol2 + 5, yPos + 3);
-          doc.text('SOLICITADO', rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
-          doc.text('REAL', rCol4 + 5, yPos + 3, { width: 80, align: 'center' });
+          doc.text('DESCRIPCIÓN', rCol2 + 5, yPos + 3);
+          doc.text('PLANIFICADO', rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
+          doc.text('REAL', rCol4 + 5, yPos + 3, { width: 70, align: 'center' });
 
           yPos += 10;
           
           receta.forEach(item => {
-              const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+              const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO');
               const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
               const cantidadFormateada = esRollo ? parseInt(item.cantidad_requerida) : parseFloat(item.cantidad_requerida).toFixed(2);
               
-              doc.rect(rCol1, yPos, 540, 10).stroke();
+              doc.rect(rCol1, yPos, 555, 10).stroke();
               doc.fontSize(6).font('Helvetica');
               doc.text(item.codigo_insumo || '', rCol1 + 5, yPos + 3);
               doc.text(item.insumo || '', rCol2 + 5, yPos + 3, { width: 300, height: 8, lineBreak: false, ellipsis: true });
               doc.text(`${cantidadFormateada} ${unidadMostrar}`, rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
               yPos += 10;
           });
+          yPos += 5;
       }
+
+      const cantidadBase = orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : 50; 
+      const totalSlots = Math.min(Math.max(cantidadBase + 20, 60), 240);
+
+      doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN (${totalSlots} ESPACIOS)`, 20, yPos);
       yPos += 10;
 
-      doc.rect(25, yPos, 540, 22).fill('#FFCC80').stroke(); 
-      doc.fillColor('black');
+      const columnasGrid = 4;
+      const anchoPagina = 555;
+      const anchoColumna = anchoPagina / columnasGrid; 
+      const rowHeight = 11;
+      const headerHeight = 10;
 
-      doc.fontSize(6).font('Helvetica-Bold').text('PRODUCTO A PRODUCIR:', 30, yPos + 3);
-      doc.fontSize(8).text(orden.producto, 30, yPos + 11, { width: 320, ellipsis: true });
-
-      let textoMedida = orden.medida || '-';
-      if (orden.medida && orden.producto) {
-          const prodLimpio = orden.producto.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          const medLimpia = orden.medida.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (prodLimpio.includes(medLimpia)) {
-             textoMedida = ''; 
-          }
-      }
-
-      if (textoMedida) {
-          doc.fontSize(6).text('MEDIDA:', 360, yPos + 3);
-          doc.font('Helvetica').text(textoMedida, 360, yPos + 11);
-      }
-
-      doc.font('Helvetica-Bold').text('GRAMAJE:', 430, yPos + 3);
-      doc.font('Helvetica').text(orden.gramaje || '-', 430, yPos + 11);
-
-      doc.font('Helvetica-Bold').text('PESO UND:', 500, yPos + 3);
-      doc.font('Helvetica').text(orden.peso_producto || '-', 500, yPos + 11);
-
-      yPos += 28;
-
-      const cantidadBase = orden.cantidad_unidades ? parseInt(orden.cantidad_unidades) : 20; 
-      const totalSlots = Math.min(cantidadBase + 10, 200);
-
-      doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN (${totalSlots} SLOTS)`, 25, yPos);
-      yPos += 10;
-
-      const drawHeaders = (xBase, y) => {
-          doc.rect(xBase, y, 265, 10).fill('#E0E0E0').stroke();
-          doc.fillColor('black').fontSize(6).font('Helvetica-Bold');
-          
-          doc.text('N°', xBase, y + 3, { width: 30, align: 'center' });
-          
-          if (esLamina) {
-            doc.text('CANTIDAD', xBase + 30, y + 3, { width: 60, align: 'center' });
-            doc.text('ROLLO USADO', xBase + 90, y + 3, { width: 90, align: 'center' });
-            doc.text('PESO', xBase + 180, y + 3, { width: 85, align: 'center' });
-          } else {
-            doc.text('CANTIDAD (UDS)', xBase + 30, y + 3, { width: 110, align: 'center' });
-            doc.text('PESO (KG)', xBase + 140, y + 3, { width: 110, align: 'center' });
+      const dibujarEncabezadosGrid = (y) => {
+          for (let c = 0; c < columnasGrid; c++) {
+              const xBase = 20 + (c * anchoColumna);
+              doc.rect(xBase, y, anchoColumna, headerHeight).fill('#F0F0F0').stroke();
+              doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
+              
+              if (esLamina) {
+                  doc.text('PAQ', xBase + 2, y + 3, { width: 15, align: 'center' }); 
+                  doc.text('ROLLO', xBase + 48, y + 3, { width: 50, align: 'center' });
+                  doc.text('PESO', xBase + 100, y + 3, { width: 30, align: 'center' });
+              } else {
+                  doc.text('N°', xBase + 2, y + 3, { width: 20, align: 'center' });
+                  doc.text('CANT', xBase + 30, y + 3, { width: 40, align: 'center' });
+                  doc.text('PESO (KG)', xBase + 80, y + 3, { width: 40, align: 'center' });
+              }
           }
       };
 
-      drawHeaders(25, yPos);
-      drawHeaders(300, yPos);
-      yPos += 10;
+      dibujarEncabezadosGrid(yPos);
+      yPos += headerHeight;
 
-      const rowHeight = 12; 
-      const totalRows = Math.ceil(totalSlots / 2);
+      const filasPorColumna = Math.ceil(totalSlots / columnasGrid);
+      let yInicialGrid = yPos;
       
-      let currentYGrid = yPos;
-      
-      for (let i = 0; i < totalRows; i++) {
-          if (currentYGrid + rowHeight > 760) {
+      for (let i = 0; i < filasPorColumna; i++) {
+          if (yPos + rowHeight > 760) {
               doc.addPage();
-              currentYGrid = 40;
-              drawHeaders(25, currentYGrid);
-              drawHeaders(300, currentYGrid);
-              currentYGrid += 10;
+              yPos = 30;
+              dibujarEncabezadosGrid(yPos);
+              yPos += headerHeight;
+              yInicialGrid = yPos;
           }
 
-          const leftIndex = i + 1;
-          const rightIndex = i + 1 + totalRows;
+          for (let c = 0; c < columnasGrid; c++) {
+              const numeroSlot = i + 1 + (c * filasPorColumna);
+              if (numeroSlot > totalSlots) continue;
 
-          doc.rect(25, currentYGrid, 265, rowHeight).stroke();
-          doc.fontSize(7).font('Helvetica');
-          
-          doc.moveTo(55, currentYGrid).lineTo(55, currentYGrid + rowHeight).stroke();
-          
-          if (esLamina) {
-             doc.moveTo(115, currentYGrid).lineTo(115, currentYGrid + rowHeight).stroke();
-             doc.moveTo(205, currentYGrid).lineTo(205, currentYGrid + rowHeight).stroke();
-          } else {
-             doc.moveTo(165, currentYGrid).lineTo(165, currentYGrid + rowHeight).stroke();
-          }
-          
-          doc.text(leftIndex.toString(), 25, currentYGrid + 4, { width: 30, align: 'center' });
-
-          if (rightIndex <= totalSlots) {
-              doc.rect(300, currentYGrid, 265, rowHeight).stroke();
+              const xBase = 20 + (c * anchoColumna);
               
-              doc.moveTo(330, currentYGrid).lineTo(330, currentYGrid + rowHeight).stroke();
-
+              doc.rect(xBase, yPos, anchoColumna, rowHeight).stroke();
+              doc.fontSize(6).font('Helvetica');
+              
               if (esLamina) {
-                 doc.moveTo(390, currentYGrid).lineTo(390, currentYGrid + rowHeight).stroke();
-                 doc.moveTo(480, currentYGrid).lineTo(480, currentYGrid + rowHeight).stroke();
+                  doc.moveTo(xBase + 18, yPos).lineTo(xBase + 18, yPos + rowHeight).stroke();
+                  doc.moveTo(xBase + 46, yPos).lineTo(xBase + 46, yPos + rowHeight).stroke();
+                  doc.moveTo(xBase + 98, yPos).lineTo(xBase + 98, yPos + rowHeight).stroke();
+                  
+                  doc.text(numeroSlot.toString(), xBase + 2, yPos + 3, { width: 15, align: 'center' });
               } else {
-                 doc.moveTo(440, currentYGrid).lineTo(440, currentYGrid + rowHeight).stroke();
+                  doc.moveTo(xBase + 25, yPos).lineTo(xBase + 25, yPos + rowHeight).stroke();
+                  doc.moveTo(xBase + 75, yPos).lineTo(xBase + 75, yPos + rowHeight).stroke();
+                  
+                  doc.text(numeroSlot.toString(), xBase + 2, yPos + 3, { width: 20, align: 'center' });
               }
-              
-              doc.text(rightIndex.toString(), 300, currentYGrid + 4, { width: 30, align: 'center' });
           }
-
-          currentYGrid += rowHeight;
+          yPos += rowHeight;
       }
-      yPos = currentYGrid + 12;
 
-      const espacioDisponible = 790 - yPos; 
-      const alturaMinimaParadas = 40; 
-
-      if (espacioDisponible < alturaMinimaParadas) {
+      yPos += 10;
+      
+      const espacioRestante = 800 - yPos;
+      if (espacioRestante < 60) {
           doc.addPage();
-          yPos = 40;
+          yPos = 30;
       }
 
-      doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS DE MÁQUINA', 25, yPos);
+      doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS Y OBSERVACIONES', 20, yPos);
       yPos += 8;
 
-      const sCol1 = 25, sCol2 = 90, sCol3 = 155;
-      doc.rect(sCol1, yPos, 540, 10).fill('#FFCCBC').stroke();
+      doc.rect(20, yPos, 555, 10).fill('#FFCCBC').stroke();
       doc.fillColor('black').fontSize(5);
-      doc.text('INICIO', sCol1, yPos + 3, { width: 65, align: 'center' });
-      doc.text('FIN', sCol2, yPos + 3, { width: 65, align: 'center' });
-      doc.text('MOTIVO / CAUSA', sCol3 + 5, yPos + 3);
+      doc.text('HORA INICIO', 20, yPos + 3, { width: 60, align: 'center' });
+      doc.text('HORA FIN', 80, yPos + 3, { width: 60, align: 'center' });
+      doc.text('MOTIVO / CAUSA', 145, yPos + 3);
 
       yPos += 10;
-      const lineasParadas = espacioDisponible > 120 ? 4 : 2; 
-
-      for (let i = 0; i < lineasParadas; i++) {
-          if (yPos + 12 > 780) break;
-          doc.rect(sCol1, yPos, 540, 12).stroke();
-          yPos += 12;
+      for (let i = 0; i < 3; i++) {
+          if (yPos + 10 > 790) break;
+          doc.rect(20, yPos, 555, 10).stroke();
+          yPos += 10;
       }
 
-      yPos += 10;
-      if (yPos + 40 > 800) { doc.addPage(); yPos = 40; }
+      yPos += 5;
+      
+      const alturaCierre = 30;
+      if (yPos + alturaCierre > 800) { doc.addPage(); yPos = 30; }
 
       doc.fontSize(6);
+      const wBox = 135;
       
-      doc.rect(25, yPos, 130, 20).stroke();
-      doc.font('Helvetica-Bold').text(`TOTAL ${esLamina ? 'MILLARES' : 'UNIDADES'}:`, 30, yPos + 7, { width: 120, align: 'left' });
+      doc.rect(20, yPos, wBox, 20).stroke();
+      doc.font('Helvetica-Bold').text(`TOTAL ${esLamina ? 'MILLARES' : 'UNIDADES'}:`, 25, yPos + 8);
 
-      doc.rect(160, yPos, 130, 20).stroke();
-      doc.text('TOTAL PRODUCIDO (KG):', 165, yPos + 7, { width: 120, align: 'left' });
-      
-      doc.rect(295, yPos, 130, 20).stroke();
-      doc.text('TOTAL MERMA (KG):', 300, yPos + 7, { width: 120, align: 'left' });
+      doc.rect(20 + wBox + 5, yPos, wBox, 20).stroke();
+      doc.text('TOTAL KG PRODUCIDO:', 20 + wBox + 10, yPos + 8);
 
-      doc.rect(430, yPos, 135, 20).stroke();
-      doc.text('OBSERVACIONES:', 435, yPos + 7, { width: 125, align: 'left' });
+      doc.rect(20 + (wBox * 2) + 10, yPos, wBox, 20).stroke();
+      doc.text('TOTAL MERMA KG:', 20 + (wBox * 2) + 15, yPos + 8);
 
-      yPos += 50; 
-      
-      doc.moveTo(50, yPos).lineTo(200, yPos).stroke();
-      doc.text('FIRMA MAQUINISTA', 50, yPos + 5, { width: 150, align: 'center' });
-
-      doc.moveTo(370, yPos).lineTo(520, yPos).stroke();
-      doc.text('FIRMA SUPERVISOR', 370, yPos + 5, { width: 150, align: 'center' });
+      doc.rect(20 + (wBox * 3) + 15, yPos, 135, 20).stroke();
+      doc.text('V°B° SUPERVISOR:', 20 + (wBox * 3) + 20, yPos + 8);
 
       doc.end();
     } catch (error) {

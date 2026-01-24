@@ -37,6 +37,7 @@ import ListaPrecios from './pages/Ventas/ListaPrecios';
 import OrdenesVenta from './pages/Ventas/OrdenesVenta';
 import NuevaOrdenVenta from './pages/Ventas/NuevaOrdenVenta';
 import DetalleOrdenVenta from './pages/Ventas/DetalleOrdenVenta';
+import VerificarOrdenes from './pages/Ventas/VerificarOrdenes';
 import GuiasRemision from './pages/Ventas/GuiasRemision';
 import NuevaGuiaRemision from './pages/Ventas/NuevaGuiaRemision';
 import DetalleGuiaRemision from './pages/Ventas/DetalleGuiaRemision';
@@ -276,6 +277,14 @@ function App() {
                         element={
                           <ProtectedRouteWithPermiso modulo="ordenesVenta">
                             <OrdenesVenta />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      <Route 
+                        path="/ventas/ordenes/verificacion" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
+                            <VerificarOrdenes />
                           </ProtectedRouteWithPermiso>
                         } 
                       />

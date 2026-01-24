@@ -72,3 +72,56 @@ export async function marcarTodasLeidas(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
+export async function eliminarNotificacion(req, res) {
+  try {
+    const { id } = req.params;
+    const id_usuario = req.user?.id_empleado;
+
+    if (!id_usuario) {
+      return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
+    }
+
+    const result = await executeQuery(`
+      DELETE FROM notificaciones 
+      WHERE id_notificacion = ? AND id_usuario_destino = ?
+    `, [id, id_usuario]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, message: 'Notificación eliminada' });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function eliminarTodasLeidas(req, res) {
+  try {
+    const id_usuario = req.user?.id_empleado;
+
+    if (!id_usuario) {
+      return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
+    }
+
+    const result = await executeQuery(`
+      DELETE FROM notificaciones 
+      WHERE id_usuario_destino = ? AND leido = 1
+    `, [id_usuario]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Notificaciones leídas eliminadas',
+      eliminadas: result.data.affectedRows || 0
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+}

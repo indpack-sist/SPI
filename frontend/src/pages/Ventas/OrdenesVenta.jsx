@@ -22,7 +22,10 @@ import {
   DollarSign,
   CreditCard,
   PlayCircle,
-  Factory
+  Factory,
+  Shield,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -42,17 +45,18 @@ function OrdenesVenta() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroPrioridad, setFiltroPrioridad] = useState('');
   const [filtroEstadoPago, setFiltroEstadoPago] = useState('');
+  const [filtroVerificacion, setFiltroVerificacion] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
   useEffect(() => {
     cargarDatos();
-  }, [filtroEstado, filtroPrioridad]);
+  }, [filtroEstado, filtroPrioridad, filtroVerificacion]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, busqueda]);
+  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, busqueda]);
 
   const cargarDatos = async () => {
     try {
@@ -62,6 +66,7 @@ function OrdenesVenta() {
       const filtros = {};
       if (filtroEstado) filtros.estado = filtroEstado;
       if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
+      if (filtroVerificacion) filtros.estado_verificacion = filtroVerificacion;
       
       const [ordenesRes, statsRes] = await Promise.all([
         ordenesVentaAPI.getAll(filtros),
@@ -181,6 +186,30 @@ function OrdenesVenta() {
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
 
+  const getEstadoVerificacionConfig = (estadoVerif) => {
+    const configs = {
+      'Pendiente': {
+        icono: Clock,
+        clase: 'badge-warning',
+        texto: 'Pend. Verif.',
+        color: '#f59e0b'
+      },
+      'Aprobada': {
+        icono: CheckCircle,
+        clase: 'badge-success',
+        texto: 'Aprobada',
+        color: '#10b981'
+      },
+      'Rechazada': {
+        icono: XCircle,
+        clase: 'badge-danger',
+        texto: 'Rechazada',
+        color: '#ef4444'
+      }
+    };
+    return configs[estadoVerif] || configs['Pendiente'];
+  };
+
   const getEstadoConfig = (estado) => {
     const configs = {
       'En Espera': { 
@@ -243,14 +272,40 @@ function OrdenesVenta() {
 
   const columns = [
     {
+      header: 'Verificación',
+      accessor: 'estado_verificacion',
+      width: '120px',
+      align: 'center',
+      render: (value, row) => {
+        const config = getEstadoVerificacionConfig(value);
+        const Icono = config.icono;
+        return (
+          <div>
+            <span className={`badge ${config.clase} text-xs`}>
+              <Icono size={12} />
+              {config.texto}
+            </span>
+            {value === 'Aprobada' && row.verificado_por && (
+              <div className="text-[10px] text-muted mt-1">
+                {row.verificado_por}
+              </div>
+            )}
+            {value === 'Rechazada' && (
+              <div className="text-[10px] text-danger mt-1 font-semibold">
+                Corregir
+              </div>
+            )}
+          </div>
+        );
+      }
+    },
+    {
       header: 'Comprobante / Orden',
       accessor: 'numero_orden',
       width: '200px',
       render: (value, row) => {
         const tipoRaw = row.tipo_comprobante || ''; 
-        
         const esFactura = tipoRaw.toLowerCase().includes('factura');
-        
         const textoMostrar = tipoRaw || 'Sin Tipo'; 
 
         return (
@@ -432,6 +487,7 @@ function OrdenesVenta() {
               navigate(`/ventas/ordenes/${value}/editar`);
             }}
             title="Editar orden"
+            disabled={row.estado_verificacion === 'Pendiente'}
           >
             <Edit size={14} />
           </button>
@@ -468,13 +524,22 @@ function OrdenesVenta() {
           </h1>
           <p className="text-muted">Gestión de órdenes de venta y despachos</p>
         </div>
-        <button 
-          className="btn btn-primary"
-          onClick={() => navigate('/ventas/ordenes/nueva')}
-        >
-          <Plus size={20} />
-          Nueva Orden de Venta
-        </button>
+        <div className="flex gap-2">
+          <button 
+            className="btn btn-outline"
+            onClick={() => navigate('/ventas/ordenes/verificacion')}
+          >
+            <Shield size={20} />
+            Verificar Órdenes
+          </button>
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/ventas/ordenes/nueva')}
+          >
+            <Plus size={20} />
+            Nueva Orden de Venta
+          </button>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -587,6 +652,31 @@ function OrdenesVenta() {
             <div className="flex items-center gap-3 w-full overflow-x-auto pb-2">
               <Filter size={20} className="text-muted shrink-0" />
               
+              <div className="flex gap-2">
+                <button
+                  className={`btn btn-sm ${!filtroVerificacion ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setFiltroVerificacion('')}
+                >
+                  Todas
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroVerificacion === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setFiltroVerificacion('Pendiente')}
+                >
+                  <Clock size={14} />
+                  Pendientes
+                </button>
+                <button
+                  className={`btn btn-sm ${filtroVerificacion === 'Rechazada' ? 'btn-danger' : 'btn-outline'}`}
+                  onClick={() => setFiltroVerificacion('Rechazada')}
+                >
+                  <XCircle size={14} />
+                  Rechazadas
+                </button>
+              </div>
+
+              <div className="border-l h-6 mx-2"></div>
+
               <div className="flex gap-2">
                 <button
                   className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}

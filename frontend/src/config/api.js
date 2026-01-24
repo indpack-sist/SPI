@@ -339,6 +339,7 @@ export const dashboard = {
   getTipoCambio: (params) => api.get('/dashboard/tipo-cambio', { params }),
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
+
 export const ordenesProduccionAPI = {
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
@@ -427,6 +428,7 @@ export const ordenesProduccionAPI = {
     }
   }
 };
+
 export const cotizacionesAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -474,6 +476,7 @@ export const ordenesVentaAPI = {
     const params = new URLSearchParams();
     if (filtros.estado) params.append('estado', filtros.estado);
     if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
+    if (filtros.estado_verificacion) params.append('estado_verificacion', filtros.estado_verificacion);
     if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
     if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
     
@@ -529,6 +532,16 @@ export const ordenesVentaAPI = {
   anularOrden: (id, motivo_anulacion) => 
     api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),
 
+  getOrdenesPendientesVerificacion: () => api.get('/ordenes-venta/verificacion/pendientes'),
+
+  getDatosVerificacion: (id) => api.get(`/ordenes-venta/${id}/verificacion/datos`),
+
+  aprobarVerificacion: (id, data) => api.post(`/ordenes-venta/${id}/verificacion/aprobar`, data),
+
+  rechazarVerificacion: (id, data) => api.post(`/ordenes-venta/${id}/verificacion/rechazar`, data),
+
+  reenviarVerificacion: (id) => api.post(`/ordenes-venta/${id}/verificacion/reenviar`),
+
   descargarPDF: (id, tipo = 'orden') => {
     return api.get(`/ordenes-venta/${id}/pdf`, {
       params: { tipo },
@@ -552,6 +565,7 @@ export const ordenesVentaAPI = {
 
   getVehiculos: () => api.get('/ordenes-venta/catalogo/vehiculos')
 };
+
 export const guiasRemisionAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
@@ -724,6 +738,7 @@ export const listasPreciosAPI = {
   update: (id, data) => api.put(`/listas-precios/${id}`, data),
   delete: (id) => api.delete(`/listas-precios/${id}`)
 };
+
 export const notificacionesAPI = {
   getAll: () => api.get('/notificaciones'),
   marcarLeida: (id) => api.put(`/notificaciones/${id}/leida`),

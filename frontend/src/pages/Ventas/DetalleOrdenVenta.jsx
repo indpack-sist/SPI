@@ -5,7 +5,7 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList
+  ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -79,16 +79,16 @@ function DetalleOrdenVenta() {
   });
 
   const [transporteForm, setTransporteForm] = useState({
-  tipo_entrega: 'Vehiculo Empresa',
-  id_vehiculo: '',
-  id_conductor: '',
-  transporte_nombre: '',
-  transporte_placa: '',
-  transporte_conductor: '',
-  transporte_dni: '',
-  transporte_licencia: '',  // ← AGREGAR ESTA LÍNEA
-  fecha_entrega_estimada: ''
-});
+    tipo_entrega: 'Vehiculo Empresa',
+    id_vehiculo: '',
+    id_conductor: '',
+    transporte_nombre: '',
+    transporte_placa: '',
+    transporte_conductor: '',
+    transporte_dni: '',
+    transporte_licencia: '',
+    fecha_entrega_estimada: ''
+  });
 
   const handleWheelDisable = (e) => {
     e.target.blur();
@@ -344,10 +344,10 @@ function DetalleOrdenVenta() {
             stock_disponible: parseFloat(p.stock_disponible),
             stock_maximo_disponible: parseFloat(p.stock_maximo_disponible),
             cantidad_ya_reservada: parseFloat(p.cantidad_ya_reservada),
-            cantidad_a_reservar: parseFloat(p.cantidad_a_reservar),
+            cantidad_a_reservar: parseFloat(p.cantidad_reservable),
             estado_reserva: p.estado_reserva,
             tipo_reserva: p.estado_reserva === 'completo' ? 'completo' : 'parcial',
-            seleccionado: parseFloat(p.cantidad_a_reservar) > 0
+            seleccionado: parseFloat(p.cantidad_reservable) > 0
           }))
         );
         setModalReservaStock(true);
@@ -439,7 +439,9 @@ function DetalleOrdenVenta() {
     } finally {
       setProcesando(false);
     }
-  };const handleCambiarTipoComprobante = async () => {
+  };
+
+  const handleCambiarTipoComprobante = async () => {
     if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
       setError('Debe seleccionar un tipo de comprobante diferente');
       return;
@@ -469,19 +471,19 @@ function DetalleOrdenVenta() {
   };
 
   const handleAbrirTransporte = () => {
-  setTransporteForm({
-    tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
-    id_vehiculo: orden.id_vehiculo || '',
-    id_conductor: orden.id_conductor || '',
-    transporte_nombre: orden.transporte_nombre || '',
-    transporte_placa: orden.transporte_placa || '',
-    transporte_conductor: orden.transporte_conductor || '',
-    transporte_dni: orden.transporte_dni || '',
-    transporte_licencia: orden.transporte_licencia || '',  // ← AGREGAR ESTA LÍNEA
-    fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
-  });
-  setModalTransporteOpen(true);
-};
+    setTransporteForm({
+      tipo_entrega: orden.tipo_entrega || 'Vehiculo Empresa',
+      id_vehiculo: orden.id_vehiculo || '',
+      id_conductor: orden.id_conductor || '',
+      transporte_nombre: orden.transporte_nombre || '',
+      transporte_placa: orden.transporte_placa || '',
+      transporte_conductor: orden.transporte_conductor || '',
+      transporte_dni: orden.transporte_dni || '',
+      transporte_licencia: orden.transporte_licencia || '',
+      fecha_entrega_estimada: orden.fecha_entrega_estimada ? orden.fecha_entrega_estimada.split('T')[0] : ''
+    });
+    setModalTransporteOpen(true);
+  };
 
   const handleGuardarTransporte = async (e) => {
     e.preventDefault();
@@ -503,7 +505,6 @@ function DetalleOrdenVenta() {
       setProcesando(false);
     }
   };
-
   const handleGenerarGuiaInterna = async () => {
     try {
       setDescargandoPDF('guia-interna');
@@ -641,6 +642,11 @@ function DetalleOrdenVenta() {
   };
 
   const handleCambiarEstado = async (estado) => {
+    if (orden.estado_verificacion === 'Pendiente') {
+      setError('No puede cambiar el estado de una orden pendiente de verificación');
+      return;
+    }
+
     if (estado !== 'Cancelada' && orden.tipo_venta === 'Crédito' && estadoCredito?.usar_limite_credito) {
       const disponible = orden.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible;
       const deudaPropiaDeEstaOrden = parseFloat(orden.total) - parseFloat(orden.monto_pagado || 0);
@@ -673,6 +679,11 @@ function DetalleOrdenVenta() {
   };
 
   const handleCambiarPrioridad = async (prioridad) => {
+    if (orden.estado_verificacion === 'Pendiente') {
+      setError('No puede cambiar la prioridad de una orden pendiente de verificación');
+      return;
+    }
+
     try {
       setError(null);
       setProcesando(true);
@@ -822,6 +833,11 @@ function DetalleOrdenVenta() {
     e.preventDefault();
     if (!productoRectificar) return;
 
+    if (orden.estado_verificacion === 'Pendiente') {
+      setError('No puede rectificar cantidades en una orden pendiente de verificación');
+      return;
+    }
+
     try {
       setProcesando(true);
       setError(null);
@@ -847,6 +863,28 @@ function DetalleOrdenVenta() {
     }
   };
 
+  const handleReenviarVerificacion = async () => {
+    if (!confirm('¿Está seguro de reenviar esta orden para verificación?')) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.reenviarVerificacion(id);
+
+      if (response.data.success) {
+        setSuccess('Orden reenviada para verificación exitosamente');
+        await cargarDatos();
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al reenviar orden');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const getTipoImpuestoNombre = (valor) => {
     const codigo = String(valor || '').toUpperCase().trim();
     
@@ -861,6 +899,30 @@ function DetalleOrdenVenta() {
     if (codigo === 'INAFECTO') return tipos['INA'];
     
     return tipos['IGV'];
+  };
+
+  const getEstadoVerificacionConfig = (estadoVerif) => {
+    const configs = {
+      'Pendiente': {
+        icono: Clock,
+        clase: 'badge-warning',
+        texto: 'Pendiente Verificación',
+        color: '#f59e0b'
+      },
+      'Aprobada': {
+        icono: CheckCircle,
+        clase: 'badge-success',
+        texto: 'Verificada y Aprobada',
+        color: '#10b981'
+      },
+      'Rechazada': {
+        icono: XCircle,
+        clase: 'badge-danger',
+        texto: 'Rechazada - Requiere Corrección',
+        color: '#ef4444'
+      }
+    };
+    return configs[estadoVerif] || configs['Pendiente'];
   };
 
   const getEstadoConfig = (estado) => {
@@ -934,14 +996,26 @@ function DetalleOrdenVenta() {
     if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
       return false;
     }
+    if (orden.estado_verificacion === 'Pendiente') {
+      return false;
+    }
     const pendientes = orden.detalle.some(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0);
     return pendientes;
   };
 
   const puedeReservarStock = () => {
     if (!orden) return false;
+    if (orden.estado_verificacion === 'Pendiente') return false;
     const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
     return !estadosNoPermitidos.includes(orden.estado);
+  };
+
+  const puedeEditarOrden = () => {
+    if (!orden) return false;
+    if (orden.estado === 'Cancelada') return false;
+    if (orden.estado_verificacion === 'Pendiente') return true;
+    if (orden.estado_verificacion === 'Rechazada') return true;
+    return true;
   };
 
   if (loading) return <Loading message="Cargando orden de venta..." />;
@@ -960,6 +1034,8 @@ function DetalleOrdenVenta() {
   const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
   const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
 
+  const estadoVerifConfig = getEstadoVerificacionConfig(orden.estado_verificacion);
+  const IconoVerificacion = estadoVerifConfig.icono;
   const columns = [
     {
       header: 'Código',
@@ -1121,6 +1197,7 @@ function DetalleOrdenVenta() {
       align: 'center',
       render: (value, row) => {
         if (orden?.estado === 'Cancelada') return '-';
+        if (orden?.estado_verificacion === 'Pendiente') return '-';
 
         return (
           <div className="flex items-center justify-center gap-1">
@@ -1224,7 +1301,7 @@ function DetalleOrdenVenta() {
           className="btn btn-sm btn-danger"
           onClick={() => handleAnularPago(value, row.numero_pago)}
           title="Anular pago"
-          disabled={procesando || orden.estado === 'Cancelada'}
+          disabled={procesando || orden.estado === 'Cancelada' || orden.estado_verificacion === 'Pendiente'}
         >
           <Trash2 size={14} />
         </button>
@@ -1320,7 +1397,7 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
-          {orden.tipo_comprobante === 'Nota de Venta' && orden.estado !== 'Cancelada' && (
+          {orden.tipo_comprobante === 'Nota de Venta' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
             <button
               className="btn btn-outline border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
               onClick={handleGenerarGuiaInterna}
@@ -1385,7 +1462,7 @@ function DetalleOrdenVenta() {
             </button>
           )}
           
-          {orden.estado !== 'Cancelada' && (
+          {puedeEditarOrden() && (
             <>
               <button
                 className="btn btn-secondary"
@@ -1394,7 +1471,7 @@ function DetalleOrdenVenta() {
                 <Edit size={20} /> Editar
               </button>
               
-              {orden.estado !== 'Entregada' && (
+              {orden.estado !== 'Entregada' && orden.estado_verificacion === 'Aprobada' && (
                 <button
                   className="btn btn-danger"
                   onClick={() => setModalAnularOrden(true)}
@@ -1411,7 +1488,79 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {productosRequierenOP.length > 0 && (
+      {orden.estado_verificacion !== 'Aprobada' && (
+        <div className={`alert mb-4 ${orden.estado_verificacion === 'Pendiente' ? 'alert-warning' : 'alert-danger'}`}>
+          <div className="flex items-start gap-3">
+            <IconoVerificacion size={24} />
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <strong className="text-lg">{estadoVerifConfig.texto}</strong>
+                <span className={`badge ${estadoVerifConfig.clase}`}>
+                  {orden.estado_verificacion}
+                </span>
+              </div>
+              
+              {orden.estado_verificacion === 'Pendiente' && (
+                <div>
+                  <p className="mb-2">Esta orden está en espera de verificación administrativa. No se pueden realizar las siguientes acciones hasta que sea aprobada:</p>
+                  <ul className="list-disc list-inside text-sm space-y-1 ml-4">
+                    <li>Cambiar estado o prioridad</li>
+                    <li>Reservar stock</li>
+                    <li>Registrar despachos</li>
+                    <li>Registrar pagos</li>
+                    <li>Crear órdenes de producción</li>
+                  </ul>
+                  <p className="mt-2 text-sm">La orden puede ser visualizada y su PDF puede descargarse normalmente.</p>
+                </div>
+              )}
+
+              {orden.estado_verificacion === 'Rechazada' && (
+                <div>
+                  <div className="mb-3">
+                    <p className="font-semibold mb-1">Motivo del rechazo:</p>
+                    <p className="bg-white bg-opacity-50 p-3 rounded border border-red-300">
+                      {orden.motivo_rechazo || 'No especificado'}
+                    </p>
+                  </div>
+                  
+                  {orden.observaciones_verificador && (
+                    <div className="mb-3">
+                      <p className="font-semibold mb-1">Observaciones del verificador:</p>
+                      <p className="bg-white bg-opacity-50 p-3 rounded border border-red-300 text-sm">
+                        {orden.observaciones_verificador}
+                      </p>
+                    </div>
+                  )}
+
+                  {orden.verificado_por && orden.fecha_verificacion && (
+                    <p className="text-sm mb-3">
+                      Rechazada por <strong>{orden.verificado_por}</strong> el {formatearFecha(orden.fecha_verificacion)}
+                    </p>
+                  )}
+
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      className="btn btn-warning"
+                      onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
+                    >
+                      <Edit size={18} /> Corregir y Editar Orden
+                    </button>
+                    <button
+                      className="btn btn-outline border-orange-300 hover:bg-orange-50"
+                      onClick={handleReenviarVerificacion}
+                      disabled={procesando}
+                    >
+                      <RefreshCw size={18} /> Reenviar para Verificación
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {productosRequierenOP.length > 0 && orden.estado_verificacion === 'Aprobada' && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
           <div>
@@ -1431,112 +1580,115 @@ function DetalleOrdenVenta() {
             <small>Puede descargar el PDF de salida usando el botón "PDF Salida" en la parte superior.</small>
           </div>
         </div>
-      )}<div className="card mb-6 border-l-4 border-primary">
-        <div className="card-header">
-          <h2 className="card-title">
-            <TrendingUp size={20} />
-            Estado de la Orden
-          </h2>
-        </div>
-        <div className="card-body">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <div className={`p-4 rounded-xl bg-gradient-to-br ${
-                orden.estado === 'En Espera' ? 'from-yellow-100 to-yellow-200' :
-                orden.estado === 'En Proceso' ? 'from-blue-100 to-blue-200' :
-                orden.estado === 'Atendido por Producción' ? 'from-green-100 to-green-200' :
-                orden.estado === 'Despacho Parcial' ? 'from-orange-100 to-orange-200' :
-                orden.estado === 'Despachada' ? 'from-purple-100 to-purple-200' :
-                orden.estado === 'Entregada' ? 'from-emerald-100 to-emerald-200' :
-                'from-red-100 to-red-200'
-              }`}>
-                <IconoEstado size={40} className={
-                  orden.estado === 'En Espera' ? 'text-yellow-600' :
-                  orden.estado === 'En Proceso' ? 'text-blue-600' :
-                  orden.estado === 'Atendido por Producción' ? 'text-green-600' :
-                  orden.estado === 'Despacho Parcial' ? 'text-orange-600' :
-                  orden.estado === 'Despachada' ? 'text-purple-600' :
-                  orden.estado === 'Entregada' ? 'text-emerald-600' :
-                  'text-red-600'
-                } />
-              </div>
-              <div>
-                <p className="text-sm uppercase font-semibold text-muted mb-1">Estado Actual</p>
-                <h3 className="text-3xl font-bold">{orden.estado}</h3>
-                {orden.fecha_vencimiento && (
-                  <p className={`text-sm mt-1 ${new Date(orden.fecha_vencimiento) < new Date() && orden.estado_pago !== 'Pagado' ? 'text-danger font-bold' : 'text-muted'}`}>
-                    Vence: {formatearFecha(orden.fecha_vencimiento)}
-                  </p>
-                )}
-              </div>
-            </div>
-            
-            <div className="text-right">
-              <p className="text-sm uppercase font-semibold text-muted mb-2">Prioridad</p>
-              <button 
-                className={`badge ${prioridadConfig.clase} text-lg px-4 py-2`}
-                onClick={() => setModalPrioridadOpen(true)}
-                disabled={orden.estado === 'Cancelada' || orden.estado === 'Entregada'}
-              >
-                {prioridadConfig.icono} {orden.prioridad}
-              </button>
-            </div>
+      )}
+
+      {orden.estado_verificacion === 'Aprobada' && (
+        <div className="card mb-6 border-l-4 border-primary">
+          <div className="card-header">
+            <h2 className="card-title">
+              <TrendingUp size={20} />
+              Estado de la Orden
+            </h2>
           </div>
-
-          {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
-            <div className="border-t border-gray-200 pt-4 mt-2">
-              <p className="text-xs font-bold uppercase text-muted mb-3">Cambiar Estado:</p>
-              <div className="flex gap-3 flex-wrap">
-                {estadoConfig.siguientes.map(estado => {
-                  const config = getEstadoConfig(estado);
-                  const Icono = config.icono;
-                  const esActual = orden.estado === estado;
-                  
-                  let colorClases = '';
-                  if (estado === 'En Proceso') {
-                    colorClases = esActual 
-                      ? 'bg-blue-500 text-white cursor-not-allowed opacity-70' 
-                      : 'bg-white text-blue-600 border-2 border-blue-500 hover:bg-blue-500 hover:text-white';
-                  } else if (estado === 'Atendido por Producción') {
-                    colorClases = esActual 
-                      ? 'bg-green-500 text-white cursor-not-allowed opacity-70' 
-                      : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
-                  } else if (estado === 'Despacho Parcial') {
-                    colorClases = esActual 
-                      ? 'bg-orange-500 text-white cursor-not-allowed opacity-70' 
-                      : 'bg-white text-orange-600 border-2 border-orange-500 hover:bg-orange-500 hover:text-white';
-                  } else if (estado === 'Despachada') {
-                    colorClases = esActual 
-                      ? 'bg-purple-500 text-white cursor-not-allowed opacity-70' 
-                      : 'bg-white text-purple-600 border-2 border-purple-500 hover:bg-purple-500 hover:text-white';
-                  } else if (estado === 'Entregada') {
-                    colorClases = esActual 
-                      ? 'bg-emerald-500 text-white cursor-not-allowed opacity-70' 
-                      : 'bg-white text-emerald-600 border-2 border-emerald-500 hover:bg-emerald-500 hover:text-white';
-                  } else if (estado === 'Cancelada') {
-                    colorClases = esActual 
-                      ? 'bg-red-500 text-white cursor-not-allowed opacity-70' 
-                      : 'bg-white text-red-600 border-2 border-red-500 hover:bg-red-500 hover:text-white';
-                  }
-
-                  return (
-                    <button
-                      key={estado}
-                      className={`btn btn-sm font-semibold transition-all ${colorClases}`}
-                      onClick={() => handleCambiarEstado(estado)}
-                      disabled={esActual || procesando}
-                    >
-                      <Icono size={16} className="mr-1.5" />
-                      {estado}
-                    </button>
-                  );
-                })}
+          <div className="card-body">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <div className={`p-4 rounded-xl bg-gradient-to-br ${
+                  orden.estado === 'En Espera' ? 'from-yellow-100 to-yellow-200' :
+                  orden.estado === 'En Proceso' ? 'from-blue-100 to-blue-200' :
+                  orden.estado === 'Atendido por Producción' ? 'from-green-100 to-green-200' :
+                  orden.estado === 'Despacho Parcial' ? 'from-orange-100 to-orange-200' :
+                  orden.estado === 'Despachada' ? 'from-purple-100 to-purple-200' :
+                  orden.estado === 'Entregada' ? 'from-emerald-100 to-emerald-200' :
+                  'from-red-100 to-red-200'
+                }`}>
+                  <IconoEstado size={40} className={
+                    orden.estado === 'En Espera' ? 'text-yellow-600' :
+                    orden.estado === 'En Proceso' ? 'text-blue-600' :
+                    orden.estado === 'Atendido por Producción' ? 'text-green-600' :
+                    orden.estado === 'Despacho Parcial' ? 'text-orange-600' :
+                    orden.estado === 'Despachada' ? 'text-purple-600' :
+                    orden.estado === 'Entregada' ? 'text-emerald-600' :
+                    'text-red-600'
+                  } />
+                </div>
+                <div>
+                  <p className="text-sm uppercase font-semibold text-muted mb-1">Estado Actual</p>
+                  <h3 className="text-3xl font-bold">{orden.estado}</h3>
+                  {orden.fecha_vencimiento && (
+                    <p className={`text-sm mt-1 ${new Date(orden.fecha_vencimiento) < new Date() && orden.estado_pago !== 'Pagado' ? 'text-danger font-bold' : 'text-muted'}`}>
+                      Vence: {formatearFecha(orden.fecha_vencimiento)}
+                    </p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="text-right">
+                <p className="text-sm uppercase font-semibold text-muted mb-2">Prioridad</p>
+                <button 
+                  className={`badge ${prioridadConfig.clase} text-lg px-4 py-2`}
+                  onClick={() => setModalPrioridadOpen(true)}
+                  disabled={orden.estado === 'Cancelada' || orden.estado === 'Entregada'}
+                >
+                  {prioridadConfig.icono} {orden.prioridad}
+                </button>
               </div>
             </div>
-          )}
-        </div>
-      </div>
 
+            {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+              <div className="border-t border-gray-200 pt-4 mt-2">
+                <p className="text-xs font-bold uppercase text-muted mb-3">Cambiar Estado:</p>
+                <div className="flex gap-3 flex-wrap">
+                  {estadoConfig.siguientes.map(estado => {
+                    const config = getEstadoConfig(estado);
+                    const Icono = config.icono;
+                    const esActual = orden.estado === estado;
+                    
+                    let colorClases = '';
+                    if (estado === 'En Proceso') {
+                      colorClases = esActual 
+                        ? 'bg-blue-500 text-white cursor-not-allowed opacity-70' 
+                        : 'bg-white text-blue-600 border-2 border-blue-500 hover:bg-blue-500 hover:text-white';
+                    } else if (estado === 'Atendido por Producción') {
+                      colorClases = esActual 
+                        ? 'bg-green-500 text-white cursor-not-allowed opacity-70' 
+                        : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
+                    } else if (estado === 'Despacho Parcial') {
+                      colorClases = esActual 
+                        ? 'bg-orange-500 text-white cursor-not-allowed opacity-70' 
+                        : 'bg-white text-orange-600 border-2 border-orange-500 hover:bg-orange-500 hover:text-white';
+                    } else if (estado === 'Despachada') {
+                      colorClases = esActual 
+                        ? 'bg-purple-500 text-white cursor-not-allowed opacity-70' 
+                        : 'bg-white text-purple-600 border-2 border-purple-500 hover:bg-purple-500 hover:text-white';
+                    } else if (estado === 'Entregada') {
+                      colorClases = esActual 
+                        ? 'bg-emerald-500 text-white cursor-not-allowed opacity-70' 
+                        : 'bg-white text-emerald-600 border-2 border-emerald-500 hover:bg-emerald-500 hover:text-white';
+                    } else if (estado === 'Cancelada') {
+                      colorClases = esActual 
+                        ? 'bg-red-500 text-white cursor-not-allowed opacity-70' 
+                        : 'bg-white text-red-600 border-2 border-red-500 hover:bg-red-500 hover:text-white';
+                    }
+
+                    return (
+                      <button
+                        key={estado}
+                        className={`btn btn-sm font-semibold transition-all ${colorClases}`}
+                        onClick={() => handleCambiarEstado(estado)}
+                        disabled={esActual || procesando}
+                      >
+                        <Icono size={16} className="mr-1.5" />
+                        {estado}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         
         <div className="card h-full">
@@ -1606,7 +1758,7 @@ function DetalleOrdenVenta() {
                             <label className="text-sm font-medium text-muted">Tipo Documento:</label>
                             <div className="flex items-center gap-2">
                                 <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
-                                {!orden.comprobante_editado && orden.estado !== 'Cancelada' && (
+                                {!orden.comprobante_editado && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
                                     <button
                                         className="btn btn-xs btn-outline text-xs"
                                         onClick={() => {
@@ -1688,7 +1840,7 @@ function DetalleOrdenVenta() {
                   className="btn btn-xs btn-outline" 
                   onClick={handleAbrirTransporte}
                   title="Editar datos de transporte"
-                  disabled={orden.estado === 'Cancelada'}
+                  disabled={orden.estado === 'Cancelada' || orden.estado_verificacion === 'Pendiente'}
                 >
                   <Edit size={14} />
                 </button>
@@ -1732,55 +1884,54 @@ function DetalleOrdenVenta() {
                 </div>
 
                <div className="pt-3 mt-2 border-t border-gray-100">
-    <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
-    {orden.tipo_entrega === 'Vehiculo Empresa' ? (
-      <>
-        <div className="flex items-center gap-2 mb-1">
-            <Truck size={14} className="text-indigo-600" />
-            <div>
-                <span className="text-xs text-muted">Vehículo:</span>
-                <span className="font-bold ml-1">{orden.vehiculo_placa_interna || orden.vehiculo_placa || 'No asignado'}</span>
-                {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
-            </div>
-        </div>
-        <div className="flex items-center gap-2 mb-1">
-            <User size={14} className="text-indigo-600" />
-            <div>
-                <span className="text-xs text-muted">Conductor:</span>
-                <span className="font-bold ml-1">{orden.conductor_nombre || orden.conductor || 'No asignado'}</span>
-            </div>
-        </div>
-        {/* ← AGREGAR ESTE BLOQUE */}
-        {orden.transporte_licencia && (
-          <div className="flex items-center gap-2">
-              <div className="ml-7">
-                  <span className="text-xs text-muted">Licencia:</span>
-                  <span className="font-bold ml-1">{orden.transporte_licencia}</span>
+                  <p className="text-xs font-bold text-indigo-700 uppercase mb-2">Transporte Asignado</p>
+                  {orden.tipo_entrega === 'Vehiculo Empresa' ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-1">
+                          <Truck size={14} className="text-indigo-600" />
+                          <div>
+                              <span className="text-xs text-muted">Vehículo:</span>
+                              <span className="font-bold ml-1">{orden.vehiculo_placa_interna || orden.vehiculo_placa || 'No asignado'}</span>
+                              {orden.vehiculo_modelo && <span className="text-xs text-muted ml-1">({orden.vehiculo_modelo})</span>}
+                          </div>
+                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                          <User size={14} className="text-indigo-600" />
+                          <div>
+                              <span className="text-xs text-muted">Conductor:</span>
+                              <span className="font-bold ml-1">{orden.conductor_nombre || orden.conductor || 'No asignado'}</span>
+                          </div>
+                      </div>
+                      {orden.transporte_licencia && (
+                        <div className="flex items-center gap-2">
+                            <div className="ml-7">
+                                <span className="text-xs text-muted">Licencia:</span>
+                                <span className="font-bold ml-1">{orden.transporte_licencia}</span>
+                            </div>
+                        </div>
+                      )}
+                    </>
+                  ) : orden.tipo_entrega === 'Transporte Privado' ? (
+                    <div className="text-sm space-y-1">
+                      <p><span className="font-bold">Privado:</span> {orden.transporte_nombre || '-'}</p>
+                      <p><span className="font-bold">Placa:</span> {orden.transporte_placa || '-'}</p>
+                      <p><span className="font-bold">Chofer:</span> {orden.transporte_conductor || '-'}</p>
+                      {orden.transporte_dni && (
+                        <p><span className="font-bold">DNI:</span> {orden.transporte_dni}</p>
+                      )}
+                      {orden.transporte_licencia && (
+                        <p><span className="font-bold">Licencia:</span> {orden.transporte_licencia}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm">
+                      <p className="flex items-center gap-1">
+                        <Box size={14} className="text-indigo-600" />
+                        <span>Recojo en tienda</span>
+                      </p>
+                    </div>
+                  )}
               </div>
-          </div>
-        )}
-      </>
-    ) : orden.tipo_entrega === 'Transporte Privado' ? (
-      <div className="text-sm space-y-1">
-        <p><span className="font-bold">Privado:</span> {orden.transporte_nombre || '-'}</p>
-        <p><span className="font-bold">Placa:</span> {orden.transporte_placa || '-'}</p>
-        <p><span className="font-bold">Chofer:</span> {orden.transporte_conductor || '-'}</p>
-        {orden.transporte_dni && (
-          <p><span className="font-bold">DNI:</span> {orden.transporte_dni}</p>
-        )}
-        {orden.transporte_licencia && (
-          <p><span className="font-bold">Licencia:</span> {orden.transporte_licencia}</p>
-        )}
-      </div>
-    ) : (
-      <div className="text-sm">
-        <p className="flex items-center gap-1">
-          <Box size={14} className="text-indigo-600" />
-          <span>Recojo en tienda</span>
-        </p>
-      </div>
-    )}
-</div>
             </div>
         </div>
       </div>
@@ -1881,7 +2032,7 @@ function DetalleOrdenVenta() {
                                    <Download size={14}/>
                                  )}
                                </button>
-                               {row.estado === 'Activo' && orden.estado !== 'Cancelada' && (
+                               {row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
                                  <button 
                                    className="btn btn-sm btn-danger" 
                                    onClick={() => handleAnularDespacho(val)}
@@ -1902,70 +2053,71 @@ function DetalleOrdenVenta() {
          </div>
       )}
 
-      <div className="mt-8 border-t-2 border-gray-100 pt-6">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700">
-            <CreditCard size={24} /> Gestión de Cobranzas
-        </h2>
+      {orden.estado_verificacion === 'Aprobada' && (
+        <div className="mt-8 border-t-2 border-gray-100 pt-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700">
+              <CreditCard size={24} /> Gestión de Cobranzas
+          </h2>
 
-        {resumenPagos && (
-            <div className="card mb-4 border-l-4 border-success">
-            <div className="card-header flex justify-between items-center">
-                <h2 className="card-title">Resumen de Pagos</h2>
-                {orden.estado_pago !== 'Pagado' && orden.estado !== 'Cancelada' && (
-                <button className="btn btn-sm btn-success" onClick={() => setModalPagoOpen(true)}>
-                    <Plus size={16} /> Registrar Pago
-                </button>
-                )}
-            </div>
-            <div className="card-body">
-                <div className="grid grid-cols-4 gap-4">
-                <div>
-                    <p className="text-sm text-muted">Total Orden</p>
-                    <p className="text-2xl font-bold">{formatearMoneda(totalCorregido)}</p>
-                </div>
-                <div>
-                    <p className="text-sm text-muted">Monto Pagado</p>
-                    <p className="text-2xl font-bold text-success">{formatearMoneda(resumenPagos.monto_pagado)}</p>
-                </div>
-                <div>
-                    <p className="text-sm text-muted">Saldo Pendiente</p>
-                    <p className="text-2xl font-bold text-warning">{formatearMoneda(saldoCorregido)}</p>
-                </div>
-                <div>
-                    <p className="text-sm text-muted">Progreso Pago</p>
-                    <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-gray-200 rounded-full h-3">
-                        <div 
-                        className={`h-3 rounded-full ${
-                            (resumenPagos.monto_pagado >= totalCorregido - 0.1) ? 'bg-success' : 
-                            parseFloat(resumenPagos.monto_pagado) > 0 ? 'bg-info' : 'bg-warning'
-                        }`}
-                        style={{ width: `${Math.min(100, (parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100)}%` }}
-                        ></div>
-                    </div>
-                    <span className="font-bold">{((parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100).toFixed(0)}%</span>
-                    </div>
-                </div>
-                </div>
-            </div>
-            </div>
-        )}
+          {resumenPagos && (
+              <div className="card mb-4 border-l-4 border-success">
+              <div className="card-header flex justify-between items-center">
+                  <h2 className="card-title">Resumen de Pagos</h2>
+                  {orden.estado_pago !== 'Pagado' && orden.estado !== 'Cancelada' && (
+                  <button className="btn btn-sm btn-success" onClick={() => setModalPagoOpen(true)}>
+                      <Plus size={16} /> Registrar Pago
+                  </button>
+                  )}
+              </div>
+              <div className="card-body">
+                  <div className="grid grid-cols-4 gap-4">
+                  <div>
+                      <p className="text-sm text-muted">Total Orden</p>
+                      <p className="text-2xl font-bold">{formatearMoneda(totalCorregido)}</p>
+                  </div>
+                  <div>
+                      <p className="text-sm text-muted">Monto Pagado</p>
+                      <p className="text-2xl font-bold text-success">{formatearMoneda(resumenPagos.monto_pagado)}</p>
+                  </div>
+                  <div>
+                      <p className="text-sm text-muted">Saldo Pendiente</p>
+                      <p className="text-2xl font-bold text-warning">{formatearMoneda(saldoCorregido)}</p>
+                  </div>
+                  <div>
+                      <p className="text-sm text-muted">Progreso Pago</p>
+                      <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-gray-200 rounded-full h-3">
+                          <div 
+                          className={`h-3 rounded-full ${
+                              (resumenPagos.monto_pagado >= totalCorregido - 0.1) ? 'bg-success' : 
+                              parseFloat(resumenPagos.monto_pagado) > 0 ? 'bg-info' : 'bg-warning'
+                          }`}
+                          style={{ width: `${Math.min(100, (parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100)}%` }}
+                          ></div>
+                      </div>
+                      <span className="font-bold">{((parseFloat(resumenPagos.monto_pagado) / totalCorregido) * 100).toFixed(0)}%</span>
+                      </div>
+                  </div>
+                  </div>
+              </div>
+              </div>
+          )}
 
-        {pagos.length > 0 && (
-            <div className="card mb-4">
-            <div className="card-header">
-                <h2 className="card-title">
-                <FileText size={20} /> Historial de Transacciones
-                <span className="badge badge-primary ml-2">{pagos.length}</span>
-                </h2>
-            </div>
-            <div className="card-body">
-                <Table columns={columnsPagos} data={pagos} emptyMessage="No hay pagos registrados" />
-            </div>
-            </div>
-        )}
-      </div>
-
+          {pagos.length > 0 && (
+              <div className="card mb-4">
+              <div className="card-header">
+                  <h2 className="card-title">
+                  <FileText size={20} /> Historial de Transacciones
+                  <span className="badge badge-primary ml-2">{pagos.length}</span>
+                  </h2>
+              </div>
+              <div className="card-body">
+                  <Table columns={columnsPagos} data={pagos} emptyMessage="No hay pagos registrados" />
+              </div>
+              </div>
+          )}
+        </div>
+      )}
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
         <div className="space-y-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
@@ -2462,143 +2614,142 @@ function DetalleOrdenVenta() {
       </Modal>
 
       <Modal
-  isOpen={modalTransporteOpen}
-  onClose={() => setModalTransporteOpen(false)}
-  title="Editar Datos de Transporte"
-  size="md"
->
-  <form onSubmit={handleGuardarTransporte}>
-    <div className="space-y-4">
-      <div className="form-group">
-        <label className="form-label">Tipo de Entrega</label>
-        <select 
-          className="form-select"
-          value={transporteForm.tipo_entrega}
-          onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
-        >
-          <option value="Vehiculo Empresa">Vehículo Empresa</option>
-          <option value="Transporte Privado">Transporte Privado / Tercero</option>
-          <option value="Recojo Tienda">Recojo en Tienda</option>
-        </select>
-      </div>
-
-      {transporteForm.tipo_entrega === 'Vehiculo Empresa' && (
-        <>
-          <div className="form-group">
-            <label className="form-label">Vehículo</label>
-            <select 
-              className="form-select"
-              value={transporteForm.id_vehiculo}
-              onChange={(e) => setTransporteForm({ ...transporteForm, id_vehiculo: e.target.value })}
-            >
-              <option value="">Seleccione vehículo</option>
-              {vehiculos.map(v => (
-                <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa} - {v.marca_modelo}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Conductor</label>
-            <select 
-              className="form-select"
-              value={transporteForm.id_conductor}
-              onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
-            >
-              <option value="">Seleccione conductor</option>
-              {conductores.map(c => (
-                <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo}</option>
-              ))}
-            </select>
-          </div>
-          {/* ← AGREGAR ESTE BLOQUE PARA VEHÍCULO EMPRESA */}
-          <div className="form-group">
-            <label className="form-label">Licencia de Conducir</label>
-            <input 
-              type="text" 
-              className="form-input"
-              value={transporteForm.transporte_licencia}
-              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}
-              placeholder="Nº Licencia"
-              maxLength={20}
-            />
-          </div>
-        </>
-      )}
-
-      {transporteForm.tipo_entrega === 'Transporte Privado' && (
-        <>
-          <div className="form-group">
-            <label className="form-label">Empresa Transporte</label>
-            <input 
-              type="text" 
-              className="form-input"
-              value={transporteForm.transporte_nombre}
-              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
-              placeholder="Nombre del empresa o transportista"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+        isOpen={modalTransporteOpen}
+        onClose={() => setModalTransporteOpen(false)}
+        title="Editar Datos de Transporte"
+        size="md"
+      >
+        <form onSubmit={handleGuardarTransporte}>
+          <div className="space-y-4">
             <div className="form-group">
-              <label className="form-label">Placa Vehículo</label>
+              <label className="form-label">Tipo de Entrega</label>
+              <select 
+                className="form-select"
+                value={transporteForm.tipo_entrega}
+                onChange={(e) => setTransporteForm({ ...transporteForm, tipo_entrega: e.target.value })}
+              >
+                <option value="Vehiculo Empresa">Vehículo Empresa</option>
+                <option value="Transporte Privado">Transporte Privado / Tercero</option>
+                <option value="Recojo Tienda">Recojo en Tienda</option>
+              </select>
+            </div>
+
+            {transporteForm.tipo_entrega === 'Vehiculo Empresa' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Vehículo</label>
+                  <select 
+                    className="form-select"
+                    value={transporteForm.id_vehiculo}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, id_vehiculo: e.target.value })}
+                  >
+                    <option value="">Seleccione vehículo</option>
+                    {vehiculos.map(v => (
+                      <option key={v.id_vehiculo} value={v.id_vehiculo}>{v.placa} - {v.marca_modelo}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Conductor</label>
+                  <select 
+                    className="form-select"
+                    value={transporteForm.id_conductor}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, id_conductor: e.target.value })}
+                  >
+                    <option value="">Seleccione conductor</option>
+                    {conductores.map(c => (
+                      <option key={c.id_empleado} value={c.id_empleado}>{c.nombre_completo}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Licencia de Conducir</label>
+                  <input 
+                    type="text" 
+                    className="form-input"
+                    value={transporteForm.transporte_licencia}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}
+                    placeholder="Nº Licencia"
+                    maxLength={20}
+                  />
+                </div>
+              </>
+            )}
+
+            {transporteForm.tipo_entrega === 'Transporte Privado' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Empresa Transporte</label>
+                  <input 
+                    type="text" 
+                    className="form-input"
+                    value={transporteForm.transporte_nombre}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_nombre: e.target.value })}
+                    placeholder="Nombre del empresa o transportista"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group">
+                    <label className="form-label">Placa Vehículo</label>
+                    <input 
+                      type="text" 
+                      className="form-input"
+                      value={transporteForm.transporte_placa}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">DNI Chofer</label>
+                    <input 
+                      type="text" 
+                      className="form-input"
+                      value={transporteForm.transporte_dni}
+                      onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nombre Chofer</label>
+                  <input 
+                    type="text" 
+                    className="form-input"
+                    value={transporteForm.transporte_conductor}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Licencia de Conducir</label>
+                  <input 
+                    type="text" 
+                    className="form-input"
+                    value={transporteForm.transporte_licencia}
+                    onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}
+                    placeholder="Nº Licencia"
+                    maxLength={20}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">Fecha Estimada Entrega</label>
               <input 
-                type="text" 
+                type="date" 
                 className="form-input"
-                value={transporteForm.transporte_placa}
-                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_placa: e.target.value })}
+                value={transporteForm.fecha_entrega_estimada}
+                onChange={(e) => setTransporteForm({ ...transporteForm, fecha_entrega_estimada: e.target.value })}
               />
             </div>
-            <div className="form-group">
-              <label className="form-label">DNI Chofer</label>
-              <input 
-                type="text" 
-                className="form-input"
-                value={transporteForm.transporte_dni}
-                onChange={(e) => setTransporteForm({ ...transporteForm, transporte_dni: e.target.value })}
-              />
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" className="btn btn-outline" onClick={() => setModalTransporteOpen(false)}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={procesando}>
+                <Save size={20} /> Guardar Cambios
+              </button>
             </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Nombre Chofer</label>
-            <input 
-              type="text" 
-              className="form-input"
-              value={transporteForm.transporte_conductor}
-              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_conductor: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Licencia de Conducir</label>
-            <input 
-              type="text" 
-              className="form-input"
-              value={transporteForm.transporte_licencia}
-              onChange={(e) => setTransporteForm({ ...transporteForm, transporte_licencia: e.target.value })}
-              placeholder="Nº Licencia"
-              maxLength={20}
-            />
-          </div>
-        </>
-      )}
-
-      <div className="form-group">
-        <label className="form-label">Fecha Estimada Entrega</label>
-        <input 
-          type="date" 
-          className="form-input"
-          value={transporteForm.fecha_entrega_estimada}
-          onChange={(e) => setTransporteForm({ ...transporteForm, fecha_entrega_estimada: e.target.value })}
-        />
-      </div>
-
-      <div className="flex gap-2 justify-end pt-2">
-        <button type="button" className="btn btn-outline" onClick={() => setModalTransporteOpen(false)}>Cancelar</button>
-        <button type="submit" className="btn btn-primary" disabled={procesando}>
-          <Save size={20} /> Guardar Cambios
-        </button>
-      </div>
-    </div>
-  </form>
-</Modal>
+        </form>
+      </Modal>
       
       <Modal
         isOpen={modalRectificarOpen}

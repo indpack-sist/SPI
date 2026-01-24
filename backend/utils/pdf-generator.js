@@ -2219,7 +2219,10 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fontSize(10).text(orden.numero_orden, 470, 33, { align: 'center', width: 105 });
 
       const esLamina = (orden.producto && (orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA'))) || orden.operario_corte;
-      const unidadProduccion = esLamina ? 'mill' : 'uds';
+      
+      const unidadProduccion = orden.unidad_medida 
+        ? orden.unidad_medida.toUpperCase() 
+        : (esLamina ? 'MILL' : 'UDS');
       
       const yInfo = 60; 
       const alturaDatos = 45; 
@@ -2231,7 +2234,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.font('Helvetica').text(orden.producto, 70, yInfo + 6, { width: 300, ellipsis: true });
       
       const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} ${unidadProduccion}` : '---';
-      doc.font('Helvetica-Bold').text(`META ${unidadProduccion.toUpperCase()}:`, 380, yInfo + 6);
+      doc.font('Helvetica-Bold').text(`META ${unidadProduccion}:`, 380, yInfo + 6);
       doc.font('Helvetica').text(metaUnidades, 430, yInfo + 6);
       doc.font('Helvetica-Bold').text('META KG:', 480, yInfo + 6);
       doc.font('Helvetica').text(`${parseFloat(orden.cantidad_planificada || 0).toFixed(2)}`, 520, yInfo + 6);
@@ -2409,7 +2412,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       const wBox = 135;
       
       doc.rect(20, yPos, wBox, 20).stroke();
-      doc.font('Helvetica-Bold').text(`TOTAL ${esLamina ? 'MILLARES' : 'UNIDADES'}:`, 25, yPos + 8);
+      doc.font('Helvetica-Bold').text(`TOTAL ${unidadProduccion}:`, 25, yPos + 8);
 
       doc.rect(20 + wBox + 5, yPos, wBox, 20).stroke();
       doc.text('TOTAL KG PRODUCIDO:', 20 + wBox + 10, yPos + 8);

@@ -509,45 +509,32 @@ function SolicitudesCredito() {
             {solicitudSeleccionada.archivo_sustento_url && (
               <div className="mb-4">
                 <h4 className="font-medium mb-2 flex items-center gap-2">
-                    <FileText size={16} /> Documento de Sustento
+                  <FileText size={16} /> Documento de Sustento
                 </h4>
                 <div className="card p-0 overflow-hidden border bg-gray-100">
-                    {/* VISUALIZACIÓN NATIVA MEJORADA */}
-                    {solicitudSeleccionada.archivo_sustento_url.toLowerCase().endsWith('.pdf') ? (
-                        <object
-                            data={solicitudSeleccionada.archivo_sustento_url}
-                            type="application/pdf"
-                            className="w-full h-[500px]"
-                        >
-                            <div className="flex flex-col items-center justify-center h-full p-4 text-center text-muted">
-                                <p>Tu navegador no puede visualizar este PDF aquí.</p>
-                                <a 
-                                    href={solicitudSeleccionada.archivo_sustento_url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="btn btn-sm btn-primary mt-2"
-                                >
-                                    Descargar / Ver PDF
-                                </a>
-                            </div>
-                        </object>
-                    ) : (
-                        <img 
-                            src={solicitudSeleccionada.archivo_sustento_url} 
-                            alt="Sustento" 
-                            className="w-full h-auto max-h-[500px] object-contain"
-                        />
-                    )}
+                  {solicitudSeleccionada.archivo_sustento_url.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
+                      src={`${import.meta.env.VITE_API_URL}/archivos/pdf-proxy?url=${encodeURIComponent(solicitudSeleccionada.archivo_sustento_url)}`}
+                      className="w-full h-[500px] border-0"
+                      title="PDF Viewer"
+                    />
+                  ) : (
+                    <img 
+                      src={solicitudSeleccionada.archivo_sustento_url} 
+                      alt="Sustento" 
+                      className="w-full h-auto max-h-[500px] object-contain"
+                    />
+                  )}
                 </div>
                 <div className="text-right mt-1">
-                    <a 
-                        href={solicitudSeleccionada.archivo_sustento_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline flex items-center justify-end gap-1"
-                    >
-                        <Eye size={12}/> Abrir archivo original en nueva pestaña
-                    </a>
+                  <a 
+                    href={solicitudSeleccionada.archivo_sustento_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center justify-end gap-1"
+                  >
+                    <Eye size={12}/> Descargar archivo original
+                  </a>
                 </div>
               </div>
             )}

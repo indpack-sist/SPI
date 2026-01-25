@@ -25,21 +25,30 @@ function Navbar({ onToggleSidebar }) {
 
   useEffect(() => {
     if (user?.id_empleado) {
+      if (socket) {
+        socket.disconnect();
+      }
+      
       console.log('Conectando WebSocket a:', SOCKET_URL);
       console.log('ID Empleado:', user.id_empleado);
       
       const newSocket = io(SOCKET_URL, {
         withCredentials: true,
-        transports: ['websocket', 'polling']
+        transports: ['polling', 'websocket'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        timeout: 20000,
+        forceNew: true
       });
 
       newSocket.on('connect', () => {
-        console.log('WebSocket conectado, emitiendo identificar_usuario');
+        console.log('✅ WebSocket CONECTADO con ID:', newSocket.id);
         newSocket.emit('identificar_usuario', user.id_empleado);
       });
 
       newSocket.on('nueva_notificacion', (notif) => {
-        console.log('Nueva notificación recibida:', notif);
+        console.log('📩 Nueva notificación recibida:', notif);
         setNotificaciones(prev => [notif, ...prev]);
         setNoLeidas(prev => prev + 1);
         
@@ -52,12 +61,12 @@ function Navbar({ onToggleSidebar }) {
         }
       });
 
-      newSocket.on('disconnect', () => {
-        console.log('WebSocket desconectado');
+      newSocket.on('disconnect', (reason) => {
+        console.log('❌ WebSocket desconectado. Razón:', reason);
       });
 
       newSocket.on('connect_error', (error) => {
-        console.error('Error de conexión WebSocket:', error);
+        console.error('🔴 Error de conexión WebSocket:', error.message);
       });
 
       setSocket(newSocket);

@@ -33,8 +33,8 @@ const CalendarioProduccion = () => {
   useEffect(() => {
     const fechaParam = searchParams.get('fecha');
     if (fechaParam) {
-      const nuevaFecha = new Date(fechaParam);
-      nuevaFecha.setHours(nuevaFecha.getHours() + 5); 
+      const fechaBase = fechaParam.includes('T') ? fechaParam.split('T')[0] : fechaParam;
+      const nuevaFecha = new Date(`${fechaBase}T12:00:00`);
       setCurrentDate(nuevaFecha);
     }
   }, [searchParams]);
@@ -53,23 +53,42 @@ const CalendarioProduccion = () => {
   };
 
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfMonth = (year, month) => { const day = new Date(year, month, 1).getDay(); return day === 0 ? 6 : day - 1; };
+  
+  const getFirstDayOfMonth = (year, month) => { 
+    const day = new Date(year, month, 1, 12, 0, 0).getDay(); 
+    return day === 0 ? 6 : day - 1; 
+  };
+  
   const changeMonth = (inc) => { const d = new Date(currentDate); d.setMonth(d.getMonth() + inc); setCurrentDate(d); };
   
   const generateCalendarDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const days = [];
-    for (let i = 0; i < getFirstDayOfMonth(year, month); i++) days.push({ day: null, fullDate: null });
-    for (let i = 1; i <= getDaysInMonth(year, month); i++) {
-      days.push({ day: i, fullDate: `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}` });
+    const firstDayIndex = getFirstDayOfMonth(year, month);
+    const daysInMonth = getDaysInMonth(year, month);
+
+    for (let i = 0; i < firstDayIndex; i++) {
+        days.push({ day: null, fullDate: null });
     }
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+      const fullDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      days.push({ day: i, fullDate: fullDate });
+    }
+    
     while (days.length < 42) days.push({ day: null, fullDate: null });
     return days;
   };
 
   const calendarDays = generateCalendarDays();
-  const isToday = (d) => d === new Date().toISOString().split('T')[0];
+  const isToday = (d) => {
+      if (!d) return false;
+      const today = new Date();
+      return d === today.getFullYear() && 
+             currentDate.getMonth() === today.getMonth() && 
+             currentDate.getFullYear() === today.getFullYear();
+  };
 
   const getStatusColor = (estado) => {
     switch(estado) {
@@ -419,7 +438,7 @@ const CalendarioProduccion = () => {
           {calendarDays.map((item, index) => {
             if (!item.day) return <div key={`empty-${index}`} style={{ backgroundColor: '#f9fafb', minHeight: '100px' }}></div>;
 
-            const isTodayDay = isToday(currentDate.getFullYear(), currentDate.getMonth(), item.day);
+            const isTodayDay = isToday(item.day);
             const ordenesDelDia = ordenes.filter(o => isOrderInDay(o, item.fullDate));
             const isPotentialEnd = pendingResize && item.fullDate >= pendingResize.start_date;
 

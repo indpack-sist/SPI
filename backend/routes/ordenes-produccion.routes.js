@@ -17,7 +17,8 @@ import {
   registrarParcial, 
   getRegistrosParcialesOrden,
   getAnalisisConsumoOrden,
-  descargarHojaRutaController
+  descargarHojaRutaController,
+  completarAsignacionOP
 } from '../controllers/ordenes-produccion.controller.js';
 
 const router = express.Router();
@@ -38,12 +39,12 @@ router.get('/:id/registros-parciales', getRegistrosParcialesOrden);
 router.get('/:id/analisis-consumo', getAnalisisConsumoOrden);
 
 router.put('/:id/asignar-receta-supervisor', asignarRecetaYSupervisor);
+router.put('/:id/completar-asignacion', completarAsignacionOP);
 
 router.post('/:id/iniciar', iniciarProduccion);
 router.post('/:id/pausar', pausarProduccion);
 router.post('/:id/reanudar', reanudarProduccion);
 
-// Aquí se usa la nueva función que soporta Kilos y Unidades
 router.post('/:id/registrar-parcial', registrarParcial);
 
 router.post('/:id/finalizar', finalizarProduccion);

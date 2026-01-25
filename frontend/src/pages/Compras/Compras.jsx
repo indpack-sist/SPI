@@ -85,7 +85,7 @@ function Compras() {
 
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${parseFloat(valor || 0).toFixed(2)}`;
+    return `${simbolo} ${parseFloat(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
   };
 
   const getNivelAlertaClase = (nivel) => {
@@ -181,10 +181,8 @@ function Compras() {
               <Icono size={12} />
               {value}
             </span>
-            {value === 'Credito' && row.numero_cuotas > 0 && (
-              <div className="text-[10px] text-muted mt-0.5">
-                {row.numero_cuotas} cuotas
-              </div>
+            {value === 'Credito' && !row.cronograma_definido && (
+                <span className="text-[9px] text-danger font-bold animate-pulse">Sin Cronograma</span>
             )}
           </div>
         );
@@ -200,9 +198,9 @@ function Compras() {
           <div className="font-bold text-gray-800">
             {formatearMoneda(value, row.moneda)}
           </div>
-          {row.tipo_compra === 'Credito' && (
-            <div className="text-xs text-muted">
-              Pagado: <span className="text-success">{formatearMoneda(row.monto_pagado || 0, row.moneda)}</span>
+          {parseFloat(row.saldo_pendiente) > 0 && (
+            <div className="text-xs text-danger font-medium">
+              Debe: {formatearMoneda(row.saldo_pendiente, row.moneda)}
             </div>
           )}
         </div>

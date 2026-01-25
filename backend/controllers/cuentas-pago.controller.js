@@ -8,14 +8,10 @@ export const getAllCuentasPago = async (req, res) => {
       SELECT 
         cp.*,
         (SELECT COUNT(*) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta) as total_movimientos,
-        (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Ingreso') as total_ingresos,
-        (SELECT SUM(monto) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_egresos,
+        (SELECT COALESCE(SUM(monto), 0) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Ingreso') as total_ingresos,
+        (SELECT COALESCE(SUM(monto), 0) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_egresos,
         (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta) as total_compras,
-        (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta AND estado_pago != 'Pagado') as compras_pendientes,
-        CASE 
-            WHEN cp.tipo = 'Tarjeta' AND cp.fecha_renovacion IS NOT NULL AND cp.fecha_renovacion <= CURDATE() THEN 1 
-            ELSE 0 
-        END as requiere_renovacion
+        (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta AND estado_pago != 'Pagado') as compras_pendientes
       FROM cuentas_pago cp
       WHERE 1=1
     `;
@@ -65,18 +61,12 @@ export const getCuentaPagoById = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // CORRECCIÓN AQUÍ: Se agregó la subconsulta para total_ingresos
     const cuentaResult = await executeQuery(`
       SELECT 
         cp.*,
         (SELECT COUNT(*) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta) as total_movimientos,
-        
-        /* ⬇️ ESTA LÍNEA FALTABA ⬇️ */
         (SELECT COALESCE(SUM(monto), 0) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Ingreso') as total_ingresos,
-        
-        /* Se agregó COALESCE para evitar nulls */
         (SELECT COALESCE(SUM(monto), 0) FROM movimientos_cuentas WHERE id_cuenta = cp.id_cuenta AND tipo_movimiento = 'Egreso') as total_gastado,
-        
         (SELECT COUNT(*) FROM ordenes_compra WHERE id_cuenta_pago = cp.id_cuenta) as total_compras
       FROM cuentas_pago cp
       WHERE cp.id_cuenta = ?
@@ -107,13 +97,6 @@ export const getCuentaPagoById = async (req, res) => {
       LIMIT 50
     `, [id]);
 
-    if (cuenta.tipo === 'Tarjeta' && cuenta.fecha_renovacion) {
-        const fechaRenov = new Date(cuenta.fecha_renovacion);
-        const hoy = new Date();
-        cuenta.estado_credito = fechaRenov <= hoy ? 'Renovación Pendiente' : 'Al día';
-        cuenta.credito_utilizado = parseFloat(cuenta.limite_credito || 0) - parseFloat(cuenta.saldo_actual || 0);
-    }
-
     cuenta.compras_asociadas = comprasResult.data || [];
     
     res.json({
@@ -137,9 +120,7 @@ export const createCuentaPago = async (req, res) => {
       numero_cuenta,
       banco,
       moneda,
-      saldo_inicial,
-      limite_credito,
-      fecha_renovacion
+      saldo_inicial
     } = req.body;
     
     if (!nombre || !tipo || !moneda) {
@@ -166,14 +147,6 @@ export const createCuentaPago = async (req, res) => {
     }
     
     const saldoInicial = parseFloat(saldo_inicial || 0);
-    const limiteCredito = parseFloat(limite_credito || 0);
-    
-    if (tipo === 'Tarjeta' && saldoInicial > limiteCredito && limiteCredito > 0) {
-        return res.status(400).json({ 
-            success: false, 
-            error: 'El saldo inicial no puede ser mayor al límite de crédito' 
-        });
-    }
     
     const result = await executeQuery(`
       INSERT INTO cuentas_pago (
@@ -183,19 +156,15 @@ export const createCuentaPago = async (req, res) => {
         banco,
         moneda,
         saldo_actual,
-        limite_credito,
-        fecha_renovacion,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Activo')
+      ) VALUES (?, ?, ?, ?, ?, ?, 'Activo')
     `, [
       nombre,
       tipo,
       numero_cuenta || null,
       banco || null,
       moneda,
-      saldoInicial,
-      limiteCredito,
-      fecha_renovacion || null
+      saldoInicial
     ]);
     
     if (!result.success) {
@@ -244,9 +213,7 @@ export const updateCuentaPago = async (req, res) => {
       numero_cuenta,
       banco,
       moneda,
-      estado,
-      limite_credito,
-      fecha_renovacion
+      estado
     } = req.body;
     
     const checkResult = await executeQuery(
@@ -268,9 +235,7 @@ export const updateCuentaPago = async (req, res) => {
           numero_cuenta = ?,
           banco = ?,
           moneda = ?,
-          estado = ?,
-          limite_credito = ?,
-          fecha_renovacion = ?
+          estado = ?
       WHERE id_cuenta = ?
     `, [
       nombre,
@@ -279,8 +244,6 @@ export const updateCuentaPago = async (req, res) => {
       banco || null,
       moneda,
       estado || 'Activo',
-      limite_credito || 0,
-      fecha_renovacion || null,
       id
     ]);
     
@@ -309,7 +272,7 @@ export const deleteCuentaPago = async (req, res) => {
     const { id } = req.params;
     
     const checkResult = await executeQuery(
-      'SELECT tipo, saldo_actual, limite_credito FROM cuentas_pago WHERE id_cuenta = ?',
+      'SELECT tipo, saldo_actual FROM cuentas_pago WHERE id_cuenta = ?',
       [id]
     );
     
@@ -322,24 +285,10 @@ export const deleteCuentaPago = async (req, res) => {
     
     const cuenta = checkResult.data[0];
     
-    let puedeBorrar = false;
-    
-    if (cuenta.tipo === 'Tarjeta') {
-        if (parseFloat(cuenta.saldo_actual) === parseFloat(cuenta.limite_credito)) {
-            puedeBorrar = true;
-        }
-    } else {
-        if (parseFloat(cuenta.saldo_actual) === 0) {
-            puedeBorrar = true;
-        }
-    }
-
-    if (!puedeBorrar) {
+    if (parseFloat(cuenta.saldo_actual) !== 0) {
       return res.status(400).json({
         success: false,
-        error: cuenta.tipo === 'Tarjeta' 
-            ? 'No se puede desactivar una tarjeta con deuda pendiente' 
-            : 'No se puede desactivar una cuenta con saldo diferente a 0'
+        error: 'No se puede desactivar una cuenta con saldo diferente a 0'
       });
     }
     
@@ -368,55 +317,6 @@ export const deleteCuentaPago = async (req, res) => {
   }
 };
 
-export const renovarCreditoManual = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { nueva_fecha_renovacion } = req.body;
-
-        const cuentaCheck = await executeQuery('SELECT * FROM cuentas_pago WHERE id_cuenta = ?', [id]);
-        if (cuentaCheck.data.length === 0) return res.status(404).json({error: 'Cuenta no encontrada'});
-        
-        const cuenta = cuentaCheck.data[0];
-
-        if (cuenta.tipo !== 'Tarjeta') {
-            return res.status(400).json({error: 'Solo se pueden renovar créditos de cuentas tipo Tarjeta'});
-        }
-
-        const limite = parseFloat(cuenta.limite_credito);
-        const saldoActual = parseFloat(cuenta.saldo_actual);
-        const diferencia = limite - saldoActual;
-
-        if (diferencia <= 0) {
-            return res.status(400).json({message: 'La cuenta ya tiene el cupo completo o excede el límite'});
-        }
-
-        const queries = [
-            {
-                sql: 'UPDATE cuentas_pago SET saldo_actual = ?, fecha_renovacion = ? WHERE id_cuenta = ?',
-                params: [limite, nueva_fecha_renovacion || null, id]
-            },
-            {
-                sql: 'INSERT INTO movimientos_cuentas (id_cuenta, tipo_movimiento, monto, concepto, fecha_movimiento, saldo_anterior, saldo_nuevo) VALUES (?, "Ingreso", ?, "Renovación de Crédito (Reinicio Ciclo)", NOW(), ?, ?)',
-                params: [id, diferencia, saldoActual, limite]
-            }
-        ];
-
-        const result = await executeTransaction(queries);
-
-        if (!result.success) return res.status(500).json({error: result.error});
-
-        res.json({
-            success: true,
-            message: 'Crédito renovado exitosamente. Saldo restaurado al límite.',
-            data: { nuevo_saldo: limite }
-        });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({success: false, error: error.message});
-    }
-};
-
 export const registrarMovimiento = async (req, res) => {
   try {
     const { id } = req.params;
@@ -426,6 +326,7 @@ export const registrarMovimiento = async (req, res) => {
       concepto,
       referencia,
       id_orden_compra,
+      id_pago_orden_venta,
       id_cuota
     } = req.body;
     
@@ -466,14 +367,6 @@ export const registrarMovimiento = async (req, res) => {
     if (tipo_movimiento === 'Ingreso') {
       saldoNuevo = saldoAnterior + montoMov;
     } else {
-      if (cuenta.tipo === 'Tarjeta') {
-          if (saldoAnterior < montoMov) {
-            return res.status(400).json({
-              success: false,
-              error: `Saldo insuficiente en tarjeta. Disponible: ${saldoAnterior} ${cuenta.moneda}`
-            });
-          }
-      }
       saldoNuevo = saldoAnterior - montoMov;
     }
     
@@ -481,12 +374,14 @@ export const registrarMovimiento = async (req, res) => {
         {
             sql: `INSERT INTO movimientos_cuentas (
                 id_cuenta, tipo_movimiento, monto, concepto, referencia, 
-                id_orden_compra, id_cuota, saldo_anterior, saldo_nuevo, 
+                id_orden_compra, id_pago_orden_venta, id_cuota, 
+                saldo_anterior, saldo_nuevo, 
                 id_registrado_por, fecha_movimiento
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
             params: [
                 id, tipo_movimiento, montoMov, concepto || null, referencia || null,
-                id_orden_compra || null, id_cuota || null, saldoAnterior, saldoNuevo, id_registrado_por
+                id_orden_compra || null, id_pago_orden_venta || null, id_cuota || null,
+                saldoAnterior, saldoNuevo, id_registrado_por
             ]
         },
         {
@@ -529,11 +424,19 @@ export const getMovimientosCuenta = async (req, res) => {
       SELECT 
         mc.*,
         e.nombre_completo as registrado_por_nombre,
-        oc.numero_orden,
+        oc.numero_orden as numero_orden_compra,
+        pr.razon_social as proveedor,
+        pov.numero_pago as numero_pago_venta,
+        ov.numero_orden as numero_orden_venta,
+        cli.razon_social as cliente,
         coc.numero_cuota
       FROM movimientos_cuentas mc
       LEFT JOIN empleados e ON mc.id_registrado_por = e.id_empleado
       LEFT JOIN ordenes_compra oc ON mc.id_orden_compra = oc.id_orden_compra
+      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
+      LEFT JOIN pagos_ordenes_venta pov ON mc.id_pago_orden_venta = pov.id_pago_orden
+      LEFT JOIN ordenes_venta ov ON pov.id_orden_venta = ov.id_orden_venta
+      LEFT JOIN clientes cli ON ov.id_cliente = cli.id_cliente
       LEFT JOIN cuotas_orden_compra coc ON mc.id_cuota = coc.id_cuota
       WHERE mc.id_cuenta = ?
     `;
@@ -697,12 +600,8 @@ export const transferirEntreCuentas = async (req, res) => {
       }
       
       const saldoOrigenAnterior = parseFloat(cuentaOrigen[0].saldo_actual);
-      
-      if (cuentaOrigen[0].tipo === 'Tarjeta' && saldoOrigenAnterior < montoTransferencia) {
-        throw new Error('Saldo insuficiente en cuenta origen');
-      }
-      
       const saldoDestinoAnterior = parseFloat(cuentaDestino[0].saldo_actual);
+      
       const saldoOrigenNuevo = saldoOrigenAnterior - montoTransferencia;
       const saldoDestinoNuevo = saldoDestinoAnterior + montoTransferencia;
       

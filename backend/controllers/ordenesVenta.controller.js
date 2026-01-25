@@ -1269,18 +1269,16 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
         numero_orden,
         id_producto_terminado,
         cantidad_planificada,
-        id_supervisor,
         costo_materiales,
         estado,
         observaciones,
         id_orden_venta_origen,
         origen_tipo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       numeroOrdenProduccion,
       id_producto,
       cantidad,
-      null,
       0,
       'Pendiente Asignación',
       `Generada desde Orden de Venta ${ordenVenta.numero_orden}`,
@@ -1322,7 +1320,7 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
         `, [
           sup.id_empleado,
           `Nueva OP: ${numeroOrdenProduccion}`,
-          `Origen: Ventas ${ordenVenta.numero_orden}. Producto: ${nombreProducto}. Cant: ${cantidad}`,
+          `Origen: Ventas ${ordenVenta.numero_orden}. Producto: ${nombreProducto}. Cant: ${cantidad} Kg`,
           '/produccion/ordenes'
         ]);
       }

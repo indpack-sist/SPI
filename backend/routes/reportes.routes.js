@@ -3,7 +3,7 @@ import { verificarToken } from '../middleware/auth.js';
 import { 
     getReporteComprasSIRE, 
     getReporteVentasSIRE 
-} from '../controllers/reportes.controller.js';
+} from '../controllers/reportesController.js';
 
 const router = express.Router();
 

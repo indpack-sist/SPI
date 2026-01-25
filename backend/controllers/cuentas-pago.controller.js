@@ -687,12 +687,7 @@ export const getEstadisticasCuentas = async (req, res) => {
     });
   }
 };
-import pool from '../config/database.js';
-import { executeQuery, executeTransaction } from '../config/database.js';
 
-// ... (tus otras funciones: getAllCuentas, getCuentaById, createCuenta, etc.) ...
-
-// AGREGA ESTA FUNCIÓN QUE FALTA
 export async function renovarCreditoManual(req, res) {
   let connection;
   try {

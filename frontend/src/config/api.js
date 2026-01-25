@@ -131,7 +131,9 @@ export const clientesAPI = {
 };
 
 export const solicitudesCreditoAPI = {
-  create: (data) => api.post('/solicitudes-credito', data),
+  create: (data) => api.post('/solicitudes-credito', data, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   getAll: (params) => api.get('/solicitudes-credito', { params }),
   getPendientes: () => api.get('/solicitudes-credito/pendientes'),
   getById: (id) => api.get(`/solicitudes-credito/${id}`),

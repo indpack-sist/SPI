@@ -1,4 +1,3 @@
-const getIO = (req) => req.app.get('socketio');
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
@@ -8,6 +7,7 @@ import {
   esVerificador, 
   puedeEditarOrdenRechazada 
 } from '../middleware/verificacionOrden.js';
+const getIO = (req) => req.app.get('socketio');
 function getFechaPeru() {
   const now = new Date();
   return new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));

@@ -21,24 +21,28 @@ export async function notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombreC
     }
 
     for (const admin of adminResult.data) {
-      const notif = {
-        id_usuario_destino: admin.id_empleado,
-        titulo: 'Nueva Orden Pendiente de Verificación',
-        mensaje: `${nombreCreador} creó una nueva orden ${numeroOrden}. Requiere verificación.`,
-        tipo: 'warning',
-        ruta_destino: `/ventas/ordenes/verificacion`,
-        leido: 0
-      };
-
       const insertResult = await executeQuery(
-        `INSERT INTO notificaciones SET ?`,
-        [notif]
+        `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          admin.id_empleado,
+          'Nueva Orden Pendiente de Verificación',
+          `${nombreCreador} creó una nueva orden ${numeroOrden}. Requiere verificación.`,
+          'warning',
+          '/ventas/ordenes/verificacion',
+          0
+        ]
       );
 
       if (insertResult.success && io) {
         const notifCompleta = {
           id_notificacion: insertResult.data.insertId,
-          ...notif,
+          id_usuario_destino: admin.id_empleado,
+          titulo: 'Nueva Orden Pendiente de Verificación',
+          mensaje: `${nombreCreador} creó una nueva orden ${numeroOrden}. Requiere verificación.`,
+          tipo: 'warning',
+          ruta_destino: '/ventas/ordenes/verificacion',
+          leido: 0,
           fecha_creacion: new Date()
         };
         await emitirNotificacion(io, admin.id_empleado, notifCompleta);
@@ -57,24 +61,28 @@ export async function notificarOrdenAprobada(idOrden, numeroOrden, idComercial, 
       return;
     }
 
-    const notif = {
-      id_usuario_destino: idComercial,
-      titulo: 'Orden Aprobada',
-      mensaje: `Tu orden ${numeroOrden} fue aprobada por ${nombreVerificador}. Ya puedes gestionarla.`,
-      tipo: 'success',
-      ruta_destino: `/ventas/ordenes/${idOrden}`,
-      leido: 0
-    };
-
     const insertResult = await executeQuery(
-      `INSERT INTO notificaciones SET ?`,
-      [notif]
+      `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        idComercial,
+        'Orden Aprobada',
+        `Tu orden ${numeroOrden} fue aprobada por ${nombreVerificador}. Ya puedes gestionarla.`,
+        'success',
+        `/ventas/ordenes/${idOrden}`,
+        0
+      ]
     );
 
     if (insertResult.success && io) {
       const notifCompleta = {
         id_notificacion: insertResult.data.insertId,
-        ...notif,
+        id_usuario_destino: idComercial,
+        titulo: 'Orden Aprobada',
+        mensaje: `Tu orden ${numeroOrden} fue aprobada por ${nombreVerificador}. Ya puedes gestionarla.`,
+        tipo: 'success',
+        ruta_destino: `/ventas/ordenes/${idOrden}`,
+        leido: 0,
         fecha_creacion: new Date()
       };
       await emitirNotificacion(io, idComercial, notifCompleta);
@@ -92,24 +100,28 @@ export async function notificarOrdenRechazada(idOrden, numeroOrden, idComercial,
       return;
     }
 
-    const notif = {
-      id_usuario_destino: idComercial,
-      titulo: 'Orden Rechazada',
-      mensaje: `Tu orden ${numeroOrden} fue rechazada por ${nombreVerificador}. Motivo: ${motivoRechazo}`,
-      tipo: 'danger',
-      ruta_destino: `/ventas/ordenes/${idOrden}`,
-      leido: 0
-    };
-
     const insertResult = await executeQuery(
-      `INSERT INTO notificaciones SET ?`,
-      [notif]
+      `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        idComercial,
+        'Orden Rechazada',
+        `Tu orden ${numeroOrden} fue rechazada por ${nombreVerificador}. Motivo: ${motivoRechazo}`,
+        'danger',
+        `/ventas/ordenes/${idOrden}`,
+        0
+      ]
     );
 
     if (insertResult.success && io) {
       const notifCompleta = {
         id_notificacion: insertResult.data.insertId,
-        ...notif,
+        id_usuario_destino: idComercial,
+        titulo: 'Orden Rechazada',
+        mensaje: `Tu orden ${numeroOrden} fue rechazada por ${nombreVerificador}. Motivo: ${motivoRechazo}`,
+        tipo: 'danger',
+        ruta_destino: `/ventas/ordenes/${idOrden}`,
+        leido: 0,
         fecha_creacion: new Date()
       };
       await emitirNotificacion(io, idComercial, notifCompleta);
@@ -135,24 +147,28 @@ export async function notificarOrdenReenviada(idOrden, numeroOrden, nombreComerc
     }
 
     for (const admin of adminResult.data) {
-      const notif = {
-        id_usuario_destino: admin.id_empleado,
-        titulo: 'Orden Reenviada para Verificación',
-        mensaje: `${nombreComercial} reenvió la orden ${numeroOrden} para nueva verificación.`,
-        tipo: 'info',
-        ruta_destino: `/ventas/ordenes/verificacion`,
-        leido: 0
-      };
-
       const insertResult = await executeQuery(
-        `INSERT INTO notificaciones SET ?`,
-        [notif]
+        `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          admin.id_empleado,
+          'Orden Reenviada para Verificación',
+          `${nombreComercial} reenvió la orden ${numeroOrden} para nueva verificación.`,
+          'info',
+          '/ventas/ordenes/verificacion',
+          0
+        ]
       );
 
       if (insertResult.success && io) {
         const notifCompleta = {
           id_notificacion: insertResult.data.insertId,
-          ...notif,
+          id_usuario_destino: admin.id_empleado,
+          titulo: 'Orden Reenviada para Verificación',
+          mensaje: `${nombreComercial} reenvió la orden ${numeroOrden} para nueva verificación.`,
+          tipo: 'info',
+          ruta_destino: '/ventas/ordenes/verificacion',
+          leido: 0,
           fecha_creacion: new Date()
         };
         await emitirNotificacion(io, admin.id_empleado, notifCompleta);

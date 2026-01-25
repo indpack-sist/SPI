@@ -511,21 +511,31 @@ function SolicitudesCredito() {
                 <h4 className="font-medium mb-2 flex items-center gap-2">
                     <FileText size={16} /> Documento de Sustento
                 </h4>
-                <div className="card p-0 overflow-hidden border">
-                    <iframe 
-                        src={solicitudSeleccionada.archivo_sustento_url} 
-                        className="w-full h-[500px]"
-                        title="Vista previa del documento"
-                    />
+                <div className="card p-0 overflow-hidden border bg-gray-100">
+                    {/* LÓGICA DE VISUALIZACIÓN MEJORADA: */}
+                    {solicitudSeleccionada.archivo_sustento_url.toLowerCase().endsWith('.pdf') ? (
+                        <iframe 
+                            src={`https://docs.google.com/gview?url=${encodeURIComponent(solicitudSeleccionada.archivo_sustento_url)}&embedded=true`}
+                            className="w-full h-[500px]"
+                            title="Vista previa del documento"
+                            frameBorder="0"
+                        />
+                    ) : (
+                        <img 
+                            src={solicitudSeleccionada.archivo_sustento_url} 
+                            alt="Sustento" 
+                            className="w-full h-auto max-h-[500px] object-contain"
+                        />
+                    )}
                 </div>
                 <div className="text-right mt-1">
                     <a 
                         href={solicitudSeleccionada.archivo_sustento_url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline"
+                        className="text-xs text-primary hover:underline flex items-center justify-end gap-1"
                     >
-                        Si no puedes visualizar el archivo, haz clic aquí para abrirlo en nueva pestaña
+                        <Eye size={12}/> Abrir archivo original en nueva pestaña
                     </a>
                 </div>
               </div>

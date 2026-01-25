@@ -3,11 +3,17 @@ import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 import { 
+  verificarOrdenAprobada, 
+  esVerificador, 
+  puedeEditarOrdenRechazada 
+} from '../middleware/verificacionOrden.js';
+import { 
   notificarNuevaOrdenPendiente,
   notificarOrdenAprobada,
   notificarOrdenRechazada,
   notificarOrdenReenviada
 } from '../utils/notificacionesHelper.js';
+
 const getIO = (req) => req.app.get('socketio');
 function getFechaPeru() {
   const now = new Date();

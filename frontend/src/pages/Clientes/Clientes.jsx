@@ -588,7 +588,7 @@ function Clientes() {
             </div>
             
             <div className="form-group">
-              <label className="form-label">Archivo de Sustento</label>
+              <label className="form-label">Archivo de Sustento (Opcional)</label>
               <input 
                 type="file" 
                 className="form-input" 

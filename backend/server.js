@@ -35,6 +35,7 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import cuentasPagoRoutes from './routes/cuentas-pago.routes.js';
 import pagosCobranzasRoutes from './routes/pagos-cobranzas.routes.js';
 import notificacionesRoutes from './routes/notificaciones.routes.js';
+import archivosRoutes from './routes/archivos.routes.js';
 
 dotenv.config();
 
@@ -165,6 +166,7 @@ app.use((req, res) => {
     method: req.method
   });
 });
+app.use('/api/archivos', archivosRoutes);
 
 app.use((err, req, res, next) => {
   console.error('='.repeat(80));

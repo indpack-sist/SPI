@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FileText, Download, Filter, Search } from 'lucide-react';
 import * as XLSX from 'xlsx'; // Necesitas instalar: npm install xlsx
-import api from '../../config/api'; // Tu instancia de axios
+import { api } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 

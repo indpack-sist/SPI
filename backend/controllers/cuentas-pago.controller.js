@@ -687,3 +687,69 @@ export const getEstadisticasCuentas = async (req, res) => {
     });
   }
 };
+import pool from '../config/database.js';
+import { executeQuery, executeTransaction } from '../config/database.js';
+
+// ... (tus otras funciones: getAllCuentas, getCuentaById, createCuenta, etc.) ...
+
+// AGREGA ESTA FUNCIÓN QUE FALTA
+export async function renovarCreditoManual(req, res) {
+  let connection;
+  try {
+    const { id } = req.params;
+    const { nuevo_saldo, observaciones } = req.body;
+    const id_registrado_por = req.user?.id_empleado || null;
+
+    if (nuevo_saldo === undefined || nuevo_saldo === null) {
+        return res.status(400).json({ success: false, error: 'Debe especificar el nuevo saldo' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // 1. Obtener datos actuales
+    const [cuenta] = await connection.query('SELECT * FROM cuentas_pago WHERE id_cuenta = ?', [id]);
+    
+    if (cuenta.length === 0) {
+        throw new Error('Cuenta no encontrada');
+    }
+
+    const saldoAnterior = parseFloat(cuenta[0].saldo_actual);
+    const saldoNuevo = parseFloat(nuevo_saldo);
+
+    // 2. Actualizar saldo
+    await connection.query('UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?', [saldoNuevo, id]);
+
+    // 3. Registrar movimiento de ajuste
+    await connection.query(`
+        INSERT INTO movimientos_cuentas (
+            id_cuenta, tipo_movimiento, monto, concepto, 
+            referencia, saldo_anterior, saldo_nuevo, 
+            id_registrado_por, fecha_movimiento
+        ) VALUES (?, 'Ajuste', ?, ?, ?, ?, ?, ?, NOW())
+    `, [
+        id, 
+        Math.abs(saldoNuevo - saldoAnterior), // Monto de la diferencia
+        observaciones || 'Renovación/Ajuste Manual de Crédito',
+        'Manual',
+        saldoAnterior,
+        saldoNuevo,
+        id_registrado_por
+    ]);
+
+    await connection.commit();
+
+    res.json({ 
+        success: true, 
+        message: 'Crédito renovado/ajustado exitosamente',
+        data: { saldo_nuevo: saldoNuevo }
+    });
+
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+}

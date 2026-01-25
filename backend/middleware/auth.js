@@ -112,7 +112,7 @@ const PERMISOS_POR_ROL = {
       flota: true,
       proveedores: true,
       clientes: true,
-      solicitudesCredito: false,
+      solicitudesCredito: true,
       productos: true,
       consultarStock: false,
       entradas: false,

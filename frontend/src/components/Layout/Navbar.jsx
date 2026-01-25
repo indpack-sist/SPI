@@ -6,10 +6,6 @@ import { useAuth } from '../../context/AuthContext';
 import { notificacionesAPI } from '../../config/api';
 import './Navbar.css';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL 
-  ? import.meta.env.VITE_API_URL.replace('/api', '') 
-  : 'http://localhost:3000';
-
 function Navbar({ onToggleSidebar }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -29,8 +25,19 @@ function Navbar({ onToggleSidebar }) {
         socket.disconnect();
       }
       
-      console.log('Conectando WebSocket a:', SOCKET_URL);
-      console.log('ID Empleado:', user.id_empleado);
+      const SOCKET_URL = import.meta.env.VITE_API_URL 
+        ? import.meta.env.VITE_API_URL.replace('/api', '') 
+        : 'http://localhost:3000';
+
+      // 🔴 LOGS TEMPORALES - BORRA DESPUÉS DE DIAGNOSTICAR
+      console.log('🌐 VITE_API_URL:', import.meta.env.VITE_API_URL);
+      console.log('🔌 SOCKET_URL:', SOCKET_URL);
+      console.log('👤 ID Empleado:', user.id_empleado);
+      
+      // 🔴 ALERTS PARA CELULAR - BORRA DESPUÉS
+      alert('1. VITE_API_URL: ' + import.meta.env.VITE_API_URL);
+      alert('2. SOCKET_URL: ' + SOCKET_URL);
+      alert('3. ID Empleado: ' + user.id_empleado);
       
       const newSocket = io(SOCKET_URL, {
         withCredentials: true,
@@ -44,11 +51,20 @@ function Navbar({ onToggleSidebar }) {
 
       newSocket.on('connect', () => {
         console.log('✅ WebSocket CONECTADO con ID:', newSocket.id);
+        console.log('📤 Emitiendo identificar_usuario:', user.id_empleado);
+        
+        // 🔴 ALERT PARA CELULAR - BORRA DESPUÉS
+        alert('4. ✅ WebSocket CONECTADO: ' + newSocket.id);
+        
         newSocket.emit('identificar_usuario', user.id_empleado);
       });
 
       newSocket.on('nueva_notificacion', (notif) => {
-        console.log('📩 Nueva notificación recibida:', notif);
+        console.log('🔔 Nueva notificación recibida:', notif);
+        
+        // 🔴 ALERT PARA CELULAR - BORRA DESPUÉS
+        alert('5. 🔔 NOTIFICACIÓN RECIBIDA!');
+        
         setNotificaciones(prev => [notif, ...prev]);
         setNoLeidas(prev => prev + 1);
         
@@ -63,10 +79,17 @@ function Navbar({ onToggleSidebar }) {
 
       newSocket.on('disconnect', (reason) => {
         console.log('❌ WebSocket desconectado. Razón:', reason);
+        
+        // 🔴 ALERT PARA CELULAR - BORRA DESPUÉS
+        alert('6. ❌ Desconectado: ' + reason);
       });
 
       newSocket.on('connect_error', (error) => {
         console.error('🔴 Error de conexión WebSocket:', error.message);
+        console.error('🔴 Error completo:', error);
+        
+        // 🔴 ALERT PARA CELULAR - BORRA DESPUÉS
+        alert('7. 🚫 ERROR: ' + error.message);
       });
 
       setSocket(newSocket);

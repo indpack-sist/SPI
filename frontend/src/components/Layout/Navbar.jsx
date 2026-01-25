@@ -24,36 +24,49 @@ function Navbar({ onToggleSidebar }) {
   }, []);
 
   useEffect(() => {
-  if (user?.id_empleado) {
-    const newSocket = io(SOCKET_URL, {
-      withCredentials: true,
-      transports: ['websocket', 'polling']
-    });
-
-    newSocket.on('connect', () => {
-      newSocket.emit('identificar_usuario', user.id_empleado);
-    });
-
-    newSocket.on('nueva_notificacion', (notif) => {
-      setNotificaciones(prev => [notif, ...prev]);
-      setNoLeidas(prev => prev + 1);
+    if (user?.id_empleado) {
+      console.log('Conectando WebSocket a:', SOCKET_URL);
+      console.log('ID Empleado:', user.id_empleado);
       
-      try {
-        const audio = new Audio('/assets/notification.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
-      } catch (e) {
-        console.error("No se pudo reproducir audio");
-      }
-    });
+      const newSocket = io(SOCKET_URL, {
+        withCredentials: true,
+        transports: ['websocket', 'polling']
+      });
 
-    setSocket(newSocket);
+      newSocket.on('connect', () => {
+        console.log('WebSocket conectado, emitiendo identificar_usuario');
+        newSocket.emit('identificar_usuario', user.id_empleado);
+      });
 
-    return () => {
-      newSocket.disconnect();
-    };
-  }
-}, [user]);
+      newSocket.on('nueva_notificacion', (notif) => {
+        console.log('Nueva notificación recibida:', notif);
+        setNotificaciones(prev => [notif, ...prev]);
+        setNoLeidas(prev => prev + 1);
+        
+        try {
+          const audio = new Audio('/assets/notification.mp3');
+          audio.volume = 0.5;
+          audio.play().catch(() => {});
+        } catch (e) {
+          console.error("No se pudo reproducir audio");
+        }
+      });
+
+      newSocket.on('disconnect', () => {
+        console.log('WebSocket desconectado');
+      });
+
+      newSocket.on('connect_error', (error) => {
+        console.error('Error de conexión WebSocket:', error);
+      });
+
+      setSocket(newSocket);
+
+      return () => {
+        newSocket.disconnect();
+      };
+    }
+  }, [user]);
 
   const cargarNotificaciones = async () => {
     try {

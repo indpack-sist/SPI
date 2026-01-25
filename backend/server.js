@@ -36,6 +36,7 @@ import cuentasPagoRoutes from './routes/cuentas-pago.routes.js';
 import pagosCobranzasRoutes from './routes/pagos-cobranzas.routes.js';
 import notificacionesRoutes from './routes/notificaciones.routes.js';
 import archivosRoutes from './routes/archivos.routes.js';
+import reportesRoutes from './routes/reportes.routes.js';
 
 dotenv.config();
 
@@ -110,7 +111,7 @@ app.get('/', (req, res) => {
       produccion: ['ordenes'],
       ventas: ['cotizaciones', 'ordenes', 'guias-remision', 'guias-transportista', 'listas-precios'],
       compras: ['compras'],
-      analytics: ['dashboard'],
+      analytics: ['dashboard', 'reportes'],
       finanzas: ['cuentas-pago', 'pagos-cobranzas'],
       sistema: ['notificaciones']
     }
@@ -153,6 +154,7 @@ app.use('/api/listas-precios', verificarToken, verificarPermiso('listasPrecios')
 app.use('/api/compras', verificarToken, verificarPermiso('compras'), comprasRoutes);
 
 app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboardRoutes);
+app.use('/api/reportes', verificarToken, verificarPermiso('reportes'), reportesRoutes);
 
 app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cuentasPagoRoutes);
 app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);
@@ -279,8 +281,9 @@ async function startServer() {
       console.log('COMPRAS:');
       console.log('   - /api/compras [compras]');
       console.log('');
-      console.log('ANALYTICS:');
+      console.log('ANALYTICS & REPORTES:');
       console.log('   - /api/dashboard [dashboard]');
+      console.log('   - /api/reportes [reportes]');
       console.log('');
       console.log('FINANZAS:');
       console.log('   - /api/cuentas-pago [cuentasPago]');

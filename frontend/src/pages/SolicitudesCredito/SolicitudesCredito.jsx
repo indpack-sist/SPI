@@ -6,7 +6,8 @@ import {
   Eye, 
   Filter, 
   TrendingUp,
-  User // Agregamos icono de usuario
+  User,
+  FileText
 } from 'lucide-react';
 import { solicitudesCreditoAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -147,7 +148,7 @@ function SolicitudesCredito() {
       )
     },
     {
-      header: 'Solicitante', // NUEVA COLUMNA
+      header: 'Solicitante',
       render: (_, row) => (
         <div className="flex items-center gap-2">
           <div className="bg-gray-100 p-1 rounded-full">
@@ -192,10 +193,22 @@ function SolicitudesCredito() {
       }
     },
     {
+      header: 'Adjunto',
+      width: '80px',
+      align: 'center',
+      render: (_, row) => (
+        row.archivo_sustento_url ? (
+          <div className="flex justify-center" title="Contiene archivo adjunto">
+            <FileText size={16} className="text-primary" />
+          </div>
+        ) : null
+      )
+    },
+    {
       header: 'Fecha',
       accessor: 'fecha_solicitud',
       width: '100px',
-      render: (value) => formatearFecha(value).split(',')[0] // Solo fecha
+      render: (value) => formatearFecha(value).split(',')[0]
     },
     {
       header: 'Acciones',
@@ -349,6 +362,13 @@ function SolicitudesCredito() {
                     </div>
                   </div>
                 )}
+                
+                {solicitudSeleccionada.archivo_sustento_url && (
+                    <div className="mt-3 pt-3 border-t flex items-center gap-2">
+                        <FileText size={16} className="text-primary"/>
+                        <span className="text-xs font-medium text-primary">Esta solicitud contiene un archivo adjunto que puedes ver en los detalles.</span>
+                    </div>
+                )}
               </div>
             </div>
 
@@ -472,7 +492,6 @@ function SolicitudesCredito() {
                       </div>
                       <div className="flex justify-between border-b pb-2">
                         <span className="text-muted">Fecha Resolución:</span>
-                        {/* AQUÍ SE APLICA EL FORMATEO SEGURO */}
                         <span>{formatearFecha(solicitudSeleccionada.fecha_respuesta)}</span>
                       </div>
                       {solicitudSeleccionada.comentario_aprobador && (
@@ -486,6 +505,31 @@ function SolicitudesCredito() {
                 </div>
               </div>
             </div>
+
+            {solicitudSeleccionada.archivo_sustento_url && (
+              <div className="mb-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                    <FileText size={16} /> Documento de Sustento
+                </h4>
+                <div className="card p-0 overflow-hidden border">
+                    <iframe 
+                        src={solicitudSeleccionada.archivo_sustento_url} 
+                        className="w-full h-[500px]"
+                        title="Vista previa del documento"
+                    />
+                </div>
+                <div className="text-right mt-1">
+                    <a 
+                        href={solicitudSeleccionada.archivo_sustento_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline"
+                    >
+                        Si no puedes visualizar el archivo, haz clic aquí para abrirlo en nueva pestaña
+                    </a>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end">
               <button 

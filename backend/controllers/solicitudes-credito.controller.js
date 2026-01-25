@@ -1,6 +1,6 @@
 import { executeQuery } from '../config/database.js';
+import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
 
-// Crear nueva solicitud de crédito
 export async function crearSolicitudCredito(req, res) {
   try {
     const {
@@ -11,13 +11,23 @@ export async function crearSolicitudCredito(req, res) {
       justificacion
     } = req.body;
     
-    const id_solicitante = req.user.id_empleado; // Del token/sesión
+    const id_solicitante = req.user.id_empleado; 
+
+    let urlArchivo = null;
+    
+    if (req.file) {
+      try {
+        const resultadoCloudinary = await subirArchivoACloudinary(req.file.buffer);
+        urlArchivo = resultadoCloudinary.secure_url;
+      } catch (uploadError) {
+        return res.status(500).json({ error: 'Error al subir el archivo de sustento' });
+      }
+    }
     
     if (!id_cliente) {
       return res.status(400).json({ error: 'ID de cliente requerido' });
     }
     
-    // Obtener límites actuales del cliente
     const clienteResult = await executeQuery(
       'SELECT limite_credito_pen, limite_credito_usd FROM clientes WHERE id_cliente = ?',
       [id_cliente]
@@ -29,7 +39,6 @@ export async function crearSolicitudCredito(req, res) {
     
     const cliente = clienteResult.data[0];
     
-    // Verificar si hay una solicitud pendiente para este cliente
     const solicitudPendiente = await executeQuery(
       'SELECT id_solicitud FROM solicitudes_credito WHERE id_cliente = ? AND estado = "Pendiente"',
       [id_cliente]
@@ -40,8 +49,9 @@ export async function crearSolicitudCredito(req, res) {
         error: 'Ya existe una solicitud pendiente para este cliente' 
       });
     }
+
+    const usarLimiteBool = (usar_limite_credito === 'true' || usar_limite_credito === true || usar_limite_credito === 1);
     
-    // Crear la solicitud
     const result = await executeQuery(
       `INSERT INTO solicitudes_credito (
         id_cliente,
@@ -51,17 +61,19 @@ export async function crearSolicitudCredito(req, res) {
         usar_limite_credito,
         limite_credito_pen_anterior,
         limite_credito_usd_anterior,
-        justificacion
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        justificacion,
+        archivo_sustento_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id_cliente,
         id_solicitante,
         parseFloat(limite_credito_pen_solicitado || 0),
         parseFloat(limite_credito_usd_solicitado || 0),
-        usar_limite_credito ? 1 : 0,
+        usarLimiteBool ? 1 : 0,
         parseFloat(cliente.limite_credito_pen || 0),
         parseFloat(cliente.limite_credito_usd || 0),
-        justificacion || null
+        justificacion || null,
+        urlArchivo
       ]
     );
     
@@ -73,16 +85,15 @@ export async function crearSolicitudCredito(req, res) {
       success: true,
       message: 'Solicitud de crédito creada exitosamente',
       data: {
-        id_solicitud: result.data.insertId
+        id_solicitud: result.data.insertId,
+        archivo_url: urlArchivo
       }
     });
   } catch (error) {
-    console.error('Error al crear solicitud:', error);
     res.status(500).json({ error: error.message });
   }
 }
 
-// Obtener todas las solicitudes (con filtros opcionales)
 export async function getAllSolicitudes(req, res) {
   try {
     const { estado, id_cliente } = req.query;
@@ -114,12 +125,10 @@ export async function getAllSolicitudes(req, res) {
       total: result.data.length
     });
   } catch (error) {
-    console.error('Error al obtener solicitudes:', error);
     res.status(500).json({ error: error.message });
   }
 }
 
-// Obtener solicitudes pendientes
 export async function getSolicitudesPendientes(req, res) {
   try {
     const result = await executeQuery(
@@ -136,12 +145,10 @@ export async function getSolicitudesPendientes(req, res) {
       total: result.data.length
     });
   } catch (error) {
-    console.error('Error al obtener solicitudes pendientes:', error);
     res.status(500).json({ error: error.message });
   }
 }
 
-// Obtener solicitud por ID
 export async function getSolicitudById(req, res) {
   try {
     const { id } = req.params;
@@ -164,19 +171,16 @@ export async function getSolicitudById(req, res) {
       data: result.data[0]
     });
   } catch (error) {
-    console.error('Error al obtener solicitud:', error);
     res.status(500).json({ error: error.message });
   }
 }
 
-// Aprobar solicitud de crédito
 export async function aprobarSolicitud(req, res) {
   try {
     const { id } = req.params;
     const { comentario_aprobador } = req.body;
-    const id_aprobador = req.user.id_empleado; // Del token/sesión
+    const id_aprobador = req.user.id_empleado; 
     
-    // Verificar que la solicitud existe y está pendiente
     const solicitudResult = await executeQuery(
       'SELECT * FROM solicitudes_credito WHERE id_solicitud = ?',
       [id]
@@ -194,7 +198,6 @@ export async function aprobarSolicitud(req, res) {
       });
     }
     
-    // Actualizar límites del cliente
     const updateCliente = await executeQuery(
       `UPDATE clientes SET 
         limite_credito_pen = ?,
@@ -213,7 +216,6 @@ export async function aprobarSolicitud(req, res) {
       return res.status(500).json({ error: 'Error al actualizar cliente' });
     }
     
-    // Actualizar estado de la solicitud
     const updateSolicitud = await executeQuery(
       `UPDATE solicitudes_credito SET 
         estado = 'Aprobada',
@@ -233,17 +235,15 @@ export async function aprobarSolicitud(req, res) {
       message: 'Solicitud aprobada y límites actualizados'
     });
   } catch (error) {
-    console.error('Error al aprobar solicitud:', error);
     res.status(500).json({ error: error.message });
   }
 }
 
-// Rechazar solicitud de crédito
 export async function rechazarSolicitud(req, res) {
   try {
     const { id } = req.params;
     const { comentario_aprobador } = req.body;
-    const id_aprobador = req.user.id_empleado; // Del token/sesión
+    const id_aprobador = req.user.id_empleado; 
     
     if (!comentario_aprobador) {
       return res.status(400).json({ 
@@ -251,7 +251,6 @@ export async function rechazarSolicitud(req, res) {
       });
     }
     
-    // Verificar que la solicitud existe y está pendiente
     const solicitudResult = await executeQuery(
       'SELECT estado FROM solicitudes_credito WHERE id_solicitud = ?',
       [id]
@@ -269,7 +268,6 @@ export async function rechazarSolicitud(req, res) {
       });
     }
     
-    // Actualizar estado de la solicitud
     const result = await executeQuery(
       `UPDATE solicitudes_credito SET 
         estado = 'Rechazada',
@@ -289,12 +287,10 @@ export async function rechazarSolicitud(req, res) {
       message: 'Solicitud rechazada'
     });
   } catch (error) {
-    console.error('Error al rechazar solicitud:', error);
     res.status(500).json({ error: error.message });
   }
 }
 
-// Obtener historial de solicitudes de un cliente
 export async function getHistorialSolicitudesCliente(req, res) {
   try {
     const { id } = req.params;
@@ -314,7 +310,6 @@ export async function getHistorialSolicitudesCliente(req, res) {
       total: result.data.length
     });
   } catch (error) {
-    console.error('Error al obtener historial:', error);
     res.status(500).json({ error: error.message });
   }
 }

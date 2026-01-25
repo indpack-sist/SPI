@@ -8,10 +8,11 @@ import {
   rechazarSolicitud,
   getHistorialSolicitudesCliente
 } from '../controllers/solicitudes-credito.controller.js';
+import { uploadMiddleware } from '../services/cloudinary.service.js'; 
 
 const router = express.Router();
 
-router.post('/', crearSolicitudCredito);
+router.post('/', uploadMiddleware.single('archivo_sustento'), crearSolicitudCredito);
 router.get('/', getAllSolicitudes);
 router.get('/pendientes', getSolicitudesPendientes);
 router.get('/cliente/:id', getHistorialSolicitudesCliente);

@@ -24,36 +24,36 @@ function Navbar({ onToggleSidebar }) {
   }, []);
 
   useEffect(() => {
-    if (user?.id) {
-      const newSocket = io(SOCKET_URL, {
-        withCredentials: true,
-        transports: ['websocket', 'polling']
-      });
+  if (user?.id_empleado) {
+    const newSocket = io(SOCKET_URL, {
+      withCredentials: true,
+      transports: ['websocket', 'polling']
+    });
 
-      newSocket.on('connect', () => {
-        newSocket.emit('identificar_usuario', user.id);
-      });
+    newSocket.on('connect', () => {
+      newSocket.emit('identificar_usuario', user.id_empleado);
+    });
 
-      newSocket.on('nueva_notificacion', (notif) => {
-        setNotificaciones(prev => [notif, ...prev]);
-        setNoLeidas(prev => prev + 1);
-        
-        try {
-          const audio = new Audio('/assets/notification.mp3');
-          audio.volume = 0.5;
-          audio.play().catch(() => {});
-        } catch (e) {
-          console.error("No se pudo reproducir audio");
-        }
-      });
+    newSocket.on('nueva_notificacion', (notif) => {
+      setNotificaciones(prev => [notif, ...prev]);
+      setNoLeidas(prev => prev + 1);
+      
+      try {
+        const audio = new Audio('/assets/notification.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch (e) {
+        console.error("No se pudo reproducir audio");
+      }
+    });
 
-      setSocket(newSocket);
+    setSocket(newSocket);
 
-      return () => {
-        newSocket.disconnect();
-      };
-    }
-  }, [user]);
+    return () => {
+      newSocket.disconnect();
+    };
+  }
+}, [user]);
 
   const cargarNotificaciones = async () => {
     try {

@@ -27,6 +27,7 @@ function Clientes() {
   
   const [modalSolicitudOpen, setModalSolicitudOpen] = useState(false);
   const [clienteParaSolicitud, setClienteParaSolicitud] = useState(null);
+  const [archivoSustento, setArchivoSustento] = useState(null);
   const [solicitudData, setSolicitudData] = useState({
     limite_credito_pen_solicitado: 0,
     limite_credito_usd_solicitado: 0,
@@ -125,6 +126,7 @@ function Clientes() {
     }
 
     setClienteParaSolicitud(cliente);
+    setArchivoSustento(null);
     setSolicitudData({
       limite_credito_pen_solicitado: parseFloat(cliente.limite_credito_pen || 0),
       limite_credito_usd_solicitado: parseFloat(cliente.limite_credito_usd || 0),
@@ -135,24 +137,33 @@ function Clientes() {
     setModalSolicitudOpen(true);
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setArchivoSustento(e.target.files[0]);
+    }
+  };
+
   const handleSubmitSolicitud = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     try {
-      const dataToSend = {
-        id_cliente: clienteParaSolicitud.id_cliente,
-        limite_credito_pen_solicitado: parseFloat(solicitudData.limite_credito_pen_solicitado),
-        limite_credito_usd_solicitado: parseFloat(solicitudData.limite_credito_usd_solicitado),
-        limite_credito_pen_actual: parseFloat(solicitudData.limite_credito_pen_actual),
-        limite_credito_usd_actual: parseFloat(solicitudData.limite_credito_usd_actual),
-        usar_limite_credito: true,
-        justificacion: solicitudData.justificacion
-      };
-      await solicitudesCreditoAPI.create(dataToSend);
+      const formDataToSend = new FormData();
+      formDataToSend.append('id_cliente', clienteParaSolicitud.id_cliente);
+      formDataToSend.append('limite_credito_pen_solicitado', solicitudData.limite_credito_pen_solicitado);
+      formDataToSend.append('limite_credito_usd_solicitado', solicitudData.limite_credito_usd_solicitado);
+      formDataToSend.append('usar_limite_credito', true);
+      formDataToSend.append('justificacion', solicitudData.justificacion);
+      
+      if (archivoSustento) {
+        formDataToSend.append('archivo_sustento', archivoSustento);
+      }
+
+      await solicitudesCreditoAPI.create(formDataToSend);
       setSuccess('Solicitud de crédito enviada exitosamente. Pendiente de aprobación.');
       setModalSolicitudOpen(false);
       setClienteParaSolicitud(null);
+      setArchivoSustento(null);
       cerrarModal();
       cargarClientes();
     } catch (err) {
@@ -575,6 +586,18 @@ function Clientes() {
               <label className="form-label">Justificación *</label>
               <textarea className="form-textarea" value={solicitudData.justificacion} onChange={(e) => setSolicitudData({ ...solicitudData, justificacion: e.target.value })} rows={4} placeholder="Explique por qué se necesita este cambio de límite..." required />
             </div>
+            
+            <div className="form-group">
+              <label className="form-label">Archivo de Sustento</label>
+              <input 
+                type="file" 
+                className="form-input" 
+                onChange={handleFileChange} 
+                accept=".pdf,.jpg,.jpeg,.png"
+              />
+              <p className="text-xs text-muted mt-1">Sube un sustento (PDF o Imagen) para agilizar la aprobación.</p>
+            </div>
+
             <div className="flex gap-2 justify-end mt-4">
               <button type="button" className="btn btn-outline" onClick={() => setModalSolicitudOpen(false)}>Cancelar</button>
               <button type="submit" className="btn btn-primary">Enviar Solicitud</button>

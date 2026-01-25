@@ -22,10 +22,11 @@ function Navbar({ onToggleSidebar }) {
   useEffect(() => {
   console.log('🚀 useEffect ejecutándose...');
   console.log('🚀 user:', user);
-  console.log('🚀 user?.id_empleado:', user?.id_empleado);
   
-  if (user?.id_empleado) {
+  // 🔴 CAMBIO: Ahora usa user?.id en lugar de user?.id_empleado
+  if (user?.id) {
     console.log('✅ Usuario tiene ID, continuando...');
+    console.log('👤 ID Usuario:', user.id);
     
     if (socket) {
       console.log('🔌 Desconectando socket anterior...');
@@ -38,11 +39,11 @@ function Navbar({ onToggleSidebar }) {
 
     console.log('🌐 VITE_API_URL:', import.meta.env.VITE_API_URL);
     console.log('🔌 SOCKET_URL:', SOCKET_URL);
-    console.log('👤 ID Empleado:', user.id_empleado);
+    console.log('👤 ID Empleado:', user.id);
     
     alert('1. VITE_API_URL: ' + import.meta.env.VITE_API_URL);
     alert('2. SOCKET_URL: ' + SOCKET_URL);
-    alert('3. ID Empleado: ' + user.id_empleado);
+    alert('3. ID Empleado: ' + user.id);
     
     const newSocket = io(SOCKET_URL, {
       withCredentials: true,
@@ -56,9 +57,9 @@ function Navbar({ onToggleSidebar }) {
 
     newSocket.on('connect', () => {
       console.log('✅ WebSocket CONECTADO con ID:', newSocket.id);
-      console.log('📤 Emitiendo identificar_usuario:', user.id_empleado);
+      console.log('📤 Emitiendo identificar_usuario:', user.id);
       alert('4. ✅ WebSocket CONECTADO: ' + newSocket.id);
-      newSocket.emit('identificar_usuario', user.id_empleado);
+      newSocket.emit('identificar_usuario', user.id); // 🔴 CAMBIO AQUÍ
     });
 
     newSocket.on('nueva_notificacion', (notif) => {
@@ -94,9 +95,9 @@ function Navbar({ onToggleSidebar }) {
       newSocket.disconnect();
     };
   } else {
-    console.log('❌ NO hay usuario o NO tiene id_empleado');
+    console.log('❌ NO hay usuario o NO tiene id');
   }
-}, [user]);
+}, [user]); // 🔴 CAMBIO: Ahora depende de user, no de user?.id_empleado
 
   const cargarNotificaciones = async () => {
     try {

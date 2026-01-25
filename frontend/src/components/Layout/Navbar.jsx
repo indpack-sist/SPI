@@ -20,84 +20,73 @@ function Navbar({ onToggleSidebar }) {
   }, []);
 
   useEffect(() => {
-  console.log('🚀 useEffect ejecutándose...');
-  console.log('🚀 user:', user);
-  
-  // 🔴 CAMBIO: Ahora usa user?.id en lugar de user?.id_empleado
-  if (user?.id) {
-    console.log('✅ Usuario tiene ID, continuando...');
-    console.log('👤 ID Usuario:', user.id);
-    
-    if (socket) {
-      console.log('🔌 Desconectando socket anterior...');
-      socket.disconnect();
-    }
-    
-    const SOCKET_URL = import.meta.env.VITE_API_URL 
-      ? import.meta.env.VITE_API_URL.replace('/api', '') 
-      : 'http://localhost:3000';
-
-    console.log('🌐 VITE_API_URL:', import.meta.env.VITE_API_URL);
-    console.log('🔌 SOCKET_URL:', SOCKET_URL);
-    console.log('👤 ID Empleado:', user.id);
-    
-    alert('1. VITE_API_URL: ' + import.meta.env.VITE_API_URL);
-    alert('2. SOCKET_URL: ' + SOCKET_URL);
-    alert('3. ID Empleado: ' + user.id);
-    
-    const newSocket = io(SOCKET_URL, {
-      withCredentials: true,
-      transports: ['polling', 'websocket'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-      timeout: 20000,
-      forceNew: true
-    });
-
-    newSocket.on('connect', () => {
-      console.log('✅ WebSocket CONECTADO con ID:', newSocket.id);
-      console.log('📤 Emitiendo identificar_usuario:', user.id);
-      alert('4. ✅ WebSocket CONECTADO: ' + newSocket.id);
-      newSocket.emit('identificar_usuario', user.id); // 🔴 CAMBIO AQUÍ
-    });
-
-    newSocket.on('nueva_notificacion', (notif) => {
-      console.log('🔔 Nueva notificación recibida:', notif);
-      alert('5. 🔔 NOTIFICACIÓN RECIBIDA!');
-      setNotificaciones(prev => [notif, ...prev]);
-      setNoLeidas(prev => prev + 1);
-      
-      try {
-        const audio = new Audio('/assets/notification.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
-      } catch (e) {
-        console.error("No se pudo reproducir audio");
+    if (user?.id) {
+      if (socket) {
+        socket.disconnect();
       }
-    });
+      
+      const SOCKET_URL = import.meta.env.VITE_API_URL 
+        ? import.meta.env.VITE_API_URL.replace('/api', '') 
+        : 'http://localhost:3000';
+      
+      const newSocket = io(SOCKET_URL, {
+        withCredentials: true,
+        transports: ['polling', 'websocket'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        timeout: 20000,
+        forceNew: true
+      });
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('❌ WebSocket desconectado. Razón:', reason);
-      alert('6. ❌ Desconectado: ' + reason);
-    });
+      newSocket.on('connect', () => {
+        newSocket.emit('identificar_usuario', user.id);
+      });
 
-    newSocket.on('connect_error', (error) => {
-      console.error('🔴 Error de conexión WebSocket:', error.message);
-      console.error('🔴 Error completo:', error);
-      alert('7. 🚫 ERROR: ' + error.message);
-    });
+      newSocket.on('nueva_notificacion', (notif) => {
+        setNotificaciones(prev => [notif, ...prev]);
+        setNoLeidas(prev => prev + 1);
+        
+        // 🔊 Sonido de notificación generado (Web Audio API)
+        try {
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          // Configuración del sonido (tono agradable)
+          oscillator.frequency.value = 800; // Frecuencia en Hz
+          oscillator.type = 'sine'; // Tipo de onda suave
+          
+          // Control de volumen (fade out)
+          gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+          
+          // Reproducir por 0.5 segundos
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.5);
+        } catch (e) {
+          console.error("No se pudo reproducir sonido");
+        }
+      });
 
-    setSocket(newSocket);
+      newSocket.on('disconnect', (reason) => {
+        console.log('WebSocket desconectado:', reason);
+      });
 
-    return () => {
-      console.log('🧹 Cleanup: desconectando socket...');
-      newSocket.disconnect();
-    };
-  } else {
-    console.log('❌ NO hay usuario o NO tiene id');
-  }
-}, [user]); // 🔴 CAMBIO: Ahora depende de user, no de user?.id_empleado
+      newSocket.on('connect_error', (error) => {
+        console.error('Error de conexión WebSocket:', error.message);
+      });
+
+      setSocket(newSocket);
+
+      return () => {
+        newSocket.disconnect();
+      };
+    }
+  }, [user]);
 
   const cargarNotificaciones = async () => {
     try {

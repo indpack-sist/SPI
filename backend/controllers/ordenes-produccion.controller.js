@@ -1089,15 +1089,47 @@ export async function registrarParcial(req, res) {
     });
 
     if (insumos_consumidos && insumos_consumidos.length > 0) {
+      const consumoExistente = await executeQuery(
+        `SELECT id_insumo, cantidad_real_consumida FROM op_consumo_materiales WHERE id_orden = ?`,
+        [id]
+      );
+
+      const insumosExistentesMap = {};
+      if (consumoExistente.success) {
+        consumoExistente.data.forEach(item => {
+          insumosExistentesMap[item.id_insumo] = true;
+        });
+      }
+
       for (const insumo of insumos_consumidos) {
         const cantidad = parseFloat(insumo.cantidad);
         if (cantidad > 0) {
-          queries.push({
-            sql: `UPDATE op_consumo_materiales 
-                  SET cantidad_real_consumida = IFNULL(cantidad_real_consumida, 0) + ? 
-                  WHERE id_orden = ? AND id_insumo = ?`,
-            params: [cantidad, id, insumo.id_insumo]
-          });
+          const insumoExiste = insumosExistentesMap[insumo.id_insumo];
+
+          if (insumoExiste) {
+            queries.push({
+              sql: `UPDATE op_consumo_materiales 
+                    SET cantidad_real_consumida = IFNULL(cantidad_real_consumida, 0) + ? 
+                    WHERE id_orden = ? AND id_insumo = ?`,
+              params: [cantidad, id, insumo.id_insumo]
+            });
+          } else {
+            const prodInfo = await executeQuery(
+              'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?',
+              [insumo.id_insumo]
+            );
+            
+            const costoUnitario = prodInfo.success && prodInfo.data.length > 0 
+              ? parseFloat(prodInfo.data[0].costo_unitario_promedio) 
+              : 0;
+
+            queries.push({
+              sql: `INSERT INTO op_consumo_materiales 
+                    (id_orden, id_insumo, cantidad_requerida, cantidad_real_consumida, costo_unitario) 
+                    VALUES (?, ?, 0, ?, ?)`,
+              params: [id, insumo.id_insumo, cantidad, costoUnitario]
+            });
+          }
 
           queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
@@ -1364,49 +1396,65 @@ export async function finalizarProduccion(req, res) {
       [id]
     );
 
+    const insumosExistentesMap = {};
+    if (consumoMaterialesData.success) {
+      consumoMaterialesData.data.forEach(item => {
+        insumosExistentesMap[item.id_insumo] = {
+          cantidad_real_consumida: parseFloat(item.cantidad_real_consumida || 0),
+          costo_unitario: parseFloat(item.costo_unitario)
+        };
+      });
+    }
+
     const queries = [];
     let costoTotalOrden = 0;
 
     if (insumos_reales && Array.isArray(insumos_reales)) {
       for (const insumo of insumos_reales) {
-        const cantidadReal = parseFloat(insumo.cantidad); 
-        if (cantidadReal < 0) continue;
+        const cantidadFinal = parseFloat(insumo.cantidad); 
+        if (cantidadFinal < 0) continue;
 
-        const insumoPrevio = consumoMaterialesData.data.find(cm => cm.id_insumo === insumo.id_insumo);
+        const insumoExistente = insumosExistentesMap[insumo.id_insumo];
         
-        if (insumoPrevio) {
-            const diferencia = cantidadReal - parseFloat(insumoPrevio.cantidad_real_consumida || 0);
-            
-            if (diferencia !== 0) {
-                queries.push({
-                    sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-                    params: [diferencia, insumo.id_insumo]
-                });
-            }
-
+        if (insumoExistente) {
+          const diferencia = cantidadFinal - insumoExistente.cantidad_real_consumida;
+          
+          if (diferencia !== 0) {
             queries.push({
-              sql: `UPDATE op_consumo_materiales SET cantidad_real_consumida = ? WHERE id_orden = ? AND id_insumo = ?`,
-              params: [cantidadReal, id, insumo.id_insumo]
+              sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+              params: [diferencia, insumo.id_insumo]
             });
+          }
 
-            costoTotalOrden += cantidadReal * parseFloat(insumoPrevio.costo_unitario);
+          queries.push({
+            sql: `UPDATE op_consumo_materiales SET cantidad_real_consumida = ? WHERE id_orden = ? AND id_insumo = ?`,
+            params: [cantidadFinal, id, insumo.id_insumo]
+          });
+
+          costoTotalOrden += cantidadFinal * insumoExistente.costo_unitario;
         } else {
-            const prodInfo = await executeQuery('SELECT id_tipo_inventario, costo_unitario_promedio FROM productos WHERE id_producto = ?', [insumo.id_insumo]);
-            if (prodInfo.success && prodInfo.data.length > 0) {
-                const costo = parseFloat(prodInfo.data[0].costo_unitario_promedio);
-                
-                queries.push({
-                    sql: 'INSERT INTO op_consumo_materiales (id_orden, id_insumo, cantidad_requerida, cantidad_real_consumida, costo_unitario) VALUES (?, ?, 0, ?, ?)',
-                    params: [id, insumo.id_insumo, cantidadReal, costo]
-                });
-                
-                queries.push({
-                    sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-                    params: [cantidadReal, insumo.id_insumo]
-                });
-                
-                costoTotalOrden += cantidadReal * costo;
-            }
+          const prodInfo = await executeQuery(
+            'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?',
+            [insumo.id_insumo]
+          );
+          
+          const costoUnitario = prodInfo.success && prodInfo.data.length > 0 
+            ? parseFloat(prodInfo.data[0].costo_unitario_promedio) 
+            : 0;
+          
+          queries.push({
+            sql: `INSERT INTO op_consumo_materiales 
+                  (id_orden, id_insumo, cantidad_requerida, cantidad_real_consumida, costo_unitario) 
+                  VALUES (?, ?, 0, ?, ?)`,
+            params: [id, insumo.id_insumo, cantidadFinal, costoUnitario]
+          });
+          
+          queries.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+            params: [cantidadFinal, insumo.id_insumo]
+          });
+          
+          costoTotalOrden += cantidadFinal * costoUnitario;
         }
       }
     }
@@ -1420,9 +1468,10 @@ export async function finalizarProduccion(req, res) {
                 cantidad_unidades_producida = ?,
                 fecha_fin = ?, 
                 tiempo_total_minutos = ?, 
-                observaciones = ?
+                observaciones = ?,
+                costo_materiales = ?
             WHERE id_orden = ?`,
-      params: [kilosFinales, unidadesFinales, fechaActual, tiempoMinutos, observaciones, id]
+      params: [kilosFinales, unidadesFinales, fechaActual, tiempoMinutos, observaciones, costoTotalOrden, id]
     });
 
     let cantidadParaStock = 0;
@@ -1431,11 +1480,11 @@ export async function finalizarProduccion(req, res) {
     const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'PIEZA', 'MILLAR', 'MLL'].includes(orden.unidad_medida.toUpperCase()) || orden.nombre_producto.toUpperCase().includes('LÁMINA');
 
     if (esPorUnidad && unidadesFinales > 0) {
-        cantidadParaStock = unidadesFinales;
-        costoUnitarioFinal = costoTotalOrden / unidadesFinales;
+      cantidadParaStock = unidadesFinales;
+      costoUnitarioFinal = costoTotalOrden / unidadesFinales;
     } else {
-        cantidadParaStock = kilosFinales;
-        costoUnitarioFinal = kilosFinales > 0 ? (costoTotalOrden / kilosFinales) : 0;
+      cantidadParaStock = kilosFinales;
+      costoUnitarioFinal = kilosFinales > 0 ? (costoTotalOrden / kilosFinales) : 0;
     }
 
     if (cantidadParaStock > 0) {
@@ -1466,100 +1515,100 @@ export async function finalizarProduccion(req, res) {
     if (!result1.success) return res.status(500).json({ error: result1.error });
 
     if (cantidadParaStock > 0) {
-        let idEntrada = null;
-        for (let i = result1.data.length - 1; i >= 0; i--) {
-            if (result1.data[i].insertId && !idEntrada) { 
-                idEntrada = result1.data[i].insertId;
-                break;
-            }
+      let idEntrada = null;
+      for (let i = result1.data.length - 1; i >= 0; i--) {
+        if (result1.data[i].insertId && !idEntrada) { 
+          idEntrada = result1.data[i].insertId;
+          break;
         }
+      }
+      
+      if (!idEntrada) {
+        const lastEntrada = await executeQuery('SELECT MAX(id_entrada) as id FROM entradas');
+        idEntrada = lastEntrada.data[0].id;
+      }
+
+      if (idEntrada) {
+        const queriesStock = [];
         
-        if (!idEntrada) {
-             const lastEntrada = await executeQuery('SELECT MAX(id_entrada) as id FROM entradas');
-             idEntrada = lastEntrada.data[0].id;
-        }
+        queriesStock.push({
+          sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
+          params: [idEntrada, orden.id_producto_terminado, cantidadParaStock, costoUnitarioFinal]
+        });
 
-        if (idEntrada) {
-            const queriesStock = [];
-            
-            queriesStock.push({
-              sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
-              params: [idEntrada, orden.id_producto_terminado, cantidadParaStock, costoUnitarioFinal]
-            });
+        queriesStock.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          params: [cantidadParaStock, orden.id_producto_terminado]
+        });
 
-            queriesStock.push({
-              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-              params: [cantidadParaStock, orden.id_producto_terminado]
-            });
-
-            await executeTransaction(queriesStock);
-        }
+        await executeTransaction(queriesStock);
+      }
     }
 
     if (mermas && mermas.length > 0) {
-        const queriesMermas = [];
-        let totalCostoMermas = 0;
-        const mermasValidas = [];
+      const queriesMermas = [];
+      let totalCostoMermas = 0;
+      const mermasValidas = [];
 
-        for (const m of mermas) {
-            if (m.cantidad > 0) {
-                queriesMermas.push({
-                    sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
-                    params: [id, m.id_producto_merma, m.cantidad, m.observaciones]
-                });
-                
-                const prodMermaInfo = await executeQuery('SELECT id_tipo_inventario, costo_unitario_promedio FROM productos WHERE id_producto = ?', [m.id_producto_merma]);
-                
-                if (prodMermaInfo.success && prodMermaInfo.data.length > 0) {
-                    const dataMerma = prodMermaInfo.data[0];
-                    const costoMerma = parseFloat(dataMerma.costo_unitario_promedio || 0);
-                    totalCostoMermas += m.cantidad * costoMerma;
-                    
-                    mermasValidas.push({
-                        id_producto: m.id_producto_merma,
-                        cantidad: m.cantidad,
-                        costo_unitario: costoMerma,
-                        id_tipo_inventario: dataMerma.id_tipo_inventario
-                    });
-                }
-            }
-        }
-
-        if (mermasValidas.length > 0) {
-            queriesMermas.push({
-                sql: `INSERT INTO entradas (
-                  id_tipo_inventario, documento_soporte, total_costo, moneda,
-                  id_registrado_por, observaciones
-                ) VALUES (?, ?, ?, ?, ?, ?)`,
-                params: [
-                  mermasValidas[0].id_tipo_inventario, 
-                  `Recuperación Merma O.P. ${orden.numero_orden}`,
-                  totalCostoMermas,
-                  'PEN',
-                  orden.id_supervisor,
-                  'Ingreso por merma de producción'
-                ]
+      for (const m of mermas) {
+        if (m.cantidad > 0) {
+          queriesMermas.push({
+            sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
+            params: [id, m.id_producto_merma, m.cantidad, m.observaciones]
+          });
+          
+          const prodMermaInfo = await executeQuery('SELECT id_tipo_inventario, costo_unitario_promedio FROM productos WHERE id_producto = ?', [m.id_producto_merma]);
+          
+          if (prodMermaInfo.success && prodMermaInfo.data.length > 0) {
+            const dataMerma = prodMermaInfo.data[0];
+            const costoMerma = parseFloat(dataMerma.costo_unitario_promedio || 0);
+            totalCostoMermas += m.cantidad * costoMerma;
+            
+            mermasValidas.push({
+              id_producto: m.id_producto_merma,
+              cantidad: m.cantidad,
+              costo_unitario: costoMerma,
+              id_tipo_inventario: dataMerma.id_tipo_inventario
             });
+          }
         }
+      }
 
-        const resultMermas = await executeTransaction(queriesMermas);
+      if (mermasValidas.length > 0) {
+        queriesMermas.push({
+          sql: `INSERT INTO entradas (
+            id_tipo_inventario, documento_soporte, total_costo, moneda,
+            id_registrado_por, observaciones
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+          params: [
+            mermasValidas[0].id_tipo_inventario, 
+            `Recuperación Merma O.P. ${orden.numero_orden}`,
+            totalCostoMermas,
+            'PEN',
+            orden.id_supervisor,
+            'Ingreso por merma de producción'
+          ]
+        });
+      }
+
+      const resultMermas = await executeTransaction(queriesMermas);
+      
+      if (resultMermas.success && mermasValidas.length > 0) {
+        const idEntradaMerma = resultMermas.data[resultMermas.data.length - 1].insertId;
+        const queriesDetalleMerma = [];
         
-        if (resultMermas.success && mermasValidas.length > 0) {
-             const idEntradaMerma = resultMermas.data[resultMermas.data.length - 1].insertId;
-             const queriesDetalleMerma = [];
-             
-             for (const m of mermasValidas) {
-                 queriesDetalleMerma.push({
-                     sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
-                     params: [idEntradaMerma, m.id_producto, m.cantidad, m.costo_unitario]
-                 });
-                 queriesDetalleMerma.push({
-                     sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-                     params: [m.cantidad, m.id_producto]
-                 });
-             }
-             await executeTransaction(queriesDetalleMerma);
+        for (const m of mermasValidas) {
+          queriesDetalleMerma.push({
+            sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
+            params: [idEntradaMerma, m.id_producto, m.cantidad, m.costo_unitario]
+          });
+          queriesDetalleMerma.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+            params: [m.cantidad, m.id_producto]
+          });
         }
+        await executeTransaction(queriesDetalleMerma);
+      }
     }
 
     await notificarCambioEstado(id, `Producción Finalizada: ${orden.numero_orden}`, 'La orden ha sido completada.', 'success', req);
@@ -1716,5 +1765,307 @@ export async function cancelarOrden(req, res) {
     res.json({ success: true, message: 'Orden cancelada y materiales devueltos al inventario' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+}
+export async function completarAsignacionOP(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      id_supervisor,
+      turno,
+      maquinista,
+      ayudante,
+      operario_corte,
+      operario_embalaje,
+      medida,
+      peso_producto,
+      gramaje,
+      modo_receta,
+      id_receta_producto,
+      receta_provisional,
+      rendimiento_receta,
+      insumos
+    } = req.body;
+
+    if (!id_supervisor) {
+      return res.status(400).json({
+        success: false,
+        error: 'Supervisor es requerido'
+      });
+    }
+
+    if (!turno) {
+      return res.status(400).json({
+        success: false,
+        error: 'Turno es requerido'
+      });
+    }
+
+    const ordenExistente = await executeQuery(`
+      SELECT op.*, p.nombre as nombre_producto, p.unidad_medida
+      FROM ordenes_produccion op
+      INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
+      WHERE op.id_orden = ? AND op.estado = 'Pendiente Asignación'
+    `, [id]);
+
+    if (!ordenExistente.success || ordenExistente.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Orden no encontrada o no está en estado Pendiente Asignación'
+      });
+    }
+
+    const orden = ordenExistente.data[0];
+    const nombreProducto = orden.nombre_producto.toUpperCase();
+    const esLamina = nombreProducto.includes('LÁMINA') || nombreProducto.includes('LAMINA');
+    const cantidadPlan = parseFloat(orden.cantidad_planificada);
+
+    let costoMateriales = 0;
+    let rendimientoUnidades = 1;
+    let idRecetaProducto = null;
+    let insumosReporte = [];
+    let recetaCalculada = [];
+
+    if (modo_receta === 'manual' || orden.es_orden_manual === 1) {
+      const updateResult = await executeQuery(`
+        UPDATE ordenes_produccion 
+        SET id_supervisor = ?,
+            turno = ?,
+            maquinista = ?,
+            ayudante = ?,
+            operario_corte = ?,
+            operario_embalaje = ?,
+            medida = ?,
+            peso_producto = ?,
+            gramaje = ?,
+            costo_materiales = 0,
+            rendimiento_unidades = 1,
+            es_orden_manual = 1,
+            estado = 'Pendiente'
+        WHERE id_orden = ?
+      `, [
+        id_supervisor,
+        turno,
+        maquinista || null,
+        ayudante || null,
+        operario_corte || null,
+        operario_embalaje || null,
+        medida || null,
+        peso_producto || null,
+        gramaje || null,
+        id
+      ]);
+
+      if (!updateResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: updateResult.error
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Orden asignada exitosamente (modo manual)',
+        data: {
+          costo_materiales: 0,
+          lotes_necesarios: 0,
+          rendimiento_unidades: 1,
+          estado: 'Pendiente',
+          es_manual: true,
+          insumos: []
+        }
+      });
+    }
+
+    if (modo_receta === 'porcentaje' && insumos && Array.isArray(insumos) && insumos.length > 0) {
+      const insumosIds = insumos.map(i => i.id_insumo);
+      const insumosResult = await executeQuery(
+        `SELECT id_producto, costo_unitario_promedio, nombre, unidad_medida, stock_actual
+         FROM productos WHERE id_producto IN (${insumosIds.map(() => '?').join(',')})`,
+        insumosIds
+      );
+
+      recetaCalculada = insumos.map(item => {
+        const insumoDb = insumosResult.data.find(i => i.id_producto == item.id_insumo);
+        if (!insumoDb) throw new Error(`Insumo ${item.id_insumo} no encontrado`);
+
+        const porcentaje = parseFloat(item.porcentaje);
+        const cantidadCalculada = (cantidadPlan * porcentaje) / 100;
+
+        costoMateriales += cantidadCalculada * parseFloat(insumoDb.costo_unitario_promedio);
+
+        insumosReporte.push({
+          id_insumo: item.id_insumo,
+          codigo: insumoDb.codigo,
+          nombre: insumoDb.nombre,
+          unidad_medida: insumoDb.unidad_medida,
+          cantidad_requerida: cantidadCalculada,
+          stock_actual: parseFloat(insumoDb.stock_actual),
+          cubre_stock: parseFloat(insumoDb.stock_actual) >= cantidadCalculada,
+          costo_unitario: parseFloat(insumoDb.costo_unitario_promedio)
+        });
+
+        return {
+          id_insumo: item.id_insumo,
+          cantidad_requerida: cantidadCalculada
+        };
+      });
+    } else if (modo_receta === 'seleccionar' && id_receta_producto) {
+      const recetaResult = await executeQuery(`
+        SELECT 
+          rd.id_insumo,
+          rd.cantidad_requerida,
+          rd.unidad_medida,
+          p.codigo AS codigo_insumo,
+          p.nombre AS nombre_insumo,
+          p.costo_unitario_promedio,
+          p.stock_actual,
+          p.id_tipo_inventario,
+          rp.rendimiento_unidades
+        FROM recetas_detalle rd
+        INNER JOIN recetas_productos rp ON rd.id_receta_producto = rp.id_receta_producto
+        INNER JOIN productos p ON rd.id_insumo = p.id_producto
+        WHERE rd.id_receta_producto = ?
+      `, [id_receta_producto]);
+
+      if (!recetaResult.success || recetaResult.data.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'La receta seleccionada no tiene insumos configurados'
+        });
+      }
+
+      const recetaData = recetaResult.data;
+      rendimientoUnidades = parseFloat(recetaData[0].rendimiento_unidades) || 1;
+      const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
+
+      for (const insumo of recetaData) {
+        const cantidadTotalRequerida = parseFloat(insumo.cantidad_requerida) * lotesNecesarios;
+        const costoUnitario = parseFloat(insumo.costo_unitario_promedio);
+        costoMateriales += cantidadTotalRequerida * costoUnitario;
+
+        insumosReporte.push({
+          id_insumo: insumo.id_insumo,
+          codigo: insumo.codigo_insumo,
+          nombre: insumo.nombre_insumo,
+          unidad_medida: insumo.unidad_medida,
+          cantidad_requerida: cantidadTotalRequerida,
+          stock_actual: parseFloat(insumo.stock_actual),
+          cubre_stock: parseFloat(insumo.stock_actual) >= cantidadTotalRequerida,
+          costo_unitario: costoUnitario
+        });
+      }
+
+      idRecetaProducto = id_receta_producto;
+    } else if (modo_receta === 'provisional' && receta_provisional && receta_provisional.length > 0) {
+      rendimientoUnidades = parseFloat(rendimiento_receta) || 1;
+      const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
+
+      for (const item of receta_provisional) {
+        const insumoResult = await executeQuery(`
+          SELECT codigo, nombre, unidad_medida, costo_unitario_promedio, stock_actual 
+          FROM productos WHERE id_producto = ?
+        `, [item.id_insumo]);
+
+        if (insumoResult.success && insumoResult.data.length > 0) {
+          const prodData = insumoResult.data[0];
+          const costoUnitario = parseFloat(prodData.costo_unitario_promedio);
+          const cantidadTotalRequerida = parseFloat(item.cantidad_requerida) * lotesNecesarios;
+
+          costoMateriales += cantidadTotalRequerida * costoUnitario;
+
+          insumosReporte.push({
+            id_insumo: item.id_insumo,
+            codigo: prodData.codigo,
+            nombre: prodData.nombre,
+            unidad_medida: prodData.unidad_medida,
+            cantidad_requerida: cantidadTotalRequerida,
+            stock_actual: parseFloat(prodData.stock_actual),
+            cubre_stock: parseFloat(prodData.stock_actual) >= cantidadTotalRequerida,
+            costo_unitario: costoUnitario
+          });
+        }
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Debe proporcionar una receta o configuración de insumos válida'
+      });
+    }
+
+    const updateResult = await executeQuery(`
+      UPDATE ordenes_produccion 
+      SET id_receta_producto = ?,
+          id_supervisor = ?,
+          turno = ?,
+          maquinista = ?,
+          ayudante = ?,
+          operario_corte = ?,
+          operario_embalaje = ?,
+          medida = ?,
+          peso_producto = ?,
+          gramaje = ?,
+          costo_materiales = ?,
+          rendimiento_unidades = ?,
+          estado = 'Pendiente'
+      WHERE id_orden = ?
+    `, [
+      idRecetaProducto,
+      id_supervisor,
+      turno,
+      maquinista || null,
+      ayudante || null,
+      operario_corte || null,
+      operario_embalaje || null,
+      medida || null,
+      peso_producto || null,
+      gramaje || null,
+      costoMateriales,
+      rendimientoUnidades,
+      id
+    ]);
+
+    if (!updateResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: updateResult.error
+      });
+    }
+
+    if (recetaCalculada.length > 0) {
+      const queries = recetaCalculada.map(item => ({
+        sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
+        params: [id, item.id_insumo, item.cantidad_requerida]
+      }));
+      await executeTransaction(queries);
+    } else if (receta_provisional && receta_provisional.length > 0) {
+      await executeQuery(`
+        UPDATE ordenes_produccion 
+        SET receta_provisional = ?
+        WHERE id_orden = ?
+      `, [JSON.stringify(receta_provisional), id]);
+    }
+
+    const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
+
+    res.json({
+      success: true,
+      message: 'Orden asignada y configurada exitosamente',
+      data: {
+        costo_materiales: costoMateriales,
+        lotes_necesarios: lotesNecesarios,
+        rendimiento_unidades: rendimientoUnidades,
+        estado: 'Pendiente',
+        modo_receta: modo_receta,
+        insumos: insumosReporte
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al completar asignación:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 }

@@ -5,7 +5,7 @@ import {
   ArrowLeftRight, Factory, X,
   FileText, ShoppingCart, FileCheck, ShoppingBag,
   CreditCard, Banknote, Search, 
-  Calendar, FileInput, Tags
+  Calendar, FileInput, Tags, FileSpreadsheet
 } from 'lucide-react';
 import { usePermisos } from '../../context/PermisosContext';
 import './Sidebar.css';
@@ -74,6 +74,12 @@ function Sidebar({ isOpen, onToggle }) {
         { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas' },
         { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas' },
         { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias', modulo: 'transferencias' }
+      ]
+    },
+    {
+      title: 'Reportes & Contabilidad', // Nueva Sección
+      items: [
+        { path: '/reportes/sire', icon: FileSpreadsheet, label: 'Reportes SIRE', modulo: 'reportes' }
       ]
     }
   ];

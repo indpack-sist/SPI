@@ -20,7 +20,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: true // <--- ÚNICO ROL CON ACCESO (TRUE)
     },
     api: {
       dashboard: true,
@@ -40,7 +41,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: true // <--- API HABILITADA
     }
   },
   'Gerencia': {
@@ -62,7 +64,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: true,
@@ -82,7 +85,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: false
     }
   },
   'Comercial': {
@@ -104,7 +108,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: false,
@@ -124,7 +129,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: false
     }
   },
   'Ventas': {
@@ -146,13 +152,14 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: false,
-      empleados: true,    
-      flota: true,        
-      proveedores: true,  
+      empleados: true,     
+      flota: true,         
+      proveedores: true,   
       clientes: true,
       solicitudesCredito: true,
       productos: true,
@@ -166,7 +173,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: true
+      listasPrecios: true,
+      reportes: false
     }
   },
   'Produccion': {
@@ -188,7 +196,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: false,
@@ -208,7 +217,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false
     }
   },
   'Supervisor': {
@@ -230,7 +240,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: false,
@@ -250,7 +261,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false
     }
   },
   'Operario': {
@@ -272,7 +284,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: false,
@@ -292,7 +305,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false
     }
   },
   'Almacenero': {
@@ -314,7 +328,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: false,
@@ -334,7 +349,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false
     }
   },
   'Logistica': {
@@ -356,7 +372,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false // <--- DENEGADO
     },
     api: {
       dashboard: false,
@@ -376,7 +393,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false
     }
   },
   'Conductor': {
@@ -398,7 +416,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false // <--- DENEGADO
     },
     api: {
       empleados: false,
@@ -417,7 +436,8 @@ const PERMISOS_POR_ROL = {
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false
     }
   },
   'Administrativo': {
@@ -439,7 +459,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false // <--- DENEGADO (Solo Administrador)
     },
     api: {
       dashboard: false,
@@ -459,7 +480,8 @@ const PERMISOS_POR_ROL = {
       compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
-      listasPrecios: false
+      listasPrecios: false,
+      reportes: false
     }
   }
 };

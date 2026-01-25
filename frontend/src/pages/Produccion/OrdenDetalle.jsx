@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale, Ruler
+  Users, Clipboard, Info, Hash, Scale, Ruler, Star
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -36,8 +36,16 @@ function OrdenDetalle() {
       maquinista: '',
       ayudante: '',
       operario_corte: '',
-      operario_embalaje: ''
+      operario_embalaje: '',
+      medida: '',
+      peso_producto: '',
+      gramaje: ''
   });
+
+  const [modoReceta, setModoReceta] = useState('porcentaje');
+  const [listaInsumos, setListaInsumos] = useState([]);
+  const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
+  const [nuevoInsumo, setNuevoInsumo] = useState({ id_insumo: '', porcentaje: '' });
 
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadKilosFinal, setCantidadKilosFinal] = useState('');
@@ -46,6 +54,7 @@ function OrdenDetalle() {
     
   const [modalParcial, setModalParcial] = useState(false);
   const [cantidadParcial, setCantidadParcial] = useState('');
+  const [cantidadUnidadesParcial, setCantidadUnidadesParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
     
   const [insumosParcialesConsumo, setInsumosParcialesConsumo] = useState([]);
@@ -54,6 +63,12 @@ function OrdenDetalle() {
   const [productosMerma, setProductosMerma] = useState([]);
   const [mermas, setMermas] = useState([]);
   const [mostrarMermas, setMostrarMermas] = useState(false);
+
+  const [modalAgregarInsumoParcial, setModalAgregarInsumoParcial] = useState(false);
+  const [nuevoInsumoParcial, setNuevoInsumoParcial] = useState({ id_insumo: '', cantidad: '' });
+
+  const [modalAgregarInsumoFinal, setModalAgregarInsumoFinal] = useState(false);
+  const [nuevoInsumoFinal, setNuevoInsumoFinal] = useState({ id_insumo: '', cantidad: '' });
 
   useEffect(() => {
     cargarDatos();
@@ -81,14 +96,23 @@ function OrdenDetalle() {
         setAnalisisConsumo(analisisRes.data.data);
       }
 
+      const esLaminaTemp = ordenRes.data.data.producto.toUpperCase().includes('LÁMINA') || ordenRes.data.data.producto.toUpperCase().includes('LAMINA');
+      
       setAsignacionData({
         id_supervisor: ordenRes.data.data.id_supervisor || '',
         turno: ordenRes.data.data.turno || 'Día',
         maquinista: ordenRes.data.data.maquinista || '',
         ayudante: ordenRes.data.data.ayudante || '',
         operario_corte: ordenRes.data.data.operario_corte || '',
-        operario_embalaje: ordenRes.data.data.operario_embalaje || ''
+        operario_embalaje: ordenRes.data.data.operario_embalaje || '',
+        medida: ordenRes.data.data.medida || '',
+        peso_producto: ordenRes.data.data.peso_producto || '',
+        gramaje: ordenRes.data.data.gramaje || ''
       });
+
+      if (esLaminaTemp) {
+        setModoReceta('manual');
+      }
 
     } catch (err) {
       setError(err.error || 'Error al cargar la orden');
@@ -116,7 +140,6 @@ function OrdenDetalle() {
       console.error('Error al cargar productos de merma:', err);
     }
   };
-
   const mermasFiltradas = productosMerma.filter(merma => {
       if (!orden) return false;
       const nombreProducto = orden.producto.toUpperCase();
@@ -130,15 +153,68 @@ function OrdenDetalle() {
       return true;
   });
 
-  const insumosParaAgregarFiltrados = insumosDisponibles.filter(insumo => {
-      if (!orden) return false;
-      const nombreProd = orden.producto.toUpperCase();
-      const nombreInsumo = insumo.nombre.toUpperCase();
+  const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
+    if (!orden) return insumo.id_tipo_inventario === 2;
 
-      if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
-          return nombreInsumo.includes('ROLLO BURBUPACK');
-      }
-      return insumo.id_tipo_inventario === 2; 
+    const nombreProd = orden.producto.toUpperCase();
+    const nombreInsumo = insumo.nombre.toUpperCase();
+
+    if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
+        return nombreInsumo.includes('ROLLO BURBUPACK');
+    }
+
+    if (nombreProd.includes('ESQUINERO')) {
+        return (
+            nombreInsumo.includes('PELETIZADO VERDE') || 
+            nombreInsumo.includes('BATERIA') ||
+            nombreInsumo.includes('BEIGE DURO') || 
+            nombreInsumo.includes('PLOMO DURO') ||
+            nombreInsumo.includes('CHANCACA VERDE') ||
+            nombreInsumo.includes('ESQUINERO MOLIDO') ||
+            nombreInsumo.includes('TUTI') ||
+            nombreInsumo.includes('PIGMENTO VERDE')
+        );
+    }
+
+    if (nombreProd.includes('BURBUPACK')) {
+        return (
+            nombreInsumo.includes('POLIETILENO DE BAJA') || 
+            nombreInsumo.includes('POLIETILENO DE ALTA') ||
+            nombreInsumo.includes('PELETIZADO POLIETILENO')
+        );
+    }
+
+    if (nombreProd.includes('ZUNCHO')) {
+        return (
+            nombreInsumo.includes('PELETIZADO NEGRO') || 
+            nombreInsumo.includes('CHATARRA') ||
+            nombreInsumo.includes('CHANCACA NEGRA') ||
+            nombreInsumo.includes('ZUNCHO MOLIDO') ||
+            nombreInsumo.includes('PIGMENTO NEGRO') ||
+            nombreInsumo.includes('OTROS')
+        );
+    }
+
+    if (nombreProd.includes('PELETIZADO NEGRO')) {
+        return (
+            nombreInsumo.includes('ETIQUETA MOLIDA') ||
+            nombreInsumo.includes('CHANCACA NEGRA') ||
+            nombreInsumo.includes('ZUNCHO MOLIDO') ||
+            nombreInsumo.includes('SACA MOLIDA') ||
+            nombreInsumo.includes('OTROS')
+        );
+    }
+
+    if (nombreProd.includes('PELETIZADO VERDE')) {
+        return (
+            nombreInsumo.includes('ETIQUETA MOLIDA') ||
+            nombreInsumo.includes('CHANCACA VERDE') ||
+            nombreInsumo.includes('SACA MOLIDA') ||
+            nombreInsumo.includes('OTROS')
+        );
+    }
+
+    return insumo.id_tipo_inventario === 2;
   });
 
   const inicializarInsumosParaParcial = () => {
@@ -147,6 +223,7 @@ function OrdenDetalle() {
       codigo_insumo: item.codigo_insumo,
       insumo: item.insumo,
       unidad_medida: item.unidad_medida,
+      cantidad_ya_consumida: parseFloat(item.cantidad_real_consumida || 0),
       cantidad: '0'
     }));
     setInsumosParcialesConsumo(insumos);
@@ -156,7 +233,6 @@ function OrdenDetalle() {
     const insumos = consumoMateriales.map(item => {
       const yaConsumido = parseFloat(item.cantidad_real_consumida || 0);
       const requerido = parseFloat(item.cantidad_requerida);
-      const pendiente = Math.max(0, requerido - yaConsumido);
         
       return {
         id_insumo: item.id_insumo,
@@ -165,45 +241,86 @@ function OrdenDetalle() {
         unidad_medida: item.unidad_medida,
         cantidad_requerida: requerido,
         cantidad_ya_consumida: yaConsumido,
-        cantidad_pendiente: pendiente,
-        cantidad: (yaConsumido + pendiente).toFixed(4),
+        cantidad: yaConsumido.toFixed(4),
         es_nuevo: false 
       };
     });
     setInsumosFinalesConsumo(insumos);
   };
 
-  const agregarLineaInsumoFinal = () => {
-      setInsumosFinalesConsumo([
-          ...insumosFinalesConsumo,
-          {
-              id_insumo: '',
-              cantidad: '',
-              es_nuevo: true
-          }
-      ]);
-  };
+  const agregarInsumoParcialNuevo = () => {
+    if (!nuevoInsumoParcial.id_insumo || !nuevoInsumoParcial.cantidad) {
+      setError('Complete todos los campos del insumo');
+      return;
+    }
 
-  const eliminarLineaInsumoFinal = (idx) => {
-      const nuevos = [...insumosFinalesConsumo];
-      nuevos.splice(idx, 1);
-      setInsumosFinalesConsumo(nuevos);
-  };
+    const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumoParcial.id_insumo);
+    if (!insumo) return;
 
-  const actualizarInsumoFinalNuevo = (idx, campo, valor) => {
-      const nuevos = [...insumosFinalesConsumo];
-      if (campo === 'id_insumo') {
-          const insumoData = insumosDisponibles.find(i => i.id_producto == valor);
-          if (insumoData) {
-              nuevos[idx].id_insumo = insumoData.id_producto;
-              nuevos[idx].insumo = insumoData.nombre;
-              nuevos[idx].unidad_medida = insumoData.unidad_medida;
-              nuevos[idx].cantidad_requerida = 0;
-          }
-      } else {
-          nuevos[idx][campo] = valor;
+    if (insumosParcialesConsumo.find(i => i.id_insumo == nuevoInsumoParcial.id_insumo)) {
+      setError('Este insumo ya está en la lista');
+      return;
+    }
+
+    const esRollo = insumo.nombre.toUpperCase().includes('ROLLO BURBUPACK');
+
+    setInsumosParcialesConsumo([
+      ...insumosParcialesConsumo,
+      {
+        id_insumo: nuevoInsumoParcial.id_insumo,
+        codigo_insumo: insumo.codigo,
+        insumo: insumo.nombre,
+        unidad_medida: esRollo ? 'Und' : insumo.unidad_medida,
+        cantidad_ya_consumida: 0,
+        cantidad: nuevoInsumoParcial.cantidad,
+        es_nuevo: true
       }
-      setInsumosFinalesConsumo(nuevos);
+    ]);
+
+    setModalAgregarInsumoParcial(false);
+    setNuevoInsumoParcial({ id_insumo: '', cantidad: '' });
+  };
+
+  const eliminarInsumoParcial = (idInsumo) => {
+    setInsumosParcialesConsumo(insumosParcialesConsumo.filter(i => i.id_insumo != idInsumo));
+  };
+
+  const agregarInsumoFinalNuevo = () => {
+    if (!nuevoInsumoFinal.id_insumo || !nuevoInsumoFinal.cantidad) {
+      setError('Complete todos los campos del insumo');
+      return;
+    }
+
+    const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumoFinal.id_insumo);
+    if (!insumo) return;
+
+    if (insumosFinalesConsumo.find(i => i.id_insumo == nuevoInsumoFinal.id_insumo)) {
+      setError('Este insumo ya está en la lista');
+      return;
+    }
+
+    const esRollo = insumo.nombre.toUpperCase().includes('ROLLO BURBUPACK');
+
+    setInsumosFinalesConsumo([
+      ...insumosFinalesConsumo,
+      {
+        id_insumo: nuevoInsumoFinal.id_insumo,
+        codigo_insumo: insumo.codigo,
+        insumo: insumo.nombre,
+        unidad_medida: esRollo ? 'Und' : insumo.unidad_medida,
+        cantidad_requerida: 0,
+        cantidad_ya_consumida: 0,
+        cantidad: nuevoInsumoFinal.cantidad,
+        es_nuevo: true
+      }
+    ]);
+
+    setModalAgregarInsumoFinal(false);
+    setNuevoInsumoFinal({ id_insumo: '', cantidad: '' });
+  };
+
+  const eliminarInsumoFinal = (idInsumo) => {
+    setInsumosFinalesConsumo(insumosFinalesConsumo.filter(i => i.id_insumo != idInsumo));
   };
 
   const actualizarCantidadInsumoParcial = (id_insumo, valor) => {
@@ -224,6 +341,51 @@ function OrdenDetalle() {
           : item
       )
     );
+  };
+
+  const abrirModalInsumo = () => {
+    setNuevoInsumo({ id_insumo: '', porcentaje: '' });
+    setModalAgregarInsumo(true);
+  };
+
+  const agregarInsumoLista = () => {
+    if (!nuevoInsumo.id_insumo || !nuevoInsumo.porcentaje) {
+      setError('Complete todos los campos del insumo');
+      return;
+    }
+
+    const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumo.id_insumo);
+    if (!insumo) return;
+
+    if (listaInsumos.find(i => i.id_insumo == nuevoInsumo.id_insumo)) {
+      setError('Este insumo ya está en la lista');
+      return;
+    }
+
+    setListaInsumos([
+      ...listaInsumos,
+      {
+        id_insumo: nuevoInsumo.id_insumo,
+        porcentaje: parseFloat(nuevoInsumo.porcentaje),
+        insumo: insumo.nombre,
+        codigo_insumo: insumo.codigo,
+        unidad_medida: insumo.unidad_medida,
+        costo_unitario: parseFloat(insumo.costo_unitario_promedio),
+        stock_actual: parseFloat(insumo.stock_actual)
+      }
+    ]);
+
+    setModalAgregarInsumo(false);
+    setNuevoInsumo({ id_insumo: '', porcentaje: '' });
+  };
+
+  const eliminarInsumoLista = (idInsumo) => {
+    setListaInsumos(listaInsumos.filter(i => i.id_insumo != idInsumo));
+  };
+
+  const calcularCantidadInsumo = (porcentaje) => {
+      const total = parseFloat(orden?.cantidad_planificada) || 0;
+      return (total * parseFloat(porcentaje)) / 100;
   };
 
   const handleDescargarHojaRuta = async () => {
@@ -249,7 +411,7 @@ function OrdenDetalle() {
     }
   };
 
- const handleRegistroParcial = async (e) => {
+  const handleRegistroParcial = async (e) => {
     e.preventDefault();
         
     try {
@@ -263,10 +425,12 @@ function OrdenDetalle() {
         setProcesando(false);
         return;
       }
+
+      const esLamina = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
         
       const payload = {
         cantidad_kilos: parseFloat(cantidadParcial),
-        cantidad_unidades: 0, 
+        cantidad_unidades: esLamina ? parseFloat(cantidadUnidadesParcial || 0) : 0, 
         insumos_consumidos: insumosConCantidad.map(i => ({
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
@@ -280,6 +444,7 @@ function OrdenDetalle() {
         setSuccess(response.data.message);
         setModalParcial(false);
         setCantidadParcial('');
+        setCantidadUnidadesParcial('');
         setObservacionesParcial('');
         setInsumosParcialesConsumo([]);
         cargarDatos();
@@ -344,22 +509,67 @@ function OrdenDetalle() {
 
   const handleAsignarSupervisor = async (e) => {
     e.preventDefault();
+    
+    const esPendienteAsignacionDesdeVenta = orden.estado === 'Pendiente Asignación' && orden.origen_tipo === 'Orden de Venta';
+
     try {
       setProcesando(true);
       setError(null);
+
+      if (esPendienteAsignacionDesdeVenta) {
+        if (modoReceta === 'porcentaje' && listaInsumos.length === 0) {
+          setError('Debe agregar al menos un insumo');
+          setProcesando(false);
+          return;
+        }
+
+        if (modoReceta === 'porcentaje') {
+          const totalPorcentaje = listaInsumos.reduce((acc, curr) => acc + curr.porcentaje, 0);
+          if (Math.abs(totalPorcentaje - 100) > 0.01) {
+            setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100%`);
+            setProcesando(false);
+            return;
+          }
+        }
+
+        const payload = {
+          id_supervisor: parseInt(asignacionData.id_supervisor),
+          turno: asignacionData.turno,
+          maquinista: asignacionData.maquinista || null,
+          ayudante: asignacionData.ayudante || null,
+          operario_corte: asignacionData.operario_corte || null,
+          operario_embalaje: asignacionData.operario_embalaje || null,
+          medida: asignacionData.medida || null,
+          peso_producto: asignacionData.peso_producto || null,
+          gramaje: asignacionData.gramaje || null,
+          modo_receta: modoReceta
+        };
+
+        if (modoReceta === 'porcentaje') {
+          payload.insumos = listaInsumos.map(i => ({
+            id_insumo: i.id_insumo,
+            porcentaje: i.porcentaje
+          }));
+        }
+
+        await ordenesProduccionAPI.completarAsignacion(id, payload);
+        setSuccess('Orden configurada y asignada exitosamente.');
+      } else {
+        const payload = {
+          id_supervisor: parseInt(asignacionData.id_supervisor),
+          turno: asignacionData.turno,
+          maquinista: asignacionData.maquinista,
+          ayudante: asignacionData.ayudante,
+          operario_corte: asignacionData.operario_corte,
+          operario_embalaje: asignacionData.operario_embalaje
+        };
         
-      const payload = {
-        id_supervisor: parseInt(asignacionData.id_supervisor),
-        turno: asignacionData.turno,
-        maquinista: asignacionData.maquinista,
-        ayudante: asignacionData.ayudante,
-        operario_corte: asignacionData.operario_corte,
-        operario_embalaje: asignacionData.operario_embalaje
-      };
-        
-      await ordenesProduccionAPI.update(id, payload);
-      setSuccess('Datos de asignación actualizados.');
+        await ordenesProduccionAPI.update(id, payload);
+        setSuccess('Datos de asignación actualizados.');
+      }
+
       setModalAsignar(false);
+      setListaInsumos([]);
       cargarDatos();
     } catch (err) {
       setError(err.response?.data?.error || 'Error al asignar supervisor');
@@ -497,6 +707,7 @@ function OrdenDetalle() {
 
   const totalMasaRealConsumida = consumoMateriales.reduce((acc, item) => acc + parseFloat(item.cantidad_real_consumida || 0), 0);
 
+  const porcentajeActualTotal = listaInsumos.reduce((sum, item) => sum + item.porcentaje, 0);
   if (loading) {
     return <Loading message="Cargando orden..." />;
   }
@@ -521,9 +732,9 @@ function OrdenDetalle() {
   const puedeCancelar = ['Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa'].includes(orden.estado);
   const puedeRegistrarParcial = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
+  const esPendienteAsignacionDesdeVenta = orden.estado === 'Pendiente Asignación' && desdeOrdenVenta;
   
   const esLamina = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
-  // AQUÍ ESTÁ LA INTEGRACIÓN: Usamos la unidad del producto si existe, sino aplicamos la lógica anterior
   const unidadProduccion = orden.unidad_medida || (esLamina ? 'Millares' : 'Unidades');
 
   return (
@@ -620,7 +831,8 @@ function OrdenDetalle() {
               }}
               disabled={procesando}
             >
-              <AlertCircle size={18} className="mr-2" /> Asignar Personal
+              <AlertCircle size={18} className="mr-2" /> 
+              {esPendienteAsignacionDesdeVenta ? 'Configurar Orden' : 'Asignar Personal'}
             </button>
           )}
           {puedeIniciar && (
@@ -644,6 +856,7 @@ function OrdenDetalle() {
               onClick={() => {
                 const cantidadRestante = parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0);
                 setCantidadParcial(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
+                setCantidadUnidadesParcial('');
                 setObservacionesParcial('');
                 inicializarInsumosParaParcial();
                 setModalParcial(true);
@@ -944,7 +1157,7 @@ function OrdenDetalle() {
                 </tr>
               </thead>
               <tbody>
-                {consumoMateriales.map((item, idx) => {
+                {consumoMateriales.map((item) => {
                   const analisisItem = analisisConsumo?.detalle.find(a => a.id_insumo === item.id_insumo);
                   const diferencia = analisisItem ? parseFloat(analisisItem.diferencia) : 0;
                   const plan = parseFloat(item.cantidad_requerida);
@@ -1007,16 +1220,16 @@ function OrdenDetalle() {
           </div>
         </div>
       )}
-        
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
         title={
           <span className="flex items-center gap-2">
-            <Users className="text-warning" /> Asignar Personal
+            <Users className="text-warning" /> 
+            {esPendienteAsignacionDesdeVenta ? 'Configurar Orden de Producción' : 'Asignar Personal'}
           </span>
         }
-        size="md"
+        size={esPendienteAsignacionDesdeVenta ? "xl" : "md"}
       >
         <form onSubmit={handleAsignarSupervisor}>
           <div className="space-y-4">
@@ -1036,11 +1249,12 @@ function OrdenDetalle() {
             </div>
             
             <div className="form-group">
-                <label className="form-label">Turno</label>
+                <label className="form-label">Turno *</label>
                 <select
                     className="form-select"
                     value={asignacionData.turno}
                     onChange={(e) => setAsignacionData({...asignacionData, turno: e.target.value})}
+                    required
                 >
                     <option value="Día">Día</option>
                     <option value="Noche">Noche</option>
@@ -1090,6 +1304,145 @@ function OrdenDetalle() {
                     </div>
                 </>
             )}
+
+            {esPendienteAsignacionDesdeVenta && (
+              <>
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <h3 className="font-semibold text-sm mb-3">Especificaciones del Producto (Opcional)</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="form-group">
+                      <label className="form-label text-xs">Medida</label>
+                      <input
+                        type="text"
+                        className="form-input text-sm"
+                        value={asignacionData.medida}
+                        onChange={(e) => setAsignacionData({...asignacionData, medida: e.target.value})}
+                        placeholder="Ej: 50x70 cm"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label text-xs">Peso Unitario</label>
+                      <input
+                        type="text"
+                        className="form-input text-sm"
+                        value={asignacionData.peso_producto}
+                        onChange={(e) => setAsignacionData({...asignacionData, peso_producto: e.target.value})}
+                        placeholder="Ej: 200g"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label text-xs">Gramaje</label>
+                      <input
+                        type="text"
+                        className="form-input text-sm"
+                        value={asignacionData.gramaje}
+                        onChange={(e) => setAsignacionData({...asignacionData, gramaje: e.target.value})}
+                        placeholder="Ej: 150 micras"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <h3 className="font-semibold text-sm mb-3">Configuración de Materiales</h3>
+                  
+                  <div className="flex gap-2 mb-4">
+                    <button
+                      type="button"
+                      className={`btn flex-1 text-left ${modoReceta === 'porcentaje' && !esLamina ? 'btn-primary' : 'btn-outline'}`}
+                      onClick={() => !esLamina && setModoReceta('porcentaje')}
+                      disabled={esLamina}
+                    >
+                      <Star size={18} className="mr-2" />
+                      <div>
+                        <div className="font-bold">Por Porcentajes</div>
+                        <div className="text-xs opacity-80">Calcula kilos automáticamente</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn flex-1 text-left ${modoReceta === 'manual' ? 'btn-warning' : 'btn-outline'}`}
+                      onClick={() => setModoReceta('manual')}
+                      disabled={esLamina}
+                    >
+                      <Zap size={18} className="mr-2" />
+                      <div>
+                        <div className="font-bold">{esLamina ? 'Orden de Conversión' : 'Orden Manual'}</div>
+                        <div className="text-xs opacity-80">{esLamina ? 'Selección de rollos posterior' : 'Sin insumos iniciales'}</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {modoReceta === 'porcentaje' && !esLamina && (
+                    <>
+                      <div className="flex justify-between items-center mb-3">
+                        <p className="text-sm text-muted">Total Porcentajes: <span className={`font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>{porcentajeActualTotal.toFixed(2)}%</span></p>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={abrirModalInsumo}
+                        >
+                          <Plus size={16} /> Agregar Insumo
+                        </button>
+                      </div>
+
+                      {listaInsumos.length === 0 ? (
+                        <div className="p-4 text-center text-muted bg-gray-50 rounded border border-gray-200">
+                          <AlertCircle size={24} className="mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">No hay insumos agregados. Agregue insumos para continuar.</p>
+                        </div>
+                      ) : (
+                        <div className="table-container">
+                          <table className="table table-sm">
+                            <thead>
+                              <tr>
+                                <th>Insumo</th>
+                                <th className="text-center">Porcentaje</th>
+                                <th className="text-right">Calculado (Kg)</th>
+                                <th className="text-center"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {listaInsumos.map(item => {
+                                const calculado = calcularCantidadInsumo(item.porcentaje);
+                                return (
+                                  <tr key={item.id_insumo}>
+                                    <td>
+                                      <div className="font-medium text-sm">{item.codigo_insumo}</div>
+                                      <div className="text-xs text-muted">{item.insumo}</div>
+                                    </td>
+                                    <td className="text-center font-bold text-blue-600">{item.porcentaje}%</td>
+                                    <td className="text-right font-mono">{calculado.toFixed(2)} Kg</td>
+                                    <td className="text-center">
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-danger p-1"
+                                        onClick={() => eliminarInsumoLista(item.id_insumo)}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {modoReceta === 'manual' && (
+                    <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                      <p className="text-sm text-yellow-800 flex items-center gap-2">
+                        <Info size={16} />
+                        Modo manual: No se consumirán materiales automáticamente. {esLamina ? 'Seleccione rollos al iniciar producción.' : ''}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end mt-6">
@@ -1106,10 +1459,74 @@ function OrdenDetalle() {
               className="btn btn-warning"
               disabled={procesando || !asignacionData.id_supervisor}
             >
-              {procesando ? 'Procesando...' : 'Guardar Asignación'}
+              {procesando ? 'Procesando...' : esPendienteAsignacionDesdeVenta ? 'Configurar y Asignar' : 'Guardar Asignación'}
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={modalAgregarInsumo}
+        onClose={() => setModalAgregarInsumo(false)}
+        title="Agregar Insumo a la Mezcla"
+        size="md"
+      >
+        <div className="form-group">
+          <label className="form-label">Insumo (Sugerido por nombre) *</label>
+          <select
+            className="form-select"
+            value={nuevoInsumo.id_insumo}
+            onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}
+          >
+            <option value="">Seleccione...</option>
+            {insumosFiltradosParaMostrar
+              .filter(i => !listaInsumos.find(li => li.id_insumo == i.id_producto))
+              .map(insumo => (
+                <option key={insumo.id_producto} value={insumo.id_producto}>
+                  {insumo.nombre} - Stock: {parseFloat(insumo.stock_actual).toFixed(2)}
+                </option>
+              ))}
+          </select>
+          <small className="text-xs text-blue-600 block mt-1">
+              Filtrando insumos relacionados al nombre del producto.
+          </small>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Porcentaje (%) *</label>
+          <div className="relative">
+            <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                max="100"
+                className="form-input pr-8"
+                value={nuevoInsumo.porcentaje}
+                onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, porcentaje: e.target.value })}
+                placeholder="Ej: 50"
+            />
+            <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
+          </div>
+          {orden?.cantidad_planificada && nuevoInsumo.porcentaje && (
+             <p className="text-sm text-blue-600 mt-1 text-right font-medium">
+                Equivale a: {((parseFloat(orden.cantidad_planificada) * parseFloat(nuevoInsumo.porcentaje)) / 100).toFixed(2)} Kg
+             </p>
+          )}
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumo(false)}>
+            Cancelar
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={agregarInsumoLista}
+            disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.porcentaje}
+          >
+            Agregar
+          </button>
+        </div>
       </Modal>
 
       <Modal
@@ -1131,21 +1548,38 @@ function OrdenDetalle() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Cantidad a Registrar (Kg) *</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="form-input"
-              value={cantidadParcial}
-              onChange={(e) => setCantidadParcial(e.target.value)}
-              required
-              placeholder="0.00"
-            />
-            <small className="text-muted block mt-1">
-              Restante: {(parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0)).toFixed(2)} Kg
-            </small>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="form-group">
+              <label className="form-label">Cantidad Kilos *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                className="form-input"
+                value={cantidadParcial}
+                onChange={(e) => setCantidadParcial(e.target.value)}
+                required
+                placeholder="0.00"
+              />
+              <small className="text-muted block mt-1">
+                Restante: {(parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0)).toFixed(2)} Kg
+              </small>
+            </div>
+
+            {esLamina && (
+              <div className="form-group">
+                <label className="form-label">Cantidad {unidadProduccion}</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  className="form-input"
+                  value={cantidadUnidadesParcial}
+                  onChange={(e) => setCantidadUnidadesParcial(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -1160,9 +1594,18 @@ function OrdenDetalle() {
           </div>
 
           <div className="border-t border-gray-200 pt-4 mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Package size={18} className="text-primary" />
-              <h3 className="font-semibold">Consumo de Insumos *</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Package size={18} className="text-primary" />
+                <h3 className="font-semibold">{esLamina ? 'Rollos Utilizados' : 'Consumo de Insumos'} *</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={() => setModalAgregarInsumoParcial(true)}
+              >
+                <Plus size={14} /> Agregar {esLamina ? 'Rollo' : 'Insumo'}
+              </button>
             </div>
 
             <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -1176,13 +1619,18 @@ function OrdenDetalle() {
                         <div className="col-span-6">
                           <div className="font-medium text-sm">{item.insumo}</div>
                           <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                          {item.cantidad_ya_consumida > 0 && (
+                            <div className="text-xs text-blue-600 mt-1">
+                              Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
+                            </div>
+                          )}
                         </div>
                           
                         <div className="col-span-3">
-                          <label className="text-xs text-muted block mb-1">Cantidad Consumida:</label>
+                          <label className="text-xs text-muted block mb-1">En este parcial:</label>
                         </div>
                           
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                           <input
                             type="number"
                             step={esRollo ? "1" : "0.0001"}
@@ -1195,11 +1643,23 @@ function OrdenDetalle() {
                           />
                           <div className="text-xs text-muted mt-1">{unidadMostrar}</div>
                         </div>
+
+                        {item.es_nuevo && (
+                          <div className="col-span-1">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger p-1"
+                              onClick={() => eliminarInsumoParcial(item.id_insumo)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })
               ) : (
-                  <p className="text-sm text-gray-500 italic text-center p-2">No hay insumos configurados para esta orden.</p>
+                  <p className="text-sm text-gray-500 italic text-center p-2">No hay {esLamina ? 'rollos' : 'insumos'} registrados. Agregue al menos uno.</p>
               )}
             </div>
           </div>
@@ -1224,6 +1684,57 @@ function OrdenDetalle() {
         </form>
       </Modal>
 
+      <Modal
+        isOpen={modalAgregarInsumoParcial}
+        onClose={() => setModalAgregarInsumoParcial(false)}
+        title={`Agregar ${esLamina ? 'Rollo' : 'Insumo'} al Registro Parcial`}
+        size="md"
+      >
+        <div className="form-group">
+          <label className="form-label">{esLamina ? 'Rollo Burbupack' : 'Insumo'} *</label>
+          <select
+            className="form-select"
+            value={nuevoInsumoParcial.id_insumo}
+            onChange={(e) => setNuevoInsumoParcial({ ...nuevoInsumoParcial, id_insumo: e.target.value })}
+          >
+            <option value="">Seleccione...</option>
+            {insumosFiltradosParaMostrar
+              .filter(i => !insumosParcialesConsumo.find(ip => ip.id_insumo == i.id_producto))
+              .map(insumo => (
+                <option key={insumo.id_producto} value={insumo.id_producto}>
+                  {insumo.nombre} - Stock: {parseFloat(insumo.stock_actual).toFixed(2)}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Cantidad *</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            className="form-input"
+            value={nuevoInsumoParcial.cantidad}
+            onChange={(e) => setNuevoInsumoParcial({ ...nuevoInsumoParcial, cantidad: e.target.value })}
+            placeholder="0.00"
+          />
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumoParcial(false)}>
+            Cancelar
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={agregarInsumoParcialNuevo}
+            disabled={!nuevoInsumoParcial.id_insumo || !nuevoInsumoParcial.cantidad}
+          >
+            Agregar
+          </button>
+        </div>
+      </Modal>
       <Modal
         isOpen={modalFinalizar}
         onClose={() => setModalFinalizar(false)}
@@ -1281,71 +1792,69 @@ function OrdenDetalle() {
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <Package size={18} className="text-primary" />
-                    <h3 className="font-semibold">Consumo Final de Insumos (Real)</h3>
+                    <h3 className="font-semibold">{esLamina ? 'Rollos Utilizados (Total)' : 'Consumo Final de Insumos (Real)'}</h3>
                 </div>
-                {esLamina && (
-                    <button 
-                        type="button" 
-                        className="btn btn-sm btn-outline"
-                        onClick={agregarLineaInsumoFinal}
-                    >
-                        <Plus size={14} className="mr-1"/> Agregar Insumo/Rollo
-                    </button>
-                )}
+                <button 
+                    type="button" 
+                    className="btn btn-sm btn-primary"
+                    onClick={() => setModalAgregarInsumoFinal(true)}
+                >
+                    <Plus size={14} className="mr-1"/> Agregar {esLamina ? 'Rollo' : 'Insumo'}
+                </button>
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
               {insumosFinalesConsumo.length === 0 && (
-                  <p className="text-center text-sm text-muted italic">No hay insumos registrados. Agregue uno manualmente si es necesario.</p>
+                  <p className="text-center text-sm text-muted italic">No hay {esLamina ? 'rollos' : 'insumos'} registrados. Agregue al menos uno.</p>
               )}
               {insumosFinalesConsumo.map((item, idx) => {
                 const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
                 const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
                 
                 return (
-                  <div key={idx} className="bg-gray-50 p-2 rounded border flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        {item.es_nuevo ? (
-                            <select 
-                                className="form-select form-select-sm"
-                                value={item.id_insumo}
-                                onChange={(e) => actualizarInsumoFinalNuevo(idx, 'id_insumo', e.target.value)}
-                            >
-                                <option value="">Seleccionar Insumo...</option>
-                                {insumosParaAgregarFiltrados.map(ins => (
-                                    <option key={ins.id_producto} value={ins.id_producto}>
-                                        {ins.nombre} (Stock: {parseFloat(ins.stock_actual).toFixed(2)})
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <>
-                                <div className="font-medium text-sm">{item.insumo}</div>
-                                <div className="text-xs text-muted">Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}</div>
-                            </>
+                  <div key={idx} className="bg-gray-50 p-3 rounded border">
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-6">
+                        <div className="font-medium text-sm">{item.insumo}</div>
+                        <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                        {!item.es_nuevo && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar} | 
+                            Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
+                          </div>
                         )}
                       </div>
-                      <div className="w-32">
+
+                      <div className="col-span-3">
+                        <label className="text-xs text-muted block mb-1">Cantidad Final:</label>
+                      </div>
+
+                      <div className="col-span-2">
                         <input
                           type="number"
                           step={esRollo ? "1" : "0.0001"}
                           min="0"
                           className="form-input form-input-sm text-right"
                           value={item.cantidad}
-                          onChange={(e) => item.es_nuevo ? actualizarInsumoFinalNuevo(idx, 'cantidad', e.target.value) : actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
+                          onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
                           required
                           placeholder="Cantidad"
                         />
+                        <div className="text-xs text-muted mt-1">{unidadMostrar}</div>
                       </div>
+
                       {item.es_nuevo && (
+                        <div className="col-span-1">
                           <button 
                             type="button" 
                             className="btn btn-sm btn-danger p-1"
-                            onClick={() => eliminarLineaInsumoFinal(idx)}
+                            onClick={() => eliminarInsumoFinal(item.id_insumo)}
                           >
                               <Trash2 size={14} />
                           </button>
+                        </div>
                       )}
+                    </div>
                   </div>
                 );
               })}
@@ -1482,6 +1991,58 @@ function OrdenDetalle() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={modalAgregarInsumoFinal}
+        onClose={() => setModalAgregarInsumoFinal(false)}
+        title={`Agregar ${esLamina ? 'Rollo' : 'Insumo'} Adicional`}
+        size="md"
+      >
+        <div className="form-group">
+          <label className="form-label">{esLamina ? 'Rollo Burbupack' : 'Insumo'} *</label>
+          <select
+            className="form-select"
+            value={nuevoInsumoFinal.id_insumo}
+            onChange={(e) => setNuevoInsumoFinal({ ...nuevoInsumoFinal, id_insumo: e.target.value })}
+          >
+            <option value="">Seleccione...</option>
+            {insumosFiltradosParaMostrar
+              .filter(i => !insumosFinalesConsumo.find(ifc => ifc.id_insumo == i.id_producto))
+              .map(insumo => (
+                <option key={insumo.id_producto} value={insumo.id_producto}>
+                  {insumo.nombre} - Stock: {parseFloat(insumo.stock_actual).toFixed(2)}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Cantidad Total Consumida *</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            className="form-input"
+            value={nuevoInsumoFinal.cantidad}
+            onChange={(e) => setNuevoInsumoFinal({ ...nuevoInsumoFinal, cantidad: e.target.value })}
+            placeholder="0.00"
+          />
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumoFinal(false)}>
+            Cancelar
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={agregarInsumoFinalNuevo}
+            disabled={!nuevoInsumoFinal.id_insumo || !nuevoInsumoFinal.cantidad}
+          >
+            Agregar
+          </button>
+        </div>
       </Modal>
     </div>
   );

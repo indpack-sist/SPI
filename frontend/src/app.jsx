@@ -53,6 +53,9 @@ import CuentasPago from './pages/Finanzas/CuentasPago';
 import DetalleCuenta from './pages/Finanzas/DetalleCuenta';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
 
+// Nuevo Import para Reportes SIRE
+import ReportesSIRE from './pages/Reportes/ReportesSIRE';
+
 function App() {
   return (
     <Router>
@@ -417,6 +420,16 @@ function App() {
                         element={
                           <ProtectedRouteWithPermiso modulo="pagosCobranzas">
                             <PagosCobranzas />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+
+                      {/* RUTA DE REPORTES SIRE */}
+                      <Route 
+                        path="/reportes/sire" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="reportes">
+                            <ReportesSIRE />
                           </ProtectedRouteWithPermiso>
                         } 
                       />

@@ -2,7 +2,8 @@ import { Navigate } from 'react-router-dom';
 import { usePermisos } from '../context/PermisosContext';
 
 export const RedirectToFirstAvailable = () => {
-  const { puedeAcceder, cargando, permisos } = usePermisos();
+  // Asegúrate de que tu Context provea 'rol' (lo agregué a la desestructuración)
+  const { puedeAcceder, cargando, rol } = usePermisos();
 
   if (cargando) {
     return (
@@ -12,22 +13,42 @@ export const RedirectToFirstAvailable = () => {
     );
   }
 
+  // --- 1. Reglas de Prioridad Específicas por Rol ---
+  
+  // Si es Supervisor -> Órdenes de Producción
+  if (rol === 'Supervisor' && puedeAcceder('ordenesProduccion')) {
+    return <Navigate to="/produccion/ordenes" replace />;
+  }
+
+  // Si es Comercial -> Cotizaciones
+  if (rol === 'Comercial' && puedeAcceder('cotizaciones')) {
+    return <Navigate to="/ventas/cotizaciones" replace />;
+  }
+
+  // Si es Administrativo -> Órdenes de Venta
+  if (rol === 'Administrativo' && puedeAcceder('ordenesVenta')) {
+    return <Navigate to="/ventas/ordenes" replace />;
+  }
+
+  // --- 2. Lista de Prioridad General (Fallback para otros roles) ---
   const rutas = [
     { path: '/dashboard', modulo: 'dashboard' },
     { path: '/productos', modulo: 'productos' },
+    { path: '/produccion/ordenes', modulo: 'ordenesProduccion' }, // Subí prioridad
+    { path: '/ventas/cotizaciones', modulo: 'cotizaciones' },     // Subí prioridad
+    { path: '/ventas/ordenes', modulo: 'ordenesVenta' },          // Subí prioridad
     { path: '/inventario/entradas', modulo: 'entradas' },
     { path: '/inventario/salidas', modulo: 'salidas' },
     { path: '/inventario/transferencias', modulo: 'transferencias' },
-    { path: '/produccion/ordenes', modulo: 'ordenesProduccion' },
-    { path: '/ventas/cotizaciones', modulo: 'cotizaciones' },
-    { path: '/ventas/ordenes', modulo: 'ordenesVenta' },
     { path: '/empleados', modulo: 'empleados' },
     { path: '/flota', modulo: 'flota' },
     { path: '/proveedores', modulo: 'proveedores' },
     { path: '/clientes', modulo: 'clientes' },
     { path: '/ventas/guias-remision', modulo: 'guiasRemision' },
     { path: '/ventas/guias-transportista', modulo: 'guiasTransportista' },
-    { path: '/compras', modulo: 'compras' }
+    { path: '/compras', modulo: 'compras' },
+    { path: '/finanzas/cuentas-pago', modulo: 'cuentasPago' },
+    { path: '/reportes/sire', modulo: 'reportes' }
   ];
 
   const primeraRutaDisponible = rutas.find(ruta => puedeAcceder(ruta.modulo));

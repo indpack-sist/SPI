@@ -350,6 +350,7 @@ export const ordenesProduccionAPI = {
   update: (id, data) => api.put(`/produccion/ordenes/${id}`, data),
 
   asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
+  completarAsignacion: (id, data) => api.put(`/produccion/ordenes/${id}/completar-asignacion`, data),
   
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
@@ -681,6 +682,8 @@ export const comprasAPI = {
   getResumenPagos: (id) => api.get(`/compras/${id}/pagos/resumen`),
   getHistorialPagos: (id) => api.get(`/compras/${id}/pagos/historial`),
 
+  establecerCronograma: (id, data) => api.post(`/compras/${id}/cronograma`, data),
+
   getCuotas: (id, params) => api.get(`/compras/${id}/cuotas`, { params }),
   getCuotaById: (id, idCuota) => api.get(`/compras/${id}/cuotas/${idCuota}`),
   pagarCuota: (id, idCuota, data) => api.post(`/compras/${id}/cuotas/${idCuota}/pagar`, data),
@@ -745,4 +748,8 @@ export const notificacionesAPI = {
   getAll: () => api.get('/notificaciones'),
   marcarLeida: (id) => api.put(`/notificaciones/${id}/leida`),
   marcarTodasLeidas: () => api.put('/notificaciones/marcar-todas-leidas')
+};
+export const reportesAPI = {
+  getSireVentas: (params) => api.get('/reportes/sire/ventas', { params }),
+  getSireCompras: (params) => api.get('/reportes/sire/compras', { params })
 };

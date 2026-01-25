@@ -3,10 +3,11 @@ import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 import { 
-  verificarOrdenAprobada, 
-  esVerificador, 
-  puedeEditarOrdenRechazada 
-} from '../middleware/verificacionOrden.js';
+  notificarNuevaOrdenPendiente,
+  notificarOrdenAprobada,
+  notificarOrdenRechazada,
+  notificarOrdenReenviada
+} from '../utils/notificacionesHelper.js';
 const getIO = (req) => req.app.get('socketio');
 function getFechaPeru() {
   const now = new Date();
@@ -774,13 +775,7 @@ export async function createOrdenVenta(req, res) {
     );
     const clienteNombre = clienteResult.data[0]?.razon_social || 'Cliente';
 
-    const { notificarNuevaOrdenPendiente } = await import('../utils/notificacionesHelper.js');
-    await notificarNuevaOrdenPendiente(
-      idOrden,
-      numeroOrden,
-      nombre_registrador,
-      getIO(req)
-    );
+  await notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombre_registrador, getIO(req));
 
     res.status(201).json({
       success: true,
@@ -3615,14 +3610,8 @@ export async function aprobarOrdenVerificacion(req, res) {
       });
     }
 
-    const { notificarOrdenAprobada } = await import('../utils/notificacionesHelper.js');
-    await notificarOrdenAprobada(
-      id,
-      orden.numero_orden,
-      orden.id_registrado_por,
-      nombre_completo,
-      getIO(req)
-    );
+    await notificarOrdenAprobada(id, orden.numero_orden, orden.id_registrado_por, nombre_completo, getIO(req));
+
 
     res.json({
       success: true,
@@ -3704,15 +3693,8 @@ export async function rechazarOrdenVerificacion(req, res) {
       });
     }
 
-    const { notificarOrdenRechazada } = await import('../utils/notificacionesHelper.js');
-    await notificarOrdenRechazada(
-      id,
-      orden.numero_orden,
-      orden.id_registrado_por,
-      nombre_completo,
-      motivo_rechazo.trim(),
-      getIO(req)
-    );
+    await notificarOrdenRechazada(id, orden.numero_orden, orden.id_registrado_por, nombre_completo, motivo_rechazo.trim(), getIO(req));
+
 
     res.json({
       success: true,
@@ -3789,13 +3771,8 @@ export async function reenviarOrdenVerificacion(req, res) {
       });
     }
 
-    const { notificarOrdenReenviada } = await import('../utils/notificacionesHelper.js');
-    await notificarOrdenReenviada(
-      id,
-      orden.numero_orden,
-      nombre_completo,
-      getIO(req)
-    );
+    await notificarOrdenReenviada(id, orden.numero_orden, nombre_completo, getIO(req));
+
 
     res.json({
       success: true,

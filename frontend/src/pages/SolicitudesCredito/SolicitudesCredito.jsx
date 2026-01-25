@@ -512,14 +512,25 @@ function SolicitudesCredito() {
                     <FileText size={16} /> Documento de Sustento
                 </h4>
                 <div className="card p-0 overflow-hidden border bg-gray-100">
-                    {/* LÓGICA DE VISUALIZACIÓN MEJORADA: */}
+                    {/* VISUALIZACIÓN NATIVA MEJORADA */}
                     {solicitudSeleccionada.archivo_sustento_url.toLowerCase().endsWith('.pdf') ? (
-                        <iframe 
-                            src={`https://docs.google.com/gview?url=${encodeURIComponent(solicitudSeleccionada.archivo_sustento_url)}&embedded=true`}
+                        <object
+                            data={solicitudSeleccionada.archivo_sustento_url}
+                            type="application/pdf"
                             className="w-full h-[500px]"
-                            title="Vista previa del documento"
-                            frameBorder="0"
-                        />
+                        >
+                            <div className="flex flex-col items-center justify-center h-full p-4 text-center text-muted">
+                                <p>Tu navegador no puede visualizar este PDF aquí.</p>
+                                <a 
+                                    href={solicitudSeleccionada.archivo_sustento_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="btn btn-sm btn-primary mt-2"
+                                >
+                                    Descargar / Ver PDF
+                                </a>
+                            </div>
+                        </object>
                     ) : (
                         <img 
                             src={solicitudSeleccionada.archivo_sustento_url} 

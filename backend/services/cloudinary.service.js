@@ -1,26 +1,27 @@
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
+import path from 'path';
 
-// Configuración usando variables de entorno (SEGURO)
 cloudinary.config({ 
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
   api_key: process.env.CLOUDINARY_API_KEY, 
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// Configurar Multer para almacenamiento en memoria (RAM)
-// Esto permite procesar el archivo sin guardarlo en el disco del servidor
 const storage = multer.memoryStorage();
 export const uploadMiddleware = multer({ storage: storage });
 
-// Función para subir el buffer a Cloudinary
-export const subirArchivoACloudinary = async (fileBuffer) => {
+export const subirArchivoACloudinary = async (file) => {
   return new Promise((resolve, reject) => {
-    // Usamos upload_stream para subir directamente desde la memoria
+    
+    const extension = path.extname(file.originalname).toLowerCase().replace('.', '');
+    
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: "indpack_solicitudes", // Carpeta donde se guardarán
-        resource_type: "auto" // Detecta automáticamente si es PDF, JPG, PNG, etc.
+        folder: "indpack_solicitudes", 
+        resource_type: "auto",
+        format: extension,
+        public_id: `${path.parse(file.originalname).name}_${Date.now()}`
       },
       (error, result) => {
         if (error) {
@@ -29,7 +30,6 @@ export const subirArchivoACloudinary = async (fileBuffer) => {
         resolve(result);
       }
     );
-    // Finalizamos el stream enviando el buffer del archivo
-    uploadStream.end(fileBuffer);
+    uploadStream.end(file.buffer);
   });
 };

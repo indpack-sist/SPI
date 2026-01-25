@@ -17,7 +17,7 @@ export async function crearSolicitudCredito(req, res) {
     
     if (req.file) {
       try {
-        const resultadoCloudinary = await subirArchivoACloudinary(req.file.buffer);
+        const resultadoCloudinary = await subirArchivoACloudinary(req.file);
         urlArchivo = resultadoCloudinary.secure_url;
       } catch (uploadError) {
         return res.status(500).json({ error: 'Error al subir el archivo de sustento' });

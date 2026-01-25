@@ -42,10 +42,19 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: [
+      process.env.CORS_ORIGIN || 'http://localhost:5173',
+      'https://spi-rho.vercel.app',
+      'http://localhost:3000'
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
-  }
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 const PORT = process.env.PORT || 3000;
@@ -67,10 +76,24 @@ app.use((req, res, next) => {
 app.set('socketio', io);
 
 io.on('connection', (socket) => {
+  console.log('Nuevo cliente WebSocket conectado:', socket.id);
+  
   socket.on('identificar_usuario', (id_usuario) => {
     if (id_usuario) {
       socket.join(`usuario_${id_usuario}`);
+      console.log(`Usuario ${id_usuario} unido a sala: usuario_${id_usuario}`);
+      console.log(`Salas activas del socket:`, Array.from(socket.rooms));
+    } else {
+      console.warn('Intento de identificacion sin id_usuario');
     }
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('Cliente desconectado:', socket.id, 'Razon:', reason);
+  });
+
+  socket.on('error', (error) => {
+    console.error('Error en socket:', error);
   });
 });
 
@@ -219,12 +242,12 @@ async function startServer() {
       console.log(`Health Check: http://localhost:${PORT}/api/health`);
       console.log(`Base de datos: CONECTADA`);
       console.log('='.repeat(80));
-      console.log('MÓDULOS DISPONIBLES CON CONTROL DE ACCESO:');
+      console.log('MODULOS DISPONIBLES CON CONTROL DE ACCESO:');
       console.log('');
-      console.log('AUTENTICACIÓN (Sin restricción):');
+      console.log('AUTENTICACION (Sin restriccion):');
       console.log('   - /api/auth');
       console.log('');
-      console.log('MÓDULOS BASE:');
+      console.log('MODULOS BASE:');
       console.log('   - /api/empleados [empleados]');
       console.log('   - /api/flota [flota]');
       console.log('   - /api/proveedores [proveedores]');
@@ -241,7 +264,7 @@ async function startServer() {
       console.log('   - /api/inventario/transferencias [transferencias]');
       console.log('   - /api/inventario [general]');
       console.log('');
-      console.log('PRODUCCIÓN:');
+      console.log('PRODUCCION:');
       console.log('   - /api/produccion/ordenes [ordenesProduccion]');
       console.log('');
       console.log('VENTAS:');

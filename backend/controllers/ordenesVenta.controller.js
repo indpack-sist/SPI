@@ -775,7 +775,18 @@ export async function createOrdenVenta(req, res) {
     );
     const clienteNombre = clienteResult.data[0]?.razon_social || 'Cliente';
 
-  await notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombre_registrador, getIO(req));
+    console.log('=== DEBUG NOTIFICACIONES ===');
+    console.log('1. ID Orden:', idOrden);
+    console.log('2. Número Orden:', numeroOrden);
+    console.log('3. Nombre Registrador:', nombre_registrador);
+    console.log('4. IO objeto:', getIO(req));
+    console.log('5. IO es null?', getIO(req) === null);
+    console.log('6. IO es undefined?', getIO(req) === undefined);
+    console.log('=== FIN DEBUG ===');
+
+    await notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombre_registrador, getIO(req));
+
+    console.log('=== NOTIFICACIÓN ENVIADA (sin errores) ===');
 
     res.status(201).json({
       success: true,

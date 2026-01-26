@@ -1104,6 +1104,21 @@ function DetalleOrdenVenta() {
       )
     },
     {
+      header: 'Margen %',
+      accessor: 'descuento_porcentaje',
+      width: '90px',
+      align: 'center',
+      render: (value) => {
+        const val = parseFloat(value || 0);
+        const color = val < 0 ? 'text-red-600 font-bold' : 'text-gray-600';
+        return (
+          <span className={`text-sm ${color}`}>
+            {val > 0 ? '+' : ''}{val.toFixed(2)}%
+          </span>
+        );
+      }
+    },
+    {
       header: 'Estado',
       accessor: 'tiene_op',
       width: '140px',

@@ -48,12 +48,10 @@ function OrdenDetalle() {
   const [nuevoInsumo, setNuevoInsumo] = useState({ id_insumo: '', porcentaje: '' });
 
   const [modalFinalizar, setModalFinalizar] = useState(false);
-  // Eliminado estado cantidadKilosFinal ya que se calcula
   const [cantidadUnidadesFinal, setCantidadUnidadesFinal] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
     
   const [modalParcial, setModalParcial] = useState(false);
-  // Eliminado estado cantidadParcial ya que se calcula
   const [cantidadUnidadesParcial, setCantidadUnidadesParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
     
@@ -611,7 +609,7 @@ function OrdenDetalle() {
       }
 
       const payload = {
-        cantidad_kilos: 0, // Se calcula en el backend
+        cantidad_kilos: 0, 
         cantidad_unidades: parseFloat(cantidadUnidadesParcial || 0), 
         insumos_consumidos: insumosConCantidad.map(i => ({
           id_insumo: i.id_insumo,
@@ -655,7 +653,7 @@ function OrdenDetalle() {
       setError(null);
 
       const payload = {
-        cantidad_kilos_final: 0, // Se calcula en el backend
+        cantidad_kilos_final: 0, 
         cantidad_unidades_final: parseFloat(cantidadUnidadesFinal || 0),
         insumos_reales: insumosValidos.map(i => ({
           id_insumo: i.id_insumo,
@@ -688,13 +686,9 @@ function OrdenDetalle() {
     }
   };
 
-  // Cálculo dinámico de kilos para mostrar en el modal
   const kilosParcialCalculados = insumosParcialesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
   const kilosFinalesCalculados = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
 
-  // ... Resto de funciones auxiliares (handleAsignarSupervisor, handleIniciar, etc.) ...
-  // [Se mantienen igual que tu código original, solo copio las que necesito para el render completo]
-  
   const handleAsignarSupervisor = async (e) => {
     e.preventDefault();
     
@@ -845,6 +839,22 @@ function OrdenDetalle() {
     }
   };
 
+  const handleAnular = async () => {
+    if (!confirm('PELIGRO: ¿Está seguro de ANULAR esta orden?\n\nEsta acción es irreversible:\n1. Se devolverán todos los insumos al stock.\n2. Se retirará el producto terminado (si existe).\n3. La Orden de Venta volverá a Pendiente.')) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+      await ordenesProduccionAPI.anular(id);
+      setSuccess('Orden anulada correctamente. Inventario revertido.');
+      cargarDatos();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al anular la orden');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const formatearNumero = (valor) => {
     return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
@@ -883,14 +893,15 @@ function OrdenDetalle() {
       'En Curso': 'badge-primary',
       'En Pausa': 'badge-warning',
       'Finalizada': 'badge-success',
-      'Cancelada': 'badge-danger'
+      'Cancelada': 'badge-danger',
+      'Anulada': 'badge-danger'
     };
     return badges[estado] || 'badge-secondary';
   };
 
   const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
   const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
-  const totalKilosProd = kilosFinalesCalculados; // Usar el calculado para visualización
+  const totalKilosProd = kilosFinalesCalculados; 
   const diferenciaMasa = totalInsumosReales - (totalKilosProd + totalMerma);
 
   const totalMasaRealConsumida = consumoMateriales.reduce((acc, item) => acc + parseFloat(item.cantidad_real_consumida || 0), 0);
@@ -1060,7 +1071,6 @@ function OrdenDetalle() {
             <button 
               className="btn btn-info" 
               onClick={() => {
-                // Ya no seteamos cantidadParcial (kilos)
                 setCantidadUnidadesParcial('');
                 setObservacionesParcial('');
                 inicializarInsumosParaParcial();
@@ -1075,7 +1085,6 @@ function OrdenDetalle() {
             <button 
               className="btn btn-success" 
               onClick={() => {
-                // Ya no seteamos cantidadKilosFinal
                 setCantidadUnidadesFinal('');
                 setObservacionesFinal('');
                 setMermas([]);
@@ -1094,9 +1103,18 @@ function OrdenDetalle() {
               <XCircle size={18} className="mr-2" /> Cancelar
             </button>
           )}
+          {!['Cancelada', 'Anulada'].includes(orden.estado) && (
+            <button 
+                className="btn btn-danger ml-2"
+                onClick={handleAnular} 
+                disabled={procesando}
+                title="Revertir toda la producción e inventario"
+            >
+              <Trash2 size={18} className="mr-2" /> Anular (Revertir)
+            </button>
+          )}
         </div>
       </div>
-      {/* ... [Se mantienen las tarjetas de Información General, Producción y Tiempos idénticas al original] ... */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
           <div className="card-header flex items-center gap-2">
@@ -1329,7 +1347,6 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* ... [Se mantiene la tabla de consumoMateriales idéntica] ... */}
       {consumoMateriales.length > 0 && (
         <div className="card mb-4">
           <div className="card-header flex items-center gap-2">
@@ -1426,7 +1443,6 @@ function OrdenDetalle() {
         </div>
       )}
 
-      {/* ... [Modales de Editar y Asignar se mantienen igual] ... */}
       <Modal
         isOpen={modalEditar}
         onClose={() => setModalEditar(false)}
@@ -1439,7 +1455,6 @@ function OrdenDetalle() {
       >
         <form onSubmit={handleGuardarEdicion}>
           <div className="space-y-4">
-            {/* ... Contenido del modal Editar igual al original ... */}
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="form-label">Producto Terminado *</label>
@@ -1728,7 +1743,6 @@ function OrdenDetalle() {
         </form>
       </Modal>
 
-      {/* Modales de Agregar Insumo para Edición y Asignación... (se mantienen igual) */}
       <Modal
         isOpen={modalAgregarInsumoEdicion}
         onClose={() => setModalAgregarInsumoEdicion(false)}
@@ -1790,7 +1804,6 @@ function OrdenDetalle() {
         </div>
       </Modal>
 
-      {/* ... [Modales de Asignar y Agregar Insumo (general) se mantienen] ... */}
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
@@ -2100,7 +2113,6 @@ function OrdenDetalle() {
         </div>
       </Modal>
 
-      {/* --- MODAL REGISTRO PARCIAL ACTUALIZADO --- */}
       <Modal
         isOpen={modalParcial}
         onClose={() => setModalParcial(false)}
@@ -2304,7 +2316,6 @@ function OrdenDetalle() {
         </div>
       </Modal>
 
-      {/* --- MODAL FINALIZAR ACTUALIZADO --- */}
       <Modal
         isOpen={modalFinalizar}
         onClose={() => setModalFinalizar(false)}

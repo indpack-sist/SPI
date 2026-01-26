@@ -246,7 +246,7 @@ export async function createCompra(req, res) {
 
     const pagoInicial = parseFloat(monto_pagado_inicial || 0);
     const saldoPendiente = total - pagoInicial;
-    const estadoPago = saldoPendiente <= 0.01 ? 'Pagado' : (pagoInicial > 0 ? 'Parcial' : 'Pendiente');
+    const estadoPago = 'Pendiente';
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -264,8 +264,6 @@ export async function createCompra(req, res) {
             if (!tipo_cambio || parseFloat(tipo_cambio) <= 0) throw new Error(`Falta tipo de cambio: ${cuenta.moneda} vs ${moneda}`);
         }
       }
-
-      if (pagoInicial > 0 && !cuenta) throw new Error('Debe seleccionar cuenta para el pago inicial');
 
       const [ultimaResult] = await connection.query('SELECT numero_orden FROM ordenes_compra ORDER BY id_orden_compra DESC LIMIT 1');
       let numeroSecuencia = 1;
@@ -383,23 +381,6 @@ export async function createCompra(req, res) {
             UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ?, costo_unitario_promedio_usd = ? WHERE id_producto = ?
           `, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
         }
-      }
-
-      if (pagoInicial > 0) {
-        await connection.query('UPDATE cuentas_pago SET saldo_actual = saldo_actual - ? WHERE id_cuenta = ?', [pagoInicial, id_cuenta_pago]);
-        const [saldoCheck] = await connection.query('SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ?', [id_cuenta_pago]);
-        
-        let conceptoPago = `Pago Inicial Compra ${numeroCompra}`;
-        if (monedaCuenta !== moneda) conceptoPago += ` (${moneda} ${pagoInicial.toFixed(2)})`;
-
-        await connection.query(`
-          INSERT INTO movimientos_cuentas (
-            id_cuenta, tipo_movimiento, monto, concepto, referencia, id_orden_compra, saldo_anterior, saldo_nuevo, id_registrado_por, fecha_movimiento
-          ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, NOW())
-        `, [
-          id_cuenta_pago, pagoInicial, conceptoPago, numero_documento ? `${serie_documento}-${numero_documento}` : 'Pago Inicial',
-          idCompra, parseFloat(saldoCheck[0].saldo_actual) + pagoInicial, saldoCheck[0].saldo_actual, id_registrado_por
-        ]);
       }
 
       await connection.commit();

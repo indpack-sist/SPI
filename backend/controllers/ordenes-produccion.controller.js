@@ -1076,11 +1076,11 @@ export async function registrarParcial(req, res) {
             VALUES (?, ?, ?, ?, ?, ?)`,
       params: [
         id, 
-        cantidad_kilos, 
+        cantidad_kilos || 0, 
         cantidad_unidades || 0, 
         id_registrado_por, 
         fechaActual, 
-        observaciones
+        observaciones || null
       ]
     });
 
@@ -1089,7 +1089,7 @@ export async function registrarParcial(req, res) {
             SET cantidad_producida = cantidad_producida + ?,
                 cantidad_unidades_producida = cantidad_unidades_producida + ?
             WHERE id_orden = ?`,
-      params: [cantidad_kilos, cantidad_unidades || 0, id]
+      params: [cantidad_kilos || 0, cantidad_unidades || 0, id]
     });
 
     if (insumos_consumidos && insumos_consumidos.length > 0) {
@@ -1479,7 +1479,7 @@ export async function finalizarProduccion(req, res) {
                 observaciones = ?,
                 costo_materiales = ?
             WHERE id_orden = ?`,
-      params: [kilosFinales, unidadesFinales, fechaActual, tiempoMinutos, observaciones, costoTotalOrden, id]
+      params: [kilosFinales, unidadesFinales, fechaActual, tiempoMinutos, observaciones || null, costoTotalOrden, id]
     });
 
     let cantidadParaStock = 0;
@@ -1562,7 +1562,7 @@ export async function finalizarProduccion(req, res) {
         if (m.cantidad > 0) {
           queriesMermas.push({
             sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
-            params: [id, m.id_producto_merma, m.cantidad, m.observaciones]
+            params: [id, m.id_producto_merma, m.cantidad, m.observaciones || null]
           });
           
           const prodMermaInfo = await executeQuery('SELECT id_tipo_inventario, costo_unitario_promedio FROM productos WHERE id_producto = ?', [m.id_producto_merma]);

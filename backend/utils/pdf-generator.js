@@ -2381,8 +2381,17 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN`, 20, yPos);
       yPos += 10;
 
-      const espacioReservadoFinal = 95; 
-      const espacioDisponibleGrid = 810 - yPos - espacioReservadoFinal; 
+      const paginaAltoTotal = 841.89;
+      const margenInferior = 20;
+      const limiteInferiorHoja = paginaAltoTotal - margenInferior;
+      
+      const alturaFooter = 20;
+      const alturaSeccion3Header = 18; 
+      const alturaSeccion3Rows = 30; 
+      const espacioEntreSecciones = 15; 
+      const alturaFijaInferior = alturaFooter + alturaSeccion3Header + alturaSeccion3Rows + espacioEntreSecciones;
+      
+      const espacioDisponibleGrid = limiteInferiorHoja - yPos - alturaFijaInferior;
       const headerGridHeight = 12;
       
       let columnasGrid = 2;
@@ -2488,8 +2497,6 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       yPos += 5;
       
-      if (yPos + 30 > 800) { doc.addPage(); yPos = 30; }
-
       doc.fontSize(6);
       const wBox = 135;
       

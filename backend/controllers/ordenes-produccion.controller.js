@@ -1044,9 +1044,9 @@ export async function reanudarProduccion(req, res) {
 export async function registrarParcial(req, res) {
   try {
     const { id } = req.params;
-    let { 
+    const { 
       cantidad_kilos, 
-      cantidad_unidades,
+      cantidad_unidades, 
       insumos_consumidos, 
       observaciones 
     } = req.body;
@@ -1054,8 +1054,14 @@ export async function registrarParcial(req, res) {
     const id_registrado_por = req.user.id_usuario; 
     const fechaActual = getFechaPeru();
 
-    if ((!cantidad_kilos || parseFloat(cantidad_kilos) === 0) && insumos_consumidos && insumos_consumidos.length > 0) {
-      cantidad_kilos = insumos_consumidos.reduce((acc, item) => acc + parseFloat(item.cantidad || 0), 0);
+    // 1. Limpieza y valores por defecto (Evita "undefined")
+    let kilosFinal = parseFloat(cantidad_kilos) || 0;
+    const unidadesFinal = parseFloat(cantidad_unidades) || 0;
+    const obsFinal = observaciones || null;
+
+    // 2. Cálculo automático si no hay kilos manuales
+    if (kilosFinal === 0 && insumos_consumidos && Array.isArray(insumos_consumidos) && insumos_consumidos.length > 0) {
+      kilosFinal = insumos_consumidos.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
     }
 
     const ordenCheck = await executeQuery(
@@ -1076,11 +1082,11 @@ export async function registrarParcial(req, res) {
             VALUES (?, ?, ?, ?, ?, ?)`,
       params: [
         id, 
-        cantidad_kilos || 0, 
-        cantidad_unidades || 0, 
+        kilosFinal, 
+        unidadesFinal, 
         id_registrado_por, 
         fechaActual, 
-        observaciones || null
+        obsFinal
       ]
     });
 
@@ -1089,10 +1095,10 @@ export async function registrarParcial(req, res) {
             SET cantidad_producida = cantidad_producida + ?,
                 cantidad_unidades_producida = cantidad_unidades_producida + ?
             WHERE id_orden = ?`,
-      params: [cantidad_kilos || 0, cantidad_unidades || 0, id]
+      params: [kilosFinal, unidadesFinal, id]
     });
 
-    if (insumos_consumidos && insumos_consumidos.length > 0) {
+    if (insumos_consumidos && Array.isArray(insumos_consumidos) && insumos_consumidos.length > 0) {
       const consumoExistente = await executeQuery(
         `SELECT id_insumo, cantidad_real_consumida FROM op_consumo_materiales WHERE id_orden = ?`,
         [id]
@@ -1106,7 +1112,8 @@ export async function registrarParcial(req, res) {
       }
 
       for (const insumo of insumos_consumidos) {
-        const cantidad = parseFloat(insumo.cantidad);
+        const cantidad = parseFloat(insumo.cantidad) || 0;
+        
         if (cantidad > 0) {
           const insumoExiste = insumosExistentesMap[insumo.id_insumo];
 

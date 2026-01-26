@@ -351,7 +351,8 @@ export const ordenesProduccionAPI = {
 
   asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
   completarAsignacion: (id, data) => api.put(`/produccion/ordenes/${id}/completar-asignacion`, data),
-  
+  editarCompleta: (id, data) => api.put(`/ordenes-produccion/ordenes/${id}/editar-completa`, data),
+
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
   reanudar: (id) => api.post(`/produccion/ordenes/${id}/reanudar`),

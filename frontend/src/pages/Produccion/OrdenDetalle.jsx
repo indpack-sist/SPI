@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale, Ruler, Star
+  Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -70,6 +70,30 @@ function OrdenDetalle() {
   const [modalAgregarInsumoFinal, setModalAgregarInsumoFinal] = useState(false);
   const [nuevoInsumoFinal, setNuevoInsumoFinal] = useState({ id_insumo: '', cantidad: '' });
 
+  const [modalEditar, setModalEditar] = useState(false);
+  const [productosDisponibles, setProductosDisponibles] = useState([]);
+  const [datosEdicion, setDatosEdicion] = useState({
+    id_producto_terminado: '',
+    cantidad_planificada: '',
+    cantidad_unidades: '',
+    id_supervisor: '',
+    turno: 'Día',
+    maquinista: '',
+    ayudante: '',
+    operario_corte: '',
+    operario_embalaje: '',
+    medida: '',
+    peso_producto: '',
+    gramaje: '',
+    fecha_programada: '',
+    fecha_programada_fin: '',
+    observaciones: ''
+  });
+  const [insumosEdicion, setInsumosEdicion] = useState([]);
+  const [modoRecetaEdicion, setModoRecetaEdicion] = useState('porcentaje');
+  const [modalAgregarInsumoEdicion, setModalAgregarInsumoEdicion] = useState(false);
+  const [nuevoInsumoEdicion, setNuevoInsumoEdicion] = useState({ id_insumo: '', porcentaje: '' });
+
   useEffect(() => {
     cargarDatos();
   }, [id]);
@@ -132,12 +156,172 @@ function OrdenDetalle() {
     }
   };
 
+  const cargarProductos = async () => {
+    try {
+      const res = await productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: 3 });
+      if (res.data.success) {
+        setProductosDisponibles(res.data.data);
+      }
+    } catch (err) {
+      console.error("Error cargando productos", err);
+    }
+  };
+  
   const cargarProductosMerma = async () => {
     try {
       const response = await ordenesProduccionAPI.getProductosMerma();
       setProductosMerma(response.data.data);
     } catch (err) {
       console.error('Error al cargar productos de merma:', err);
+    }
+  };
+
+  const inicializarEdicion = async () => {
+    await cargarSupervisores();
+    await cargarProductos();
+
+    const esLaminaEdit = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
+
+    setDatosEdicion({
+      id_producto_terminado: orden.id_producto_terminado || '',
+      cantidad_planificada: orden.cantidad_planificada || '',
+      cantidad_unidades: orden.cantidad_unidades || '',
+      id_supervisor: orden.id_supervisor || '',
+      turno: orden.turno || 'Día',
+      maquinista: orden.maquinista || '',
+      ayudante: orden.ayudante || '',
+      operario_corte: orden.operario_corte || '',
+      operario_embalaje: orden.operario_embalaje || '',
+      medida: orden.medida || '',
+      peso_producto: orden.peso_producto || '',
+      gramaje: orden.gramaje || '',
+      fecha_programada: orden.fecha_programada || '',
+      fecha_programada_fin: orden.fecha_programada_fin || '',
+      observaciones: orden.observaciones || ''
+    });
+
+    if (esLaminaEdit || orden.es_orden_manual === 1) {
+      setModoRecetaEdicion('manual');
+      setInsumosEdicion([]);
+    } else {
+      setModoRecetaEdicion('porcentaje');
+      
+      if (consumoMateriales.length > 0) {
+        const insumosActuales = consumoMateriales.map(item => {
+          const porcentaje = parseFloat(orden.cantidad_planificada) > 0 
+            ? (parseFloat(item.cantidad_requerida) / parseFloat(orden.cantidad_planificada)) * 100 
+            : 0;
+          
+          return {
+            id_insumo: item.id_insumo,
+            porcentaje: parseFloat(porcentaje.toFixed(2)),
+            insumo: item.insumo,
+            codigo_insumo: item.codigo_insumo,
+            unidad_medida: item.unidad_medida,
+            costo_unitario: parseFloat(item.costo_unitario),
+            stock_actual: 0
+          };
+        });
+        setInsumosEdicion(insumosActuales);
+      } else {
+        setInsumosEdicion([]);
+      }
+    }
+
+    setModalEditar(true);
+  };
+
+  const agregarInsumoEdicion = () => {
+    if (!nuevoInsumoEdicion.id_insumo || !nuevoInsumoEdicion.porcentaje) {
+      setError('Complete todos los campos del insumo');
+      return;
+    }
+
+    const insumo = insumosDisponibles.find(i => i.id_producto == nuevoInsumoEdicion.id_insumo);
+    if (!insumo) return;
+
+    if (insumosEdicion.find(i => i.id_insumo == nuevoInsumoEdicion.id_insumo)) {
+      setError('Este insumo ya está en la lista');
+      return;
+    }
+
+    setInsumosEdicion([
+      ...insumosEdicion,
+      {
+        id_insumo: nuevoInsumoEdicion.id_insumo,
+        porcentaje: parseFloat(nuevoInsumoEdicion.porcentaje),
+        insumo: insumo.nombre,
+        codigo_insumo: insumo.codigo,
+        unidad_medida: insumo.unidad_medida,
+        costo_unitario: parseFloat(insumo.costo_unitario_promedio),
+        stock_actual: parseFloat(insumo.stock_actual)
+      }
+    ]);
+
+    setModalAgregarInsumoEdicion(false);
+    setNuevoInsumoEdicion({ id_insumo: '', porcentaje: '' });
+  };
+
+  const eliminarInsumoEdicion = (idInsumo) => {
+    setInsumosEdicion(insumosEdicion.filter(i => i.id_insumo != idInsumo));
+  };
+
+  const calcularCantidadInsumoEdicion = (porcentaje) => {
+    const total = parseFloat(datosEdicion.cantidad_planificada) || 0;
+    return (total * parseFloat(porcentaje)) / 100;
+  };
+
+  const handleGuardarEdicion = async (e) => {
+    e.preventDefault();
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      if (modoRecetaEdicion === 'porcentaje' && insumosEdicion.length > 0) {
+        const totalPorcentaje = insumosEdicion.reduce((acc, curr) => acc + curr.porcentaje, 0);
+        if (Math.abs(totalPorcentaje - 100) > 0.01) {
+          setError(`La suma de los porcentajes es ${totalPorcentaje.toFixed(2)}%. Debe ser exactamente 100%`);
+          setProcesando(false);
+          return;
+        }
+      }
+
+      const payload = {
+        id_producto_terminado: parseInt(datosEdicion.id_producto_terminado),
+        cantidad_planificada: parseFloat(datosEdicion.cantidad_planificada),
+        cantidad_unidades: parseFloat(datosEdicion.cantidad_unidades || 0),
+        id_supervisor: datosEdicion.id_supervisor ? parseInt(datosEdicion.id_supervisor) : null,
+        turno: datosEdicion.turno,
+        maquinista: datosEdicion.maquinista || null,
+        ayudante: datosEdicion.ayudante || null,
+        operario_corte: datosEdicion.operario_corte || null,
+        operario_embalaje: datosEdicion.operario_embalaje || null,
+        medida: datosEdicion.medida || null,
+        peso_producto: datosEdicion.peso_producto || null,
+        gramaje: datosEdicion.gramaje || null,
+        fecha_programada: datosEdicion.fecha_programada || null,
+        fecha_programada_fin: datosEdicion.fecha_programada_fin || null,
+        observaciones: datosEdicion.observaciones || null,
+        modo_receta: modoRecetaEdicion
+      };
+
+      if (modoRecetaEdicion === 'porcentaje' && insumosEdicion.length > 0) {
+        payload.insumos = insumosEdicion.map(i => ({
+          id_insumo: i.id_insumo,
+          porcentaje: i.porcentaje
+        }));
+      }
+
+      await ordenesProduccionAPI.editarCompleta(id, payload);
+      setSuccess('Orden actualizada exitosamente');
+      setModalEditar(false);
+      setInsumosEdicion([]);
+      cargarDatos();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al actualizar orden');
+    } finally {
+      setProcesando(false);
     }
   };
   const mermasFiltradas = productosMerma.filter(merma => {
@@ -506,7 +690,6 @@ function OrdenDetalle() {
       setProcesando(false);
     }
   };
-
   const handleAsignarSupervisor = async (e) => {
     e.preventDefault();
     
@@ -708,6 +891,8 @@ function OrdenDetalle() {
   const totalMasaRealConsumida = consumoMateriales.reduce((acc, item) => acc + parseFloat(item.cantidad_real_consumida || 0), 0);
 
   const porcentajeActualTotal = listaInsumos.reduce((sum, item) => sum + item.porcentaje, 0);
+  const porcentajeEdicionTotal = insumosEdicion.reduce((sum, item) => sum + item.porcentaje, 0);
+
   if (loading) {
     return <Loading message="Cargando orden..." />;
   }
@@ -724,6 +909,7 @@ function OrdenDetalle() {
     );
   }
 
+  const puedeEditar = orden.estado === 'Pendiente Asignación' || orden.estado === 'Pendiente';
   const puedeAsignar = orden.estado === 'Pendiente Asignación';
   const puedeIniciar = orden.estado === 'Pendiente';
   const puedePausar = orden.estado === 'En Curso';
@@ -736,6 +922,11 @@ function OrdenDetalle() {
   
   const esLamina = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
   const unidadProduccion = orden.unidad_medida || (esLamina ? 'Millares' : 'Unidades');
+
+  const esLaminaEdicion = datosEdicion.id_producto_terminado ? 
+    (productosDisponibles.find(p => p.id_producto == datosEdicion.id_producto_terminado)?.nombre.toUpperCase().includes('LÁMINA') || 
+     productosDisponibles.find(p => p.id_producto == datosEdicion.id_producto_terminado)?.nombre.toUpperCase().includes('LAMINA')) : 
+    esLamina;
 
   return (
     <div>
@@ -822,6 +1013,16 @@ function OrdenDetalle() {
             <Clipboard size={18} className="mr-2" /> Hoja de Ruta
           </button>
 
+          {puedeEditar && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={inicializarEdicion}
+              disabled={procesando}
+            >
+              <Edit size={18} className="mr-2" /> Editar Orden
+            </button>
+          )}
+
           {puedeAsignar && (
             <button 
               className="btn btn-warning" 
@@ -892,7 +1093,6 @@ function OrdenDetalle() {
           )}
         </div>
       </div>
-
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
           <div className="card-header flex items-center gap-2">
@@ -1220,6 +1420,366 @@ function OrdenDetalle() {
           </div>
         </div>
       )}
+      <Modal
+        isOpen={modalEditar}
+        onClose={() => setModalEditar(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <Edit className="text-secondary" /> Editar Orden de Producción
+          </span>
+        }
+        size="xl"
+      >
+        <form onSubmit={handleGuardarEdicion}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="form-group">
+                <label className="form-label">Producto Terminado *</label>
+                <select
+                  className="form-select"
+                  value={datosEdicion.id_producto_terminado}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, id_producto_terminado: e.target.value})}
+                  required
+                >
+                  <option value="">Seleccione...</option>
+                  {productosDisponibles.map(prod => (
+                    <option key={prod.id_producto} value={prod.id_producto}>{prod.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Supervisor</label>
+                <select
+                  className="form-select"
+                  value={datosEdicion.id_supervisor}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, id_supervisor: e.target.value})}
+                >
+                  <option value="">Seleccione...</option>
+                  {supervisoresDisponibles.map(sup => (
+                    <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="form-group">
+                <label className="form-label">Cantidad Kilos *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="form-input"
+                  value={datosEdicion.cantidad_planificada}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_planificada: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Cantidad Unidades</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  className="form-input"
+                  value={datosEdicion.cantidad_unidades}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_unidades: e.target.value})}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Turno</label>
+                <select
+                  className="form-select"
+                  value={datosEdicion.turno}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, turno: e.target.value})}
+                >
+                  <option value="Día">Día</option>
+                  <option value="Noche">Noche</option>
+                </select>
+              </div>
+            </div>
+
+            {esLaminaEdicion ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="form-label">Operario de Corte</label>
+                  <input
+                    className="form-input"
+                    value={datosEdicion.operario_corte}
+                    onChange={(e) => setDatosEdicion({...datosEdicion, operario_corte: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Operario de Embalaje</label>
+                  <input
+                    className="form-input"
+                    value={datosEdicion.operario_embalaje}
+                    onChange={(e) => setDatosEdicion({...datosEdicion, operario_embalaje: e.target.value})}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="form-label">Maquinista</label>
+                  <input
+                    className="form-input"
+                    value={datosEdicion.maquinista}
+                    onChange={(e) => setDatosEdicion({...datosEdicion, maquinista: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ayudante</label>
+                  <input
+                    className="form-input"
+                    value={datosEdicion.ayudante}
+                    onChange={(e) => setDatosEdicion({...datosEdicion, ayudante: e.target.value})}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="form-group">
+                <label className="form-label">Medida</label>
+                <input
+                  className="form-input"
+                  value={datosEdicion.medida}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, medida: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Peso Producto</label>
+                <input
+                  className="form-input"
+                  value={datosEdicion.peso_producto}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, peso_producto: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Gramaje</label>
+                <input
+                  className="form-input"
+                  value={datosEdicion.gramaje}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, gramaje: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="form-group">
+                <label className="form-label">Fecha Programada</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={datosEdicion.fecha_programada}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada: e.target.value})}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Fecha Programada Fin</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={datosEdicion.fecha_programada_fin}
+                  onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada_fin: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Observaciones</label>
+              <textarea
+                className="form-textarea"
+                value={datosEdicion.observaciones}
+                onChange={(e) => setDatosEdicion({...datosEdicion, observaciones: e.target.value})}
+                rows={3}
+              />
+            </div>
+
+            {!esLaminaEdicion && (
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <h3 className="font-semibold text-sm mb-3">Configuración de Materiales</h3>
+                
+                <div className="flex gap-2 mb-4">
+                  <button
+                    type="button"
+                    className={`btn flex-1 text-left ${modoRecetaEdicion === 'porcentaje' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setModoRecetaEdicion('porcentaje')}
+                  >
+                    <Star size={18} className="mr-2" />
+                    <div>
+                      <div className="font-bold">Por Porcentajes</div>
+                      <div className="text-xs opacity-80">Calcula kilos automáticamente</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn flex-1 text-left ${modoRecetaEdicion === 'manual' ? 'btn-warning' : 'btn-outline'}`}
+                    onClick={() => setModoRecetaEdicion('manual')}
+                  >
+                    <Zap size={18} className="mr-2" />
+                    <div>
+                      <div className="font-bold">Orden Manual</div>
+                      <div className="text-xs opacity-80">Sin insumos iniciales</div>
+                    </div>
+                  </button>
+                </div>
+
+                {modoRecetaEdicion === 'porcentaje' && (
+                  <>
+                    <div className="flex justify-between items-center mb-3">
+                      <p className="text-sm text-muted">Total Porcentajes: <span className={`font-bold ${Math.abs(porcentajeEdicionTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>{porcentajeEdicionTotal.toFixed(2)}%</span></p>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => setModalAgregarInsumoEdicion(true)}
+                      >
+                        <Plus size={16} /> Agregar Insumo
+                      </button>
+                    </div>
+
+                    {insumosEdicion.length === 0 ? (
+                      <div className="p-4 text-center text-muted bg-gray-50 rounded border border-gray-200">
+                        <AlertCircle size={24} className="mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No hay insumos agregados.</p>
+                      </div>
+                    ) : (
+                      <div className="table-container">
+                        <table className="table table-sm">
+                          <thead>
+                            <tr>
+                              <th>Insumo</th>
+                              <th className="text-center">Porcentaje</th>
+                              <th className="text-right">Calculado (Kg)</th>
+                              <th className="text-center"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {insumosEdicion.map(item => {
+                              const calculado = calcularCantidadInsumoEdicion(item.porcentaje);
+                              return (
+                                <tr key={item.id_insumo}>
+                                  <td>
+                                    <div className="font-medium text-sm">{item.codigo_insumo}</div>
+                                    <div className="text-xs text-muted">{item.insumo}</div>
+                                  </td>
+                                  <td className="text-center font-bold text-blue-600">{item.porcentaje}%</td>
+                                  <td className="text-right font-mono">{calculado.toFixed(2)} Kg</td>
+                                  <td className="text-center">
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-danger p-1"
+                                      onClick={() => eliminarInsumoEdicion(item.id_insumo)}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {modoRecetaEdicion === 'manual' && (
+                  <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                    <p className="text-sm text-yellow-800 flex items-center gap-2">
+                      <Info size={16} />
+                      Modo manual: No se consumirán materiales automáticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 justify-end mt-6">
+            <button 
+              type="button" 
+              className="btn btn-outline" 
+              onClick={() => setModalEditar(false)}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-secondary"
+              disabled={procesando}
+            >
+              {procesando ? 'Procesando...' : 'Guardar Cambios'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={modalAgregarInsumoEdicion}
+        onClose={() => setModalAgregarInsumoEdicion(false)}
+        title="Agregar Insumo"
+        size="md"
+      >
+        <div className="form-group">
+          <label className="form-label">Insumo *</label>
+          <select
+            className="form-select"
+            value={nuevoInsumoEdicion.id_insumo}
+            onChange={(e) => setNuevoInsumoEdicion({ ...nuevoInsumoEdicion, id_insumo: e.target.value })}
+          >
+            <option value="">Seleccione...</option>
+            {insumosFiltradosParaMostrar
+              .filter(i => !insumosEdicion.find(ie => ie.id_insumo == i.id_producto))
+              .map(insumo => (
+                <option key={insumo.id_producto} value={insumo.id_producto}>
+                  {insumo.nombre} - Stock: {parseFloat(insumo.stock_actual).toFixed(2)}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Porcentaje (%) *</label>
+          <div className="relative">
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max="100"
+              className="form-input pr-8"
+              value={nuevoInsumoEdicion.porcentaje}
+              onChange={(e) => setNuevoInsumoEdicion({ ...nuevoInsumoEdicion, porcentaje: e.target.value })}
+              placeholder="Ej: 50"
+            />
+            <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
+          </div>
+          {datosEdicion.cantidad_planificada && nuevoInsumoEdicion.porcentaje && (
+            <p className="text-sm text-blue-600 mt-1 text-right font-medium">
+              Equivale a: {((parseFloat(datosEdicion.cantidad_planificada) * parseFloat(nuevoInsumoEdicion.porcentaje)) / 100).toFixed(2)} Kg
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumoEdicion(false)}>
+            Cancelar
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={agregarInsumoEdicion}
+            disabled={!nuevoInsumoEdicion.id_insumo || !nuevoInsumoEdicion.porcentaje}
+          >
+            Agregar
+          </button>
+        </div>
+      </Modal>
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
@@ -1735,6 +2295,7 @@ function OrdenDetalle() {
           </button>
         </div>
       </Modal>
+
       <Modal
         isOpen={modalFinalizar}
         onClose={() => setModalFinalizar(false)}

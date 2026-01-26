@@ -2069,3 +2069,151 @@ export async function completarAsignacionOP(req, res) {
     });
   }
 }
+export async function editarOrdenCompleta(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      id_producto_terminado,
+      cantidad_planificada,
+      cantidad_unidades,
+      id_supervisor,
+      turno,
+      maquinista,
+      ayudante,
+      operario_corte,
+      operario_embalaje,
+      medida,
+      peso_producto,
+      gramaje,
+      fecha_programada,
+      fecha_programada_fin,
+      observaciones,
+      insumos,
+      modo_receta
+    } = req.body;
+
+    const ordenCheck = await executeQuery(
+      'SELECT * FROM ordenes_produccion WHERE id_orden = ?',
+      [id]
+    );
+
+    if (ordenCheck.data.length === 0) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+
+    const ordenActual = ordenCheck.data[0];
+
+    if (!['Pendiente Asignación', 'Pendiente'].includes(ordenActual.estado)) {
+      return res.status(400).json({ 
+        error: 'Solo se pueden editar órdenes en estado "Pendiente Asignación" o "Pendiente"' 
+      });
+    }
+
+    const queries = [];
+
+    const payload = {
+      id_producto_terminado: parseInt(id_producto_terminado),
+      cantidad_planificada: parseFloat(cantidad_planificada),
+      cantidad_unidades: parseFloat(cantidad_unidades || 0),
+      id_supervisor: id_supervisor ? parseInt(id_supervisor) : null,
+      turno: turno || 'Día',
+      maquinista: maquinista || null,
+      ayudante: ayudante || null,
+      operario_corte: operario_corte || null,
+      operario_embalaje: operario_embalaje || null,
+      medida: medida || null,
+      peso_producto: peso_producto || null,
+      gramaje: gramaje || null,
+      fecha_programada: fecha_programada || null,
+      fecha_programada_fin: fecha_programada_fin || null,
+      observaciones: observaciones || null
+    };
+
+    const productoChanged = parseInt(id_producto_terminado) !== parseInt(ordenActual.id_producto_terminado);
+    const cantidadChanged = parseFloat(cantidad_planificada) !== parseFloat(ordenActual.cantidad_planificada);
+
+    if (productoChanged || cantidadChanged || (insumos && insumos.length > 0)) {
+      queries.push({
+        sql: 'DELETE FROM op_consumo_materiales WHERE id_orden = ?',
+        params: [id]
+      });
+
+      queries.push({
+        sql: 'DELETE FROM op_recetas_provisionales WHERE id_orden = ?',
+        params: [id]
+      });
+
+      if (insumos && insumos.length > 0 && modo_receta === 'porcentaje') {
+        let costoTotalMateriales = 0;
+
+        for (const insumo of insumos) {
+          const porcentaje = parseFloat(insumo.porcentaje);
+          const cantidadRequerida = (parseFloat(cantidad_planificada) * porcentaje) / 100;
+
+          const insumoInfo = await executeQuery(
+            'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?',
+            [insumo.id_insumo]
+          );
+
+          const costoUnitario = insumoInfo.success && insumoInfo.data.length > 0
+            ? parseFloat(insumoInfo.data[0].costo_unitario_promedio)
+            : 0;
+
+          costoTotalMateriales += cantidadRequerida * costoUnitario;
+
+          if (ordenActual.estado === 'Pendiente') {
+            queries.push({
+              sql: `INSERT INTO op_consumo_materiales 
+                    (id_orden, id_insumo, cantidad_requerida, costo_unitario, cantidad_real_consumida) 
+                    VALUES (?, ?, ?, ?, 0)`,
+              params: [id, insumo.id_insumo, cantidadRequerida, costoUnitario]
+            });
+          } else {
+            queries.push({
+              sql: `INSERT INTO op_recetas_provisionales 
+                    (id_orden, id_insumo, porcentaje, cantidad_requerida, costo_unitario) 
+                    VALUES (?, ?, ?, ?, ?)`,
+              params: [id, insumo.id_insumo, porcentaje, cantidadRequerida, costoUnitario]
+            });
+          }
+        }
+
+        payload.costo_materiales = costoTotalMateriales;
+      } else if (modo_receta === 'manual') {
+        payload.es_orden_manual = 1;
+        payload.costo_materiales = 0;
+      }
+    }
+
+    const setClauses = Object.keys(payload).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(payload);
+
+    queries.push({
+      sql: `UPDATE ordenes_produccion SET ${setClauses} WHERE id_orden = ?`,
+      params: [...values, id]
+    });
+
+    const result = await executeTransaction(queries);
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+
+    await notificarCambioEstado(
+      id,
+      `Orden Modificada: ${ordenActual.numero_orden}`,
+      'La orden de producción ha sido editada.',
+      'info',
+      req
+    );
+
+    res.json({
+      success: true,
+      message: 'Orden actualizada exitosamente'
+    });
+
+  } catch (error) {
+    console.error('Error al editar orden:', error);
+    res.status(500).json({ error: error.message });
+  }
+}

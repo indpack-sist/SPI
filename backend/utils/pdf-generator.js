@@ -2234,7 +2234,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.rect(20, yInfo, 555, alturaDatos).stroke(); 
       doc.fontSize(6).font('Helvetica-Bold');
       
-      doc.rect(22, yInfo + 2, 350, 10).fill('#F5F5F5');
+      doc.rect(22, yInfo + 2, 350, 10).fill('#FFF176');
       doc.fillColor('black').text('PRODUCTO:', 25, yInfo + 5);
       doc.font('Helvetica').text(orden.producto, 70, yInfo + 5, { width: 300, ellipsis: true });
       
@@ -2483,7 +2483,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS Y OBSERVACIONES', 20, yPos);
       yPos += 8;
 
-      doc.rect(20, yPos, 555, 10).fill('#FFCCBC').stroke();
+      doc.rect(20, yPos, 555, 10).fill('#FFF176').stroke();
       doc.fillColor('black').fontSize(5);
       doc.text('HORA INICIO', 20, yPos + 3, { width: 60, align: 'center' });
       doc.text('HORA FIN', 80, yPos + 3, { width: 60, align: 'center' });

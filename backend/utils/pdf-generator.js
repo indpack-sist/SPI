@@ -2354,20 +2354,19 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           if (orden.medida) textos.push(`MEDIDA: ${orden.medida}`);
           if (orden.peso_producto) textos.push(`PESO: ${orden.peso_producto}`);
           
-          const textoCompleto = textos.join('  |  ');
+          const textoCompleto = textos.join('   |   ');
           doc.text(textoCompleto, 25, yPos + 5, { width: 545, align: 'center' });
           
           yPos += 18;
       }
 
-      const footerHeight = 70;
-      const pageBottomLimit = 800;
-      const availableHeight = pageBottomLimit - footerHeight - yPos;
-      const headerHeight = 10;
-      const rowHeight = 9;
-      
-      const maxRowsPossible = Math.floor((availableHeight - headerHeight) / rowHeight);
-      
+      let labelSlot = 'N°';
+      if (esLamina) labelSlot = 'PAQ';
+      else if (esEsquinero) labelSlot = 'PAQ';
+      else if (esZuncho) labelSlot = 'ROLLO';
+      else if (esBurbupack) labelSlot = 'ROLLO';
+      else if (esGrapa) labelSlot = 'BOLSA';
+
       let slotsNecesarios = 0;
       if (esLamina) {
           const millares = parseFloat(orden.cantidad_unidades || 0);
@@ -2378,105 +2377,96 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       } else {
           slotsNecesarios = parseInt(orden.cantidad_unidades || orden.cantidad_planificada || 0) + 10;
       }
-      
-      let columnasGrid = 2;
-      let filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
-      
-      if (filasPorColumna > maxRowsPossible) {
-          columnasGrid = 3;
-          filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
-      }
-      
-      if (filasPorColumna > maxRowsPossible) {
-          columnasGrid = 4;
-          filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
-      }
-      
-      if (filasPorColumna > maxRowsPossible) {
-          columnasGrid = 5;
-          filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
-      }
-      
-      filasPorColumna = Math.min(filasPorColumna, maxRowsPossible);
-
-      let labelSlot = 'N°';
-      if (esLamina) {
-          labelSlot = 'PAQ';
-      } else if (esEsquinero) {
-          labelSlot = 'PAQ';
-      } else if (esZuncho) {
-          labelSlot = 'ROLLO';
-      } else if (esBurbupack) {
-          labelSlot = 'ROLLO';
-      } else if (esGrapa) {
-          labelSlot = 'BOLSA';
-      }
 
       doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN`, 20, yPos);
       yPos += 10;
 
+      const espacioReservadoFinal = 95; 
+      const espacioDisponibleGrid = 810 - yPos - espacioReservadoFinal; 
+      const headerGridHeight = 12;
+      
+      let columnasGrid = 2;
+      let filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
+      let alturaFila = (espacioDisponibleGrid - headerGridHeight) / filasPorColumna;
+
+      while (alturaFila < 9 && columnasGrid < 6) {
+          columnasGrid++;
+          filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
+          alturaFila = (espacioDisponibleGrid - headerGridHeight) / filasPorColumna;
+      }
+
+      if (alturaFila < 9) alturaFila = 9;
+
+      let tamanioFuenteDinamico = alturaFila * 0.5;
+      if (tamanioFuenteDinamico > 12) tamanioFuenteDinamico = 12;
+      if (tamanioFuenteDinamico < 5) tamanioFuenteDinamico = 5;
+
       const anchoPagina = 555;
       const anchoColumna = anchoPagina / columnasGrid;
+      const textOffsetY = (alturaFila - tamanioFuenteDinamico) / 2;
 
-      const dibujarEncabezadosGrid = (y) => {
-          for (let c = 0; c < columnasGrid; c++) {
-              const xBase = 20 + (c * anchoColumna);
-              doc.rect(xBase, y, anchoColumna, headerHeight).fill('#F0F0F0').stroke();
-              doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
-              
-              if (esLamina) {
-                  const w1 = anchoColumna * 0.15;
-                  const w2 = anchoColumna * 0.45;
-                  const w3 = anchoColumna * 0.40;
-                  
-                  doc.text('PAQ', xBase + 2, y + 3, { width: w1, align: 'center' }); 
-                  doc.text('ROLLO', xBase + w1, y + 3, { width: w2, align: 'center' });
-                  doc.text('PESO', xBase + w1 + w2, y + 3, { width: w3, align: 'center' });
-              } else {
-                  const w1 = anchoColumna * 0.20;
-                  const w2 = anchoColumna * 0.40;
-                  const w3 = anchoColumna * 0.40;
-                  
-                  doc.text(labelSlot, xBase + 2, y + 3, { width: w1, align: 'center' });
-                  doc.text('CANT', xBase + w1, y + 3, { width: w2, align: 'center' });
-                  doc.text('PESO (KG)', xBase + w1 + w2, y + 3, { width: w3, align: 'center' });
-              }
+      for (let c = 0; c < columnasGrid; c++) {
+          const xBase = 20 + (c * anchoColumna);
+          doc.rect(xBase, yPos, anchoColumna, headerGridHeight).fill('#F0F0F0').stroke();
+          doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
+          
+          if (esLamina) {
+              const w1 = anchoColumna * 0.15;
+              const w2 = anchoColumna * 0.45;
+              const w3 = anchoColumna * 0.40;
+              doc.text('PAQ', xBase + 2, yPos + 3, { width: w1, align: 'center' }); 
+              doc.text('ROLLO', xBase + w1, yPos + 3, { width: w2, align: 'center' });
+              doc.text('PESO', xBase + w1 + w2, yPos + 3, { width: w3, align: 'center' });
+          } else {
+              const w1 = anchoColumna * 0.20;
+              const w2 = anchoColumna * 0.40;
+              const w3 = anchoColumna * 0.40;
+              doc.text(labelSlot, xBase + 2, yPos + 3, { width: w1, align: 'center' });
+              doc.text('CANT', xBase + w1, yPos + 3, { width: w2, align: 'center' });
+              doc.text('PESO (KG)', xBase + w1 + w2, yPos + 3, { width: w3, align: 'center' });
           }
-      };
-
-      dibujarEncabezadosGrid(yPos);
-      yPos += headerHeight;
+      }
+      yPos += headerGridHeight;
 
       for (let i = 0; i < filasPorColumna; i++) {
           for (let c = 0; c < columnasGrid; c++) {
               const numeroSlot = i + 1 + (c * filasPorColumna);
-              
-              if (numeroSlot > slotsNecesarios) continue;
+              if (numeroSlot > slotsNecesarios) {
+                const xBase = 20 + (c * anchoColumna);
+                doc.rect(xBase, yPos, anchoColumna, alturaFila).stroke();
+                if (esLamina) {
+                    const w1 = anchoColumna * 0.15;
+                    const w2 = anchoColumna * 0.45;
+                    doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).stroke();
+                    doc.moveTo(xBase + w1 + w2, yPos).lineTo(xBase + w1 + w2, yPos + alturaFila).stroke();
+                } else {
+                    const w1 = anchoColumna * 0.20;
+                    const w2 = anchoColumna * 0.40;
+                    doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).stroke();
+                    doc.moveTo(xBase + w1 + w2, yPos).lineTo(xBase + w1 + w2, yPos + alturaFila).stroke();
+                }
+                continue;
+              }
               
               const xBase = 20 + (c * anchoColumna);
-              
-              doc.rect(xBase, yPos, anchoColumna, rowHeight).stroke();
-              doc.fontSize(5).font('Helvetica');
+              doc.rect(xBase, yPos, anchoColumna, alturaFila).stroke();
+              doc.fontSize(tamanioFuenteDinamico).font('Helvetica');
               
               if (esLamina) {
                   const w1 = anchoColumna * 0.15;
                   const w2 = anchoColumna * 0.45;
-                  
-                  doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + rowHeight).stroke();
-                  doc.moveTo(xBase + w1 + w2, yPos).lineTo(xBase + w1 + w2, yPos + rowHeight).stroke();
-                  
-                  doc.text(numeroSlot.toString(), xBase + 2, yPos + 3, { width: w1 - 2, align: 'center' });
+                  doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).stroke();
+                  doc.moveTo(xBase + w1 + w2, yPos).lineTo(xBase + w1 + w2, yPos + alturaFila).stroke();
+                  doc.text(numeroSlot.toString(), xBase + 2, yPos + textOffsetY, { width: w1 - 2, align: 'center' });
               } else {
                   const w1 = anchoColumna * 0.20;
                   const w2 = anchoColumna * 0.40;
-                  
-                  doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + rowHeight).stroke();
-                  doc.moveTo(xBase + w1 + w2, yPos).lineTo(xBase + w1 + w2, yPos + rowHeight).stroke();
-                  
-                  doc.text(numeroSlot.toString(), xBase + 2, yPos + 3, { width: w1 - 2, align: 'center' });
+                  doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).stroke();
+                  doc.moveTo(xBase + w1 + w2, yPos).lineTo(xBase + w1 + w2, yPos + alturaFila).stroke();
+                  doc.text(numeroSlot.toString(), xBase + 2, yPos + textOffsetY, { width: w1 - 2, align: 'center' });
               }
           }
-          yPos += rowHeight;
+          yPos += alturaFila;
       }
 
       yPos += 10;
@@ -2498,8 +2488,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       yPos += 5;
       
-      const alturaCierre = 30;
-      if (yPos + alturaCierre > 800) { doc.addPage(); yPos = 30; }
+      if (yPos + 30 > 800) { doc.addPage(); yPos = 30; }
 
       doc.fontSize(6);
       const wBox = 135;

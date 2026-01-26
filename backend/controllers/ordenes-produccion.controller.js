@@ -1044,7 +1044,7 @@ export async function reanudarProduccion(req, res) {
 export async function registrarParcial(req, res) {
   try {
     const { id } = req.params;
-    const { 
+    let { 
       cantidad_kilos, 
       cantidad_unidades,
       insumos_consumidos, 
@@ -1053,6 +1053,10 @@ export async function registrarParcial(req, res) {
     
     const id_registrado_por = req.user.id_usuario; 
     const fechaActual = getFechaPeru();
+
+    if ((!cantidad_kilos || parseFloat(cantidad_kilos) === 0) && insumos_consumidos && insumos_consumidos.length > 0) {
+      cantidad_kilos = insumos_consumidos.reduce((acc, item) => acc + parseFloat(item.cantidad || 0), 0);
+    }
 
     const ordenCheck = await executeQuery(
       "SELECT estado, cantidad_planificada, cantidad_producida, cantidad_unidades, cantidad_unidades_producida FROM ordenes_produccion WHERE id_orden = ?",
@@ -1363,7 +1367,7 @@ export const descargarHojaRutaController = async (req, res) => {
 export async function finalizarProduccion(req, res) {
   try {
     const { id } = req.params;
-    const { 
+    let { 
       cantidad_kilos_final,
       cantidad_unidades_final,
       insumos_reales, 
@@ -1372,6 +1376,10 @@ export async function finalizarProduccion(req, res) {
     } = req.body;
     
     const fechaActual = getFechaPeru();
+
+    if ((!cantidad_kilos_final || parseFloat(cantidad_kilos_final) === 0) && insumos_reales && insumos_reales.length > 0) {
+      cantidad_kilos_final = insumos_reales.reduce((acc, item) => acc + parseFloat(item.cantidad || 0), 0);
+    }
 
     const ordenResult = await executeQuery(
       `SELECT op.*, p.id_tipo_inventario, p.unidad_medida, p.nombre as nombre_producto

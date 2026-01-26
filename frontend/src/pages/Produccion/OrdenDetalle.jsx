@@ -48,12 +48,12 @@ function OrdenDetalle() {
   const [nuevoInsumo, setNuevoInsumo] = useState({ id_insumo: '', porcentaje: '' });
 
   const [modalFinalizar, setModalFinalizar] = useState(false);
-  const [cantidadKilosFinal, setCantidadKilosFinal] = useState('');
+  // Eliminado estado cantidadKilosFinal ya que se calcula
   const [cantidadUnidadesFinal, setCantidadUnidadesFinal] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
     
   const [modalParcial, setModalParcial] = useState(false);
-  const [cantidadParcial, setCantidadParcial] = useState('');
+  // Eliminado estado cantidadParcial ya que se calcula
   const [cantidadUnidadesParcial, setCantidadUnidadesParcial] = useState('');
   const [observacionesParcial, setObservacionesParcial] = useState('');
     
@@ -610,11 +610,9 @@ function OrdenDetalle() {
         return;
       }
 
-      const esLamina = orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA');
-        
       const payload = {
-        cantidad_kilos: parseFloat(cantidadParcial),
-        cantidad_unidades: esLamina ? parseFloat(cantidadUnidadesParcial || 0) : 0, 
+        cantidad_kilos: 0, // Se calcula en el backend
+        cantidad_unidades: parseFloat(cantidadUnidadesParcial || 0), 
         insumos_consumidos: insumosConCantidad.map(i => ({
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
@@ -627,7 +625,6 @@ function OrdenDetalle() {
       if (response.data.success) {
         setSuccess(response.data.message);
         setModalParcial(false);
-        setCantidadParcial('');
         setCantidadUnidadesParcial('');
         setObservacionesParcial('');
         setInsumosParcialesConsumo([]);
@@ -658,7 +655,7 @@ function OrdenDetalle() {
       setError(null);
 
       const payload = {
-        cantidad_kilos_final: parseFloat(cantidadKilosFinal || 0),
+        cantidad_kilos_final: 0, // Se calcula en el backend
         cantidad_unidades_final: parseFloat(cantidadUnidadesFinal || 0),
         insumos_reales: insumosValidos.map(i => ({
           id_insumo: i.id_insumo,
@@ -690,6 +687,14 @@ function OrdenDetalle() {
       setProcesando(false);
     }
   };
+
+  // Cálculo dinámico de kilos para mostrar en el modal
+  const kilosParcialCalculados = insumosParcialesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+  const kilosFinalesCalculados = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+
+  // ... Resto de funciones auxiliares (handleAsignarSupervisor, handleIniciar, etc.) ...
+  // [Se mantienen igual que tu código original, solo copio las que necesito para el render completo]
+  
   const handleAsignarSupervisor = async (e) => {
     e.preventDefault();
     
@@ -885,7 +890,7 @@ function OrdenDetalle() {
 
   const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
   const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
-  const totalKilosProd = parseFloat(cantidadKilosFinal || 0);
+  const totalKilosProd = kilosFinalesCalculados; // Usar el calculado para visualización
   const diferenciaMasa = totalInsumosReales - (totalKilosProd + totalMerma);
 
   const totalMasaRealConsumida = consumoMateriales.reduce((acc, item) => acc + parseFloat(item.cantidad_real_consumida || 0), 0);
@@ -1055,8 +1060,7 @@ function OrdenDetalle() {
             <button 
               className="btn btn-info" 
               onClick={() => {
-                const cantidadRestante = parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0);
-                setCantidadParcial(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
+                // Ya no seteamos cantidadParcial (kilos)
                 setCantidadUnidadesParcial('');
                 setObservacionesParcial('');
                 inicializarInsumosParaParcial();
@@ -1071,8 +1075,7 @@ function OrdenDetalle() {
             <button 
               className="btn btn-success" 
               onClick={() => {
-                const cantidadRestante = parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0);
-                setCantidadKilosFinal(cantidadRestante > 0 ? cantidadRestante.toFixed(2) : '');
+                // Ya no seteamos cantidadKilosFinal
                 setCantidadUnidadesFinal('');
                 setObservacionesFinal('');
                 setMermas([]);
@@ -1093,6 +1096,7 @@ function OrdenDetalle() {
           )}
         </div>
       </div>
+      {/* ... [Se mantienen las tarjetas de Información General, Producción y Tiempos idénticas al original] ... */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="card">
           <div className="card-header flex items-center gap-2">
@@ -1325,6 +1329,7 @@ function OrdenDetalle() {
         </div>
       )}
 
+      {/* ... [Se mantiene la tabla de consumoMateriales idéntica] ... */}
       {consumoMateriales.length > 0 && (
         <div className="card mb-4">
           <div className="card-header flex items-center gap-2">
@@ -1420,6 +1425,8 @@ function OrdenDetalle() {
           </div>
         </div>
       )}
+
+      {/* ... [Modales de Editar y Asignar se mantienen igual] ... */}
       <Modal
         isOpen={modalEditar}
         onClose={() => setModalEditar(false)}
@@ -1432,6 +1439,7 @@ function OrdenDetalle() {
       >
         <form onSubmit={handleGuardarEdicion}>
           <div className="space-y-4">
+            {/* ... Contenido del modal Editar igual al original ... */}
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="form-label">Producto Terminado *</label>
@@ -1720,6 +1728,7 @@ function OrdenDetalle() {
         </form>
       </Modal>
 
+      {/* Modales de Agregar Insumo para Edición y Asignación... (se mantienen igual) */}
       <Modal
         isOpen={modalAgregarInsumoEdicion}
         onClose={() => setModalAgregarInsumoEdicion(false)}
@@ -1780,6 +1789,8 @@ function OrdenDetalle() {
           </button>
         </div>
       </Modal>
+
+      {/* ... [Modales de Asignar y Agregar Insumo (general) se mantienen] ... */}
       <Modal
         isOpen={modalAsignar}
         onClose={() => setModalAsignar(false)}
@@ -2089,6 +2100,7 @@ function OrdenDetalle() {
         </div>
       </Modal>
 
+      {/* --- MODAL REGISTRO PARCIAL ACTUALIZADO --- */}
       <Modal
         isOpen={modalParcial}
         onClose={() => setModalParcial(false)}
@@ -2103,43 +2115,39 @@ function OrdenDetalle() {
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
             <Info className="text-blue-500 shrink-0" size={20} />
             <div className="text-sm text-blue-700">
-              <p><strong>Registro Parcial:</strong> Permite registrar producción sin finalizar la orden.</p>
+              <p><strong>Registro Parcial:</strong> Registre la cantidad de unidades fabricadas y los insumos consumidos. El peso total se calculará automáticamente.</p>
               <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> de <strong>{parseFloat(orden.cantidad_planificada).toFixed(2)}</strong> Kg</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="form-group">
-              <label className="form-label">Cantidad Kilos *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                className="form-input"
-                value={cantidadParcial}
-                onChange={(e) => setCantidadParcial(e.target.value)}
-                required
-                placeholder="0.00"
-              />
-              <small className="text-muted block mt-1">
-                Restante: {(parseFloat(orden.cantidad_planificada) - parseFloat(orden.cantidad_producida || 0)).toFixed(2)} Kg
-              </small>
+                <label className="form-label">Cantidad {unidadProduccion} *</label>
+                <div className="relative">
+                    <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        className="form-input pl-8"
+                        value={cantidadUnidadesParcial}
+                        onChange={(e) => setCantidadUnidadesParcial(e.target.value)}
+                        placeholder="0"
+                        required
+                    />
+                    <Hash className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
+                </div>
             </div>
 
-            {esLamina && (
-              <div className="form-group">
-                <label className="form-label">Cantidad {unidadProduccion}</label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  className="form-input"
-                  value={cantidadUnidadesParcial}
-                  onChange={(e) => setCantidadUnidadesParcial(e.target.value)}
-                  placeholder="0"
-                />
+            <div className="form-group">
+              <label className="form-label text-muted">Peso Calculado (Estimado)</label>
+              <div className="form-input bg-gray-100 flex items-center justify-between text-gray-700 font-bold">
+                 <span>{kilosParcialCalculados.toFixed(2)}</span>
+                 <span className="text-xs font-normal">Kg</span>
               </div>
-            )}
+              <small className="text-muted block mt-1">
+                Suma automática de los insumos ingresados abajo.
+              </small>
+            </div>
           </div>
 
           <div className="form-group">
@@ -2236,7 +2244,7 @@ function OrdenDetalle() {
             <button 
               type="submit" 
               className="btn btn-info"
-              disabled={procesando || !cantidadParcial}
+              disabled={procesando || insumosParcialesConsumo.length === 0}
             >
               {procesando ? 'Procesando...' : 'Registrar Producción Parcial'}
             </button>
@@ -2296,6 +2304,7 @@ function OrdenDetalle() {
         </div>
       </Modal>
 
+      {/* --- MODAL FINALIZAR ACTUALIZADO --- */}
       <Modal
         isOpen={modalFinalizar}
         onClose={() => setModalFinalizar(false)}
@@ -2310,28 +2319,11 @@ function OrdenDetalle() {
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
             <Info className="text-blue-500 shrink-0" size={20} />
             <div className="text-sm text-blue-700">
-              <p><strong>Cierre de Orden:</strong> Ingrese los valores reales obtenidos al finalizar el turno.</p>
+              <p><strong>Cierre de Orden:</strong> Ingrese el total de unidades producidas y verifique los insumos consumidos. El peso final se calculará automáticamente.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="form-group">
-                <label className="form-label">Total Kilos Producidos (Real) *</label>
-                <div className="relative">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="form-input pl-8"
-                      value={cantidadKilosFinal}
-                      onChange={(e) => setCantidadKilosFinal(e.target.value)}
-                      required
-                      placeholder="0.00"
-                    />
-                    <Scale className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
-                </div>
-              </div>
-
               <div className="form-group">
                 <label className="form-label">Total {unidadProduccion} Producidas (Real)</label>
                 <div className="relative">
@@ -2343,9 +2335,21 @@ function OrdenDetalle() {
                       value={cantidadUnidadesFinal}
                       onChange={(e) => setCantidadUnidadesFinal(e.target.value)}
                       placeholder="0"
+                      required
                     />
                     <Hash className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-muted">Peso Total Calculado (Real)</label>
+                <div className="relative">
+                    <div className="form-input pl-8 bg-gray-100 flex items-center text-gray-700 font-bold">
+                        {kilosFinalesCalculados.toFixed(2)} Kg
+                    </div>
+                    <Scale className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
+                </div>
+                <small className="text-muted block mt-1">Suma de insumos totales.</small>
               </div>
           </div>
 
@@ -2411,7 +2415,7 @@ function OrdenDetalle() {
                             className="btn btn-sm btn-danger p-1"
                             onClick={() => eliminarInsumoFinal(item.id_insumo)}
                           >
-                              <Trash2 size={14} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       )}
@@ -2546,7 +2550,7 @@ function OrdenDetalle() {
             <button 
               type="submit" 
               className="btn btn-success"
-              disabled={procesando || (!cantidadKilosFinal && !cantidadUnidadesFinal)}
+              disabled={procesando}
             >
               {procesando ? 'Procesando...' : 'Finalizar Producción'}
             </button>

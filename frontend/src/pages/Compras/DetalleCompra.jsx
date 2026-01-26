@@ -394,7 +394,6 @@ function DetalleCompra() {
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
-
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -407,9 +406,9 @@ function DetalleCompra() {
             </h1>
             <div className="flex gap-3 text-sm text-muted mt-1">
                 <span className="flex items-center gap-1"><Calendar size={14}/> {formatearFecha(compra.fecha_emision)}</span>
-                <span className={`badge ${compra.estado === 'Recibida' ? 'badge-success' : 'badge-info'}`}>{compra.estado}</span>
-                {compra.usa_fondos_propios && (
-                  <span className="badge badge-warning">Fondos Propios</span>
+                <span className={`badge ${compra.estado === 'Recibida' ? 'badge-success' : compra.estado === 'En Tránsito' ? 'badge-info' : 'badge-warning'}`}>{compra.estado}</span>
+                {compra.usa_fondos_propios === 1 && (
+                  <span className="badge badge-purple">Fondos Propios</span>
                 )}
             </div>
           </div>
@@ -420,7 +419,7 @@ function DetalleCompra() {
           
           {compra.estado !== 'Cancelada' && compra.estado_pago !== 'Pagado' && (
             <>
-              {(compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && (
+              {(compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && !compra.usa_fondos_propios && (
                   <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
                     <DollarSign size={18} /> Registrar Pago
                   </button>
@@ -473,7 +472,7 @@ function DetalleCompra() {
         </div>
       </div>
 
-      {compra.usa_fondos_propios && saldoReembolso > 0 && (
+      {compra.usa_fondos_propios === 1 && saldoReembolso > 0 && (
         <div className="card mb-6 border-l-4 border-purple-500 bg-purple-50">
           <div className="card-body">
             <div className="flex justify-between items-center">
@@ -485,7 +484,7 @@ function DetalleCompra() {
                   Comprador: <span className="font-medium">{compra.comprador || 'No especificado'}</span>
                 </p>
                 <p className="text-sm text-purple-700">
-                  Estado: <span className="badge badge-warning">{compra.estado_reembolso}</span>
+                  Estado: <span className={`badge ${compra.estado_reembolso === 'Pendiente' ? 'badge-danger' : compra.estado_reembolso === 'Parcial' ? 'badge-warning' : 'badge-success'}`}>{compra.estado_reembolso}</span>
                 </p>
               </div>
               <div className="text-right">
@@ -656,10 +655,12 @@ function DetalleCompra() {
                       <tbody>
                           {compra.pagos_realizados.map((pago, i) => (
                               <tr key={i}>
-                                  <td>{new Date(pago.fecha_movimiento).toLocaleDateString()}</td>
+                                  <td>{new Date(pago.fecha_movimiento).toLocaleDateString('es-PE')}</td>
                                   <td>
-                                    {pago.es_reembolso ? (
-                                      <span className="badge badge-purple">Reembolso</span>
+                                    {pago.es_reembolso === 1 ? (
+                                      <span className="badge badge-purple flex items-center gap-1 w-fit">
+                                        <RefreshCw size={12} /> Reembolso
+                                      </span>
                                     ) : (
                                       <span className="badge badge-info">Pago</span>
                                     )}
@@ -816,14 +817,13 @@ function DetalleCompra() {
           </div>
         </div>
       )}
-
       <Modal isOpen={modalPagarCuotaOpen} onClose={() => setModalPagarCuotaOpen(false)} title="Pagar Cuota">
         <form onSubmit={handlePagarCuota} className="space-y-4">
             <div className="form-group">
                 <label className="form-label">Cuenta Origen</label>
                 <select className="form-select" value={datosPago.id_cuenta_pago} onChange={e => setDatosPago({...datosPago, id_cuenta_pago: e.target.value})} required>
                     <option value="">Seleccione...</option>
-                    {cuentasPago.map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
+                    {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
                 </select>
             </div>
             <div className="form-group">
@@ -844,7 +844,7 @@ function DetalleCompra() {
                 <label className="form-label">Cuenta Origen</label>
                 <select className="form-select" value={datosPago.id_cuenta_pago} onChange={e => setDatosPago({...datosPago, id_cuenta_pago: e.target.value})} required>
                     <option value="">Seleccione...</option>
-                    {cuentasPago.map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
+                    {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
                 </select>
             </div>
             <div className="form-group">
@@ -869,7 +869,7 @@ function DetalleCompra() {
                 <label className="form-label">Cuenta INDPACK (Origen)</label>
                 <select className="form-select" value={datosReembolso.id_cuenta_pago} onChange={e => setDatosReembolso({...datosReembolso, id_cuenta_pago: e.target.value})} required>
                     <option value="">Seleccione cuenta de empresa...</option>
-                    {cuentasPago.map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
+                    {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
                 </select>
             </div>
             <div className="form-group">
@@ -1002,7 +1002,7 @@ function DetalleCompra() {
             <label className="form-label">Cuenta Origen</label>
             <select className="form-select" value={datosLetra.id_cuenta_pago} onChange={e => setDatosLetra({...datosLetra, id_cuenta_pago: e.target.value})} required>
               <option value="">Seleccione...</option>
-              {cuentasPago.map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
+              {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
             </select>
           </div>
           <div className="form-group">

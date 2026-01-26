@@ -89,16 +89,6 @@ function Compras() {
     return `${simbolo} ${parseFloat(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
   };
 
-  const getNivelAlertaClase = (nivel) => {
-    const clases = {
-      'success': 'badge-success',
-      'info': 'badge-info',
-      'warning': 'badge-warning',
-      'danger': 'badge-danger'
-    };
-    return clases[nivel] || 'badge-info';
-  };
-
   const getEstadoPagoConfig = (estado) => {
     const configs = {
       'Pendiente': { clase: 'badge-warning', texto: 'Pendiente' },
@@ -116,14 +106,6 @@ function Compras() {
       'Cancelada': { clase: 'bg-red-100 text-red-800 border-red-200', icono: XCircle, texto: 'Cancelada' }
     };
     return configs[estado] || { clase: 'bg-gray-100 text-gray-800 border-gray-200', icono: Package, texto: estado };
-  };
-
-  const getTipoCompraConfig = (tipo) => {
-    const configs = {
-      'Contado': { clase: 'badge-success', icono: Wallet },
-      'Credito': { clase: 'badge-warning', icono: CreditCard }
-    };
-    return configs[tipo] || configs['Contado'];
   };
 
   const getFormaPagoConfig = (forma) => {
@@ -191,10 +173,10 @@ function Compras() {
               <Icono size={12} />
               {config.texto}
             </span>
-            {value === 'Credito' && !row.cronograma_definido && (
+            {value === 'Credito' && row.cronograma_definido === 0 && (
                 <span className="text-[9px] text-danger font-bold animate-pulse">Sin Cronograma</span>
             )}
-            {value === 'Letras' && !row.letras_registradas && (
+            {value === 'Letras' && row.letras_registradas === 0 && (
                 <span className="text-[9px] text-purple-600 font-bold animate-pulse">Pendiente Registro</span>
             )}
           </div>

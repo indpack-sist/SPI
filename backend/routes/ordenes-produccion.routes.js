@@ -18,7 +18,8 @@ import {
   getRegistrosParcialesOrden,
   getAnalisisConsumoOrden,
   descargarHojaRutaController,
-  completarAsignacionOP
+  completarAsignacionOP,
+  editarOrdenCompleta
 } from '../controllers/ordenes-produccion.controller.js';
 
 const router = express.Router();
@@ -51,5 +52,6 @@ router.post('/:id/finalizar', finalizarProduccion);
 
 router.post('/:id/cancelar', cancelarOrden);
 router.get('/:id/hoja-ruta', descargarHojaRutaController);
+router.put('/ordenes/:id/editar-completa', editarOrdenCompleta);
 
 export default router;

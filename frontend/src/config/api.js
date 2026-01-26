@@ -351,7 +351,7 @@ export const ordenesProduccionAPI = {
 
   asignarRecetaYSupervisor: (id, data) => api.put(`/produccion/ordenes/${id}/asignar-receta-supervisor`, data),
   completarAsignacion: (id, data) => api.put(`/produccion/ordenes/${id}/completar-asignacion`, data),
-  editarCompleta: (id, data) => api.put(`/ordenes-produccion/ordenes/${id}/editar-completa`, data),
+  editarCompleta: (id, data) => api.put(`/produccion/ordenes/${id}/editar-completa`, data),
 
   iniciar: (id, data) => api.post(`/produccion/ordenes/${id}/iniciar`, data),
   pausar: (id) => api.post(`/produccion/ordenes/${id}/pausar`),
@@ -363,6 +363,7 @@ export const ordenesProduccionAPI = {
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
   
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
+  anular: (id) => api.post(`/produccion/ordenes/${id}/anular`),
   
   getConsumoMateriales: (id) => api.get(`/produccion/ordenes/${id}/consumo-materiales`),
   getAnalisisConsumo: (id) => api.get(`/produccion/ordenes/${id}/analisis-consumo`),

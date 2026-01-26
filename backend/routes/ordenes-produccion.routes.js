@@ -11,10 +11,11 @@ import {
   reanudarProduccion,
   finalizarProduccion,
   cancelarOrden,
+  anularOrden,
   generarPDFOrdenController,
   getProductosMerma,
   getMermasOrden,
-  registrarParcial, 
+  registrarParcial,
   getRegistrosParcialesOrden,
   getAnalisisConsumoOrden,
   descargarHojaRutaController,
@@ -51,6 +52,8 @@ router.post('/:id/registrar-parcial', registrarParcial);
 router.post('/:id/finalizar', finalizarProduccion);
 
 router.post('/:id/cancelar', cancelarOrden);
+router.post('/:id/anular', anularOrden);
+
 router.get('/:id/hoja-ruta', descargarHojaRutaController);
 router.put('/ordenes/:id/editar-completa', editarOrdenCompleta);
 

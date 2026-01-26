@@ -425,11 +425,25 @@ export const getMovimientosCuenta = async (req, res) => {
         mc.*,
         e.nombre_completo as registrado_por_nombre,
         oc.numero_orden as numero_orden_compra,
+        oc.forma_pago_detalle,
         pr.razon_social as proveedor,
         pov.numero_pago as numero_pago_venta,
         ov.numero_orden as numero_orden_venta,
         cli.razon_social as cliente,
-        coc.numero_cuota
+        coc.numero_cuota,
+        coc.codigo_letra as codigo_letra_cuota,
+        lc.numero_letra,
+        lc.fecha_vencimiento as fecha_vencimiento_letra,
+        emp_beneficiario.nombre_completo as empleado_beneficiario,
+        emp_beneficiario.cargo as cargo_empleado_beneficiario,
+        CASE 
+          WHEN mc.es_reembolso = 1 THEN 'Reembolso'
+          WHEN mc.id_letra_compra IS NOT NULL THEN 'Pago Letra'
+          WHEN mc.id_cuota IS NOT NULL THEN 'Pago Cuota'
+          WHEN mc.id_orden_compra IS NOT NULL THEN 'Pago Compra'
+          WHEN mc.id_pago_orden_venta IS NOT NULL THEN 'Cobro Venta'
+          ELSE 'Otro'
+        END as tipo_operacion
       FROM movimientos_cuentas mc
       LEFT JOIN empleados e ON mc.id_registrado_por = e.id_empleado
       LEFT JOIN ordenes_compra oc ON mc.id_orden_compra = oc.id_orden_compra
@@ -438,6 +452,8 @@ export const getMovimientosCuenta = async (req, res) => {
       LEFT JOIN ordenes_venta ov ON pov.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cli ON ov.id_cliente = cli.id_cliente
       LEFT JOIN cuotas_orden_compra coc ON mc.id_cuota = coc.id_cuota
+      LEFT JOIN letras_compra lc ON mc.id_letra_compra = lc.id_letra
+      LEFT JOIN empleados emp_beneficiario ON mc.id_empleado_relacionado = emp_beneficiario.id_empleado
       WHERE mc.id_cuenta = ?
     `;
     const params = [id];
@@ -489,6 +505,7 @@ export const getMovimientosCuenta = async (req, res) => {
     });
   }
 };
+
 
 export const getResumenCuenta = async (req, res) => {
   try {

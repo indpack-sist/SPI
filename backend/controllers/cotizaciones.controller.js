@@ -273,9 +273,8 @@ export async function createCotizacion(req, res) {
     for (const item of detalle) {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || 0);
-      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
 
-      const valorVenta = (cantidad * precioVenta) * (1 - (pctDescuento / 100));
+      const valorVenta = cantidad * precioVenta;
       
       if (!isNaN(valorVenta)) {
         subtotal += valorVenta;
@@ -397,7 +396,13 @@ export async function createCotizacion(req, res) {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioBase = parseFloat(item.precio_base || 0);
       const precioVenta = parseFloat(item.precio_venta || 0);
-      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+
+      let porcentajeCalculado = 0;
+      if (precioBase !== 0) {
+        porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
+      } else {
+        porcentajeCalculado = parseFloat(item.descuento_porcentaje || 0);
+      }
       
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
@@ -415,7 +420,7 @@ export async function createCotizacion(req, res) {
         cantidad,
         precioVenta,
         precioBase,
-        pctDescuento,
+        porcentajeCalculado.toFixed(2),
         i + 1
       ]);
     }

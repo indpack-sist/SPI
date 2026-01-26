@@ -388,13 +388,20 @@ function DetalleCotizacion() {
       )
     },
     {
-      header: 'Desc.',
+      header: 'Margen %', 
       accessor: 'descuento_porcentaje',
-      width: '70px',
+      width: '80px',
       align: 'center',
-      render: (value) => (
-        <span className="text-sm">{parseFloat(value || 0).toFixed(1)}%</span>
-      )
+      render: (value) => {
+        const porcentaje = parseFloat(value || 0);
+        const colorClass = porcentaje < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-medium';
+        
+        return (
+          <span className={`text-sm ${colorClass}`}>
+            {porcentaje > 0 ? '+' : ''}{porcentaje.toFixed(2)}%
+          </span>
+        );
+      }
     },
     {
       header: 'Subtotal',

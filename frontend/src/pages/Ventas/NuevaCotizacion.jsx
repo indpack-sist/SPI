@@ -527,9 +527,10 @@ function NuevaCotizacion() {
     
     const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
     
-    if (precioBase > 0 && precioVenta > precioBase) {
-      const descuento = ((precioVenta - precioBase) / precioVenta) * 100;
-      newDetalle[index].descuento_porcentaje = descuento;
+    // CAMBIO: Fórmula de Margen ((Venta - Base) / Base) * 100
+    if (precioBase > 0) {
+      const margen = ((precioVenta - precioBase) / precioBase) * 100;
+      newDetalle[index].descuento_porcentaje = margen;
     } else {
       newDetalle[index].descuento_porcentaje = 0;
     }
@@ -544,11 +545,13 @@ function NuevaCotizacion() {
     
     const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
     
-    if (precioBase > 0 && precioVenta > precioBase) {
-      const descuento = ((precioVenta - precioBase) / precioVenta) * 100;
-      newDetalle[index].descuento_porcentaje = descuento;
+    // CAMBIO: Fórmula de Margen ((Venta - Base) / Base) * 100
+    if (precioBase > 0) {
+      const margen = ((precioVenta - precioBase) / precioBase) * 100;
+      newDetalle[index].descuento_porcentaje = margen;
     } else {
-      newDetalle[index].descuento_porcentaje = 0;
+      // Si no hay precio base, asumimos 0 o mantenemos lo que estaba
+      newDetalle[index].descuento_porcentaje = 0; 
     }
     
     setDetalle(newDetalle);
@@ -562,14 +565,16 @@ function NuevaCotizacion() {
 
   const handleDescuentoChange = (index, valor) => {
     const newDetalle = [...detalle];
-    const descuento = parseFloat(valor) || 0;
-    newDetalle[index].descuento_porcentaje = descuento;
+    const porcentaje = parseFloat(valor) || 0; // Ahora representa margen
+    newDetalle[index].descuento_porcentaje = porcentaje;
     
-    const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
+    const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
     
-    if (descuento > 0 && precioVenta > 0) {
-      const precioBase = precioVenta * (1 - descuento / 100);
-      newDetalle[index].precio_base = precioBase;
+    // CAMBIO: Si cambio el %, recalculo el Precio Venta basándome en el Costo
+    // Venta = Costo * (1 + (Porcentaje / 100))
+    if (precioBase > 0) {
+      const nuevoPrecioVenta = precioBase * (1 + (porcentaje / 100));
+      newDetalle[index].precio_venta = parseFloat(nuevoPrecioVenta.toFixed(4));
     }
     
     setDetalle(newDetalle);
@@ -1222,7 +1227,7 @@ function NuevaCotizacion() {
                       <th>UM</th>
                       <th className="text-right">P. Base</th>
                       <th className="text-right">P. Venta</th>
-                      <th className="text-right">Desc. %</th>
+                      <th className="text-right">Margen %</th>
                       <th className="text-right">Subtotal</th>
                       <th></th>
                     </tr>

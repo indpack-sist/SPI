@@ -683,11 +683,21 @@ export const comprasAPI = {
   getResumenPagos: (id) => api.get(`/compras/${id}/pagos/resumen`),
   getHistorialPagos: (id) => api.get(`/compras/${id}/pagos/historial`),
 
+  registrarReembolso: (id, data) => api.post(`/compras/${id}/reembolsos`, data),
+
   establecerCronograma: (id, data) => api.post(`/compras/${id}/cronograma`, data),
 
   getCuotas: (id, params) => api.get(`/compras/${id}/cuotas`, { params }),
   getCuotaById: (id, idCuota) => api.get(`/compras/${id}/cuotas/${idCuota}`),
   pagarCuota: (id, idCuota, data) => api.post(`/compras/${id}/cuotas/${idCuota}/pagar`, data),
+
+  registrarLetras: (id, data) => api.post(`/compras/${id}/letras`, data),
+  getLetras: (id, params) => api.get(`/compras/${id}/letras`, { params }),
+  pagarLetra: (idLetra, data) => api.post(`/compras/letras/${idLetra}/pagar`, data),
+
+  registrarIngreso: (id, data) => api.post(`/compras/${id}/ingresos`, data),
+  getIngresos: (id) => api.get(`/compras/${id}/ingresos`),
+  getItemsPendientes: (id) => api.get(`/compras/${id}/items-pendientes`),
 
   descargarPDF: async (id) => {
     const response = await fetch(`${import.meta.env.VITE_API_URL}/compras/${id}/pdf`, {

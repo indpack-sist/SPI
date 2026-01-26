@@ -527,8 +527,9 @@ export async function createOrdenVenta(req, res) {
     let subtotal = 0;
 
     for (const item of detalle) {
-      const precioVenta = parseFloat(item.precio_venta);
-      const valorVenta = (item.cantidad * precioVenta) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+      const precioVenta = parseFloat(item.precio_venta) || 0;
+      const cantidad = parseFloat(item.cantidad) || 0;
+      const valorVenta = cantidad * precioVenta;
       subtotal += valorVenta;
     }
 
@@ -545,36 +546,36 @@ export async function createOrdenVenta(req, res) {
     const total = subtotal + impuesto;
 
     if (plazo_pago !== 'Contado') {
-        const clienteInfo = await executeQuery(
-            'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?', 
-            [id_cliente]
-        );
-  
-        if (clienteInfo.success && clienteInfo.data.length > 0) {
-            const cliente = clienteInfo.data[0];
-            
-            if (cliente.usar_limite_credito == 1) {
-                const deudaResult = await executeQuery(`
-                    SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
-                    FROM ordenes_venta
-                    WHERE id_cliente = ? 
-                    AND moneda = ? 
-                    AND estado != 'Cancelada' 
-                    AND estado_pago != 'Pagado'
-                `, [id_cliente, moneda]);
-  
-                const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
-                const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
-                const nuevaDeudaTotal = deudaActual + total;
-  
-                if (nuevaDeudaTotal > limiteAsignado) {
-                    return res.status(400).json({
-                        success: false,
-                        error: `Límite de crédito excedido. Disponible: ${moneda} ${(limiteAsignado - deudaActual).toFixed(2)}. Requerido: ${moneda} ${total.toFixed(2)}.`
-                    });
-                }
-            }
+      const clienteInfo = await executeQuery(
+        'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?',
+        [id_cliente]
+      );
+
+      if (clienteInfo.success && clienteInfo.data.length > 0) {
+        const cliente = clienteInfo.data[0];
+
+        if (cliente.usar_limite_credito == 1) {
+          const deudaResult = await executeQuery(`
+            SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
+            FROM ordenes_venta
+            WHERE id_cliente = ? 
+            AND moneda = ? 
+            AND estado != 'Cancelada' 
+            AND estado_pago != 'Pagado'
+          `, [id_cliente, moneda]);
+
+          const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
+          const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
+          const nuevaDeudaTotal = deudaActual + total;
+
+          if (nuevaDeudaTotal > limiteAsignado) {
+            return res.status(400).json({
+              success: false,
+              error: `Límite de crédito excedido. Disponible: ${moneda} ${(limiteAsignado - deudaActual).toFixed(2)}. Requerido: ${moneda} ${total.toFixed(2)}.`
+            });
+          }
         }
+      }
     }
 
     const ultimaResult = await executeQuery(`
@@ -739,8 +740,15 @@ export async function createOrdenVenta(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const precioBase = parseFloat(item.precio_base);
-      const precioVenta = parseFloat(item.precio_venta);
+      const precioBase = parseFloat(item.precio_base) || 0;
+      const precioVenta = parseFloat(item.precio_venta) || 0;
+      
+      let porcentajeCalculado = 0;
+      if (precioBase !== 0) {
+        porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
+      } else {
+        porcentajeCalculado = parseFloat(item.descuento_porcentaje || 0);
+      }
 
       queriesDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
@@ -758,7 +766,7 @@ export async function createOrdenVenta(req, res) {
           parseFloat(item.cantidad),
           precioVenta,
           precioBase,
-          parseFloat(item.descuento_porcentaje || 0)
+          porcentajeCalculado.toFixed(2)
         ]
       });
     }

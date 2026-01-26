@@ -457,9 +457,9 @@ function NuevaOrdenVenta() {
     
     const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
     
-    if (precioBase > 0 && precioVenta > precioBase) {
-      const descuento = ((precioVenta - precioBase) / precioVenta) * 100;
-      newDetalle[index].descuento_porcentaje = descuento;
+    if (precioBase > 0) {
+      const margen = ((precioVenta - precioBase) / precioBase) * 100;
+      newDetalle[index].descuento_porcentaje = margen;
     } else {
       newDetalle[index].descuento_porcentaje = 0;
     }
@@ -474,9 +474,9 @@ function NuevaOrdenVenta() {
     
     const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
     
-    if (precioBase > 0 && precioVenta > precioBase) {
-      const descuento = ((precioVenta - precioBase) / precioVenta) * 100;
-      newDetalle[index].descuento_porcentaje = descuento;
+    if (precioBase > 0) {
+      const margen = ((precioVenta - precioBase) / precioBase) * 100;
+      newDetalle[index].descuento_porcentaje = margen;
     } else {
       newDetalle[index].descuento_porcentaje = 0;
     }
@@ -492,14 +492,14 @@ function NuevaOrdenVenta() {
 
   const handleDescuentoChange = (index, valor) => {
     const newDetalle = [...detalle];
-    const descuento = parseFloat(valor) || 0;
-    newDetalle[index].descuento_porcentaje = descuento;
+    const porcentaje = parseFloat(valor) || 0;
+    newDetalle[index].descuento_porcentaje = porcentaje;
     
-    const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
+    const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
     
-    if (descuento > 0 && precioVenta > 0) {
-      const precioBase = precioVenta * (1 - descuento / 100);
-      newDetalle[index].precio_base = precioBase;
+    if (precioBase > 0) {
+      const nuevoPrecioVenta = precioBase * (1 + (porcentaje / 100));
+      newDetalle[index].precio_venta = parseFloat(nuevoPrecioVenta.toFixed(4));
     }
     
     setDetalle(newDetalle);
@@ -515,7 +515,7 @@ function NuevaOrdenVenta() {
     
     detalle.forEach(item => {
       const precioVenta = parseFloat(item.precio_venta) || 0;
-      const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
+      const valorVenta = item.cantidad * precioVenta; 
       subtotal += valorVenta;
     });
     
@@ -830,7 +830,7 @@ function NuevaOrdenVenta() {
                       <th className="text-right w-24">Cant.</th>
                       <th className="text-right w-28">P. Base</th>
                       <th className="text-right w-28">P. Venta</th>
-                      <th className="text-center w-20">Desc%</th>
+                      <th className="text-center w-20">Margen %</th>
                       <th className="text-right w-28">Subtotal</th>
                       <th className="w-10"></th>
                     </tr>
@@ -841,7 +841,10 @@ function NuevaOrdenVenta() {
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
-                        const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
+                        const valorVenta = item.cantidad * precioVenta;
+                        const margen = parseFloat(item.descuento_porcentaje || 0);
+                        const margenColor = margen < 0 ? 'text-red-600 font-bold' : '';
+                        
                         return (
                           <tr key={index}>
                             <td>
@@ -882,10 +885,10 @@ function NuevaOrdenVenta() {
                             <td>
                               <input 
                                 type="number" 
-                                className="form-input text-center p-1 h-8"
+                                className={`form-input text-center p-1 h-8 ${margenColor}`}
                                 value={parseFloat(item.descuento_porcentaje).toFixed(2)}
                                 onChange={(e) => handleDescuentoChange(index, e.target.value)}
-                                min="0" max="100" step="0.01"
+                                step="0.01"
                                 onWheel={handleWheelDisable}
                               />
                             </td>

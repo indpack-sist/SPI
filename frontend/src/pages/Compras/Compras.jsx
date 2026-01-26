@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, ShoppingCart, Filter, Clock, CheckCircle,
   XCircle, AlertCircle, TrendingUp, Wallet, CreditCard,
-  Calendar, PackageCheck, Truck, Package
+  Calendar, PackageCheck, Truck, Package, Receipt, User,
+  RefreshCw
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -125,6 +126,15 @@ function Compras() {
     return configs[tipo] || configs['Contado'];
   };
 
+  const getFormaPagoConfig = (forma) => {
+    const configs = {
+      'Contado': { clase: 'text-green-700', icono: Wallet, texto: 'Contado' },
+      'Credito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' },
+      'Letras': { clase: 'text-purple-700', icono: Receipt, texto: 'Letras' }
+    };
+    return configs[forma] || configs['Contado'];
+  };
+
   const columns = [
     {
       header: 'N° Compra',
@@ -168,25 +178,53 @@ function Compras() {
       }
     },
     {
-      header: 'Tipo',
-      accessor: 'tipo_compra',
-      width: '100px',
+      header: 'Forma Pago',
+      accessor: 'forma_pago_detalle',
+      width: '110px',
       align: 'center',
       render: (value, row) => {
-        const config = getTipoCompraConfig(value);
+        const config = getFormaPagoConfig(value || row.tipo_compra);
         const Icono = config.icono;
         return (
-          <div className="flex flex-col items-center">
-            <span className={`badge ${config.clase} flex gap-1 items-center`}>
+          <div className="flex flex-col items-center gap-1">
+            <span className={`text-xs font-bold flex gap-1 items-center ${config.clase}`}>
               <Icono size={12} />
-              {value}
+              {config.texto}
             </span>
             {value === 'Credito' && !row.cronograma_definido && (
                 <span className="text-[9px] text-danger font-bold animate-pulse">Sin Cronograma</span>
             )}
+            {value === 'Letras' && !row.letras_registradas && (
+                <span className="text-[9px] text-purple-600 font-bold animate-pulse">Pendiente Registro</span>
+            )}
           </div>
         );
       }
+    },
+    {
+      header: 'Indicadores',
+      accessor: 'usa_fondos_propios',
+      width: '100px',
+      align: 'center',
+      render: (value, row) => (
+        <div className="flex flex-col items-center gap-1">
+          {value === 1 && (
+            <span className="badge badge-purple text-[10px] flex items-center gap-1">
+              <User size={10} /> F.Propios
+            </span>
+          )}
+          {row.estado_reembolso === 'Pendiente' && (
+            <span className="badge badge-warning text-[10px] flex items-center gap-1">
+              <RefreshCw size={10} /> Reembolso
+            </span>
+          )}
+          {row.estado_reembolso === 'Parcial' && (
+            <span className="badge badge-info text-[10px] flex items-center gap-1">
+              <RefreshCw size={10} /> Reem.Parcial
+            </span>
+          )}
+        </div>
+      )
     },
     {
       header: 'Total',

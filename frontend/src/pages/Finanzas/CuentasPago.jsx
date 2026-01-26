@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Edit, Trash2, Wallet, CreditCard, Building2, 
-  DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight, Eye, AlertCircle
+  DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight, Eye, AlertCircle,
+  Receipt, RefreshCw, ShoppingCart
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -21,7 +22,6 @@ function CuentasPago() {
   const [modoEdicion, setModoEdicion] = useState(false);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   
-  // Estado simplificado: Sin límites de crédito ni fechas de renovación
   const [formData, setFormData] = useState({
     nombre: '',
     tipo: 'Banco',
@@ -59,7 +59,6 @@ function CuentasPago() {
       setLoading(true);
       
       if (modoEdicion) {
-        // En edición no enviamos saldo inicial
         const { saldo_inicial, ...dataToUpdate } = formData;
         const response = await cuentasPagoAPI.update(cuentaSeleccionada.id_cuenta, dataToUpdate);
         if (response.data.success) {
@@ -91,7 +90,7 @@ function CuentasPago() {
       numero_cuenta: cuenta.numero_cuenta || '',
       banco: cuenta.banco || '',
       moneda: cuenta.moneda,
-      saldo_inicial: 0, // No se edita el saldo inicial, se hacen ajustes por movimientos
+      saldo_inicial: 0,
       estado: cuenta.estado
     });
     setModoEdicion(true);
@@ -99,7 +98,6 @@ function CuentasPago() {
   };
 
   const handleVerDetalle = (id) => {
-    // Esta ruta debe llevar al componente de detalle (próximo paso)
     navigate(`/finanzas/cuentas/${id}`);
   };
 
@@ -158,7 +156,7 @@ function CuentasPago() {
         const Icon = getTipoIcon(row.tipo);
         return (
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${row.tipo === 'Caja' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+            <div className={`p-2 rounded-lg ${row.tipo === 'Caja' ? 'bg-orange-100 text-orange-600' : row.tipo === 'Tarjeta' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
                 <Icon size={20} />
             </div>
             <div>
@@ -190,18 +188,38 @@ function CuentasPago() {
       )
     },
     {
-      header: 'Flujo Histórico',
-      accessor: 'total_ingresos', // Usamos un accessor dummy
+      header: 'Actividad',
+      accessor: 'total_movimientos',
+      width: '180px',
       render: (_, row) => (
-        <div className="flex flex-col gap-1 text-xs">
-            <div className="flex justify-between items-center w-32">
-                <span className="text-success flex items-center gap-1"><ArrowUpRight size={12}/> Ingresos:</span>
-                <span className="font-medium">{parseFloat(row.total_ingresos).toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted flex items-center gap-1">
+              <ShoppingCart size={12} className="text-blue-600" />
+              Compras:
+            </span>
+            <span className="font-medium text-xs">{row.total_compras || 0}</span>
+          </div>
+          {row.compras_pendientes > 0 && (
+            <div className="flex items-center gap-1 text-xs text-warning">
+              <AlertCircle size={12} />
+              <span className="font-medium">{row.compras_pendientes} pendientes</span>
             </div>
-            <div className="flex justify-between items-center w-32">
-                <span className="text-danger flex items-center gap-1"><ArrowDownRight size={12}/> Egresos:</span>
-                <span className="font-medium">{parseFloat(row.total_egresos).toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+          )}
+          <div className="flex flex-col gap-1 text-xs pt-1 border-t">
+            <div className="flex justify-between items-center">
+              <span className="text-success flex items-center gap-1">
+                <ArrowUpRight size={12}/> Ingresos:
+              </span>
+              <span className="font-medium">{parseFloat(row.total_ingresos || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-danger flex items-center gap-1">
+                <ArrowDownRight size={12}/> Egresos:
+              </span>
+              <span className="font-medium">{parseFloat(row.total_egresos || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+            </div>
+          </div>
         </div>
       )
     },
@@ -215,12 +233,9 @@ function CuentasPago() {
             <div className={`text-lg font-bold ${parseFloat(value) < 0 ? 'text-danger' : 'text-gray-800'}`}>
             {formatearMoneda(value, row.moneda)}
             </div>
-            {row.compras_pendientes > 0 && (
-                <div className="flex items-center justify-end gap-1 text-[11px] text-warning font-medium mt-1">
-                    <AlertCircle size={12} />
-                    {row.compras_pendientes} compras por pagar
-                </div>
-            )}
+            <div className="text-xs text-muted mt-1">
+              {row.total_movimientos || 0} movimientos
+            </div>
         </div>
       )
     },
@@ -262,9 +277,11 @@ function CuentasPago() {
     return <Loading message="Sincronizando cuentas y saldos..." />;
   }
 
-  // Cálculos para las tarjetas superiores usando datos reales
   const totalPEN = cuentas.filter(c => c.moneda === 'PEN').reduce((sum, c) => sum + parseFloat(c.saldo_actual || 0), 0);
   const totalUSD = cuentas.filter(c => c.moneda === 'USD').reduce((sum, c) => sum + parseFloat(c.saldo_actual || 0), 0);
+
+  const totalCompras = cuentas.reduce((sum, c) => sum + (parseInt(c.total_compras) || 0), 0);
+  const comprasPendientes = cuentas.reduce((sum, c) => sum + (parseInt(c.compras_pendientes) || 0), 0);
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -291,18 +308,17 @@ function CuentasPago() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* Tarjetas de Resumen Global */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="card bg-gradient-to-br from-white to-blue-50 border-l-4 border-primary shadow-sm">
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted uppercase tracking-wider">Saldo Total Soles</p>
-                <h3 className={`text-3xl font-bold mt-2 ${totalPEN < 0 ? 'text-danger' : 'text-gray-800'}`}>
+                <h3 className={`text-2xl font-bold mt-2 ${totalPEN < 0 ? 'text-danger' : 'text-gray-800'}`}>
                     S/ {totalPEN.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                 </h3>
               </div>
-              <div className="p-4 bg-white rounded-full shadow-sm">
+              <div className="p-3 bg-white rounded-full shadow-sm">
                 <span className="font-bold text-xl text-primary">S/</span>
               </div>
             </div>
@@ -314,12 +330,42 @@ function CuentasPago() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted uppercase tracking-wider">Saldo Total Dólares</p>
-                <h3 className={`text-3xl font-bold mt-2 ${totalUSD < 0 ? 'text-danger' : 'text-gray-800'}`}>
+                <h3 className={`text-2xl font-bold mt-2 ${totalUSD < 0 ? 'text-danger' : 'text-gray-800'}`}>
                     $ {totalUSD.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                 </h3>
               </div>
-              <div className="p-4 bg-white rounded-full shadow-sm">
+              <div className="p-3 bg-white rounded-full shadow-sm">
                 <span className="font-bold text-xl text-success">$</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card border-l-4 border-blue-500">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted uppercase tracking-wider">Total Compras</p>
+                <h3 className="text-2xl font-bold mt-2 text-blue-700">{totalCompras}</h3>
+                <p className="text-xs text-muted mt-1">Registradas</p>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
+                <ShoppingCart size={24} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card border-l-4 border-warning">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted uppercase tracking-wider">Compras Pendientes</p>
+                <h3 className="text-2xl font-bold mt-2 text-warning">{comprasPendientes}</h3>
+                <p className="text-xs text-muted mt-1">Por pagar</p>
+              </div>
+              <div className="p-3 bg-yellow-50 rounded-lg text-warning">
+                <AlertCircle size={24} />
               </div>
             </div>
           </div>
@@ -364,7 +410,7 @@ function CuentasPago() {
             </div>
 
             <div className="form-group">
-              <label className="form-label font-medium">Nombre Identificativo *</label>
+              <label className="form-label font-medium">Nombre Identificativo</label>
               <input
                 type="text"
                 className="form-input"
@@ -377,7 +423,7 @@ function CuentasPago() {
 
             <div className="grid grid-cols-2 gap-5">
               <div className="form-group">
-                <label className="form-label font-medium">Tipo de Cuenta *</label>
+                <label className="form-label font-medium">Tipo de Cuenta</label>
                 <select
                   className="form-select"
                   value={formData.tipo}
@@ -386,18 +432,18 @@ function CuentasPago() {
                 >
                   <option value="Banco">Banco</option>
                   <option value="Caja">Caja Efectivo</option>
-                  <option value="Tarjeta">Tarjeta (Crédito/Débito)</option>
+                  <option value="Tarjeta">Tarjeta</option>
                 </select>
               </div>
 
               <div className="form-group">
-                <label className="form-label font-medium">Moneda *</label>
+                <label className="form-label font-medium">Moneda</label>
                 <select
                   className="form-select"
                   value={formData.moneda}
                   onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
                   required
-                  disabled={modoEdicion} // Bloqueamos moneda en edición para evitar inconsistencias
+                  disabled={modoEdicion}
                 >
                   <option value="PEN">Soles (PEN)</option>
                   <option value="USD">Dólares (USD)</option>

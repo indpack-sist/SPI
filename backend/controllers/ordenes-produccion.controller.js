@@ -1044,28 +1044,34 @@ export async function reanudarProduccion(req, res) {
 export async function registrarParcial(req, res) {
   try {
     const { id } = req.params;
-    const { 
-      cantidad_kilos, 
-      cantidad_unidades, 
-      insumos_consumidos, 
-      observaciones 
-    } = req.body;
     
-    const id_registrado_por = req.user.id_usuario; 
-    const fechaActual = getFechaPeru();
+    // 1. SANITIZACIÓN DE ENTRADA (La clave para evitar el error)
+    // Usamos el operador || para asegurar que NUNCA sea undefined
+    const body = req.body || {};
+    
+    let cantidad_kilos = parseFloat(body.cantidad_kilos) || 0;
+    const cantidad_unidades = parseFloat(body.cantidad_unidades) || 0;
+    const observaciones = body.observaciones || null; // Si no hay, pasa null a la BD
+    const insumos_consumidos = Array.isArray(body.insumos_consumidos) ? body.insumos_consumidos : [];
 
-    // 1. Limpieza y valores por defecto (Evita "undefined")
-    let kilosFinal = parseFloat(cantidad_kilos) || 0;
-    const unidadesFinal = parseFloat(cantidad_unidades) || 0;
-    const obsFinal = observaciones || null;
+    // 2. RECUPERACIÓN SEGURA DEL USUARIO
+    // Intentamos leer id_usuario, si no existe probamos 'id', si no 'userId', si no NULL.
+    const id_registrado_por = req.user?.id_usuario || req.user?.id || req.user?.userId || null;
 
-    // 2. Cálculo automático si no hay kilos manuales
-    if (kilosFinal === 0 && insumos_consumidos && Array.isArray(insumos_consumidos) && insumos_consumidos.length > 0) {
-      kilosFinal = insumos_consumidos.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+    if (!id_registrado_por) {
+      console.warn("⚠ ADVERTENCIA: No se pudo obtener el ID del usuario del token. Se registrará como NULL.");
     }
 
+    const fechaActual = getFechaPeru();
+
+    // 3. CÁLCULO AUTOMÁTICO DE KILOS (Tu lógica de negocio)
+    if (cantidad_kilos === 0 && insumos_consumidos.length > 0) {
+      cantidad_kilos = insumos_consumidos.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+    }
+
+    // Validación de estado de la orden
     const ordenCheck = await executeQuery(
-      "SELECT estado, cantidad_planificada, cantidad_producida, cantidad_unidades, cantidad_unidades_producida FROM ordenes_produccion WHERE id_orden = ?",
+      "SELECT estado FROM ordenes_produccion WHERE id_orden = ?",
       [id]
     );
 
@@ -1076,17 +1082,18 @@ export async function registrarParcial(req, res) {
 
     const queries = [];
 
+    // 4. QUERY DE INSERCIÓN (Aquí es donde fallaba antes)
     queries.push({
       sql: `INSERT INTO op_registros_produccion 
             (id_orden, cantidad_registrada, cantidad_unidades_registrada, id_registrado_por, fecha_registro, observaciones) 
             VALUES (?, ?, ?, ?, ?, ?)`,
       params: [
         id, 
-        kilosFinal, 
-        unidadesFinal, 
-        id_registrado_por, 
+        cantidad_kilos, 
+        cantidad_unidades, 
+        id_registrado_por, // Ahora seguro es un ID o null, nunca undefined
         fechaActual, 
-        obsFinal
+        observaciones      // Ahora seguro es texto o null, nunca undefined
       ]
     });
 
@@ -1095,12 +1102,13 @@ export async function registrarParcial(req, res) {
             SET cantidad_producida = cantidad_producida + ?,
                 cantidad_unidades_producida = cantidad_unidades_producida + ?
             WHERE id_orden = ?`,
-      params: [kilosFinal, unidadesFinal, id]
+      params: [cantidad_kilos, cantidad_unidades, id]
     });
 
-    if (insumos_consumidos && Array.isArray(insumos_consumidos) && insumos_consumidos.length > 0) {
+    // 5. PROCESAMIENTO DE INSUMOS
+    if (insumos_consumidos.length > 0) {
       const consumoExistente = await executeQuery(
-        `SELECT id_insumo, cantidad_real_consumida FROM op_consumo_materiales WHERE id_orden = ?`,
+        `SELECT id_insumo FROM op_consumo_materiales WHERE id_orden = ?`,
         [id]
       );
 
@@ -1112,51 +1120,58 @@ export async function registrarParcial(req, res) {
       }
 
       for (const insumo of insumos_consumidos) {
+        // Validación estricta dentro del loop
+        const idInsumo = insumo.id_insumo;
         const cantidad = parseFloat(insumo.cantidad) || 0;
-        
-        if (cantidad > 0) {
-          const insumoExiste = insumosExistentesMap[insumo.id_insumo];
 
-          if (insumoExiste) {
+        // Si el frontend manda un insumo mal formado (sin ID), lo saltamos
+        if (!idInsumo) continue; 
+
+        if (cantidad > 0) {
+          if (insumosExistentesMap[idInsumo]) {
             queries.push({
               sql: `UPDATE op_consumo_materiales 
                     SET cantidad_real_consumida = IFNULL(cantidad_real_consumida, 0) + ? 
                     WHERE id_orden = ? AND id_insumo = ?`,
-              params: [cantidad, id, insumo.id_insumo]
+              params: [cantidad, id, idInsumo]
             });
           } else {
             const prodInfo = await executeQuery(
               'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?',
-              [insumo.id_insumo]
+              [idInsumo]
             );
             
             const costoUnitario = prodInfo.success && prodInfo.data.length > 0 
-              ? parseFloat(prodInfo.data[0].costo_unitario_promedio) 
+              ? parseFloat(prodInfo.data[0].costo_unitario_promedio) || 0 // Prevenimos undefined aquí también
               : 0;
 
             queries.push({
               sql: `INSERT INTO op_consumo_materiales 
                     (id_orden, id_insumo, cantidad_requerida, cantidad_real_consumida, costo_unitario) 
                     VALUES (?, ?, 0, ?, ?)`,
-              params: [id, insumo.id_insumo, cantidad, costoUnitario]
+              params: [id, idInsumo, cantidad, costoUnitario]
             });
           }
 
           queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [cantidad, insumo.id_insumo]
+            params: [cantidad, idInsumo]
           });
         }
       }
     }
 
     const result = await executeTransaction(queries);
-    if (!result.success) return res.status(500).json({ error: result.error });
+    if (!result.success) {
+        // Log para que veas el error real en consola si ocurre
+        console.error("Error SQL Transaction:", result.error); 
+        return res.status(500).json({ error: "Error en base de datos al guardar." });
+    }
 
     res.json({ success: true, message: 'Avance registrado correctamente' });
 
   } catch (error) {
-    console.error('Error en registrarParcial:', error);
+    console.error('Error CRÍTICO en registrarParcial:', error);
     res.status(500).json({ error: error.message });
   }
 }

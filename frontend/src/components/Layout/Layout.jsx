@@ -16,20 +16,30 @@ function Layout({ children }) {
 
   return (
     <div className="layout">
+      {/* 1. Sidebar: Se oculta en el launcher */}
       {!isLauncher && (
         <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
       )}
       
+      {/* 2. Contenedor Principal */}
       <div className={`layout-main ${isLauncher ? 'layout-full' : (sidebarOpen ? 'sidebar-open' : 'sidebar-closed')}`}>
-        <Navbar onToggleSidebar={toggleSidebar} showMenuButton={!isLauncher} />
         
-        <main className="layout-content">
+        {/* 3. Navbar: Se oculta si es launcher */}
+        {!isLauncher && (
+          <Navbar onToggleSidebar={toggleSidebar} showMenuButton={true} />
+        )}
+        
+        {/* 4. Main Content */}
+        <main className={`layout-content ${isLauncher ? 'content-launcher' : ''}`}>
           {children}
         </main>
         
-        <footer className="layout-footer">
-          <p>INDPACK Sistema de Inventario y Producción - {new Date().getFullYear()}</p>
-        </footer>
+        {/* 5. Footer: Se oculta si es launcher */}
+        {!isLauncher && (
+          <footer className="layout-footer">
+            <p>INDPACK Sistema de Inventario y Producción - {new Date().getFullYear()}</p>
+          </footer>
+        )}
       </div>
     </div>
   );

@@ -165,7 +165,8 @@ function Compras() {
       width: '110px',
       align: 'center',
       render: (value, row) => {
-        const config = getFormaPagoConfig(value || row.tipo_compra);
+        const formaPago = row.forma_pago_detalle || row.tipo_compra;
+        const config = getFormaPagoConfig(formaPago);
         const Icono = config.icono;
         return (
           <div className="flex flex-col items-center gap-1">
@@ -173,10 +174,10 @@ function Compras() {
               <Icono size={12} />
               {config.texto}
             </span>
-            {value === 'Credito' && row.cronograma_definido === 0 && (
+            {formaPago === 'Credito' && row.cronograma_definido === 0 && (
                 <span className="text-[9px] text-danger font-bold animate-pulse">Sin Cronograma</span>
             )}
-            {value === 'Letras' && row.letras_registradas === 0 && (
+            {formaPago === 'Letras' && row.letras_registradas === 0 && (
                 <span className="text-[9px] text-purple-600 font-bold animate-pulse">Pendiente Registro</span>
             )}
           </div>

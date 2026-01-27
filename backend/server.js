@@ -160,7 +160,14 @@ app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cu
 app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);
 
 app.use('/api/notificaciones', verificarToken, notificacionesRoutes);
-app.use('/api/archivos', verificarToken, archivosRoutes);
+app.use('/api/archivos', (req, res, next) => {
+    if (!req.headers.authorization && req.query.token) {
+        req.headers.authorization = `Bearer ${req.query.token}`;
+    }
+    next();
+}, verificarToken, archivosRoutes);
+
+
 app.use((req, res) => {
   res.status(404).json({
     error: 'Ruta no encontrada',

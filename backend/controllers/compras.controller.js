@@ -1491,3 +1491,138 @@ export async function getItemsPendientesIngreso(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+export async function cambiarCuentaCompra(req, res) {
+  let connection;
+  try {
+    const { id } = req.params;
+    const { id_nueva_cuenta } = req.body;
+    const id_registrado_por = req.user?.id_empleado || null;
+
+    if (!id_nueva_cuenta) return res.status(400).json({ success: false, error: 'Debe especificar la nueva cuenta' });
+
+    connection = await pool.getConnection();
+    
+    // 1. Obtener datos de la compra y la cuenta actual
+    const [orders] = await connection.query('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
+    if (orders.length === 0) {
+      connection.release();
+      return res.status(404).json({ success: false, error: 'Compra no encontrada' });
+    }
+    const compra = orders[0];
+    const id_cuenta_anterior = compra.id_cuenta_pago;
+
+    // Si es la misma cuenta, no hacemos nada
+    if (id_cuenta_anterior == id_nueva_cuenta) {
+      connection.release();
+      return res.status(400).json({ success: false, error: 'La compra ya está asignada a esta cuenta' });
+    }
+
+    // 2. Validar nueva cuenta
+    const [nuevasCuentas] = await connection.query('SELECT * FROM cuentas_pago WHERE id_cuenta = ?', [id_nueva_cuenta]);
+    if (nuevasCuentas.length === 0) {
+      connection.release();
+      return res.status(404).json({ success: false, error: 'La nueva cuenta no existe' });
+    }
+    const nuevaCuenta = nuevasCuentas[0];
+
+    // Validar moneda (IMPORTANTE: No puedes migrar de una cuenta Soles a una Dólares directamente sin recalcular T.C.)
+    if (compra.moneda !== nuevaCuenta.moneda) {
+        connection.release();
+        return res.status(400).json({ 
+            success: false, 
+            error: `Conflicto de monedas. Compra: ${compra.moneda}, Nueva Cuenta: ${nuevaCuenta.moneda}` 
+        });
+    }
+
+    await connection.beginTransaction();
+
+    try {
+      // 3. MOVER EL DINERO (Si hubo pagos registrados)
+      // Buscamos los movimientos de dinero (Egresos) de esta compra en la cuenta anterior
+      const [movimientos] = await connection.query(
+        'SELECT * FROM movimientos_cuentas WHERE id_orden_compra = ? AND id_cuenta = ? AND tipo_movimiento = "Egreso"', 
+        [id, id_cuenta_anterior]
+      );
+
+      let totalMovido = 0;
+
+      for (const mov of movimientos) {
+        const monto = parseFloat(mov.monto);
+        totalMovido += monto;
+
+        // A. Devolver dinero a la cuenta anterior (Test)
+        await connection.query(
+          'UPDATE cuentas_pago SET saldo_actual = saldo_actual + ? WHERE id_cuenta = ?',
+          [monto, id_cuenta_anterior]
+        );
+
+        // B. Restar dinero a la nueva cuenta (Real)
+        await connection.query(
+          'UPDATE cuentas_pago SET saldo_actual = saldo_actual - ? WHERE id_cuenta = ?',
+          [monto, id_nueva_cuenta]
+        );
+
+        // C. Actualizar el registro del movimiento para que apunte a la nueva cuenta
+        // NOTA: Mantenemos la fecha original para no romper el historial temporal,
+        // pero cambiamos la cuenta asociada.
+        await connection.query(
+          'UPDATE movimientos_cuentas SET id_cuenta = ? WHERE id_movimiento = ?',
+          [id_nueva_cuenta, mov.id_movimiento]
+        );
+        
+        // D. Si existen pagos en la tabla pagos_ordenes_compra (si la usas), actualizarlos también
+        /* await connection.query(
+            'UPDATE pagos_ordenes_compra SET id_cuenta_bancaria_origen = ? WHERE id_orden_compra = ? AND id_cuenta_bancaria_origen = ?',
+            [id_nueva_cuenta, id, id_cuenta_anterior]
+        );
+        */
+      }
+
+      // 4. ACTUALIZAR CABECERAS
+      // Actualizar Orden de Compra
+      await connection.query(
+        `UPDATE ordenes_compra SET 
+            id_cuenta_pago = ?, 
+            observaciones = CONCAT(IFNULL(observaciones, ''), '\n[MIGRACIÓN CUENTA]: De ID ', ?, ' a ID ', ?)
+         WHERE id_orden_compra = ?`,
+        [id_nueva_cuenta, id_cuenta_anterior || 'NULL', id_nueva_cuenta, id]
+      );
+
+      // Actualizar Entradas (si existen)
+      await connection.query(
+        'UPDATE entradas SET id_cuenta_pago = ? WHERE id_orden_compra = ?',
+        [id_nueva_cuenta, id]
+      );
+
+      // Actualizar Pagos de Letras (si hubiera)
+      await connection.query(
+        'UPDATE pagos_letras_compra plc JOIN letras_compra lc ON plc.id_letra = lc.id_letra SET plc.id_cuenta_pago = ? WHERE lc.id_orden_compra = ? AND plc.id_cuenta_pago = ?',
+        [id_nueva_cuenta, id, id_cuenta_anterior]
+      );
+
+      await connection.commit();
+      
+      res.json({ 
+        success: true, 
+        message: 'Cuenta actualizada exitosamente', 
+        data: { 
+            id_orden: id, 
+            cuenta_anterior: id_cuenta_anterior, 
+            cuenta_nueva: id_nueva_cuenta,
+            movimientos_migrados: movimientos.length,
+            monto_ajustado: totalMovido
+        } 
+      });
+
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}

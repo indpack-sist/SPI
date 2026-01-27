@@ -682,7 +682,12 @@ export const comprasAPI = {
   getById: (id) => api.get(`/compras/${id}`),
   create: (data) => api.post('/compras', data),
   update: (id, data) => api.put(`/compras/${id}`, data),
-  cancelar: (id, motivo_cancelacion) => api.patch(`/compras/${id}/cancelar`, { motivo_cancelacion }),
+  
+  // Actualizado para recibir el objeto data directamente { motivo_cancelacion: '...' }
+  cancelar: (id, data) => api.patch(`/compras/${id}/cancelar`, data),
+  
+  // Nueva función para migración de cuentas
+  cambiarCuenta: (id, data) => api.patch(`/compras/${id}/cambiar-cuenta`, data),
 
   getEstadisticas: (params) => api.get('/compras/estadisticas', { params }),
   getAlertas: (params) => api.get('/compras/alertas', { params }),

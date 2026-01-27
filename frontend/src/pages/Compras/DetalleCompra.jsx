@@ -5,7 +5,8 @@ import {
   XCircle, AlertCircle, Building, Calendar,
   CreditCard, DollarSign, TrendingUp,
   PackageCheck, FileText, Plus, Receipt,
-  RefreshCw, PackagePlus, Truck, AlertTriangle
+  RefreshCw, PackagePlus, Truck, AlertTriangle,
+  ArrowRightLeft
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -37,6 +38,7 @@ function DetalleCompra() {
   const [modalRegistrarLetrasOpen, setModalRegistrarLetrasOpen] = useState(false);
   const [modalPagarLetraOpen, setModalPagarLetraOpen] = useState(false);
   const [modalIngresoInventarioOpen, setModalIngresoInventarioOpen] = useState(false);
+  const [modalCambiarCuentaOpen, setModalCambiarCuentaOpen] = useState(false);
 
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState(null);
   const [letraSeleccionada, setLetraSeleccionada] = useState(null);
@@ -67,6 +69,7 @@ function DetalleCompra() {
   });
 
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [nuevaCuentaId, setNuevaCuentaId] = useState('');
   const [cronogramaForm, setCronogramaForm] = useState([]);
   const [letrasForm, setLetrasForm] = useState([]);
   
@@ -99,6 +102,9 @@ function DetalleCompra() {
       
       if (compraRes.data.success) {
         setCompra(compraRes.data.data);
+        if (compraRes.data.data.id_cuenta_pago) {
+            setNuevaCuentaId(compraRes.data.data.id_cuenta_pago);
+        }
       } else {
         setError('Compra no encontrada');
       }
@@ -378,6 +384,21 @@ function DetalleCompra() {
     } catch (err) { setError(err.response?.data?.error || 'Error al cancelar'); } finally { setLoading(false); }
   };
 
+  const handleCambiarCuenta = async () => {
+    if (!nuevaCuentaId) { setError('Seleccione una cuenta'); return; }
+    try {
+        setLoading(true);
+        const response = await comprasAPI.cambiarCuenta(id, { id_nueva_cuenta: nuevaCuentaId });
+        if (response.data.success) {
+            setSuccess('Cuenta actualizada y movimientos migrados');
+            setModalCambiarCuentaOpen(false);
+            await cargarDatos();
+        } else {
+            setError(response.data.error);
+        }
+    } catch (err) { setError(err.response?.data?.error || 'Error al cambiar cuenta'); } finally { setLoading(false); }
+  };
+
   const handleDescargarPDF = async () => {
     try {
       setLoading(true); await comprasAPI.descargarPDF(id); setSuccess('PDF descargado');
@@ -394,6 +415,7 @@ function DetalleCompra() {
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
+  
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -406,7 +428,7 @@ function DetalleCompra() {
             </h1>
             <div className="flex gap-3 text-sm text-muted mt-1">
                 <span className="flex items-center gap-1"><Calendar size={14}/> {formatearFecha(compra.fecha_emision)}</span>
-                <span className={`badge ${compra.estado === 'Recibida' ? 'badge-success' : compra.estado === 'En Tránsito' ? 'badge-info' : 'badge-warning'}`}>{compra.estado}</span>
+                <span className={`badge ${compra.estado === 'Recibida' ? 'badge-success' : compra.estado === 'En Tránsito' ? 'badge-info' : compra.estado === 'Cancelada' ? 'badge-danger' : 'badge-warning'}`}>{compra.estado}</span>
                 {compra.usa_fondos_propios === 1 && (
                   <span className="badge badge-purple">Fondos Propios</span>
                 )}
@@ -414,11 +436,17 @@ function DetalleCompra() {
           </div>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
           <button className="btn btn-outline" onClick={handleDescargarPDF}><Download size={18} /> PDF</button>
           
           {compra.estado !== 'Cancelada' && (
             <>
+              {compra.estado_pago !== 'Pagado' && !compra.usa_fondos_propios && (
+                  <button className="btn btn-outline" onClick={() => setModalCambiarCuentaOpen(true)}>
+                    <ArrowRightLeft size={18} /> Mover Cuenta
+                  </button>
+              )}
+
               {compra.estado_pago !== 'Pagado' && (compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && !compra.usa_fondos_propios && (
                   <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
                     <DollarSign size={18} /> Registrar Pago
@@ -448,7 +476,7 @@ function DetalleCompra() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className={`card mb-6 border-l-4 ${compra.estado_pago === 'Pagado' ? 'border-success' : 'border-warning'}`}>
+      <div className={`card mb-6 border-l-4 ${compra.estado === 'Cancelada' ? 'border-danger' : compra.estado_pago === 'Pagado' ? 'border-success' : 'border-warning'}`}>
         <div className="card-body grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
                 <p className="text-sm text-muted">Total Compra</p>
@@ -466,7 +494,7 @@ function DetalleCompra() {
                 <p className="text-sm text-muted">Vencimiento</p>
                 <div className="flex items-center gap-2">
                     <span className="text-lg font-medium">{formatearFecha(compra.fecha_vencimiento)}</span>
-                    {compra.dias_para_vencer < 0 && <span className="badge badge-danger">Vencido</span>}
+                    {compra.dias_para_vencer < 0 && compra.saldo_pendiente > 0 && <span className="badge badge-danger">Vencido</span>}
                 </div>
             </div>
         </div>
@@ -497,6 +525,18 @@ function DetalleCompra() {
             </div>
           </div>
         </div>
+      )}
+
+      {compra.estado === 'Cancelada' && (
+          <div className="card mb-6 bg-red-50 border border-red-200">
+              <div className="card-body flex items-start gap-3">
+                  <XCircle className="text-red-500 shrink-0" size={24} />
+                  <div>
+                      <h3 className="font-bold text-red-800">Compra Cancelada</h3>
+                      <p className="text-sm text-red-700 mt-1">Esta compra fue anulada y sus movimientos financieros revertidos.</p>
+                  </div>
+              </div>
+          </div>
       )}
 
       <div className="mb-6">
@@ -592,6 +632,16 @@ function DetalleCompra() {
                 </div>
             </div>
 
+            {compra.id_cuenta_pago && !compra.usa_fondos_propios && (
+                <div className="card">
+                    <div className="card-header bg-gray-50/50"><h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuenta de Pago Asignada</h3></div>
+                    <div className="card-body">
+                        <p className="font-medium text-lg">{compra.cuenta_pago || 'Cuenta no encontrada'}</p>
+                        <p className="text-sm text-muted">{compra.tipo_cuenta_pago} - {compra.moneda_cuenta}</p>
+                    </div>
+                </div>
+            )}
+
             {compra.tipo_compra === 'Credito' && compra.forma_pago_detalle !== 'Letras' && (
                 <div className="card">
                     <div className="card-header bg-gray-50/50 flex justify-between items-center">
@@ -612,6 +662,8 @@ function DetalleCompra() {
                                                 <p className="font-medium">{formatearMoneda(cuota.monto_cuota)}</p>
                                                 {cuota.estado === 'Pagada' ? (
                                                     <span className="badge badge-success text-[10px]">Pagada</span>
+                                                ) : cuota.estado === 'Cancelada' ? (
+                                                    <span className="badge badge-danger text-[10px]">Cancelada</span>
                                                 ) : (
                                                     <button className="btn btn-xs btn-primary mt-1" onClick={() => handleAbrirPagarCuota(cuota)}>Pagar</button>
                                                 )}
@@ -653,10 +705,12 @@ function DetalleCompra() {
                       </thead>
                       <tbody>
                           {compra.pagos_realizados.map((pago, i) => (
-                              <tr key={i}>
+                              <tr key={i} className={pago.tipo_movimiento === 'Ingreso' ? 'bg-red-50' : ''}>
                                   <td>{new Date(pago.fecha_movimiento).toLocaleDateString('es-PE')}</td>
                                   <td>
-                                    {pago.es_reembolso === 1 ? (
+                                    {pago.tipo_movimiento === 'Ingreso' ? (
+                                        <span className="badge badge-danger">Anulación</span>
+                                    ) : pago.es_reembolso === 1 ? (
                                       <span className="badge badge-purple flex items-center gap-1 w-fit">
                                         <RefreshCw size={12} /> Reembolso
                                       </span>
@@ -670,7 +724,9 @@ function DetalleCompra() {
                                   </td>
                                   <td className="text-sm">{pago.concepto || '-'}</td>
                                   <td className="text-sm">{pago.referencia || '-'}</td>
-                                  <td className="text-right font-bold text-success">{formatearMoneda(pago.monto)}</td>
+                                  <td className={`text-right font-bold ${pago.tipo_movimiento === 'Ingreso' ? 'text-danger' : 'text-success'}`}>
+                                      {pago.tipo_movimiento === 'Ingreso' ? '-' : ''}{formatearMoneda(pago.monto)}
+                                  </td>
                               </tr>
                           ))}
                       </tbody>
@@ -1111,6 +1167,29 @@ function DetalleCompra() {
             <div className="flex justify-end gap-2">
                 <button className="btn btn-outline" onClick={() => setModalCancelarOpen(false)}>Volver</button>
                 <button className="btn btn-danger" onClick={handleCancelarCompra}>Confirmar Anulación</button>
+            </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={modalCambiarCuentaOpen} onClose={() => setModalCambiarCuentaOpen(false)} title="Cambiar Cuenta de Pago (Migración)">
+        <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                <p className="text-sm text-blue-800">
+                    Esta acción transferirá todos los pagos y la deuda de esta compra a una nueva cuenta.
+                    El dinero pagado será "devuelto" a la cuenta actual y "descontado" de la nueva.
+                </p>
+            </div>
+            <div className="form-group">
+                <label className="form-label">Seleccionar Nueva Cuenta</label>
+                <select className="form-select" value={nuevaCuentaId} onChange={e => setNuevaCuentaId(e.target.value)} required>
+                    <option value="">Seleccione...</option>
+                    {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
+                </select>
+                <p className="text-xs text-muted mt-1">Solo se muestran cuentas de la misma moneda ({compra.moneda})</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+                <button className="btn btn-outline" onClick={() => setModalCambiarCuentaOpen(false)}>Cancelar</button>
+                <button className="btn btn-primary" onClick={handleCambiarCuenta} disabled={loading || !nuevaCuentaId || nuevaCuentaId == compra.id_cuenta_pago}>Confirmar Cambio</button>
             </div>
         </div>
       </Modal>

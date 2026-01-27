@@ -160,7 +160,7 @@ app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cu
 app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);
 
 app.use('/api/notificaciones', verificarToken, notificacionesRoutes);
-
+app.use('/api/archivos', archivosRoutes);
 app.use((req, res) => {
   res.status(404).json({
     error: 'Ruta no encontrada',
@@ -168,7 +168,7 @@ app.use((req, res) => {
     method: req.method
   });
 });
-app.use('/api/archivos', archivosRoutes);
+
 
 app.use((err, req, res, next) => {
   console.error('='.repeat(80));

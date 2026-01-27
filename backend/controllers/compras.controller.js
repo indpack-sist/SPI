@@ -489,43 +489,46 @@ export async function updateCompra(req, res) {
 }
 
 export async function cancelarCompra(req, res) {
+  let connection;
   try {
     const { id } = req.params;
     const { motivo_cancelacion } = req.body;
-    // Capturamos el usuario para registrar quién hizo la anulación
-    const id_registrado_por = req.user?.id_empleado || null; 
+    const id_registrado_por = req.user?.id_empleado || null;
+
+    connection = await pool.getConnection();
+
+    const [orders] = await connection.query('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
     
-    const compraResult = await executeQuery('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
-    if (!compraResult.success || compraResult.data.length === 0) return res.status(404).json({ success: false, error: 'Compra no encontrada' });
-    
-    const compra = compraResult.data[0];
-    if (compra.estado === 'Cancelada') return res.status(400).json({ success: false, error: 'Ya está cancelada' });
-    
-    // NOTA: Se eliminó el bloqueo "if (monto_pagado > 0)..." para permitir la anulación
-    
-    const operations = async (connection) => {
-      // 1. REVERSIÓN DE PAGOS Y DEVOLUCIÓN DE DINERO A CUENTAS
-      // Buscamos todos los egresos asociados a esta compra
+    if (orders.length === 0) {
+      connection.release();
+      return res.status(404).json({ success: false, error: 'Compra no encontrada' });
+    }
+
+    const compra = orders[0];
+    if (compra.estado === 'Cancelada') {
+      connection.release();
+      return res.status(400).json({ success: false, error: 'Ya está cancelada' });
+    }
+
+    await connection.beginTransaction();
+
+    try {
       const [movimientos] = await connection.query(
         'SELECT * FROM movimientos_cuentas WHERE id_orden_compra = ? AND tipo_movimiento = "Egreso"', 
         [id]
       );
 
       for (const mov of movimientos) {
-        // a. Devolvemos el dinero a la cuenta (Saldo actual + Monto anulado)
         await connection.query(
           'UPDATE cuentas_pago SET saldo_actual = saldo_actual + ? WHERE id_cuenta = ?', 
           [mov.monto, mov.id_cuenta]
         );
 
-        // b. Obtenemos el saldo actualizado para el registro
         const [cuentaInfo] = await connection.query(
-            'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ?', 
-            [mov.id_cuenta]
+          'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ?', 
+          [mov.id_cuenta]
         );
-        const nuevoSaldo = cuentaInfo[0].saldo_actual;
-
-        // c. Creamos el contra-asiento (Ingreso por anulación) en el historial
+        
         await connection.query(`
           INSERT INTO movimientos_cuentas (
             id_cuenta, tipo_movimiento, monto, concepto, referencia, 
@@ -534,16 +537,15 @@ export async function cancelarCompra(req, res) {
         `, [
           mov.id_cuenta, 
           mov.monto, 
-          `ANULACIÓN COMPRA ${compra.numero_orden}`, // Concepto claro
-          `REF-${mov.id_movimiento}`, // Referencia al movimiento original
+          `ANULACIÓN COMPRA ${compra.numero_orden}`, 
+          `REF-${mov.id_movimiento}`, 
           id, 
-          parseFloat(nuevoSaldo) - parseFloat(mov.monto), // Saldo antes de devolver
-          nuevoSaldo, 
+          parseFloat(cuentaInfo[0].saldo_actual) - parseFloat(mov.monto), 
+          cuentaInfo[0].saldo_actual, 
           id_registrado_por
         ]);
       }
 
-      // 2. ACTUALIZACIÓN DE ESTADOS DE LA COMPRA
       await connection.query(
         `UPDATE ordenes_compra SET 
             estado='Cancelada', 
@@ -554,13 +556,8 @@ export async function cancelarCompra(req, res) {
         [motivo_cancelacion || 'Sin motivo', id]
       );
 
-      // 3. CANCELACIÓN DE CUOTAS Y LETRAS
       await connection.query(`UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=?`, [id]);
-      
-      // Si tienes tabla de letras, también las cancelamos
-      // await connection.query(`UPDATE letras_compra SET estado='Cancelada' WHERE id_orden_compra=?`, [id]); 
 
-      // 4. REVERSIÓN DE STOCK (Lógica corregida previamente)
       const [detalles] = await connection.query(
         'SELECT id_producto, cantidad_recibida FROM detalle_orden_compra WHERE id_orden_compra = ?', 
         [id]
@@ -574,13 +571,17 @@ export async function cancelarCompra(req, res) {
           );
         }
       }
-      return { cancelada: true, pagos_revertidos: movimientos.length };
-    };
-    
-    const result = await executeTransaction(operations);
-    if (!result.success) return res.status(500).json({ success: false, error: result.error });
-    
-    res.json({ success: true, message: 'Compra y pagos anulados exitosamente' });
+
+      await connection.commit();
+      res.json({ success: true, message: 'Compra y pagos anulados exitosamente' });
+
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: error.message });

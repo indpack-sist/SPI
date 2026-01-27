@@ -2,7 +2,7 @@ import {
   Home, Users, Truck, Building2, UserCircle2, 
   Package, Search, Factory, Calendar, FileText, 
   Tags, ShoppingCart, FileCheck, ShoppingBag, 
-  CreditCard, Banknote, FileInput, ArrowDownToLine, // <--- Asegúrate de importar FileInput
+  CreditCard, Banknote, FileInput, ArrowDownToLine, 
   ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet
 } from 'lucide-react';
 
@@ -40,8 +40,8 @@ export const menuConfig = [
     title: 'Ventas',
     items: [
       { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
+      { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },
-      { path: '/ventas/guias-remision', icon: FileCheck, label: 'Guías', modulo: 'guiasRemision', color: '#8E44AD' },
     ]
   },
   {

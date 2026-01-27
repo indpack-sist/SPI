@@ -416,6 +416,13 @@ function DetalleCompra() {
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
   
+  // =========================================================================================
+  // FIX: Normalizar tipos de compra para evitar errores por tildes ("Credito" vs "Crédito")
+  // =========================================================================================
+  const esCredito = compra.tipo_compra === 'Credito' || compra.tipo_compra === 'Crédito';
+  const esContado = compra.tipo_compra === 'Contado';
+  const esLetras = compra.forma_pago_detalle === 'Letras';
+
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -447,19 +454,19 @@ function DetalleCompra() {
                   </button>
               )}
 
-              {compra.estado_pago !== 'Pagado' && (compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Crédito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && !compra.usa_fondos_propios && (
+              {compra.estado_pago !== 'Pagado' && (esContado || (esCredito && !compra.cronograma_definido && !esLetras)) && !compra.usa_fondos_propios && (
                   <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
                     <DollarSign size={18} /> Registrar Pago
                   </button>
               )}
 
-              {compra.estado_pago !== 'Pagado' && compra.tipo_compra === 'Crédito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras' && (
+              {compra.estado_pago !== 'Pagado' && esCredito && !compra.cronograma_definido && !esLetras && (
                   <button className="btn btn-warning text-white" onClick={handleAbrirCronograma}>
                     <FileText size={18} /> Definir Letras
                   </button>
               )}
 
-              {compra.estado_pago !== 'Pagado' && compra.forma_pago_detalle === 'Letras' && !compra.letras_registradas && (
+              {compra.estado_pago !== 'Pagado' && esLetras && !compra.letras_registradas && (
                   <button className="btn btn-purple text-white" onClick={handleAbrirRegistrarLetras}>
                     <Receipt size={18} /> Registrar Letras
                   </button>
@@ -642,7 +649,7 @@ function DetalleCompra() {
                 </div>
             )}
 
-            {compra.tipo_compra === 'Crédito' && compra.forma_pago_detalle !== 'Letras' && (
+            {esCredito && !esLetras && (
                 <div className="card">
                     <div className="card-header bg-gray-50/50 flex justify-between items-center">
                         <h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuotas</h3>

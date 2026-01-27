@@ -369,13 +369,14 @@ function DetalleCompra() {
     if (!motivoCancelacion.trim()) { setError('Indique motivo'); return; }
     try {
       setLoading(true);
-      const response = await comprasAPI.cancelar(id, motivoCancelacion);
+      // Enviamos el motivo como objeto JSON para asegurar compatibilidad
+      const response = await comprasAPI.cancelar(id, { motivo_cancelacion: motivoCancelacion });
       if (response.data.success) {
         setSuccess('Compra cancelada');
         setModalCancelarOpen(false);
         await cargarDatos();
       } else setError(response.data.error);
-    } catch (err) { setError(err.response?.data?.error); } finally { setLoading(false); }
+    } catch (err) { setError(err.response?.data?.error || 'Error al cancelar'); } finally { setLoading(false); }
   };
 
   const handleDescargarPDF = async () => {
@@ -602,7 +603,6 @@ function DetalleCompra() {
                         {compra.cuotas && compra.cuotas.length > 0 ? (
                             <div className="divide-y">
                                 {compra.cuotas.map((cuota) => {
-                                    const saldoC = parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado||0);
                                     return (
                                         <div key={cuota.id_cuota} className="p-3 hover:bg-gray-50 flex justify-between items-center">
                                             <div>

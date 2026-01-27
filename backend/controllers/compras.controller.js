@@ -501,12 +501,15 @@ export async function cancelarCompra(req, res) {
     if (parseFloat(compra.monto_pagado || 0) > 0) return res.status(400).json({ success: false, error: 'No se puede cancelar una compra con pagos' });
     
     const operations = async (connection) => {
-      await connection.query(`UPDATE ordenes_compra SET estado='Cancelada', observaciones=CONCAT(COALESCE(observaciones,''), '\n[CANCELADA] ', ?) WHERE id_orden_compra=?`, [motivo_cancelacion||'Sin motivo', id]);
+      await connection.query(`UPDATE ordenes_compra SET estado='Cancelada', observaciones=CONCAT(COALESCE(observaciones,''), '\n[CANCELADA] ', ?) WHERE id_orden_compra=?`, [motivo_cancelacion || 'Sin motivo', id]);
       await connection.query(`UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=? AND estado='Pendiente'`, [id]);
       
-      const [detalles] = await connection.query('SELECT id_producto, cantidad FROM detalle_orden_compra WHERE id_orden_compra = ?', [id]);
+      const [detalles] = await connection.query('SELECT id_producto, cantidad_recibida FROM detalle_orden_compra WHERE id_orden_compra = ?', [id]);
+      
       for (const d of detalles) {
-        await connection.query('UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?', [d.cantidad, d.id_producto]);
+        if (parseFloat(d.cantidad_recibida) > 0) {
+          await connection.query('UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?', [d.cantidad_recibida, d.id_producto]);
+        }
       }
       return { cancelada: true };
     };

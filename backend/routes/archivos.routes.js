@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.get('/pdf-proxy', async (req, res) => {
   try {
-    const { url } = req.query;
+    let { url } = req.query;
 
     if (!url) {
       return res.status(400).json({ error: 'URL requerida' });
@@ -15,13 +15,20 @@ router.get('/pdf-proxy', async (req, res) => {
       return res.status(403).json({ error: 'URL no permitida' });
     }
 
-    const response = await fetch(url, {
+    // Limpieza: Reemplaza fl_attachment por upload para evitar errores de descarga forzada
+    let cleanUrl = url.replace('/fl_attachment/', '/upload/');
+
+    // Manejo de caracteres especiales como los paréntesis (1) en la URL
+    cleanUrl = encodeURI(decodeURIComponent(cleanUrl));
+
+    const response = await fetch(cleanUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       }
     });
 
     if (!response.ok) {
+      console.error(`Error en origen (${response.status}): ${cleanUrl}`);
       return res.status(404).json({ error: 'Archivo no encontrado en origen' });
     }
 
@@ -35,7 +42,7 @@ router.get('/pdf-proxy', async (req, res) => {
     response.body.pipe(res);
 
   } catch (error) {
-    console.error('Error al servir PDF:', error);
+    console.error('Error al servir archivo:', error);
     res.status(500).json({ error: 'Error al cargar archivo' });
   }
 });

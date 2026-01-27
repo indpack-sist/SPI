@@ -2,7 +2,7 @@ import {
   Home, Users, Truck, Building2, UserCircle2, 
   Package, Search, Factory, Calendar, FileText, 
   Tags, ShoppingCart, FileCheck, ShoppingBag, 
-  CreditCard, Banknote, FileInput, ArrowDownToLine, 
+  CreditCard, Banknote, FileInput, ArrowDownToLine, // <--- Asegúrate de importar FileInput
   ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet
 } from 'lucide-react';
 
@@ -55,6 +55,7 @@ export const menuConfig = [
     items: [
       { path: '/finanzas/cuentas-pago', icon: CreditCard, label: 'Pagos', modulo: 'cuentasPago', color: '#2C3E50' },
       { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Cobranzas', modulo: 'pagosCobranzas', color: '#27AE60' },
+      { path: '/solicitudes-credito', icon: FileInput, label: 'Créditos', modulo: 'solicitudesCredito', color: '#5D6D7E' }
     ]
   },
   {

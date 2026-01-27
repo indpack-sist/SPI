@@ -1,64 +1,92 @@
+/* AppLauncher.css */
+
 .launcher-container {
   padding: 40px;
-  background-color: #f0f2f5; /* Fondo gris claro tipo Odoo */
-  min-height: calc(100vh - 60px); /* Ajustar según tu header */
+  /* Altura mínima restando el navbar (ajusta 60px si tu navbar es más alto/bajo) */
+  min-height: calc(100vh - 60px); 
+  
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center; /* Centra el contenido verticalmente */
+
+  /* --- CONFIGURACIÓN DE FONDO --- */
+  /* Capa negra al 60% (0.6) sobre la imagen para que los iconos resalten */
+  background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)),
+              url('/fondomenu.jpg'); /* Busca en la carpeta public */
+  
+  background-size: cover;      /* Cubre toda la pantalla */
+  background-position: center; /* Centra la imagen */
+  background-repeat: no-repeat;
 }
 
 .launcher-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 20px;
+  /* Aumentamos el ancho mínimo de columna a 160px para que quepan los iconos grandes */
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 30px; /* Más espacio entre iconos */
   width: 100%;
-  max-width: 1000px; /* Limitar ancho para que no se vea tan disperso */
+  max-width: 1200px; /* Un poco más ancho que antes */
 }
 
 .launcher-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   text-decoration: none;
-  color: #4b5563;
-  transition: transform 0.2s ease, filter 0.2s;
-  padding: 10px;
-  border-radius: 8px;
+  color: #fff; /* Texto blanco base */
+  transition: transform 0.2s ease, background-color 0.2s;
+  padding: 15px;
+  border-radius: 12px;
 }
 
 .launcher-card:hover {
   transform: translateY(-5px);
-  background-color: rgba(255,255,255, 0.5); /* Efecto sutil al pasar mouse */
+  /* Fondo blanco semitransparente al pasar el mouse */
+  background-color: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(5px); /* Opcional: efecto borroso bonito */
 }
 
-/* El cuadro del icono */
+/* El cuadro de color que envuelve el icono */
 .icon-wrapper {
-  width: 70px;
-  height: 70px;
-  border-radius: 12px;
+  /* TAMAÑO AUMENTADO PARA ICONOS GRANDES */
+  width: 110px;
+  height: 110px;
+  border-radius: 20px; /* Bordes más redondeados estilo App */
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  margin-bottom: 15px; /* Más separación con el texto */
+  
+  /* Sombra para darle profundidad sobre el fondo */
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+
+.launcher-card:hover .icon-wrapper {
+  transform: scale(1.05); /* El icono crece un poquito al pasar el mouse */
 }
 
 .app-label {
-  font-size: 0.9rem;
+  font-size: 1.1rem; /* Texto un poco más grande */
   font-weight: 600;
   text-align: center;
-  color: #333;
+  color: #ffffff; /* Blanco puro */
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8); /* Sombra negra para leerse sobre cualquier foto */
+  line-height: 1.2;
 }
 
 .launcher-footer {
-  margin-top: 50px;
+  margin-top: 60px;
   text-align: center;
-  color: #888;
-  font-size: 0.8rem;
+  color: #dddddd; /* Gris muy claro para el footer */
+  font-size: 0.85rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .subscription-text {
-  color: #16A085;
+  color: #48C9B0; /* Un verde agua que resalta sobre oscuro */
+  font-weight: 500;
   margin-top: 5px;
 }

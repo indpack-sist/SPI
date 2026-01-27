@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Package, X } from 'lucide-react'; // Solo importamos los iconos estructurales
+import { Package, X, LayoutGrid } from 'lucide-react'; // <--- 1. Agregamos LayoutGrid
 import { usePermisos } from '../../context/PermisosContext';
-import { menuConfig } from '../../config/menuConfig'; // <--- Aquí importamos la configuración central
+import { menuConfig } from '../../config/menuConfig';
 import './Sidebar.css';
 
 function Sidebar({ isOpen, onToggle }) {
@@ -46,11 +46,32 @@ function Sidebar({ isOpen, onToggle }) {
         </div>
 
         <nav className="sidebar-nav">
+          
+          {/* --- 2. BOTÓN DE MENÚ DE APPS (Encima de todo) --- */}
+          <div className="sidebar-section">
+            <ul className="sidebar-menu">
+              <li>
+                <Link
+                  to="/"
+                  className={`sidebar-link ${location.pathname === '/' ? 'active' : ''}`}
+                  style={{ 
+                    backgroundColor: 'rgba(0,0,0,0.03)', // Un fondo sutil para destacarlo
+                    marginBottom: '10px' // Separación del resto de menús
+                  }}
+                >
+                  <LayoutGrid size={22} color="#4b5563" /> {/* Icono de Apps */}
+                  <span style={{ fontWeight: '700', color: '#374151' }}>Menú Principal</span>
+                </Link>
+              </li>
+            </ul>
+            {/* Línea divisoria opcional para separar visualmente */}
+            <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '0 15px 15px 15px' }}></div>
+          </div>
+          {/* ------------------------------------------------ */}
+
           {menuConfig.map((section, idx) => {
-            // Filtramos los items según los permisos del usuario
             const itemsVisibles = section.items.filter(item => tienePermiso(item.modulo));
             
-            // Si la sección queda vacía por falta de permisos, no la renderizamos
             if (itemsVisibles.length === 0) {
               return null;
             }
@@ -60,7 +81,6 @@ function Sidebar({ isOpen, onToggle }) {
                 <div className="sidebar-section-title">{section.title}</div>
                 <ul className="sidebar-menu">
                   {itemsVisibles.map((item) => {
-                    // Extraemos el componente Icon que viene en la config
                     const Icon = item.icon;
                     
                     return (
@@ -68,8 +88,6 @@ function Sidebar({ isOpen, onToggle }) {
                         <Link
                           to={item.path}
                           className={`sidebar-link ${isActive(item.path) ? 'active' : ''}`}
-                          // Opcional: Si quieres que el sidebar se cierre en móvil al hacer click
-                          // onClick={() => window.innerWidth < 768 && onToggle()} 
                         >
                           <Icon size={20} />
                           <span>{item.label}</span>

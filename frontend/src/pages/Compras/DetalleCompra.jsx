@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Edit, Download, ShoppingCart, CheckCircle,
-  XCircle, Clock, AlertCircle, Building, Calendar,
-  MapPin, CreditCard, Wallet, DollarSign, TrendingUp,
-  ArrowRightLeft, PackageCheck, FileText, Plus, Receipt,
-  User, RefreshCw, PackagePlus, Truck
+  ArrowLeft, Download, ShoppingCart, 
+  XCircle, AlertCircle, Building, Calendar,
+  CreditCard, DollarSign, TrendingUp,
+  PackageCheck, FileText, Plus, Receipt,
+  RefreshCw, PackagePlus, Truck, AlertTriangle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -369,10 +369,9 @@ function DetalleCompra() {
     if (!motivoCancelacion.trim()) { setError('Indique motivo'); return; }
     try {
       setLoading(true);
-      // Enviamos el motivo como objeto JSON para asegurar compatibilidad
       const response = await comprasAPI.cancelar(id, { motivo_cancelacion: motivoCancelacion });
       if (response.data.success) {
-        setSuccess('Compra cancelada');
+        setSuccess('Compra cancelada y reversiones ejecutadas');
         setModalCancelarOpen(false);
         await cargarDatos();
       } else setError(response.data.error);
@@ -418,28 +417,28 @@ function DetalleCompra() {
         <div className="flex gap-2">
           <button className="btn btn-outline" onClick={handleDescargarPDF}><Download size={18} /> PDF</button>
           
-          {compra.estado !== 'Cancelada' && compra.estado_pago !== 'Pagado' && (
+          {compra.estado !== 'Cancelada' && (
             <>
-              {(compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && !compra.usa_fondos_propios && (
+              {compra.estado_pago !== 'Pagado' && (compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && !compra.usa_fondos_propios && (
                   <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
                     <DollarSign size={18} /> Registrar Pago
                   </button>
               )}
 
-              {compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras' && (
+              {compra.estado_pago !== 'Pagado' && compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras' && (
                   <button className="btn btn-warning text-white" onClick={handleAbrirCronograma}>
                     <FileText size={18} /> Definir Letras
                   </button>
               )}
 
-              {compra.forma_pago_detalle === 'Letras' && !compra.letras_registradas && (
+              {compra.estado_pago !== 'Pagado' && compra.forma_pago_detalle === 'Letras' && !compra.letras_registradas && (
                   <button className="btn btn-purple text-white" onClick={handleAbrirRegistrarLetras}>
                     <Receipt size={18} /> Registrar Letras
                   </button>
               )}
               
               <button className="btn btn-outline text-danger border-danger hover:bg-danger/10" onClick={() => setModalCancelarOpen(true)}>
-                <XCircle size={18} /> Cancelar
+                <XCircle size={18} /> Cancelar / Anular
               </button>
             </>
           )}
@@ -1081,13 +1080,37 @@ function DetalleCompra() {
         </form>
       </Modal>
 
-      <Modal isOpen={modalCancelarOpen} onClose={() => setModalCancelarOpen(false)} title="Cancelar Compra">
+      <Modal isOpen={modalCancelarOpen} onClose={() => setModalCancelarOpen(false)} title="Cancelar Compra y Anular Movimientos">
         <div className="space-y-4">
-            <p className="text-sm text-muted">¿Está seguro? Esta acción revertirá el stock.</p>
-            <textarea className="form-textarea" placeholder="Motivo..." value={motivoCancelacion} onChange={e => setMotivoCancelacion(e.target.value)} required />
+            <div className="bg-red-50 border border-red-200 rounded p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="text-red-500 shrink-0" size={24} />
+                <div className="text-sm text-red-700">
+                  <p className="font-bold mb-2">Advertencia: Esta acción es irreversible</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Se revertirá el stock de los productos ingresados.</li>
+                    <li>Se anularán todos los pagos, generando devoluciones a las cuentas de origen.</li>
+                    <li>Se cancelarán todas las cuotas y letras pendientes.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Motivo de la cancelación / anulación</label>
+              <textarea 
+                className="form-textarea" 
+                placeholder="Indique la razón..." 
+                value={motivoCancelacion} 
+                onChange={e => setMotivoCancelacion(e.target.value)} 
+                required 
+                rows="3"
+              />
+            </div>
+            
             <div className="flex justify-end gap-2">
                 <button className="btn btn-outline" onClick={() => setModalCancelarOpen(false)}>Volver</button>
-                <button className="btn btn-danger" onClick={handleCancelarCompra}>Confirmar Cancelación</button>
+                <button className="btn btn-danger" onClick={handleCancelarCompra}>Confirmar Anulación</button>
             </div>
         </div>
       </Modal>

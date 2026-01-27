@@ -1,0 +1,64 @@
+.launcher-container {
+  padding: 40px;
+  background-color: #f0f2f5; /* Fondo gris claro tipo Odoo */
+  min-height: calc(100vh - 60px); /* Ajustar según tu header */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 1000px; /* Limitar ancho para que no se vea tan disperso */
+}
+
+.launcher-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: #4b5563;
+  transition: transform 0.2s ease, filter 0.2s;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.launcher-card:hover {
+  transform: translateY(-5px);
+  background-color: rgba(255,255,255, 0.5); /* Efecto sutil al pasar mouse */
+}
+
+/* El cuadro del icono */
+.icon-wrapper {
+  width: 70px;
+  height: 70px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.app-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  color: #333;
+}
+
+.launcher-footer {
+  margin-top: 50px;
+  text-align: center;
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.subscription-text {
+  color: #16A085;
+  margin-top: 5px;
+}

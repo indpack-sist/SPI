@@ -1,88 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  Home, Users, Truck, Building2, UserCircle2, 
-  Package, BarChart3, ArrowDownToLine, ArrowUpFromLine, 
-  ArrowLeftRight, Factory, X,
-  FileText, ShoppingCart, FileCheck, ShoppingBag,
-  CreditCard, Banknote, Search, 
-  Calendar, FileInput, Tags, FileSpreadsheet
-} from 'lucide-react';
+import { Package, X } from 'lucide-react'; // Solo importamos los iconos estructurales
 import { usePermisos } from '../../context/PermisosContext';
+import { menuConfig } from '../../config/menuConfig'; // <--- Aquí importamos la configuración central
 import './Sidebar.css';
 
 function Sidebar({ isOpen, onToggle }) {
   const location = useLocation();
   const { rol, tienePermiso } = usePermisos();
-
-  const menuItems = [
-    {
-      title: 'Principal',
-      items: [
-        { path: '/dashboard', icon: Home, label: 'Dashboard', modulo: 'dashboard' }
-      ]
-    },
-    {
-      title: 'Módulos Maestros',
-      items: [
-        { path: '/empleados', icon: Users, label: 'Empleados', modulo: 'empleados' },
-        { path: '/flota', icon: Truck, label: 'Flota', modulo: 'flota' },
-        { path: '/proveedores', icon: Building2, label: 'Proveedores', modulo: 'proveedores' },
-        { path: '/clientes', icon: UserCircle2, label: 'Clientes', modulo: 'clientes' }
-      ]
-    },
-    {
-      title: 'Productos',
-      items: [
-        { path: '/productos', icon: Package, label: 'Catálogo de Productos', modulo: 'productos' },
-        { path: '/productos/consulta-stock', icon: Search, label: 'Consulta de Stock', modulo: 'consultarStock' }
-      ]
-    },
-    {
-      title: 'Producción',
-      items: [
-        { path: '/produccion/ordenes', icon: Factory, label: 'Órdenes de Producción', modulo: 'ordenesProduccion' },
-        { path: '/produccion/calendario', icon: Calendar, label: 'Calendario', modulo: 'ordenesProduccion' } 
-      ]
-    },
-    {
-      title: 'Ventas',
-      items: [
-        { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones' },
-        { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones' },
-        { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Órdenes de Venta', modulo: 'ordenesVenta' },
-        { path: '/ventas/guias-remision', icon: FileCheck, label: 'Guías de Remisión', modulo: 'guiasRemision' },
-        { path: '/ventas/guias-transportista', icon: Truck, label: 'Guías de Transportista', modulo: 'guiasTransportista' }
-      ]
-    },
-    {
-      title: 'Compras',
-      items: [
-        { path: '/compras', icon: ShoppingBag, label: 'Compras', modulo: 'compras' }
-      ]
-    },
-    {
-      title: 'Finanzas',
-      items: [
-        { path: '/finanzas/cuentas-pago', icon: CreditCard, label: 'Cuentas por Pagar', modulo: 'cuentasPago' },
-        { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Pagos y Cobranzas', modulo: 'pagosCobranzas' },
-        { path: '/solicitudes-credito', icon: FileInput, label: 'Solicitudes de Crédito', modulo: 'solicitudesCredito' }
-      ]
-    },
-    {
-      title: 'Inventario',
-      items: [
-        { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas' },
-        { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas' },
-        { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias', modulo: 'transferencias' }
-      ]
-    },
-    {
-      title: 'Reportes & Contabilidad', // Nueva Sección
-      items: [
-        { path: '/reportes/sire', icon: FileSpreadsheet, label: 'Reportes SIRE', modulo: 'reportes' }
-      ]
-    }
-  ];
 
   const isActive = (path) => location.pathname === path;
 
@@ -122,9 +46,11 @@ function Sidebar({ isOpen, onToggle }) {
         </div>
 
         <nav className="sidebar-nav">
-          {menuItems.map((section, idx) => {
+          {menuConfig.map((section, idx) => {
+            // Filtramos los items según los permisos del usuario
             const itemsVisibles = section.items.filter(item => tienePermiso(item.modulo));
             
+            // Si la sección queda vacía por falta de permisos, no la renderizamos
             if (itemsVisibles.length === 0) {
               return null;
             }
@@ -134,6 +60,7 @@ function Sidebar({ isOpen, onToggle }) {
                 <div className="sidebar-section-title">{section.title}</div>
                 <ul className="sidebar-menu">
                   {itemsVisibles.map((item) => {
+                    // Extraemos el componente Icon que viene en la config
                     const Icon = item.icon;
                     
                     return (
@@ -141,6 +68,8 @@ function Sidebar({ isOpen, onToggle }) {
                         <Link
                           to={item.path}
                           className={`sidebar-link ${isActive(item.path) ? 'active' : ''}`}
+                          // Opcional: Si quieres que el sidebar se cierre en móvil al hacer click
+                          // onClick={() => window.innerWidth < 768 && onToggle()} 
                         >
                           <Icon size={20} />
                           <span>{item.label}</span>

@@ -6,6 +6,7 @@ import { ProtectedRoute as ProtectedRouteWithPermiso } from './components/Protec
 import { RedirectToFirstAvailable } from './components/RedirectToFirstAvailable';
 import Login from './pages/Auth/Login';
 import Layout from './components/Layout/Layout';
+import AppLauncher from './pages/Home/AppLauncher';
 
 import Dashboard from './pages/Dashboard/Dashboard';
 
@@ -53,7 +54,6 @@ import CuentasPago from './pages/Finanzas/CuentasPago';
 import DetalleCuenta from './pages/Finanzas/DetalleCuenta';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
 
-// Nuevo Import para Reportes SIRE
 import ReportesSIRE from './pages/Reportes/ReportesSIRE';
 
 function App() {
@@ -70,7 +70,7 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Routes>
-                      <Route path="/" element={<RedirectToFirstAvailable />} />
+                      <Route path="/" element={<AppLauncher />} />
                       
                       <Route 
                         path="/dashboard" 
@@ -424,7 +424,6 @@ function App() {
                         } 
                       />
 
-                      {/* RUTA DE REPORTES SIRE */}
                       <Route 
                         path="/reportes/sire" 
                         element={

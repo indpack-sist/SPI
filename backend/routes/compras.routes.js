@@ -23,7 +23,8 @@ import {
   registrarReembolsoComprador,
   registrarIngresoInventario,
   getIngresosCompra,
-  getItemsPendientesIngreso
+  getItemsPendientesIngreso,
+  cambiarCuentaCompra
 } from '../controllers/compras.controller.js';
 
 const router = express.Router();
@@ -60,5 +61,6 @@ router.post('/:id/cuotas/:idCuota/pagar', verificarToken, pagarCuota);
 router.get('/:id', verificarToken, getCompraById);
 router.put('/:id', verificarToken, updateCompra);
 router.patch('/:id/cancelar', verificarToken, cancelarCompra);
+router.patch('/:id/cambiar-cuenta', verificarToken, cambiarCuentaCompra);
 
 export default router;

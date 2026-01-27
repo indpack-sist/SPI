@@ -1,6 +1,11 @@
 import { v2 as cloudinary } from 'cloudinary';
+import multer from 'multer'; //
 
-// Configuración centralizada (usando las variables de Render)
+// Configuración de Multer para recibir archivos en memoria
+const storage = multer.memoryStorage(); //
+export const uploadMiddleware = multer({ storage: storage }); // ESTO ES LO QUE FALTA
+
+// Configuración de Cloudinary (Render usará estas variables automáticamente)
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -9,17 +14,15 @@ cloudinary.config({
 
 export const subirArchivoACloudinary = async (file, folder = 'indpack_solicitudes') => {
   try {
-    // Determinamos si es imagen o PDF para aplicar la optimización
     const esImagen = file.mimetype.startsWith('image/');
     
     const opciones = {
       folder: folder,
-      resource_type: esImagen ? 'image' : 'raw', // 'raw' es vital para PDFs
+      resource_type: esImagen ? 'image' : 'raw',
       public_id: `${file.originalname.split('.')[0]}_${Date.now()}`,
     };
 
-    // Si es una imagen, aplicamos el Ejemplo 3 (Transform on upload)
-    // Esto limita el tamaño a 1200px y baja el peso sin perder calidad visual
+    // Optimización automática para imágenes (Ejemplo 3 del SDK)
     if (esImagen) {
       opciones.width = 1200;
       opciones.height = 1200;
@@ -27,7 +30,6 @@ export const subirArchivoACloudinary = async (file, folder = 'indpack_solicitude
       opciones.quality = "auto";
     }
 
-    // Retornamos la promesa de subida
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         opciones,

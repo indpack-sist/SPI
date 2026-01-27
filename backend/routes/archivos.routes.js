@@ -15,38 +15,47 @@ router.get('/pdf-proxy', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
 
-    console.log("Procesando URL:", url); // Log para debug en Render
+    console.log("Procesando URL:", url);
 
     const urlParts = decodeURIComponent(url).split('/upload/');
     if (urlParts.length < 2) return res.status(400).json({ error: 'URL mal formada' });
-    
-    // Extraer ID y Tipo
-    const publicId = urlParts[1].replace(/^v\d+\//, '');
-    
-    // CORRECCIÓN CLAVE: Detectar el tipo mirando la URL original
-    // Si la URL tiene "/raw/", es un archivo raw (PDF). Si tiene "/image/", es imagen.
-    const resourceType = url.includes('/raw/') ? 'raw' : 'image'; 
 
-    console.log(`Generando firma para ID: ${publicId} Tipo: ${resourceType}`);
+    // Parte crítica: "v1769.../carpeta/archivo.pdf"
+    const pathAndVersion = urlParts[1];
 
+    // 1. Extraemos la versión real (Ej: 1769530784)
+    const versionMatch = pathAndVersion.match(/^v(\d+)\//);
+    const version = versionMatch ? versionMatch[1] : null;
+
+    // 2. Extraemos el Public ID (quitando la versión)
+    const publicId = pathAndVersion.replace(/^v\d+\//, '');
+
+    // 3. Detectamos el tipo
+    const resourceType = url.includes('/raw/') ? 'raw' : 'image';
+
+    console.log(`Firma para ID: ${publicId} | Versión: ${version} | Tipo: ${resourceType}`);
+
+    // 4. Generamos la URL firmada USANDO LA VERSIÓN EXACTA
+    // Si no pasamos la versión, el SDK pone 'v1' y la firma falla.
     const signedUrl = cloudinary.url(publicId, {
       resource_type: resourceType,
       sign_url: true,
-      secure: true
+      secure: true,
+      version: version // <--- ESTO SOLUCIONA EL 401
     });
 
+    // Petición a Cloudinary
     const response = await fetch(signedUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       timeout: 15000
     });
 
     if (!response.ok) {
-      // Este log aparecerá en tu panel de Render y nos dirá exactamente qué pasó
-      console.error(`Error Cloudinary (${response.status}) al pedir: ${signedUrl}`);
-      return res.status(response.status).json({ error: 'No se pudo acceder al archivo' });
+      console.error(`Error Cloudinary (${response.status}) URL: ${signedUrl}`);
+      return res.status(response.status).json({ error: 'Acceso denegado a Cloudinary' });
     }
 
-    // Forzar cabeceras correctas según el tipo real
+    // Cabeceras correctas
     if (resourceType === 'raw' || publicId.endsWith('.pdf')) {
         res.setHeader('Content-Type', 'application/pdf');
     } else {
@@ -59,8 +68,8 @@ router.get('/pdf-proxy', async (req, res) => {
     response.body.pipe(res);
 
   } catch (error) {
-    console.error('Error Crítico en Proxy:', error.message);
-    res.status(500).json({ error: 'Error al procesar el archivo' });
+    console.error('Error Proxy:', error.message);
+    res.status(500).json({ error: 'Error interno' });
   }
 });
 

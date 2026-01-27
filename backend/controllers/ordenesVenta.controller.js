@@ -428,7 +428,7 @@ export async function ejecutarReservaStock(req, res) {
 
 export async function createOrdenVenta(req, res) {
   try {
-    const {
+    let {
       tipo_comprobante,
       id_cliente,
       id_cotizacion,
@@ -462,8 +462,30 @@ export async function createOrdenVenta(req, res) {
       detalle
     } = req.body;
 
+    if (typeof detalle === 'string') {
+      try {
+        detalle = JSON.parse(detalle);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: 'Formato de detalle inválido' });
+      }
+    }
+
     const id_registrado_por = req.user?.id_empleado || null;
     const nombre_registrador = req.user?.nombre_completo || 'Desconocido';
+
+    let ordenCompraUrl = null;
+    let comprobanteUrl = null;
+
+    if (req.files) {
+      if (req.files.orden_compra && req.files.orden_compra[0]) {
+        const resultadoOC = await subirArchivoACloudinary(req.files.orden_compra[0], 'indpack_ventas/ordenes_compra');
+        ordenCompraUrl = resultadoOC.secure_url;
+      }
+      if (req.files.comprobante && req.files.comprobante[0]) {
+        const resultadoComp = await subirArchivoACloudinary(req.files.comprobante[0], 'indpack_ventas/comprobantes');
+        comprobanteUrl = resultadoComp.secure_url;
+      }
+    }
 
     if (!id_cliente || !detalle || detalle.length === 0) {
       return res.status(400).json({
@@ -666,6 +688,8 @@ export async function createOrdenVenta(req, res) {
         plazo_pago,
         forma_pago,
         orden_compra_cliente,
+        orden_compra_url,
+        comprobante_url,
         id_vehiculo,
         id_conductor,
         tipo_entrega,
@@ -687,7 +711,7 @@ export async function createOrdenVenta(req, res) {
         estado,
         estado_verificacion,
         stock_reservado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
     `, [
       numeroOrden,
       tipoComp,
@@ -707,6 +731,8 @@ export async function createOrdenVenta(req, res) {
       plazo_pago,
       forma_pago,
       orden_compra_cliente || null,
+      ordenCompraUrl,
+      comprobanteUrl,
       idVehiculoFinal,
       idConductorFinal,
       tipo_entrega || 'Vehiculo Empresa',
@@ -789,18 +815,7 @@ export async function createOrdenVenta(req, res) {
     );
     const clienteNombre = clienteResult.data[0]?.razon_social || 'Cliente';
 
-    console.log('=== DEBUG NOTIFICACIONES ===');
-    console.log('1. ID Orden:', idOrden);
-    console.log('2. Número Orden:', numeroOrden);
-    console.log('3. Nombre Registrador:', nombre_registrador);
-    console.log('4. IO objeto:', getIO(req));
-    console.log('5. IO es null?', getIO(req) === null);
-    console.log('6. IO es undefined?', getIO(req) === undefined);
-    console.log('=== FIN DEBUG ===');
-
     await notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombre_registrador, getIO(req));
-
-    console.log('=== NOTIFICACIÓN ENVIADA (sin errores) ===');
 
     res.status(201).json({
       success: true,
@@ -809,6 +824,8 @@ export async function createOrdenVenta(req, res) {
         numero_orden: numeroOrden,
         tipo_comprobante: tipoComp,
         numero_comprobante: numeroComprobante,
+        orden_compra_url: ordenCompraUrl,
+        comprobante_url: comprobanteUrl,
         estado_verificacion: 'Pendiente',
         stock_reservado: 0
       },
@@ -827,7 +844,7 @@ export async function createOrdenVenta(req, res) {
 export async function updateOrdenVenta(req, res) {
   try {
     const { id } = req.params;
-    const {
+    let {
       id_cliente,
       fecha_emision,
       fecha_entrega_estimada,
@@ -859,8 +876,18 @@ export async function updateOrdenVenta(req, res) {
       detalle
     } = req.body;
 
+    if (typeof detalle === 'string') {
+      try {
+        detalle = JSON.parse(detalle);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: 'Formato de detalle inválido' });
+      }
+    }
+
+    // 1. Obtener la orden actual para preservar URLs si no se suben nuevas
     const ordenExistente = await executeQuery(`
-      SELECT estado, stock_reservado, id_cotizacion FROM ordenes_venta WHERE id_orden_venta = ?
+      SELECT estado, stock_reservado, id_cotizacion, orden_compra_url, comprobante_url 
+      FROM ordenes_venta WHERE id_orden_venta = ?
     `, [id]);
 
     if (!ordenExistente.success || ordenExistente.data.length === 0) {
@@ -871,6 +898,21 @@ export async function updateOrdenVenta(req, res) {
     
     if (ordenActual.estado === 'Cancelada') {
         return res.status(400).json({ success: false, error: 'No se puede editar una orden Cancelada' });
+    }
+
+    // 2. Procesar Archivos (Si existen, reemplazan a los anteriores)
+    let nuevaOrdenCompraUrl = ordenActual.orden_compra_url;
+    let nuevoComprobanteUrl = ordenActual.comprobante_url;
+
+    if (req.files) {
+      if (req.files.orden_compra && req.files.orden_compra[0]) {
+        const resultadoOC = await subirArchivoACloudinary(req.files.orden_compra[0], 'indpack_ventas/ordenes_compra');
+        nuevaOrdenCompraUrl = resultadoOC.secure_url;
+      }
+      if (req.files.comprobante && req.files.comprobante[0]) {
+        const resultadoComp = await subirArchivoACloudinary(req.files.comprobante[0], 'indpack_ventas/comprobantes');
+        nuevoComprobanteUrl = resultadoComp.secure_url;
+      }
     }
 
     if (!id_cliente || !detalle || detalle.length === 0) {
@@ -1008,6 +1050,8 @@ export async function updateOrdenVenta(req, res) {
         plazo_pago = ?,
         forma_pago = ?,
         orden_compra_cliente = ?,
+        orden_compra_url = ?,
+        comprobante_url = ?,
         id_vehiculo = ?,
         id_conductor = ?,
         tipo_entrega = ?,
@@ -1043,6 +1087,8 @@ export async function updateOrdenVenta(req, res) {
       plazo_pago,
       forma_pago || null,
       orden_compra_cliente || null,
+      nuevaOrdenCompraUrl, // URL actualizada o la anterior
+      nuevoComprobanteUrl, // URL actualizada o la anterior
       idVehiculoFinal,
       idConductorFinal,
       tipoEntregaFinal,

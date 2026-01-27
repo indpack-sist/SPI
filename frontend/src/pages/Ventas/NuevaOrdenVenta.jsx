@@ -4,12 +4,12 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle, Truck, User, Box
+  FileText, Lock, CheckCircle, Truck, User, Box, Upload, Eye
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI } from '../../config/api';
+import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI, archivosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 
 const TIPOS_IMPUESTO = [
@@ -68,6 +68,10 @@ function NuevaOrdenVenta() {
   const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', referencia: '' });
   const [savingDireccion, setSavingDireccion] = useState(false);
   
+  const [archivos, setArchivos] = useState({ orden_compra: null, comprobante: null });
+  const [archivosPrevios, setArchivosPrevios] = useState({ orden_compra_url: null, comprobante_url: null });
+  const [tieneOC, setTieneOC] = useState(false);
+
   const [formCabecera, setFormCabecera] = useState({
     tipo_comprobante: 'Factura',
     id_cliente: '',
@@ -116,6 +120,12 @@ function NuevaOrdenVenta() {
   const formatearMoneda = (valor) => {
     const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+  };
+
+  const verArchivo = (url) => {
+    if (!url) return;
+    const proxyUrl = archivosAPI.getProxyUrl(url);
+    window.open(proxyUrl, '_blank');
   };
 
   useEffect(() => {
@@ -251,6 +261,15 @@ function NuevaOrdenVenta() {
           contacto_entrega: orden.contacto_entrega || '',
           telefono_entrega: orden.telefono_entrega || '',
           observaciones: orden.observaciones || ''
+        });
+
+        if (orden.orden_compra_cliente || orden.orden_compra_url) {
+            setTieneOC(true);
+        }
+
+        setArchivosPrevios({
+            orden_compra_url: orden.orden_compra_url,
+            comprobante_url: orden.comprobante_url
         });
 
         const resCli = await clientesAPI.getById(orden.id_cliente);
@@ -587,6 +606,11 @@ function NuevaOrdenVenta() {
       return;
     }
 
+    if (tieneOC && (!formCabecera.orden_compra_cliente || (!archivos.orden_compra && !archivosPrevios.orden_compra_url))) {
+        setError('Si seleccionó "Con Orden de Compra", debe ingresar el correlativo y subir el archivo.');
+        return;
+    }
+
     if (estadoCredito?.usar_limite_credito && formCabecera.tipo_venta === 'Crédito') {
       const disponible = formCabecera.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible;
       if (totales.total > disponible) {
@@ -598,28 +622,42 @@ function NuevaOrdenVenta() {
     try {
       setLoading(true);
       
-      const payload = {
-        ...formCabecera,
-        id_cliente: clienteSeleccionado.id_cliente,
-        detalle: detalle.map((item, index) => ({
-          id_producto: item.id_producto,
-          cantidad: parseFloat(item.cantidad),
-          precio_base: parseFloat(item.precio_base),
-          precio_venta: parseFloat(item.precio_venta),
-          descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-          orden: index + 1
-        }))
-      };
+      const formData = new FormData();
+
+      Object.keys(formCabecera).forEach(key => {
+        if (!tieneOC && key === 'orden_compra_cliente') {
+            formData.append(key, '');
+        } else {
+            formData.append(key, formCabecera[key]);
+        }
+      });
+
+      formData.append('detalle', JSON.stringify(detalle.map((item, index) => ({
+        id_producto: item.id_producto,
+        cantidad: parseFloat(item.cantidad),
+        precio_base: parseFloat(item.precio_base),
+        precio_venta: parseFloat(item.precio_venta),
+        descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+        orden: index + 1
+      }))));
+
+      if (tieneOC && archivos.orden_compra) {
+        formData.append('orden_compra', archivos.orden_compra);
+      }
+
+      if (archivos.comprobante) {
+        formData.append('comprobante', archivos.comprobante);
+      }
 
       let response;
       if (modoEdicion) {
-        response = await ordenesVentaAPI.update(id, payload);
+        response = await ordenesVentaAPI.update(id, formData);
         if (response.data.success) {
           setSuccess('Orden actualizada exitosamente');
           setTimeout(() => navigate(`/ventas/ordenes/${id}`), 1500);
         }
       } else {
-        response = await ordenesVentaAPI.create(payload);
+        response = await ordenesVentaAPI.create(formData);
         if (response.data.success) {
           setSuccess(`Orden creada: ${response.data.data.numero_orden}`);
           setTimeout(() => navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`), 1500);
@@ -737,28 +775,75 @@ function NuevaOrdenVenta() {
             </div>
 
             <div className="card">
-              <div className="card-header bg-gradient-to-r from-orange-50 to-white">
-                <h2 className="card-title text-orange-900">
-                  <FileText size={20} /> Orden de Compra del Cliente
+              <div className="card-header bg-gradient-to-r from-orange-50 to-white flex justify-between items-center">
+                <h2 className="card-title text-orange-900 flex items-center gap-2">
+                  <FileText size={20} /> Orden de Compra
                 </h2>
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="checkbox" 
+                        id="checkOC"
+                        className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
+                        checked={tieneOC}
+                        onChange={(e) => setTieneOC(e.target.checked)}
+                    />
+                    <label htmlFor="checkOC" className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                        Con Orden de Compra
+                    </label>
+                </div>
               </div>
-              <div className="card-body">
-                <label className="form-label text-sm font-semibold text-gray-700">
-                  Nº Orden de Compra (Opcional)
-                </label>
-                <input
-                  type="text"
-                  className="form-input text-lg font-mono"
-                  placeholder="Ej: OC-2025-001234"
-                  value={formCabecera.orden_compra_cliente}
-                  onChange={(e) => setFormCabecera({...formCabecera, orden_compra_cliente: e.target.value})}
-                  maxLength={100}
-                />
-                <p className="text-xs text-muted mt-2">
-                  <Info size={12} className="inline mr-1" />
-                  Número de orden de compra proporcionado por el cliente (si aplica)
-                </p>
-              </div>
+              
+              {tieneOC && (
+                  <div className="card-body space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div>
+                        <label className="form-label text-sm font-semibold text-gray-700">
+                        Nº Orden de Compra (Correlativo) *
+                        </label>
+                        <input
+                        type="text"
+                        className="form-input text-lg font-mono"
+                        placeholder="Ej: OC-2025-001234"
+                        value={formCabecera.orden_compra_cliente}
+                        onChange={(e) => setFormCabecera({...formCabecera, orden_compra_cliente: e.target.value})}
+                        maxLength={100}
+                        required={tieneOC}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="form-label text-sm font-semibold text-gray-700">
+                            Archivo Adjunto (PDF o Imagen) *
+                        </label>
+                        <div className="flex gap-2 items-center">
+                            <label className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer w-full">
+                                <Upload className="mr-2 h-5 w-5 text-gray-400" />
+                                <span>{archivos.orden_compra ? archivos.orden_compra.name : 'Subir archivo...'}</span>
+                                <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept=".pdf,image/*"
+                                    onChange={(e) => setArchivos({...archivos, orden_compra: e.target.files[0]})}
+                                />
+                            </label>
+                            {archivosPrevios.orden_compra_url && (
+                                <button
+                                    type="button"
+                                    className="btn btn-outline px-3"
+                                    onClick={() => verArchivo(archivosPrevios.orden_compra_url)}
+                                    title="Ver archivo actual"
+                                >
+                                    <Eye size={20} className="text-blue-600"/>
+                                </button>
+                            )}
+                        </div>
+                        {archivosPrevios.orden_compra_url && !archivos.orden_compra && (
+                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                <CheckCircle size={12}/> Archivo cargado previamente. Suba uno nuevo solo si desea reemplazarlo.
+                            </p>
+                        )}
+                    </div>
+                  </div>
+              )}
             </div>
 
             <div className="card">
@@ -1276,6 +1361,36 @@ function NuevaOrdenVenta() {
                   <span>TOTAL:</span>
                   <span>{formatearMoneda(totales.total)}</span>
                 </div>
+
+                {/* ARCHIVO COMPROBANTE OPCIONAL */}
+                <div className="pt-2 border-t mt-2">
+                    <label className="form-label flex items-center gap-1 text-xs">
+                        <FileText size={12}/> Adjuntar Comprobante/Voucher (Opcional)
+                    </label>
+                    <div className="flex gap-2">
+                        <label className="flex items-center justify-center px-2 py-1 border border-gray-300 rounded text-xs text-gray-700 bg-white hover:bg-gray-50 cursor-pointer w-full">
+                            <Upload className="mr-1 h-3 w-3" />
+                            <span className="truncate">{archivos.comprobante ? archivos.comprobante.name : 'Subir archivo...'}</span>
+                            <input 
+                                type="file" 
+                                className="hidden" 
+                                accept=".pdf,image/*"
+                                onChange={(e) => setArchivos({...archivos, comprobante: e.target.files[0]})}
+                            />
+                        </label>
+                        {archivosPrevios.comprobante_url && (
+                            <button
+                                type="button"
+                                className="btn btn-xs btn-outline px-2"
+                                onClick={() => verArchivo(archivosPrevios.comprobante_url)}
+                                title="Ver comprobante actual"
+                            >
+                                <Eye size={14} className="text-blue-600"/>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
                 <button 
                   type="submit" 
                   className="btn btn-primary w-full py-3 mt-4 text-lg shadow-lg shadow-primary/20"

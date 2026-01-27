@@ -5,13 +5,13 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw
+  ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw, Eye
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI } from '../../config/api';
+import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI } from '../../config/api';
 
 function DetalleOrdenVenta() {
   const { id } = useParams();
@@ -51,6 +51,8 @@ function DetalleOrdenVenta() {
   const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   const [modalReservaStock, setModalReservaStock] = useState(false);
+  const [modalVisorArchivo, setModalVisorArchivo] = useState(false);
+  const [archivoSeleccionado, setArchivoSeleccionado] = useState(null);
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
@@ -115,6 +117,12 @@ function DetalleOrdenVenta() {
       month: '2-digit',
       day: '2-digit'
     });
+  };
+
+  const verArchivo = (url, titulo) => {
+    if (!url) return;
+    const proxyUrl = archivosAPI.getProxyUrl(url);
+    window.open(proxyUrl, '_blank');
   };
 
   useEffect(() => {
@@ -1503,6 +1511,7 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      {/* ALERTAS DE ESTADO (Verificación, Rechazo, etc.) */}
       {orden.estado_verificacion !== 'Aprobada' && (
         <div className={`alert mb-4 ${orden.estado_verificacion === 'Pendiente' ? 'alert-warning' : 'alert-danger'}`}>
           <div className="flex items-start gap-3">
@@ -1649,7 +1658,7 @@ function DetalleOrdenVenta() {
                 </button>
               </div>
             </div>
-
+            
             {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <p className="text-xs font-bold uppercase text-muted mb-3">Cambiar Estado:</p>
@@ -1704,6 +1713,7 @@ function DetalleOrdenVenta() {
           </div>
         </div>
       )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         
         <div className="card h-full">
@@ -1761,9 +1771,20 @@ function DetalleOrdenVenta() {
                 )}
 
                 {orden.orden_compra_cliente && (
-                    <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded">
-                        <label className="text-sm font-medium text-muted">O/C Cliente:</label>
-                        <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
+                    <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded flex justify-between items-center">
+                        <div>
+                            <label className="text-sm font-medium text-muted">O/C Cliente:</label>
+                            <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
+                        </div>
+                        {orden.orden_compra_url && (
+                            <button 
+                                className="btn btn-xs btn-outline bg-white"
+                                onClick={() => verArchivo(orden.orden_compra_url, 'Orden de Compra')}
+                                title="Ver archivo adjunto"
+                            >
+                                <Eye size={14}/> Ver
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -1962,13 +1983,29 @@ function DetalleOrdenVenta() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {orden.observaciones && (
-          <div className="card h-full">
+        <div className="card h-full">
             <div className="card-header"><h3 className="card-title">Observaciones</h3></div>
-            <div className="card-body"><p className="whitespace-pre-wrap">{orden.observaciones}</p></div>
-          </div>
-        )}
-        <div className={`card ${!orden.observaciones ? 'md:col-span-2' : ''} ml-auto w-full`}>
+            <div className="card-body">
+                <p className="whitespace-pre-wrap mb-4">{orden.observaciones || 'Sin observaciones.'}</p>
+                
+                {orden.comprobante_url && (
+                    <div className="bg-green-50 p-3 rounded border border-green-200 flex justify-between items-center">
+                        <div className="flex items-center gap-2 text-green-800">
+                            <FileText size={20}/>
+                            <span className="font-medium">Comprobante/Voucher Adjunto</span>
+                        </div>
+                        <button 
+                            className="btn btn-sm btn-outline bg-white"
+                            onClick={() => verArchivo(orden.comprobante_url, 'Comprobante')}
+                        >
+                            <Eye size={16}/> Ver
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        <div className={`card ml-auto w-full`}>
           <div className="card-header">
             <h3 className="card-title"><Calculator size={20} /> Totales</h3>
           </div>

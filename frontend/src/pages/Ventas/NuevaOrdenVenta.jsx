@@ -128,6 +128,25 @@ function NuevaOrdenVenta() {
     window.open(proxyUrl, '_blank');
   };
 
+  const handlePaste = (e, campo) => {
+    const items = e.clipboardData.items;
+    
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        const fecha = new Date().toISOString().replace(/[:.]/g, '-');
+        const file = new File([blob], `imagen_pegada_${fecha}.png`, { type: blob.type });
+
+        setArchivos(prev => ({ ...prev, [campo]: file }));
+        
+        e.preventDefault();
+        setSuccess(`Imagen pegada correctamente en ${campo === 'orden_compra' ? 'Orden de Compra' : 'Comprobante'}`);
+        setTimeout(() => setSuccess(null), 2000);
+        return; 
+      }
+    }
+  };
+
   useEffect(() => {
     cargarCatalogos();
   }, []);
@@ -812,13 +831,21 @@ function NuevaOrdenVenta() {
 
                     <div>
                         <label className="form-label text-sm font-semibold text-gray-700">
-                            Archivo Adjunto (PDF o Imagen) *
+                            Archivo Adjunto (PDF, Imagen o <span className="text-orange-600">Pegar con Ctrl+V</span>) *
                         </label>
                         <div className="flex gap-2 items-center">
-                            <label className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer w-full">
+                            <label 
+                                className="flex items-center justify-center px-4 py-2 border-2 border-dashed border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:border-orange-400 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 cursor-pointer w-full transition-all outline-none"
+                                tabIndex="0"
+                                onPaste={(e) => handlePaste(e, 'orden_compra')}
+                                onKeyDown={(e) => { if(e.key === 'Enter') document.getElementById('file-upload-oc').click() }}
+                            >
                                 <Upload className="mr-2 h-5 w-5 text-gray-400" />
-                                <span>{archivos.orden_compra ? archivos.orden_compra.name : 'Subir archivo...'}</span>
+                                <span className="truncate">
+                                    {archivos.orden_compra ? archivos.orden_compra.name : 'Click aquí y presiona Ctrl+V o selecciona'}
+                                </span>
                                 <input 
+                                    id="file-upload-oc"
                                     type="file" 
                                     className="hidden" 
                                     accept=".pdf,image/*"
@@ -1362,15 +1389,20 @@ function NuevaOrdenVenta() {
                   <span>{formatearMoneda(totales.total)}</span>
                 </div>
 
-                {/* ARCHIVO COMPROBANTE OPCIONAL */}
                 <div className="pt-2 border-t mt-2">
                     <label className="form-label flex items-center gap-1 text-xs">
-                        <FileText size={12}/> Adjuntar Comprobante/Voucher (Opcional)
+                        <FileText size={12}/> Adjuntar Comprobante (Click + Ctrl+V)
                     </label>
                     <div className="flex gap-2">
-                        <label className="flex items-center justify-center px-2 py-1 border border-gray-300 rounded text-xs text-gray-700 bg-white hover:bg-gray-50 cursor-pointer w-full">
+                        <label 
+                            className="flex items-center justify-center px-2 py-1 border-2 border-dashed border-gray-300 rounded text-xs text-gray-700 bg-white hover:bg-gray-50 hover:border-blue-400 focus:border-blue-500 outline-none cursor-pointer w-full transition-all"
+                            tabIndex="0"
+                            onPaste={(e) => handlePaste(e, 'comprobante')}
+                        >
                             <Upload className="mr-1 h-3 w-3" />
-                            <span className="truncate">{archivos.comprobante ? archivos.comprobante.name : 'Subir archivo...'}</span>
+                            <span className="truncate">
+                                {archivos.comprobante ? archivos.comprobante.name : 'Pegar o subir...'}
+                            </span>
                             <input 
                                 type="file" 
                                 className="hidden" 

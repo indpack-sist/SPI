@@ -5,43 +5,47 @@ const router = express.Router();
 
 router.get('/pdf-proxy', async (req, res) => {
   try {
-    let { url } = req.query;
+    const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
 
-    // 1. Limpieza de seguridad y compatibilidad
-    // Reemplaza fl_attachment si existe y decodifica para limpiar doble codificación
-    let decodedUrl = decodeURIComponent(url).replace('/fl_attachment/', '/upload/');
+    // 1. Limpieza de URL (elimina flags de descarga y decodifica caracteres)
+    const targetUrl = decodeURIComponent(url).replace('/fl_attachment/', '/upload/');
 
-    // 2. Codificación manual para Cloudinary
-    // Cloudinary requiere que los paréntesis ( ) y espacios se envíen de forma precisa
-    const cleanUrl = decodedUrl
-      .replace(/ /g, '%20')
-      .replace(/\(/g, '%28')
-      .replace(/\)/g, '%29');
+    // 2. Autenticación con Cloudinary usando las variables de Render
+    // Esto genera el header necesario para que Cloudinary no responda 401
+    const auth = Buffer.from(
+      `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`
+    ).toString('base64');
 
-    const response = await fetch(cleanUrl, {
+    const response = await fetch(targetUrl, {
+      method: 'GET',
       headers: {
+        'Authorization': `Basic ${auth}`,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Accept': '*/*'
-      },
-      timeout: 10000
+        'Accept': 'application/pdf, */*'
+      }
     });
 
     if (!response.ok) {
-      console.error(`Cloudinary Error (${response.status}): ${cleanUrl}`);
-      return res.status(response.status).json({ error: 'Archivo no encontrado en Cloudinary' });
+      console.error(`Error Cloudinary (${response.status}): ${targetUrl}`);
+      return res.status(response.status).json({ 
+        error: 'No se pudo acceder al archivo en Cloudinary',
+        status: response.status 
+      });
     }
 
-    const contentType = response.headers.get('content-type');
-    res.setHeader('Content-Type', contentType || 'application/pdf');
+    // 3. Configuración de cabeceras para visualización en el navegador
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
 
+    // 4. Stream del archivo al frontend
     response.body.pipe(res);
 
   } catch (error) {
-    console.error('Proxy Error:', error.message);
-    res.status(500).json({ error: 'Error de conexión con el servidor de archivos' });
+    console.error('Error Crítico en Proxy:', error.message);
+    res.status(500).json({ error: 'Error al procesar el documento' });
   }
 });
 

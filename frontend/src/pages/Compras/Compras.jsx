@@ -111,7 +111,7 @@ function Compras() {
   const getFormaPagoConfig = (forma) => {
     const configs = {
       'Contado': { clase: 'text-green-700', icono: Wallet, texto: 'Contado' },
-      'Credito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' },
+      'Crédito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' },
       'Letras': { clase: 'text-purple-700', icono: Receipt, texto: 'Letras' }
     };
     return configs[forma] || configs['Contado'];
@@ -174,7 +174,7 @@ function Compras() {
               <Icono size={12} />
               {config.texto}
             </span>
-            {formaPago === 'Credito' && row.cronograma_definido === 0 && (
+            {formaPago === 'Crédito' && row.cronograma_definido === 0 && (
                 <span className="text-[9px] text-danger font-bold animate-pulse">Sin Cronograma</span>
             )}
             {formaPago === 'Letras' && row.letras_registradas === 0 && (
@@ -510,7 +510,7 @@ function Compras() {
               >
                 <option value="">Todos</option>
                 <option value="Contado">Contado</option>
-                <option value="Credito">Crédito</option>
+                <option value="Crédito">Crédito</option>
               </select>
             </div>
 

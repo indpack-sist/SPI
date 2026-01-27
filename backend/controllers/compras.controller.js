@@ -493,12 +493,12 @@ export async function cancelarCompra(req, res) {
   try {
     const { id } = req.params;
     const { motivo_cancelacion } = req.body;
-    // Capturamos el usuario si existe, sino null
-    const id_registrado_por = req.user?.id_empleado || null; 
+    // Capturamos el ID del usuario que realiza la acción
+    const id_registrado_por = req.user?.id_empleado || null;
 
     connection = await pool.getConnection();
 
-    // 1. Verificar estado actual de la compra
+    // 1. Verificar existencia y estado actual
     const [orders] = await connection.query('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
     
     if (orders.length === 0) {
@@ -509,32 +509,34 @@ export async function cancelarCompra(req, res) {
     const compra = orders[0];
     if (compra.estado === 'Cancelada') {
       connection.release();
-      return res.status(400).json({ success: false, error: 'Ya está cancelada' });
+      return res.status(400).json({ success: false, error: 'La compra ya está cancelada' });
     }
 
     await connection.beginTransaction();
 
     try {
-      // 2. REVERSIÓN DE DINERO (Si hubo pagos)
+      // 2. REVERSIÓN DE PAGOS (Devolución de dinero a las cuentas)
+      // Buscamos cualquier egreso de dinero asociado a esta compra
       const [movimientos] = await connection.query(
         'SELECT * FROM movimientos_cuentas WHERE id_orden_compra = ? AND tipo_movimiento = "Egreso"', 
         [id]
       );
 
       for (const mov of movimientos) {
-        // a. Devolver dinero a la cuenta
+        // a. Devolvemos el dinero a la cuenta de origen
         await connection.query(
           'UPDATE cuentas_pago SET saldo_actual = saldo_actual + ? WHERE id_cuenta = ?', 
           [mov.monto, mov.id_cuenta]
         );
 
-        // b. Obtener saldo actualizado para el historial
+        // b. Obtenemos el saldo actualizado para registrarlo correctamente
         const [cuentaInfo] = await connection.query(
           'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ?', 
           [mov.id_cuenta]
         );
+        const nuevoSaldo = cuentaInfo[0].saldo_actual;
         
-        // c. Registrar el contra-asiento (Ingreso por anulación)
+        // c. Registramos el movimiento de anulación (Ingreso)
         await connection.query(`
           INSERT INTO movimientos_cuentas (
             id_cuenta, tipo_movimiento, monto, concepto, referencia, 
@@ -544,37 +546,44 @@ export async function cancelarCompra(req, res) {
           mov.id_cuenta, 
           mov.monto, 
           `ANULACIÓN COMPRA ${compra.numero_orden}`, 
-          `REF-${mov.id_movimiento}`, 
+          `REF-${mov.id_movimiento}`, // Referencia al movimiento original
           id, 
-          parseFloat(cuentaInfo[0].saldo_actual) - parseFloat(mov.monto), 
-          cuentaInfo[0].saldo_actual, 
+          parseFloat(nuevoSaldo) - parseFloat(mov.monto), 
+          nuevoSaldo, 
           id_registrado_por
         ]);
       }
 
-      // 3. ACTUALIZAR ORDEN DE COMPRA
-      // Corrección Clave: Usamos CONCAT para guardar el motivo en 'observaciones'
-      // NO intentamos escribir en una columna 'motivo_cancelacion' que no existe
+      // 3. ACTUALIZAR ESTADO DE LA ORDEN
+      // CORRECCIÓN: Concatenamos el motivo en 'observaciones' en lugar de usar una columna inexistente.
+      // También reiniciamos los montos de reembolso si aplicara.
       await connection.query(
         `UPDATE ordenes_compra SET 
             estado = 'Cancelada', 
             monto_pagado = 0, 
             saldo_pendiente = 0,
-            observaciones = CONCAT(IFNULL(observaciones, ''), '\n[CANCELADA]: ', ?)
+            estado_pago = 'Pendiente',
+            monto_reembolsado = 0,
+            estado_reembolso = 'No Aplica',
+            observaciones = CONCAT(IFNULL(observaciones, ''), '\n[CANCELADA ', DATE_FORMAT(NOW(), '%d/%m/%Y %H:%i'), ']: ', ?)
          WHERE id_orden_compra = ?`, 
-        [motivo_cancelacion || 'Sin motivo', id]
+        [motivo_cancelacion || 'Sin motivo especificado', id]
       );
 
-      // 4. CANCELAR CUOTAS
-      await connection.query(`UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=?`, [id]);
+      // 4. CANCELAR CUOTAS PENDIENTES
+      await connection.query(
+        `UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=?`, 
+        [id]
+      );
 
-      // 5. REVERTIR STOCK (Solo lo que se recibió)
+      // 5. REVERTIR STOCK (Solo si hubo recepción de mercadería)
       const [detalles] = await connection.query(
         'SELECT id_producto, cantidad_recibida FROM detalle_orden_compra WHERE id_orden_compra = ?', 
         [id]
       );
       
       for (const d of detalles) {
+        // Solo restamos stock si realmente entró algo al almacén
         if (parseFloat(d.cantidad_recibida) > 0) {
           await connection.query(
             'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?', 
@@ -584,21 +593,20 @@ export async function cancelarCompra(req, res) {
       }
 
       await connection.commit();
-      res.json({ success: true, message: 'Compra y pagos anulados exitosamente' });
+      res.json({ success: true, message: 'Compra cancelada, pagos anulados y stock revertido correctamente.' });
 
     } catch (err) {
       await connection.rollback();
-      throw err;
+      throw err; // Re-lanzar para que lo capture el bloque catch externo
     } finally {
       connection.release();
     }
 
   } catch (error) {
-    console.error(error);
+    console.error('Error en cancelarCompra:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }
-
 export async function getCuotasCompra(req, res) {
   try {
     const { id } = req.params;

@@ -447,13 +447,13 @@ function DetalleCompra() {
                   </button>
               )}
 
-              {compra.estado_pago !== 'Pagado' && (compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && !compra.usa_fondos_propios && (
+              {compra.estado_pago !== 'Pagado' && (compra.tipo_compra === 'Contado' || (compra.tipo_compra === 'Crédito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras')) && !compra.usa_fondos_propios && (
                   <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
                     <DollarSign size={18} /> Registrar Pago
                   </button>
               )}
 
-              {compra.estado_pago !== 'Pagado' && compra.tipo_compra === 'Credito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras' && (
+              {compra.estado_pago !== 'Pagado' && compra.tipo_compra === 'Crédito' && !compra.cronograma_definido && compra.forma_pago_detalle !== 'Letras' && (
                   <button className="btn btn-warning text-white" onClick={handleAbrirCronograma}>
                     <FileText size={18} /> Definir Letras
                   </button>
@@ -642,7 +642,7 @@ function DetalleCompra() {
                 </div>
             )}
 
-            {compra.tipo_compra === 'Credito' && compra.forma_pago_detalle !== 'Letras' && (
+            {compra.tipo_compra === 'Crédito' && compra.forma_pago_detalle !== 'Letras' && (
                 <div className="card">
                     <div className="card-header bg-gray-50/50 flex justify-between items-center">
                         <h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuotas</h3>

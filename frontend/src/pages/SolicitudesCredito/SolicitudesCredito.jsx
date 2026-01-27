@@ -512,11 +512,12 @@ function SolicitudesCredito() {
                   <FileText size={16} /> Documento de Sustento
                 </h4>
                 <div className="card p-0 overflow-hidden border bg-gray-100">
-                  {solicitudSeleccionada.archivo_sustento_url.toLowerCase().endsWith('.pdf') ? (
+                  {/* Solución al renderizado de PDF vs Imagen */}
+                  {solicitudSeleccionada.archivo_sustento_url.toLowerCase().includes('.pdf') ? (
                     <iframe
                       src={archivosAPI.getProxyUrl(solicitudSeleccionada.archivo_sustento_url)}
                       className="w-full h-[600px] border-0"
-                      title="PDF Viewer"
+                      title="Visor PDF"
                     />
                   ) : (
                     <div className="flex justify-center p-4">

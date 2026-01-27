@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 
 const router = express.Router();
 
+// Configuración de Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -15,37 +16,50 @@ router.get('/pdf-proxy', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
 
+    // 1. Extraer el Public ID limpio
     const urlParts = decodeURIComponent(url).split('/upload/');
     if (urlParts.length < 2) return res.status(400).json({ error: 'URL mal formada' });
     
-    // Extraemos el publicId eliminando la versión (v1234567/)
+    // Eliminamos la versión (v12345/) para quedarnos con "carpeta/archivo.ext"
     const publicId = urlParts[1].replace(/^v\d+\//, '');
 
-    // Generamos la URL firmada. 
-    // Nota: El SDK manejará automáticamente si el resource_type es image o raw 
-    // basándose en el publicId si lo especificas correctamente.
+    // 2. Determinar si es PDF o Imagen basándonos en la extensión
+    // Esto conecta con la lógica que pusimos en cloudinary.service.js
+    const esPdf = publicId.toLowerCase().endsWith('.pdf');
+    
+    // Si tiene extensión .pdf, obligatoriamente es 'raw'. Si no, asumimos 'image'.
+    const resourceType = esPdf ? 'raw' : 'image';
+
+    // 3. Generar la URL firmada
     const signedUrl = cloudinary.url(publicId, {
-      resource_type: url.includes('/raw/') ? 'raw' : 'image',
+      resource_type: resourceType,
       sign_url: true,
       secure: true
     });
 
+    // 4. Obtener el archivo desde Cloudinary
     const response = await fetch(signedUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 10000 // Evita que Render se quede colgado si Cloudinary tarda
+      timeout: 15000 // Aumentamos un poco el timeout por si el PDF es pesado
     });
 
     if (!response.ok) {
-      console.error(`Error Cloudinary (${response.status}) para ID: ${publicId}`);
-      return res.status(response.status).json({ error: 'Acceso denegado a Cloudinary' });
+      console.error(`Error Cloudinary (${response.status}) ID: ${publicId} Tipo: ${resourceType}`);
+      return res.status(response.status).json({ error: 'No se pudo acceder al archivo' });
     }
 
-    // Usamos el Content-Type original de Cloudinary (PDF o Imagen)
-    const contentType = response.headers.get('content-type');
-    res.setHeader('Content-Type', contentType || 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline');
+    // 5. Configurar cabeceras para el navegador
+    // Forzamos el tipo correcto para que el visor no se confunda
+    if (esPdf) {
+        res.setHeader('Content-Type', 'application/pdf');
+    } else {
+        res.setHeader('Content-Type', response.headers.get('content-type') || 'image/jpeg');
+    }
+    
+    res.setHeader('Content-Disposition', 'inline'); // 'inline' permite verlo en el navegador sin descargar
     res.setHeader('Access-Control-Allow-Origin', '*');
     
+    // 6. Enviar el stream
     response.body.pipe(res);
 
   } catch (error) {

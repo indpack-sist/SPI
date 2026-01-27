@@ -490,9 +490,17 @@ export const ordenesVentaAPI = {
 
   getById: (id) => api.get(`/ordenes-venta/${id}`),
   
-  create: (data) => api.post('/ordenes-venta', data),
+  create: (data) => api.post('/ordenes-venta', data, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  }),
   
-  update: (id, data) => api.put(`/ordenes-venta/${id}`, data),
+  update: (id, data) => api.put(`/ordenes-venta/${id}`, data, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  }),
 
   rectificarCantidad: (id, data) => api.put(`/ordenes-venta/${id}/rectificar`, data),
 

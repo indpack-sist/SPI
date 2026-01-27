@@ -15,13 +15,14 @@ import {
   FileText,
   X,
   Eye,
-  ChevronRight
+  ChevronRight,
+  Download
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
-import { ordenesVentaAPI } from '../../config/api';
+import { ordenesVentaAPI, archivosAPI } from '../../config/api';
 
 function VerificarOrdenes() {
   const navigate = useNavigate();
@@ -86,6 +87,12 @@ function VerificarOrdenes() {
     } finally {
       setProcesando(false);
     }
+  };
+
+  const verArchivo = (url) => {
+    if (!url) return;
+    const proxyUrl = archivosAPI.getProxyUrl(url);
+    window.open(proxyUrl, '_blank');
   };
 
   const handleAprobar = async () => {
@@ -472,6 +479,31 @@ function VerificarOrdenes() {
                     <span className="text-muted">Productos:</span>
                     <span className="badge badge-neutral">{datosVerificacion.orden.detalle?.length || 0} items</span>
                   </div>
+
+                  {/* SECCIÓN DE ARCHIVOS ADJUNTOS */}
+                  {(datosVerificacion.orden.orden_compra_url || datosVerificacion.orden.comprobante_url) && (
+                    <div className="pt-3 border-t border-blue-200 mt-2">
+                        <p className="text-xs font-bold text-blue-800 mb-2">Documentos Adjuntos</p>
+                        <div className="flex gap-2">
+                            {datosVerificacion.orden.orden_compra_url && (
+                                <button 
+                                    className="btn btn-xs btn-outline bg-white flex items-center gap-1"
+                                    onClick={() => verArchivo(datosVerificacion.orden.orden_compra_url)}
+                                >
+                                    <Eye size={12}/> Ver O/C Cliente
+                                </button>
+                            )}
+                            {datosVerificacion.orden.comprobante_url && (
+                                <button 
+                                    className="btn btn-xs btn-outline bg-white flex items-center gap-1"
+                                    onClick={() => verArchivo(datosVerificacion.orden.comprobante_url)}
+                                >
+                                    <Eye size={12}/> Ver Comprobante
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -9,7 +9,7 @@ import {
   User,
   FileText
 } from 'lucide-react';
-import { solicitudesCreditoAPI } from '../../config/api';
+import { solicitudesCreditoAPI, archivosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
@@ -514,16 +514,18 @@ function SolicitudesCredito() {
                 <div className="card p-0 overflow-hidden border bg-gray-100">
                   {solicitudSeleccionada.archivo_sustento_url.toLowerCase().endsWith('.pdf') ? (
                     <iframe
-                      src={`${import.meta.env.VITE_API_URL}/archivos/pdf-proxy?url=${encodeURIComponent(solicitudSeleccionada.archivo_sustento_url)}`}
-                      className="w-full h-[500px] border-0"
+                      src={archivosAPI.getProxyUrl(solicitudSeleccionada.archivo_sustento_url)}
+                      className="w-full h-[600px] border-0"
                       title="PDF Viewer"
                     />
                   ) : (
-                    <img 
-                      src={solicitudSeleccionada.archivo_sustento_url} 
-                      alt="Sustento" 
-                      className="w-full h-auto max-h-[500px] object-contain"
-                    />
+                    <div className="flex justify-center p-4">
+                        <img 
+                        src={solicitudSeleccionada.archivo_sustento_url} 
+                        alt="Sustento" 
+                        className="w-full h-auto max-h-[600px] object-contain shadow-sm rounded"
+                        />
+                    </div>
                   )}
                 </div>
                 <div className="text-right mt-1">

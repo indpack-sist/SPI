@@ -493,10 +493,12 @@ export async function cancelarCompra(req, res) {
   try {
     const { id } = req.params;
     const { motivo_cancelacion } = req.body;
-    const id_registrado_por = req.user?.id_empleado || null;
+    // Capturamos el usuario si existe, sino null
+    const id_registrado_por = req.user?.id_empleado || null; 
 
     connection = await pool.getConnection();
 
+    // 1. Verificar estado actual de la compra
     const [orders] = await connection.query('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
     
     if (orders.length === 0) {
@@ -513,22 +515,26 @@ export async function cancelarCompra(req, res) {
     await connection.beginTransaction();
 
     try {
+      // 2. REVERSIÓN DE DINERO (Si hubo pagos)
       const [movimientos] = await connection.query(
         'SELECT * FROM movimientos_cuentas WHERE id_orden_compra = ? AND tipo_movimiento = "Egreso"', 
         [id]
       );
 
       for (const mov of movimientos) {
+        // a. Devolver dinero a la cuenta
         await connection.query(
           'UPDATE cuentas_pago SET saldo_actual = saldo_actual + ? WHERE id_cuenta = ?', 
           [mov.monto, mov.id_cuenta]
         );
 
+        // b. Obtener saldo actualizado para el historial
         const [cuentaInfo] = await connection.query(
           'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ?', 
           [mov.id_cuenta]
         );
         
+        // c. Registrar el contra-asiento (Ingreso por anulación)
         await connection.query(`
           INSERT INTO movimientos_cuentas (
             id_cuenta, tipo_movimiento, monto, concepto, referencia, 
@@ -546,18 +552,23 @@ export async function cancelarCompra(req, res) {
         ]);
       }
 
+      // 3. ACTUALIZAR ORDEN DE COMPRA
+      // Corrección Clave: Usamos CONCAT para guardar el motivo en 'observaciones'
+      // NO intentamos escribir en una columna 'motivo_cancelacion' que no existe
       await connection.query(
         `UPDATE ordenes_compra SET 
-            estado='Cancelada', 
+            estado = 'Cancelada', 
             monto_pagado = 0, 
             saldo_pendiente = 0,
-            observaciones=CONCAT(COALESCE(observaciones,''), '\n[CANCELADA] ', ?) 
-         WHERE id_orden_compra=?`, 
+            observaciones = CONCAT(IFNULL(observaciones, ''), '\n[CANCELADA]: ', ?)
+         WHERE id_orden_compra = ?`, 
         [motivo_cancelacion || 'Sin motivo', id]
       );
 
+      // 4. CANCELAR CUOTAS
       await connection.query(`UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=?`, [id]);
 
+      // 5. REVERTIR STOCK (Solo lo que se recibió)
       const [detalles] = await connection.query(
         'SELECT id_producto, cantidad_recibida FROM detalle_orden_compra WHERE id_orden_compra = ?', 
         [id]

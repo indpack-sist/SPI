@@ -766,8 +766,14 @@ export const reportesAPI = {
   getSireCompras: (params) => api.get('/reportes/sire/compras', { params })
 };
 export const archivosAPI = {
-  // Esta función genera la URL completa para el iframe
   getProxyUrl: (urlCloudinary) => {
-    return `${API_URL}/archivos/pdf-proxy?url=${encodeURIComponent(urlCloudinary)}`;
+    const token = localStorage.getItem('token');
+    const baseUrl = `${API_URL}/archivos/pdf-proxy`;
+    const params = new URLSearchParams({
+      url: urlCloudinary,
+      token: token || ''
+    });
+    
+    return `${baseUrl}?${params.toString()}`;
   }
 };

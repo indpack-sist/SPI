@@ -514,7 +514,7 @@ function SolicitudesCredito() {
                 <div className="card p-0 overflow-hidden border bg-gray-100">
                   {solicitudSeleccionada.archivo_sustento_url.toLowerCase().endsWith('.pdf') ? (
                     <iframe
-                      src={archivosAPI.getProxyUrl(solicitudSeleccionada.archivo_sustento_url)}
+                      src={`${import.meta.env.VITE_API_URL}/archivos/pdf-proxy?url=${encodeURIComponent(solicitudSeleccionada.archivo_sustento_url)}&token=${localStorage.getItem('token')}`}
                       className="w-full h-[600px] border-0"
                       title="PDF Viewer"
                     />

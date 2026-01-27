@@ -768,10 +768,12 @@ export const reportesAPI = {
 export const archivosAPI = {
   getProxyUrl: (urlCloudinary) => {
     const token = localStorage.getItem('token');
+    // Aseguramos que apunte a /archivos/pdf-proxy que es lo que definimos en server.js
     const baseUrl = `${API_URL}/archivos/pdf-proxy`;
+    
     const params = new URLSearchParams({
       url: urlCloudinary,
-      token: token || ''
+      token: token || '' // Enviamos el token para que el middleware verificarToken no nos bloquee
     });
     
     return `${baseUrl}?${params.toString()}`;

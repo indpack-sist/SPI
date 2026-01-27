@@ -1,51 +1,52 @@
 import express from 'express';
+import { v2 as cloudinary } from 'cloudinary';
 import fetch from 'node-fetch';
 
 const router = express.Router();
+
+// El SDK toma las variables CLOUDINARY_CLOUD_NAME, API_KEY y API_SECRET de Render
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 router.get('/pdf-proxy', async (req, res) => {
   try {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL requerida' });
 
-    // 1. Limpieza de URL (elimina flags de descarga y decodifica caracteres)
-    const targetUrl = decodeURIComponent(url).replace('/fl_attachment/', '/upload/');
+    // Extraemos el Public ID para generar la firma de seguridad
+    const urlParts = decodeURIComponent(url).split('/upload/');
+    if (urlParts.length < 2) return res.status(400).json({ error: 'URL mal formada' });
+    
+    const publicId = urlParts[1].replace(/^v\d+\//, '');
 
-    // 2. Autenticación con Cloudinary usando las variables de Render
-    // Esto genera el header necesario para que Cloudinary no responda 401
-    const auth = Buffer.from(
-      `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`
-    ).toString('base64');
+    // Generamos la URL firmada para autorizar la descarga (Solución al 401)
+    const signedUrl = cloudinary.url(publicId, {
+      resource_type: 'raw',
+      sign_url: true,
+      secure: true
+    });
 
-    const response = await fetch(targetUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Accept': 'application/pdf, */*'
-      }
+    const response = await fetch(signedUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
     if (!response.ok) {
-      console.error(`Error Cloudinary (${response.status}): ${targetUrl}`);
-      return res.status(response.status).json({ 
-        error: 'No se pudo acceder al archivo en Cloudinary',
-        status: response.status 
-      });
+      console.error(`Error Cloudinary (${response.status}): ${signedUrl}`);
+      return res.status(response.status).json({ error: 'Acceso denegado' });
     }
 
-    // 3. Configuración de cabeceras para visualización en el navegador
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-cache');
-
-    // 4. Stream del archivo al frontend
+    
     response.body.pipe(res);
 
   } catch (error) {
-    console.error('Error Crítico en Proxy:', error.message);
-    res.status(500).json({ error: 'Error al procesar el documento' });
+    console.error('Error en Proxy:', error.message);
+    res.status(500).json({ error: 'Error al procesar el archivo' });
   }
 });
 

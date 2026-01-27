@@ -416,9 +416,7 @@ function DetalleCompra() {
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
   
-  // =========================================================================================
-  // FIX: Normalizar tipos de compra para evitar errores por tildes ("Credito" vs "Crédito")
-  // =========================================================================================
+  // Normalización de tipos para evitar errores de tilde
   const esCredito = compra.tipo_compra === 'Credito' || compra.tipo_compra === 'Crédito';
   const esContado = compra.tipo_compra === 'Contado';
   const esLetras = compra.forma_pago_detalle === 'Letras';
@@ -619,6 +617,23 @@ function DetalleCompra() {
                                 </tr>
                             ))}
                         </tbody>
+                        {/* ========================================================================================= */}
+                        {/* NUEVO FOOTER PARA MOSTRAR IGV Y TOTALES DESGLOSADOS */}
+                        {/* ========================================================================================= */}
+                        <tfoot className="bg-gray-50 font-medium">
+                            <tr>
+                                <td colSpan="4" className="text-right">Subtotal</td>
+                                <td className="text-right">{formatearMoneda(compra.subtotal)}</td>
+                            </tr>
+                            <tr>
+                                <td colSpan="4" className="text-right">Impuesto ({parseFloat(compra.igv) > 0 ? '18%' : '0%'})</td>
+                                <td className="text-right">{formatearMoneda(compra.igv)}</td>
+                            </tr>
+                            <tr>
+                                <td colSpan="4" className="text-right font-bold text-lg">Total</td>
+                                <td className="text-right font-bold text-lg">{formatearMoneda(compra.total)}</td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -745,6 +760,11 @@ function DetalleCompra() {
         </div>
       )}
 
+      {/* ... RESTO DE LOS TABS DE LETRAS E INGRESOS IGUAL ... */}
+      {/* ... RESTO DE LOS MODALES IGUAL ... */}
+      {/* (Para no repetir código innecesario, mantén el resto de tu archivo igual desde donde terminan los tabs hasta el final) */}
+      
+      {/* Solo recuerda cerrar todas las llaves y exportar */}
       {tabActiva === 'letras' && (
         <div className="space-y-6">
           <div className="card">

@@ -38,6 +38,13 @@ function VerificarOrdenes() {
   const [modalRechazar, setModalRechazar] = useState(false);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
   
+  const [visorArchivo, setVisorArchivo] = useState({
+    open: false,
+    url: '',
+    tipo: '', 
+    titulo: ''
+  });
+
   const [formRechazo, setFormRechazo] = useState({
     motivo_rechazo: '',
     observaciones_verificador: ''
@@ -89,10 +96,23 @@ function VerificarOrdenes() {
     }
   };
 
-  const verArchivo = (url) => {
+  const abrirVisor = (url, titulo) => {
     if (!url) return;
+    
+    const extension = url.split('.').pop().toLowerCase();
+    const esPdf = extension === 'pdf';
     const proxyUrl = archivosAPI.getProxyUrl(url);
-    window.open(proxyUrl, '_blank');
+
+    setVisorArchivo({
+      open: true,
+      url: proxyUrl,
+      tipo: esPdf ? 'pdf' : 'img',
+      titulo: titulo
+    });
+  };
+
+  const cerrarVisor = () => {
+    setVisorArchivo({ open: false, url: '', tipo: '', titulo: '' });
   };
 
   const handleAprobar = async () => {
@@ -309,6 +329,7 @@ function VerificarOrdenes() {
       )
     }
   ];
+
   if (loading) return <Loading message="Cargando órdenes pendientes..." />;
 
   return (
@@ -480,7 +501,6 @@ function VerificarOrdenes() {
                     <span className="badge badge-neutral">{datosVerificacion.orden.detalle?.length || 0} items</span>
                   </div>
 
-                  {/* SECCIÓN DE ARCHIVOS ADJUNTOS */}
                   {(datosVerificacion.orden.orden_compra_url || datosVerificacion.orden.comprobante_url) && (
                     <div className="pt-3 border-t border-blue-200 mt-2">
                         <p className="text-xs font-bold text-blue-800 mb-2">Documentos Adjuntos</p>
@@ -488,7 +508,7 @@ function VerificarOrdenes() {
                             {datosVerificacion.orden.orden_compra_url && (
                                 <button 
                                     className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                    onClick={() => verArchivo(datosVerificacion.orden.orden_compra_url)}
+                                    onClick={() => abrirVisor(datosVerificacion.orden.orden_compra_url, 'Orden de Compra')}
                                 >
                                     <Eye size={12}/> Ver O/C Cliente
                                 </button>
@@ -496,7 +516,7 @@ function VerificarOrdenes() {
                             {datosVerificacion.orden.comprobante_url && (
                                 <button 
                                     className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                    onClick={() => verArchivo(datosVerificacion.orden.comprobante_url)}
+                                    onClick={() => abrirVisor(datosVerificacion.orden.comprobante_url, 'Comprobante de Pago')}
                                 >
                                     <Eye size={12}/> Ver Comprobante
                                 </button>
@@ -960,6 +980,35 @@ function VerificarOrdenes() {
           </div>
         </form>
       </Modal>
+
+      <Modal
+        isOpen={visorArchivo.open}
+        onClose={cerrarVisor}
+        title={visorArchivo.titulo}
+        size="2xl"
+      >
+        <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
+          {visorArchivo.tipo === 'pdf' ? (
+            <iframe 
+              src={visorArchivo.url} 
+              className="w-full h-[70vh] border-0 rounded"
+              title="Visor de PDF"
+            />
+          ) : (
+            <img 
+              src={visorArchivo.url} 
+              alt="Visualización de archivo" 
+              className="max-w-full max-h-[70vh] object-contain rounded shadow-lg"
+            />
+          )}
+        </div>
+        <div className="flex justify-end mt-4">
+          <button className="btn btn-primary" onClick={cerrarVisor}>
+            Cerrar Visor
+          </button>
+        </div>
+      </Modal>
+
     </div>
   );
 }

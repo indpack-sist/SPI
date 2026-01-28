@@ -51,8 +51,13 @@ function DetalleOrdenVenta() {
   const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   const [modalReservaStock, setModalReservaStock] = useState(false);
-  const [modalVisorArchivo, setModalVisorArchivo] = useState(false);
-  const [archivoSeleccionado, setArchivoSeleccionado] = useState(null);
+  
+  const [visorArchivo, setVisorArchivo] = useState({
+    open: false,
+    url: '',
+    tipo: '', 
+    titulo: ''
+  });
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidadOP, setCantidadOP] = useState('');
@@ -119,10 +124,21 @@ function DetalleOrdenVenta() {
     });
   };
 
-  const verArchivo = (url, titulo) => {
+  const abrirVisor = (url, titulo) => {
     if (!url) return;
+    const extension = url.split('.').pop().toLowerCase();
+    const esPdf = extension === 'pdf';
     const proxyUrl = archivosAPI.getProxyUrl(url);
-    window.open(proxyUrl, '_blank');
+    setVisorArchivo({
+      open: true,
+      url: proxyUrl,
+      tipo: esPdf ? 'pdf' : 'img',
+      titulo: titulo
+    });
+  };
+
+  const cerrarVisor = () => {
+    setVisorArchivo({ open: false, url: '', tipo: '', titulo: '' });
   };
 
   useEffect(() => {
@@ -1778,9 +1794,8 @@ function DetalleOrdenVenta() {
                         </div>
                         {orden.orden_compra_url && (
                             <button 
-                                className="btn btn-xs btn-outline bg-white"
-                                onClick={() => verArchivo(orden.orden_compra_url, 'Orden de Compra')}
-                                title="Ver archivo adjunto"
+                                className="btn btn-xs btn-outline bg-white flex items-center gap-1"
+                                onClick={() => abrirVisor(orden.orden_compra_url, 'Orden de Compra Cliente')}
                             >
                                 <Eye size={14}/> Ver
                             </button>
@@ -1995,8 +2010,8 @@ function DetalleOrdenVenta() {
                             <span className="font-medium">Comprobante/Voucher Adjunto</span>
                         </div>
                         <button 
-                            className="btn btn-sm btn-outline bg-white"
-                            onClick={() => verArchivo(orden.comprobante_url, 'Comprobante')}
+                            className="btn btn-sm btn-outline bg-white flex items-center gap-1"
+                            onClick={() => abrirVisor(orden.comprobante_url, 'Comprobante de Pago')}
                         >
                             <Eye size={16}/> Ver
                         </button>
@@ -2981,6 +2996,35 @@ function DetalleOrdenVenta() {
           </div>
         </div>
       </Modal>
+
+      <Modal
+        isOpen={visorArchivo.open}
+        onClose={cerrarVisor}
+        title={visorArchivo.titulo}
+        size="2xl"
+      >
+        <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
+          {visorArchivo.tipo === 'pdf' ? (
+            <iframe 
+              src={visorArchivo.url} 
+              className="w-full h-[70vh] border-0 rounded"
+              title="Visor de PDF"
+            />
+          ) : (
+            <img 
+              src={visorArchivo.url} 
+              alt="Visualización de archivo" 
+              className="max-w-full max-h-[70vh] object-contain rounded shadow-lg"
+            />
+          )}
+        </div>
+        <div className="flex justify-end mt-4">
+          <button className="btn btn-primary" onClick={cerrarVisor}>
+            Cerrar Visor
+          </button>
+        </div>
+      </Modal>
+
     </div>
   );
 }

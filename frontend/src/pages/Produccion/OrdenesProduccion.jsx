@@ -292,7 +292,7 @@ function OrdenesProduccion() {
       align: 'left',
       width: '180px',
       render: (value, row) => {
-        const planificada = parseFloat(value);
+        const planificada = parseFloat(value || 0);
         const producida = parseFloat(row.cantidad_producida || 0);
         const porcentaje = planificada > 0 ? (producida / planificada * 100).toFixed(0) : 0;
         const numRegistros = registrosParciales[row.id_orden] || 0;

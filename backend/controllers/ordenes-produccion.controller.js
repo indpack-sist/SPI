@@ -67,12 +67,8 @@ export async function getAllOrdenes(req, res) {
         p.codigo AS codigo_producto,
         COALESCE(p.nombre, '[PRODUCTO ELIMINADO]') AS producto,
         p.unidad_medida,
-        
-        -- AGREGAR ESTAS DOS LÍNEAS AQUÍ:
         op.cantidad_unidades,
         op.cantidad_unidades_producida,
-        -- FIN DE LO AGREGADO
-
         op.cantidad_planificada,
         op.cantidad_producida,
         op.id_supervisor,
@@ -113,8 +109,6 @@ export async function getAllOrdenes(req, res) {
       WHERE 1=1
     `;
     
-    // ... el resto de la función sigue igual (params, filtros, etc.) ...
-
     const params = [];
     
     if (estado) {

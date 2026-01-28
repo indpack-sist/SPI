@@ -105,11 +105,11 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
-      compras: false,
+      compras: true,
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: false // <--- DENEGADO
+      reportes: true // <--- DENEGADO
     },
     api: {
       dashboard: false,
@@ -130,7 +130,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: false
+      reportes: true
     }
   },
   'Ventas': {

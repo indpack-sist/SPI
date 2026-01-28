@@ -2287,6 +2287,7 @@ export async function anularOrden(req, res) {
     
     let hayEntradaInsumos = false;
     let haySalidaProducto = false;
+    let totalCostoInsumos = 0; 
 
     const consumoResult = await executeQuery(
       `SELECT 
@@ -2303,7 +2304,7 @@ export async function anularOrden(req, res) {
     if (consumoResult.data.length > 0) {
       hayEntradaInsumos = true;
       
-      const totalCostoDevolucion = consumoResult.data.reduce((sum, item) => 
+      totalCostoInsumos = consumoResult.data.reduce((sum, item) => 
         sum + (parseFloat(item.cantidad_real_consumida) * parseFloat(item.costo_unitario)), 0
       );
 
@@ -2322,7 +2323,7 @@ export async function anularOrden(req, res) {
         params: [
           consumoResult.data[0].id_tipo_inventario,
           `Anulación O.P. ${orden.numero_orden}`,
-          totalCostoDevolucion,
+          totalCostoInsumos,
           id_usuario, 
           `Devolución de insumos por anulación de O.P. ${orden.numero_orden}`
         ]
@@ -2330,7 +2331,8 @@ export async function anularOrden(req, res) {
     }
 
     let cantidadA_Retirar = 0;
-    
+    let costoUnitarioPT = 0;
+
     if (orden.estado === 'Finalizada' && parseFloat(orden.cantidad_producida) > 0) {
         
         cantidadA_Retirar = parseFloat(orden.cantidad_producida);
@@ -2342,6 +2344,9 @@ export async function anularOrden(req, res) {
         if (cantidadA_Retirar > 0) {
             haySalidaProducto = true;
             
+            costoUnitarioPT = totalCostoInsumos / cantidadA_Retirar;
+            if (isNaN(costoUnitarioPT) || !isFinite(costoUnitarioPT)) costoUnitarioPT = 0;
+
             queries.push({
                 sql: `INSERT INTO salidas (
                     id_tipo_inventario, 
@@ -2405,8 +2410,8 @@ export async function anularOrden(req, res) {
         const idSalida = resultHeader.data[currentIndex].insertId;
 
         queriesDetalles.push({
-            sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad) VALUES (?, ?, ?)`,
-            params: [idSalida, orden.id_producto_terminado, cantidadA_Retirar]
+            sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
+            params: [idSalida, orden.id_producto_terminado, cantidadA_Retirar, costoUnitarioPT]
         });
         
         queriesDetalles.push({

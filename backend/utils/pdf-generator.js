@@ -2323,20 +2323,20 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       }
 
       const altoHeaderSeccion2 = 18;
-      doc.rect(20, yPos, 555, altoHeaderSeccion2).fill('#D1C4E9').stroke();
+      doc.rect(20, yPos, 555, altoHeaderSeccion2).fill('#FFCC80').stroke();
       doc.fillColor('black');
 
       doc.fontSize(7).font('Helvetica-Bold').text('2. REGISTRO DE PRODUCCIÓN', 25, yPos + 6);
 
       doc.fontSize(6);
       doc.text('GRAMAJE:', 250, yPos + 6);
-      doc.font('Helvetica').text(orden.gramaje || '-', 290, yPos + 6);
+      doc.font('Helvetica').text(orden.gramaje || '', 290, yPos + 6);
       
       doc.font('Helvetica-Bold').text('MEDIDA:', 350, yPos + 6);
-      doc.font('Helvetica').text(orden.medida || '-', 385, yPos + 6);
+      doc.font('Helvetica').text(orden.medida || '', 385, yPos + 6);
       
       doc.font('Helvetica-Bold').text('PESO:', 460, yPos + 6);
-      doc.font('Helvetica').text(orden.peso_producto || '-', 485, yPos + 6);
+      doc.font('Helvetica').text(orden.peso_producto || '', 485, yPos + 6);
 
       yPos += altoHeaderSeccion2;
 
@@ -2375,34 +2375,48 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       }
 
       yPos += 10;
-      if (yPos > 700) { doc.addPage(); yPos = 30; }
+      if (yPos > 720) { doc.addPage(); yPos = 30; }
 
       doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('REGISTRO DE MERMAS', 20, yPos);
       yPos += 8;
 
-      const anchoMermaCol = 100;
-      const totalAnchoMerma = anchoMermaCol * 2;
-      const altoHeaderMerma = 10;
-      const filasMerma = 6;
-
-      doc.rect(20, yPos, totalAnchoMerma, altoHeaderMerma).fill('#FFF176').stroke();
-      doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
-      doc.text('PESO / CANTIDAD', 20, yPos + 3, { width: anchoMermaCol, align: 'center' });
-      doc.text('PESO / CANTIDAD', 20 + anchoMermaCol, yPos + 3, { width: anchoMermaCol, align: 'center' });
+      const colsMerma = 2;
+      const filasMerma = 10;
+      const anchoTotal = 555;
+      const gap = 15;
+      const anchoTablaMerma = (anchoTotal - gap) / colsMerma; 
+      const anchoNumMerma = 40;
+      const anchoPesoMerma = anchoTablaMerma - anchoNumMerma;
       
-      doc.moveTo(20 + anchoMermaCol, yPos).lineTo(20 + anchoMermaCol, yPos + altoHeaderMerma).stroke();
-      
-      yPos += altoHeaderMerma;
+      doc.fontSize(5).font('Helvetica-Bold');
+      doc.rect(20, yPos, anchoTablaMerma, 10).fill('#FFCC80').stroke();
+      doc.fillColor('black').text('N° REGISTRO', 20, yPos + 3, { width: anchoNumMerma, align: 'center' });
+      doc.text('PESO / CANTIDAD', 20 + anchoNumMerma, yPos + 3, { width: anchoPesoMerma, align: 'center' });
 
-      doc.lineWidth(0.5);
-      for (let m = 0; m < filasMerma; m++) {
-          doc.rect(20, yPos, anchoMermaCol, alturaFila).stroke();
-          doc.rect(20 + anchoMermaCol, yPos, anchoMermaCol, alturaFila).stroke();
-          yPos += alturaFila;
+      doc.rect(20 + anchoTablaMerma + gap, yPos, anchoTablaMerma, 10).fill('#FFCC80').stroke();
+      doc.fillColor('black').text('N° REGISTRO', 20 + anchoTablaMerma + gap, yPos + 3, { width: anchoNumMerma, align: 'center' });
+      doc.text('PESO / CANTIDAD', 20 + anchoTablaMerma + gap + anchoNumMerma, yPos + 3, { width: anchoPesoMerma, align: 'center' });
+
+      yPos += 10;
+
+      doc.fontSize(6).font('Helvetica');
+      for (let i = 0; i < filasMerma; i++) {
+        const yRow = yPos + (i * 12);
+        
+        const x1 = 20;
+        doc.rect(x1, yRow, anchoTablaMerma, 12).stroke();
+        doc.moveTo(x1 + anchoNumMerma, yRow).lineTo(x1 + anchoNumMerma, yRow + 12).stroke();
+        doc.text((i + 1).toString(), x1, yRow + 3, { width: anchoNumMerma, align: 'center' });
+
+        const x2 = 20 + anchoTablaMerma + gap;
+        doc.rect(x2, yRow, anchoTablaMerma, 12).stroke();
+        doc.moveTo(x2 + anchoNumMerma, yRow).lineTo(x2 + anchoNumMerma, yRow + 12).stroke();
+        doc.text((i + 11).toString(), x2, yRow + 3, { width: anchoNumMerma, align: 'center' });
       }
+      yPos += (filasMerma * 12);
 
       yPos += 15;
-      if (yPos > 700) { doc.addPage(); yPos = 30; }
+      if (yPos > 720) { doc.addPage(); yPos = 30; }
 
       doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS Y OBSERVACIONES', 20, yPos);
       yPos += 8;
@@ -2418,7 +2432,12 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           yPos += 10;
       }
 
-      const yFooter = 790; 
+      let yFooter = yPos + 20;
+      if (yFooter + 20 > 800) {
+        doc.addPage();
+        yFooter = 30;
+      }
+
       doc.fontSize(6);
       const wBox = 135;
       doc.rect(20, yFooter, wBox, 20).stroke();

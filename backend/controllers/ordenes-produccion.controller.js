@@ -2252,7 +2252,7 @@ export async function editarOrdenCompleta(req, res) {
 export async function anularOrden(req, res) {
   try {
     const { id } = req.params;
-    const id_usuario = req.user?.id_usuario || req.user?.id || null; // Quien anula
+    const id_usuario = req.user?.id_usuario || req.user?.id || null;
 
     // 1. Obtener datos de la orden
     const ordenResult = await executeQuery(
@@ -2266,95 +2266,110 @@ export async function anularOrden(req, res) {
 
     const orden = ordenResult.data[0];
 
-    if (orden.estado === 'Cancelada' || orden.estado === 'Anulada') {
-      return res.status(400).json({ error: 'La orden ya está anulada o cancelada' });
+    // Validación de estado según el ENUM de tu tabla
+    if (orden.estado === 'Cancelada') {
+      return res.status(400).json({ error: 'La orden ya está cancelada' });
     }
 
     const queries = [];
+    
+    // Variables para rastrear los índices de los resultados de la transacción
+    let hayEntradaInsumos = false;
+    let haySalidaProducto = false;
 
     // ---------------------------------------------------------
     // PASO A: DEVOLVER INSUMOS CONSUMIDOS AL ALMACÉN (Entrada)
     // ---------------------------------------------------------
     const consumoResult = await executeQuery(
       `SELECT 
-         cm.id_insumo, 
-         cm.cantidad_real_consumida, 
-         cm.costo_unitario,
-         p.id_tipo_inventario
-       FROM op_consumo_materiales cm
-       INNER JOIN productos p ON cm.id_insumo = p.id_producto
-       WHERE cm.id_orden = ? AND cm.cantidad_real_consumida > 0`,
+          cm.id_insumo, 
+          cm.cantidad_real_consumida, 
+          cm.costo_unitario,
+          p.id_tipo_inventario
+        FROM op_consumo_materiales cm
+        INNER JOIN productos p ON cm.id_insumo = p.id_producto
+        WHERE cm.id_orden = ? AND cm.cantidad_real_consumida > 0`,
       [id]
     );
 
     if (consumoResult.data.length > 0) {
-      // Calcular costo total de la devolución de insumos
+      hayEntradaInsumos = true;
+      
       const totalCostoDevolucion = consumoResult.data.reduce((sum, item) => 
         sum + (parseFloat(item.cantidad_real_consumida) * parseFloat(item.costo_unitario)), 0
       );
 
-      // Crear cabecera de Entrada (Devolución)
+      // CORRECCIÓN: Usamos 'fecha_movimiento' y 'tipo_entrada'
       queries.push({
         sql: `INSERT INTO entradas (
-          id_tipo_inventario, documento_soporte, total_costo, moneda,
-          id_registrado_por, observaciones, fecha_entrada
-        ) VALUES (?, ?, ?, 'PEN', ?, ?, NOW())`,
+          id_tipo_inventario, 
+          tipo_entrada,
+          documento_soporte, 
+          total_costo, 
+          moneda,
+          id_registrado_por, 
+          observaciones, 
+          fecha_movimiento,
+          estado
+        ) VALUES (?, 'Devolucion', ?, ?, 'PEN', ?, ?, NOW(), 'Activo')`,
         params: [
-          consumoResult.data[0].id_tipo_inventario, // Usamos el tipo del primer insumo (generalmente Materia Prima)
+          consumoResult.data[0].id_tipo_inventario,
           `Anulación O.P. ${orden.numero_orden}`,
           totalCostoDevolucion,
           id_usuario,
           `Devolución de insumos por anulación de O.P. ${orden.numero_orden}`
         ]
       });
-
-      // Nota: Necesitamos el ID de esta entrada para los detalles. 
-      // Como estamos en una transacción manual de queries, usaremos una variable SQL o lógica posterior.
-      // Para simplificar en executeTransaction, asumiremos que se inserta y luego recuperamos el ID
-      // Ojo: executeTransaction devuelve los resultados en orden.
     }
 
     // ---------------------------------------------------------
     // PASO B: RETIRAR PRODUCTO TERMINADO (Salida) - Solo si finalizó
     // ---------------------------------------------------------
     let cantidadA_Retirar = 0;
-    // Si la orden estaba finalizada, hay que sacar el producto del stock
-    if (orden.estado === 'Finalizada' && orden.cantidad_producida > 0) {
+    
+    if (orden.estado === 'Finalizada' && parseFloat(orden.cantidad_producida) > 0) {
         
-        // Determinar si usamos unidades o kilos para el stock (mismo criterio que al finalizar)
-        const esLamina = orden.es_orden_manual === 1; // O tu lógica de nombre de producto
-        // Simplificación: Usaremos lo que se guardó en la entrada original o la lógica base
-        // Asumimos que retiramos la cantidad principal producida (sea kg o unds según tu lógica de stock)
+        // Lógica para determinar qué cantidad retirar del stock (Kilos o Unidades)
+        // Por defecto el sistema mueve stock en base a la unidad de medida principal del producto
+        // Si tu sistema mueve stock en Kilos:
+        cantidadA_Retirar = parseFloat(orden.cantidad_producida);
         
-        // NOTA: Aquí debes ajustar si tu stock se mueve en Kilos o Unidades para este producto.
-        // Asumiré Kilos por defecto, salvo que sea Lámina/Unidad.
-        const esUnidad = orden.cantidad_unidades_producida > 0 && esLamina; 
-        cantidadA_Retirar = esUnidad ? orden.cantidad_unidades_producida : orden.cantidad_producida;
+        // Si es un caso especial donde el stock se mueve en unidades (ej. láminas manuales):
+        // (Ajusta esta lógica según cómo guardas tu stock normalmente)
+        if (orden.es_orden_manual === 1 && parseFloat(orden.cantidad_unidades_producida) > 0) {
+             // Si el producto está configurado para controlar stock por unidades, descomenta esto:
+             // cantidadA_Retirar = parseFloat(orden.cantidad_unidades_producida);
+        }
 
-        const costoTotalProducto = orden.costo_materiales; // El valor que entró
-
-        // Crear cabecera de Salida (Anulación de Ingreso)
-        queries.push({
-            sql: `INSERT INTO salidas (
-                id_tipo_inventario, documento_soporte, id_solicitante, 
-                observaciones, fecha_salida, estado
-            ) VALUES (?, ?, ?, ?, NOW(), 'Aprobado')`,
-            params: [
-                3, // ID 3 suele ser Producto Terminado (ajustar según tu DB)
-                `Anulación O.P. ${orden.numero_orden}`,
-                id_usuario,
-                `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`
-            ]
-        });
+        if (cantidadA_Retirar > 0) {
+            haySalidaProducto = true;
+            
+            // Asumimos que la tabla salidas usa 'fecha_salida' o 'fecha_movimiento'. 
+            // Si salidas tiene la misma estructura que entradas, usa 'fecha_movimiento'.
+            // Mantendré 'fecha_salida' si tu tabla salidas es estándar, si falla cámbialo a 'fecha_movimiento'.
+            queries.push({
+                sql: `INSERT INTO salidas (
+                    id_tipo_inventario, documento_soporte, id_solicitante, 
+                    observaciones, fecha_salida, estado
+                ) VALUES (?, ?, ?, ?, NOW(), 'Aprobado')`,
+                params: [
+                    3, // ID 3 = Producto Terminado
+                    `Anulación O.P. ${orden.numero_orden}`,
+                    id_usuario,
+                    `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`
+                ]
+            });
+        }
     }
 
     // ---------------------------------------------------------
     // PASO C: ACTUALIZAR ESTADO DE LA ORDEN
     // ---------------------------------------------------------
+    // CORRECCIÓN: Estado 'Cancelada' (el enum no admite 'Anulada')
     queries.push({
       sql: `UPDATE ordenes_produccion 
-            SET estado = 'Anulada', 
-                observaciones = CONCAT(IFNULL(observaciones, ''), ' [ANULADA]') 
+            SET estado = 'Cancelada', 
+                observaciones = CONCAT(IFNULL(observaciones, ''), ' [CANCELADA]') 
             WHERE id_orden = ?`,
       params: [id]
     });
@@ -2369,7 +2384,7 @@ export async function anularOrden(req, res) {
       });
     }
 
-    // Ejecutar Transacción Principal (Creación de Cabeceras y Updates)
+    // EJECUTAR TRANSACCIÓN DE CABECERAS
     const resultHeader = await executeTransaction(queries);
     
     if (!resultHeader.success) {
@@ -2379,22 +2394,22 @@ export async function anularOrden(req, res) {
     // ---------------------------------------------------------
     // PASO E: GESTIONAR DETALLES DE INVENTARIO (Stock Físico)
     // ---------------------------------------------------------
-    // Esto se hace en una segunda fase porque necesitamos los IDs insertados arriba
-    
     const queriesDetalles = [];
-    let indiceQuery = 0;
-
+    
+    // Rastrear índices de los resultados para obtener los IDs generados
+    let currentIndex = 0;
+    
     // 1. Procesar Devolución de Insumos (Entrada)
-    if (consumoResult.data.length > 0) {
-        const idEntrada = resultHeader.data[0].insertId; // El primer insert fue la Entrada
-        indiceQuery++; // Avanzamos el índice
+    if (hayEntradaInsumos) {
+        const idEntrada = resultHeader.data[currentIndex].insertId;
+        currentIndex++;
 
         for (const item of consumoResult.data) {
-            // Detalle Entrada
             queriesDetalles.push({
                 sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (?, ?, ?, ?)`,
                 params: [idEntrada, item.id_insumo, item.cantidad_real_consumida, item.costo_unitario]
             });
+            
             // Devolver Stock
             queriesDetalles.push({
                 sql: `UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?`,
@@ -2404,33 +2419,34 @@ export async function anularOrden(req, res) {
     }
 
     // 2. Procesar Retiro de Producto Terminado (Salida)
-    if (orden.estado === 'Finalizada' && cantidadA_Retirar > 0) {
-        // El ID de salida es el siguiente insert en resultHeader
-        // Si hubo insumos, es el indice 1. Si no hubo insumos, es el indice 0.
-        const idSalida = resultHeader.data[indiceQuery].insertId;
+    if (haySalidaProducto) {
+        const idSalida = resultHeader.data[currentIndex].insertId;
+        // currentIndex++; // No es necesario incrementar si no hay más inserts con ID dependiente después
 
-        // Detalle Salida
         queriesDetalles.push({
             sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad) VALUES (?, ?, ?)`,
             params: [idSalida, orden.id_producto_terminado, cantidadA_Retirar]
         });
-        // Restar Stock
+        
+        // Restar Stock (Revertir el ingreso de producción)
         queriesDetalles.push({
             sql: `UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?`,
             params: [cantidadA_Retirar, orden.id_producto_terminado]
         });
     }
 
-    // Ejecutar movimientos de stock
+    // Ejecutar movimientos de stock (Detalles y Updates)
     if (queriesDetalles.length > 0) {
         const resultDetalles = await executeTransaction(queriesDetalles);
         if (!resultDetalles.success) throw new Error(resultDetalles.error);
     }
 
-    // Notificar
-    await notificarCambioEstado(id, `Orden Anulada: ${orden.numero_orden}`, 'La orden y sus movimientos han sido revertidos.', 'error', req);
+    // Notificar (Asumiendo que tienes esta función)
+    if (typeof notificarCambioEstado === 'function') {
+        await notificarCambioEstado(id, `Orden Cancelada: ${orden.numero_orden}`, 'La orden y sus movimientos han sido revertidos.', 'error', req);
+    }
 
-    res.json({ success: true, message: 'Orden anulada y movimientos revertidos correctamente.' });
+    res.json({ success: true, message: 'Orden cancelada y movimientos revertidos correctamente.' });
 
   } catch (error) {
     console.error('Error al anular orden:', error);

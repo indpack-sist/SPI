@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, 
-  Loader, Building2, Eye, User, CreditCard 
+  Loader, Building2, Eye, User, CreditCard, Upload 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clientesAPI, solicitudesCreditoAPI } from '../../config/api';
@@ -137,9 +137,17 @@ function Clientes() {
     setModalSolicitudOpen(true);
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setArchivoSustento(e.target.files[0]);
+  const handlePaste = (e) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        const fecha = new Date().toISOString().replace(/[:.]/g, '-');
+        const file = new File([blob], `sustento_${fecha}.png`, { type: blob.type });
+        setArchivoSustento(file);
+        e.preventDefault();
+        return; 
+      }
     }
   };
 
@@ -483,11 +491,10 @@ function Clientes() {
               <p className="text-xs text-muted mt-1 ml-6">{formData.usar_limite_credito ? 'El cliente tiene límites de crédito definidos' : 'El cliente puede realizar compras sin límite de crédito'}</p>
             </div>
 
-            {formData.usar_limite_credito && (
-              <div className="pt-3 border-t">
-                {editando ? (
-                  <div className="space-y-3">
-                    <div className="card bg-blue-50">
+            {editando ? (
+                // MODO EDICIÓN: BOTÓN DE SOLICITUD
+                <div className="pt-3 border-t">
+                    <div className="card bg-blue-50 mb-3">
                       <div className="flex items-center gap-2 mb-2">
                         <AlertCircle size={16} className="text-info" />
                         <p className="text-sm font-medium text-info">Límites Actuales (Solo lectura)</p>
@@ -503,28 +510,38 @@ function Clientes() {
                         </div>
                       </div>
                     </div>
+                    
                     <button 
-                      type="button" 
-                      className={`btn btn-block ${editando.tiene_solicitud_pendiente ? 'btn-disabled opacity-50' : 'btn-outline'}`}
-                      onClick={() => abrirModalSolicitudCredito(editando)}
-                      disabled={editando.tiene_solicitud_pendiente}
+                        type="button" 
+                        className={`btn btn-block ${editando.tiene_solicitud_pendiente ? 'btn-disabled opacity-50' : 'btn-outline'}`}
+                        onClick={() => abrirModalSolicitudCredito(editando)}
+                        disabled={editando.tiene_solicitud_pendiente}
                     >
-                      <CreditCard size={16} /> {editando.tiene_solicitud_pendiente ? 'Solicitud en Proceso' : 'Solicitar Cambio de Límite'}
+                        <CreditCard size={16} /> 
+                        {editando.tiene_solicitud_pendiente 
+                            ? 'Solicitud en Proceso' 
+                            : !formData.usar_limite_credito 
+                                ? 'Solicitar Crédito' 
+                                : 'Solicitar Cambio de Límite'
+                        }
                     </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="form-group mb-0">
-                      <label className="form-label">Límite en Soles (S/)</label>
-                      <input type="number" className="form-input" value={formData.limite_credito_pen} onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })} min="0" step="0.01" placeholder="0.00" />
+                </div>
+            ) : (
+                // MODO CREACIÓN: CAMPOS EDITABLES SOLO SI SE MARCA EL CHECK
+                formData.usar_limite_credito && (
+                    <div className="pt-3 border-t">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="form-group mb-0">
+                            <label className="form-label">Límite en Soles (S/)</label>
+                            <input type="number" className="form-input" value={formData.limite_credito_pen} onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })} min="0" step="0.01" placeholder="0.00" />
+                            </div>
+                            <div className="form-group mb-0">
+                            <label className="form-label">Límite en Dólares ($)</label>
+                            <input type="number" className="form-input" value={formData.limite_credito_usd} onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })} min="0" step="0.01" placeholder="0.00" />
+                            </div>
+                        </div>
                     </div>
-                    <div className="form-group mb-0">
-                      <label className="form-label">Límite en Dólares ($)</label>
-                      <input type="number" className="form-input" value={formData.limite_credito_usd} onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })} min="0" step="0.01" placeholder="0.00" />
-                    </div>
-                  </div>
-                )}
-              </div>
+                )
             )}
           </div>
 
@@ -546,7 +563,7 @@ function Clientes() {
       <Modal 
         isOpen={modalSolicitudOpen} 
         onClose={() => setModalSolicitudOpen(false)} 
-        title="Solicitar Cambio de Límite de Crédito"
+        title={!clienteParaSolicitud?.usar_limite_credito ? "Solicitar Activación de Crédito" : "Solicitar Cambio de Límite"}
       >
         {clienteParaSolicitud && (
           <form onSubmit={handleSubmitSolicitud}>
@@ -556,6 +573,7 @@ function Clientes() {
                 <p className="text-sm text-muted">RUC: {clienteParaSolicitud.ruc}</p>
               </div>
             </div>
+            
             <div className="mb-4">
               <h4 className="font-medium mb-2">Límites Actuales</h4>
               <div className="grid grid-cols-2 gap-3 card bg-gray-50">
@@ -569,6 +587,7 @@ function Clientes() {
                 </div>
               </div>
             </div>
+
             <div className="mb-4">
               <h4 className="font-medium mb-2">Nuevos Límites Solicitados</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -582,20 +601,41 @@ function Clientes() {
                 </div>
               </div>
             </div>
+
             <div className="form-group">
               <label className="form-label">Justificación *</label>
-              <textarea className="form-textarea" value={solicitudData.justificacion} onChange={(e) => setSolicitudData({ ...solicitudData, justificacion: e.target.value })} rows={4} placeholder="Explique por qué se necesita este cambio de límite..." required />
+              <textarea className="form-textarea" value={solicitudData.justificacion} onChange={(e) => setSolicitudData({ ...solicitudData, justificacion: e.target.value })} rows={4} placeholder="Explique por qué se necesita este crédito..." required />
             </div>
             
             <div className="form-group">
               <label className="form-label">Archivo de Sustento (Opcional)</label>
-              <input 
-                type="file" 
-                className="form-input" 
-                onChange={handleFileChange} 
-                accept=".pdf,.jpg,.jpeg,.png"
-              />
-              <p className="text-xs text-muted mt-1">Sube un sustento (PDF o Imagen) para agilizar la aprobación.</p>
+              
+              <div 
+                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 focus:outline-none"
+                tabIndex="0"
+                onPaste={handlePaste}
+                onClick={() => document.getElementById('file-upload-sustento').click()}
+              >
+                {archivoSustento ? (
+                    <div className="flex items-center justify-center gap-2 text-success">
+                        <CheckCircle size={20} />
+                        <span className="font-medium">{archivoSustento.name}</span>
+                    </div>
+                ) : (
+                    <div className="text-gray-500">
+                        <Upload className="mx-auto h-8 w-8 mb-2 text-gray-400" />
+                        <p className="text-sm font-medium">Haz click para subir o presiona <span className="text-primary font-bold">Ctrl+V</span> para pegar imagen</p>
+                        <p className="text-xs mt-1">Formatos: PDF, JPG, PNG</p>
+                    </div>
+                )}
+                <input 
+                    id="file-upload-sustento"
+                    type="file" 
+                    className="hidden" 
+                    onChange={(e) => setArchivoSustento(e.target.files[0])}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                />
+              </div>
             </div>
 
             <div className="flex gap-2 justify-end mt-4">

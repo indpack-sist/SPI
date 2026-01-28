@@ -236,7 +236,7 @@ function OrdenesProduccion() {
               )}
             </div>
           )}
-          {row.es_orden_manual === 1 && (
+          {row.es_manual === 1 && (
             <div className="badge badge-warning text-xs mt-1">Manual</div>
           )}
         </div>
@@ -287,7 +287,7 @@ function OrdenesProduccion() {
       }
     },
     {
-      header: 'Progreso',
+      header: 'Progreso (Kg / Und)',
       accessor: 'cantidad_planificada',
       align: 'left',
       width: '240px',
@@ -297,20 +297,21 @@ function OrdenesProduccion() {
         const realKg = parseFloat(row.cantidad_producida || 0);
         let pctKg = 0;
         if (metaKg > 0) pctKg = (realKg / metaKg) * 100;
+        else if (realKg > 0) pctKg = 100; // Si no hay meta pero hay real, llenar al 100%
 
         // --- CÁLCULO UNIDADES ---
         const metaUnd = parseFloat(row.cantidad_unidades || 0);
         const realUnd = parseFloat(row.cantidad_unidades_producida || 0);
         let pctUnd = 0;
         if (metaUnd > 0) pctUnd = (realUnd / metaUnd) * 100;
-        else if (realUnd > 0) pctUnd = 100; // Si no hay meta pero hay real, llenar barra.
+        else if (realUnd > 0) pctUnd = 100; 
         
         const unidadLabel = row.unidad_medida || 'Und';
 
         return (
-          <div className="w-full flex flex-col gap-2 py-1">
+          <div className="w-full flex flex-col gap-3 py-2">
             
-            {/* === BARRA KILOS (Verde) === */}
+            {/* === SECCIÓN KILOS (Masa) === */}
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-end leading-none">
                 <span className="text-[10px] uppercase font-bold text-gray-500">Kilos (Kg)</span>
@@ -322,16 +323,22 @@ function OrdenesProduccion() {
                   <span className="text-gray-600 font-semibold">{metaKg.toFixed(2)}</span>
                 </div>
               </div>
-              <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+              
+              {/* Barra Kilos: Estilos en línea para forzar visualización */}
+              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '9999px', overflow: 'hidden' }}>
                 <div 
-                  className={`h-full transition-all duration-500 ${pctKg > 100 ? 'bg-orange-500' : 'bg-success'}`}
-                  style={{ width: `${Math.min(pctKg, 100)}%` }}
+                  style={{ 
+                    width: `${Math.min(pctKg, 100)}%`, 
+                    height: '100%', 
+                    backgroundColor: pctKg > 100 ? '#f97316' : '#10b981', // Naranja si se pasa, Verde normal
+                    transition: 'width 0.5s ease' 
+                  }}
                   title={`Avance Kilos: ${pctKg.toFixed(1)}%`}
                 />
               </div>
             </div>
 
-            {/* === BARRA UNIDADES (Azul) === */}
+            {/* === SECCIÓN UNIDADES (Cantidad) === */}
             <div className="flex flex-col gap-1">
               <div className="flex justify-between items-end leading-none">
                 <span className="text-[10px] uppercase font-bold text-blue-500 truncate max-w-[80px]" title={unidadLabel}>
@@ -339,16 +346,22 @@ function OrdenesProduccion() {
                 </span>
                 <div className="text-xs font-mono">
                   <span className={realUnd > 0 ? "font-bold text-blue-600" : "text-gray-400"}>
-                    {realUnd.toFixed(2)}
+                    {Math.floor(realUnd)}
                   </span>
                   <span className="text-gray-300 mx-1">/</span>
-                  <span className="text-gray-600 font-semibold">{metaUnd.toFixed(2)}</span>
+                  <span className="text-gray-600 font-semibold">{Math.floor(metaUnd)}</span>
                 </div>
               </div>
-              <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+
+              {/* Barra Unidades: Estilos en línea para forzar visualización */}
+              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '9999px', overflow: 'hidden' }}>
                 <div 
-                  className={`h-full transition-all duration-500 ${pctUnd > 100 ? 'bg-indigo-500' : 'bg-blue-500'}`}
-                  style={{ width: `${Math.min(pctUnd, 100)}%` }}
+                  style={{ 
+                    width: `${Math.min(pctUnd, 100)}%`, 
+                    height: '100%', 
+                    backgroundColor: pctUnd > 100 ? '#6366f1' : '#3b82f6', // Indigo si se pasa, Azul normal
+                    transition: 'width 0.5s ease' 
+                  }}
                   title={`Avance Unidades: ${pctUnd.toFixed(1)}%`}
                 />
               </div>

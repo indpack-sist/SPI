@@ -513,8 +513,12 @@ export async function updateCotizacion(req, res) {
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+      
+      const precioUnitarioInput = parseFloat(item.precio_unitario || item.precio_venta || 0);
       const montoComision = precioBase * (pctComision / 100);
-      const precioFinal = precioBase + montoComision;
+      
+      const precioFinal = precioUnitarioInput > 0 ? precioUnitarioInput : (precioBase + montoComision);
+      
       const valorVenta = (cantidad * precioFinal) * (1 - (pctDescuento / 100));
       
       if (!isNaN(valorVenta)) subtotal += valorVenta;
@@ -576,8 +580,11 @@ export async function updateCotizacion(req, res) {
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+      
+      const precioUnitarioInput = parseFloat(item.precio_unitario || item.precio_venta || 0);
       const montoComision = precioBase * (pctComision / 100);
-      const precioFinal = precioBase + montoComision;
+      
+      const precioFinal = precioUnitarioInput > 0 ? precioUnitarioInput : (precioBase + montoComision);
 
       queries.push({
         sql: `INSERT INTO detalle_cotizacion (id_cotizacion, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, orden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -624,8 +631,11 @@ export async function updateCotizacion(req, res) {
         const precioBase = parseFloat(item.precio_base || 0);
         const pctComision = parseFloat(item.porcentaje_comision || 0);
         const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+        
+        const precioUnitarioInput = parseFloat(item.precio_unitario || item.precio_venta || 0);
         const montoComision = precioBase * (pctComision / 100);
-        const precioFinal = precioBase + montoComision;
+        
+        const precioFinal = precioUnitarioInput > 0 ? precioUnitarioInput : (precioBase + montoComision);
 
         queries.push({
           sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -512,7 +512,6 @@ function SolicitudesCredito() {
                   <FileText size={16} /> Documento de Sustento
                 </h4>
                 <div className="card p-0 overflow-hidden border bg-gray-100">
-                  {/* AQUÍ ESTÁ LA SOLUCIÓN: Usamos .includes('.pdf') para ser más flexibles y PROXY para todo */}
                   {solicitudSeleccionada.archivo_sustento_url.toLowerCase().includes('.pdf') ? (
                     <iframe
                       src={archivosAPI.getProxyUrl(solicitudSeleccionada.archivo_sustento_url)}
@@ -522,12 +521,10 @@ function SolicitudesCredito() {
                   ) : (
                     <div className="flex justify-center p-4">
                       <img 
-                        /* IMPORTANTE: Usamos el proxy también para imágenes para evitar el error 401 */
                         src={archivosAPI.getProxyUrl(solicitudSeleccionada.archivo_sustento_url)} 
                         alt="Sustento" 
                         className="w-full h-auto max-h-[600px] object-contain shadow-sm rounded"
                         onError={(e) => {
-                          // Si falla como imagen, intentamos mostrarlo como link de descarga
                           e.target.style.display = 'none';
                         }}
                       />
@@ -536,7 +533,6 @@ function SolicitudesCredito() {
                 </div>
                 <div className="text-right mt-1">
                   <a 
-                    /* Usamos el proxy también aquí para permitir la descarga de archivos privados */
                     href={archivosAPI.getProxyUrl(solicitudSeleccionada.archivo_sustento_url)} 
                     target="_blank" 
                     rel="noopener noreferrer"

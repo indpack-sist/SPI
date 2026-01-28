@@ -6,7 +6,7 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit
+  Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit, History
 } from 'lucide-react';
 import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
@@ -91,6 +91,8 @@ function OrdenDetalle() {
   const [modoRecetaEdicion, setModoRecetaEdicion] = useState('porcentaje');
   const [modalAgregarInsumoEdicion, setModalAgregarInsumoEdicion] = useState(false);
   const [nuevoInsumoEdicion, setNuevoInsumoEdicion] = useState({ id_insumo: '', porcentaje: '' });
+
+  const [modalAnular, setModalAnular] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -322,6 +324,7 @@ function OrdenDetalle() {
       setProcesando(false);
     }
   };
+
   const mermasFiltradas = productosMerma.filter(merma => {
       if (!orden) return false;
       const nombreProducto = orden.producto.toUpperCase();
@@ -823,30 +826,13 @@ function OrdenDetalle() {
     ));
   };
 
-  const handleCancelar = async () => {
-    if (!confirm('¿Está seguro de cancelar esta orden? Los materiales consumidos serán devueltos al inventario.')) return;
-
-    try {
-      setProcesando(true);
-      setError(null);
-      await ordenesProduccionAPI.cancelar(id);
-      setSuccess('Orden cancelada. Los materiales han sido devueltos al inventario.');
-      cargarDatos();
-    } catch (err) {
-      setError(err.error || 'Error al cancelar orden');
-    } finally {
-      setProcesando(false);
-    }
-  };
-
   const handleAnular = async () => {
-    if (!confirm('PELIGRO: ¿Está seguro de ANULAR esta orden?\n\nEsta acción es irreversible:\n1. Se devolverán todos los insumos al stock.\n2. Se retirará el producto terminado (si existe).\n3. La Orden de Venta volverá a Pendiente.')) return;
-
     try {
       setProcesando(true);
       setError(null);
       await ordenesProduccionAPI.anular(id);
       setSuccess('Orden anulada correctamente. Inventario revertido.');
+      setModalAnular(false);
       cargarDatos();
     } catch (err) {
       setError(err.response?.data?.error || 'Error al anular la orden');
@@ -931,7 +917,6 @@ function OrdenDetalle() {
   const puedePausar = orden.estado === 'En Curso';
   const puedeReanudar = orden.estado === 'En Pausa';
   const puedeFinalizar = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
-  const puedeCancelar = ['Pendiente Asignación', 'Pendiente', 'En Curso', 'En Pausa'].includes(orden.estado);
   const puedeRegistrarParcial = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
   const esPendienteAsignacionDesdeVenta = orden.estado === 'Pendiente Asignación' && desdeOrdenVenta;
@@ -943,6 +928,9 @@ function OrdenDetalle() {
     (productosDisponibles.find(p => p.id_producto == datosEdicion.id_producto_terminado)?.nombre.toUpperCase().includes('LÁMINA') || 
      productosDisponibles.find(p => p.id_producto == datosEdicion.id_producto_terminado)?.nombre.toUpperCase().includes('LAMINA')) : 
     esLamina;
+
+  const tieneRegistrosParciales = registrosParciales && registrosParciales.length > 0;
+  const tieneConsumoMateriales = consumoMateriales && consumoMateriales.length > 0;
 
   return (
     <div>
@@ -971,7 +959,7 @@ function OrdenDetalle() {
               </div>
               
               <div className="flex gap-4 text-sm">
-                 {orden.prioridad_venta && (
+                  {orden.prioridad_venta && (
                     <div className="flex flex-col items-center">
                       <span className="text-xs text-blue-600 uppercase font-semibold">Prioridad</span>
                       <span className={`badge ${
@@ -981,16 +969,16 @@ function OrdenDetalle() {
                         {orden.prioridad_venta}
                       </span>
                     </div>
-                 )}
-                 
-                 {orden.fecha_estimada_venta && (
+                  )}
+                  
+                  {orden.fecha_estimada_venta && (
                     <div className="flex flex-col items-end">
                       <span className="text-xs text-blue-600 uppercase font-semibold">Fecha Prometida</span>
                       <span className="font-bold text-blue-900">
                         {formatearFecha(orden.fecha_estimada_venta)}
                       </span>
                     </div>
-                 )}
+                  )}
               </div>
             </div>
           </div>
@@ -1098,15 +1086,10 @@ function OrdenDetalle() {
               <CheckCircle size={18} className="mr-2" /> Finalizar
             </button>
           )}
-          {puedeCancelar && (
-            <button className="btn btn-danger" onClick={handleCancelar} disabled={procesando}>
-              <XCircle size={18} className="mr-2" /> Cancelar
-            </button>
-          )}
           {!['Cancelada', 'Anulada'].includes(orden.estado) && (
             <button 
                 className="btn btn-danger ml-2"
-                onClick={handleAnular} 
+                onClick={() => setModalAnular(true)} 
                 disabled={procesando}
                 title="Revertir toda la producción e inventario"
             >
@@ -1443,6 +1426,81 @@ function OrdenDetalle() {
         </div>
       )}
 
+      {/* MODAL DE ANULACIÓN MEJORADO */}
+      <Modal
+        isOpen={modalAnular}
+        onClose={() => setModalAnular(false)}
+        title="ANULAR ORDEN DE PRODUCCIÓN"
+        size="lg"
+      >
+        <div className="space-y-4">
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded flex items-start gap-3">
+                <AlertTriangle className="text-red-600 shrink-0 mt-0.5" size={24} />
+                <div className="text-sm text-red-800">
+                    <p className="font-bold text-lg mb-1">¡ACCIÓN IRREVERSIBLE!</p>
+                    <p>Al confirmar esta acción, se realizarán los siguientes movimientos automáticos:</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-white p-3 border rounded shadow-sm">
+                    <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
+                        <CheckCircle size={16} className="text-green-600"/> 1. Devolución de Insumos
+                    </h4>
+                    {tieneConsumoMateriales ? (
+                        <ul className="list-disc list-inside text-gray-600 space-y-1 ml-2">
+                            <li>Se generará una <strong>ENTRADA</strong> de almacén.</li>
+                            <li>Se devolverá el stock de todos los insumos consumidos hasta el momento.</li>
+                            <li>Registros Parciales: <strong>{registrosParciales.length}</strong> encontrados.</li>
+                        </ul>
+                    ) : (
+                        <p className="text-gray-500 italic ml-6">No hay consumo de materiales registrado aún.</p>
+                    )}
+                </div>
+
+                <div className="bg-white p-3 border rounded shadow-sm">
+                    <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
+                        <XCircle size={16} className="text-red-600"/> 2. Retiro de Producto
+                    </h4>
+                    {orden.estado === 'Finalizada' ? (
+                        <ul className="list-disc list-inside text-gray-600 space-y-1 ml-2">
+                            <li>Se generará una <strong>SALIDA</strong> de almacén.</li>
+                            <li>Se retirará el producto terminado del stock.</li>
+                            <li>Cantidad a retirar: <strong>{orden.cantidad_producida} Kg</strong></li>
+                        </ul>
+                    ) : (
+                        <p className="text-gray-500 italic ml-6">La orden no está finalizada, no se retirará producto terminado.</p>
+                    )}
+                </div>
+            </div>
+
+            <div className="bg-orange-50 p-3 rounded border border-orange-200 text-sm">
+                <h4 className="font-bold text-orange-800 mb-1 flex items-center gap-2">
+                   <History size={16}/> 3. Estado de Orden
+                </h4>
+                <p className="text-orange-700">La orden cambiará a estado <strong>CANCELADA</strong> y la Orden de Venta original (si existe) volverá a estado <strong>PENDIENTE</strong> para poder ser programada nuevamente.</p>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4 border-t mt-2">
+                <button 
+                    className="btn btn-outline" 
+                    onClick={() => setModalAnular(false)}
+                    disabled={procesando}
+                >
+                    Cancelar
+                </button>
+                <button 
+                    className="btn btn-danger font-bold px-6" 
+                    onClick={handleAnular}
+                    disabled={procesando}
+                >
+                    {procesando ? 'Procesando...' : 'CONFIRMAR ANULACIÓN'}
+                </button>
+            </div>
+        </div>
+      </Modal>
+
+      {/* OTROS MODALES (Edición, Asignación, etc.) se mantienen igual... */}
       <Modal
         isOpen={modalEditar}
         onClose={() => setModalEditar(false)}

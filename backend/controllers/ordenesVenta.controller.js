@@ -2,6 +2,7 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
+import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
 import { 
   verificarOrdenAprobada, 
   esVerificador, 

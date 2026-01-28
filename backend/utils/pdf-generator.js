@@ -2204,7 +2204,6 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
 
-      // --- ENCABEZADO ---
       if (logoBuffer) {
         doc.image(logoBuffer, 20, 20, { width: 80 });
       } else {
@@ -2218,7 +2217,6 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fontSize(6).font('Helvetica-Bold').text('N° ORDEN', 470, 23, { align: 'center', width: 105 });
       doc.fontSize(10).text(orden.numero_orden, 470, 33, { align: 'center', width: 105 });
 
-      // --- LÓGICA DE PRODUCTO ---
       const esLamina = (orden.producto && (orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA'))) || orden.operario_corte;
       const esEsquinero = orden.producto && orden.producto.toUpperCase().includes('ESQUINERO');
       const esZuncho = orden.producto && orden.producto.toUpperCase().includes('ZUNCHO');
@@ -2269,11 +2267,8 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.font('Helvetica-Bold').text('FIN:', 250, yFechas);
       doc.text('__:__', 270, yFechas); 
 
-      // NOTA: Se eliminaron los cuadros de Gramaje/Medida/Peso de aquí para moverlos a la Sección 2.
-
       let yPos = yInfo + alturaDatos + 6;
       
-      // --- SECCION 1 (INSUMOS) ---
       if (esLamina) {
           doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('1. HISTORIAL DE ROLLOS BURBUPACK USADOS', 20, yPos);
           yPos += 8;
@@ -2313,7 +2308,6 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           yPos += 5;
       }
 
-      // --- SECCION 2: REGISTRO DE PRODUCCIÓN (MODIFICADO) ---
       let labelSlot = 'N°';
       if (esLamina || esEsquinero) labelSlot = 'PAQ';
       else if (esZuncho || esBurbupack) labelSlot = 'ROLLO';
@@ -2328,16 +2322,12 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           slotsNecesarios = parseInt(orden.cantidad_unidades || orden.cantidad_planificada || 0) + 10;
       }
 
-      // 1. DIBUJAR ENCABEZADO PERSONALIZADO CON DATOS Y FONDO DE COLOR
       const altoHeaderSeccion2 = 18;
-      // Usamos un color distinto (ej. lila suave) para destacar esta sección
       doc.rect(20, yPos, 555, altoHeaderSeccion2).fill('#D1C4E9').stroke();
       doc.fillColor('black');
 
-      // Título Sección
       doc.fontSize(7).font('Helvetica-Bold').text('2. REGISTRO DE PRODUCCIÓN', 25, yPos + 6);
 
-      // Datos Gramaje/Medida/Peso alineados a la derecha dentro del header
       doc.fontSize(6);
       doc.text('GRAMAJE:', 250, yPos + 6);
       doc.font('Helvetica').text(orden.gramaje || '-', 290, yPos + 6);
@@ -2350,14 +2340,12 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       yPos += altoHeaderSeccion2;
 
-      // 2. CONFIGURACIÓN DE LA REJILLA (Compacta, max 4 columnas)
-      const columnasGrid = 4; // Fijo a 4 columnas
-      const alturaFila = 12;  // Altura fija y pequeña
+      const columnasGrid = 4;
+      const alturaFila = 12;
       const filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
       const anchoColumna = 555 / columnasGrid;
       const headerGridHeight = 10;
 
-      // Dibujar Encabezados de Tabla
       for (let c = 0; c < columnasGrid; c++) {
           const xBase = 20 + (c * anchoColumna);
           doc.rect(xBase, yPos, anchoColumna, headerGridHeight).fill('#F0F0F0').stroke();
@@ -2370,7 +2358,6 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       }
       yPos += headerGridHeight;
 
-      // Dibujar Slots
       doc.fontSize(7).font('Helvetica');
       for (let i = 0; i < filasPorColumna; i++) {
           for (let c = 0; c < columnasGrid; c++) {
@@ -2381,39 +2368,39 @@ export async function generarPDFHojaRuta(orden, receta = []) {
               if (numeroSlot <= slotsNecesarios) {
                   doc.rect(xBase, yPos, anchoColumna, alturaFila).stroke();
                   doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).lineWidth(0.5).stroke();
-                  
                   doc.text(numeroSlot.toString(), xBase, yPos + 3, { width: w1, align: 'center' });
               }
           }
           yPos += alturaFila;
       }
 
-      // --- SECCION DE MERMAS (NUEVA) ---
       yPos += 10;
-      // Verificar si nos queda espacio en página, si no, nueva página (básico)
       if (yPos > 700) { doc.addPage(); yPos = 30; }
 
-      doc.fontSize(7).font('Helvetica-Bold').text('REGISTRO DE MERMAS', 20, yPos);
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('REGISTRO DE MERMAS', 20, yPos);
       yPos += 8;
-      
-      const altoHeaderMerma = 10;
-      const anchoMerma = 200; // No necesita ser todo el ancho
-      const filasMerma = 6;   // Cantidad fija de renglones para mermas
 
-      // Header Merma
-      doc.rect(20, yPos, anchoMerma, altoHeaderMerma).fill('#FFCCBC').stroke(); // Color rojizo suave
+      const anchoMermaCol = 100;
+      const totalAnchoMerma = anchoMermaCol * 2;
+      const altoHeaderMerma = 10;
+      const filasMerma = 6;
+
+      doc.rect(20, yPos, totalAnchoMerma, altoHeaderMerma).fill('#FFF176').stroke();
       doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
-      doc.text('PESO / CANTIDAD', 20, yPos + 3, { width: anchoMerma, align: 'center' });
+      doc.text('PESO / CANTIDAD', 20, yPos + 3, { width: anchoMermaCol, align: 'center' });
+      doc.text('PESO / CANTIDAD', 20 + anchoMermaCol, yPos + 3, { width: anchoMermaCol, align: 'center' });
+      
+      doc.moveTo(20 + anchoMermaCol, yPos).lineTo(20 + anchoMermaCol, yPos + altoHeaderMerma).stroke();
+      
       yPos += altoHeaderMerma;
 
-      // Filas Merma
+      doc.lineWidth(0.5);
       for (let m = 0; m < filasMerma; m++) {
-        doc.rect(20, yPos, anchoMerma, alturaFila).stroke();
-        yPos += alturaFila;
+          doc.rect(20, yPos, anchoMermaCol, alturaFila).stroke();
+          doc.rect(20 + anchoMermaCol, yPos, anchoMermaCol, alturaFila).stroke();
+          yPos += alturaFila;
       }
 
-
-      // --- SECCION 3: PARADAS ---
       yPos += 15;
       if (yPos > 700) { doc.addPage(); yPos = 30; }
 
@@ -2431,8 +2418,248 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           yPos += 10;
       }
 
-      // --- FOOTER FINAL ---
-      const yFooter = 790; // Posición fija
+      const yFooter = 790; 
+      doc.fontSize(6);
+      const wBox = 135;
+      doc.rect(20, yFooter, wBox, 20).stroke();
+      doc.font('Helvetica-Bold').text(`TOTAL ${unidadProduccion}:`, 25, yFooter + 8);
+      doc.rect(20 + wBox + 5, yFooter, wBox, 20).stroke();
+      doc.text('TOTAL KG PRODUCIDO:', 20 + wBox + 10, yFooter + 8);
+      doc.rect(20 + (wBox * 2) + 10, yFooter, wBox, 20).stroke();
+      doc.text('TOTAL MERMA KG:', 20 + (wBox * 2) + 15, yFooter + 8);
+      doc.rect(20 + (wBox * 3) + 15, yFooter, 135, 20).stroke();
+      doc.text('V°B° SUPERVISOR:', 20 + (wBox * 3) + 20, yFooter + 8);
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}export async function generarPDFHojaRuta(orden, receta = []) {
+  const logoBuffer = await cargarLogoURL();
+
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 20, size: 'A4' });
+      const chunks = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+
+      if (logoBuffer) {
+        doc.image(logoBuffer, 20, 20, { width: 80 });
+      } else {
+        doc.fontSize(16).font('Helvetica-Bold').text('IndPack', 20, 25);
+      }
+      
+      doc.font('Helvetica-Bold').fontSize(12).text('HOJA DE RUTA DE PRODUCCIÓN', 110, 25, { align: 'center', width: 350 });
+      doc.fontSize(7).font('Helvetica').text('CONTROL EN PLANTA', 110, 38, { align: 'center', width: 350 });
+
+      doc.roundedRect(470, 20, 105, 30, 4).stroke();
+      doc.fontSize(6).font('Helvetica-Bold').text('N° ORDEN', 470, 23, { align: 'center', width: 105 });
+      doc.fontSize(10).text(orden.numero_orden, 470, 33, { align: 'center', width: 105 });
+
+      const esLamina = (orden.producto && (orden.producto.toUpperCase().includes('LÁMINA') || orden.producto.toUpperCase().includes('LAMINA'))) || orden.operario_corte;
+      const esEsquinero = orden.producto && orden.producto.toUpperCase().includes('ESQUINERO');
+      const esZuncho = orden.producto && orden.producto.toUpperCase().includes('ZUNCHO');
+      const esBurbupack = orden.producto && (orden.producto.toUpperCase().includes('BURBUPACK') && !esLamina);
+      const esGrapa = orden.producto && orden.producto.toUpperCase().includes('GRAPA');
+      
+      const unidadProduccion = orden.unidad_medida ? orden.unidad_medida.toUpperCase() : (esLamina ? 'MILL' : 'UDS');
+      
+      const yInfo = 60; 
+      const alturaDatos = 45; 
+      doc.rect(20, yInfo, 555, alturaDatos).stroke(); 
+      doc.fontSize(6).font('Helvetica-Bold');
+      
+      doc.rect(22, yInfo + 2, 350, 10).fill('#FFF176');
+      doc.fillColor('black').text('PRODUCTO:', 25, yInfo + 5);
+      doc.font('Helvetica').text(orden.producto, 70, yInfo + 5, { width: 300, ellipsis: true });
+      
+      const metaUnidades = orden.cantidad_unidades ? `${parseInt(orden.cantidad_unidades)} ${unidadProduccion}` : '---';
+      doc.font('Helvetica-Bold').text(`META ${unidadProduccion}:`, 380, yInfo + 6);
+      doc.font('Helvetica').text(metaUnidades, 430, yInfo + 6);
+      doc.font('Helvetica-Bold').text('META KG:', 480, yInfo + 6);
+      doc.font('Helvetica').text(`${parseFloat(orden.cantidad_planificada || 0).toFixed(2)}`, 520, yInfo + 6);
+
+      let currentY = yInfo + 18;
+      if (esLamina) {
+          doc.font('Helvetica-Bold').text('OP. CORTE:', 25, currentY);
+          doc.font('Helvetica').text(orden.operario_corte || '____________________', 70, currentY);
+          doc.font('Helvetica-Bold').text('OP. EMBALAJE:', 200, currentY);
+          doc.font('Helvetica').text(orden.operario_embalaje || '____________________', 260, currentY);
+      } else {
+          doc.font('Helvetica-Bold').text('MAQUINISTA:', 25, currentY);
+          doc.font('Helvetica').text(orden.maquinista || '____________________', 75, currentY);
+          doc.font('Helvetica-Bold').text('AYUDANTE:', 200, currentY);
+          doc.font('Helvetica').text(orden.ayudante || '____________________', 245, currentY);
+      }
+
+      doc.font('Helvetica-Bold').text('TURNO:', 380, currentY);
+      doc.font('Helvetica').text(orden.turno || '___', 410, currentY);
+
+      const yLinea = yInfo + alturaDatos - 14;
+      doc.moveTo(20, yLinea).lineTo(575, yLinea).lineWidth(0.5).stroke(); 
+      
+      const yFechas = yLinea + 4;
+      doc.font('Helvetica-Bold').text('FECHA:', 25, yFechas);
+      doc.font('Helvetica').text(formatearFecha(orden.fecha_inicio) || '__/__/__', 55, yFechas);
+      doc.font('Helvetica-Bold').text('INICIO:', 150, yFechas);
+      doc.text('__:__', 180, yFechas); 
+      doc.font('Helvetica-Bold').text('FIN:', 250, yFechas);
+      doc.text('__:__', 270, yFechas); 
+
+      let yPos = yInfo + alturaDatos + 6;
+      
+      if (esLamina) {
+          doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('1. HISTORIAL DE ROLLOS BURBUPACK USADOS', 20, yPos);
+          yPos += 8;
+          const rCol1 = 20, rCol2 = 70, rCol3 = 350, rCol4 = 440;
+          doc.rect(rCol1, yPos, 555, 10).fill('#E0E0E0').stroke();
+          doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
+          doc.text('N°', rCol1 + 5, yPos + 3, { width: 40, align: 'center' });
+          doc.text('MEDIDA', rCol2 + 5, yPos + 3, { width: 270, align: 'left' });
+          doc.text('CANT', rCol3 + 5, yPos + 3, { width: 80, align: 'center' });
+          doc.text('PESO', rCol4 + 5, yPos + 3, { width: 50, align: 'center' });
+          yPos += 10;
+          for (let i = 0; i < 8; i++) {
+              doc.rect(rCol1, yPos, 555, 10).stroke();
+              doc.fontSize(6).font('Helvetica');
+              doc.text((i + 1).toString(), rCol1 + 5, yPos + 3, { width: 40, align: 'center' });
+              yPos += 10;
+          }
+          yPos += 5;
+      } else if (receta.length > 0) {
+          doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('1. MEZCLA / INSUMOS', 20, yPos);
+          yPos += 8;
+          const rCol1 = 20, rCol2 = 90, rCol3 = 380, rCol4 = 480;
+          doc.rect(rCol1, yPos, 555, 10).fill('#E0E0E0').stroke();
+          doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
+          doc.text('CÓDIGO', rCol1 + 5, yPos + 3);
+          doc.text('DESCRIPCIÓN', rCol2 + 5, yPos + 3);
+          doc.text('PLANIFICADO', rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
+          doc.text('REAL', rCol4 + 5, yPos + 3, { width: 70, align: 'center' });
+          yPos += 10;
+          receta.forEach(item => {
+              doc.rect(rCol1, yPos, 555, 10).stroke();
+              doc.fontSize(6).font('Helvetica');
+              doc.text(item.codigo_insumo || '', rCol1 + 5, yPos + 3);
+              doc.text(item.insumo || '', rCol2 + 5, yPos + 3, { width: 280, height: 8, lineBreak: false, ellipsis: true });
+              yPos += 10;
+          });
+          yPos += 5;
+      }
+
+      let labelSlot = 'N°';
+      if (esLamina || esEsquinero) labelSlot = 'PAQ';
+      else if (esZuncho || esBurbupack) labelSlot = 'ROLLO';
+      else if (esGrapa) labelSlot = 'BOLSA';
+
+      let slotsNecesarios = 0;
+      if (esLamina) {
+          slotsNecesarios = Math.ceil((parseFloat(orden.cantidad_unidades || 0) * 1000) / 500) + 10;
+      } else if (esEsquinero) {
+          slotsNecesarios = Math.min(250, Math.ceil(parseInt(orden.cantidad_unidades || 0) / 25) + 10);
+      } else {
+          slotsNecesarios = parseInt(orden.cantidad_unidades || orden.cantidad_planificada || 0) + 10;
+      }
+
+      const altoHeaderSeccion2 = 18;
+      doc.rect(20, yPos, 555, altoHeaderSeccion2).fill('#D1C4E9').stroke();
+      doc.fillColor('black');
+
+      doc.fontSize(7).font('Helvetica-Bold').text('2. REGISTRO DE PRODUCCIÓN', 25, yPos + 6);
+
+      doc.fontSize(6);
+      doc.text('GRAMAJE:', 250, yPos + 6);
+      doc.font('Helvetica').text(orden.gramaje || '-', 290, yPos + 6);
+      
+      doc.font('Helvetica-Bold').text('MEDIDA:', 350, yPos + 6);
+      doc.font('Helvetica').text(orden.medida || '-', 385, yPos + 6);
+      
+      doc.font('Helvetica-Bold').text('PESO:', 460, yPos + 6);
+      doc.font('Helvetica').text(orden.peso_producto || '-', 485, yPos + 6);
+
+      yPos += altoHeaderSeccion2;
+
+      const columnasGrid = 4;
+      const alturaFila = 12;
+      const filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
+      const anchoColumna = 555 / columnasGrid;
+      const headerGridHeight = 10;
+
+      for (let c = 0; c < columnasGrid; c++) {
+          const xBase = 20 + (c * anchoColumna);
+          doc.rect(xBase, yPos, anchoColumna, headerGridHeight).fill('#F0F0F0').stroke();
+          doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
+          
+          const w1 = anchoColumna * 0.3;
+          const w2 = anchoColumna * 0.7;
+          doc.text(labelSlot, xBase, yPos + 3, { width: w1, align: 'center' });
+          doc.text('PESO', xBase + w1, yPos + 3, { width: w2, align: 'center' });
+      }
+      yPos += headerGridHeight;
+
+      doc.fontSize(7).font('Helvetica');
+      for (let i = 0; i < filasPorColumna; i++) {
+          for (let c = 0; c < columnasGrid; c++) {
+              const numeroSlot = i + 1 + (c * filasPorColumna);
+              const xBase = 20 + (c * anchoColumna);
+              const w1 = anchoColumna * 0.3;
+
+              if (numeroSlot <= slotsNecesarios) {
+                  doc.rect(xBase, yPos, anchoColumna, alturaFila).stroke();
+                  doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).lineWidth(0.5).stroke();
+                  doc.text(numeroSlot.toString(), xBase, yPos + 3, { width: w1, align: 'center' });
+              }
+          }
+          yPos += alturaFila;
+      }
+
+      yPos += 10;
+      if (yPos > 700) { doc.addPage(); yPos = 30; }
+
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('REGISTRO DE MERMAS', 20, yPos);
+      yPos += 8;
+
+      const anchoMermaCol = 100;
+      const totalAnchoMerma = anchoMermaCol * 2;
+      const altoHeaderMerma = 10;
+      const filasMerma = 6;
+
+      doc.rect(20, yPos, totalAnchoMerma, altoHeaderMerma).fill('#FFF176').stroke();
+      doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
+      doc.text('PESO / CANTIDAD', 20, yPos + 3, { width: anchoMermaCol, align: 'center' });
+      doc.text('PESO / CANTIDAD', 20 + anchoMermaCol, yPos + 3, { width: anchoMermaCol, align: 'center' });
+      
+      doc.moveTo(20 + anchoMermaCol, yPos).lineTo(20 + anchoMermaCol, yPos + altoHeaderMerma).stroke();
+      
+      yPos += altoHeaderMerma;
+
+      doc.lineWidth(0.5);
+      for (let m = 0; m < filasMerma; m++) {
+          doc.rect(20, yPos, anchoMermaCol, alturaFila).stroke();
+          doc.rect(20 + anchoMermaCol, yPos, anchoMermaCol, alturaFila).stroke();
+          yPos += alturaFila;
+      }
+
+      yPos += 15;
+      if (yPos > 700) { doc.addPage(); yPos = 30; }
+
+      doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS Y OBSERVACIONES', 20, yPos);
+      yPos += 8;
+      doc.rect(20, yPos, 555, 10).fill('#FFF176').stroke();
+      doc.fillColor('black').fontSize(5);
+      doc.text('HORA INICIO', 20, yPos + 3, { width: 60, align: 'center' });
+      doc.text('HORA FIN', 80, yPos + 3, { width: 60, align: 'center' });
+      doc.text('MOTIVO / CAUSA', 145, yPos + 3);
+
+      yPos += 10;
+      for (let i = 0; i < 3; i++) {
+          doc.rect(20, yPos, 555, 10).stroke();
+          yPos += 10;
+      }
+
+      const yFooter = 790; 
       doc.fontSize(6);
       const wBox = 135;
       doc.rect(20, yFooter, wBox, 20).stroke();

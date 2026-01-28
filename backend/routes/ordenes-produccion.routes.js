@@ -55,6 +55,6 @@ router.post('/:id/cancelar', cancelarOrden);
 router.post('/:id/anular', anularOrden);
 
 router.get('/:id/hoja-ruta', descargarHojaRutaController);
-router.put('/ordenes/:id/editar-completa', editarOrdenCompleta);
+router.put('/:id/editar-completa', editarOrdenCompleta);
 
 export default router;

@@ -2268,43 +2268,63 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.text('__:__', 270, yFechas); 
 
       let yPos = yInfo + alturaDatos + 6;
-      
+      const ANCHO_TABLA = 290; 
+
       if (esLamina) {
           doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('1. HISTORIAL DE ROLLOS BURBUPACK USADOS', 20, yPos);
           yPos += 8;
-          const rCol1 = 20, rCol2 = 70, rCol3 = 350, rCol4 = 440;
-          doc.rect(rCol1, yPos, 555, 10).fill('#E0E0E0').stroke();
+          
+          const colW = ANCHO_TABLA / 4; 
+          doc.rect(20, yPos, ANCHO_TABLA, 10).fill('#E0E0E0').stroke();
           doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
-          doc.text('N°', rCol1 + 5, yPos + 3, { width: 40, align: 'center' });
-          doc.text('MEDIDA', rCol2 + 5, yPos + 3, { width: 270, align: 'left' });
-          doc.text('CANT', rCol3 + 5, yPos + 3, { width: 80, align: 'center' });
-          doc.text('PESO', rCol4 + 5, yPos + 3, { width: 50, align: 'center' });
+          doc.text('N°', 20, yPos + 3, { width: 30, align: 'center' });
+          doc.text('MEDIDA', 50, yPos + 3, { width: 150, align: 'left' });
+          doc.text('CANT', 200, yPos + 3, { width: 40, align: 'center' });
+          doc.text('PESO', 240, yPos + 3, { width: 40, align: 'center' });
           yPos += 10;
           for (let i = 0; i < 8; i++) {
-              doc.rect(rCol1, yPos, 555, 10).stroke();
+              doc.rect(20, yPos, ANCHO_TABLA, 10).stroke();
               doc.fontSize(6).font('Helvetica');
-              doc.text((i + 1).toString(), rCol1 + 5, yPos + 3, { width: 40, align: 'center' });
+              doc.text((i + 1).toString(), 20, yPos + 3, { width: 30, align: 'center' });
               yPos += 10;
           }
           yPos += 5;
-      } else if (receta.length > 0) {
+      } else {
           doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('1. MEZCLA / INSUMOS', 20, yPos);
           yPos += 8;
-          const rCol1 = 20, rCol2 = 90, rCol3 = 380, rCol4 = 480;
-          doc.rect(rCol1, yPos, 555, 10).fill('#E0E0E0').stroke();
+          
+          const wCode = 40;
+          const wDesc = 140;
+          const wPlan = 55;
+          const wReal = 55;
+          const xCode = 20;
+          const xDesc = xCode + wCode;
+          const xPlan = xDesc + wDesc;
+          const xReal = xPlan + wPlan;
+
+          doc.rect(20, yPos, ANCHO_TABLA, 10).fill('#E0E0E0').stroke();
           doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
-          doc.text('CÓDIGO', rCol1 + 5, yPos + 3);
-          doc.text('DESCRIPCIÓN', rCol2 + 5, yPos + 3);
-          doc.text('PLANIFICADO', rCol3 + 5, yPos + 3, { width: 90, align: 'right' });
-          doc.text('REAL', rCol4 + 5, yPos + 3, { width: 70, align: 'center' });
+          doc.text('CÓDIGO', xCode + 2, yPos + 3, { width: wCode });
+          doc.text('DESCRIPCIÓN', xDesc + 2, yPos + 3, { width: wDesc });
+          doc.text('PLANIF.', xPlan + 2, yPos + 3, { width: wPlan, align: 'center' });
+          doc.text('REAL', xReal + 2, yPos + 3, { width: wReal, align: 'center' });
           yPos += 10;
-          receta.forEach(item => {
-              doc.rect(rCol1, yPos, 555, 10).stroke();
-              doc.fontSize(6).font('Helvetica');
-              doc.text(item.codigo_insumo || '', rCol1 + 5, yPos + 3);
-              doc.text(item.insumo || '', rCol2 + 5, yPos + 3, { width: 280, height: 8, lineBreak: false, ellipsis: true });
+          
+          if (receta.length > 0) {
+              receta.forEach(item => {
+                  doc.rect(20, yPos, ANCHO_TABLA, 10).stroke();
+                  doc.fontSize(6).font('Helvetica');
+                  doc.text(item.codigo_insumo || '', xCode + 2, yPos + 3, { width: wCode });
+                  doc.text(item.insumo || '', xDesc + 2, yPos + 3, { width: wDesc, height: 8, lineBreak: false, ellipsis: true });
+                  yPos += 10;
+              });
+          }
+
+          const slotsVacios = receta.length > 0 ? receta.length : 5;
+          for (let i = 0; i < slotsVacios; i++) {
+              doc.rect(20, yPos, ANCHO_TABLA, 10).stroke();
               yPos += 10;
-          });
+          }
           yPos += 5;
       }
 
@@ -2323,27 +2343,36 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       }
 
       const altoHeaderSeccion2 = 18;
-      doc.rect(20, yPos, 555, altoHeaderSeccion2).fill('#FFCC80').stroke();
+      doc.rect(20, yPos, ANCHO_TABLA, altoHeaderSeccion2).fill('#FFCC80').stroke();
       doc.fillColor('black');
 
       doc.fontSize(7).font('Helvetica-Bold').text('2. REGISTRO DE PRODUCCIÓN', 25, yPos + 6);
 
-      doc.fontSize(6);
-      doc.text('GRAMAJE:', 250, yPos + 6);
-      doc.font('Helvetica').text(orden.gramaje || '', 290, yPos + 6);
+      const xInfo = 160;
+      const wInfoItem = 40;
+      doc.fontSize(5);
       
-      doc.font('Helvetica-Bold').text('MEDIDA:', 350, yPos + 6);
-      doc.font('Helvetica').text(orden.medida || '', 385, yPos + 6);
+      if (orden.gramaje) {
+        doc.font('Helvetica-Bold').text('GRAMAJE:', xInfo, yPos + 6);
+        doc.font('Helvetica').text(orden.gramaje, xInfo + 30, yPos + 6);
+      }
       
-      doc.font('Helvetica-Bold').text('PESO:', 460, yPos + 6);
-      doc.font('Helvetica').text(orden.peso_producto || '', 485, yPos + 6);
+      if (orden.medida) {
+        doc.font('Helvetica-Bold').text('MEDIDA:', xInfo + 50, yPos + 6);
+        doc.font('Helvetica').text(orden.medida, xInfo + 75, yPos + 6);
+      }
+
+      if (orden.peso_producto) {
+        doc.font('Helvetica-Bold').text('PESO:', xInfo + 100, yPos + 6);
+        doc.font('Helvetica').text(orden.peso_producto, xInfo + 120, yPos + 6);
+      }
 
       yPos += altoHeaderSeccion2;
 
       const columnasGrid = 4;
       const alturaFila = 12;
       const filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
-      const anchoColumna = 555 / columnasGrid;
+      const anchoColumna = ANCHO_TABLA / columnasGrid; 
       const headerGridHeight = 10;
 
       for (let c = 0; c < columnasGrid; c++) {
@@ -2380,22 +2409,23 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.fontSize(7).font('Helvetica-Bold').fillColor('black').text('REGISTRO DE MERMAS', 20, yPos);
       yPos += 8;
 
-      const colsMerma = 2;
-      const filasMerma = 10;
-      const anchoTotal = 555;
-      const gap = 15;
-      const anchoTablaMerma = (anchoTotal - gap) / colsMerma; 
-      const anchoNumMerma = 40;
-      const anchoPesoMerma = anchoTablaMerma - anchoNumMerma;
+      const gap = 10;
+      const anchoBloqueMerma = (ANCHO_TABLA - gap) / 2;
+      const anchoNumMerma = 25;
+      const anchoPesoMerma = anchoBloqueMerma - anchoNumMerma;
+      const filasMerma = 10; 
+
+      const xBlock1 = 20;
+      const xBlock2 = 20 + anchoBloqueMerma + gap;
       
       doc.fontSize(5).font('Helvetica-Bold');
-      doc.rect(20, yPos, anchoTablaMerma, 10).fill('#FFCC80').stroke();
-      doc.fillColor('black').text('N° REGISTRO', 20, yPos + 3, { width: anchoNumMerma, align: 'center' });
-      doc.text('PESO / CANTIDAD', 20 + anchoNumMerma, yPos + 3, { width: anchoPesoMerma, align: 'center' });
+      doc.rect(xBlock1, yPos, anchoBloqueMerma, 10).fill('#FFCC80').stroke();
+      doc.fillColor('black').text('N°', xBlock1, yPos + 3, { width: anchoNumMerma, align: 'center' });
+      doc.text('PESO / CANT', xBlock1 + anchoNumMerma, yPos + 3, { width: anchoPesoMerma, align: 'center' });
 
-      doc.rect(20 + anchoTablaMerma + gap, yPos, anchoTablaMerma, 10).fill('#FFCC80').stroke();
-      doc.fillColor('black').text('N° REGISTRO', 20 + anchoTablaMerma + gap, yPos + 3, { width: anchoNumMerma, align: 'center' });
-      doc.text('PESO / CANTIDAD', 20 + anchoTablaMerma + gap + anchoNumMerma, yPos + 3, { width: anchoPesoMerma, align: 'center' });
+      doc.rect(xBlock2, yPos, anchoBloqueMerma, 10).fill('#FFCC80').stroke();
+      doc.fillColor('black').text('N°', xBlock2, yPos + 3, { width: anchoNumMerma, align: 'center' });
+      doc.text('PESO / CANT', xBlock2 + anchoNumMerma, yPos + 3, { width: anchoPesoMerma, align: 'center' });
 
       yPos += 10;
 
@@ -2403,15 +2433,13 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       for (let i = 0; i < filasMerma; i++) {
         const yRow = yPos + (i * 12);
         
-        const x1 = 20;
-        doc.rect(x1, yRow, anchoTablaMerma, 12).stroke();
-        doc.moveTo(x1 + anchoNumMerma, yRow).lineTo(x1 + anchoNumMerma, yRow + 12).stroke();
-        doc.text((i + 1).toString(), x1, yRow + 3, { width: anchoNumMerma, align: 'center' });
+        doc.rect(xBlock1, yRow, anchoBloqueMerma, 12).stroke();
+        doc.moveTo(xBlock1 + anchoNumMerma, yRow).lineTo(xBlock1 + anchoNumMerma, yRow + 12).stroke();
+        doc.text((i + 1).toString(), xBlock1, yRow + 3, { width: anchoNumMerma, align: 'center' });
 
-        const x2 = 20 + anchoTablaMerma + gap;
-        doc.rect(x2, yRow, anchoTablaMerma, 12).stroke();
-        doc.moveTo(x2 + anchoNumMerma, yRow).lineTo(x2 + anchoNumMerma, yRow + 12).stroke();
-        doc.text((i + 11).toString(), x2, yRow + 3, { width: anchoNumMerma, align: 'center' });
+        doc.rect(xBlock2, yRow, anchoBloqueMerma, 12).stroke();
+        doc.moveTo(xBlock2 + anchoNumMerma, yRow).lineTo(xBlock2 + anchoNumMerma, yRow + 12).stroke();
+        doc.text((i + 11).toString(), xBlock2, yRow + 3, { width: anchoNumMerma, align: 'center' });
       }
       yPos += (filasMerma * 12);
 
@@ -2420,15 +2448,19 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
       doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS Y OBSERVACIONES', 20, yPos);
       yPos += 8;
-      doc.rect(20, yPos, 555, 10).fill('#FFF176').stroke();
+      
+      const wHora = 40;
+      const wCausa = ANCHO_TABLA - (wHora * 2);
+
+      doc.rect(20, yPos, ANCHO_TABLA, 10).fill('#FFF176').stroke();
       doc.fillColor('black').fontSize(5);
-      doc.text('HORA INICIO', 20, yPos + 3, { width: 60, align: 'center' });
-      doc.text('HORA FIN', 80, yPos + 3, { width: 60, align: 'center' });
-      doc.text('MOTIVO / CAUSA', 145, yPos + 3);
+      doc.text('INICIO', 20, yPos + 3, { width: wHora, align: 'center' });
+      doc.text('FIN', 20 + wHora, yPos + 3, { width: wHora, align: 'center' });
+      doc.text('MOTIVO / CAUSA', 20 + (wHora * 2) + 5, yPos + 3);
 
       yPos += 10;
       for (let i = 0; i < 3; i++) {
-          doc.rect(20, yPos, 555, 10).stroke();
+          doc.rect(20, yPos, ANCHO_TABLA, 10).stroke();
           yPos += 10;
       }
 

@@ -2269,17 +2269,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.font('Helvetica-Bold').text('FIN:', 250, yFechas);
       doc.text('__:__', 270, yFechas); 
 
-      doc.rect(308, yFechas - 2, 80, 10).fill('#F5F5F5');
-      doc.rect(390, yFechas - 2, 90, 10).fill('#F5F5F5');
-      doc.rect(482, yFechas - 2, 70, 10).fill('#F5F5F5');
-      doc.fillColor('black');
-
-      doc.font('Helvetica-Bold').text('GRAMAJE:', 310, yFechas);
-      doc.font('Helvetica').text(orden.gramaje || '-', 350, yFechas);
-      doc.font('Helvetica-Bold').text('MEDIDA:', 392, yFechas);
-      doc.font('Helvetica').text(orden.medida || '-', 427, yFechas);
-      doc.font('Helvetica-Bold').text('PESO:', 485, yFechas);
-      doc.font('Helvetica').text(orden.peso_producto || '-', 510, yFechas);
+      // NOTA: Se eliminaron los cuadros de Gramaje/Medida/Peso de aquí para moverlos a la Sección 2.
 
       let yPos = yInfo + alturaDatos + 6;
       
@@ -2323,7 +2313,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           yPos += 5;
       }
 
-      // --- SECCION 2: REGISTRO DE PRODUCCIÓN (SLOTS) ---
+      // --- SECCION 2: REGISTRO DE PRODUCCIÓN (MODIFICADO) ---
       let labelSlot = 'N°';
       if (esLamina || esEsquinero) labelSlot = 'PAQ';
       else if (esZuncho || esBurbupack) labelSlot = 'ROLLO';
@@ -2338,71 +2328,95 @@ export async function generarPDFHojaRuta(orden, receta = []) {
           slotsNecesarios = parseInt(orden.cantidad_unidades || orden.cantidad_planificada || 0) + 10;
       }
 
-      doc.fontSize(7).font('Helvetica-Bold').text(`2. REGISTRO DE PRODUCCIÓN`, 20, yPos);
-      yPos += 10;
+      // 1. DIBUJAR ENCABEZADO PERSONALIZADO CON DATOS Y FONDO DE COLOR
+      const altoHeaderSeccion2 = 18;
+      // Usamos un color distinto (ej. lila suave) para destacar esta sección
+      doc.rect(20, yPos, 555, altoHeaderSeccion2).fill('#D1C4E9').stroke();
+      doc.fillColor('black');
 
-      // --- CÁLCULO DE TAMAÑOS ---
-      const ALTURA_MAX_FILA = 18; // <-- Límite para que no se vea gigante
-      const ALTURA_MIN_FILA = 9;
-      const paginaAltoTotal = 841.89;
-      const margenInferior = 20;
-      const alturaFijaInferior = 85; // Espacio para sección 3 y footer
-      const espacioDisponibleGrid = paginaAltoTotal - margenInferior - yPos - alturaFijaInferior;
-      const headerGridHeight = 12;
+      // Título Sección
+      doc.fontSize(7).font('Helvetica-Bold').text('2. REGISTRO DE PRODUCCIÓN', 25, yPos + 6);
 
-      let columnasGrid = 2;
-      let filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
-      let alturaFila = (espacioDisponibleGrid - headerGridHeight) / filasPorColumna;
+      // Datos Gramaje/Medida/Peso alineados a la derecha dentro del header
+      doc.fontSize(6);
+      doc.text('GRAMAJE:', 250, yPos + 6);
+      doc.font('Helvetica').text(orden.gramaje || '-', 290, yPos + 6);
+      
+      doc.font('Helvetica-Bold').text('MEDIDA:', 350, yPos + 6);
+      doc.font('Helvetica').text(orden.medida || '-', 385, yPos + 6);
+      
+      doc.font('Helvetica-Bold').text('PESO:', 460, yPos + 6);
+      doc.font('Helvetica').text(orden.peso_producto || '-', 485, yPos + 6);
 
-      // Ajuste de columnas si las filas son muy pequeñas
-      while (alturaFila < ALTURA_MIN_FILA && columnasGrid < 6) {
-          columnasGrid++;
-          filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
-          alturaFila = (espacioDisponibleGrid - headerGridHeight) / filasPorColumna;
-      }
+      yPos += altoHeaderSeccion2;
 
-      // Aplicar el límite superior de altura
-      if (alturaFila > ALTURA_MAX_FILA) alturaFila = ALTURA_MAX_FILA;
-      if (alturaFila < ALTURA_MIN_FILA) alturaFila = ALTURA_MIN_FILA;
-
-      let tamanioFuenteDinamico = Math.min(10, Math.max(5, alturaFila * 0.5));
+      // 2. CONFIGURACIÓN DE LA REJILLA (Compacta, max 4 columnas)
+      const columnasGrid = 4; // Fijo a 4 columnas
+      const alturaFila = 12;  // Altura fija y pequeña
+      const filasPorColumna = Math.ceil(slotsNecesarios / columnasGrid);
       const anchoColumna = 555 / columnasGrid;
-      const textOffsetY = (alturaFila - tamanioFuenteDinamico) / 2;
+      const headerGridHeight = 10;
 
-      // Dibujar Encabezados de Tabla (SIN CANTIDAD)
+      // Dibujar Encabezados de Tabla
       for (let c = 0; c < columnasGrid; c++) {
           const xBase = 20 + (c * anchoColumna);
           doc.rect(xBase, yPos, anchoColumna, headerGridHeight).fill('#F0F0F0').stroke();
           doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
           
-          // Dividimos la columna solo en 2: ID y PESO
-          const w1 = anchoColumna * 0.25;
-          const w2 = anchoColumna * 0.75;
+          const w1 = anchoColumna * 0.3;
+          const w2 = anchoColumna * 0.7;
           doc.text(labelSlot, xBase, yPos + 3, { width: w1, align: 'center' });
-          doc.text('PESO (KG)', xBase + w1, yPos + 3, { width: w2, align: 'center' });
+          doc.text('PESO', xBase + w1, yPos + 3, { width: w2, align: 'center' });
       }
       yPos += headerGridHeight;
 
-      // Dibujar Filas
+      // Dibujar Slots
+      doc.fontSize(7).font('Helvetica');
       for (let i = 0; i < filasPorColumna; i++) {
           for (let c = 0; c < columnasGrid; c++) {
               const numeroSlot = i + 1 + (c * filasPorColumna);
               const xBase = 20 + (c * anchoColumna);
-              const w1 = anchoColumna * 0.25;
+              const w1 = anchoColumna * 0.3;
 
               if (numeroSlot <= slotsNecesarios) {
                   doc.rect(xBase, yPos, anchoColumna, alturaFila).stroke();
-                  doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).stroke();
+                  doc.moveTo(xBase + w1, yPos).lineTo(xBase + w1, yPos + alturaFila).lineWidth(0.5).stroke();
                   
-                  doc.fontSize(tamanioFuenteDinamico).font('Helvetica').fillColor('black');
-                  doc.text(numeroSlot.toString(), xBase, yPos + textOffsetY, { width: w1, align: 'center' });
+                  doc.text(numeroSlot.toString(), xBase, yPos + 3, { width: w1, align: 'center' });
               }
           }
           yPos += alturaFila;
       }
 
-      // --- SECCION 3: PARADAS (Ubicación dinámica) ---
+      // --- SECCION DE MERMAS (NUEVA) ---
       yPos += 10;
+      // Verificar si nos queda espacio en página, si no, nueva página (básico)
+      if (yPos > 700) { doc.addPage(); yPos = 30; }
+
+      doc.fontSize(7).font('Helvetica-Bold').text('REGISTRO DE MERMAS', 20, yPos);
+      yPos += 8;
+      
+      const altoHeaderMerma = 10;
+      const anchoMerma = 200; // No necesita ser todo el ancho
+      const filasMerma = 6;   // Cantidad fija de renglones para mermas
+
+      // Header Merma
+      doc.rect(20, yPos, anchoMerma, altoHeaderMerma).fill('#FFCCBC').stroke(); // Color rojizo suave
+      doc.fillColor('black').fontSize(5).font('Helvetica-Bold');
+      doc.text('PESO / CANTIDAD', 20, yPos + 3, { width: anchoMerma, align: 'center' });
+      yPos += altoHeaderMerma;
+
+      // Filas Merma
+      for (let m = 0; m < filasMerma; m++) {
+        doc.rect(20, yPos, anchoMerma, alturaFila).stroke();
+        yPos += alturaFila;
+      }
+
+
+      // --- SECCION 3: PARADAS ---
+      yPos += 15;
+      if (yPos > 700) { doc.addPage(); yPos = 30; }
+
       doc.fontSize(7).font('Helvetica-Bold').text('3. PARADAS Y OBSERVACIONES', 20, yPos);
       yPos += 8;
       doc.rect(20, yPos, 555, 10).fill('#FFF176').stroke();
@@ -2418,7 +2432,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       }
 
       // --- FOOTER FINAL ---
-      const yFooter = 790; // Posición fija al final para consistencia
+      const yFooter = 790; // Posición fija
       doc.fontSize(6);
       const wBox = 135;
       doc.rect(20, yFooter, wBox, 20).stroke();

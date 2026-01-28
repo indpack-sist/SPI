@@ -236,7 +236,7 @@ function OrdenesProduccion() {
               )}
             </div>
           )}
-          {row.es_manual === 1 && (
+          {row.es_orden_manual === 1 && (
             <div className="badge badge-warning text-xs mt-1">Manual</div>
           )}
         </div>
@@ -287,60 +287,59 @@ function OrdenesProduccion() {
       }
     },
     {
-      header: 'Progreso (Kg / Und)',
+      header: 'Progreso',
       accessor: 'cantidad_planificada',
       align: 'left',
-      width: '200px',
+      width: '240px',
       render: (value, row) => {
-        const planKg = parseFloat(value || 0);
-        const realKg = parseFloat(row.cantidad_producida || 0);
-        const pctKg = planKg > 0 ? (realKg / planKg * 100).toFixed(0) : 0;
+        const metaKilos = parseFloat(row.cantidad_planificada || 0);
+        const realKilos = parseFloat(row.cantidad_producida || 0);
+        const pctKilos = metaKilos > 0 ? (realKilos / metaKilos) * 100 : 0;
 
-        const planUnd = parseFloat(row.cantidad_unidades || 0);
-        const realUnd = parseFloat(row.cantidad_unidades_producida || 0);
-        const pctUnd = planUnd > 0 ? (realUnd / planUnd * 100).toFixed(0) : 0;
+        const metaUnidades = parseFloat(row.cantidad_unidades || 0);
+        const realUnidades = parseFloat(row.cantidad_unidades_producida || 0);
+        const pctUnidades = metaUnidades > 0 ? (realUnidades / metaUnidades) * 100 : 0;
+        
         const unidadLabel = row.unidad_medida || 'Und';
 
         return (
-          <div className="w-full flex flex-col gap-2 py-1">
-            <div>
-              <div className="flex justify-between items-end mb-1 leading-none">
-                <span className="text-xs font-bold text-gray-500">Kg</span>
+          <div className="w-full flex flex-col gap-3 py-1">
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between items-end leading-none">
+                <span className="text-xs font-bold text-gray-500">Kilos (Kg)</span>
                 <div className="text-xs font-mono">
-                  <span className={realKg > 0 ? "font-bold text-success" : "text-gray-400"}>
-                    {realKg.toFixed(2)}
+                  <span className={realKilos > 0 ? "font-bold text-success" : "text-gray-400"}>
+                    {realKilos.toFixed(2)}
                   </span>
                   <span className="text-gray-300 mx-1">/</span>
-                  <span className="text-gray-600 font-semibold">{planKg.toFixed(2)}</span>
+                  <span className="text-gray-600 font-semibold">{metaKilos.toFixed(2)}</span>
                 </div>
               </div>
-              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                 <div 
                   className="h-full bg-success transition-all duration-500" 
-                  style={{ width: `${Math.min(pctKg, 100)}%` }}
-                  title={`Avance Kilos: ${pctKg}%`}
+                  style={{ width: `${Math.min(pctKilos, 100)}%` }}
                 />
               </div>
             </div>
 
-            <div>
-              <div className="flex justify-between items-end mb-1 leading-none">
-                <span className="text-xs font-bold text-blue-500 truncate max-w-[60px]" title={unidadLabel}>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between items-end leading-none">
+                <span className="text-xs font-bold text-blue-500 truncate max-w-[80px]" title={unidadLabel}>
                   {unidadLabel}
                 </span>
                 <div className="text-xs font-mono">
-                  <span className={realUnd > 0 ? "font-bold text-blue-600" : "text-gray-400"}>
-                    {Math.floor(realUnd)}
+                  <span className={realUnidades > 0 ? "font-bold text-blue-600" : "text-gray-400"}>
+                    {realUnidades.toFixed(2)}
                   </span>
                   <span className="text-gray-300 mx-1">/</span>
-                  <span className="text-gray-600 font-semibold">{Math.floor(planUnd)}</span>
+                  <span className="text-gray-600 font-semibold">{metaUnidades.toFixed(2)}</span>
                 </div>
               </div>
-              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                 <div 
                   className="h-full bg-blue-500 transition-all duration-500" 
-                  style={{ width: `${Math.min(pctUnd, 100)}%` }}
-                  title={`Avance Unidades: ${pctUnd}%`}
+                  style={{ width: `${Math.min(pctUnidades, 100)}%` }}
                 />
               </div>
             </div>

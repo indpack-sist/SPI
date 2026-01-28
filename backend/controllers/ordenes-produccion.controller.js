@@ -67,6 +67,12 @@ export async function getAllOrdenes(req, res) {
         p.codigo AS codigo_producto,
         COALESCE(p.nombre, '[PRODUCTO ELIMINADO]') AS producto,
         p.unidad_medida,
+        
+        -- AGREGAR ESTAS DOS LÍNEAS AQUÍ:
+        op.cantidad_unidades,
+        op.cantidad_unidades_producida,
+        -- FIN DE LO AGREGADO
+
         op.cantidad_planificada,
         op.cantidad_producida,
         op.id_supervisor,
@@ -106,6 +112,9 @@ export async function getAllOrdenes(req, res) {
       LEFT JOIN empleados e_comercial ON ov.id_comercial = e_comercial.id_empleado
       WHERE 1=1
     `;
+    
+    // ... el resto de la función sigue igual (params, filtros, etc.) ...
+
     const params = [];
     
     if (estado) {
@@ -2253,16 +2262,12 @@ export async function anularOrden(req, res) {
   try {
     const { id } = req.params;
     
-    // CORRECCIÓN AQUÍ: Agregamos 'id_empleado' que es lo que viene en tu token
     const id_usuario = req.user?.id_usuario || req.user?.id || req.user?.userId || req.user?.id_empleado;
 
-    // Validación de seguridad
     if (!id_usuario) {
-        console.error("Error: No se detectó ID de usuario en req.user:", req.user);
         return res.status(401).json({ error: 'Acción no autorizada: No se pudo identificar al usuario.' });
     }
 
-    // 1. Obtener datos de la orden
     const ordenResult = await executeQuery(
       `SELECT * FROM ordenes_produccion WHERE id_orden = ?`,
       [id]
@@ -2274,20 +2279,15 @@ export async function anularOrden(req, res) {
 
     const orden = ordenResult.data[0];
 
-    // Validación de estado
     if (orden.estado === 'Cancelada') {
       return res.status(400).json({ error: 'La orden ya está cancelada' });
     }
 
     const queries = [];
     
-    // Variables para rastrear índices
     let hayEntradaInsumos = false;
     let haySalidaProducto = false;
 
-    // ---------------------------------------------------------
-    // PASO A: DEVOLVER INSUMOS (Entrada)
-    // ---------------------------------------------------------
     const consumoResult = await executeQuery(
       `SELECT 
           cm.id_insumo, 
@@ -2323,15 +2323,12 @@ export async function anularOrden(req, res) {
           consumoResult.data[0].id_tipo_inventario,
           `Anulación O.P. ${orden.numero_orden}`,
           totalCostoDevolucion,
-          id_usuario, // Ahora sí tiene el valor correcto (2)
+          id_usuario, 
           `Devolución de insumos por anulación de O.P. ${orden.numero_orden}`
         ]
       });
     }
 
-    // ---------------------------------------------------------
-    // PASO B: RETIRAR PRODUCTO TERMINADO (Salida)
-    // ---------------------------------------------------------
     let cantidadA_Retirar = 0;
     
     if (orden.estado === 'Finalizada' && parseFloat(orden.cantidad_producida) > 0) {
@@ -2339,7 +2336,7 @@ export async function anularOrden(req, res) {
         cantidadA_Retirar = parseFloat(orden.cantidad_producida);
         
         if (orden.es_orden_manual === 1 && parseFloat(orden.cantidad_unidades_producida) > 0) {
-             // cantidadA_Retirar = parseFloat(orden.cantidad_unidades_producida);
+             
         }
 
         if (cantidadA_Retirar > 0) {
@@ -2347,12 +2344,15 @@ export async function anularOrden(req, res) {
             
             queries.push({
                 sql: `INSERT INTO salidas (
-                    id_tipo_inventario, documento_soporte, id_solicitante, 
-                    observaciones, fecha_salida, estado
-                ) VALUES (?, ?, ?, ?, NOW(), 'Aprobado')`,
+                    id_tipo_inventario, 
+                    tipo_movimiento, 
+                    id_registrado_por, 
+                    observaciones, 
+                    fecha_movimiento, 
+                    estado
+                ) VALUES (?, 'Anulación Producción', ?, ?, NOW(), 'Activo')`,
                 params: [
-                    3, // ID Producto Terminado
-                    `Anulación O.P. ${orden.numero_orden}`,
+                    3, 
                     id_usuario, 
                     `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`
                 ]
@@ -2360,9 +2360,6 @@ export async function anularOrden(req, res) {
         }
     }
 
-    // ---------------------------------------------------------
-    // PASO C: ACTUALIZAR ESTADO ORDEN
-    // ---------------------------------------------------------
     queries.push({
       sql: `UPDATE ordenes_produccion 
             SET estado = 'Cancelada', 
@@ -2371,9 +2368,6 @@ export async function anularOrden(req, res) {
       params: [id]
     });
 
-    // ---------------------------------------------------------
-    // PASO D: LIBERAR ORDEN VENTA
-    // ---------------------------------------------------------
     if (orden.id_orden_venta_origen) {
       queries.push({
         sql: `UPDATE ordenes_venta SET estado = 'Pendiente' WHERE id_orden_venta = ?`,
@@ -2381,20 +2375,15 @@ export async function anularOrden(req, res) {
       });
     }
 
-    // EJECUTAR TRANSACCIÓN CABECERAS
     const resultHeader = await executeTransaction(queries);
     
     if (!resultHeader.success) {
         throw new Error(resultHeader.error);
     }
 
-    // ---------------------------------------------------------
-    // PASO E: DETALLES Y MOVIMIENTOS
-    // ---------------------------------------------------------
     const queriesDetalles = [];
     let currentIndex = 0;
     
-    // 1. Detalles Entrada (Devolución)
     if (hayEntradaInsumos) {
         const idEntrada = resultHeader.data[currentIndex].insertId;
         currentIndex++;
@@ -2412,7 +2401,6 @@ export async function anularOrden(req, res) {
         }
     }
 
-    // 2. Detalles Salida (Retiro PT)
     if (haySalidaProducto) {
         const idSalida = resultHeader.data[currentIndex].insertId;
 

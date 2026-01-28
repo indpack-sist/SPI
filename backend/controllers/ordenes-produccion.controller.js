@@ -2253,13 +2253,12 @@ export async function anularOrden(req, res) {
   try {
     const { id } = req.params;
     
-    // INTENTO DE RECUPERAR EL USUARIO
-    // A veces viene como id_usuario, id, userId, o sub dependiendo de tu configuración JWT
-    const id_usuario = req.user?.id_usuario || req.user?.id || req.user?.userId;
+    // CORRECCIÓN AQUÍ: Agregamos 'id_empleado' que es lo que viene en tu token
+    const id_usuario = req.user?.id_usuario || req.user?.id || req.user?.userId || req.user?.id_empleado;
 
-    // VALIDACIÓN CRÍTICA: Si no hay usuario, detenemos todo para evitar el error SQL
+    // Validación de seguridad
     if (!id_usuario) {
-        console.error("Error: No se detectó id_usuario en req.user:", req.user);
+        console.error("Error: No se detectó ID de usuario en req.user:", req.user);
         return res.status(401).json({ error: 'Acción no autorizada: No se pudo identificar al usuario.' });
     }
 
@@ -2324,7 +2323,7 @@ export async function anularOrden(req, res) {
           consumoResult.data[0].id_tipo_inventario,
           `Anulación O.P. ${orden.numero_orden}`,
           totalCostoDevolucion,
-          id_usuario, // Aquí ya está validado que no es null
+          id_usuario, // Ahora sí tiene el valor correcto (2)
           `Devolución de insumos por anulación de O.P. ${orden.numero_orden}`
         ]
       });
@@ -2337,10 +2336,8 @@ export async function anularOrden(req, res) {
     
     if (orden.estado === 'Finalizada' && parseFloat(orden.cantidad_producida) > 0) {
         
-        // Lógica de retiro (Kilos por defecto)
         cantidadA_Retirar = parseFloat(orden.cantidad_producida);
         
-        // Ajuste si es manual/unidades (opcional según tu lógica)
         if (orden.es_orden_manual === 1 && parseFloat(orden.cantidad_unidades_producida) > 0) {
              // cantidadA_Retirar = parseFloat(orden.cantidad_unidades_producida);
         }
@@ -2356,7 +2353,7 @@ export async function anularOrden(req, res) {
                 params: [
                     3, // ID Producto Terminado
                     `Anulación O.P. ${orden.numero_orden}`,
-                    id_usuario, // Validado
+                    id_usuario, 
                     `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`
                 ]
             });

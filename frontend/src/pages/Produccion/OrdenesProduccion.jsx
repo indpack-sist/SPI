@@ -287,45 +287,62 @@ function OrdenesProduccion() {
       }
     },
     {
-      header: 'Progreso',
+      header: 'Progreso (Kg / Und)',
       accessor: 'cantidad_planificada',
       align: 'left',
-      width: '180px',
+      width: '200px',
       render: (value, row) => {
-        const planificada = parseFloat(value || 0);
-        const producida = parseFloat(row.cantidad_producida || 0);
-        const porcentaje = planificada > 0 ? (producida / planificada * 100).toFixed(0) : 0;
-        const numRegistros = registrosParciales[row.id_orden] || 0;
-        
+        const planKg = parseFloat(value || 0);
+        const realKg = parseFloat(row.cantidad_producida || 0);
+        const pctKg = planKg > 0 ? (realKg / planKg * 100).toFixed(0) : 0;
+
+        const planUnd = parseFloat(row.cantidad_unidades || 0);
+        const realUnd = parseFloat(row.cantidad_unidades_producida || 0);
+        const pctUnd = planUnd > 0 ? (realUnd / planUnd * 100).toFixed(0) : 0;
+        const unidadLabel = row.unidad_medida || 'Und';
+
         return (
-          <div className="w-full">
-            <div className="flex justify-between items-end mb-1">
-              <span className="font-bold text-sm">
-                {planificada.toFixed(2)} <span className="text-xs text-muted">{row.unidad_medida}</span>
-              </span>
-              {producida > 0 && (
-                <span className="text-xs text-success font-bold flex items-center gap-1">
-                   <CheckCircle size={10} />
-                   {porcentaje}%
-                </span>
-              )}
-            </div>
-            <div className="progress-bar" style={{ height: '6px' }}>
-              <div 
-                className="progress-fill bg-success" 
-                style={{ width: `${Math.min(porcentaje, 100)}%` }}
-              />
-            </div>
-            <div className="flex justify-between items-center mt-1">
-              <div className="text-xs text-muted">
-                Prod: {producida.toFixed(2)}
-              </div>
-              {numRegistros > 0 && (
-                <div className="flex items-center gap-1 text-xs text-primary font-medium">
-                  <List size={12} />
-                  {numRegistros} reg.
+          <div className="w-full flex flex-col gap-2 py-1">
+            <div>
+              <div className="flex justify-between items-end mb-1 leading-none">
+                <span className="text-xs font-bold text-gray-500">Kg</span>
+                <div className="text-xs font-mono">
+                  <span className={realKg > 0 ? "font-bold text-success" : "text-gray-400"}>
+                    {realKg.toFixed(2)}
+                  </span>
+                  <span className="text-gray-300 mx-1">/</span>
+                  <span className="text-gray-600 font-semibold">{planKg.toFixed(2)}</span>
                 </div>
-              )}
+              </div>
+              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-success transition-all duration-500" 
+                  style={{ width: `${Math.min(pctKg, 100)}%` }}
+                  title={`Avance Kilos: ${pctKg}%`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-end mb-1 leading-none">
+                <span className="text-xs font-bold text-blue-500 truncate max-w-[60px]" title={unidadLabel}>
+                  {unidadLabel}
+                </span>
+                <div className="text-xs font-mono">
+                  <span className={realUnd > 0 ? "font-bold text-blue-600" : "text-gray-400"}>
+                    {Math.floor(realUnd)}
+                  </span>
+                  <span className="text-gray-300 mx-1">/</span>
+                  <span className="text-gray-600 font-semibold">{Math.floor(planUnd)}</span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-500 transition-all duration-500" 
+                  style={{ width: `${Math.min(pctUnd, 100)}%` }}
+                  title={`Avance Unidades: ${pctUnd}%`}
+                />
+              </div>
             </div>
           </div>
         );

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, 
-  Loader, Building2, Eye, User, CreditCard, Upload 
+  Loader, Building2, Eye, User, CreditCard, Upload, FilePlus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clientesAPI, solicitudesCreditoAPI } from '../../config/api';
@@ -492,7 +492,6 @@ function Clientes() {
             </div>
 
             {editando ? (
-                // MODO EDICIÓN: BOTÓN DE SOLICITUD
                 <div className="pt-3 border-t">
                     <div className="card bg-blue-50 mb-3">
                       <div className="flex items-center gap-2 mb-2">
@@ -527,7 +526,6 @@ function Clientes() {
                     </button>
                 </div>
             ) : (
-                // MODO CREACIÓN: CAMPOS EDITABLES SOLO SI SE MARCA EL CHECK
                 formData.usar_limite_credito && (
                     <div className="pt-3 border-t">
                         <div className="grid grid-cols-2 gap-4">
@@ -569,7 +567,7 @@ function Clientes() {
           <form onSubmit={handleSubmitSolicitud}>
             <div className="mb-4">
               <div className="card bg-gray-50">
-                <h3 className="font-medium mb-2">{clienteParaSolicitud.razon_social}</h3>
+                <h3 className="font-medium">{clienteParaSolicitud.razon_social}</h3>
                 <p className="text-sm text-muted">RUC: {clienteParaSolicitud.ruc}</p>
               </div>
             </div>
@@ -610,24 +608,35 @@ function Clientes() {
             <div className="form-group">
               <label className="form-label">Archivo de Sustento (Opcional)</label>
               
-              <div 
-                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 focus:outline-none"
-                tabIndex="0"
-                onPaste={handlePaste}
-                onClick={() => document.getElementById('file-upload-sustento').click()}
-              >
-                {archivoSustento ? (
-                    <div className="flex items-center justify-center gap-2 text-success">
-                        <CheckCircle size={20} />
-                        <span className="font-medium">{archivoSustento.name}</span>
-                    </div>
-                ) : (
-                    <div className="text-gray-500">
-                        <Upload className="mx-auto h-8 w-8 mb-2 text-gray-400" />
-                        <p className="text-sm font-medium">Haz click para subir o presiona <span className="text-primary font-bold">Ctrl+V</span> para pegar imagen</p>
-                        <p className="text-xs mt-1">Formatos: PDF, JPG, PNG</p>
-                    </div>
-                )}
+              <div className="flex gap-2">
+                <div 
+                  className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 focus:outline-none focus:border-primary transition-all"
+                  tabIndex="0"
+                  onPaste={handlePaste}
+                  title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
+                >
+                  {archivoSustento ? (
+                      <div className="flex items-center justify-center gap-2 text-success text-sm">
+                          <CheckCircle size={16} />
+                          <span className="font-medium truncate max-w-[150px]">{archivoSustento.name}</span>
+                      </div>
+                  ) : (
+                      <div className="text-gray-400">
+                          <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-primary font-bold">Ctrl+V</span> para pegar imagen</p>
+                      </div>
+                  )}
+                </div>
+
+                <button 
+                  type="button" 
+                  className="btn btn-outline border-dashed px-4 flex flex-col items-center justify-center gap-1"
+                  onClick={() => document.getElementById('file-upload-sustento').click()}
+                  title="Abrir explorador de archivos"
+                >
+                  <FilePlus size={20} />
+                  <span className="text-[10px] uppercase font-bold">Subir</span>
+                </button>
+
                 <input 
                     id="file-upload-sustento"
                     type="file" 

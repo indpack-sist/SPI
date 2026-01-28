@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle, Truck, User, Box, Upload, Eye
+  FileText, Lock, CheckCircle, Truck, User, Box, Upload, Eye, FilePlus
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -831,27 +831,45 @@ function NuevaOrdenVenta() {
 
                     <div>
                         <label className="form-label text-sm font-semibold text-gray-700">
-                            Archivo Adjunto (PDF, Imagen o <span className="text-orange-600">Pegar con Ctrl+V</span>) *
+                            Archivo Adjunto (PDF o Imagen) *
                         </label>
                         <div className="flex gap-2 items-center">
-                            <label 
-                                className="flex items-center justify-center px-4 py-2 border-2 border-dashed border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:border-orange-400 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 cursor-pointer w-full transition-all outline-none"
+                            <div 
+                                className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-50 focus:outline-none focus:border-orange-500 transition-all"
                                 tabIndex="0"
                                 onPaste={(e) => handlePaste(e, 'orden_compra')}
-                                onKeyDown={(e) => { if(e.key === 'Enter') document.getElementById('file-upload-oc').click() }}
+                                title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                             >
-                                <Upload className="mr-2 h-5 w-5 text-gray-400" />
-                                <span className="truncate">
-                                    {archivos.orden_compra ? archivos.orden_compra.name : 'Click aquí y presiona Ctrl+V o selecciona'}
-                                </span>
-                                <input 
-                                    id="file-upload-oc"
-                                    type="file" 
-                                    className="hidden" 
-                                    accept=".pdf,image/*"
-                                    onChange={(e) => setArchivos({...archivos, orden_compra: e.target.files[0]})}
-                                />
-                            </label>
+                                {archivos.orden_compra ? (
+                                    <div className="flex items-center justify-center gap-2 text-success text-sm">
+                                        <CheckCircle size={16} />
+                                        <span className="font-medium truncate max-w-[200px]">{archivos.orden_compra.name}</span>
+                                    </div>
+                                ) : (
+                                    <div className="text-gray-400">
+                                        <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-orange-600 font-bold">Ctrl+V</span> para pegar imagen</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button 
+                                type="button" 
+                                className="btn btn-outline border-dashed px-4 flex flex-col items-center justify-center gap-1"
+                                onClick={() => document.getElementById('file-upload-oc').click()}
+                                title="Abrir explorador de archivos"
+                            >
+                                <FilePlus size={20} />
+                                <span className="text-[10px] uppercase font-bold">Subir</span>
+                            </button>
+
+                            <input 
+                                id="file-upload-oc"
+                                type="file" 
+                                className="hidden" 
+                                accept=".pdf,image/*"
+                                onChange={(e) => setArchivos({...archivos, orden_compra: e.target.files[0]})}
+                            />
+
                             {archivosPrevios.orden_compra_url && (
                                 <button
                                     type="button"
@@ -1391,33 +1409,52 @@ function NuevaOrdenVenta() {
 
                 <div className="pt-2 border-t mt-2">
                     <label className="form-label flex items-center gap-1 text-xs">
-                        <FileText size={12}/> Adjuntar Comprobante (Click + Ctrl+V)
+                        <FileText size={12}/> Adjuntar Comprobante/Voucher (Opcional)
                     </label>
-                    <div className="flex gap-2">
-                        <label 
-                            className="flex items-center justify-center px-2 py-1 border-2 border-dashed border-gray-300 rounded text-xs text-gray-700 bg-white hover:bg-gray-50 hover:border-blue-400 focus:border-blue-500 outline-none cursor-pointer w-full transition-all"
+                    <div className="flex gap-2 items-center">
+                        <div 
+                            className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-50 focus:outline-none focus:border-blue-500 transition-all"
                             tabIndex="0"
                             onPaste={(e) => handlePaste(e, 'comprobante')}
+                            title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                         >
-                            <Upload className="mr-1 h-3 w-3" />
-                            <span className="truncate">
-                                {archivos.comprobante ? archivos.comprobante.name : 'Pegar o subir...'}
-                            </span>
-                            <input 
-                                type="file" 
-                                className="hidden" 
-                                accept=".pdf,image/*"
-                                onChange={(e) => setArchivos({...archivos, comprobante: e.target.files[0]})}
-                            />
-                        </label>
+                            {archivos.comprobante ? (
+                                <div className="flex items-center justify-center gap-2 text-success text-sm">
+                                    <CheckCircle size={16} />
+                                    <span className="font-medium truncate max-w-[200px]">{archivos.comprobante.name}</span>
+                                </div>
+                            ) : (
+                                <div className="text-gray-400">
+                                    <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-blue-600 font-bold">Ctrl+V</span> para pegar imagen</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <button 
+                            type="button" 
+                            className="btn btn-outline border-dashed px-4 flex flex-col items-center justify-center gap-1"
+                            onClick={() => document.getElementById('file-upload-comp').click()}
+                            title="Abrir explorador de archivos"
+                        >
+                            <FilePlus size={20} />
+                            <span className="text-[10px] uppercase font-bold">Subir</span>
+                        </button>
+
+                        <input 
+                            id="file-upload-comp"
+                            type="file" 
+                            className="hidden" 
+                            accept=".pdf,image/*"
+                            onChange={(e) => setArchivos({...archivos, comprobante: e.target.files[0]})}
+                        />
                         {archivosPrevios.comprobante_url && (
                             <button
                                 type="button"
-                                className="btn btn-xs btn-outline px-2"
+                                className="btn btn-outline px-3"
                                 onClick={() => verArchivo(archivosPrevios.comprobante_url)}
                                 title="Ver comprobante actual"
                             >
-                                <Eye size={14} className="text-blue-600"/>
+                                <Eye size={20} className="text-blue-600"/>
                             </button>
                         )}
                     </div>

@@ -569,12 +569,14 @@ export async function getEstadoCreditoCliente(req, res) {
     
     const cliente = clienteResult.data[0];
     
+    // CORRECCIÓN: Filtramos por tipo_venta = 'Crédito'
     const deudaPenResult = await executeQuery(`
       SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_pen
       FROM ordenes_venta
       WHERE id_cliente = ?
       AND moneda = 'PEN'
-      AND estado NOT IN ('Cancelada', 'Entregada')
+      AND tipo_venta = 'Crédito'
+      AND estado NOT IN ('Cancelada') 
       AND estado_pago != 'Pagado'
     `, [id]);
     
@@ -583,7 +585,8 @@ export async function getEstadoCreditoCliente(req, res) {
       FROM ordenes_venta
       WHERE id_cliente = ?
       AND moneda = 'USD'
-      AND estado NOT IN ('Cancelada', 'Entregada')
+      AND tipo_venta = 'Crédito'
+      AND estado NOT IN ('Cancelada')
       AND estado_pago != 'Pagado'
     `, [id]);
     

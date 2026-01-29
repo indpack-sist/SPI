@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const pool = mysql.createPool({
+export const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'root',
@@ -65,8 +65,8 @@ export async function executeQuery(sql, params = []) {
     return { 
       success: false, 
       error: error.message, 
-      code: error.code,
-      sqlState: error.sqlState,
+      code: error.code, 
+      sqlState: error.sqlState, 
       sql: error.sql
     };
   }
@@ -116,9 +116,9 @@ export async function executeTransaction(queries) {
     
     return { 
       success: false, 
-      error: error.message,
-      code: error.code,
-      sqlState: error.sqlState,
+      error: error.message, 
+      code: error.code, 
+      sqlState: error.sqlState, 
       sql: error.sql
     };
   } finally {

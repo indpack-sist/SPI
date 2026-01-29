@@ -129,6 +129,7 @@ function ClienteDetalle() {
   };
 
   const calcularTotalesPorMoneda = (items, campo = 'total') => {
+    // Aquí filtramos las canceladas para los totales generales
     const totalPEN = items
       .filter(item => item.moneda === 'PEN' && item.estado !== 'Cancelada' && item.estado !== 'Rechazada')
       .reduce((sum, item) => sum + parseFloat(item[campo] || 0), 0);
@@ -141,12 +142,27 @@ function ClienteDetalle() {
   };
 
   const calcularDeudaReal = (items) => {
+      // Esta función es la CLAVE: 
+      // 1. Excluye canceladas
+      // 2. Excluye pagadas
+      // 3. Excluye ventas al contado (Solo suma ventas a CRÉDITO)
+      
       const deudaPEN = items
-        .filter(item => item.moneda === 'PEN' && item.estado !== 'Cancelada' && item.estado_pago !== 'Pagado' && (item.tipo_venta === 'Crédito' || item.tipo_venta === 'Credito'))
+        .filter(item => 
+            item.moneda === 'PEN' && 
+            item.estado !== 'Cancelada' && 
+            item.estado_pago !== 'Pagado' && 
+            (item.tipo_venta === 'Crédito' || item.tipo_venta === 'Credito')
+        )
         .reduce((sum, item) => sum + parseFloat(item.saldo_pendiente || 0), 0);
 
       const deudaUSD = items
-        .filter(item => item.moneda === 'USD' && item.estado !== 'Cancelada' && item.estado_pago !== 'Pagado' && (item.tipo_venta === 'Crédito' || item.tipo_venta === 'Credito'))
+        .filter(item => 
+            item.moneda === 'USD' && 
+            item.estado !== 'Cancelada' && 
+            item.estado_pago !== 'Pagado' && 
+            (item.tipo_venta === 'Crédito' || item.tipo_venta === 'Credito')
+        )
         .reduce((sum, item) => sum + parseFloat(item.saldo_pendiente || 0), 0);
 
       return { totalPEN: deudaPEN, totalUSD: deudaUSD };

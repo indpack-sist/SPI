@@ -140,6 +140,18 @@ function ClienteDetalle() {
     return { totalPEN, totalUSD };
   };
 
+  const calcularDeudaReal = (items) => {
+      const deudaPEN = items
+        .filter(item => item.moneda === 'PEN' && item.estado !== 'Cancelada' && item.estado_pago !== 'Pagado' && (item.tipo_venta === 'Crédito' || item.tipo_venta === 'Credito'))
+        .reduce((sum, item) => sum + parseFloat(item.saldo_pendiente || 0), 0);
+
+      const deudaUSD = items
+        .filter(item => item.moneda === 'USD' && item.estado !== 'Cancelada' && item.estado_pago !== 'Pagado' && (item.tipo_venta === 'Crédito' || item.tipo_venta === 'Credito'))
+        .reduce((sum, item) => sum + parseFloat(item.saldo_pendiente || 0), 0);
+
+      return { totalPEN: deudaPEN, totalUSD: deudaUSD };
+  };
+
   const columnsCotizaciones = [
     {
       header: 'N° Cotización',
@@ -329,7 +341,7 @@ function ClienteDetalle() {
 
   const totalesCotizaciones = calcularTotalesPorMoneda(cotizaciones);
   const totalesOrdenes = calcularTotalesPorMoneda(ordenesVenta);
-  const totalesPendientes = calcularTotalesPorMoneda(ordenesVenta, 'saldo_pendiente');
+  const totalesPendientes = calcularDeudaReal(ordenesVenta);
 
   return (
     <div>
@@ -570,7 +582,7 @@ function ClienteDetalle() {
             <AlertTriangle size={24} className="text-warning" />
           </div>
           <div className="stat-content">
-            <p className="stat-label">Saldo Pendiente</p>
+            <p className="stat-label">Deuda Crédito</p>
             <div className="text-sm space-y-1">
               <div className="font-bold text-warning">{formatearMoneda(totalesPendientes.totalPEN, 'PEN')}</div>
               <div className="font-bold text-warning">{formatearMoneda(totalesPendientes.totalUSD, 'USD')}</div>

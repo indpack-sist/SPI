@@ -205,13 +205,13 @@ function OrdenDetalle() {
       setInsumosEdicion([]);
     } else {
       setModoRecetaEdicion('porcentaje');
-      
-      if (consumoMateriales.length > 0) {
+
+      if (consumoMateriales && consumoMateriales.length > 0) {
         const insumosActuales = consumoMateriales.map(item => {
-          const porcentaje = parseFloat(orden.cantidad_planificada) > 0 
-            ? (parseFloat(item.cantidad_requerida) / parseFloat(orden.cantidad_planificada)) * 100 
+          const porcentaje = parseFloat(orden.cantidad_planificada) > 0
+            ? (parseFloat(item.cantidad_requerida) / parseFloat(orden.cantidad_planificada)) * 100
             : 0;
-          
+
           return {
             id_insumo: item.id_insumo,
             porcentaje: parseFloat(porcentaje.toFixed(2)),

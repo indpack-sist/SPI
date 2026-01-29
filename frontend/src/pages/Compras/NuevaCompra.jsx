@@ -4,7 +4,7 @@ import {
   ArrowLeft, Save, ShoppingCart, Building,
   MapPin, Plus, Trash2, Search, Wallet, CreditCard,
   ArrowRightLeft, PackagePlus, UserPlus, FileText,
-  Receipt, User, CheckCircle
+  Receipt, User, CheckCircle, Calendar, AlertCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -54,7 +54,7 @@ function NuevaCompra() {
     numero_cuotas: 1,
     dias_entre_cuotas: 30,
     dias_credito: 0,
-    fecha_primera_cuota: '',
+    fecha_primera_cuota: new Date().toISOString().split('T')[0],
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     observaciones: '',
@@ -103,10 +103,10 @@ function NuevaCompra() {
   }, [totales.total, formData.forma_pago_detalle, formData.usa_fondos_propios]);
 
   useEffect(() => {
-    if (formData.tipo_compra === 'Credito' && formData.forma_pago_detalle === 'Credito') {
+    if ((formData.tipo_compra === 'Credito' || formData.tipo_compra === 'Letras') && totales.total > 0) {
       calcularCronograma();
     }
-  }, [formData.tipo_compra, formData.forma_pago_detalle, formData.numero_cuotas, formData.dias_entre_cuotas, formData.fecha_emision, formData.fecha_primera_cuota, totales.total]);
+  }, [formData.tipo_compra, formData.numero_cuotas, formData.dias_entre_cuotas, formData.fecha_primera_cuota, totales.total, formData.monto_pagado_inicial]);
 
   useEffect(() => {
     if (formData.id_cuenta_pago) {
@@ -229,21 +229,30 @@ function NuevaCompra() {
 
   const calcularCronograma = () => {
     if (totales.total <= 0) return;
+    
     const numCuotas = parseInt(formData.numero_cuotas) || 1;
     const diasEntre = parseInt(formData.dias_entre_cuotas) || 30;
     const saldoCredito = totales.total - parseFloat(formData.monto_pagado_inicial || 0);
-    const montoPorCuota = saldoCredito / numCuotas;
-    let fechaBase = new Date(formData.fecha_primera_cuota || formData.fecha_emision);
     
-    if (!formData.fecha_primera_cuota) {
-        fechaBase = new Date(formData.fecha_emision);
-        fechaBase.setDate(fechaBase.getDate() + diasEntre); 
-    } else {
-        fechaBase = new Date(formData.fecha_primera_cuota + 'T12:00:00');
+    if (saldoCredito <= 0) {
+        setCronograma([]);
+        return;
+    }
+
+    const montoPorCuota = saldoCredito / numCuotas;
+    let fechaBase = new Date(formData.fecha_primera_cuota);
+    
+    if (isNaN(fechaBase.getTime())) {
+       fechaBase = new Date(formData.fecha_emision);
+       fechaBase.setDate(fechaBase.getDate() + diasEntre);
     }
 
     const nuevoCronograma = [];
     let ultimaFecha = new Date(fechaBase);
+
+    // Ajuste para la primera fecha si es exactamente la seleccionada
+    // Si queremos que la primera cuota sea exactamente la fecha seleccionada:
+    // (Ya está establecido en ultimaFecha)
 
     for (let i = 1; i <= numCuotas; i++) {
         nuevoCronograma.push({ numero: i, fecha: new Date(ultimaFecha), monto: montoPorCuota });
@@ -265,9 +274,9 @@ function NuevaCompra() {
     setFormData(prev => ({
       ...prev,
       forma_pago_detalle: forma,
-      tipo_compra: esLetras ? 'Credito' : (esCredito ? 'Credito' : 'Contado'),
-      letras_pendientes_registro: esLetras,
-      numero_cuotas: esCredito || esLetras ? 1 : 0,
+      tipo_compra: esLetras ? 'Letras' : (esCredito ? 'Credito' : 'Contado'),
+      letras_pendientes_registro: esLetras, 
+      numero_cuotas: esCredito || esLetras ? (prev.numero_cuotas || 1) : 0,
       dias_credito: esCredito || esLetras ? 30 : 0,
       dias_entre_cuotas: esCredito || esLetras ? 30 : 0,
       monto_pagado_inicial: esContado && !prev.usa_fondos_propios ? totales.total : 0,
@@ -292,8 +301,21 @@ function NuevaCompra() {
     if (formData.usa_fondos_propios && !formData.id_comprador) { setError('Debe seleccionar al comprador'); return; }
     if (!formData.usa_fondos_propios && formData.forma_pago_detalle === 'Contado' && !formData.id_cuenta_pago) { setError('Seleccione cuenta de pago'); return; }
     
+    if (formData.tipo_compra === 'Letras' && parseInt(formData.numero_cuotas) < 1) {
+        setError('Debe indicar al menos 1 cuota/letra.'); return;
+    }
+
     try {
       setLoading(true);
+
+      const cronogramaPayload = (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro && cronograma.length > 0)
+        ? cronograma.map(c => ({
+            numero: c.numero,
+            monto: c.monto,
+            fecha_vencimiento: c.fecha.toISOString().split('T')[0]
+        }))
+        : [];
+
       const payload = {
         ...formData,
         id_proveedor: parseInt(formData.id_proveedor),
@@ -306,6 +328,7 @@ function NuevaCompra() {
         tipo_cambio: requiereConversion ? parseFloat(formData.tipo_cambio) : 1.0,
         monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
         usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
+        cronograma: cronogramaPayload,
         detalle: detalle.map(item => ({
           id_producto: item.id_producto,
           cantidad: parseFloat(item.cantidad),
@@ -317,7 +340,7 @@ function NuevaCompra() {
       
       const response = await comprasAPI.create(payload);
       if (response.data.success) {
-        setSuccess(`Compra ${response.data.data.numero_orden} registrada`);
+        setSuccess(`Compra ${response.data.data.numero} registrada`);
         setTimeout(() => navigate('/compras'), 1500);
       } else { setError(response.data.error || 'Error al crear compra'); }
     } catch (err) { setError('Error al crear compra'); } finally { setLoading(false); }
@@ -531,18 +554,75 @@ function NuevaCompra() {
                             )}
 
                             {formData.forma_pago_detalle === 'Letras' && (
-                                <div className="slide-down p-3 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900">
-                                    <p className="font-bold mb-1">Registro de Letras</p>
-                                    <p className="mb-2">Puedes definir el cronograma ahora o registrar las letras posteriormente.</p>
-                                    <label className="flex items-center gap-2 cursor-pointer">
+                                <div className="slide-down">
+                                    <div className="p-3 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 mb-3">
+                                        <div className="flex items-start gap-2">
+                                            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                                            <div>
+                                                <p className="font-bold">Compra a Letras</p>
+                                                <p>Define el cronograma ahora o regístralo después.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <label className="flex items-center gap-2 cursor-pointer mb-3 p-2 border rounded hover:bg-gray-50">
                                         <input type="checkbox" className="form-checkbox text-purple-600 rounded" checked={formData.letras_pendientes_registro} onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} />
-                                        <span className="font-medium">Registrar letras después</span>
+                                        <span className="font-medium text-sm">Registrar detalle de letras después</span>
                                     </label>
                                 </div>
                             )}
 
                             {(formData.forma_pago_detalle === 'Credito' || formData.forma_pago_detalle === 'Letras') && (
                                 <div className="slide-down space-y-4 pt-2 border-t border-dashed">
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="form-group">
+                                            <label className="form-label text-xs uppercase text-muted">
+                                                {formData.forma_pago_detalle === 'Letras' ? 'N° Letras' : 'Cuotas'}
+                                            </label>
+                                            <input type="number" className="form-input text-center font-bold" min="1" value={formData.numero_cuotas} onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label text-xs uppercase text-muted">Días/Intervalo</label>
+                                            <input type="number" className="form-input text-center" min="1" value={formData.dias_entre_cuotas} onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} />
+                                        </div>
+                                        <div className="form-group col-span-2">
+                                            <label className="form-label text-xs uppercase text-muted">
+                                                {formData.forma_pago_detalle === 'Letras' ? 'Vencimiento 1° Letra' : '1° Vencimiento'}
+                                            </label>
+                                            <input type="date" className="form-input" value={formData.fecha_primera_cuota} onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} />
+                                        </div>
+                                    </div>
+
+                                    {/* Previsualización del Cronograma si es Letras y NO está pendiente */}
+                                    {formData.forma_pago_detalle === 'Letras' && !formData.letras_pendientes_registro && cronograma.length > 0 && (
+                                        <div className="bg-gray-50 rounded border overflow-hidden">
+                                            <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
+                                                <span>Cronograma Preliminar</span>
+                                                <Calendar size={14}/>
+                                            </div>
+                                            <div className="max-h-48 overflow-y-auto">
+                                                <table className="w-full text-xs">
+                                                    <thead className="text-gray-500 bg-gray-50">
+                                                        <tr>
+                                                            <th className="px-2 py-1 text-left">#</th>
+                                                            <th className="px-2 py-1 text-left">Vence</th>
+                                                            <th className="px-2 py-1 text-right">Monto</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y">
+                                                        {cronograma.map((cuota) => (
+                                                            <tr key={cuota.numero}>
+                                                                <td className="px-2 py-1 font-medium">{cuota.numero}</td>
+                                                                <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
+                                                                <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {!formData.usa_fondos_propios && (
                                         <div className="bg-gray-50 p-3 rounded border">
                                             <label className="form-label text-xs uppercase text-blue-700 font-bold mb-2">Adelanto (Opcional)</label>
@@ -559,14 +639,6 @@ function NuevaCompra() {
                                                 </select>
                                             )}
                                             <div className="text-right mt-1 text-xs text-muted">Saldo: {formatearMoneda(totales.total - parseFloat(formData.monto_pagado_inicial || 0))}</div>
-                                        </div>
-                                    )}
-
-                                    {formData.forma_pago_detalle === 'Credito' && (
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="form-group"><label className="form-label text-xs uppercase text-muted">Cuotas</label><input type="number" className="form-input text-center" min="1" value={formData.numero_cuotas} onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} /></div>
-                                            <div className="form-group"><label className="form-label text-xs uppercase text-muted">Días/Cuota</label><input type="number" className="form-input text-center" min="1" value={formData.dias_entre_cuotas} onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} /></div>
-                                            <div className="form-group col-span-2"><label className="form-label text-xs uppercase text-muted">1° Vencimiento</label><input type="date" className="form-input" value={formData.fecha_primera_cuota} onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} /></div>
                                         </div>
                                     )}
                                 </div>

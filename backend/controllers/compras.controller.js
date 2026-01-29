@@ -202,7 +202,9 @@ export async function createCompra(req, res) {
       tipo_impuesto, porcentaje_impuesto, observaciones, id_responsable, contacto_proveedor,
       direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
       serie_documento, numero_documento, fecha_emision_documento,
-      monto_pagado_inicial, url_comprobante
+      monto_pagado_inicial, url_comprobante,
+      // NUEVO: Recibir opcionalmente el cronograma de letras aquí
+      cronograma 
     } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
@@ -211,10 +213,19 @@ export async function createCompra(req, res) {
     if (!id_registrado_por) return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     if (!moneda) return res.status(400).json({ success: false, error: 'Especifique la moneda' });
 
+    // 1. Detección de tipo de crédito (Para Letras o Credito simple)
+    const esCredito = ['Credito', 'Letra', 'Letras'].includes(tipo_compra);
+
+    // Validación específica para Letras
+    if ((tipo_compra === 'Letra' || tipo_compra === 'Letras') && (!numero_cuotas || parseInt(numero_cuotas) < 1)) {
+        return res.status(400).json({ success: false, error: 'Para compras a Letras, debe indicar más de 1 cuota/letra.' });
+    }
+
     let subtotal = 0;
     let subtotalRecepcion = 0;
     let tieneItemsParaRecepcion = false;
 
+    // --- CÁLCULOS DE MONTOS (Igual que tu código original) ---
     for (const item of detalle) {
       const precioUnitario = parseFloat(item.precio_unitario);
       const valorCompra = (item.cantidad * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
@@ -246,7 +257,21 @@ export async function createCompra(req, res) {
 
     const pagoInicial = parseFloat(monto_pagado_inicial || 0);
     const saldoPendiente = total - pagoInicial;
-    const estadoPago = 'Pendiente';
+    const estadoPago = saldoPendiente <= 0.01 ? 'Pagado' : 'Pendiente'; // Pequeña mejora de precisión
+
+    // --- VALIDACIÓN DE CRONOGRAMA SI SE ENVÍA AHORA ---
+    let cronogramaDefinido = 0;
+    if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
+        const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
+        // Validar con margen de error de 1.00 por redondeos
+        if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `La suma de las letras (${totalCronograma.toFixed(2)}) no coincide con el saldo pendiente (${saldoPendiente.toFixed(2)})` 
+            });
+        }
+        cronogramaDefinido = 1;
+    }
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -273,11 +298,14 @@ export async function createCompra(req, res) {
       }
       const numeroCompra = `COM-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(5, '0')}`;
 
+      // --- CÁLCULO DE FECHA VENCIMIENTO ---
       let fechaVencimientoFinal = fecha_vencimiento;
       if (!fechaVencimientoFinal) {
         const fechaBase = new Date(fecha_emision);
-        let diasTotal = 30;
-        if (tipo_compra === 'Credito') {
+        let diasTotal = 30; // Default
+        
+        // CORRECCIÓN AQUÍ: Usamos la variable 'esCredito' en lugar de comparar solo string 'Credito'
+        if (esCredito) {
           if (dias_credito) diasTotal = parseInt(dias_credito);
           else if (numero_cuotas && dias_entre_cuotas) diasTotal = parseInt(numero_cuotas) * parseInt(dias_entre_cuotas);
         }
@@ -296,21 +324,35 @@ export async function createCompra(req, res) {
           observaciones, id_responsable, id_registrado_por, subtotal, igv, total,
           estado, estado_pago, saldo_pendiente, monto_pagado, cronograma_definido,
           tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         numeroCompra, id_proveedor, id_cuenta_pago || null, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
         prioridad || 'Media', moneda, tipoCambioFinal, tipoImpuestoFinal, porcentaje, tipo_compra,
-        tipo_compra === 'Credito' ? parseInt(numero_cuotas || 0) : 0,
-        tipo_compra === 'Credito' ? parseInt(dias_entre_cuotas || 30) : 0,
-        tipo_compra === 'Credito' ? parseInt(dias_credito || 30) : 0,
+        // CORRECCIÓN AQUÍ: Usar 'esCredito' para permitir guardar cuotas si es Letra
+        esCredito ? parseInt(numero_cuotas || 0) : 0,
+        esCredito ? parseInt(dias_entre_cuotas || 30) : 0,
+        esCredito ? parseInt(dias_credito || 30) : 0,
         contacto_proveedor || null, direccion_entrega || null, observaciones, id_responsable || null, id_registrado_por,
-        subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, pagoInicial,
+        subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, pagoInicial, 
+        cronogramaDefinido, // Guardamos si definimos el cronograma de una vez
         tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null
       ]);
 
       const idCompra = resultCompra.insertId;
-      let idEntrada = null;
+      
+      // --- NUEVO BLOQUE: INSERTAR LETRAS AUTOMÁTICAMENTE ---
+      if (cronogramaDefinido === 1) {
+          for (const letra of cronograma) {
+              await connection.query(`
+                INSERT INTO cuotas_orden_compra (
+                    id_orden_compra, numero_cuota, codigo_letra, monto_cuota, fecha_vencimiento, estado
+                ) VALUES (?, ?, ?, ?, ?, 'Pendiente')
+              `, [idCompra, letra.numero, letra.codigo_letra || null, letra.monto, letra.fecha_vencimiento]);
+          }
+      }
 
+      // --- LOGICA DE ENTRADA (Mantenida igual) ---
+      let idEntrada = null;
       if (tieneItemsParaRecepcion) {
         const [primerProducto] = await connection.query('SELECT id_tipo_inventario FROM productos WHERE id_producto = ?', [detalle[0].id_producto]);
         const id_tipo_inventario_entrada = primerProducto[0]?.id_tipo_inventario;
@@ -331,6 +373,7 @@ export async function createCompra(req, res) {
         idEntrada = resultEntrada.insertId;
       }
 
+      // --- DETALLE PRODUCTOS (Mantenida igual) ---
       for (let i = 0; i < detalle.length; i++) {
         const item = detalle[i];
         const precioUnitario = parseFloat(item.precio_unitario);
@@ -347,39 +390,29 @@ export async function createCompra(req, res) {
         `, [idCompra, item.id_producto, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
 
         if (idEntrada && cantidadRecibida > 0) {
-          const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
-          let costoPEN = 0, costoUSD = 0;
+           // ... (Lógica de costos promedio y stock se mantiene igual) ...
+           const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
+           let costoPEN = 0, costoUSD = 0;
+           if (moneda === 'PEN') {
+             costoPEN = costoUnitarioNeto; costoUSD = costoUnitarioNeto / tipoCambioFinal;
+           } else {
+             costoUSD = costoUnitarioNeto; costoPEN = costoUnitarioNeto * tipoCambioFinal;
+           }
+           await connection.query(`
+             INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario, costo_unitario_calculado_pen, costo_unitario_calculado_usd)
+             VALUES (?, ?, ?, ?, ?, ?)
+           `, [idEntrada, item.id_producto, cantidadRecibida, costoUnitarioNeto, costoPEN, costoUSD]);
 
-          if (moneda === 'PEN') {
-            costoPEN = costoUnitarioNeto;
-            costoUSD = costoUnitarioNeto / tipoCambioFinal;
-          } else {
-            costoUSD = costoUnitarioNeto;
-            costoPEN = costoUnitarioNeto * tipoCambioFinal;
-          }
+           const [productoInfo] = await connection.query('SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE', [item.id_producto]);
+           const stockActual = parseFloat(productoInfo[0].stock_actual || 0);
+           const cupActualPEN = parseFloat(productoInfo[0].costo_unitario_promedio || 0);
+           const cupActualUSD = parseFloat(productoInfo[0].costo_unitario_promedio_usd || 0);
+           const nuevoStock = stockActual + cantidadRecibida;
+           
+           const nuevoCostoPromedioPEN = nuevoStock > 0 ? ((stockActual * cupActualPEN) + (cantidadRecibida * costoPEN)) / nuevoStock : costoPEN;
+           const nuevoCostoPromedioUSD = nuevoStock > 0 ? ((stockActual * cupActualUSD) + (cantidadRecibida * costoUSD)) / nuevoStock : costoUSD;
 
-          await connection.query(`
-            INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario, costo_unitario_calculado_pen, costo_unitario_calculado_usd)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `, [idEntrada, item.id_producto, cantidadRecibida, costoUnitarioNeto, costoPEN, costoUSD]);
-
-          const [productoInfo] = await connection.query('SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE', [item.id_producto]);
-          const stockActual = parseFloat(productoInfo[0].stock_actual || 0);
-          const cupActualPEN = parseFloat(productoInfo[0].costo_unitario_promedio || 0);
-          const cupActualUSD = parseFloat(productoInfo[0].costo_unitario_promedio_usd || 0);
-          const nuevoStock = stockActual + cantidadRecibida;
-          
-          const nuevoCostoPromedioPEN = nuevoStock > 0 
-            ? ((stockActual * cupActualPEN) + (cantidadRecibida * costoPEN)) / nuevoStock 
-            : costoPEN;
-            
-          const nuevoCostoPromedioUSD = nuevoStock > 0 
-            ? ((stockActual * cupActualUSD) + (cantidadRecibida * costoUSD)) / nuevoStock 
-            : costoUSD;
-
-          await connection.query(`
-            UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ?, costo_unitario_promedio_usd = ? WHERE id_producto = ?
-          `, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
+           await connection.query(`UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ?, costo_unitario_promedio_usd = ? WHERE id_producto = ?`, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
         }
       }
 

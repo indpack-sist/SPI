@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle, Truck, User, Box, Upload, Eye, FilePlus
+  FileText, Lock, CheckCircle, Truck, User, Box, Eye, FilePlus
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -19,15 +19,8 @@ const TIPOS_IMPUESTO = [
 ];
 
 const FORMAS_PAGO = [
-  'Transferencia Bancaria',
-  'Depósito en Cuenta',
-  'Cheque',
-  'Efectivo',
-  'Letra de Cambio',
-  'Yape',
-  'Plin',
-  'Tarjeta de Crédito',
-  'Tarjeta de Débito'
+  'Transferencia Bancaria', 'Depósito en Cuenta', 'Cheque', 'Efectivo', 
+  'Letra de Cambio', 'Yape', 'Plin', 'Tarjeta de Crédito', 'Tarjeta de Débito'
 ];
 
 const DIAS_CREDITO_OPCIONES = [7, 15, 30, 45, 60, 90];
@@ -106,15 +99,10 @@ function NuevaOrdenVenta() {
     observaciones: ''
   });
 
-  const handleWheelDisable = (e) => {
-    e.target.blur();
-  };
+  const handleWheelDisable = (e) => { e.target.blur(); };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('en-US', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 3
-    }).format(valor);
+    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(valor);
   };
 
   const formatearMoneda = (valor) => {
@@ -130,15 +118,12 @@ function NuevaOrdenVenta() {
 
   const handlePaste = (e, campo) => {
     const items = e.clipboardData.items;
-    
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image') !== -1) {
         const blob = items[i].getAsFile();
         const fecha = new Date().toISOString().replace(/[:.]/g, '-');
         const file = new File([blob], `imagen_pegada_${fecha}.png`, { type: blob.type });
-
         setArchivos(prev => ({ ...prev, [campo]: file }));
-        
         e.preventDefault();
         setSuccess(`Imagen pegada correctamente en ${campo === 'orden_compra' ? 'Orden de Compra' : 'Comprobante'}`);
         setTimeout(() => setSuccess(null), 2000);
@@ -147,19 +132,11 @@ function NuevaOrdenVenta() {
     }
   };
 
-  useEffect(() => {
-    cargarCatalogos();
-  }, []);
+  useEffect(() => { cargarCatalogos(); }, []);
 
-  useEffect(() => {
-    if (modoEdicion) {
-      cargarOrden();
-    }
-  }, [id]);
+  useEffect(() => { if (modoEdicion) { cargarOrden(); } }, [id]);
 
-  useEffect(() => {
-    calcularTotales();
-  }, [detalle, formCabecera.porcentaje_impuesto]);
+  useEffect(() => { calcularTotales(); }, [detalle, formCabecera.porcentaje_impuesto]);
 
   useEffect(() => {
     if (formCabecera.tipo_venta === 'Contado') {
@@ -173,9 +150,7 @@ function NuevaOrdenVenta() {
       const fechaEmision = new Date(formCabecera.fecha_emision);
       const fechaBase = new Date(fechaEmision.valueOf() + fechaEmision.getTimezoneOffset() * 60000);
       fechaBase.setDate(fechaBase.getDate() + parseInt(formCabecera.dias_credito || 0));
-      
       const fechaVencimiento = fechaBase.toISOString().split('T')[0];
-      
       setFormCabecera(prev => ({
         ...prev,
         fecha_vencimiento: fechaVencimiento,
@@ -221,17 +196,9 @@ function NuevaOrdenVenta() {
         setComerciales(vendedores);
       }
 
-      if (resCotizaciones.data.success) {
-        setCotizacionesPendientes(resCotizaciones.data.data || []);
-      }
-
-      if (resVehiculos.data.success) {
-        setVehiculos(resVehiculos.data.data || []);
-      }
-
-      if (resConductores.data.success) {
-        setConductores(resConductores.data.data || []);
-      }
+      if (resCotizaciones.data.success) setCotizacionesPendientes(resCotizaciones.data.data || []);
+      if (resVehiculos.data.success) setVehiculos(resVehiculos.data.data || []);
+      if (resConductores.data.success) setConductores(resConductores.data.data || []);
 
     } catch (err) {
       console.error(err);
@@ -813,7 +780,7 @@ function NuevaOrdenVenta() {
               </div>
               
               {tieneOC && (
-                  <div className="card-body space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="card-body space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div>
                         <label className="form-label text-sm font-semibold text-gray-700">
                         Nº Orden de Compra (Correlativo) *
@@ -1291,7 +1258,7 @@ function NuevaOrdenVenta() {
                 </div>
 
                 {formCabecera.tipo_venta === 'Crédito' && (
-                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 animated fade-in">
+                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 animate-in fade-in slide-in-from-top-2 duration-300">
                     <label className="form-label text-orange-800">Días de Crédito</label>
                     <div className="grid grid-cols-3 gap-2 mb-2">
                       {DIAS_CREDITO_OPCIONES.map(dias => (
@@ -1485,7 +1452,7 @@ function NuevaOrdenVenta() {
           />
         </div>
         <div className="max-h-96 overflow-y-auto space-y-2">
-          {clientes.filter(c => c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) || c.ruc.includes(busquedaCliente)).map(c => (
+          {clientesFiltrados.map(c => (
             <div key={c.id_cliente} className="p-3 border rounded hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => handleSelectCliente(c)}>
               <div>
                 <div className="font-bold">{c.razon_social}</div>
@@ -1519,7 +1486,7 @@ function NuevaOrdenVenta() {
           />
         </div>
         <div className="max-h-96 overflow-y-auto space-y-2">
-          {productos.filter(p => p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) || p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())).map(p => (
+          {productosFiltrados.map(p => (
             <div key={p.id_producto} className="p-3 border rounded hover:bg-gray-50 cursor-pointer flex justify-between" onClick={() => handleAgregarProducto(p)}>
               <div>
                 <div className="font-bold">{p.nombre}</div>

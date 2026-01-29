@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, 
-  Loader, Building2, Eye, User, CreditCard, Upload, FilePlus
+  Loader, Building2, User, CreditCard, FilePlus, Eye
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clientesAPI, solicitudesCreditoAPI } from '../../config/api';
@@ -250,28 +250,40 @@ function Clientes() {
     setError(null);
     setSuccess(null);
 
+    // CORRECCIÓN CLAVE: Separamos la lógica de creación vs actualización
     const dataToSend = {
       ...formData,
       tipo_documento: formData.tipo_documento || 'RUC',
       usar_limite_credito: formData.usar_limite_credito ? 1 : 0,
-      creacion_manual: creacionManual
+      creacion_manual: creacionManual,
+      // Si estamos CREANDO, forzamos límites en 0 para evitar asignación directa
+      limite_credito_pen: editando ? parseFloat(formData.limite_credito_pen || 0) : 0,
+      limite_credito_usd: editando ? parseFloat(formData.limite_credito_usd || 0) : 0
     };
-
-    if (editando) {
-      dataToSend.limite_credito_pen = parseFloat(editando.limite_credito_pen || 0);
-      dataToSend.limite_credito_usd = parseFloat(editando.limite_credito_usd || 0);
-    } else {
-      dataToSend.limite_credito_pen = parseFloat(formData.limite_credito_pen || 0);
-      dataToSend.limite_credito_usd = parseFloat(formData.limite_credito_usd || 0);
-    }
 
     try {
       if (editando) {
         await clientesAPI.update(editando.id_cliente, dataToSend);
         setSuccess('Cliente actualizado exitosamente');
       } else {
-        await clientesAPI.create(dataToSend);
-        setSuccess('Cliente creado exitosamente');
+        // Crear cliente
+        const response = await clientesAPI.create(dataToSend);
+        const nuevoClienteId = response.data.data.id_cliente;
+
+        // Si se solicitó crédito al crear, generamos la solicitud automáticamente
+        if (formData.usar_limite_credito && (parseFloat(formData.limite_credito_pen) > 0 || parseFloat(formData.limite_credito_usd) > 0)) {
+            const solicitudFormData = new FormData();
+            solicitudFormData.append('id_cliente', nuevoClienteId);
+            solicitudFormData.append('limite_credito_pen_solicitado', parseFloat(formData.limite_credito_pen || 0));
+            solicitudFormData.append('limite_credito_usd_solicitado', parseFloat(formData.limite_credito_usd || 0));
+            solicitudFormData.append('usar_limite_credito', true);
+            solicitudFormData.append('justificacion', 'Solicitud inicial al crear cliente');
+            
+            await solicitudesCreditoAPI.create(solicitudFormData);
+            setSuccess('Cliente creado y solicitud de crédito enviada exitosamente');
+        } else {
+            setSuccess('Cliente creado exitosamente');
+        }
       }
       cerrarModal();
       cargarClientes();
@@ -488,7 +500,7 @@ function Clientes() {
                 <CreditCard size={18} className="text-primary" />
                 <span className="font-medium">Usar límite de crédito</span>
               </label>
-              <p className="text-xs text-muted mt-1 ml-6">{formData.usar_limite_credito ? 'El cliente tiene límites de crédito definidos' : 'El cliente puede realizar compras sin límite de crédito'}</p>
+              <p className="text-xs text-muted mt-1 ml-6">{formData.usar_limite_credito ? 'El cliente tendrá límites de crédito (requiere aprobación)' : 'El cliente puede realizar compras sin límite de crédito'}</p>
             </div>
 
             {editando ? (
@@ -520,7 +532,7 @@ function Clientes() {
                         {editando.tiene_solicitud_pendiente 
                             ? 'Solicitud en Proceso' 
                             : !formData.usar_limite_credito 
-                                ? 'Solicitar Crédito' 
+                                ? 'Solicitar Activación de Crédito' 
                                 : 'Solicitar Cambio de Límite'
                         }
                     </button>
@@ -528,6 +540,10 @@ function Clientes() {
             ) : (
                 formData.usar_limite_credito && (
                     <div className="pt-3 border-t">
+                        <div className="alert alert-info mb-3">
+                            <AlertCircle size={16} />
+                            <span className="text-xs">Estos límites se enviarán como una solicitud de crédito automática para aprobación.</span>
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group mb-0">
                             <label className="form-label">Límite en Soles (S/)</label>

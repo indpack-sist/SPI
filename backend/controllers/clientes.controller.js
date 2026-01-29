@@ -177,8 +177,6 @@ export async function createCliente(req, res) {
       telefono,
       email,
       direccion_despacho,
-      limite_credito_pen,
-      limite_credito_usd,
       usar_limite_credito,
       validar_documento,
       estado,
@@ -262,8 +260,8 @@ export async function createCliente(req, res) {
         telefono || null,
         email || null,
         direccion_despacho || null,
-        parseFloat(limite_credito_pen || 0),
-        parseFloat(limite_credito_usd || 0),
+        0, 
+        0,
         usar_limite_credito ? 1 : 0,
         estado || 'Activo'
       ]

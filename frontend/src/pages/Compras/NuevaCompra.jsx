@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Save, ShoppingCart, Building, Calendar,
-  MapPin, Plus, Trash2, Search, AlertCircle, Wallet, CreditCard, Clock,
-  DollarSign, ArrowRightLeft, PackagePlus, UserPlus, FileText,
-  Receipt, User, CheckCircle, Percent
+  ArrowLeft, Save, ShoppingCart, Building,
+  MapPin, Plus, Trash2, Search, Wallet, CreditCard,
+  ArrowRightLeft, PackagePlus, UserPlus, FileText,
+  Receipt, User, CheckCircle
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -16,7 +16,6 @@ import {
 function NuevaCompra() {
   const navigate = useNavigate();
   
-  // --- ESTADOS (Mismos que tu código original) ---
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -84,7 +83,6 @@ function NuevaCompra() {
   const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
   const [cronograma, setCronograma] = useState([]);
 
-  // --- FILTROS ---
   const proveedoresFiltrados = proveedores.filter(p => 
     p.razon_social.toLowerCase().includes(busquedaProveedor.toLowerCase()) || 
     p.ruc.includes(busquedaProveedor)
@@ -95,7 +93,6 @@ function NuevaCompra() {
     p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
-  // --- EFECTOS ---
   useEffect(() => { cargarCatalogos(); }, []);
   useEffect(() => { calcularTotales(); }, [detalle, formData.porcentaje_impuesto, formData.tipo_impuesto]);
   
@@ -126,7 +123,6 @@ function NuevaCompra() {
     }
   }, [formData.id_cuenta_pago, formData.moneda, cuentasPago]);
 
-  // --- FUNCIONES DE CARGA Y LÓGICA ---
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
@@ -165,7 +161,6 @@ function NuevaCompra() {
     } catch (err) { setError('Error al validar RUC'); } finally { setBuscandoRuc(false); }
   };
 
-  // ... (Tus funciones handleGuardarNuevoProveedor, handleGuardarNuevoProducto se mantienen igual) ...
   const handleGuardarNuevoProveedor = async (e) => {
     e.preventDefault();
     try {
@@ -212,7 +207,6 @@ function NuevaCompra() {
     setDetalle([...detalle, nuevoItem]); setModalProductoOpen(false); setBusquedaProducto('');
   };
 
-  // ... (Tus manejadores de cambios en items se mantienen igual) ...
   const handleCantidadChange = (index, val) => { const newD = [...detalle]; newD[index].cantidad = parseFloat(val)||0; newD[index].cantidad_a_recibir = parseFloat(val)||0; setDetalle(newD); };
   const handleCantidadRecibirChange = (index, val) => { const newD = [...detalle]; newD[index].cantidad_a_recibir = parseFloat(val)||0; setDetalle(newD); };
   const handlePrecioChange = (index, val) => { const newD = [...detalle]; newD[index].precio_unitario = parseFloat(val)||0; setDetalle(newD); };
@@ -292,7 +286,6 @@ function NuevaCompra() {
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setError(null); setSuccess(null);
-    // Validaciones básicas
     if (!formData.id_proveedor) { setError('Seleccione proveedor'); return; }
     if (detalle.length === 0) { setError('Agregue productos'); return; }
     if (!formData.moneda) { setError('Especifique moneda'); return; }
@@ -339,9 +332,8 @@ function NuevaCompra() {
   const montoConvertido = calcularMontoConversion();
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
-      {/* Encabezado */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="container py-6">
+      <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
           <button className="btn btn-outline" onClick={() => navigate('/compras')}><ArrowLeft size={20} /></button>
           <div>
@@ -357,17 +349,15 @@ function NuevaCompra() {
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* COLUMNA IZQUIERDA (2/3) - Detalle y Proveedor */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* Tarjeta Proveedor */}
             <div className="card">
-              <div className="card-header bg-gray-50/50">
+              <div className="card-header bg-gray-50">
                 <h2 className="card-title text-base"><Building size={18} className="text-primary"/> Datos del Proveedor</h2>
               </div>
               <div className="card-body">
                 {proveedorSeleccionado ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex justify-between items-center transition-all">
+                  <div className="bg-blue-50 border border-blue-200 rounded p-4 flex justify-between items-center transition-all">
                     <div>
                       <p className="font-bold text-lg text-blue-900">{proveedorSeleccionado.razon_social}</p>
                       <p className="text-sm text-blue-700 font-mono">RUC: {proveedorSeleccionado.ruc}</p>
@@ -375,7 +365,7 @@ function NuevaCompra() {
                     <button type="button" className="btn btn-sm btn-outline bg-white hover:text-blue-700" onClick={() => { setProveedorSeleccionado(null); setFormData({ ...formData, id_proveedor: '' }); }}>Cambiar</button>
                   </div>
                 ) : (
-                  <button type="button" className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg text-muted hover:border-primary hover:text-primary transition-colors flex flex-col items-center gap-2" onClick={() => setModalProveedorOpen(true)}>
+                  <button type="button" className="w-full py-8 border-2 border-dashed border-gray-200 rounded text-muted hover:border-primary hover:text-primary transition-colors flex flex-col items-center gap-2" onClick={() => setModalProveedorOpen(true)}>
                     <Search size={32} />
                     <span className="font-medium">Clic para buscar proveedor</span>
                   </button>
@@ -396,9 +386,8 @@ function NuevaCompra() {
               </div>
             </div>
 
-            {/* Tarjeta Documento */}
             <div className="card">
-                <div className="card-header bg-gray-50/50">
+                <div className="card-header bg-gray-50">
                     <h2 className="card-title text-base"><FileText size={18} className="text-primary"/> Documento Físico</h2>
                 </div>
                 <div className="card-body grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -423,7 +412,6 @@ function NuevaCompra() {
                 </div>
             </div>
 
-            {/* Tarjeta Moneda */}
             <div className="card">
                 <div className="card-body">
                     <div className="flex gap-4">
@@ -437,10 +425,9 @@ function NuevaCompra() {
                 </div>
             </div>
 
-            {/* Tarjeta Productos */}
             {formData.moneda && (
                 <div className="card">
-                    <div className="card-header bg-gray-50/50 flex justify-between items-center">
+                    <div className="card-header bg-gray-50 flex justify-between items-center">
                         <h2 className="card-title text-base"><ShoppingCart size={18} className="text-primary"/> Detalle de Productos</h2>
                         <div className="flex gap-2">
                             <select className="form-select text-xs w-36" value={formData.tipo_recepcion} onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}>
@@ -471,14 +458,14 @@ function NuevaCompra() {
                                             <td className="text-center text-muted text-xs">{index + 1}</td>
                                             <td>
                                                 <div className="font-medium text-sm text-gray-800">{item.producto}</div>
-                                                <div className="text-[10px] text-muted font-mono">{item.codigo_producto}</div>
+                                                <div className="text-xs text-muted font-mono">{item.codigo_producto}</div>
                                             </td>
                                             <td><input type="number" className="form-input form-input-sm text-right" value={item.cantidad} onChange={(e) => handleCantidadChange(index, e.target.value)} min="0" step="0.01" /></td>
-                                            {formData.tipo_recepcion === 'Parcial' && <td className="bg-blue-50/30"><input type="number" className="form-input form-input-sm text-right border-blue-300 focus:ring-blue-500" value={item.cantidad_a_recibir} onChange={(e) => handleCantidadRecibirChange(index, e.target.value)} min="0" max={item.cantidad} step="0.01" /></td>}
+                                            {formData.tipo_recepcion === 'Parcial' && <td className="bg-blue-50"><input type="number" className="form-input form-input-sm text-right border-blue-500" value={item.cantidad_a_recibir} onChange={(e) => handleCantidadRecibirChange(index, e.target.value)} min="0" max={item.cantidad} step="0.01" /></td>}
                                             <td><input type="number" className="form-input form-input-sm text-right" value={item.precio_unitario} onChange={(e) => handlePrecioChange(index, e.target.value)} min="0" step="0.01" /></td>
                                             <td><input type="number" className="form-input form-input-sm text-center" value={item.descuento_porcentaje} onChange={(e) => handleDescuentoChange(index, e.target.value)} min="0" max="100" /></td>
-                                            <td className="text-right font-bold text-gray-700 text-sm">{formatearMoneda(calcularSubtotalItem(item))}</td>
-                                            <td className="text-center"><button type="button" className="btn btn-xs btn-ghost text-red-500 hover:bg-red-50 hover:text-red-700" onClick={() => handleEliminarProducto(index)}><Trash2 size={14} /></button></td>
+                                            <td className="text-right font-bold text-gray-800 text-sm">{formatearMoneda(calcularSubtotalItem(item))}</td>
+                                            <td className="text-center"><button type="button" className="btn btn-xs btn-ghost text-red-600 hover:bg-red-50" onClick={() => handleEliminarProducto(index)}><Trash2 size={14} /></button></td>
                                         </tr>
                                     )) : (
                                         <tr><td colSpan="8" className="p-8 text-center text-muted italic">No hay productos agregados a la lista.</td></tr>
@@ -489,11 +476,11 @@ function NuevaCompra() {
                     </div>
 
                     <div className="p-4 bg-gray-50 border-t flex justify-end">
-                        <div className="w-72 space-y-2">
+                        <div className="w-80 space-y-2">
                             <div className="flex justify-between text-sm"><span className="text-muted">Subtotal:</span><span className="font-medium">{formatearMoneda(totales.subtotal)}</span></div>
                             <div className="flex justify-between text-sm items-center">
                                 <div className="flex items-center gap-1">
-                                    <select className="form-select form-select-sm border-none bg-transparent p-0 pr-6 font-medium text-muted cursor-pointer hover:text-primary focus:ring-0" value={formData.tipo_impuesto} onChange={(e) => setFormData({...formData, tipo_impuesto: e.target.value})}>
+                                    <select className="form-select form-select-sm border-transparent bg-transparent p-0 pr-6 font-medium text-muted cursor-pointer hover:text-primary focus:ring-0" value={formData.tipo_impuesto} onChange={(e) => setFormData({...formData, tipo_impuesto: e.target.value})}>
                                         <option value="IGV">IGV (18%)</option><option value="EXO">Exonerado</option><option value="INA">Inafecto</option>
                                     </select>
                                 </div>
@@ -508,28 +495,25 @@ function NuevaCompra() {
             )}
           </div>
 
-          {/* COLUMNA DERECHA (1/3) - Pago y Opciones */}
           <div className="space-y-6">
             
             {detalle.length > 0 && (
                 <>
-                    {/* Tarjeta Forma de Pago */}
                     <div className="card">
-                        <div className="card-header bg-gray-50/50"><h2 className="card-title text-base"><Wallet size={18} className="text-primary"/> Forma de Pago</h2></div>
+                        <div className="card-header bg-gray-50"><h2 className="card-title text-base"><Wallet size={18} className="text-primary"/> Forma de Pago</h2></div>
                         <div className="card-body space-y-4">
                             <div className="grid grid-cols-3 gap-2">
                                 <button type="button" className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Contado' ? 'active' : ''}`} onClick={() => handleFormaPagoChange('Contado')}>
-                                    <Wallet size={20} /><span className="text-[10px] font-bold uppercase">Contado</span>
+                                    <Wallet size={20} /><span className="text-xs font-bold uppercase">Contado</span>
                                 </button>
                                 <button type="button" className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Credito' ? 'active' : ''}`} onClick={() => handleFormaPagoChange('Credito')}>
-                                    <CreditCard size={20} /><span className="text-[10px] font-bold uppercase">Crédito</span>
+                                    <CreditCard size={20} /><span className="text-xs font-bold uppercase">Crédito</span>
                                 </button>
                                 <button type="button" className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Letras' ? 'active' : ''}`} onClick={() => handleFormaPagoChange('Letras')}>
-                                    <Receipt size={20} /><span className="text-[10px] font-bold uppercase">Letras</span>
+                                    <Receipt size={20} /><span className="text-xs font-bold uppercase">Letras</span>
                                 </button>
                             </div>
 
-                            {/* LOGICA DE PAGO CONTADO */}
                             {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
                                 <div className="slide-down space-y-3">
                                     <div className="p-3 bg-green-50 border border-green-200 rounded text-xs text-green-800 flex gap-2">
@@ -546,9 +530,8 @@ function NuevaCompra() {
                                 </div>
                             )}
 
-                            {/* LOGICA DE LETRAS */}
                             {formData.forma_pago_detalle === 'Letras' && (
-                                <div className="slide-down p-3 bg-purple-50 border border-purple-200 rounded text-xs text-purple-800">
+                                <div className="slide-down p-3 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900">
                                     <p className="font-bold mb-1">Registro de Letras</p>
                                     <p className="mb-2">Puedes definir el cronograma ahora o registrar las letras posteriormente.</p>
                                     <label className="flex items-center gap-2 cursor-pointer">
@@ -558,7 +541,6 @@ function NuevaCompra() {
                                 </div>
                             )}
 
-                            {/* LOGICA DE CRÉDITO / LETRAS (Configuración) */}
                             {(formData.forma_pago_detalle === 'Credito' || formData.forma_pago_detalle === 'Letras') && (
                                 <div className="slide-down space-y-4 pt-2 border-t border-dashed">
                                     {!formData.usa_fondos_propios && (
@@ -582,15 +564,14 @@ function NuevaCompra() {
 
                                     {formData.forma_pago_detalle === 'Credito' && (
                                         <div className="grid grid-cols-2 gap-3">
-                                            <div className="form-group"><label className="form-label text-[10px] uppercase text-muted">Cuotas</label><input type="number" className="form-input text-center" min="1" value={formData.numero_cuotas} onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} /></div>
-                                            <div className="form-group"><label className="form-label text-[10px] uppercase text-muted">Días/Cuota</label><input type="number" className="form-input text-center" min="1" value={formData.dias_entre_cuotas} onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} /></div>
-                                            <div className="form-group col-span-2"><label className="form-label text-[10px] uppercase text-muted">1° Vencimiento</label><input type="date" className="form-input" value={formData.fecha_primera_cuota} onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} /></div>
+                                            <div className="form-group"><label className="form-label text-xs uppercase text-muted">Cuotas</label><input type="number" className="form-input text-center" min="1" value={formData.numero_cuotas} onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} /></div>
+                                            <div className="form-group"><label className="form-label text-xs uppercase text-muted">Días/Cuota</label><input type="number" className="form-input text-center" min="1" value={formData.dias_entre_cuotas} onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} /></div>
+                                            <div className="form-group col-span-2"><label className="form-label text-xs uppercase text-muted">1° Vencimiento</label><input type="date" className="form-input" value={formData.fecha_primera_cuota} onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} /></div>
                                         </div>
                                     )}
                                 </div>
                             )}
 
-                            {/* Info de Saldo Disponible */}
                             {cuentaSeleccionada && (
                                 <div className="flex justify-between items-center text-xs px-3 py-2 bg-gray-100 rounded text-gray-600">
                                     <span>Saldo disponible:</span>
@@ -598,7 +579,6 @@ function NuevaCompra() {
                                 </div>
                             )}
 
-                            {/* Conversión de Divisa */}
                             {requiereConversion && (
                                 <div className="bg-orange-50 border border-orange-200 rounded p-3 text-xs space-y-2">
                                     <div className="font-bold text-orange-800 flex items-center gap-1"><ArrowRightLeft size={12}/> Conversión Necesaria</div>
@@ -612,12 +592,11 @@ function NuevaCompra() {
                         </div>
                     </div>
 
-                    {/* Tarjeta Comprador (Fondos Propios) */}
                     <div className="card">
-                        <div className="card-header bg-gray-50/50"><h2 className="card-title text-base"><User size={18} className="text-primary"/> Comprador</h2></div>
+                        <div className="card-header bg-gray-50"><h2 className="card-title text-base"><User size={18} className="text-primary"/> Comprador</h2></div>
                         <div className="card-body">
                             <label className="flex items-start gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded transition-colors">
-                                <input type="checkbox" className="form-checkbox mt-1" checked={formData.usa_fondos_propios} onChange={(e) => {
+                                <input type="checkbox" className="mt-1" checked={formData.usa_fondos_propios} onChange={(e) => {
                                     const usa = e.target.checked;
                                     setFormData({ ...formData, usa_fondos_propios: usa, id_comprador: usa ? formData.id_comprador : '', id_cuenta_pago: usa ? '' : formData.id_cuenta_pago, monto_pagado_inicial: usa ? 0 : (formData.forma_pago_detalle === 'Contado' ? totales.total : formData.monto_pagado_inicial) });
                                 }} />
@@ -638,7 +617,6 @@ function NuevaCompra() {
                         </div>
                     </div>
 
-                    {/* Notas y Dirección */}
                     <div className="card">
                         <div className="card-body space-y-3">
                             <div className="form-group m-0">
@@ -652,7 +630,7 @@ function NuevaCompra() {
                         </div>
                     </div>
 
-                    <button type="submit" className="btn btn-primary w-full py-4 text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all" disabled={loading}>
+                    <button type="submit" className="btn btn-primary w-full btn-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all" disabled={loading}>
                         {loading ? 'Procesando...' : <><Save size={20} /> Guardar Compra</>}
                     </button>
                 </>
@@ -661,7 +639,6 @@ function NuevaCompra() {
         </div>
       </form>
 
-      {/* --- MODALES (Mantienen lógica, ajuste mínimo de estilos) --- */}
       <Modal isOpen={modalProveedorOpen} onClose={() => { setModalProveedorOpen(false); setBusquedaProveedor(''); }} title="Buscar Proveedor">
         <div className="space-y-4">
              <div className="flex gap-2">
@@ -671,7 +648,7 @@ function NuevaCompra() {
                 </div>
                 <button type="button" className="btn btn-success" onClick={() => { setModalProveedorOpen(false); setModalCrearProveedorOpen(true); }}><UserPlus size={18} /></button>
             </div>
-            <div className="max-h-80 overflow-y-auto border rounded-lg divide-y">
+            <div className="max-h-80 overflow-y-auto border rounded divide-y">
                 {proveedoresFiltrados.length > 0 ? proveedoresFiltrados.map((prov) => (
                     <div key={prov.id_proveedor} className="p-3 hover:bg-blue-50 cursor-pointer transition-colors" onClick={() => handleSelectProveedor(prov)}>
                         <div className="font-bold text-blue-900">{prov.razon_social}</div>
@@ -691,7 +668,7 @@ function NuevaCompra() {
                 </div>
                 <button type="button" className="btn btn-success" onClick={() => { setModalProductoOpen(false); setModalCrearProductoOpen(true); }}><PackagePlus size={18} /></button>
             </div>
-            <div className="max-h-[50vh] overflow-y-auto border rounded-lg divide-y">
+            <div className="max-h-96 overflow-y-auto border rounded divide-y">
                 {productosFiltrados.length > 0 ? productosFiltrados.map((prod) => (
                     <div key={prod.id_producto} className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center transition-colors" onClick={() => handleSelectProducto(prod)}>
                         <div>
@@ -708,7 +685,6 @@ function NuevaCompra() {
         </div>
       </Modal>
 
-      {/* Modal Crear Proveedor (Simplificado visualmente) */}
       <Modal isOpen={modalCrearProveedorOpen} onClose={() => setModalCrearProveedorOpen(false)} title="Nuevo Proveedor">
         <form onSubmit={handleGuardarNuevoProveedor} className="space-y-3">
             <div className="flex gap-2">
@@ -728,7 +704,6 @@ function NuevaCompra() {
         </form>
       </Modal>
 
-      {/* Modal Crear Producto (Simplificado visualmente) */}
       <Modal isOpen={modalCrearProductoOpen} onClose={() => setModalCrearProductoOpen(false)} title="Nuevo Producto">
         <form onSubmit={handleGuardarNuevoProducto} className="space-y-3">
             <div className="grid grid-cols-3 gap-3">

@@ -142,11 +142,6 @@ function ClienteDetalle() {
   };
 
   const calcularDeudaReal = (items) => {
-      // Esta función es la CLAVE: 
-      // 1. Excluye canceladas
-      // 2. Excluye pagadas
-      // 3. Excluye ventas al contado (Solo suma ventas a CRÉDITO)
-      
       const deudaPEN = items
         .filter(item => 
             item.moneda === 'PEN' && 

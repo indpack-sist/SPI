@@ -837,7 +837,7 @@ function DetalleOrdenVenta() {
       const link = document.createElement('a');
       link.href = url;
       
-      link.setAttribute('download', `GuiaRemision-${orden.numero_orden}-${idSalida}.pdf`);
+      link.setAttribute('download', `ConstanciaSalida-${orden.numero_orden}-${idSalida}.pdf`);
       
       document.body.appendChild(link);
       link.click();

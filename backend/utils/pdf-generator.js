@@ -422,13 +422,7 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica');
       doc.text(formatearFecha(datos.fecha_movimiento || datos.fecha_emision), 100, 213);
       
-      if (!datos.historial_despachos) {
-        doc.font('Helvetica-Bold');
-        doc.text('Hora:', 40, 228);
-        doc.font('Helvetica');
-        const horaStr = formatearHora(datos.fecha_movimiento); 
-        doc.text(horaStr, 100, 228);
-      }
+      // --- CAMBIO: Se eliminó el bloque que pintaba la HORA aquí ---
       
       doc.font('Helvetica-Bold');
       doc.text('Tipo:', 40, 243);

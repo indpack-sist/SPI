@@ -392,9 +392,10 @@ function DetalleCompra() {
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
+  
   const esCredito = compra.tipo_compra === 'Credito' || compra.tipo_compra === 'Crédito';
+  const esLetras = compra.tipo_compra === 'Letras' || compra.forma_pago_detalle === 'Letras';
   const esContado = compra.tipo_compra === 'Contado';
-  const esLetras = compra.forma_pago_detalle === 'Letras';
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -409,6 +410,7 @@ function DetalleCompra() {
                 <span className="flex items-center gap-1"><Calendar size={14}/> {formatearFecha(compra.fecha_emision)}</span>
                 <span className={`badge ${compra.estado === 'Recibida' ? 'badge-success' : compra.estado === 'En Tránsito' ? 'badge-info' : compra.estado === 'Cancelada' ? 'badge-danger' : 'badge-warning'}`}>{compra.estado}</span>
                 {compra.usa_fondos_propios === 1 && <span className="badge badge-purple">Fondos Propios</span>}
+                <span className="badge badge-outline">{compra.tipo_compra}</span>
             </div>
           </div>
         </div>
@@ -422,14 +424,14 @@ function DetalleCompra() {
                     <ArrowRightLeft size={18} /> Mover Cuenta
                   </button>
               )}
-              {compra.estado_pago !== 'Pagado' && (esContado || (esCredito && !compra.cronograma_definido && !esLetras)) && !compra.usa_fondos_propios && (
+              {compra.estado_pago !== 'Pagado' && esContado && !compra.usa_fondos_propios && (
                   <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
                     <DollarSign size={18} /> Registrar Pago
                   </button>
               )}
-              {compra.estado_pago !== 'Pagado' && esCredito && !compra.cronograma_definido && !esLetras && (
+              {compra.estado_pago !== 'Pagado' && (esCredito || esLetras) && !compra.cronograma_definido && (
                   <button className="btn btn-warning text-white" onClick={handleAbrirCronograma}>
-                    <FileText size={18} /> Definir Letras
+                    <FileText size={18} /> Definir Cronograma
                   </button>
               )}
               {compra.estado_pago !== 'Pagado' && esLetras && !compra.letras_registradas && (
@@ -499,7 +501,7 @@ function DetalleCompra() {
           <nav className="flex gap-4">
             <button className={`px-4 py-2 border-b-2 font-medium transition ${tabActiva === 'general' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-gray-700'}`} onClick={() => setTabActiva('general')}>General</button>
             <button className={`px-4 py-2 border-b-2 font-medium transition ${tabActiva === 'pagos' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-gray-700'}`} onClick={() => setTabActiva('pagos')}>Pagos</button>
-            {compra.forma_pago_detalle === 'Letras' && (
+            {esLetras && (
               <button className={`px-4 py-2 border-b-2 font-medium transition ${tabActiva === 'letras' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-gray-700'}`} onClick={() => setTabActiva('letras')}>
                 Letras {letras.filter(l => l.estado === 'Pendiente').length > 0 && <span className="ml-2 badge badge-warning text-xs">{letras.filter(l => l.estado === 'Pendiente').length}</span>}
               </button>
@@ -573,10 +575,10 @@ function DetalleCompra() {
                 </div>
             )}
 
-            {esCredito && !esLetras && (
+            {(esCredito || esLetras) && (
                 <div className="card">
                     <div className="card-header bg-gray-50/50 flex justify-between items-center">
-                        <h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuotas</h3>
+                        <h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuotas / Cronograma</h3>
                         {!compra.cronograma_definido && <span className="badge badge-warning text-[10px]">Por definir</span>}
                     </div>
                     <div className="card-body p-0">
@@ -585,7 +587,7 @@ function DetalleCompra() {
                                 {compra.cuotas.map((cuota) => (
                                     <div key={cuota.id_cuota} className="p-3 hover:bg-gray-50 flex justify-between items-center">
                                         <div>
-                                            <p className="font-bold text-sm">Letra #{cuota.numero_cuota} {cuota.codigo_letra ? `(${cuota.codigo_letra})` : ''}</p>
+                                            <p className="font-bold text-sm">Cuota #{cuota.numero_cuota} {cuota.codigo_letra ? `(${cuota.codigo_letra})` : ''}</p>
                                             <p className="text-xs text-muted">Vence: {formatearFecha(cuota.fecha_vencimiento)}</p>
                                         </div>
                                         <div className="text-right">
@@ -598,7 +600,9 @@ function DetalleCompra() {
                         ) : (
                             <div className="p-4 text-center">
                                 <p className="text-sm text-muted mb-2">No hay cronograma definido.</p>
-                                <button className="btn btn-sm btn-outline" onClick={handleAbrirCronograma}>Crear Cronograma</button>
+                                {compra.estado_pago !== 'Pagado' && (
+                                    <button className="btn btn-sm btn-outline" onClick={handleAbrirCronograma}>Crear Cronograma</button>
+                                )}
                             </div>
                         )}
                     </div>

@@ -87,7 +87,7 @@ export async function getAllCompras(req, res) {
     } else if (alertas === 'pago_parcial') {
       sql += ` AND oc.estado_pago = 'Parcial'`;
     } else if (alertas === 'sin_cronograma') {
-      sql += ` AND oc.tipo_compra = 'Credito' AND oc.cronograma_definido = 0`;
+      sql += ` AND oc.tipo_compra IN ('Credito', 'Letras') AND oc.cronograma_definido = 0`;
     }
     
     sql += ` ORDER BY oc.fecha_emision DESC, oc.id_orden_compra DESC`;
@@ -821,7 +821,7 @@ export async function getResumenPagosCompra(req, res) {
     const compra = compraResult.data[0];
     
     let cuotasInfo = null;
-    if (compra.tipo_compra === 'Credito') {
+    if (['Credito', 'Letras'].includes(compra.tipo_compra)) {
       const cuotas = await executeQuery(`
         SELECT COUNT(*) as total, SUM(CASE WHEN estado='Pagada' THEN 1 ELSE 0 END) as pagadas, SUM(CASE WHEN estado!='Pagada' AND fecha_vencimiento<CURDATE() THEN 1 ELSE 0 END) as vencidas
         FROM cuotas_orden_compra WHERE id_orden_compra = ?

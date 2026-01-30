@@ -112,7 +112,9 @@ function Compras() {
     const configs = {
       'Contado': { clase: 'text-green-700', icono: Wallet, texto: 'Contado' },
       'Crédito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' },
-      'Letras': { clase: 'text-purple-700', icono: Receipt, texto: 'Letras' }
+      'Credito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' }, // Soporte sin tilde
+      'Letras': { clase: 'text-purple-700', icono: Receipt, texto: 'Letras' },
+      'Letra': { clase: 'text-purple-700', icono: Receipt, texto: 'Letras' }
     };
     return configs[forma] || configs['Contado'];
   };
@@ -168,16 +170,21 @@ function Compras() {
         const formaPago = row.forma_pago_detalle || row.tipo_compra;
         const config = getFormaPagoConfig(formaPago);
         const Icono = config.icono;
+        
+        // Normalizamos para comparar
+        const esCredito = formaPago === 'Crédito' || formaPago === 'Credito';
+        const esLetras = formaPago === 'Letras' || formaPago === 'Letra';
+
         return (
           <div className="flex flex-col items-center gap-1">
             <span className={`text-xs font-bold flex gap-1 items-center ${config.clase}`}>
               <Icono size={12} />
               {config.texto}
             </span>
-            {formaPago === 'Crédito' && row.cronograma_definido === 0 && (
+            {esCredito && row.cronograma_definido === 0 && (
                 <span className="text-[9px] text-danger font-bold animate-pulse">Sin Cronograma</span>
             )}
-            {formaPago === 'Letras' && row.letras_registradas === 0 && (
+            {esLetras && row.letras_registradas === 0 && (
                 <span className="text-[9px] text-purple-600 font-bold animate-pulse">Pendiente Registro</span>
             )}
           </div>
@@ -510,7 +517,8 @@ function Compras() {
               >
                 <option value="">Todos</option>
                 <option value="Contado">Contado</option>
-                <option value="Crédito">Crédito</option>
+                <option value="Credito">Crédito</option>
+                <option value="Letras">Letras</option>
               </select>
             </div>
 

@@ -945,6 +945,7 @@ export async function updateOrdenVenta(req, res) {
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
 
+    // --- CORRECCIÓN MATEMÁTICA EN BUCLE PRINCIPAL ---
     for (const item of detalle) {
       let precioFinal = parseFloat(item.precio_unitario);
       const precioBase = parseFloat(item.precio_base);
@@ -955,7 +956,8 @@ export async function updateOrdenVenta(req, res) {
           precioFinal = precioBase + montoComision;
       }
 
-      const valorVenta = item.cantidad * precioFinal;
+      // CORREGIDO: Eliminamos el factor de descuento. El precioFinal ya es el definitivo.
+      const valorVenta = item.cantidad * precioFinal; 
       subtotal += valorVenta;
 
       totalComision += montoComision * item.cantidad;

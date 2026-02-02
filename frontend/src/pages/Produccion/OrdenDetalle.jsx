@@ -604,6 +604,12 @@ function OrdenDetalle() {
       setError(null);
 
       const insumosConCantidad = insumosParcialesConsumo.filter(i => parseFloat(i.cantidad) > 0);
+      
+      const mermasValidas = mermas.filter(m => 
+          m.id_producto_merma && 
+          m.cantidad && 
+          parseFloat(m.cantidad) > 0
+      );
         
       if (insumosParcialesConsumo.length > 0 && insumosConCantidad.length === 0) {
         setError('Debe especificar al menos un insumo con cantidad mayor a 0');
@@ -618,7 +624,12 @@ function OrdenDetalle() {
           id_insumo: i.id_insumo,
           cantidad: parseFloat(i.cantidad)
         })),
-        observaciones: observacionesParcial
+        observaciones: observacionesParcial,
+        mermas: mermasValidas.map(m => ({
+          id_producto_merma: parseInt(m.id_producto_merma),
+          cantidad: parseFloat(m.cantidad),
+          observaciones: m.observaciones || null
+        }))
       };
 
       const response = await ordenesProduccionAPI.registrarParcial(id, payload);
@@ -629,6 +640,8 @@ function OrdenDetalle() {
         setCantidadUnidadesParcial('');
         setObservacionesParcial('');
         setInsumosParcialesConsumo([]);
+        setMermas([]); 
+        setMostrarMermas(false);
         cargarDatos();
       }
         
@@ -691,8 +704,6 @@ function OrdenDetalle() {
 
   const kilosParcialCalculados = insumosParcialesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
   
-  // CORRECCIÓN PARA EL TOTAL EN EL MODAL DE FINALIZAR:
-  // Peso Acumulado (Ya registrado) + Peso Adicional (Inputs del modal)
   const kilosAdicionalesCierre = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
   const kilosFinalesCalculados = parseFloat(orden?.cantidad_producida || 0) + kilosAdicionalesCierre;
 
@@ -891,7 +902,7 @@ function OrdenDetalle() {
 
   const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0) + (parseFloat(item.cantidad_ya_consumida) || 0), 0);
   const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
-  const totalKilosProd = kilosFinalesCalculados; // Ya incluye acumulado + adicional
+  const totalKilosProd = kilosFinalesCalculados; 
   const diferenciaMasa = totalInsumosReales - (totalKilosProd + totalMerma);
 
   const totalMasaRealConsumida = consumoMateriales.reduce((acc, item) => acc + parseFloat(item.cantidad_real_consumida || 0), 0);
@@ -946,9 +957,6 @@ function OrdenDetalle() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* --- (Resto del JSX se mantiene igual hasta el Modal de Finalizar) --- */}
-      {/* (Para ahorrar espacio, asumimos que el contenido de arriba no cambia, PERO lo incluyo todo para cumplir tu petición de "código completo") */}
-      
       {desdeOrdenVenta && (
         <div className="card border-l-4 border-info bg-blue-50 mb-4">
           <div className="card-body py-3">
@@ -1068,7 +1076,10 @@ function OrdenDetalle() {
               onClick={() => {
                 setCantidadUnidadesParcial('');
                 setObservacionesParcial('');
+                setMermas([]);
+                setMostrarMermas(false);
                 inicializarInsumosParaParcial();
+                cargarProductosMerma();
                 setModalParcial(true);
               }}
               disabled={procesando}
@@ -1573,6 +1584,91 @@ function OrdenDetalle() {
                  </tbody>
               </table>
             </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-warning" />
+                <h3 className="font-semibold">Registro de Mermas (Opcional)</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => setMostrarMermas(!mostrarMermas)}
+              >
+                {mostrarMermas ? 'Ocultar' : 'Agregar Mermas'}
+              </button>
+            </div>
+
+            {mostrarMermas && (
+              <div className="space-y-3">
+                {mermas.map((merma) => (
+                  <div key={merma.id_temp} className="bg-gray-50 p-3 rounded border border-gray-200">
+                    <div className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-5">
+                        <label className="form-label text-xs">Tipo de Merma</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={merma.id_producto_merma}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'id_producto_merma', e.target.value)}
+                          required={mermas.length > 0}
+                        >
+                          <option value="">Seleccione...</option>
+                          {mermasFiltradas.map(p => (
+                            <option key={p.id_producto} value={p.id_producto}>
+                              {p.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-3">
+                        <label className="form-label text-xs">Cantidad (Kg)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          className="form-input form-input-sm"
+                          value={merma.cantidad}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'cantidad', e.target.value)}
+                          placeholder="0.00"
+                          required={mermas.length > 0}
+                        />
+                      </div>
+
+                      <div className="col-span-3">
+                          <label className="form-label text-xs">Observación</label>
+                          <input
+                          type="text"
+                          className="form-input form-input-sm"
+                          value={merma.observaciones}
+                          onChange={(e) => actualizarMerma(merma.id_temp, 'observaciones', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="col-span-1 flex items-end">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger w-full"
+                          onClick={() => eliminarMerma(merma.id_temp)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline w-full"
+                  onClick={agregarMerma}
+                >
+                  <Plus size={16} className="mr-1" /> Agregar Línea de Merma
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end mt-6">

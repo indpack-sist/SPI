@@ -44,6 +44,8 @@ export async function getAllOrdenesVenta(req, res) {
         ov.fecha_entrega_real,
         ov.fecha_vencimiento,
         ov.tipo_venta,
+        ov.tipo_impuesto, /* <--- CAMPO AGREGADO CRÍTICO */
+        ov.porcentaje_impuesto, /* <--- CAMPO AGREGADO */
         ov.dias_credito,
         ov.estado,
         ov.estado_verificacion,

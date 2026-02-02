@@ -1052,6 +1052,7 @@ export async function registrarParcial(req, res) {
     const cantidad_unidades = parseFloat(body.cantidad_unidades) || 0;
     const observaciones = body.observaciones || null;
     const insumos_consumidos = Array.isArray(body.insumos_consumidos) ? body.insumos_consumidos : [];
+    const mermas = Array.isArray(body.mermas) ? body.mermas : [];
 
     const id_registrado_por = req.user?.id_empleado || req.user?.id || req.user?.userId || null;
 
@@ -1192,13 +1193,84 @@ export async function registrarParcial(req, res) {
         });
     }
 
+    if (mermas.length > 0) {
+        let totalCostoMermas = 0;
+        let hayMermasValidas = false;
+        const mermasValidas = [];
+
+        for (const m of mermas) {
+            const cantidadMerma = parseFloat(m.cantidad) || 0;
+            if (cantidadMerma > 0 && m.id_producto_merma) {
+                hayMermasValidas = true;
+                
+                queries.push({
+                    sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
+                    params: [id, m.id_producto_merma, cantidadMerma, m.observaciones || null]
+                });
+
+                queries.push({
+                    sql: `INSERT INTO op_detalle_registros_produccion (id_registro, id_insumo, cantidad) VALUES (@id_registro_actual, ?, ?)`,
+                    params: [m.id_producto_merma, cantidadMerma]
+                });
+
+                mermasValidas.push({ id: m.id_producto_merma, cantidad: cantidadMerma });
+            }
+        }
+
+        if(hayMermasValidas && mermasValidas.length > 0) {
+             const idsMermas = mermasValidas.map(m => m.id).join(',');
+             const costosMermas = await executeQuery(`SELECT id_producto, costo_unitario_promedio, id_tipo_inventario FROM productos WHERE id_producto IN (${idsMermas})`);
+             
+             let mapaCostosMermas = {};
+             let tipoInventarioMerma = 3; 
+
+             if(costosMermas.success){
+                 costosMermas.data.forEach(p => {
+                     mapaCostosMermas[p.id_producto] = parseFloat(p.costo_unitario_promedio || 0);
+                     tipoInventarioMerma = p.id_tipo_inventario;
+                 });
+             }
+
+             for (const m of mermasValidas) {
+                 totalCostoMermas += m.cantidad * (mapaCostosMermas[m.id] || 0);
+             }
+
+             queries.push({
+                sql: `INSERT INTO entradas (
+                    id_tipo_inventario, documento_soporte, total_costo, moneda,
+                    id_registrado_por, observaciones, tipo_entrada, fecha_movimiento, estado
+                ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', NOW(), 'Activo')`,
+                params: [
+                    tipoInventarioMerma, 
+                    `Merma Parcial O.P. ${orden.numero_orden}`,
+                    totalCostoMermas,
+                    id_registrado_por,
+                    'Ingreso por merma (Parcial)'
+                ]
+            });
+
+            queries.push({ sql: `SET @id_entrada_merma = LAST_INSERT_ID();`, params: [] });
+
+            for (const m of mermasValidas) {
+                 queries.push({
+                    sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) VALUES (@id_entrada_merma, ?, ?, ?)`,
+                    params: [m.id, m.cantidad, mapaCostosMermas[m.id] || 0]
+                 });
+                 queries.push({
+                    sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+                    params: [m.cantidad, m.id]
+                 });
+            }
+        }
+    }
+
     const result = await executeTransaction(queries);
     if (!result.success) {
         console.error("Error SQL:", result.error); 
-        return res.status(500).json({ error: "Error al guardar registro parcial." });
+        return res.status(500).json({ error: "Error en base de datos al guardar registro parcial." });
     }
 
-    res.json({ success: true, message: 'Avance registrado correctamente' });
+    res.json({ success: true, message: 'Avance y merma registrados correctamente' });
 
   } catch (error) {
     console.error('Error en registrarParcial:', error);
@@ -1606,10 +1678,17 @@ export async function finalizarProduccion(req, res) {
             const cantidadMerma = parseFloat(m.cantidad) || 0;
             if (cantidadMerma > 0 && m.id_producto_merma) {
                 hayMermasValidas = true;
+                
                 queries.push({
                     sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
                     params: [id, m.id_producto_merma, cantidadMerma, m.observaciones || null]
                 });
+
+                queries.push({
+                    sql: `INSERT INTO op_detalle_registros_produccion (id_registro, id_insumo, cantidad) VALUES (@id_registro_cierre, ?, ?)`,
+                    params: [m.id_producto_merma, cantidadMerma]
+                });
+
                 mermasValidas.push({ id: m.id_producto_merma, cantidad: cantidadMerma });
             }
         }

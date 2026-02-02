@@ -622,7 +622,8 @@ function NuevaOrdenVenta() {
         id_producto: item.id_producto,
         cantidad: parseFloat(item.cantidad),
         precio_base: parseFloat(item.precio_base),
-        precio_venta: parseFloat(item.precio_venta),
+        precio_unitario: parseFloat(item.precio_venta), // <--- CORRECCIÓN: Cambiar la clave a precio_unitario
+        porcentaje_comision: 0, // Opcional: Asegura que se envíe si lo usas
         descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
         orden: index + 1
       }))));

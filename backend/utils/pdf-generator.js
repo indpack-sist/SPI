@@ -2311,13 +2311,14 @@ export async function generarPDFHojaRuta(orden, receta = []) {
                   doc.text(item.codigo_insumo || '', xCode + 2, yPos + 3, { width: wCode });
                   doc.text(item.insumo || '', xDesc + 2, yPos + 3, { width: wDesc, height: 8, lineBreak: false, ellipsis: true });
                   
-                  // ESTA ES LA LÍNEA QUE FALTABA:
-                  const cantidadPlan = parseFloat(item.cantidad_requerida || item.cantidad || item.cantidad_formulada || 0).toFixed(2);                  doc.text(cantidadPlan, xPlan + 2, yPos + 3, { width: wPlan, align: 'center' });
+                  const cantidadPlan = parseFloat(item.cantidad_requerida || item.cantidad || item.cantidad_formulada || 0).toFixed(2);
+                  doc.text(cantidadPlan, xPlan + 2, yPos + 3, { width: wPlan, align: 'center' });
 
-                  doc.text(cantidadPlan, xPlan + 2, yPos + 3, { width: wPlan, align: 'center' });              });
+                  yPos += 10;
+              });
           }
 
-          const slotsVacios = receta.length > 0 ? receta.length : 5;
+          const slotsVacios = receta.length > 0 ? Math.max(0, 5 - receta.length) : 5;
           for (let i = 0; i < slotsVacios; i++) {
               doc.rect(20, yPos, ANCHO_REDUCIDO, 10).stroke();
               yPos += 10;

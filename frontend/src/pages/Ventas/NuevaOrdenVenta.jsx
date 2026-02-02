@@ -622,9 +622,9 @@ function NuevaOrdenVenta() {
         id_producto: item.id_producto,
         cantidad: parseFloat(item.cantidad),
         precio_base: parseFloat(item.precio_base),
-        precio_unitario: parseFloat(item.precio_venta), // <--- CORRECCIÓN: Cambiar la clave a precio_unitario
-        porcentaje_comision: 0, // Opcional: Asegura que se envíe si lo usas
-        descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+        precio_unitario: parseFloat(item.precio_venta), 
+        porcentaje_comision: 0,
+        descuento_porcentaje: 0, 
         orden: index + 1
       }))));
 
@@ -939,7 +939,7 @@ function NuevaOrdenVenta() {
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
-                        const valorVenta = item.cantidad * precioVenta;
+                        const valorVenta = item.cantidad * precioVenta; 
                         const margen = parseFloat(item.descuento_porcentaje || 0);
                         const margenColor = margen < 0 ? 'text-red-600 font-bold' : '';
                         
@@ -1374,7 +1374,7 @@ function NuevaOrdenVenta() {
                   <span>TOTAL:</span>
                   <span>{formatearMoneda(totales.total)}</span>
                 </div>
-
+                
                 <div className="pt-2 border-t mt-2">
                     <label className="form-label flex items-center gap-1 text-xs">
                         <FileText size={12}/> Adjuntar Comprobante/Voucher (Opcional)

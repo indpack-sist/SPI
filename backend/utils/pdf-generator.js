@@ -2310,6 +2310,11 @@ export async function generarPDFHojaRuta(orden, receta = []) {
                   doc.fontSize(6).font('Helvetica');
                   doc.text(item.codigo_insumo || '', xCode + 2, yPos + 3, { width: wCode });
                   doc.text(item.insumo || '', xDesc + 2, yPos + 3, { width: wDesc, height: 8, lineBreak: false, ellipsis: true });
+                  
+                  // ESTA ES LA LÍNEA QUE FALTABA:
+                  const cantidadPlan = parseFloat(item.cantidad || item.cantidad_formulada || item.cantidad_estimada || 0).toFixed(2);
+                  doc.text(cantidadPlan, xPlan + 2, yPos + 3, { width: wPlan, align: 'center' });
+
                   yPos += 10;
               });
           }

@@ -946,12 +946,16 @@ export async function updateOrdenVenta(req, res) {
     let sumaComisionPorcentual = 0;
 
     for (const item of detalle) {
-      const precioFinal = parseFloat(item.precio_unitario);
+      let precioFinal = parseFloat(item.precio_unitario);
       const precioBase = parseFloat(item.precio_base);
       const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (porcentajeComision / 100);
 
-      const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
+      if (isNaN(precioFinal) || precioFinal <= 0) {
+          precioFinal = precioBase + montoComision;
+      }
+
+      const valorVenta = item.cantidad * precioFinal;
       subtotal += valorVenta;
 
       totalComision += montoComision * item.cantidad;
@@ -1120,10 +1124,14 @@ export async function updateOrdenVenta(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const precioFinal = parseFloat(item.precio_unitario);
+      let precioFinal = parseFloat(item.precio_unitario);
       const precioBase = parseFloat(item.precio_base);
       const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (porcentajeComision / 100);
+
+      if (isNaN(precioFinal) || precioFinal <= 0) {
+          precioFinal = precioBase + montoComision;
+      }
 
       queriesNuevoDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
@@ -1174,11 +1182,16 @@ export async function updateOrdenVenta(req, res) {
         for (let i = 0; i < detalle.length; i++) {
           const item = detalle[i];
           const cantidad = parseFloat(item.cantidad);
-          const precioFinal = parseFloat(item.precio_unitario);
+          
+          let precioFinal = parseFloat(item.precio_unitario);
           const precioBase = parseFloat(item.precio_base);
           const pctComision = parseFloat(item.porcentaje_comision || 0);
           const montoComision = precioBase * (pctComision / 100);
           const descuento = parseFloat(item.descuento_porcentaje || 0);
+
+          if (isNaN(precioFinal) || precioFinal <= 0) {
+             precioFinal = precioBase + montoComision;
+          }
 
           queriesNuevoDetalle.push({
             sql: `INSERT INTO detalle_cotizacion (
@@ -1234,7 +1247,7 @@ export async function updateOrdenVenta(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-  
+
 export async function crearOrdenProduccionDesdeVenta(req, res) {
   try {
     const { id } = req.params;

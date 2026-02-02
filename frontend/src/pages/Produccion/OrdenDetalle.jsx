@@ -933,7 +933,7 @@ function OrdenDetalle() {
   const tieneConsumoMateriales = consumoMateriales && consumoMateriales.length > 0;
 
   return (
-    <div>
+    <div className="p-6">
       <button className="btn btn-outline mb-4" onClick={() => navigate('/produccion/ordenes')}>
         <ArrowLeft size={20} className="mr-2" />
         Volver a Órdenes
@@ -1294,6 +1294,7 @@ function OrdenDetalle() {
                   <th>Fecha y Hora</th>
                   <th className="text-center">Cant. {unidadProduccion}</th>
                   <th className="text-right">Peso (Kg)</th>
+                  <th>Detalle Insumos</th>
                   <th>Registrado Por</th>
                   <th>Observaciones</th>
                 </tr>
@@ -1307,6 +1308,9 @@ function OrdenDetalle() {
                     </td>
                     <td className="text-right font-bold">
                       {parseFloat(registro.cantidad_registrada).toFixed(2)} Kg
+                    </td>
+                    <td className="text-xs text-gray-600 max-w-xs break-words">
+                      {registro.detalle_insumos || '-'}
                     </td>
                     <td>{registro.registrado_por || '-'}</td>
                     <td className="text-sm text-muted">{registro.observaciones || '-'}</td>
@@ -1425,752 +1429,7 @@ function OrdenDetalle() {
           </div>
         </div>
       )}
-
-      {/* MODAL DE ANULACIÓN MEJORADO */}
-      <Modal
-        isOpen={modalAnular}
-        onClose={() => setModalAnular(false)}
-        title="ANULAR ORDEN DE PRODUCCIÓN"
-        size="lg"
-      >
-        <div className="space-y-4">
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded flex items-start gap-3">
-                <AlertTriangle className="text-red-600 shrink-0 mt-0.5" size={24} />
-                <div className="text-sm text-red-800">
-                    <p className="font-bold text-lg mb-1">¡ACCIÓN IRREVERSIBLE!</p>
-                    <p>Al confirmar esta acción, se realizarán los siguientes movimientos automáticos:</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="bg-white p-3 border rounded shadow-sm">
-                    <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
-                        <CheckCircle size={16} className="text-green-600"/> 1. Devolución de Insumos
-                    </h4>
-                    {tieneConsumoMateriales ? (
-                        <ul className="list-disc list-inside text-gray-600 space-y-1 ml-2">
-                            <li>Se generará una <strong>ENTRADA</strong> de almacén.</li>
-                            <li>Se devolverá el stock de todos los insumos consumidos hasta el momento.</li>
-                            <li>Registros Parciales: <strong>{registrosParciales.length}</strong> encontrados.</li>
-                        </ul>
-                    ) : (
-                        <p className="text-gray-500 italic ml-6">No hay consumo de materiales registrado aún.</p>
-                    )}
-                </div>
-
-                <div className="bg-white p-3 border rounded shadow-sm">
-                    <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
-                        <XCircle size={16} className="text-red-600"/> 2. Retiro de Producto
-                    </h4>
-                    {orden.estado === 'Finalizada' ? (
-                        <ul className="list-disc list-inside text-gray-600 space-y-1 ml-2">
-                            <li>Se generará una <strong>SALIDA</strong> de almacén.</li>
-                            <li>Se retirará el producto terminado del stock.</li>
-                            <li>Cantidad a retirar: <strong>{orden.cantidad_producida} Kg</strong></li>
-                        </ul>
-                    ) : (
-                        <p className="text-gray-500 italic ml-6">La orden no está finalizada, no se retirará producto terminado.</p>
-                    )}
-                </div>
-            </div>
-
-            <div className="bg-orange-50 p-3 rounded border border-orange-200 text-sm">
-                <h4 className="font-bold text-orange-800 mb-1 flex items-center gap-2">
-                   <History size={16}/> 3. Estado de Orden
-                </h4>
-                <p className="text-orange-700">La orden cambiará a estado <strong>CANCELADA</strong> y la Orden de Venta original (si existe) volverá a estado <strong>PENDIENTE</strong> para poder ser programada nuevamente.</p>
-            </div>
-
-            <div className="flex gap-3 justify-end pt-4 border-t mt-2">
-                <button 
-                    className="btn btn-outline" 
-                    onClick={() => setModalAnular(false)}
-                    disabled={procesando}
-                >
-                    Cancelar
-                </button>
-                <button 
-                    className="btn btn-danger font-bold px-6" 
-                    onClick={handleAnular}
-                    disabled={procesando}
-                >
-                    {procesando ? 'Procesando...' : 'CONFIRMAR ANULACIÓN'}
-                </button>
-            </div>
-        </div>
-      </Modal>
-
-      {/* OTROS MODALES (Edición, Asignación, etc.) se mantienen igual... */}
-      <Modal
-        isOpen={modalEditar}
-        onClose={() => setModalEditar(false)}
-        title={
-          <span className="flex items-center gap-2">
-            <Edit className="text-secondary" /> Editar Orden de Producción
-          </span>
-        }
-        size="xl"
-      >
-        <form onSubmit={handleGuardarEdicion}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label className="form-label">Producto Terminado *</label>
-                <select
-                  className="form-select"
-                  value={datosEdicion.id_producto_terminado}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, id_producto_terminado: e.target.value})}
-                  required
-                >
-                  <option value="">Seleccione...</option>
-                  {productosDisponibles.map(prod => (
-                    <option key={prod.id_producto} value={prod.id_producto}>{prod.nombre}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Supervisor</label>
-                <select
-                  className="form-select"
-                  value={datosEdicion.id_supervisor}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, id_supervisor: e.target.value})}
-                >
-                  <option value="">Seleccione...</option>
-                  {supervisoresDisponibles.map(sup => (
-                    <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="form-group">
-                <label className="form-label">Cantidad Kilos *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  className="form-input"
-                  value={datosEdicion.cantidad_planificada}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_planificada: e.target.value})}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Cantidad Unidades</label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  className="form-input"
-                  value={datosEdicion.cantidad_unidades}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_unidades: e.target.value})}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Turno</label>
-                <select
-                  className="form-select"
-                  value={datosEdicion.turno}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, turno: e.target.value})}
-                >
-                  <option value="Día">Día</option>
-                  <option value="Noche">Noche</option>
-                </select>
-              </div>
-            </div>
-
-            {esLaminaEdicion ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="form-label">Operario de Corte</label>
-                  <input
-                    className="form-input"
-                    value={datosEdicion.operario_corte}
-                    onChange={(e) => setDatosEdicion({...datosEdicion, operario_corte: e.target.value})}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Operario de Embalaje</label>
-                  <input
-                    className="form-input"
-                    value={datosEdicion.operario_embalaje}
-                    onChange={(e) => setDatosEdicion({...datosEdicion, operario_embalaje: e.target.value})}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="form-label">Maquinista</label>
-                  <input
-                    className="form-input"
-                    value={datosEdicion.maquinista}
-                    onChange={(e) => setDatosEdicion({...datosEdicion, maquinista: e.target.value})}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Ayudante</label>
-                  <input
-                    className="form-input"
-                    value={datosEdicion.ayudante}
-                    onChange={(e) => setDatosEdicion({...datosEdicion, ayudante: e.target.value})}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="form-group">
-                <label className="form-label">Medida</label>
-                <input
-                  className="form-input"
-                  value={datosEdicion.medida}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, medida: e.target.value})}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Peso Producto</label>
-                <input
-                  className="form-input"
-                  value={datosEdicion.peso_producto}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, peso_producto: e.target.value})}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Gramaje</label>
-                <input
-                  className="form-input"
-                  value={datosEdicion.gramaje}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, gramaje: e.target.value})}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label className="form-label">Fecha Programada</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={datosEdicion.fecha_programada}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada: e.target.value})}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Fecha Programada Fin</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={datosEdicion.fecha_programada_fin}
-                  onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada_fin: e.target.value})}
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Observaciones</label>
-              <textarea
-                className="form-textarea"
-                value={datosEdicion.observaciones}
-                onChange={(e) => setDatosEdicion({...datosEdicion, observaciones: e.target.value})}
-                rows={3}
-              />
-            </div>
-
-            {!esLaminaEdicion && (
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <h3 className="font-semibold text-sm mb-3">Configuración de Materiales</h3>
-                
-                <div className="flex gap-2 mb-4">
-                  <button
-                    type="button"
-                    className={`btn flex-1 text-left ${modoRecetaEdicion === 'porcentaje' ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => setModoRecetaEdicion('porcentaje')}
-                  >
-                    <Star size={18} className="mr-2" />
-                    <div>
-                      <div className="font-bold">Por Porcentajes</div>
-                      <div className="text-xs opacity-80">Calcula kilos automáticamente</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn flex-1 text-left ${modoRecetaEdicion === 'manual' ? 'btn-warning' : 'btn-outline'}`}
-                    onClick={() => setModoRecetaEdicion('manual')}
-                  >
-                    <Zap size={18} className="mr-2" />
-                    <div>
-                      <div className="font-bold">Orden Manual</div>
-                      <div className="text-xs opacity-80">Sin insumos iniciales</div>
-                    </div>
-                  </button>
-                </div>
-
-                {modoRecetaEdicion === 'porcentaje' && (
-                  <>
-                    <div className="flex justify-between items-center mb-3">
-                      <p className="text-sm text-muted">Total Porcentajes: <span className={`font-bold ${Math.abs(porcentajeEdicionTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>{porcentajeEdicionTotal.toFixed(2)}%</span></p>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-primary"
-                        onClick={() => setModalAgregarInsumoEdicion(true)}
-                      >
-                        <Plus size={16} /> Agregar Insumo
-                      </button>
-                    </div>
-
-                    {insumosEdicion.length === 0 ? (
-                      <div className="p-4 text-center text-muted bg-gray-50 rounded border border-gray-200">
-                        <AlertCircle size={24} className="mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">No hay insumos agregados.</p>
-                      </div>
-                    ) : (
-                      <div className="table-container">
-                        <table className="table table-sm">
-                          <thead>
-                            <tr>
-                              <th>Insumo</th>
-                              <th className="text-center">Porcentaje</th>
-                              <th className="text-right">Calculado (Kg)</th>
-                              <th className="text-center"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {insumosEdicion.map(item => {
-                              const calculado = calcularCantidadInsumoEdicion(item.porcentaje);
-                              return (
-                                <tr key={item.id_insumo}>
-                                  <td>
-                                    <div className="font-medium text-sm">{item.codigo_insumo}</div>
-                                    <div className="text-xs text-muted">{item.insumo}</div>
-                                  </td>
-                                  <td className="text-center font-bold text-blue-600">{item.porcentaje}%</td>
-                                  <td className="text-right font-mono">{calculado.toFixed(2)} Kg</td>
-                                  <td className="text-center">
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-danger p-1"
-                                      onClick={() => eliminarInsumoEdicion(item.id_insumo)}
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {modoRecetaEdicion === 'manual' && (
-                  <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
-                    <p className="text-sm text-yellow-800 flex items-center gap-2">
-                      <Info size={16} />
-                      Modo manual: No se consumirán materiales automáticamente.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-2 justify-end mt-6">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalEditar(false)}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-secondary"
-              disabled={procesando}
-            >
-              {procesando ? 'Procesando...' : 'Guardar Cambios'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={modalAgregarInsumoEdicion}
-        onClose={() => setModalAgregarInsumoEdicion(false)}
-        title="Agregar Insumo"
-        size="md"
-      >
-        <div className="form-group">
-          <label className="form-label">Insumo *</label>
-          <select
-            className="form-select"
-            value={nuevoInsumoEdicion.id_insumo}
-            onChange={(e) => setNuevoInsumoEdicion({ ...nuevoInsumoEdicion, id_insumo: e.target.value })}
-          >
-            <option value="">Seleccione...</option>
-            {insumosFiltradosParaMostrar
-              .filter(i => !insumosEdicion.find(ie => ie.id_insumo == i.id_producto))
-              .map(insumo => (
-                <option key={insumo.id_producto} value={insumo.id_producto}>
-                  {insumo.nombre} - Stock: {parseFloat(insumo.stock_actual).toFixed(2)}
-                </option>
-              ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Porcentaje (%) *</label>
-          <div className="relative">
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              max="100"
-              className="form-input pr-8"
-              value={nuevoInsumoEdicion.porcentaje}
-              onChange={(e) => setNuevoInsumoEdicion({ ...nuevoInsumoEdicion, porcentaje: e.target.value })}
-              placeholder="Ej: 50"
-            />
-            <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
-          </div>
-          {datosEdicion.cantidad_planificada && nuevoInsumoEdicion.porcentaje && (
-            <p className="text-sm text-blue-600 mt-1 text-right font-medium">
-              Equivale a: {((parseFloat(datosEdicion.cantidad_planificada) * parseFloat(nuevoInsumoEdicion.porcentaje)) / 100).toFixed(2)} Kg
-            </p>
-          )}
-        </div>
-
-        <div className="flex gap-2 justify-end mt-4">
-          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumoEdicion(false)}>
-            Cancelar
-          </button>
-          <button 
-            type="button" 
-            className="btn btn-primary" 
-            onClick={agregarInsumoEdicion}
-            disabled={!nuevoInsumoEdicion.id_insumo || !nuevoInsumoEdicion.porcentaje}
-          >
-            Agregar
-          </button>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={modalAsignar}
-        onClose={() => setModalAsignar(false)}
-        title={
-          <span className="flex items-center gap-2">
-            <Users className="text-warning" /> 
-            {esPendienteAsignacionDesdeVenta ? 'Configurar Orden de Producción' : 'Asignar Personal'}
-          </span>
-        }
-        size={esPendienteAsignacionDesdeVenta ? "xl" : "md"}
-      >
-        <form onSubmit={handleAsignarSupervisor}>
-          <div className="space-y-4">
-            <div className="form-group">
-                <label className="form-label">Supervisor *</label>
-                <select
-                    className="form-select"
-                    value={asignacionData.id_supervisor}
-                    onChange={(e) => setAsignacionData({...asignacionData, id_supervisor: e.target.value})}
-                    required
-                >
-                    <option value="">Seleccione...</option>
-                    {supervisoresDisponibles.map(sup => (
-                        <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>
-                    ))}
-                </select>
-            </div>
-            
-            <div className="form-group">
-                <label className="form-label">Turno *</label>
-                <select
-                    className="form-select"
-                    value={asignacionData.turno}
-                    onChange={(e) => setAsignacionData({...asignacionData, turno: e.target.value})}
-                    required
-                >
-                    <option value="Día">Día</option>
-                    <option value="Noche">Noche</option>
-                </select>
-            </div>
-
-            {esLamina ? (
-                <>
-                    <div className="form-group">
-                        <label className="form-label">Operario de Corte</label>
-                        <input 
-                            className="form-input" 
-                            value={asignacionData.operario_corte}
-                            onChange={(e) => setAsignacionData({...asignacionData, operario_corte: e.target.value})}
-                            placeholder="Encargado del corte"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Operario de Embalaje</label>
-                        <input 
-                            className="form-input" 
-                            value={asignacionData.operario_embalaje}
-                            onChange={(e) => setAsignacionData({...asignacionData, operario_embalaje: e.target.value})}
-                            placeholder="Encargado de embalaje"
-                        />
-                    </div>
-                </>
-            ) : (
-                <>
-                    <div className="form-group">
-                        <label className="form-label">Maquinista</label>
-                        <input 
-                            className="form-input" 
-                            value={asignacionData.maquinista}
-                            onChange={(e) => setAsignacionData({...asignacionData, maquinista: e.target.value})}
-                            placeholder="Nombre del maquinista"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Ayudante</label>
-                        <input 
-                            className="form-input" 
-                            value={asignacionData.ayudante}
-                            onChange={(e) => setAsignacionData({...asignacionData, ayudante: e.target.value})}
-                            placeholder="Nombre del ayudante"
-                        />
-                    </div>
-                </>
-            )}
-
-            {esPendienteAsignacionDesdeVenta && (
-              <>
-                <div className="border-t border-gray-200 pt-4 mt-4">
-                  <h3 className="font-semibold text-sm mb-3">Especificaciones del Producto (Opcional)</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="form-group">
-                      <label className="form-label text-xs">Medida</label>
-                      <input
-                        type="text"
-                        className="form-input text-sm"
-                        value={asignacionData.medida}
-                        onChange={(e) => setAsignacionData({...asignacionData, medida: e.target.value})}
-                        placeholder="Ej: 50x70 cm"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label text-xs">Peso Unitario</label>
-                      <input
-                        type="text"
-                        className="form-input text-sm"
-                        value={asignacionData.peso_producto}
-                        onChange={(e) => setAsignacionData({...asignacionData, peso_producto: e.target.value})}
-                        placeholder="Ej: 200g"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label text-xs">Gramaje</label>
-                      <input
-                        type="text"
-                        className="form-input text-sm"
-                        value={asignacionData.gramaje}
-                        onChange={(e) => setAsignacionData({...asignacionData, gramaje: e.target.value})}
-                        placeholder="Ej: 150 micras"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-200 pt-4 mt-4">
-                  <h3 className="font-semibold text-sm mb-3">Configuración de Materiales</h3>
-                  
-                  <div className="flex gap-2 mb-4">
-                    <button
-                      type="button"
-                      className={`btn flex-1 text-left ${modoReceta === 'porcentaje' && !esLamina ? 'btn-primary' : 'btn-outline'}`}
-                      onClick={() => !esLamina && setModoReceta('porcentaje')}
-                      disabled={esLamina}
-                    >
-                      <Star size={18} className="mr-2" />
-                      <div>
-                        <div className="font-bold">Por Porcentajes</div>
-                        <div className="text-xs opacity-80">Calcula kilos automáticamente</div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn flex-1 text-left ${modoReceta === 'manual' ? 'btn-warning' : 'btn-outline'}`}
-                      onClick={() => setModoReceta('manual')}
-                      disabled={esLamina}
-                    >
-                      <Zap size={18} className="mr-2" />
-                      <div>
-                        <div className="font-bold">{esLamina ? 'Orden de Conversión' : 'Orden Manual'}</div>
-                        <div className="text-xs opacity-80">{esLamina ? 'Selección de rollos posterior' : 'Sin insumos iniciales'}</div>
-                      </div>
-                    </button>
-                  </div>
-
-                  {modoReceta === 'porcentaje' && !esLamina && (
-                    <>
-                      <div className="flex justify-between items-center mb-3">
-                        <p className="text-sm text-muted">Total Porcentajes: <span className={`font-bold ${Math.abs(porcentajeActualTotal - 100) < 0.01 ? 'text-success' : 'text-danger'}`}>{porcentajeActualTotal.toFixed(2)}%</span></p>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-primary"
-                          onClick={abrirModalInsumo}
-                        >
-                          <Plus size={16} /> Agregar Insumo
-                        </button>
-                      </div>
-
-                      {listaInsumos.length === 0 ? (
-                        <div className="p-4 text-center text-muted bg-gray-50 rounded border border-gray-200">
-                          <AlertCircle size={24} className="mx-auto mb-2 opacity-30" />
-                          <p className="text-sm">No hay insumos agregados. Agregue insumos para continuar.</p>
-                        </div>
-                      ) : (
-                        <div className="table-container">
-                          <table className="table table-sm">
-                            <thead>
-                              <tr>
-                                <th>Insumo</th>
-                                <th className="text-center">Porcentaje</th>
-                                <th className="text-right">Calculado (Kg)</th>
-                                <th className="text-center"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {listaInsumos.map(item => {
-                                const calculado = calcularCantidadInsumo(item.porcentaje);
-                                return (
-                                  <tr key={item.id_insumo}>
-                                    <td>
-                                      <div className="font-medium text-sm">{item.codigo_insumo}</div>
-                                      <div className="text-xs text-muted">{item.insumo}</div>
-                                    </td>
-                                    <td className="text-center font-bold text-blue-600">{item.porcentaje}%</td>
-                                    <td className="text-right font-mono">{calculado.toFixed(2)} Kg</td>
-                                    <td className="text-center">
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-danger p-1"
-                                        onClick={() => eliminarInsumoLista(item.id_insumo)}
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {modoReceta === 'manual' && (
-                    <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
-                      <p className="text-sm text-yellow-800 flex items-center gap-2">
-                        <Info size={16} />
-                        Modo manual: No se consumirán materiales automáticamente. {esLamina ? 'Seleccione rollos al iniciar producción.' : ''}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="flex gap-2 justify-end mt-6">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalAsignar(false)}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-warning"
-              disabled={procesando || !asignacionData.id_supervisor}
-            >
-              {procesando ? 'Procesando...' : esPendienteAsignacionDesdeVenta ? 'Configurar y Asignar' : 'Guardar Asignación'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={modalAgregarInsumo}
-        onClose={() => setModalAgregarInsumo(false)}
-        title="Agregar Insumo a la Mezcla"
-        size="md"
-      >
-        <div className="form-group">
-          <label className="form-label">Insumo (Sugerido por nombre) *</label>
-          <select
-            className="form-select"
-            value={nuevoInsumo.id_insumo}
-            onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}
-          >
-            <option value="">Seleccione...</option>
-            {insumosFiltradosParaMostrar
-              .filter(i => !listaInsumos.find(li => li.id_insumo == i.id_producto))
-              .map(insumo => (
-                <option key={insumo.id_producto} value={insumo.id_producto}>
-                  {insumo.nombre} - Stock: {parseFloat(insumo.stock_actual).toFixed(2)}
-                </option>
-              ))}
-          </select>
-          <small className="text-xs text-blue-600 block mt-1">
-              Filtrando insumos relacionados al nombre del producto.
-          </small>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Porcentaje (%) *</label>
-          <div className="relative">
-            <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                max="100"
-                className="form-input pr-8"
-                value={nuevoInsumo.porcentaje}
-                onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, porcentaje: e.target.value })}
-                placeholder="Ej: 50"
-            />
-            <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
-          </div>
-          {orden?.cantidad_planificada && nuevoInsumo.porcentaje && (
-             <p className="text-sm text-blue-600 mt-1 text-right font-medium">
-                Equivale a: {((parseFloat(orden.cantidad_planificada) * parseFloat(nuevoInsumo.porcentaje)) / 100).toFixed(2)} Kg
-             </p>
-          )}
-        </div>
-
-        <div className="flex gap-2 justify-end mt-4">
-          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumo(false)}>
-            Cancelar
-          </button>
-          <button 
-            type="button" 
-            className="btn btn-primary" 
-            onClick={agregarInsumoLista}
-            disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.porcentaje}
-          >
-            Agregar
-          </button>
-        </div>
-      </Modal>
-
+      
       <Modal
         isOpen={modalParcial}
         onClose={() => setModalParcial(false)}
@@ -2193,7 +1452,8 @@ function OrdenDetalle() {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="form-group">
                 <label className="form-label">Cantidad {unidadProduccion} *</label>
-                <div className="relative">
+                <div className="relative input-with-icon">
+                    <Hash className="icon" size={16} />
                     <input
                         type="number"
                         step="1"
@@ -2204,7 +1464,6 @@ function OrdenDetalle() {
                         placeholder="0"
                         required
                     />
-                    <Hash className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
                 </div>
             </div>
 
@@ -2246,59 +1505,66 @@ function OrdenDetalle() {
               </button>
             </div>
 
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {insumosParcialesConsumo.length > 0 ? (
-                  insumosParcialesConsumo.map(item => {
-                    const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
-                    const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
-                    
-                    return (
-                      <div key={item.id_insumo} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded border">
-                        <div className="col-span-6">
-                          <div className="font-medium text-sm">{item.insumo}</div>
-                          <div className="text-xs text-muted">{item.codigo_insumo}</div>
-                          {item.cantidad_ya_consumida > 0 && (
-                            <div className="text-xs text-blue-600 mt-1">
-                              Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
-                            </div>
-                          )}
-                        </div>
-                          
-                        <div className="col-span-3">
-                          <label className="text-xs text-muted block mb-1">En este parcial:</label>
-                        </div>
-                          
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            step={esRollo ? "1" : "0.0001"}
-                            min="0"
-                            className="form-input form-input-sm"
-                            value={item.cantidad}
-                            onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
-                            placeholder="0.0000"
-                            required
-                          />
-                          <div className="text-xs text-muted mt-1">{unidadMostrar}</div>
-                        </div>
-
-                        {item.es_nuevo && (
-                          <div className="col-span-1">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-danger p-1"
-                              onClick={() => eliminarInsumoParcial(item.id_insumo)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-              ) : (
-                  <p className="text-sm text-gray-500 italic text-center p-2">No hay {esLamina ? 'rollos' : 'insumos'} registrados. Agregue al menos uno.</p>
-              )}
+            <div className="space-y-2 max-h-80 overflow-y-auto table-container">
+              <table className="table table-sm">
+                 <thead>
+                    <tr>
+                        <th>Insumo</th>
+                        <th className="text-right">En este parcial</th>
+                        <th className="w-12"></th>
+                    </tr>
+                 </thead>
+                 <tbody>
+                  {insumosParcialesConsumo.length > 0 ? (
+                      insumosParcialesConsumo.map(item => {
+                        const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+                        const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+                        
+                        return (
+                          <tr key={item.id_insumo}>
+                            <td>
+                              <div className="font-medium text-sm">{item.insumo}</div>
+                              <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                              {item.cantidad_ya_consumida > 0 && (
+                                <div className="text-xs text-blue-600 mt-1">
+                                  Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
+                                </div>
+                              )}
+                            </td>
+                            <td className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <input
+                                    type="number"
+                                    step={esRollo ? "1" : "0.0001"}
+                                    min="0"
+                                    className="form-input form-input-sm text-right w-24"
+                                    value={item.cantidad}
+                                    onChange={(e) => actualizarCantidadInsumoParcial(item.id_insumo, e.target.value)}
+                                    placeholder="0.0000"
+                                    required
+                                  />
+                                  <span className="text-xs text-muted">{unidadMostrar}</span>
+                                </div>
+                            </td>
+                            <td className="text-center">
+                                {item.es_nuevo && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-danger p-1"
+                                    onClick={() => eliminarInsumoParcial(item.id_insumo)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                  ) : (
+                      <tr><td colSpan="3" className="text-center text-sm text-muted italic p-4">No hay {esLamina ? 'rollos' : 'insumos'} registrados. Agregue al menos uno.</td></tr>
+                  )}
+                 </tbody>
+              </table>
             </div>
           </div>
 
@@ -2395,28 +1661,28 @@ function OrdenDetalle() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="form-group">
                 <label className="form-label">Total {unidadProduccion} Producidas (Real)</label>
-                <div className="relative">
+                <div className="relative input-with-icon">
+                    <Hash className="icon" size={16} />
                     <input
                       type="number"
                       step="1"
                       min="0"
-                      className="form-input pl-8"
+                      className="form-input"
                       value={cantidadUnidadesFinal}
                       onChange={(e) => setCantidadUnidadesFinal(e.target.value)}
                       placeholder="0"
                       required
                     />
-                    <Hash className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
                 </div>
               </div>
 
               <div className="form-group">
                 <label className="form-label text-muted">Peso Total Calculado (Real)</label>
-                <div className="relative">
-                    <div className="form-input pl-8 bg-gray-100 flex items-center text-gray-700 font-bold">
+                <div className="relative input-with-icon">
+                    <Scale className="icon" size={16} />
+                    <div className="form-input bg-gray-100 flex items-center text-gray-700 font-bold" style={{ paddingLeft: '2.5rem' }}>
                         {kilosFinalesCalculados.toFixed(2)} Kg
                     </div>
-                    <Scale className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
                 </div>
                 <small className="text-muted block mt-1">Suma de insumos totales.</small>
               </div>
@@ -2437,61 +1703,67 @@ function OrdenDetalle() {
                 </button>
             </div>
 
-            <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-              {insumosFinalesConsumo.length === 0 && (
-                  <p className="text-center text-sm text-muted italic">No hay {esLamina ? 'rollos' : 'insumos'} registrados. Agregue al menos uno.</p>
-              )}
-              {insumosFinalesConsumo.map((item, idx) => {
-                const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
-                const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
-                
-                return (
-                  <div key={idx} className="bg-gray-50 p-3 rounded border">
-                    <div className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-6">
-                        <div className="font-medium text-sm">{item.insumo}</div>
-                        <div className="text-xs text-muted">{item.codigo_insumo}</div>
-                        {!item.es_nuevo && (
-                          <div className="text-xs text-blue-600 mt-1">
-                            Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar} | 
-                            Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="col-span-3">
-                        <label className="text-xs text-muted block mb-1">Cantidad Final:</label>
-                      </div>
-
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          step={esRollo ? "1" : "0.0001"}
-                          min="0"
-                          className="form-input form-input-sm text-right"
-                          value={item.cantidad}
-                          onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
-                          required
-                          placeholder="Cantidad"
-                        />
-                        <div className="text-xs text-muted mt-1">{unidadMostrar}</div>
-                      </div>
-
-                      {item.es_nuevo && (
-                        <div className="col-span-1">
-                          <button 
-                            type="button" 
-                            className="btn btn-sm btn-danger p-1"
-                            onClick={() => eliminarInsumoFinal(item.id_insumo)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="space-y-2 max-h-60 overflow-y-auto mb-4 table-container">
+              <table className="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Insumo</th>
+                        <th className="text-right">Cantidad Final</th>
+                        <th className="w-12"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                  {insumosFinalesConsumo.length === 0 ? (
+                      <tr><td colSpan="3" className="text-center text-sm text-muted italic p-4">No hay {esLamina ? 'rollos' : 'insumos'} registrados. Agregue al menos uno.</td></tr>
+                  ) : (
+                    insumosFinalesConsumo.map((item, idx) => {
+                        const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
+                        const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+                        
+                        return (
+                          <tr key={idx}>
+                            <td>
+                                <div className="font-medium text-sm">{item.insumo}</div>
+                                <div className="text-xs text-muted">{item.codigo_insumo}</div>
+                                {!item.es_nuevo && (
+                                  <div className="text-xs text-blue-600 mt-1">
+                                    Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar} | 
+                                    Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
+                                  </div>
+                                )}
+                            </td>
+                            <td className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                    <input
+                                      type="number"
+                                      step={esRollo ? "1" : "0.0001"}
+                                      min="0"
+                                      className="form-input form-input-sm text-right w-24"
+                                      value={item.cantidad}
+                                      onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
+                                      required
+                                      placeholder="Cantidad"
+                                    />
+                                    <span className="text-xs text-muted">{unidadMostrar}</span>
+                                </div>
+                            </td>
+                            <td className="text-center">
+                                {item.es_nuevo && (
+                                    <button 
+                                      type="button" 
+                                      className="btn btn-sm btn-danger p-1"
+                                      onClick={() => eliminarInsumoFinal(item.id_insumo)}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                )}
+                            </td>
+                          </tr>
+                        );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -2678,6 +1950,266 @@ function OrdenDetalle() {
           </button>
         </div>
       </Modal>
+      
+      <Modal
+        isOpen={modalEditar}
+        onClose={() => setModalEditar(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <Edit className="text-secondary" /> Editar Orden de Producción
+          </span>
+        }
+        size="xl"
+      >
+          <form onSubmit={handleGuardarEdicion}>
+             <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="form-group">
+                        <label className="form-label">Producto Terminado *</label>
+                        <select className="form-select" value={datosEdicion.id_producto_terminado} onChange={(e) => setDatosEdicion({...datosEdicion, id_producto_terminado: e.target.value})} required>
+                            <option value="">Seleccione...</option>
+                            {productosDisponibles.map(prod => <option key={prod.id_producto} value={prod.id_producto}>{prod.nombre}</option>)}
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Supervisor</label>
+                        <select className="form-select" value={datosEdicion.id_supervisor} onChange={(e) => setDatosEdicion({...datosEdicion, id_supervisor: e.target.value})}>
+                            <option value="">Seleccione...</option>
+                            {supervisoresDisponibles.map(sup => <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>)}
+                        </select>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="form-group">
+                        <label className="form-label">Cantidad Kilos *</label>
+                        <input type="number" step="0.01" className="form-input" value={datosEdicion.cantidad_planificada} onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_planificada: e.target.value})} required />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Cantidad Unidades</label>
+                        <input type="number" step="1" className="form-input" value={datosEdicion.cantidad_unidades} onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_unidades: e.target.value})} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Turno</label>
+                        <select className="form-select" value={datosEdicion.turno} onChange={(e) => setDatosEdicion({...datosEdicion, turno: e.target.value})}>
+                            <option value="Día">Día</option>
+                            <option value="Noche">Noche</option>
+                        </select>
+                    </div>
+                </div>
+
+                {esLaminaEdicion ? (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="form-group">
+                            <label className="form-label">Operario de Corte</label>
+                            <input className="form-input" value={datosEdicion.operario_corte} onChange={(e) => setDatosEdicion({...datosEdicion, operario_corte: e.target.value})} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Operario de Embalaje</label>
+                            <input className="form-input" value={datosEdicion.operario_embalaje} onChange={(e) => setDatosEdicion({...datosEdicion, operario_embalaje: e.target.value})} />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="form-group">
+                            <label className="form-label">Maquinista</label>
+                            <input className="form-input" value={datosEdicion.maquinista} onChange={(e) => setDatosEdicion({...datosEdicion, maquinista: e.target.value})} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Ayudante</label>
+                            <input className="form-input" value={datosEdicion.ayudante} onChange={(e) => setDatosEdicion({...datosEdicion, ayudante: e.target.value})} />
+                        </div>
+                    </div>
+                )}
+                
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="form-group">
+                        <label className="form-label">Medida</label>
+                        <input className="form-input" value={datosEdicion.medida} onChange={(e) => setDatosEdicion({...datosEdicion, medida: e.target.value})} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Peso Producto</label>
+                        <input className="form-input" value={datosEdicion.peso_producto} onChange={(e) => setDatosEdicion({...datosEdicion, peso_producto: e.target.value})} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Gramaje</label>
+                        <input className="form-input" value={datosEdicion.gramaje} onChange={(e) => setDatosEdicion({...datosEdicion, gramaje: e.target.value})} />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="form-group">
+                        <label className="form-label">Fecha Programada</label>
+                        <input type="date" className="form-input" value={datosEdicion.fecha_programada} onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada: e.target.value})} />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Fecha Programada Fin</label>
+                        <input type="date" className="form-input" value={datosEdicion.fecha_programada_fin} onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada_fin: e.target.value})} />
+                    </div>
+                </div>
+                
+                <div className="form-group">
+                    <label className="form-label">Observaciones</label>
+                    <textarea className="form-textarea" value={datosEdicion.observaciones} onChange={(e) => setDatosEdicion({...datosEdicion, observaciones: e.target.value})} rows={3} />
+                </div>
+                
+                {!esLaminaEdicion && (
+                    <div className="border-t border-gray-200 pt-4 mt-4">
+                        <h3 className="font-semibold text-sm mb-3">Configuración de Materiales</h3>
+                        <div className="flex gap-2 mb-4">
+                            <button type="button" className={`btn flex-1 text-left ${modoRecetaEdicion === 'porcentaje' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setModoRecetaEdicion('porcentaje')}>
+                                <Star size={18} className="mr-2" />
+                                <div><div className="font-bold">Por Porcentajes</div><div className="text-xs opacity-80">Calcula kilos automáticamente</div></div>
+                            </button>
+                            <button type="button" className={`btn flex-1 text-left ${modoRecetaEdicion === 'manual' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setModoRecetaEdicion('manual')}>
+                                <Zap size={18} className="mr-2" />
+                                <div><div className="font-bold">Orden Manual</div><div className="text-xs opacity-80">Sin insumos iniciales</div></div>
+                            </button>
+                        </div>
+                        {modoRecetaEdicion === 'porcentaje' && (
+                             <>
+                                <div className="flex justify-between items-center mb-3">
+                                    <button type="button" className="btn btn-sm btn-primary" onClick={() => setModalAgregarInsumoEdicion(true)}><Plus size={16} /> Agregar Insumo</button>
+                                </div>
+                                {insumosEdicion.length > 0 ? (
+                                    <div className="table-container">
+                                        <table className="table table-sm">
+                                            <thead><tr><th>Insumo</th><th className="text-center">Porcentaje</th><th className="text-right">Calculado (Kg)</th><th className="text-center"></th></tr></thead>
+                                            <tbody>
+                                                {insumosEdicion.map(item => (
+                                                    <tr key={item.id_insumo}>
+                                                        <td><div className="font-medium text-sm">{item.codigo_insumo}</div><div className="text-xs text-muted">{item.insumo}</div></td>
+                                                        <td className="text-center font-bold text-blue-600">{item.porcentaje}%</td>
+                                                        <td className="text-right font-mono">{calcularCantidadInsumoEdicion(item.porcentaje).toFixed(2)} Kg</td>
+                                                        <td className="text-center"><button type="button" className="btn btn-sm btn-danger p-1" onClick={() => eliminarInsumoEdicion(item.id_insumo)}><Trash2 size={14} /></button></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="p-4 text-center text-muted bg-gray-50 rounded border border-gray-200"><p className="text-sm">No hay insumos agregados.</p></div>
+                                )}
+                             </>
+                        )}
+                    </div>
+                )}
+                
+                <div className="flex gap-2 justify-end mt-6">
+                    <button type="button" className="btn btn-outline" onClick={() => setModalEditar(false)} disabled={procesando}>Cancelar</button>
+                    <button type="submit" className="btn btn-secondary" disabled={procesando}>{procesando ? 'Procesando...' : 'Guardar Cambios'}</button>
+                </div>
+             </div>
+          </form>
+      </Modal>
+
+       <Modal
+        isOpen={modalAsignar}
+        onClose={() => setModalAsignar(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <Users className="text-warning" /> 
+            {orden.estado === 'Pendiente Asignación' && orden.origen_tipo === 'Orden de Venta' ? 'Configurar Orden de Producción' : 'Asignar Personal'}
+          </span>
+        }
+        size={orden.estado === 'Pendiente Asignación' && orden.origen_tipo === 'Orden de Venta' ? "xl" : "md"}
+      >
+          <form onSubmit={handleAsignarSupervisor}>
+              <div className="space-y-4">
+                  <div className="form-group">
+                      <label className="form-label">Supervisor *</label>
+                      <select className="form-select" value={asignacionData.id_supervisor} onChange={(e) => setAsignacionData({...asignacionData, id_supervisor: e.target.value})} required>
+                          <option value="">Seleccione...</option>
+                          {supervisoresDisponibles.map(sup => <option key={sup.id_empleado} value={sup.id_empleado}>{sup.nombre_completo}</option>)}
+                      </select>
+                  </div>
+                  
+                  <div className="flex gap-2 justify-end mt-6">
+                    <button type="button" className="btn btn-outline" onClick={() => setModalAsignar(false)} disabled={procesando}>Cancelar</button>
+                    <button type="submit" className="btn btn-warning" disabled={procesando || !asignacionData.id_supervisor}>{procesando ? 'Procesando...' : 'Guardar Asignación'}</button>
+                  </div>
+              </div>
+          </form>
+      </Modal>
+      
+      <Modal
+        isOpen={modalAgregarInsumoEdicion}
+        onClose={() => setModalAgregarInsumoEdicion(false)}
+        title="Agregar Insumo"
+        size="md"
+      >
+         <div className="form-group">
+            <label className="form-label">Insumo *</label>
+            <select className="form-select" value={nuevoInsumoEdicion.id_insumo} onChange={(e) => setNuevoInsumoEdicion({ ...nuevoInsumoEdicion, id_insumo: e.target.value })}>
+                <option value="">Seleccione...</option>
+                {insumosFiltradosParaMostrar.filter(i => !insumosEdicion.find(ie => ie.id_insumo == i.id_producto)).map(insumo => (
+                    <option key={insumo.id_producto} value={insumo.id_producto}>{insumo.nombre} - Stock: {parseFloat(insumo.stock_actual).toFixed(2)}</option>
+                ))}
+            </select>
+         </div>
+         <div className="form-group">
+            <label className="form-label">Porcentaje (%) *</label>
+            <div className="relative input-with-icon">
+                <input type="number" step="0.01" className="form-input pr-8" value={nuevoInsumoEdicion.porcentaje} onChange={(e) => setNuevoInsumoEdicion({ ...nuevoInsumoEdicion, porcentaje: e.target.value })} placeholder="Ej: 50" />
+                <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
+            </div>
+         </div>
+         <div className="flex gap-2 justify-end mt-4">
+            <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumoEdicion(false)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" onClick={agregarInsumoEdicion} disabled={!nuevoInsumoEdicion.id_insumo || !nuevoInsumoEdicion.porcentaje}>Agregar</button>
+         </div>
+      </Modal>
+
+       <Modal
+        isOpen={modalAgregarInsumo}
+        onClose={() => setModalAgregarInsumo(false)}
+        title="Agregar Insumo a la Mezcla"
+        size="md"
+      >
+         <div className="form-group">
+            <label className="form-label">Insumo *</label>
+            <select className="form-select" value={nuevoInsumo.id_insumo} onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, id_insumo: e.target.value })}>
+                <option value="">Seleccione...</option>
+                {insumosFiltradosParaMostrar.filter(i => !listaInsumos.find(li => li.id_insumo == i.id_producto)).map(insumo => (
+                    <option key={insumo.id_producto} value={insumo.id_producto}>{insumo.nombre}</option>
+                ))}
+            </select>
+         </div>
+         <div className="form-group">
+            <label className="form-label">Porcentaje (%) *</label>
+            <div className="relative input-with-icon">
+                <input type="number" step="0.01" className="form-input pr-8" value={nuevoInsumo.porcentaje} onChange={(e) => setNuevoInsumo({ ...nuevoInsumo, porcentaje: e.target.value })} />
+                <span className="absolute right-3 top-2.5 text-gray-500 font-bold">%</span>
+            </div>
+         </div>
+         <div className="flex gap-2 justify-end mt-4">
+            <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumo(false)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" onClick={agregarInsumoLista} disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.porcentaje}>Agregar</button>
+         </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalAnular}
+        onClose={() => setModalAnular(false)}
+        title="ANULAR ORDEN DE PRODUCCIÓN"
+        size="lg"
+      >
+         <div className="space-y-4">
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded flex items-start gap-3">
+                <AlertTriangle className="text-red-600 shrink-0 mt-0.5" size={24} />
+                <div className="text-sm text-red-800">
+                    <p className="font-bold text-lg mb-1">¡ACCIÓN IRREVERSIBLE!</p>
+                    <p>Al confirmar esta acción, se realizarán los siguientes movimientos automáticos:</p>
+                </div>
+            </div>
+            
+            <div className="flex gap-3 justify-end pt-4 border-t mt-2">
+                <button className="btn btn-outline" onClick={() => setModalAnular(false)} disabled={procesando}>Cancelar</button>
+                <button className="btn btn-danger font-bold px-6" onClick={handleAnular} disabled={procesando}>{procesando ? 'Procesando...' : 'CONFIRMAR ANULACIÓN'}</button>
+            </div>
+         </div>
+      </Modal>
+
     </div>
   );
 }

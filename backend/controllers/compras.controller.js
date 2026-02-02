@@ -216,9 +216,7 @@ export async function createCompra(req, res) {
       tipo_impuesto, porcentaje_impuesto, observaciones, id_responsable, contacto_proveedor,
       direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
       serie_documento, numero_documento, fecha_emision_documento,
-      monto_pagado_inicial, url_comprobante,
-      // NUEVO: Recibir opcionalmente el cronograma de letras aquí
-      cronograma 
+      monto_pagado_inicial, url_comprobante, cronograma 
     } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
@@ -227,10 +225,8 @@ export async function createCompra(req, res) {
     if (!id_registrado_por) return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     if (!moneda) return res.status(400).json({ success: false, error: 'Especifique la moneda' });
 
-    // 1. Detección de tipo de crédito (Para Letras o Credito simple)
     const esCredito = ['Credito', 'Letra', 'Letras'].includes(tipo_compra);
 
-    // Validación específica para Letras
     if ((tipo_compra === 'Letra' || tipo_compra === 'Letras') && (!numero_cuotas || parseInt(numero_cuotas) < 1)) {
         return res.status(400).json({ success: false, error: 'Para compras a Letras, debe indicar más de 1 cuota/letra.' });
     }
@@ -238,8 +234,8 @@ export async function createCompra(req, res) {
     let subtotal = 0;
     let subtotalRecepcion = 0;
     let tieneItemsParaRecepcion = false;
+    let totalUnidadesRecepcion = 0;
 
-    // --- CÁLCULOS DE MONTOS (Igual que tu código original) ---
     for (const item of detalle) {
       const precioUnitario = parseFloat(item.precio_unitario);
       const valorCompra = (item.cantidad * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
@@ -256,6 +252,7 @@ export async function createCompra(req, res) {
         const valorRecepcion = (cantidadRecibirAhora * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
         subtotalRecepcion += valorRecepcion;
         tieneItemsParaRecepcion = true;
+        totalUnidadesRecepcion += cantidadRecibirAhora;
       }
     }
 
@@ -271,13 +268,11 @@ export async function createCompra(req, res) {
 
     const pagoInicial = parseFloat(monto_pagado_inicial || 0);
     const saldoPendiente = total - pagoInicial;
-    const estadoPago = saldoPendiente <= 0.01 ? 'Pagado' : 'Pendiente'; // Pequeña mejora de precisión
+    const estadoPago = saldoPendiente <= 0.01 ? 'Pagado' : 'Pendiente';
 
-    // --- VALIDACIÓN DE CRONOGRAMA SI SE ENVÍA AHORA ---
     let cronogramaDefinido = 0;
     if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
         const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
-        // Validar con margen de error de 1.00 por redondeos
         if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
             return res.status(400).json({ 
                 success: false, 
@@ -312,13 +307,11 @@ export async function createCompra(req, res) {
       }
       const numeroCompra = `COM-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(5, '0')}`;
 
-      // --- CÁLCULO DE FECHA VENCIMIENTO ---
       let fechaVencimientoFinal = fecha_vencimiento;
       if (!fechaVencimientoFinal) {
         const fechaBase = new Date(fecha_emision);
-        let diasTotal = 30; // Default
+        let diasTotal = 30; 
         
-        // CORRECCIÓN AQUÍ: Usamos la variable 'esCredito' en lugar de comparar solo string 'Credito'
         if (esCredito) {
           if (dias_credito) diasTotal = parseInt(dias_credito);
           else if (numero_cuotas && dias_entre_cuotas) diasTotal = parseInt(numero_cuotas) * parseInt(dias_entre_cuotas);
@@ -342,19 +335,17 @@ export async function createCompra(req, res) {
       `, [
         numeroCompra, id_proveedor, id_cuenta_pago || null, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
         prioridad || 'Media', moneda, tipoCambioFinal, tipoImpuestoFinal, porcentaje, tipo_compra,
-        // CORRECCIÓN AQUÍ: Usar 'esCredito' para permitir guardar cuotas si es Letra
         esCredito ? parseInt(numero_cuotas || 0) : 0,
         esCredito ? parseInt(dias_entre_cuotas || 30) : 0,
         esCredito ? parseInt(dias_credito || 30) : 0,
         contacto_proveedor || null, direccion_entrega || null, observaciones, id_responsable || null, id_registrado_por,
         subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, pagoInicial, 
-        cronogramaDefinido, // Guardamos si definimos el cronograma de una vez
+        cronogramaDefinido,
         tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null
       ]);
 
       const idCompra = resultCompra.insertId;
       
-      // --- NUEVO BLOQUE: INSERTAR LETRAS AUTOMÁTICAMENTE ---
       if (cronogramaDefinido === 1) {
           for (const letra of cronograma) {
               await connection.query(`
@@ -365,29 +356,32 @@ export async function createCompra(req, res) {
           }
       }
 
-      // --- LOGICA DE ENTRADA (Mantenida igual) ---
       let idEntrada = null;
       if (tieneItemsParaRecepcion) {
         const [primerProducto] = await connection.query('SELECT id_tipo_inventario FROM productos WHERE id_producto = ?', [detalle[0].id_producto]);
         const id_tipo_inventario_entrada = primerProducto[0]?.id_tipo_inventario;
         if (!id_tipo_inventario_entrada) throw new Error('Error al determinar inventario');
 
+        const estadoIngresoFinal = (tipo_recepcion === 'Total') ? 'Completo' : 'Parcial';
+        const fechaIngresoFinal = (tipo_recepcion === 'Total') ? new Date() : null;
+
         const [resultEntrada] = await connection.query(`
           INSERT INTO entradas ( 
             id_tipo_inventario, tipo_entrada, id_proveedor, documento_soporte, total_costo, subtotal, igv, total, porcentaje_igv, 
-            moneda, tipo_cambio, monto_pagado, estado_pago, id_cuenta_pago, id_registrado_por, observaciones, id_orden_compra
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            moneda, tipo_cambio, monto_pagado, estado_pago, id_cuenta_pago, id_registrado_por, observaciones, id_orden_compra,
+            cantidad_items_total, cantidad_items_ingresada, estado_ingreso, fecha_ingreso_completo
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           id_tipo_inventario_entrada, 'Compra', id_proveedor, numero_documento ? `${serie_documento}-${numero_documento}` : numeroCompra,
           subtotalRecepcion, subtotalRecepcion, impuestoRecepcion, totalRecepcion, porcentaje, moneda, tipoCambioFinal,
           pagoInicial >= totalRecepcion ? totalRecepcion : pagoInicial,
           pagoInicial >= totalRecepcion ? 'Pagado' : 'Pendiente',
-          id_cuenta_pago, id_registrado_por, `Entrada por Compra ${numeroCompra}`, idCompra
+          id_cuenta_pago, id_registrado_por, `Entrada por Compra ${numeroCompra}`, idCompra,
+          totalUnidadesRecepcion, totalUnidadesRecepcion, estadoIngresoFinal, fechaIngresoFinal
         ]);
         idEntrada = resultEntrada.insertId;
       }
 
-      // --- DETALLE PRODUCTOS (Mantenida igual) ---
       for (let i = 0; i < detalle.length; i++) {
         const item = detalle[i];
         const precioUnitario = parseFloat(item.precio_unitario);
@@ -404,7 +398,6 @@ export async function createCompra(req, res) {
         `, [idCompra, item.id_producto, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
 
         if (idEntrada && cantidadRecibida > 0) {
-           // ... (Lógica de costos promedio y stock se mantiene igual) ...
            const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
            let costoPEN = 0, costoUSD = 0;
            if (moneda === 'PEN') {

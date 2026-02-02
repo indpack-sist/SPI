@@ -426,7 +426,7 @@ function OrdenDetalle() {
         unidad_medida: item.unidad_medida,
         cantidad_requerida: requerido,
         cantidad_ya_consumida: yaConsumido,
-        cantidad: yaConsumido.toFixed(4),
+        cantidad: '', 
         es_nuevo: false 
       };
     });
@@ -690,7 +690,11 @@ function OrdenDetalle() {
   };
 
   const kilosParcialCalculados = insumosParcialesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
-  const kilosFinalesCalculados = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+  
+  // CORRECCIÓN PARA EL TOTAL EN EL MODAL DE FINALIZAR:
+  // Peso Acumulado (Ya registrado) + Peso Adicional (Inputs del modal)
+  const kilosAdicionalesCierre = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+  const kilosFinalesCalculados = parseFloat(orden?.cantidad_producida || 0) + kilosAdicionalesCierre;
 
   const handleAsignarSupervisor = async (e) => {
     e.preventDefault();
@@ -885,9 +889,9 @@ function OrdenDetalle() {
     return badges[estado] || 'badge-secondary';
   };
 
-  const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+  const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0) + (parseFloat(item.cantidad_ya_consumida) || 0), 0);
   const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
-  const totalKilosProd = kilosFinalesCalculados; 
+  const totalKilosProd = kilosFinalesCalculados; // Ya incluye acumulado + adicional
   const diferenciaMasa = totalInsumosReales - (totalKilosProd + totalMerma);
 
   const totalMasaRealConsumida = consumoMateriales.reduce((acc, item) => acc + parseFloat(item.cantidad_real_consumida || 0), 0);
@@ -942,6 +946,9 @@ function OrdenDetalle() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      {/* --- (Resto del JSX se mantiene igual hasta el Modal de Finalizar) --- */}
+      {/* (Para ahorrar espacio, asumimos que el contenido de arriba no cambia, PERO lo incluyo todo para cumplir tu petición de "código completo") */}
+      
       {desdeOrdenVenta && (
         <div className="card border-l-4 border-info bg-blue-50 mb-4">
           <div className="card-body py-3">
@@ -1654,13 +1661,14 @@ function OrdenDetalle() {
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
             <Info className="text-blue-500 shrink-0" size={20} />
             <div className="text-sm text-blue-700">
-              <p><strong>Cierre de Orden:</strong> Ingrese el total de unidades producidas y verifique los insumos consumidos. El peso final se calculará automáticamente.</p>
+              <p><strong>Cierre de Orden:</strong> Ingrese las cantidades <strong>ADICIONALES</strong> producidas en este cierre (no el total acumulado).</p>
+              <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{parseInt(orden.cantidad_unidades_producida || 0)} {unidadProduccion}</strong></p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="form-group">
-                <label className="form-label">Total {unidadProduccion} Producidas (Real)</label>
+                <label className="form-label">Cant. {unidadProduccion} (Adicional)</label>
                 <div className="relative input-with-icon">
                     <Hash className="icon" size={16} />
                     <input
@@ -1677,14 +1685,14 @@ function OrdenDetalle() {
               </div>
 
               <div className="form-group">
-                <label className="form-label text-muted">Peso Total Calculado (Real)</label>
+                <label className="form-label text-muted">Peso Adicional Calculado</label>
                 <div className="relative input-with-icon">
                     <Scale className="icon" size={16} />
                     <div className="form-input bg-gray-100 flex items-center text-gray-700 font-bold" style={{ paddingLeft: '2.5rem' }}>
                         {kilosFinalesCalculados.toFixed(2)} Kg
                     </div>
                 </div>
-                <small className="text-muted block mt-1">Suma de insumos totales.</small>
+                <small className="text-muted block mt-1">Suma de insumos ingresados abajo.</small>
               </div>
           </div>
 
@@ -1692,7 +1700,7 @@ function OrdenDetalle() {
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <Package size={18} className="text-primary" />
-                    <h3 className="font-semibold">{esLamina ? 'Rollos Utilizados (Total)' : 'Consumo Final de Insumos (Real)'}</h3>
+                    <h3 className="font-semibold">{esLamina ? 'Rollos Utilizados (Cierre)' : 'Consumo Insumos (Cierre)'}</h3>
                 </div>
                 <button 
                     type="button" 
@@ -1708,44 +1716,48 @@ function OrdenDetalle() {
                 <thead>
                     <tr>
                         <th>Insumo</th>
-                        <th className="text-right">Cantidad Final</th>
+                        <th className="text-right">Acumulado</th>
+                        <th className="text-right">+ Adicional Cierre</th>
+                        <th className="text-right">Total Final</th>
                         <th className="w-12"></th>
                     </tr>
                 </thead>
                 <tbody>
                   {insumosFinalesConsumo.length === 0 ? (
-                      <tr><td colSpan="3" className="text-center text-sm text-muted italic p-4">No hay {esLamina ? 'rollos' : 'insumos'} registrados. Agregue al menos uno.</td></tr>
+                      <tr><td colSpan="5" className="text-center text-sm text-muted italic p-4">No hay insumos adicionales para el cierre.</td></tr>
                   ) : (
                     insumosFinalesConsumo.map((item, idx) => {
                         const esRollo = item.insumo && item.insumo.toUpperCase().includes('ROLLO BURBUPACK');
                         const unidadMostrar = esRollo ? 'Und' : item.unidad_medida;
+                        const acumulado = parseFloat(item.cantidad_ya_consumida || 0);
+                        const adicional = parseFloat(item.cantidad || 0);
+                        const total = acumulado + adicional;
                         
                         return (
                           <tr key={idx}>
                             <td>
                                 <div className="font-medium text-sm">{item.insumo}</div>
                                 <div className="text-xs text-muted">{item.codigo_insumo}</div>
-                                {!item.es_nuevo && (
-                                  <div className="text-xs text-blue-600 mt-1">
-                                    Planificado: {item.cantidad_requerida.toFixed(esRollo ? 0 : 2)} {unidadMostrar} | 
-                                    Ya consumido: {item.cantidad_ya_consumida.toFixed(esRollo ? 0 : 2)} {unidadMostrar}
-                                  </div>
-                                )}
+                            </td>
+                            <td className="text-right text-muted text-xs">
+                                {acumulado.toFixed(2)} {unidadMostrar}
                             </td>
                             <td className="text-right">
                                 <div className="flex items-center justify-end gap-2">
+                                    <span className="text-green-600 font-bold">+</span>
                                     <input
                                       type="number"
                                       step={esRollo ? "1" : "0.0001"}
                                       min="0"
-                                      className="form-input form-input-sm text-right w-24"
+                                      className="form-input form-input-sm text-right w-20"
                                       value={item.cantidad}
                                       onChange={(e) => actualizarCantidadInsumoFinal(item.id_insumo, e.target.value)}
-                                      required
-                                      placeholder="Cantidad"
+                                      placeholder="0"
                                     />
-                                    <span className="text-xs text-muted">{unidadMostrar}</span>
                                 </div>
+                            </td>
+                            <td className="text-right font-bold text-blue-700">
+                                {total.toFixed(2)} {unidadMostrar}
                             </td>
                             <td className="text-center">
                                 {item.es_nuevo && (

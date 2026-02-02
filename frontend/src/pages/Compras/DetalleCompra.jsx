@@ -517,28 +517,40 @@ function DetalleCompra() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="card">
-                <div className="card-header bg-gray-50/50"><h3 className="card-title flex gap-2"><PackageCheck size={18}/> Items de la Compra</h3></div>
+                <div className="card-header bg-gray-50"><h3 className="card-title flex gap-2"><PackageCheck size={18}/> Items de la Compra</h3></div>
                 <div className="card-body p-0">
                     <table className="table">
                         <thead>
                             <tr>
                                 <th>Producto</th>
-                                <th className="text-right">Cant.</th>
-                                <th className="text-right">Recibida</th>
+                                <th className="text-right">Cant. Solicitada</th>
+                                <th className="text-right">Progreso Entrega</th>
                                 <th className="text-right">Precio</th>
                                 <th className="text-right">Total</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {compra.detalle?.map((item, i) => (
+                            {compra.detalle?.map((item, i) => {
+                                const porcentaje = (parseFloat(item.cantidad_recibida || 0) / parseFloat(item.cantidad)) * 100;
+                                const esCompleto = parseFloat(item.cantidad_recibida || 0) >= parseFloat(item.cantidad);
+                                return (
                                 <tr key={i}>
                                     <td><div className="font-medium">{item.producto}</div><div className="text-xs text-muted">{item.codigo_producto}</div></td>
                                     <td className="text-right">{parseFloat(item.cantidad).toFixed(2)} {item.unidad_medida}</td>
-                                    <td className="text-right"><span className={parseFloat(item.cantidad_recibida || 0) >= parseFloat(item.cantidad) ? 'text-success font-medium' : 'text-warning'}>{parseFloat(item.cantidad_recibida || 0).toFixed(2)}</span></td>
+                                    <td className="text-right">
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className={`text-xs font-bold ${esCompleto ? 'text-success' : 'text-warning'}`}>
+                                                {parseFloat(item.cantidad_recibida || 0).toFixed(2)} / {parseFloat(item.cantidad).toFixed(2)}
+                                            </span>
+                                            <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                <div className={`h-full rounded-full ${esCompleto ? 'bg-success' : 'bg-warning'}`} style={{ width: `${Math.min(porcentaje, 100)}%` }}></div>
+                                            </div>
+                                        </div>
+                                    </td>
                                     <td className="text-right">{formatearMoneda(item.precio_unitario)}</td>
                                     <td className="text-right font-bold">{formatearMoneda(item.subtotal)}</td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                         <tfoot className="bg-gray-50 font-medium">
                             <tr><td colSpan="4" className="text-right">Subtotal</td><td className="text-right">{formatearMoneda(compra.subtotal)}</td></tr>
@@ -552,7 +564,7 @@ function DetalleCompra() {
 
           <div className="space-y-6">
             <div className="card">
-                <div className="card-header"><h3 className="card-title flex gap-2"><Building size={18}/> Proveedor</h3></div>
+                <div className="card-header bg-gray-50"><h3 className="card-title flex gap-2"><Building size={18}/> Proveedor</h3></div>
                 <div className="card-body">
                     <p className="font-bold text-lg">{compra.proveedor}</p>
                     <p className="text-sm text-muted">RUC: {compra.ruc_proveedor}</p>
@@ -567,7 +579,7 @@ function DetalleCompra() {
 
             {compra.id_cuenta_pago && !compra.usa_fondos_propios && (
                 <div className="card">
-                    <div className="card-header bg-gray-50/50"><h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuenta de Pago Asignada</h3></div>
+                    <div className="card-header bg-gray-50"><h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuenta de Pago Asignada</h3></div>
                     <div className="card-body">
                         <p className="font-medium text-lg">{compra.cuenta_pago || 'Cuenta no encontrada'}</p>
                         <p className="text-sm text-muted">{compra.tipo_cuenta_pago} - {compra.moneda_cuenta}</p>
@@ -577,7 +589,7 @@ function DetalleCompra() {
 
             {(esCredito || esLetras) && (
                 <div className="card">
-                    <div className="card-header bg-gray-50/50 flex justify-between items-center">
+                    <div className="card-header bg-gray-50 flex justify-between items-center">
                         <h3 className="card-title flex gap-2"><CreditCard size={18}/> Cuotas / Cronograma</h3>
                         {!compra.cronograma_definido && <span className="badge badge-warning text-[10px]">Por definir</span>}
                     </div>
@@ -614,7 +626,7 @@ function DetalleCompra() {
 
       {tabActiva === 'pagos' && (
         <div className="card">
-          <div className="card-header bg-gray-50/50"><h3 className="card-title flex gap-2"><TrendingUp size={18}/> Historial de Pagos</h3></div>
+          <div className="card-header bg-gray-50"><h3 className="card-title flex gap-2"><TrendingUp size={18}/> Historial de Pagos</h3></div>
           <div className="card-body p-0">
               {compra.pagos_realizados && compra.pagos_realizados.length > 0 ? (
                   <table className="table">
@@ -640,7 +652,7 @@ function DetalleCompra() {
       {tabActiva === 'letras' && (
         <div className="space-y-6">
           <div className="card">
-            <div className="card-header bg-gray-50/50 flex justify-between items-center">
+            <div className="card-header bg-gray-50 flex justify-between items-center">
               <h3 className="card-title flex gap-2"><Receipt size={18}/> Letras de Cambio</h3>
               {!compra.letras_registradas && <button className="btn btn-sm btn-primary" onClick={handleAbrirRegistrarLetras}><Plus size={16} /> Registrar Letras</button>}
             </div>
@@ -676,7 +688,7 @@ function DetalleCompra() {
 
       {tabActiva === 'ingresos' && (
         <div className="space-y-6">
-          {itemsPendientes.length > 0 && (
+          {itemsPendientes.length > 0 ? (
             <div className="card border-l-4 border-warning">
               <div className="card-body">
                 <div className="flex justify-between items-center">
@@ -688,9 +700,22 @@ function DetalleCompra() {
                 </div>
               </div>
             </div>
+          ) : (
+             <div className="card border-l-4 border-success">
+              <div className="card-body">
+                 <div className="flex items-center gap-2 text-success">
+                    <PackageCheck size={24}/>
+                    <div>
+                        <h3 className="font-bold">Entrega Completada</h3>
+                        <p className="text-sm text-muted">Todos los productos de esta compra han ingresado al inventario.</p>
+                    </div>
+                 </div>
+              </div>
+            </div>
           )}
+
           <div className="card">
-            <div className="card-header bg-gray-50/50"><h3 className="card-title flex gap-2"><Truck size={18}/> Historial de Ingresos</h3></div>
+            <div className="card-header bg-gray-50"><h3 className="card-title flex gap-2"><Truck size={18}/> Historial de Ingresos</h3></div>
             <div className="card-body p-0">
               {ingresos.length > 0 ? (
                 <table className="table">
@@ -714,6 +739,7 @@ function DetalleCompra() {
         </div>
       )}
 
+      {/* --- MODALES --- */}
       <Modal isOpen={modalPagarCuotaOpen} onClose={() => setModalPagarCuotaOpen(false)} title="Pagar Cuota">
         <form onSubmit={handlePagarCuota} className="space-y-4">
             <div className="form-group">

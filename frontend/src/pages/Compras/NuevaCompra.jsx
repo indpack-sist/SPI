@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Save, ShoppingCart, Building,
-  MapPin, Plus, Trash2, Search, Wallet, CreditCard,
+  Plus, Trash2, Search, Wallet, CreditCard,
   ArrowRightLeft, PackagePlus, UserPlus, FileText,
   Receipt, User, CheckCircle, Calendar, AlertCircle
 } from 'lucide-react';
@@ -103,10 +103,11 @@ function NuevaCompra() {
   }, [totales.total, formData.forma_pago_detalle, formData.usa_fondos_propios]);
 
   useEffect(() => {
-    if ((formData.tipo_compra === 'Credito' || formData.tipo_compra === 'Letras') && totales.total > 0) {
+    // Solo calculamos cronograma si NO es Letras pendiente
+    if ((formData.tipo_compra === 'Credito' || (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro)) && totales.total > 0) {
       calcularCronograma();
     }
-  }, [formData.tipo_compra, formData.numero_cuotas, formData.dias_entre_cuotas, formData.fecha_primera_cuota, totales.total, formData.monto_pagado_inicial]);
+  }, [formData.tipo_compra, formData.letras_pendientes_registro, formData.numero_cuotas, formData.dias_entre_cuotas, formData.fecha_primera_cuota, totales.total, formData.monto_pagado_inicial]);
 
   useEffect(() => {
     if (formData.id_cuenta_pago) {
@@ -250,10 +251,6 @@ function NuevaCompra() {
     const nuevoCronograma = [];
     let ultimaFecha = new Date(fechaBase);
 
-    // Ajuste para la primera fecha si es exactamente la seleccionada
-    // Si queremos que la primera cuota sea exactamente la fecha seleccionada:
-    // (Ya está establecido en ultimaFecha)
-
     for (let i = 1; i <= numCuotas; i++) {
         nuevoCronograma.push({ numero: i, fecha: new Date(ultimaFecha), monto: montoPorCuota });
         ultimaFecha.setDate(ultimaFecha.getDate() + diasEntre);
@@ -275,7 +272,7 @@ function NuevaCompra() {
       ...prev,
       forma_pago_detalle: forma,
       tipo_compra: esLetras ? 'Letras' : (esCredito ? 'Credito' : 'Contado'),
-      letras_pendientes_registro: esLetras, 
+      letras_pendientes_registro: esLetras, // Por defecto pendiente si es Letras
       numero_cuotas: esCredito || esLetras ? (prev.numero_cuotas || 1) : 0,
       dias_credito: esCredito || esLetras ? 30 : 0,
       dias_entre_cuotas: esCredito || esLetras ? 30 : 0,
@@ -301,7 +298,8 @@ function NuevaCompra() {
     if (formData.usa_fondos_propios && !formData.id_comprador) { setError('Debe seleccionar al comprador'); return; }
     if (!formData.usa_fondos_propios && formData.forma_pago_detalle === 'Contado' && !formData.id_cuenta_pago) { setError('Seleccione cuenta de pago'); return; }
     
-    if (formData.tipo_compra === 'Letras' && parseInt(formData.numero_cuotas) < 1) {
+    // Validar cuotas solo si NO es letras pendiente
+    if ((formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro) && parseInt(formData.numero_cuotas) < 1) {
         setError('Debe indicar al menos 1 cuota/letra.'); return;
     }
 
@@ -504,7 +502,7 @@ function NuevaCompra() {
                             <div className="flex justify-between text-sm items-center">
                                 <div className="flex items-center gap-1">
                                     <select className="form-select form-select-sm border-transparent bg-transparent p-0 pr-6 font-medium text-muted cursor-pointer hover:text-primary focus:ring-0" value={formData.tipo_impuesto} onChange={(e) => setFormData({...formData, tipo_impuesto: e.target.value})}>
-                                        <option value="IGV">IGV (18%)</option><option value="EXO">Exonerado</option><option value="INA">Inafecto</option>
+                                            <option value="IGV">IGV (18%)</option><option value="EXO">Exonerado</option><option value="INA">Inafecto</option>
                                     </select>
                                 </div>
                                 <span className="font-medium">{formatearMoneda(totales.igv)}</span>
@@ -539,8 +537,8 @@ function NuevaCompra() {
 
                             {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
                                 <div className="slide-down space-y-3">
-                                    <div className="p-3 bg-green-50 border border-green-200 rounded text-xs text-green-800 flex gap-2">
-                                        <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                                    <div className="alert alert-success">
+                                        <CheckCircle size={16} />
                                         <div><p className="font-bold">Pago Inmediato</p><p>Se registrará un egreso por {formatearMoneda(totales.total)}.</p></div>
                                     </div>
                                     <div className="form-group">
@@ -553,25 +551,29 @@ function NuevaCompra() {
                                 </div>
                             )}
 
+                            {/* CONFIGURACIÓN ESPECÍFICA PARA LETRAS */}
                             {formData.forma_pago_detalle === 'Letras' && (
                                 <div className="slide-down">
-                                    <div className="p-3 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 mb-3">
-                                        <div className="flex items-start gap-2">
-                                            <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                                            <div>
-                                                <p className="font-bold">Compra a Letras</p>
-                                                <p>Define el cronograma ahora o regístralo después.</p>
-                                            </div>
+                                    <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
+                                        <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="font-bold">Compra a Letras</p>
+                                            <p className="text-purple-900/80">
+                                                {formData.letras_pendientes_registro 
+                                                ? "Se registrará la deuda total. Podrás canjear las letras y definir fechas más adelante." 
+                                                : "Define el cronograma de cuotas ahora mismo."}
+                                            </p>
                                         </div>
                                     </div>
-                                    <label className="flex items-center gap-2 cursor-pointer mb-3 p-2 border rounded hover:bg-gray-50">
-                                        <input type="checkbox" className="form-checkbox text-purple-600 rounded" checked={formData.letras_pendientes_registro} onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} />
+                                    <label className="flex items-center gap-2 cursor-pointer mb-3 p-3 border rounded hover:bg-gray-50 transition-colors">
+                                        <input type="checkbox" className="form-checkbox h-4 w-4 text-purple-600 rounded" checked={formData.letras_pendientes_registro} onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} />
                                         <span className="font-medium text-sm">Registrar detalle de letras después</span>
                                     </label>
                                 </div>
                             )}
 
-                            {(formData.forma_pago_detalle === 'Credito' || formData.forma_pago_detalle === 'Letras') && (
+                            {/* LOGICA CORREGIDA: Mostrar inputs solo si es Crédito O (Letras Y NO Pendiente) */}
+                            {(formData.forma_pago_detalle === 'Credito' || (formData.forma_pago_detalle === 'Letras' && !formData.letras_pendientes_registro)) && (
                                 <div className="slide-down space-y-4 pt-2 border-t border-dashed">
                                     
                                     <div className="grid grid-cols-2 gap-3">
@@ -594,7 +596,7 @@ function NuevaCompra() {
                                     </div>
 
                                     {/* Previsualización del Cronograma si es Letras y NO está pendiente */}
-                                    {formData.forma_pago_detalle === 'Letras' && !formData.letras_pendientes_registro && cronograma.length > 0 && (
+                                    {formData.forma_pago_detalle === 'Letras' && cronograma.length > 0 && (
                                         <div className="bg-gray-50 rounded border overflow-hidden">
                                             <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
                                                 <span>Cronograma Preliminar</span>
@@ -681,8 +683,8 @@ function NuevaCompra() {
                             {formData.usa_fondos_propios && (
                                 <div className="mt-3 slide-down">
                                     <select className="form-select" value={formData.id_comprador} onChange={(e) => setFormData({...formData, id_comprador: e.target.value})} required>
-                                        <option value="">Seleccione empleado...</option>
-                                        {empleados.map(emp => <option key={emp.id_empleado} value={emp.id_empleado}>{emp.nombre_completo}</option>)}
+                                            <option value="">Seleccione empleado...</option>
+                                            {empleados.map(emp => <option key={emp.id_empleado} value={emp.id_empleado}>{emp.nombre_completo}</option>)}
                                     </select>
                                 </div>
                             )}

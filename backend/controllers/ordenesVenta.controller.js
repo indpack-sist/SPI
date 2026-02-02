@@ -114,7 +114,6 @@ export async function getAllOrdenesVenta(req, res) {
       params.push(fecha_fin);
     }
 
-    // ✅ NUEVO FILTRO POR ESTADO DE VERIFICACIÓN
     if (estado_verificacion) {
       sql += ` AND ov.estado_verificacion = ?`;
       params.push(estado_verificacion);

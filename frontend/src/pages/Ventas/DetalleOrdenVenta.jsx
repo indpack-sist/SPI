@@ -1020,7 +1020,7 @@ function DetalleOrdenVenta() {
     if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
       return false;
     }
-    if (orden.estado_verificacion === 'Pendiente') {
+    if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') {
       return false;
     }
     const pendientes = orden.detalle.some(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0);
@@ -1029,7 +1029,7 @@ function DetalleOrdenVenta() {
 
   const puedeReservarStock = () => {
     if (!orden) return false;
-    if (orden.estado_verificacion === 'Pendiente') return false;
+    if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') return false;
     const estadosNoPermitidos = ['Cancelada', 'Despacho Parcial', 'Despachada', 'Entregada'];
     return !estadosNoPermitidos.includes(orden.estado);
   };
@@ -1527,7 +1527,6 @@ function DetalleOrdenVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {/* ALERTAS DE ESTADO (Verificación, Rechazo, etc.) */}
       {orden.estado_verificacion !== 'Aprobada' && (
         <div className={`alert mb-4 ${orden.estado_verificacion === 'Pendiente' ? 'alert-warning' : 'alert-danger'}`}>
           <div className="flex items-start gap-3">

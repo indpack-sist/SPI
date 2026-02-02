@@ -16,7 +16,7 @@ export async function getAllCompras(req, res) {
         oc.fecha_emision,
         oc.fecha_entrega_estimada,
         oc.fecha_entrega_real,
-        oc.fecha_vencimiento,
+        COALESCE(pl.fecha_vencimiento, pc.fecha_vencimiento, oc.fecha_vencimiento) AS fecha_vencimiento,
         oc.tipo_compra,
         oc.dias_credito,
         oc.estado,
@@ -44,11 +44,11 @@ export async function getAllCompras(req, res) {
         cp.moneda AS moneda_cuenta,
         (SELECT COUNT(*) FROM detalle_orden_compra WHERE id_orden_compra = oc.id_orden_compra) AS total_items,
         (SELECT COUNT(*) FROM cuotas_orden_compra WHERE id_orden_compra = oc.id_orden_compra AND estado = 'Pendiente') AS cuotas_pendientes,
-        DATEDIFF(oc.fecha_vencimiento, CURDATE()) AS dias_para_vencer,
+        DATEDIFF(COALESCE(pl.fecha_vencimiento, pc.fecha_vencimiento, oc.fecha_vencimiento), CURDATE()) AS dias_para_vencer,
         CASE 
           WHEN oc.estado_pago = 'Pagado' THEN 'success'
-          WHEN oc.saldo_pendiente > 0.01 AND oc.fecha_vencimiento < CURDATE() THEN 'danger'
-          WHEN oc.saldo_pendiente > 0.01 AND DATEDIFF(oc.fecha_vencimiento, CURDATE()) <= 7 THEN 'warning'
+          WHEN oc.saldo_pendiente > 0.01 AND COALESCE(pl.fecha_vencimiento, pc.fecha_vencimiento, oc.fecha_vencimiento) < CURDATE() THEN 'danger'
+          WHEN oc.saldo_pendiente > 0.01 AND DATEDIFF(COALESCE(pl.fecha_vencimiento, pc.fecha_vencimiento, oc.fecha_vencimiento), CURDATE()) <= 7 THEN 'warning'
           ELSE 'info'
         END AS nivel_alerta
       FROM ordenes_compra oc
@@ -56,6 +56,18 @@ export async function getAllCompras(req, res) {
       LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
       LEFT JOIN empleados e_responsable ON oc.id_responsable = e_responsable.id_empleado
       LEFT JOIN empleados e_registrado ON oc.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN (
+          SELECT id_orden_compra, MIN(fecha_vencimiento) as fecha_vencimiento
+          FROM letras_compra 
+          WHERE estado = 'Pendiente'
+          GROUP BY id_orden_compra
+      ) pl ON oc.id_orden_compra = pl.id_orden_compra
+      LEFT JOIN (
+          SELECT id_orden_compra, MIN(fecha_vencimiento) as fecha_vencimiento
+          FROM cuotas_orden_compra 
+          WHERE estado != 'Pagada'
+          GROUP BY id_orden_compra
+      ) pc ON oc.id_orden_compra = pc.id_orden_compra
       WHERE 1=1
     `;
     
@@ -78,10 +90,12 @@ export async function getAllCompras(req, res) {
       params.push(anio);
     }
     
+    const fechaReal = 'COALESCE(pl.fecha_vencimiento, pc.fecha_vencimiento, oc.fecha_vencimiento)';
+
     if (alertas === 'proximas_vencer') {
-      sql += ` AND oc.saldo_pendiente > 0 AND DATEDIFF(oc.fecha_vencimiento, CURDATE()) BETWEEN 0 AND 7`;
+      sql += ` AND oc.saldo_pendiente > 0 AND DATEDIFF(${fechaReal}, CURDATE()) BETWEEN 0 AND 7`;
     } else if (alertas === 'vencidas') {
-      sql += ` AND oc.saldo_pendiente > 0 AND oc.fecha_vencimiento < CURDATE()`;
+      sql += ` AND oc.saldo_pendiente > 0 AND ${fechaReal} < CURDATE()`;
     } else if (alertas === 'pendiente_pago') {
       sql += ` AND oc.estado_pago = 'Pendiente'`;
     } else if (alertas === 'pago_parcial') {

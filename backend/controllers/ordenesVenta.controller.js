@@ -885,7 +885,6 @@ export async function updateOrdenVenta(req, res) {
       }
     }
 
-    // 1. Obtener la orden actual para preservar URLs si no se suben nuevas
     const ordenExistente = await executeQuery(`
       SELECT estado, stock_reservado, id_cotizacion, orden_compra_url, comprobante_url 
       FROM ordenes_venta WHERE id_orden_venta = ?
@@ -901,7 +900,6 @@ export async function updateOrdenVenta(req, res) {
         return res.status(400).json({ success: false, error: 'No se puede editar una orden Cancelada' });
     }
 
-    // 2. Procesar Archivos (Si existen, reemplazan a los anteriores)
     let nuevaOrdenCompraUrl = ordenActual.orden_compra_url;
     let nuevoComprobanteUrl = ordenActual.comprobante_url;
 
@@ -948,10 +946,10 @@ export async function updateOrdenVenta(req, res) {
     let sumaComisionPorcentual = 0;
 
     for (const item of detalle) {
+      const precioFinal = parseFloat(item.precio_unitario);
       const precioBase = parseFloat(item.precio_base);
       const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (porcentajeComision / 100);
-      const precioFinal = precioBase + montoComision;
 
       const valorVenta = (item.cantidad * precioFinal) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorVenta;
@@ -1088,8 +1086,8 @@ export async function updateOrdenVenta(req, res) {
       plazo_pago,
       forma_pago || null,
       orden_compra_cliente || null,
-      nuevaOrdenCompraUrl, // URL actualizada o la anterior
-      nuevoComprobanteUrl, // URL actualizada o la anterior
+      nuevaOrdenCompraUrl,
+      nuevoComprobanteUrl,
       idVehiculoFinal,
       idConductorFinal,
       tipoEntregaFinal,
@@ -1122,10 +1120,10 @@ export async function updateOrdenVenta(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
+      const precioFinal = parseFloat(item.precio_unitario);
       const precioBase = parseFloat(item.precio_base);
       const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (porcentajeComision / 100);
-      const precioFinal = precioBase + montoComision;
 
       queriesNuevoDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
@@ -1176,10 +1174,10 @@ export async function updateOrdenVenta(req, res) {
         for (let i = 0; i < detalle.length; i++) {
           const item = detalle[i];
           const cantidad = parseFloat(item.cantidad);
+          const precioFinal = parseFloat(item.precio_unitario);
           const precioBase = parseFloat(item.precio_base);
           const pctComision = parseFloat(item.porcentaje_comision || 0);
           const montoComision = precioBase * (pctComision / 100);
-          const precioFinal = precioBase + montoComision;
           const descuento = parseFloat(item.descuento_porcentaje || 0);
 
           queriesNuevoDetalle.push({
@@ -1236,7 +1234,7 @@ export async function updateOrdenVenta(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-
+  
 export async function crearOrdenProduccionDesdeVenta(req, res) {
   try {
     const { id } = req.params;

@@ -392,8 +392,9 @@ function OrdenesVenta() {
       align: 'right',
       width: '140px',
       render: (value, row) => {
-        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(row.tipo_impuesto || '').toUpperCase());
-        const total = esSinImpuesto && row.subtotal ? parseFloat(row.subtotal) : parseFloat(value);
+        // CORRECCIÓN: Usamos directamente el total de la base de datos
+        // ya que el backend lo calcula correctamente ahora.
+        const total = parseFloat(value || 0);
         const pagado = parseFloat(row.monto_pagado || 0);
         const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
         

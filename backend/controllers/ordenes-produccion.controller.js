@@ -1048,7 +1048,6 @@ export async function registrarParcial(req, res) {
     const { id } = req.params;
     const body = req.body || {};
     
-    // Datos del formulario
     let cantidad_kilos = parseFloat(body.cantidad_kilos) || 0;
     const cantidad_unidades = parseFloat(body.cantidad_unidades) || 0;
     const observaciones = body.observaciones || null;
@@ -1056,10 +1055,9 @@ export async function registrarParcial(req, res) {
 
     const id_registrado_por = req.user?.id_empleado || req.user?.id || req.user?.userId || null;
 
-    // 1. Obtener datos de la orden y del producto terminado para poder hacer la entrada
     const ordenResult = await executeQuery(
       `SELECT op.estado, op.numero_orden, op.id_producto_terminado, 
-              op.id_supervisor, p.id_tipo_inventario, p.unidad_medida, p.nombre as nombre_producto
+              p.id_tipo_inventario, p.unidad_medida, p.nombre as nombre_producto
        FROM ordenes_produccion op
        INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
        WHERE op.id_orden = ?`,
@@ -1073,14 +1071,12 @@ export async function registrarParcial(req, res) {
       return res.status(400).json({ error: 'La orden no está en estado válido para registrar avances.' });
     }
 
-    // Calcular kilos si no vienen del frontend (basado en insumos)
     if (cantidad_kilos === 0 && insumos_consumidos.length > 0) {
       cantidad_kilos = insumos_consumidos.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
     }
 
     const queries = [];
 
-    // 2. Insertar cabecera del historial (Registro Parcial)
     queries.push({
       sql: `INSERT INTO op_registros_produccion 
             (id_orden, cantidad_registrada, cantidad_unidades_registrada, id_registrado_por, fecha_registro, observaciones) 
@@ -1088,7 +1084,11 @@ export async function registrarParcial(req, res) {
       params: [id, cantidad_kilos, cantidad_unidades, id_registrado_por, observaciones]
     });
 
-    // 3. Actualizar acumulados en la Orden
+    queries.push({
+        sql: `SET @id_registro_actual = LAST_INSERT_ID();`,
+        params: []
+    });
+
     queries.push({
       sql: `UPDATE ordenes_produccion 
             SET cantidad_producida = cantidad_producida + ?,
@@ -1097,53 +1097,38 @@ export async function registrarParcial(req, res) {
       params: [cantidad_kilos, cantidad_unidades, id]
     });
 
-    let costoTotalParcial = 0; // Para calcular cuánto vale lo que acabamos de producir
+    let costoTotalParcial = 0;
 
-    // 4. Procesar Insumos (Salida de materia prima y cálculo de costos)
     if (insumos_consumidos.length > 0) {
-      // Obtenemos los costos actuales de los insumos para valorizar este parcial
-      const idsInsumos = insumos_consumidos.map(i => i.id_insumo).filter(x => x);
+      const ids = insumos_consumidos.map(i => i.id_insumo).join(',');
       let mapaCostos = {};
-
-      if (idsInsumos.length > 0) {
-          const costosRes = await executeQuery(
-              `SELECT id_producto, costo_unitario_promedio FROM productos WHERE id_producto IN (${idsInsumos.join(',')})`
-          );
-          if (costosRes.success) {
-              costosRes.data.forEach(p => {
-                  mapaCostos[p.id_producto] = parseFloat(p.costo_unitario_promedio || 0);
-              });
-          }
+      if(ids){
+          const costos = await executeQuery(`SELECT id_producto, costo_unitario_promedio FROM productos WHERE id_producto IN (${ids})`);
+          costos.data.forEach(p => mapaCostos[p.id_producto] = parseFloat(p.costo_unitario_promedio || 0));
       }
 
-      // Preparamos mapa para saber si actualizar o insertar en op_consumo_materiales
       const consumoExistente = await executeQuery(
         `SELECT id_insumo FROM op_consumo_materiales WHERE id_orden = ?`,
         [id]
       );
-      const insumosExistentesMap = {};
-      if (consumoExistente.success) {
-        consumoExistente.data.forEach(item => { insumosExistentesMap[item.id_insumo] = true; });
-      }
+      const insumosMap = {};
+      if (consumoExistente.success) consumoExistente.data.forEach(i => insumosMap[i.id_insumo] = true);
 
       for (const insumo of insumos_consumidos) {
         const idInsumo = insumo.id_insumo;
         const cantidad = parseFloat(insumo.cantidad) || 0;
+        const costoU = mapaCostos[idInsumo] || 0;
 
         if (!idInsumo || cantidad <= 0) continue;
 
-        const costoUnitario = mapaCostos[idInsumo] || 0;
-        costoTotalParcial += cantidad * costoUnitario;
+        costoTotalParcial += cantidad * costoU;
 
-        // A. Insertar detalle para el historial (para que se vea en el modal)
-        // Usamos LAST_INSERT_ID() que refiere a op_registros_produccion insertado arriba
         queries.push({
-          sql: `INSERT INTO op_detalle_registros_produccion (id_registro, id_insumo, cantidad) VALUES (LAST_INSERT_ID(), ?, ?)`,
+          sql: `INSERT INTO op_detalle_registros_produccion (id_registro, id_insumo, cantidad) VALUES (@id_registro_actual, ?, ?)`,
           params: [idInsumo, cantidad]
         });
 
-        // B. Actualizar tabla acumulada de consumo
-        if (insumosExistentesMap[idInsumo]) {
+        if (insumosMap[idInsumo]) {
           queries.push({
             sql: `UPDATE op_consumo_materiales 
                   SET cantidad_real_consumida = IFNULL(cantidad_real_consumida, 0) + ? 
@@ -1155,11 +1140,10 @@ export async function registrarParcial(req, res) {
             sql: `INSERT INTO op_consumo_materiales 
                   (id_orden, id_insumo, cantidad_requerida, cantidad_real_consumida, costo_unitario) 
                   VALUES (?, ?, 0, ?, ?)`,
-            params: [id, idInsumo, cantidad, costoUnitario]
+            params: [id, idInsumo, cantidad, costoU]
           });
         }
 
-        // C. Restar stock del insumo (SALIDA FÍSICA)
         queries.push({
           sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
           params: [cantidad, idInsumo]
@@ -1167,65 +1151,54 @@ export async function registrarParcial(req, res) {
       }
     }
 
-    // 5. INGRESAR PRODUCTO TERMINADO AL INVENTARIO (Lo que faltaba)
-    // Determinamos si el ingreso es por Kilos o Unidades según la configuración del producto
-    const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'PIEZA', 'MILLAR', 'MLL'].includes(orden.unidad_medida?.toUpperCase()) || orden.nombre_producto?.toUpperCase().includes('LÁMINA');
-    
-    let cantidadParaStock = 0;
-    let costoUnitarioProducto = 0;
+    const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'MILLAR', 'MLL', 'PIEZA'].includes(orden.unidad_medida?.toUpperCase()) || orden.nombre_producto?.toUpperCase().includes('LÁMINA');
+    let cantidadStock = esPorUnidad ? cantidad_unidades : cantidad_kilos;
+    let costoUnitarioPT = cantidadStock > 0 ? (costoTotalParcial / cantidadStock) : 0;
 
-    if (esPorUnidad && cantidad_unidades > 0) {
-        cantidadParaStock = cantidad_unidades;
-        costoUnitarioProducto = costoTotalParcial / cantidad_unidades;
-    } else {
-        cantidadParaStock = cantidad_kilos;
-        costoUnitarioProducto = cantidad_kilos > 0 ? (costoTotalParcial / cantidad_kilos) : 0;
-    }
-
-    if (cantidadParaStock > 0) {
-        // A. Crear la cabecera de la Entrada
+    if (cantidadStock > 0) {
         queries.push({
             sql: `INSERT INTO entradas (
                 id_tipo_inventario, documento_soporte, total_costo, moneda,
                 id_registrado_por, observaciones, tipo_entrada, fecha_movimiento, estado
             ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', NOW(), 'Activo')`,
             params: [
-                orden.id_tipo_inventario, // Tipo de inventario del producto terminado
+                orden.id_tipo_inventario,
                 `Parcial O.P. ${orden.numero_orden}`,
                 costoTotalParcial,
                 id_registrado_por,
-                `Ingreso parcial de producción: ${cantidadParaStock} ${orden.unidad_medida}`
+                `Ingreso parcial: ${cantidadStock} ${orden.unidad_medida}`
             ]
         });
 
-        // B. Crear el detalle de la Entrada y Sumar Stock (Usamos variable de sesión de MySQL para obtener el ID anterior)
         queries.push({
-            sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) 
-                  VALUES (LAST_INSERT_ID(), ?, ?, ?)`,
-            params: [orden.id_producto_terminado, cantidadParaStock, costoUnitarioProducto]
+            sql: `SET @id_entrada_actual = LAST_INSERT_ID();`,
+            params: []
         });
 
-        // C. AUMENTAR STOCK FÍSICO DEL PRODUCTO TERMINADO
+        queries.push({
+            sql: `INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario) 
+                  VALUES (@id_entrada_actual, ?, ?, ?)`,
+            params: [orden.id_producto_terminado, cantidadStock, costoUnitarioPT]
+        });
+
         queries.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [cantidadParaStock, orden.id_producto_terminado]
+            params: [cantidadStock, orden.id_producto_terminado]
         });
         
-        // D. Actualizar costo de la orden general
         queries.push({
             sql: 'UPDATE ordenes_produccion SET costo_materiales = costo_materiales + ? WHERE id_orden = ?',
             params: [costoTotalParcial, id]
         });
     }
 
-    // Ejecutar todo en una sola transacción
     const result = await executeTransaction(queries);
     if (!result.success) {
-        console.error("Error SQL Transaction:", result.error); 
-        return res.status(500).json({ error: "Error en base de datos al guardar registro parcial." });
+        console.error("Error SQL:", result.error); 
+        return res.status(500).json({ error: "Error al guardar registro parcial." });
     }
 
-    res.json({ success: true, message: 'Avance registrado y stock actualizado correctamente' });
+    res.json({ success: true, message: 'Avance registrado correctamente' });
 
   } catch (error) {
     console.error('Error en registrarParcial:', error);

@@ -50,30 +50,30 @@ function NuevaCotizacion() {
   const { id } = useParams();
   const location = useLocation();
   const { user } = useAuth();
-   
+    
   const modoEdicion = !!id;
   const modoDuplicar = location.state?.duplicar === true;
-   
+    
   const [loading, setLoading] = useState(false);
   const [loadingTC, setLoadingTC] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [cotizacionConvertida, setCotizacionConvertida] = useState(false);
   const [idOrdenVenta, setIdOrdenVenta] = useState(null);
-   
+    
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [comerciales, setComerciales] = useState([]);
-   
+    
   const [tipoCambio, setTipoCambio] = useState(null);
   const [tipoCambioFecha, setTipoCambioFecha] = useState(null);
-   
+    
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
-   
+    
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
-   
+    
   const [tabCliente, setTabCliente] = useState('lista');
   const [nuevoClienteDoc, setNuevoClienteDoc] = useState({ tipo: 'RUC', numero: '' });
   const [clienteApiData, setClienteApiData] = useState(null);
@@ -102,7 +102,7 @@ function NuevaCotizacion() {
     const day = String(peruDate.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-   
+    
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
     id_comercial: user?.id_empleado || '',
@@ -119,13 +119,13 @@ function NuevaCotizacion() {
     plazo_entrega: '',
     lugar_entrega: ''
   });
-   
+    
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [direccionesCliente, setDireccionesCliente] = useState([]);
   const [estadoCredito, setEstadoCredito] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
-   
+    
   const [fechaVencimientoCalculada, setFechaVencimientoCalculada] = useState('');
 
   const formatearNumero = (valor) => {
@@ -478,7 +478,7 @@ function NuevaCotizacion() {
       setError('El producto ya está en el detalle');
       return;
     }
-    const precioVenta = producto.precio_venta || 0;
+    const precioVenta = parseFloat(producto.precio_venta || 0);
     const nuevoItem = {
       id_producto: producto.id_producto,
       codigo_producto: producto.codigo,
@@ -502,40 +502,20 @@ function NuevaCotizacion() {
           const newDetalle = detalle.filter((_, i) => i !== existeIndex);
           setDetalle(newDetalle);
       } else {
-          if (monedaLista !== formCabecera.moneda) {
-          }
-
+          const precioLista = parseFloat(prod.precio_especial);
           const nuevoItem = {
               id_producto: prod.id_producto,
               codigo_producto: prod.codigo,
               producto: prod.producto,
               unidad_medida: prod.unidad_medida,
               cantidad: 1,
-              precio_base: parseFloat(prod.precio_especial),
-              precio_venta: parseFloat(prod.precio_especial),
+              precio_base: precioLista,
+              precio_venta: precioLista,
               descuento_porcentaje: 0,
               stock_actual: 0 
           };
           setDetalle([...detalle, nuevoItem]);
       }
-  };
-
-  const handlePrecioBaseChange = (index, valor) => {
-    const newDetalle = [...detalle];
-    const precioBase = parseFloat(valor) || 0;
-    newDetalle[index].precio_base = precioBase;
-    
-    const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
-    
-    // CAMBIO: Fórmula de Margen ((Venta - Base) / Base) * 100
-    if (precioBase > 0) {
-      const margen = ((precioVenta - precioBase) / precioBase) * 100;
-      newDetalle[index].descuento_porcentaje = margen;
-    } else {
-      newDetalle[index].descuento_porcentaje = 0;
-    }
-    
-    setDetalle(newDetalle);
   };
 
   const handlePrecioVentaChange = (index, valor) => {
@@ -545,12 +525,10 @@ function NuevaCotizacion() {
     
     const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
     
-    // CAMBIO: Fórmula de Margen ((Venta - Base) / Base) * 100
     if (precioBase > 0) {
       const margen = ((precioVenta - precioBase) / precioBase) * 100;
       newDetalle[index].descuento_porcentaje = margen;
     } else {
-      // Si no hay precio base, asumimos 0 o mantenemos lo que estaba
       newDetalle[index].descuento_porcentaje = 0; 
     }
     
@@ -565,13 +543,11 @@ function NuevaCotizacion() {
 
   const handleDescuentoChange = (index, valor) => {
     const newDetalle = [...detalle];
-    const porcentaje = parseFloat(valor) || 0; // Ahora representa margen
+    const porcentaje = parseFloat(valor) || 0;
     newDetalle[index].descuento_porcentaje = porcentaje;
     
     const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
     
-    // CAMBIO: Si cambio el %, recalculo el Precio Venta basándome en el Costo
-    // Venta = Costo * (1 + (Porcentaje / 100))
     if (precioBase > 0) {
       const nuevoPrecioVenta = precioBase * (1 + (porcentaje / 100));
       newDetalle[index].precio_venta = parseFloat(nuevoPrecioVenta.toFixed(4));
@@ -589,7 +565,7 @@ function NuevaCotizacion() {
     let subtotal = 0;
     detalle.forEach(item => {
       const precioVenta = parseFloat(item.precio_venta) || 0;
-      const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
+      const valorVenta = item.cantidad * precioVenta;
       subtotal += valorVenta;
     });
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
@@ -1235,7 +1211,7 @@ function NuevaCotizacion() {
                   <tbody>
                     {detalle.map((item, index) => {
                       const precioVenta = parseFloat(item.precio_venta) || 0;
-                      const valorVenta = (item.cantidad * precioVenta) * (1 - item.descuento_porcentaje / 100);
+                      const valorVenta = item.cantidad * precioVenta;
                       return (
                         <tr key={index}>
                           <td className="font-mono text-sm">{item.codigo_producto}</td>
@@ -1259,11 +1235,10 @@ function NuevaCotizacion() {
                               type="number"
                               className="form-input text-right bg-gray-100"
                               value={item.precio_base}
-                              onChange={(e) => handlePrecioBaseChange(index, e.target.value)}
+                              readOnly
                               min="0"
                               step="0.001"
                               disabled={cotizacionConvertida}
-                              onWheel={handleWheelDisable}
                             />
                           </td>
                           <td>
@@ -1286,8 +1261,6 @@ function NuevaCotizacion() {
                               className="form-input text-right"
                               value={parseFloat(item.descuento_porcentaje).toFixed(2)}
                               onChange={(e) => handleDescuentoChange(index, e.target.value)}
-                              min="0"
-                              max="100"
                               step="0.01"
                               disabled={cotizacionConvertida}
                               onWheel={handleWheelDisable}

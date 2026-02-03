@@ -551,10 +551,14 @@ export async function createOrdenVenta(req, res) {
     let subtotal = 0;
 
     for (const item of detalle) {
-      const precioVenta = parseFloat(item.precio_venta) || 0;
-      const cantidad = parseFloat(item.cantidad) || 0;
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+      
       const valorVenta = cantidad * precioVenta;
-      subtotal += valorVenta;
+      
+      if (!isNaN(valorVenta)) {
+        subtotal += valorVenta;
+      }
     }
 
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
@@ -672,87 +676,24 @@ export async function createOrdenVenta(req, res) {
 
     const result = await executeQuery(`
       INSERT INTO ordenes_venta (
-        numero_orden,
-        tipo_comprobante,
-        numero_comprobante,
-        id_cliente,
-        id_cotizacion,
-        fecha_emision,
-        fecha_entrega_estimada,
-        fecha_vencimiento,
-        prioridad,
-        moneda,
-        tipo_cambio,
-        tipo_impuesto,
-        porcentaje_impuesto,
-        tipo_venta,
-        dias_credito,
-        plazo_pago,
-        forma_pago,
-        orden_compra_cliente,
-        orden_compra_url,
-        comprobante_url,
-        id_vehiculo,
-        id_conductor,
-        tipo_entrega,
-        transporte_nombre,
-        transporte_placa,
-        transporte_conductor,
-        transporte_dni,
-        direccion_entrega,
-        lugar_entrega,
-        ciudad_entrega,
-        contacto_entrega,
-        telefono_entrega,
-        observaciones,
-        id_comercial,
-        id_registrado_por,
-        subtotal,
-        igv,
-        total,
-        estado,
-        estado_verificacion,
-        stock_reservado
+        numero_orden, tipo_comprobante, numero_comprobante, id_cliente, id_cotizacion,
+        fecha_emision, fecha_entrega_estimada, fecha_vencimiento, prioridad, moneda,
+        tipo_cambio, tipo_impuesto, porcentaje_impuesto, tipo_venta, dias_credito,
+        plazo_pago, forma_pago, orden_compra_cliente, orden_compra_url, comprobante_url,
+        id_vehiculo, id_conductor, tipo_entrega, transporte_nombre, transporte_placa,
+        transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
+        contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
+        subtotal, igv, total, estado, estado_verificacion, stock_reservado
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
     `, [
-      numeroOrden,
-      tipoComp,
-      numeroComprobante,
-      id_cliente,
-      id_cotizacion || null,
-      fecha_emision,
-      fecha_entrega_estimada || null,
-      fechaVencimientoFinal,
-      prioridad || 'Media',
-      moneda,
-      parseFloat(tipo_cambio || 1.0000),
-      tipoImpuestoFinal,
-      porcentaje,
-      tipo_venta || 'Contado',
-      parseInt(dias_credito || 0),
-      plazo_pago,
-      forma_pago,
-      orden_compra_cliente || null,
-      ordenCompraUrl,
-      comprobanteUrl,
-      idVehiculoFinal,
-      idConductorFinal,
-      tipo_entrega || 'Vehiculo Empresa',
-      transNombreFinal,
-      transPlacaFinal,
-      transCondFinal,
-      transDniFinal,
-      direccion_entrega,
-      lugar_entrega,
-      ciudad_entrega,
-      contacto_entrega,
-      telefono_entrega,
-      observaciones,
-      id_comercial || null,
-      id_registrado_por,
-      subtotal,
-      impuesto,
-      total
+      numeroOrden, tipoComp, numeroComprobante, id_cliente, id_cotizacion || null,
+      fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
+      parseFloat(tipo_cambio || 1.0000), tipoImpuestoFinal, porcentaje, tipo_venta || 'Contado', parseInt(dias_credito || 0),
+      plazo_pago, forma_pago, orden_compra_cliente || null, ordenCompraUrl, comprobanteUrl,
+      idVehiculoFinal, idConductorFinal, tipo_entrega || 'Vehiculo Empresa', transNombreFinal, transPlacaFinal,
+      transCondFinal, transDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
+      contacto_entrega, telefono_entrega, observaciones, id_comercial || null, id_registrado_por,
+      subtotal, impuesto, total
     ]);
 
     if (!result.success) {
@@ -768,30 +709,24 @@ export async function createOrdenVenta(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      const precioBase = parseFloat(item.precio_base) || 0;
-      const precioVenta = parseFloat(item.precio_venta) || 0;
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
       
       let porcentajeCalculado = 0;
       if (precioBase !== 0) {
         porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
-      } else {
-        porcentajeCalculado = parseFloat(item.descuento_porcentaje || 0);
       }
 
       queriesDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
-          id_orden_venta,
-          id_producto,
-          cantidad,
-          precio_unitario,
-          precio_base,
-          descuento_porcentaje,
-          stock_reservado
+          id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
+          descuento_porcentaje, stock_reservado
         ) VALUES (?, ?, ?, ?, ?, ?, 0)`,
         params: [
           idOrden,
           item.id_producto,
-          parseFloat(item.cantidad),
+          cantidad,
           precioVenta,
           precioBase,
           porcentajeCalculado.toFixed(2)
@@ -804,9 +739,7 @@ export async function createOrdenVenta(req, res) {
     if (id_cotizacion) {
       await executeQuery(`
         UPDATE cotizaciones 
-        SET estado = 'Convertida',
-        convertida_venta = 1,
-        id_orden_venta = ?
+        SET estado = 'Convertida', convertida_venta = 1, id_orden_venta = ?
         WHERE id_cotizacion = ?
       `, [idOrden, id_cotizacion]);
     }
@@ -946,23 +879,19 @@ export async function updateOrdenVenta(req, res) {
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
 
-    // --- CORRECCIÓN MATEMÁTICA EN BUCLE PRINCIPAL ---
     for (const item of detalle) {
-      let precioFinal = parseFloat(item.precio_unitario);
-      const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+      
+      const valorVenta = cantidad * precioVenta;
+      
+      if (!isNaN(valorVenta)) subtotal += valorVenta;
 
-      if (isNaN(precioFinal) || precioFinal <= 0) {
-          precioFinal = precioBase + montoComision;
-      }
-
-      // CORREGIDO: Eliminamos el factor de descuento. El precioFinal ya es el definitivo.
-      const valorVenta = item.cantidad * precioFinal; 
-      subtotal += valorVenta;
-
-      totalComision += montoComision * item.cantidad;
-      sumaComisionPorcentual += porcentajeComision;
+      const precioBase = parseFloat(item.precio_base || 0);
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (pctComision / 100);
+      totalComision += montoComision * cantidad;
+      sumaComisionPorcentual += pctComision;
     }
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
@@ -1042,79 +971,24 @@ export async function updateOrdenVenta(req, res) {
     const updateResult = await executeQuery(`
       UPDATE ordenes_venta 
       SET 
-        id_cliente = ?,
-        fecha_emision = ?,
-        fecha_entrega_estimada = ?,
-        fecha_vencimiento = ?,
-        prioridad = ?,
-        moneda = ?,
-        tipo_cambio = ?,
-        tipo_impuesto = ?,
-        porcentaje_impuesto = ?,
-        tipo_venta = ?,
-        dias_credito = ?,
-        plazo_pago = ?,
-        forma_pago = ?,
-        orden_compra_cliente = ?,
-        orden_compra_url = ?,
-        comprobante_url = ?,
-        id_vehiculo = ?,
-        id_conductor = ?,
-        tipo_entrega = ?,
-        transporte_nombre = ?,
-        transporte_placa = ?,
-        transporte_conductor = ?,
-        transporte_dni = ?,
-        direccion_entrega = ?,
-        lugar_entrega = ?,
-        ciudad_entrega = ?,
-        contacto_entrega = ?,
-        telefono_entrega = ?,
-        observaciones = ?,
-        id_comercial = ?,
-        subtotal = ?,
-        igv = ?,
-        total = ?,
-        total_comision = ?,
-        porcentaje_comision_promedio = ?
+        id_cliente = ?, fecha_emision = ?, fecha_entrega_estimada = ?, fecha_vencimiento = ?,
+        prioridad = ?, moneda = ?, tipo_cambio = ?, tipo_impuesto = ?, porcentaje_impuesto = ?,
+        tipo_venta = ?, dias_credito = ?, plazo_pago = ?, forma_pago = ?, orden_compra_cliente = ?,
+        orden_compra_url = ?, comprobante_url = ?, id_vehiculo = ?, id_conductor = ?, tipo_entrega = ?,
+        transporte_nombre = ?, transporte_placa = ?, transporte_conductor = ?, transporte_dni = ?,
+        direccion_entrega = ?, lugar_entrega = ?, ciudad_entrega = ?, contacto_entrega = ?,
+        telefono_entrega = ?, observaciones = ?, id_comercial = ?, subtotal = ?, igv = ?, total = ?,
+        total_comision = ?, porcentaje_comision_promedio = ?
       WHERE id_orden_venta = ?
     `, [
-      id_cliente,
-      fecha_emision,
-      fecha_entrega_estimada || null,
-      fechaVencimientoFinal,
-      prioridad || 'Media',
-      moneda,
-      parseFloat(tipo_cambio || 1.0000),
-      tipoImpuestoFinal,
-      porcentaje,
-      tipo_venta || 'Contado',
-      parseInt(dias_credito || 0),
-      plazo_pago,
-      forma_pago || null,
-      orden_compra_cliente || null,
-      nuevaOrdenCompraUrl,
-      nuevoComprobanteUrl,
-      idVehiculoFinal,
-      idConductorFinal,
-      tipoEntregaFinal,
-      transporteNombreFinal,
-      transportePlacaFinal,
-      transporteConductorFinal,
-      transporteDniFinal,
-      direccion_entrega,
-      lugar_entrega,
-      ciudad_entrega,
-      contacto_entrega,
-      telefono_entrega,
-      observaciones,
-      id_comercial || null,
-      subtotal,
-      impuesto,
-      total,
-      totalComision,
-      porcentajeComisionPromedio,
-      id
+      id_cliente, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
+      prioridad || 'Media', moneda, parseFloat(tipo_cambio || 1.0000), tipoImpuestoFinal, porcentaje,
+      tipo_venta || 'Contado', parseInt(dias_credito || 0), plazo_pago, forma_pago || null,
+      orden_compra_cliente || null, nuevaOrdenCompraUrl, nuevoComprobanteUrl, idVehiculoFinal,
+      idConductorFinal, tipoEntregaFinal, transporteNombreFinal, transportePlacaFinal,
+      transporteConductorFinal, transporteDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
+      contacto_entrega, telefono_entrega, observaciones, id_comercial || null, subtotal, impuesto,
+      total, totalComision, porcentajeComisionPromedio, id
     ]);
 
     if (!updateResult.success) {
@@ -1127,37 +1001,26 @@ export async function updateOrdenVenta(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
-      let precioFinal = parseFloat(item.precio_unitario);
-      const precioBase = parseFloat(item.precio_base);
-      const porcentajeComision = parseFloat(item.porcentaje_comision || 0);
-      const montoComision = precioBase * (porcentajeComision / 100);
-
-      if (isNaN(precioFinal) || precioFinal <= 0) {
-          precioFinal = precioBase + montoComision;
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
+      
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const montoComision = precioBase * (pctComision / 100);
+      
+      let porcentajeCalculado = 0;
+      if (precioBase !== 0) {
+        porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
       }
 
       queriesNuevoDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
-          id_orden_venta,
-          id_producto,
-          cantidad,
-          precio_unitario,
-          precio_base,
-          porcentaje_comision,
-          monto_comision,
-          descuento_porcentaje,
-          stock_reservado
+          id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
+          porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
-          id,
-          item.id_producto,
-          parseFloat(item.cantidad),
-          precioFinal,
-          precioBase,
-          porcentajeComision,
-          montoComision,
-          parseFloat(item.descuento_porcentaje || 0),
-          stockReservado ? 1 : 0
+          id, item.id_producto, cantidad, precioVenta, precioBase,
+          pctComision, montoComision, porcentajeCalculado.toFixed(2), stockReservado ? 1 : 0
         ]
       });
 
@@ -1170,7 +1033,7 @@ export async function updateOrdenVenta(req, res) {
         if (productoCheck.success && productoCheck.data.length > 0 && productoCheck.data[0].requiere_receta === 0) {
           queriesNuevoDetalle.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-            params: [parseFloat(item.cantidad), item.id_producto]
+            params: [cantidad, item.id_producto]
           });
         }
       }
@@ -1184,58 +1047,37 @@ export async function updateOrdenVenta(req, res) {
 
         for (let i = 0; i < detalle.length; i++) {
           const item = detalle[i];
-          const cantidad = parseFloat(item.cantidad);
+          const cantidad = parseFloat(item.cantidad || 0);
+          const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+          const precioBase = parseFloat(item.precio_base || 0);
           
-          let precioFinal = parseFloat(item.precio_unitario);
-          const precioBase = parseFloat(item.precio_base);
-          const pctComision = parseFloat(item.porcentaje_comision || 0);
-          const montoComision = precioBase * (pctComision / 100);
-          const descuento = parseFloat(item.descuento_porcentaje || 0);
-
-          if (isNaN(precioFinal) || precioFinal <= 0) {
-             precioFinal = precioBase + montoComision;
+          let porcentajeCalculado = 0;
+          if (precioBase !== 0) {
+            porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
           }
 
           queriesNuevoDetalle.push({
             sql: `INSERT INTO detalle_cotizacion (
               id_cotizacion, id_producto, cantidad, precio_unitario, precio_base, 
-              porcentaje_comision, monto_comision, descuento_porcentaje, orden
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              descuento_porcentaje, orden
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             params: [
-              ordenActual.id_cotizacion,
-              item.id_producto,
-              cantidad,
-              precioFinal,
-              precioBase,
-              pctComision,
-              montoComision,
-              descuento,
-              i + 1
+              ordenActual.id_cotizacion, item.id_producto, cantidad,
+              precioVenta, precioBase, porcentajeCalculado.toFixed(2), i + 1
             ]
           });
         }
 
         queriesNuevoDetalle.push({
             sql: `UPDATE cotizaciones 
-                  SET 
-                    subtotal = ?, 
-                    igv = ?, 
-                    total = ?, 
-                    total_comision = ?, 
-                    porcentaje_comision_promedio = ?,
-                    observaciones = ?,
-                    moneda = ?,
-                    tipo_cambio = ?
+                  SET subtotal = ?, igv = ?, total = ?, 
+                      total_comision = ?, porcentaje_comision_promedio = ?,
+                      observaciones = ?, moneda = ?, tipo_cambio = ?
                   WHERE id_cotizacion = ?`,
             params: [
-                subtotal, 
-                impuesto, 
-                total, 
-                totalComision, 
-                porcentajeComisionPromedio, 
-                observaciones, 
-                moneda, 
-                parseFloat(tipo_cambio || 1.0000),
+                subtotal, impuesto, total, 
+                totalComision, porcentajeComisionPromedio,
+                observaciones, moneda, parseFloat(tipo_cambio || 1.0000),
                 ordenActual.id_cotizacion
             ]
         });

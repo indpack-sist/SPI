@@ -813,20 +813,23 @@ function VerificarOrdenes() {
                       </tr>
                     </thead>
                     <tbody>
-                      {datosVerificacion.orden.detalle?.map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="font-mono text-xs">{item.codigo_producto}</td>
-                          <td>
-                            <div className="font-medium text-sm">{item.producto}</div>
-                            <div className="text-xs text-muted">{item.unidad_medida}</div>
-                          </td>
-                          <td className="text-right font-semibold">{formatearNumero(item.cantidad)}</td>
-                          <td className="text-right">{formatearMoneda(item.precio_unitario, datosVerificacion.orden.moneda)}</td>
-                          <td className="text-right font-bold text-primary">
-                            {formatearMoneda(item.valor_venta, datosVerificacion.orden.moneda)}
-                          </td>
-                        </tr>
-                      ))}
+                      {datosVerificacion.orden.detalle?.map((item, idx) => {
+                        const subtotalCalculado = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+                        return (
+                          <tr key={idx}>
+                            <td className="font-mono text-xs">{item.codigo_producto}</td>
+                            <td>
+                              <div className="font-medium text-sm">{item.producto}</div>
+                              <div className="text-xs text-muted">{item.unidad_medida}</div>
+                            </td>
+                            <td className="text-right font-semibold">{formatearNumero(item.cantidad)}</td>
+                            <td className="text-right">{formatearMoneda(item.precio_unitario, datosVerificacion.orden.moneda)}</td>
+                            <td className="text-right font-bold text-primary">
+                              {formatearMoneda(subtotalCalculado, datosVerificacion.orden.moneda)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2">

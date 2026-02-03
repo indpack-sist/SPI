@@ -1055,11 +1055,27 @@ function DetalleOrdenVenta() {
     );
   }
 
+  // --- CÁLCULO DE TOTALES EN VIVO (Corrección Matemática) ---
+  const subtotalReal = orden.detalle.reduce((acc, item) => {
+      // Forzamos el cálculo Cantidad * Precio Unitario
+      const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+      return acc + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase());
+  const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
+  const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (porcentajeImpuesto / 100);
+  const totalCorregido = subtotalReal + impuestoReal;
+  
+  const saldoCorregido = resumenPagos ? Math.max(0, totalCorregido - parseFloat(resumenPagos.monto_pagado)) : 0;
+  // -----------------------------------------------------------
+
   const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
   const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
 
   const estadoVerifConfig = getEstadoVerificacionConfig(orden.estado_verificacion);
   const IconoVerificacion = estadoVerifConfig.icono;
+  
   const columns = [
     {
       header: 'Código',
@@ -1282,9 +1298,11 @@ function DetalleOrdenVenta() {
       accessor: 'valor_venta',
       width: '120px',
       align: 'right',
-      render: (value) => (
-        <span className="font-bold text-primary">{formatearMoneda(value)}</span>
-      )
+      render: (value, row) => {
+        // CORRECCIÓN MATEMÁTICA: Calculamos Subtotal = Cantidad * Precio Unitario en vivo
+        const subtotalCalc = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
+        return <span className="font-bold text-primary">{formatearMoneda(subtotalCalc)}</span>
+      }
     }
   ];
 
@@ -1366,10 +1384,6 @@ function DetalleOrdenVenta() {
            orden.estado !== 'Entregada' &&
            orden.estado !== 'Despachada';
   });
-
-  const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase());
-  const totalCorregido = esSinImpuesto ? parseFloat(orden.subtotal) : parseFloat(orden.total);
-  const saldoCorregido = resumenPagos ? Math.max(0, totalCorregido - parseFloat(resumenPagos.monto_pagado)) : 0;
 
   return (
     <div className="p-6">
@@ -2026,7 +2040,7 @@ function DetalleOrdenVenta() {
           <div className="card-body space-y-3">
             <div className="flex justify-between py-2 border-b">
               <span>Sub Total:</span>
-              <span className="font-bold">{formatearMoneda(orden.subtotal)}</span>
+              <span className="font-bold">{formatearMoneda(subtotalReal)}</span>
             </div>
             <div className="flex justify-between py-2 border-b">
               <span className="flex items-center gap-1">
@@ -2034,7 +2048,7 @@ function DetalleOrdenVenta() {
                 {getTipoImpuestoNombre(orden.tipo_impuesto)}:
               </span>
               <span className="font-bold">
-                {formatearMoneda(esSinImpuesto ? 0 : orden.igv)}
+                {formatearMoneda(impuestoReal)}
               </span>
             </div>
             <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">

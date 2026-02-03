@@ -1,45 +1,63 @@
-/* AppLauncher.css */
-
 .launcher-container {
-  /* Ocupar toda la altura disponible restando el navbar */
-  height: calc(100vh - 60px); 
+  height: calc(100vh - 60px);
   width: 100%;
-  
-  /* Flexbox para centrar todo */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
-  padding: 20px; /* Reducimos padding para ganar espacio */
-  
-
-  /* --- TRUCO: SCROLL PERO INVISIBLE --- */
-  overflow-y: auto; /* Permite scroll si no cabe */
-  
-  /* Para Firefox */
-  scrollbar-width: none; 
-  /* Para IE y Edge */
-  -ms-overflow-style: none; 
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  position: relative;
+  z-index: 1;
 }
 
-/* Para Chrome, Safari y Opera: Ocultar la barra */
+.launcher-container::before,
+.launcher-container::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.4;
+  z-index: -1;
+  animation: floatBackground 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.launcher-container::before {
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, #3b82f6, #8b5cf6);
+  top: -10%;
+  left: -10%;
+  transform-origin: top left;
+}
+
+.launcher-container::after {
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, #f43f5e, #f97316);
+  bottom: -10%;
+  right: -10%;
+  animation-delay: -10s;
+  transform-origin: bottom right;
+}
+
 .launcher-container::-webkit-scrollbar {
   display: none;
 }
 
 .launcher-grid {
   display: grid;
-  /* Grid responsiva y centrada */
   grid-template-columns: repeat(auto-fit, minmax(160px, 160px));
-  justify-content: center; /* Centra los iconos en el bloque */
-  gap: 30px; 
-  
+  justify-content: center;
+  gap: 30px;
   width: 100%;
   max-width: 1200px;
-  
-  /* Animación de entrada suave */
-  animation: fadeIn 0.5s ease-out;
+  animation: fadeIn 0.8s ease-out;
+  z-index: 2;
 }
 
 .launcher-card {
@@ -49,51 +67,55 @@
   justify-content: flex-start;
   text-decoration: none;
   color: #fff;
-  transition: all 0.2s ease;
-  padding: 10px;
-  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  padding: 15px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(5px);
 }
 
 .launcher-card:hover {
-  transform: translateY(-5px);
-  background-color: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(4px);
+  transform: translateY(-8px) scale(1.02);
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
 }
 
 .icon-wrapper {
   width: 110px;
   height: 110px;
-  border-radius: 22px;
+  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
-  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Efecto rebote sutil */
+  margin-bottom: 15px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .launcher-card:hover .icon-wrapper {
-  transform: scale(1.08);
+  transform: scale(1.1) rotate(3deg);
 }
 
 .app-label {
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 1.1rem;
+  font-weight: 600;
   text-align: center;
-  color: #fff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+  color: #f1f5f9;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   letter-spacing: 0.5px;
 }
 
 .launcher-footer {
   margin-top: 40px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85rem;
+  z-index: 2;
 }
 
-/* --- RESPONSIVIDAD INTELIGENTE --- */
-/* Si la pantalla es bajita (laptops), reducimos un poco todo para evitar scroll */
 @media (max-height: 800px) {
   .launcher-grid {
     gap: 15px;
@@ -102,10 +124,8 @@
     width: 90px;
     height: 90px;
   }
-  /* Ajustamos el icono dentro (necesitarás ajustar el size en el JSX si quieres que sea dinámico, 
-     pero CSS scale funciona visualmente rápido) */
   .icon-wrapper svg {
-    transform: scale(0.8); 
+    transform: scale(0.85);
   }
   .launcher-footer {
     margin-top: 20px;
@@ -113,6 +133,18 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes floatBackground {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(20px, 20px) scale(1.1);
+  }
+  100% {
+    transform: translate(-20px, 40px) scale(0.95);
+  }
 }

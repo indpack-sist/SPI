@@ -276,7 +276,7 @@ function NuevaOrdenVenta() {
             producto: item.producto,
             unidad_medida: item.unidad_medida,
             cantidad: parseFloat(item.cantidad),
-            precio_base: parseFloat(item.precio_base) > 0 ? parseFloat(item.precio_base) : parseFloat(item.precio_unitario),
+            precio_base: parseFloat(item.precio_base || item.precio_unitario), 
             precio_venta: parseFloat(item.precio_unitario),
             descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
             stock_actual: item.stock_disponible
@@ -1310,7 +1310,7 @@ function NuevaOrdenVenta() {
                           <select
                             className="form-select pl-10"
                             value={formCabecera.direccion_entrega}
-                            onChange={(e) => setFormCabecera({...formCabecera, direccion_entrega: e.target.value})}
+                            onChange={(e) => setFormCabecera({...formCabecera,direccion_entrega: e.target.value})}
                           >
                             <option value="">Seleccione una dirección...</option>
                             {direccionesCliente.map((dir, idx) => (

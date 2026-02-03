@@ -408,9 +408,11 @@ function DetalleCotizacion() {
       accessor: 'valor_venta',
       width: '130px',
       align: 'right',
-      render: (value) => (
-        <span className="font-bold text-lg">{formatearMoneda(value)}</span>
-      )
+      render: (value, row) => {
+        // CORRECCION: Calculamos en vivo para evitar errores de BD antiguos
+        const subtotalCalculado = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
+        return <span className="font-bold text-lg">{formatearMoneda(subtotalCalculado)}</span>
+      }
     },
     {
       header: 'Acciones',
@@ -458,11 +460,13 @@ function DetalleCotizacion() {
     );
   }
 
+  // CORRECCION: Función de totales forzada a recalcular con Cantidad * Precio
   const calcularTotalesReales = () => {
     if (!cotizacion.detalle) return { sub: 0, tax: 0, tot: 0 };
 
     const sub = cotizacion.detalle.reduce((acc, item) => {
-        const val = parseFloat(item.valor_venta) || (parseFloat(item.cantidad) * parseFloat(item.precio_unitario));
+        // Forzamos el cálculo estricto
+        const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
         return acc + (isNaN(val) ? 0 : val);
     }, 0);
 

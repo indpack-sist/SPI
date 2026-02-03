@@ -1,20 +1,30 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { usePermisos } from '../../context/PermisosContext'; // Ajusta la ruta a tu context
-import { menuConfig } from '../../config/menuConfig'; // Ajusta la ruta a tu config
+import { usePermisos } from '../../context/PermisosContext'; 
+import { menuConfig } from '../../config/menuConfig'; 
 import './AppLauncher.css';
 
 const AppLauncher = () => {
   const { tienePermiso } = usePermisos();
-
-  // Aplanamos la estructura: obtenemos todos los items de todas las secciones en un solo array
   const allApps = menuConfig.flatMap(section => section.items);
-
-  // Filtramos según permisos
   const allowedApps = allApps.filter(app => tienePermiso(app.modulo));
 
   return (
     <div className="launcher-container">
+      
+      <div className="background-shapes">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+
       <div className="launcher-grid">
         {allowedApps.map((app, index) => {
           const Icon = app.icon;
@@ -23,7 +33,7 @@ const AppLauncher = () => {
               to={app.path} 
               key={index} 
               className="launcher-card"
-              style={{ '--card-color': app.color || '#555' }} // Variable CSS para el hover/borde
+              style={{ '--card-color': app.color || '#555' }} 
             >
               <div className="icon-wrapper" style={{ backgroundColor: app.color || '#555' }}>
                 <Icon size={32} color="#fff" />

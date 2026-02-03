@@ -69,10 +69,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: false,
-      flota: false,
-      proveedores: false,
-      clientes: false,
+      empleados: true,
+      flota: true,
+      proveedores: true,
+      clientes: true,
       solicitudesCredito: false,
       productos: true,
       consultarStock: false,
@@ -83,7 +83,7 @@ const PERMISOS_POR_ROL = {
       cotizaciones: false,
       ordenesVenta: false,
       compras: true,
-      cuentasPago: false,
+      cuentasPago: true,
       pagosCobranzas: false,
       listasPrecios: false,
       reportes: false

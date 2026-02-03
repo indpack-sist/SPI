@@ -21,7 +21,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true // <--- ÚNICO ROL CON ACCESO (TRUE)
+      reportes: true
     },
     api: {
       dashboard: true,
@@ -42,50 +42,50 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true // <--- API HABILITADA
+      reportes: true
     }
   },
-  'Gerencia': {
+  'Calidad': {
     ui: {
-      dashboard: true,
-      empleados: true,
-      flota: true,
-      proveedores: true,
-      clientes: true,
-      solicitudesCredito: true,
+      dashboard: false,
+      empleados: false,
+      flota: false,
+      proveedores: false,
+      clientes: false,
+      solicitudesCredito: false,
       productos: true,
-      consultarStock: true,
+      consultarStock: false,
       entradas: true,
       salidas: true,
-      transferencias: true,
+      transferencias: false,
       ordenesProduccion: true,
-      cotizaciones: true,
-      ordenesVenta: true,
+      cotizaciones: false,
+      ordenesVenta: false,
       compras: true,
-      cuentasPago: true,
-      pagosCobranzas: true,
-      listasPrecios: true,
-      reportes: false // <--- DENEGADO
+      cuentasPago: false,
+      pagosCobranzas: false,
+      listasPrecios: false,
+      reportes: false
     },
     api: {
-      dashboard: true,
-      empleados: true,
-      flota: true,
-      proveedores: true,
-      clientes: true,
-      solicitudesCredito: true,
+      dashboard: false,
+      empleados: false,
+      flota: false,
+      proveedores: false,
+      clientes: false,
+      solicitudesCredito: false,
       productos: true,
-      consultarStock: true,
+      consultarStock: false,
       entradas: true,
       salidas: true,
-      transferencias: true,
+      transferencias: false,
       ordenesProduccion: true,
-      cotizaciones: true,
-      ordenesVenta: true,
+      cotizaciones: false,
+      ordenesVenta: false,
       compras: true,
-      cuentasPago: true,
-      pagosCobranzas: true,
-      listasPrecios: true,
+      cuentasPago: false,
+      pagosCobranzas: false,
+      listasPrecios: false,
       reportes: false
     }
   },
@@ -109,7 +109,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true // <--- DENEGADO
+      reportes: true
     },
     api: {
       dashboard: false,
@@ -153,7 +153,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: true,
-      reportes: false // <--- DENEGADO
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -197,7 +197,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false // <--- DENEGADO
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -241,7 +241,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false // <--- DENEGADO
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -285,7 +285,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false // <--- DENEGADO
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -329,7 +329,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false // <--- DENEGADO
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -373,7 +373,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false // <--- DENEGADO
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -417,7 +417,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false // <--- DENEGADO
+      reportes: false
     },
     api: {
       empleados: false,
@@ -460,7 +460,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: false,
-      reportes: false // <--- DENEGADO (Solo Administrador)
+      reportes: false
     },
     api: {
       dashboard: false,

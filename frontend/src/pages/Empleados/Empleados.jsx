@@ -238,9 +238,9 @@ function Empleados() {
   );
 
   const getRolBadgeClass = (rol) => {
-    const rolLower = rol.toLowerCase();
+    // CAMBIO: Se cambió 'Gerencia' por 'Calidad'
     if (rol === 'Administrador') return 'badge-danger';
-    if (rol === 'Gerencia') return 'badge-danger';
+    if (rol === 'Calidad') return 'badge-danger';
     if (rol === 'Supervisor' || rol === 'Produccion') return 'badge-primary';
     if (rol === 'Ventas' || rol === 'Comercial') return 'badge-success';
     if (rol === 'Conductor') return 'badge-info';
@@ -472,7 +472,7 @@ function Empleados() {
                 </small>
               </div>
 
-              {/* ✅ ROL ACTUALIZADO CON TODOS LOS NUEVOS ROLES */}
+              {/* ✅ ROL ACTUALIZADO CON CALIDAD */}
               <div className="form-group">
                 <label className="form-label">Rol *</label>
                 <select
@@ -481,9 +481,9 @@ function Empleados() {
                   onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
                   required
                 >
-                  <optgroup label="Administración y Gerencia">
+                  <optgroup label="Administración y Calidad">
                     <option value="Administrador">Administrador</option>
-                    <option value="Gerencia">Gerencia</option>
+                    <option value="Calidad">Calidad</option>
                     <option value="Administrativo">Administrativo</option>
                   </optgroup>
                   

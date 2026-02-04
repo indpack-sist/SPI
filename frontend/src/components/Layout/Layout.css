@@ -1,16 +1,42 @@
+/* Layout.css */
 .layout {
   display: flex;
-  min-height: 100vh;
+  min-height: 100dvh; /* dvh para mejor soporte móvil */
   background-color: var(--bg-secondary);
+  position: relative;
+  overflow-x: hidden; /* Vital para evitar scroll horizontal al abrir menú */
 }
 
+/* --- WRAPPER DEL SIDEBAR (Nuevo) --- */
+.layout-sidebar-wrapper {
+  width: 260px;
+  background-color: var(--bg-primary);
+  border-right: 1px solid var(--border);
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50; /* Por encima de todo */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Estado cerrado en Desktop (si quisieras colapsarlo visualmente) */
+.layout-sidebar-wrapper.closed {
+  transform: translateX(-100%);
+}
+
+/* --- MAIN CONTAINER --- */
 .layout-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  transition: margin-left 0.3s ease;
+  min-width: 0; /* Truco CSS para evitar desbordes de Grid/Flex internos */
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* En Desktop, el contenido se empuja */
 .layout-main.sidebar-open {
   margin-left: 260px;
 }
@@ -19,9 +45,12 @@
   margin-left: 0;
 }
 
+/* --- CONTENIDO INTERNO --- */
 .layout-content {
   flex: 1;
   padding: 1.5rem;
+  /* Contenedor para que las 'Container Queries' de index.css funcionen aquí dentro */
+  container-type: inline-size; 
 }
 
 .layout-footer {
@@ -33,12 +62,54 @@
   color: var(--text-secondary);
 }
 
+/* --- OVERLAY (Fondo oscuro móvil) --- */
+.layout-overlay {
+  position: fixed;
+  inset: 0; /* top:0, right:0, bottom:0, left:0 */
+  background-color: rgba(15, 23, 42, 0.5); /* Color oscuro semi-transparente */
+  backdrop-filter: blur(2px); /* Efecto vidrio (App Nativa) */
+  z-index: 40; /* Debajo del sidebar, encima del contenido */
+  opacity: 0;
+  pointer-events: none; /* Click traspasa si está oculto */
+  transition: opacity 0.3s ease;
+}
+
+.layout-overlay.visible {
+  opacity: 1;
+  pointer-events: auto; /* Click activa el cierre */
+}
+
+/* --- RESPONSIVE 2026 (Móvil y Tablet) --- */
 @media (max-width: 768px) {
-  .layout-main.sidebar-open {
-    margin-left: 0;
+  
+  /* 1. El Sidebar Wrapper siempre está "off-canvas" por defecto */
+  .layout-sidebar-wrapper {
+    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
   }
   
+  /* Si está cerrado en móvil, se va a la izquierda */
+  .layout-sidebar-wrapper.closed {
+    transform: translateX(-100%);
+  }
+
+  /* Si está abierto en móvil, entra en escena (pero NO empuja contenido) */
+  .layout-sidebar-wrapper.open {
+    transform: translateX(0);
+  }
+
+  /* 2. El Main nunca tiene margen en móvil (Sidebar flota encima) */
+  .layout-main.sidebar-open,
+  .layout-main.sidebar-closed {
+    margin-left: 0 !important;
+  }
+  
+  /* Ajustes de padding para móvil */
   .layout-content {
     padding: 1rem;
+  }
+  
+  /* Ajuste para que el Navbar no choque con nada */
+  .layout-main {
+    width: 100%;
   }
 }

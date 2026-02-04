@@ -515,16 +515,16 @@ function OrdenesVenta() {
   if (loading) return <Loading message="Cargando órdenes de venta..." />;
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-4 md:p-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShoppingCart size={32} />
+            <ShoppingCart size={32} className="text-primary" />
             Órdenes de Venta
           </h1>
           <p className="text-muted">Gestión de órdenes de venta y despachos</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full md:w-auto">
           <button 
             className="btn btn-outline"
             onClick={() => navigate('/ventas/ordenes/verificacion')}
@@ -533,11 +533,11 @@ function OrdenesVenta() {
             Verificar Órdenes
           </button>
           <button 
-            className="btn btn-primary"
+            className="btn btn-primary flex-1 md:flex-none justify-center"
             onClick={() => navigate('/ventas/ordenes/nueva')}
           >
             <Plus size={20} />
-            Nueva Orden de Venta
+            Nueva Orden
           </button>
         </div>
       </div>
@@ -546,86 +546,66 @@ function OrdenesVenta() {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       {estadisticas && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div className="card shadow-sm">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted">Total Órdenes</p>
-                  <h3 className="text-2xl font-bold text-gray-800">{estadisticas.total_ordenes || 0}</h3>
-                  <p className="text-xs text-muted">{estadisticas.clientes_unicos || 0} clientes</p>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <ShoppingCart size={24} className="text-primary" />
-                </div>
-              </div>
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-content">
+              <p className="stat-label">Total Órdenes</p>
+              <p className="stat-value">{estadisticas.total_ordenes || 0}</p>
+              <p className="stat-sublabel">{estadisticas.clientes_unicos || 0} clientes</p>
+            </div>
+            <div className="stat-icon">
+              <ShoppingCart size={24} />
             </div>
           </div>
 
-          <div className="card shadow-sm border-l-4 border-warning">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted">En Espera</p>
-                  <h3 className="text-2xl font-bold text-warning">{estadisticas.en_espera || 0}</h3>
-                  <p className="text-xs text-muted">Por producir</p>
-                </div>
-                <div className="p-3 bg-yellow-100 rounded-lg">
-                  <Clock size={24} className="text-warning" />
-                </div>
-              </div>
+          <div className="stat-card border-l-4 border-warning">
+            <div className="stat-content">
+              <p className="stat-label">En Espera</p>
+              <p className="stat-value text-warning">{estadisticas.en_espera || 0}</p>
+              <p className="stat-sublabel">Por producir</p>
+            </div>
+            <div className="stat-icon">
+              <Clock size={24} className="text-warning" />
             </div>
           </div>
 
-          <div className="card shadow-sm border-l-4 border-info">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted">En Proceso</p>
-                  <h3 className="text-2xl font-bold text-info">{estadisticas.en_proceso || 0}</h3>
-                  {estadisticas.urgentes > 0 && (
-                    <p className="text-xs text-danger flex items-center gap-1 font-bold">
-                      <AlertTriangle size={12} />
-                      {estadisticas.urgentes} urgentes
-                    </p>
-                  )}
-                </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <PlayCircle size={24} className="text-info" />
-                </div>
-              </div>
+          <div className="stat-card border-l-4 border-info">
+            <div className="stat-content">
+              <p className="stat-label">En Proceso</p>
+              <p className="stat-value text-info">{estadisticas.en_proceso || 0}</p>
+              {estadisticas.urgentes > 0 && (
+                <p className="text-xs text-danger flex items-center gap-1 font-bold mt-1">
+                  <AlertTriangle size={12} />
+                  {estadisticas.urgentes} urgentes
+                </p>
+              )}
+            </div>
+            <div className="stat-icon">
+              <PlayCircle size={24} className="text-info" />
             </div>
           </div>
 
-          <div className="card shadow-sm border-l-4 border-orange-400">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted">Desp. Parcial</p>
-                  <h3 className="text-2xl font-bold text-orange-600">{estadisticas.despacho_parcial || 0}</h3>
-                  <p className="text-xs text-muted">Pendientes</p>
-                </div>
-                <div className="p-3 bg-orange-100 rounded-lg">
-                  <Truck size={24} className="text-orange-600" />
-                </div>
-              </div>
+          <div className="stat-card border-l-4 border-orange-400">
+            <div className="stat-content">
+              <p className="stat-label">Desp. Parcial</p>
+              <p className="stat-value text-orange-600">{estadisticas.despacho_parcial || 0}</p>
+              <p className="stat-sublabel">Pendientes</p>
+            </div>
+            <div className="stat-icon">
+              <Truck size={24} className="text-orange-600" />
             </div>
           </div>
 
-          <div className="card shadow-sm border-l-4 border-success">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted">Monto Total</p>
-                  <h3 className="text-2xl font-bold text-success">
-                    {formatearMoneda(estadisticas.monto_total || 0, 'PEN')}
-                  </h3>
-                  <p className="text-xs text-muted">{estadisticas.entregadas || 0} entregadas</p>
-                </div>
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <TrendingUp size={24} className="text-success" />
-                </div>
-              </div>
+          <div className="stat-card border-l-4 border-success">
+            <div className="stat-content">
+              <p className="stat-label">Monto Total</p>
+              <p className="stat-value text-success">
+                {formatearMoneda(estadisticas.monto_total || 0, 'PEN')}
+              </p>
+              <p className="stat-sublabel">{estadisticas.entregadas || 0} entregadas</p>
+            </div>
+            <div className="stat-icon">
+              <TrendingUp size={24} className="text-success" />
             </div>
           </div>
         </div>
@@ -635,21 +615,21 @@ function OrdenesVenta() {
         <div className="card-body">
           <div className="flex flex-col md:flex-row gap-4">
             
-            <div className="relative flex-1">
+            <div className="search-input-wrapper flex-1">
               <Search 
                 size={20} 
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+                className="search-icon" 
               />
               <input
                 type="text"
-                className="form-input pl-10 w-full"
+                className="form-input search-input"
                 placeholder="Buscar por N°, cliente, RUC..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
 
-            <div className="flex items-center gap-3 w-full overflow-x-auto pb-2">
+            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
               <Filter size={20} className="text-muted shrink-0" />
               
               <div className="flex gap-2">
@@ -675,7 +655,7 @@ function OrdenesVenta() {
                 </button>
               </div>
 
-              <div className="border-l h-6 mx-2"></div>
+              <div className="border-l h-6 mx-2 hidden md:block"></div>
 
               <div className="flex gap-2">
                 <button
@@ -728,7 +708,7 @@ function OrdenesVenta() {
                 </button>
               </div>
 
-              <div className="border-l h-6 mx-2"></div>
+              <div className="border-l h-6 mx-2 hidden md:block"></div>
 
               <div className="flex gap-2">
                 <button
@@ -745,7 +725,7 @@ function OrdenesVenta() {
                 </button>
               </div>
 
-              <div className="border-l h-6 mx-2"></div>
+              <div className="border-l h-6 mx-2 hidden md:block"></div>
 
               <div className="flex gap-2">
                 <button
@@ -776,45 +756,51 @@ function OrdenesVenta() {
       </div>
 
       <div className="card shadow-sm">
-        <div className="card-header flex justify-between items-center bg-gray-50/50">
-          <h2 className="card-title">
-            Lista de Órdenes de Venta
-            <span className="badge badge-primary ml-2">{ordenesFiltradas.length}</span>
-          </h2>
+        <div className="card-header">
+          <div className="flex items-center gap-2">
+            <h2 className="card-title">
+              Lista de Órdenes de Venta
+              <span className="badge badge-primary ml-2">{ordenesFiltradas.length}</span>
+            </h2>
+          </div>
           <div className="text-sm text-muted">
               Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
           </div>
         </div>
         
         <div className="card-body p-0">
-          <Table
-            columns={columns}
-            data={currentItems}
-            emptyMessage="No hay órdenes de venta registradas"
-            onRowClick={(row) => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
-          />
+          <div className="table-container">
+            <Table
+              columns={columns}
+              data={currentItems}
+              emptyMessage="No hay órdenes de venta registradas"
+              onRowClick={(row) => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
+            />
+          </div>
         </div>
 
         {ordenesFiltradas.length > itemsPerPage && (
-          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+          <div className="card-footer flex-wrap gap-2">
             <button 
                 className="btn btn-sm btn-outline flex items-center gap-1"
                 onClick={goToPrevPage}
                 disabled={currentPage === 1}
             >
-                <ChevronLeft size={16} /> Anterior
+                <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
             </button>
 
-            <span className="text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">
                 Página {currentPage} de {totalPages}
-            </span>
+              </span>
+            </div>
 
             <button 
                 className="btn btn-sm btn-outline flex items-center gap-1"
                 onClick={goToNextPage}
                 disabled={currentPage === totalPages}
             >
-                Siguiente <ChevronRight size={16} />
+                <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
             </button>
           </div>
         )}

@@ -1,5 +1,5 @@
 .launcher-container {
-  height: calc(100vh - 60px); 
+  min-height: 100dvh;
   width: 100%;
   position: relative;
   display: flex;
@@ -7,18 +7,20 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  overflow: hidden; 
+  overflow-y: auto;
+  overflow-x: hidden;
   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
 }
 
 .background-shapes {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  z-index: 0; 
+  z-index: 0;
+  pointer-events: none;
 }
 
 .background-shapes span {
@@ -30,14 +32,14 @@
   background: rgba(255, 255, 255, 0.1);
   animation: animate 25s linear infinite;
   bottom: -150px;
-  border-radius: 4px; 
+  border-radius: 4px;
 }
 
 .background-shapes span:nth-child(1) {
   left: 25%;
   width: 80px;
   height: 80px;
-  background: rgba(59, 130, 246, 0.2); 
+  background: rgba(59, 130, 246, 0.2);
   animation-delay: 0s;
 }
 
@@ -47,7 +49,7 @@
   height: 20px;
   animation-delay: 2s;
   animation-duration: 12s;
-  background: rgba(244, 63, 94, 0.2); 
+  background: rgba(244, 63, 94, 0.2);
 }
 
 .background-shapes span:nth-child(3) {
@@ -55,7 +57,7 @@
   width: 20px;
   height: 20px;
   animation-delay: 4s;
-  background: rgba(139, 92, 246, 0.2); 
+  background: rgba(139, 92, 246, 0.2);
 }
 
 .background-shapes span:nth-child(4) {
@@ -64,7 +66,7 @@
   height: 60px;
   animation-delay: 0s;
   animation-duration: 18s;
-  background: rgba(16, 185, 129, 0.15); 
+  background: rgba(16, 185, 129, 0.15);
 }
 
 .background-shapes span:nth-child(5) {
@@ -79,8 +81,8 @@
   width: 110px;
   height: 110px;
   animation-delay: 3s;
-  background: rgba(249, 115, 22, 0.15); 
-  border-radius: 50%; 
+  background: rgba(249, 115, 22, 0.15);
+  border-radius: 50%;
 }
 
 .background-shapes span:nth-child(7) {
@@ -88,7 +90,7 @@
   width: 150px;
   height: 150px;
   animation-delay: 7s;
-  background: rgba(59, 130, 246, 0.1); 
+  background: rgba(59, 130, 246, 0.1);
   border-radius: 50%;
 }
 
@@ -114,7 +116,7 @@
   height: 150px;
   animation-delay: 0s;
   animation-duration: 11s;
-  background: rgba(236, 72, 153, 0.15); 
+  background: rgba(236, 72, 153, 0.15);
 }
 
 @keyframes animate {
@@ -132,29 +134,32 @@
 
 .launcher-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 160px));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   justify-content: center;
   gap: 30px;
   width: 100%;
   max-width: 1200px;
-  z-index: 2; 
+  z-index: 2;
   animation: fadeIn 0.8s ease-out;
+  padding: 20px;
 }
 
 .launcher-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   text-decoration: none;
   color: #fff;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  padding: 15px;
+  padding: 20px 15px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05); 
-  border: 1px solid rgba(255, 255, 255, 0.1); 
-  backdrop-filter: blur(8px); 
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  aspect-ratio: 1 / 1.1;
+  min-height: 180px;
 }
 
 .launcher-card:hover {
@@ -164,14 +169,18 @@
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
 }
 
+.launcher-card:active {
+  transform: scale(0.98);
+}
+
 .icon-wrapper {
-  width: 110px;
-  height: 110px;
-  border-radius: 24px;
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -181,44 +190,71 @@
 }
 
 .app-label {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   text-align: center;
   color: #f1f5f9;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   letter-spacing: 0.5px;
   z-index: 2;
+  line-height: 1.2;
 }
 
 .launcher-footer {
-  margin-top: 40px;
+  margin-top: auto;
+  padding-top: 40px;
   text-align: center;
   color: rgba(255, 255, 255, 0.5);
   font-size: 0.85rem;
   z-index: 2;
 }
 
-.launcher-container::-webkit-scrollbar {
-  display: none;
-}
-
-@media (max-height: 800px) {
-  .launcher-grid {
-    gap: 15px;
-  }
-  .icon-wrapper {
-    width: 90px;
-    height: 90px;
-  }
-  .icon-wrapper svg {
-    transform: scale(0.85);
-  }
-  .launcher-footer {
-    margin-top: 20px;
-  }
-}
-
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(30px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 768px) {
+  .launcher-container {
+    padding: 15px;
+    padding-top: 40px;
+  }
+
+  .launcher-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    padding: 10px;
+  }
+
+  .launcher-card {
+    min-height: 140px;
+    padding: 15px 10px;
+    border-radius: 16px;
+  }
+
+  .icon-wrapper {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    margin-bottom: 15px;
+  }
+
+  .icon-wrapper svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .app-label {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .launcher-grid {
+    gap: 12px;
+  }
+  
+  .launcher-card:hover {
+    transform: none;
+  }
 }

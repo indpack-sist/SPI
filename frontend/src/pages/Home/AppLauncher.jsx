@@ -12,40 +12,41 @@ const AppLauncher = () => {
   return (
     <div className="launcher-container">
       
+      {/* Fondo Animado Optimizado */}
       <div className="background-shapes">
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
+        <li></li><li></li><li></li><li></li><li></li>
+        <li></li><li></li><li></li><li></li><li></li>
       </div>
 
-      <div className="launcher-grid">
-        {allowedApps.map((app, index) => {
-          const Icon = app.icon;
-          return (
-            <Link 
-              to={app.path} 
-              key={index} 
-              className="launcher-card"
-              style={{ '--card-color': app.color || '#555' }} 
-            >
-              <div className="icon-wrapper" style={{ backgroundColor: app.color || '#555' }}>
-                <Icon size={32} color="#fff" />
-              </div>
-              <span className="app-label">{app.label}</span>
-            </Link>
-          );
-        })}
+      <div className="launcher-content">
+        <div className="launcher-header">
+          <h1>Bienvenido a INDPACK</h1>
+          <p>Selecciona una aplicación para comenzar</p>
+        </div>
+
+        <div className="launcher-grid">
+          {allowedApps.map((app, index) => {
+            const Icon = app.icon;
+            return (
+              <Link 
+                to={app.path} 
+                key={index} 
+                className="launcher-card"
+                style={{ '--card-color': app.color || '#64748b' }} 
+              >
+                <div className="launcher-icon-wrapper">
+                  <Icon size={32} strokeWidth={1.5} />
+                </div>
+                <span className="launcher-label">{app.label}</span>
+                <div className="launcher-card-shine"></div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
       
       <div className="launcher-footer">
-        <p>Sistema de Gestión INDPACK</p>
+        <p>© 2026 Sistema de Gestión INDPACK</p>
       </div>
     </div>
   );

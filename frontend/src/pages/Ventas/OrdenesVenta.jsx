@@ -396,7 +396,6 @@ function OrdenesVenta() {
         const total = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
         const pagado = parseFloat(row.monto_pagado || 0);
         const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
-        
         return (
           <div>
             <div className="font-bold text-gray-800">{formatearMoneda(total, row.moneda)}</div>

@@ -340,8 +340,8 @@ function Cotizaciones() {
   if (loading) return <Loading message="Cargando cotizaciones..." />;
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-4 md:p-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FileText size={32} className="text-primary" />
@@ -349,7 +349,7 @@ function Cotizaciones() {
           </h1>
           <p className="text-muted">Gestión de cotizaciones de venta</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full md:w-auto">
           <button 
             className="btn btn-outline"
             onClick={() => cargarDatos(true)}
@@ -359,7 +359,7 @@ function Cotizaciones() {
             <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
           </button>
           <button 
-            className="btn btn-primary"
+            className="btn btn-primary flex-1 md:flex-none justify-center"
             onClick={() => navigate('/ventas/cotizaciones/nueva')}
           >
             <Plus size={20} />
@@ -371,64 +371,55 @@ function Cotizaciones() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold">Total</p>
-                <p className="text-2xl font-bold">{estadisticas.total}</p>
-              </div>
-              <FileText size={32} className="text-muted opacity-20" />
-            </div>
+      {/* --- GRID DE ESTADISTICAS RESPONSIVE (Usa .stats-grid del CSS) --- */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-content">
+            <p className="stat-label">Total</p>
+            <p className="stat-value">{estadisticas.total}</p>
+          </div>
+          <div className="stat-icon">
+            <FileText size={24} />
           </div>
         </div>
 
-        <div className="card shadow-sm border-l-4 border-warning">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold">Pendientes</p>
-                <p className="text-2xl font-bold text-warning">{estadisticas.pendientes}</p>
-              </div>
-              <Calendar size={32} className="text-warning opacity-20" />
-            </div>
+        <div className="stat-card border-l-4 border-warning">
+          <div className="stat-content">
+            <p className="stat-label">Pendientes</p>
+            <p className="stat-value text-warning">{estadisticas.pendientes}</p>
+          </div>
+          <div className="stat-icon">
+            <Calendar size={24} className="text-warning" />
           </div>
         </div>
 
-        <div className="card shadow-sm border-l-4 border-success">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold">Aprobadas</p>
-                <p className="text-2xl font-bold text-success">{estadisticas.aprobadas}</p>
-              </div>
-              <TrendingUp size={32} className="text-success opacity-20" />
-            </div>
+        <div className="stat-card border-l-4 border-success">
+          <div className="stat-content">
+            <p className="stat-label">Aprobadas</p>
+            <p className="stat-value text-success">{estadisticas.aprobadas}</p>
+          </div>
+          <div className="stat-icon">
+            <TrendingUp size={24} className="text-success" />
           </div>
         </div>
 
-        <div className="card shadow-sm border-l-4 border-primary">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted uppercase font-semibold">Convertidas</p>
-                <p className="text-2xl font-bold text-primary">{estadisticas.convertidas}</p>
-              </div>
-              <CheckCircle2 size={32} className="text-primary opacity-20" />
-            </div>
+        <div className="stat-card border-l-4 border-primary">
+          <div className="stat-content">
+            <p className="stat-label">Convertidas</p>
+            <p className="stat-value text-primary">{estadisticas.convertidas}</p>
+          </div>
+          <div className="stat-icon">
+            <CheckCircle2 size={24} className="text-primary" />
           </div>
         </div>
 
-        <div className="card shadow-sm bg-gradient-to-br from-primary to-blue-600 text-white">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase font-semibold opacity-90">Monto Total (PEN)</p>
-                <p className="text-2xl font-bold">S/ {formatearNumero(estadisticas.montoTotal)}</p>
-              </div>
-              <DollarSign size={32} className="opacity-20" />
-            </div>
+        <div className="stat-card bg-gradient-to-br from-primary to-blue-600 text-white">
+          <div className="stat-content">
+            <p className="stat-label text-white/90">Monto Total (PEN)</p>
+            <p className="stat-value text-white">S/ {formatearNumero(estadisticas.montoTotal)}</p>
+          </div>
+          <div className="stat-icon bg-white/20 text-white">
+            <DollarSign size={24} />
           </div>
         </div>
       </div>
@@ -437,23 +428,25 @@ function Cotizaciones() {
         <div className="card-body">
           <div className="flex flex-col md:flex-row gap-4">
             
-            <div className="relative flex-1">
+            {/* Buscador con clase responsiva */}
+            <div className="search-input-wrapper flex-1">
               <Search 
                 size={20} 
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+                className="search-icon" 
               />
               <input
                 type="text"
-                className="form-input pl-10 w-full"
+                className="form-input search-input"
                 placeholder="Buscar por N°, cliente, RUC o comercial..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Filtros con scroll horizontal en móvil */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
               <Filter size={18} className="text-muted shrink-0" />
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2">
                 <button
                   className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => setFiltroEstado('')}
@@ -485,37 +478,40 @@ function Cotizaciones() {
       </div>
 
       <div className="card shadow-sm">
-        <div className="card-header flex justify-between items-center bg-gray-50/50">
-          <h2 className="card-title">
-            Lista de Cotizaciones
+        <div className="card-header">
+          <div className="flex items-center gap-2">
+            <h2 className="card-title">Lista de Cotizaciones</h2>
             {cotizacionesFiltradas.length !== cotizaciones.length && (
-              <span className="badge badge-info ml-2">
+              <span className="badge badge-info">
                 {cotizacionesFiltradas.length} de {cotizaciones.length}
               </span>
             )}
-          </h2>
+          </div>
           <div className="text-sm text-muted">
-            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, cotizacionesFiltradas.length)} de {cotizacionesFiltradas.length}
+            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, cotizacionesFiltradas.length)}
           </div>
         </div>
         
+        {/* Wrapper table-container para scroll horizontal en móvil */}
         <div className="card-body p-0">
-          <Table
-            columns={columns}
-            data={currentItems}
-            emptyMessage="No hay cotizaciones registradas"
-            onRowClick={(row) => handleVerDetalle(row.id_cotizacion)}
-          />
+          <div className="table-container">
+            <Table
+              columns={columns}
+              data={currentItems}
+              emptyMessage="No hay cotizaciones registradas"
+              onRowClick={(row) => handleVerDetalle(row.id_cotizacion)}
+            />
+          </div>
         </div>
 
         {cotizacionesFiltradas.length > itemsPerPage && (
-          <div className="card-footer border-t border-border p-4 flex justify-between items-center bg-gray-50/50">
+          <div className="card-footer flex-wrap gap-2">
             <button 
               className="btn btn-sm btn-outline flex items-center gap-1"
               onClick={goToPrevPage}
               disabled={currentPage === 1}
             >
-              <ChevronLeft size={16} /> Anterior
+              <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
             </button>
 
             <div className="flex items-center gap-2">
@@ -529,7 +525,7 @@ function Cotizaciones() {
               onClick={goToNextPage}
               disabled={currentPage === totalPages}
             >
-              Siguiente <ChevronRight size={16} />
+              <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
             </button>
           </div>
         )}

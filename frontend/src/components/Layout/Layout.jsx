@@ -1,30 +1,48 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import './Layout.css';
 
 function Layout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Inicializar basado en el ancho de pantalla (Desktop: abierto, Móvil: cerrado)
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const location = useLocation();
+
+  const isLauncher = location.pathname === '/';
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
-  const isLauncher = location.pathname === '/';
+  // Lógica 2026: Cerrar menú automáticamente al cambiar de ruta (solo en móvil)
+  useEffect(() => {
+    if (window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname]);
 
   return (
     <div className="layout">
-      {/* 1. Sidebar: Se oculta en el launcher */}
+      {/* 1. Sidebar Wrapper: Controla la posición flotante vs estática */}
       {!isLauncher && (
-        <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
+        <>
+          {/* Fondo oscuro para móvil (Overlay) */}
+          <div 
+            className={`layout-overlay ${sidebarOpen ? 'visible' : ''}`} 
+            onClick={() => setSidebarOpen(false)}
+          />
+          
+          <aside className={`layout-sidebar-wrapper ${sidebarOpen ? 'open' : 'closed'}`}>
+            <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
+          </aside>
+        </>
       )}
       
       {/* 2. Contenedor Principal */}
       <div className={`layout-main ${isLauncher ? 'layout-full' : (sidebarOpen ? 'sidebar-open' : 'sidebar-closed')}`}>
         
-        {/* 3. Navbar: Se oculta si es launcher */}
+        {/* 3. Navbar */}
         {!isLauncher && (
           <Navbar onToggleSidebar={toggleSidebar} showMenuButton={true} />
         )}
@@ -34,7 +52,7 @@ function Layout({ children }) {
           {children}
         </main>
         
-        {/* 5. Footer: Se oculta si es launcher */}
+        {/* 5. Footer */}
         {!isLauncher && (
           <footer className="layout-footer">
             <p>INDPACK Sistema de Inventario y Producción - {new Date().getFullYear()}</p>

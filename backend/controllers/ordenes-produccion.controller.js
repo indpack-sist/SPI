@@ -1625,8 +1625,9 @@ export async function finalizarProduccion(req, res) {
       params: [cantidad_kilos_final, cantidad_unidades_final, tiempoMinutos, observaciones, costoAdicionalCierre, id]
     });
 
-    const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'MILLAR', 'MLL'].includes(orden.unidad_medida?.toUpperCase()) || orden.nombre_producto?.toUpperCase().includes('LÁMINA');
-    
+    const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'MILLAR', 'MLL'].includes(orden.unidad_medida?.toUpperCase()) || 
+                    orden.nombre_producto?.toUpperCase().includes('LÁMINA') || 
+                    orden.nombre_producto?.toUpperCase().includes('LAMINA');
     let cantidadParaStock = 0;
     let costoUnitarioPT = 0;
 

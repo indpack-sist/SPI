@@ -2349,7 +2349,10 @@ export async function anularOrden(req, res) {
     }
 
     const ordenResult = await executeQuery(
-      `SELECT * FROM ordenes_produccion WHERE id_orden = ?`,
+      `SELECT op.*, p.unidad_medida, p.nombre as nombre_producto, p.id_tipo_inventario
+       FROM ordenes_produccion op
+       INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
+       WHERE op.id_orden = ?`,
       [id]
     );
 
@@ -2369,7 +2372,6 @@ export async function anularOrden(req, res) {
     let haySalidaProducto = false;
     let totalCostoInsumos = 0; 
 
-    // Buscar si hubo consumo real de materiales
     const consumoResult = await executeQuery(
       `SELECT 
           cm.id_insumo, 
@@ -2382,7 +2384,6 @@ export async function anularOrden(req, res) {
       [id]
     );
 
-    // Preparar devolución de insumos (Entrada al almacén)
     if (consumoResult.data.length > 0) {
       hayEntradaInsumos = true;
       
@@ -2412,39 +2413,44 @@ export async function anularOrden(req, res) {
       });
     }
 
+    const nombreProducto = orden.nombre_producto ? orden.nombre_producto.toUpperCase() : '';
+    const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'MILLAR', 'MLL', 'PIEZA'].includes(orden.unidad_medida?.toUpperCase()) || 
+                        nombreProducto.includes('LÁMINA') || nombreProducto.includes('LAMINA');
+
     let cantidadA_Retirar = 0;
+    
+    if (esPorUnidad) {
+        cantidadA_Retirar = parseFloat(orden.cantidad_unidades_producida || 0);
+    } else {
+        cantidadA_Retirar = parseFloat(orden.cantidad_producida || 0);
+    }
+    
     let costoUnitarioPT = 0;
 
-    // Preparar retiro de producto terminado (Salida del almacén)
-    if (orden.estado === 'Finalizada' && parseFloat(orden.cantidad_producida) > 0) {
+    if (cantidadA_Retirar > 0) {
         
-        cantidadA_Retirar = parseFloat(orden.cantidad_producida);
+        haySalidaProducto = true;
         
-        if (cantidadA_Retirar > 0) {
-            haySalidaProducto = true;
-            
-            costoUnitarioPT = totalCostoInsumos / cantidadA_Retirar;
-            if (isNaN(costoUnitarioPT) || !isFinite(costoUnitarioPT)) costoUnitarioPT = 0;
+        costoUnitarioPT = totalCostoInsumos / cantidadA_Retirar;
+        if (isNaN(costoUnitarioPT) || !isFinite(costoUnitarioPT)) costoUnitarioPT = 0;
 
-            queries.push({
-                sql: `INSERT INTO salidas (
-                    id_tipo_inventario, 
-                    tipo_movimiento, 
-                    id_registrado_por, 
-                    observaciones, 
-                    fecha_movimiento, 
-                    estado
-                ) VALUES (?, 'Anulación Producción', ?, ?, NOW(), 'Activo')`,
-                params: [
-                    3, // ID tipo inventario para producto terminado (ajustar si varía)
-                    id_usuario, 
-                    `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`
-                ]
-            });
-        }
+        queries.push({
+            sql: `INSERT INTO salidas (
+                id_tipo_inventario, 
+                tipo_movimiento, 
+                id_registrado_por, 
+                observaciones, 
+                fecha_movimiento, 
+                estado
+            ) VALUES (?, 'Anulación Producción', ?, ?, NOW(), 'Activo')`,
+            params: [
+                orden.id_tipo_inventario, 
+                id_usuario, 
+                `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`
+            ]
+        });
     }
 
-    // Cancelar la orden de producción
     queries.push({
       sql: `UPDATE ordenes_produccion 
             SET estado = 'Cancelada', 
@@ -2453,7 +2459,6 @@ export async function anularOrden(req, res) {
       params: [id]
     });
 
-    // Liberar la orden de venta si existe
     if (orden.id_orden_venta_origen) {
       queries.push({
         sql: `UPDATE ordenes_venta SET estado = 'Pendiente' WHERE id_orden_venta = ?`,
@@ -2461,7 +2466,6 @@ export async function anularOrden(req, res) {
       });
     }
 
-    // Ejecutar cabeceras
     const resultHeader = await executeTransaction(queries);
     
     if (!resultHeader.success) {
@@ -2471,7 +2475,6 @@ export async function anularOrden(req, res) {
     const queriesDetalles = [];
     let currentIndex = 0;
     
-    // Detalles de la Devolución de Insumos
     if (hayEntradaInsumos) {
         const idEntrada = resultHeader.data[currentIndex].insertId;
         currentIndex++;
@@ -2489,7 +2492,6 @@ export async function anularOrden(req, res) {
         }
     }
 
-    // Detalles del Retiro de Producto Terminado
     if (haySalidaProducto) {
         const idSalida = resultHeader.data[currentIndex].insertId;
 
@@ -2504,13 +2506,12 @@ export async function anularOrden(req, res) {
         });
     }
 
-    // Ejecutar detalles
     if (queriesDetalles.length > 0) {
         const resultDetalles = await executeTransaction(queriesDetalles);
         if (!resultDetalles.success) throw new Error(resultDetalles.error);
     }
 
-    res.json({ success: true, message: 'Orden cancelada y movimientos revertidos correctamente.' });
+    res.json({ success: true, message: 'Orden anulada. Se han revertido los movimientos de inventario (insumos devueltos y productos retirados).' });
 
   } catch (error) {
     console.error('Error al anular orden:', error);

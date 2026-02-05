@@ -713,6 +713,7 @@ export async function createOrdenVenta(req, res) {
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
       
+      // Calculamos margen solo para referencia, o lo ignoramos si no lo guardas en otra columna
       let porcentajeCalculado = 0;
       if (precioBase !== 0) {
         porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
@@ -729,7 +730,7 @@ export async function createOrdenVenta(req, res) {
           cantidad,
           precioVenta,
           precioBase,
-          porcentajeCalculado.toFixed(2)
+          0, // CORREGIDO: Se envía 0 en lugar del margen
         ]
       });
     }
@@ -775,7 +776,6 @@ export async function createOrdenVenta(req, res) {
     });
   }
 }
-
 export async function updateOrdenVenta(req, res) {
   try {
     const { id } = req.params;

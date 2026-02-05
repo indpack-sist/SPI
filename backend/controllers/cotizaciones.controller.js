@@ -190,87 +190,79 @@ export async function createCotizacion(req, res) {
       tipo_impuesto,
       porcentaje_impuesto,
       tipo_cambio,
-      plazo_pago,        
+      plazo_pago,
       forma_pago,
       direccion_entrega,
       observaciones,
-      id_comercial,        
-      validez_dias,        
+      id_comercial,
+      validez_dias,
       plazo_entrega,
       lugar_entrega,
       detalle
     } = req.body;
-    
+
     if (!id_cliente) return res.status(400).json({ success: false, error: 'Cliente es obligatorio' });
     if (!detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Debe agregar al menos un producto' });
     if (!plazo_pago || plazo_pago.trim() === '') return res.status(400).json({ success: false, error: 'Plazo de pago es obligatorio' });
-    
+
     const comercialFinal = id_comercial || req.user?.id_empleado;
     if (!comercialFinal) return res.status(400).json({ success: false, error: 'No se pudo determinar el comercial responsable' });
-    
-    // --- Lógica de Fechas ---
+
     let fechaEmisionFinal = fecha_emision;
     if (!fechaEmisionFinal) {
-        const peruDate = getFechaPeru();
-        const year = peruDate.getFullYear();
-        const month = String(peruDate.getMonth() + 1).padStart(2, '0');
-        const day = String(peruDate.getDate()).padStart(2, '0');
-        fechaEmisionFinal = `${year}-${month}-${day}`;
+      const peruDate = getFechaPeru();
+      const year = peruDate.getFullYear();
+      const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+      const day = String(peruDate.getDate()).padStart(2, '0');
+      fechaEmisionFinal = `${year}-${month}-${day}`;
     }
 
     const validezDiasFinal = parseInt(validez_dias) || 7;
     const fechaEmisionDate = new Date(fechaEmisionFinal + 'T12:00:00');
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
-    
-    // --- Lógica de Moneda ---
+
     let tipoCambioFinal = parseFloat(tipo_cambio) || 1.0000;
     if (moneda === 'PEN') tipoCambioFinal = 1.0000;
-    
-    // --- Generar Correlativo ---
+
     const ultimaResult = await executeQuery(`
       SELECT numero_cotizacion 
       FROM cotizaciones 
       ORDER BY id_cotizacion DESC 
       LIMIT 1
     `);
-    
+
     let numeroSecuencia = 1;
     if (ultimaResult.success && ultimaResult.data.length > 0) {
       const match = ultimaResult.data[0].numero_cotizacion.match(/(\d+)$/);
       if (match) numeroSecuencia = parseInt(match[1]) + 1;
     }
     const numeroCotizacion = `COT-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
-    
-    // --- CÁLCULO DE SUBTOTAL (SOLO P.VENTA x CANTIDAD) ---
+
     let subtotal = 0;
 
     for (const item of detalle) {
       const cantidad = parseFloat(item.cantidad || 0);
-      // Aquí aseguramos usar estrictamente el precio_venta enviado
       const precioVenta = parseFloat(item.precio_venta || 0);
-
       const valorVenta = cantidad * precioVenta;
-      
+
       if (!isNaN(valorVenta)) {
         subtotal += valorVenta;
       }
     }
-    
-    // --- Cálculo de Impuestos ---
+
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
-    
+
     if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
-    
+
     let igv = subtotal * (porcentaje / 100);
     let total = subtotal + igv;
 
-    // --- Validaciones de Crédito (Lógica Original) ---
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
         `SELECT usar_limite_credito, 
@@ -279,7 +271,7 @@ export async function createCotizacion(req, res) {
          FROM clientes WHERE id_cliente = ?`,
         [id_cliente]
       );
-      
+
       if (clienteInfo.success && clienteInfo.data.length > 0) {
         const cliente = clienteInfo.data[0];
         if (cliente.usar_limite_credito == 1) {
@@ -294,7 +286,6 @@ export async function createCotizacion(req, res) {
 
           const limite = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
           const deudaActual = parseFloat(deudaRes.data[0]?.deuda_actual || 0);
-          const disponible = limite - deudaActual;
 
           if ((deudaActual + total) > limite) {
              console.warn(`Cliente ${id_cliente} excede límite de crédito.`);
@@ -302,8 +293,7 @@ export async function createCotizacion(req, res) {
         }
       }
     }
-    
-    // --- INSERT CABECERA ---
+
     const result = await executeQuery(`
       INSERT INTO cotizaciones (
         numero_cotizacion, id_cliente, id_comercial, fecha_emision, fecha_vencimiento,
@@ -313,30 +303,23 @@ export async function createCotizacion(req, res) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
     `, [
       numeroCotizacion, id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada,
-      prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal,                  
-      plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,                  
-      plazo_entrega || null, lugar_entrega || null, 
-      subtotal, igv, total, 
-      comercialFinal                      
+      prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal,
+      plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,
+      plazo_entrega || null, lugar_entrega || null,
+      subtotal, igv, total,
+      comercialFinal
     ]);
-    
+
     if (!result.success) return res.status(500).json({ success: false, error: result.error });
-    
+
     const idCotizacion = result.data.insertId;
-    
-    // --- INSERT DETALLE ---
+
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
       const cantidad = parseFloat(item.cantidad || 0);
-      const precioVenta = parseFloat(item.precio_venta || 0); // Este es el que manda
-      const precioBase = parseFloat(item.precio_base || 0);   // Solo referencia
+      const precioVenta = parseFloat(item.precio_venta || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
 
-      // Calculamos margen solo para guardarlo como dato, no afecta precios
-      let porcentajeCalculado = 0;
-      if (precioBase !== 0) {
-        porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
-      }
-      
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
           id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
@@ -346,19 +329,19 @@ export async function createCotizacion(req, res) {
         idCotizacion,
         item.id_producto,
         cantidad,
-        precioVenta, // Guardamos el Precio Venta REAL
-        precioBase,  // Guardamos el Precio Base REFERENCIAL
-        porcentajeCalculado.toFixed(2), // Guardamos el margen referencial
+        precioVenta,
+        precioBase,
+        0, 
         i + 1
       ]);
     }
-    
+
     res.status(201).json({
       success: true,
       data: { id_cotizacion: idCotizacion, numero_cotizacion: numeroCotizacion, fecha_vencimiento: fechaVencimientoCalculada },
       message: 'Cotización creada exitosamente'
     });
-    
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: error.message });

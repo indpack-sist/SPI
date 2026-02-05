@@ -129,7 +129,7 @@ function Cotizaciones() {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
-  const handleDescargarPDF = async (id_cotizacion, numero, cliente) => {
+  const handleDescargarPDF = async (id_cotizacion, numero, cliente, estadoActual) => {
     try {
       setLoading(true);
       setError(null);
@@ -159,6 +159,10 @@ function Cotizaciones() {
       window.URL.revokeObjectURL(url);
       
       setSuccessMessage('PDF descargado exitosamente');
+
+      if (estadoActual === 'Borrador' || estadoActual === 'Pendiente') {
+        await cargarDatos(true);
+      }
 
     } catch (err) {
       console.error("Error original:", err);
@@ -326,7 +330,7 @@ function Cotizaciones() {
             className="btn btn-sm btn-outline"
             onClick={(e) => {
               e.stopPropagation();
-              handleDescargarPDF(value, row.numero_cotizacion, row.cliente);
+              handleDescargarPDF(value, row.numero_cotizacion, row.cliente, row.estado);
             }}
             title="Descargar PDF"
           >
@@ -371,7 +375,6 @@ function Cotizaciones() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
-      {/* --- GRID DE ESTADISTICAS RESPONSIVE (Usa .stats-grid del CSS) --- */}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-content">
@@ -428,7 +431,6 @@ function Cotizaciones() {
         <div className="card-body">
           <div className="flex flex-col md:flex-row gap-4">
             
-            {/* Buscador con clase responsiva */}
             <div className="search-input-wrapper flex-1">
               <Search 
                 size={20} 
@@ -443,7 +445,6 @@ function Cotizaciones() {
               />
             </div>
 
-            {/* Filtros con scroll horizontal en móvil */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
               <Filter size={18} className="text-muted shrink-0" />
               <div className="flex gap-2">
@@ -492,7 +493,6 @@ function Cotizaciones() {
           </div>
         </div>
         
-        {/* Wrapper table-container para scroll horizontal en móvil */}
         <div className="card-body p-0">
           <div className="table-container">
             <Table

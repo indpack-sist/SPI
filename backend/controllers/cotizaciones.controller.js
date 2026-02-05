@@ -926,6 +926,13 @@ export async function descargarPDFCotizacion(req, res) {
       });
     }
 
+    await executeQuery(`
+        UPDATE cotizaciones 
+        SET estado = 'Enviada' 
+        WHERE id_cotizacion = ? 
+        AND estado IN ('Borrador', 'Pendiente')
+    `, [id]);
+
     const cotizacion = cotizacionResult.data[0];
 
     const detalleResult = await executeQuery(`

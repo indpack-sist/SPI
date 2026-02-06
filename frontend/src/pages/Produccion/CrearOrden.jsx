@@ -427,20 +427,25 @@ function CrearOrden() {
                     {mostrarDropdown && (
                         <div 
                           className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-xl max-h-96 overflow-y-auto overscroll-contain"
-                          style={{ zIndex: 9999 }}
+                          style={{ zIndex: 9999, backgroundColor: '#ffffff' }}
                         >
                             {productosFiltrados.length > 0 ? (
-                                productosFiltrados.map((prod) => (
-                                    <div
-                                        key={prod.id_producto}
-                                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-50 last:border-0"
-                                        onClick={() => handleSeleccionarProducto(prod)}
-                                    >
-                                        <div className="font-bold text-gray-800">{prod.codigo}</div>
-                                        <div className="text-gray-600">{prod.nombre}</div>
-                                        <div className="text-xs text-muted mt-1">Stock: {parseFloat(prod.stock_actual).toFixed(2)}</div>
-                                    </div>
-                                ))
+                                productosFiltrados.map((prod) => {
+                                    const stock = parseFloat(prod.stock_actual || 0);
+                                    return (
+                                        <div
+                                            key={prod.id_producto}
+                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-50 last:border-0"
+                                            onClick={() => handleSeleccionarProducto(prod)}
+                                        >
+                                            <div className="font-bold text-gray-800">{prod.codigo}</div>
+                                            <div className="text-gray-600">{prod.nombre}</div>
+                                            <div className={`text-xs mt-1 font-medium ${stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                Stock: {stock.toFixed(2)}
+                                            </div>
+                                        </div>
+                                    );
+                                })
                             ) : (
                                 <div className="px-4 py-3 text-sm text-gray-500 text-center">No se encontraron productos</div>
                             )}

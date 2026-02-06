@@ -199,6 +199,11 @@ export async function getOrdenVentaById(req, res) {
         dov.cantidad_despachada, 
         (dov.cantidad - dov.cantidad_despachada) AS cantidad_pendiente,
         dov.subtotal AS valor_venta,
+        CASE 
+            WHEN dov.precio_base > 0 THEN 
+                ROUND(((dov.precio_unitario - dov.precio_base) / dov.precio_base) * 100, 2)
+            ELSE 0.00 
+        END AS margen_visual_porcentaje,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
@@ -854,6 +859,7 @@ export async function updateOrdenVenta(req, res) {
 
     const stockReservado = ordenActual.stock_reservado === 1;
 
+    // Devolver stock si estaba reservado antes de borrar el detalle anterior
     if (stockReservado) {
       const detalleAnterior = await executeQuery(
         'SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?',
@@ -875,6 +881,7 @@ export async function updateOrdenVenta(req, res) {
       }
     }
 
+    // Cálculos de cabecera
     let subtotal = 0;
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
@@ -908,6 +915,7 @@ export async function updateOrdenVenta(req, res) {
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
 
+    // Validación de Crédito
     if (plazo_pago !== 'Contado') {
         const clienteInfo = await executeQuery(
             'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?', 
@@ -968,6 +976,7 @@ export async function updateOrdenVenta(req, res) {
       transporteDniFinal = transporte_dni || null;
     }
 
+    // UPDATE Cabecera
     const updateResult = await executeQuery(`
       UPDATE ordenes_venta 
       SET 
@@ -995,6 +1004,7 @@ export async function updateOrdenVenta(req, res) {
       return res.status(500).json({ success: false, error: updateResult.error });
     }
 
+    // Re-insertar detalles
     await executeQuery('DELETE FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
 
     const queriesNuevoDetalle = [];
@@ -1008,6 +1018,8 @@ export async function updateOrdenVenta(req, res) {
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (pctComision / 100);
       
+      // El margen se calcula solo para referencia interna si se deseara loguear
+      // pero NO se envía al campo de descuento.
       let porcentajeCalculado = 0;
       if (precioBase !== 0) {
         porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
@@ -1020,7 +1032,9 @@ export async function updateOrdenVenta(req, res) {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id, item.id_producto, cantidad, precioVenta, precioBase,
-          pctComision, montoComision, porcentajeCalculado.toFixed(2), stockReservado ? 1 : 0
+          pctComision, montoComision, 
+          0, // <--- CORRECCIÓN IMPORTANTE: Descuento siempre en 0
+          stockReservado ? 1 : 0
         ]
       });
 
@@ -1039,6 +1053,7 @@ export async function updateOrdenVenta(req, res) {
       }
     }
 
+    // Actualización de Cotización vinculada (si existe)
     if (ordenActual.id_cotizacion) {
         queriesNuevoDetalle.push({
             sql: 'DELETE FROM detalle_cotizacion WHERE id_cotizacion = ?',
@@ -1051,11 +1066,6 @@ export async function updateOrdenVenta(req, res) {
           const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
           const precioBase = parseFloat(item.precio_base || 0);
           
-          let porcentajeCalculado = 0;
-          if (precioBase !== 0) {
-            porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
-          }
-
           queriesNuevoDetalle.push({
             sql: `INSERT INTO detalle_cotizacion (
               id_cotizacion, id_producto, cantidad, precio_unitario, precio_base, 
@@ -1063,7 +1073,9 @@ export async function updateOrdenVenta(req, res) {
             ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             params: [
               ordenActual.id_cotizacion, item.id_producto, cantidad,
-              precioVenta, precioBase, porcentajeCalculado.toFixed(2), i + 1
+              precioVenta, precioBase, 
+              0, // <--- CORRECCIÓN: También en cotizaciones enviamos 0 descuento
+              i + 1
             ]
           });
         }

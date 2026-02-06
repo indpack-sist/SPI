@@ -88,7 +88,7 @@ function NuevaOrdenVenta() {
     porcentaje_impuesto: 18.00,
     prioridad: 'Media',
     tipo_venta: 'Contado', 
-    dias_credito: 0,      
+    dias_credito: 0,       
     plazo_pago: 'Contado',
     forma_pago: '',
     direccion_entrega: '',
@@ -574,6 +574,8 @@ function NuevaOrdenVenta() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
+    
     setError(null);
     
     if (!clienteSeleccionado) {

@@ -25,7 +25,6 @@ function CrearOrden() {
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
   const [generandoCorrelativo, setGenerandoCorrelativo] = useState(false);
   
-  // NUEVO ESTADO: Para guardar la unidad de medida del producto seleccionado
   const [unidadMedidaSeleccionada, setUnidadMedidaSeleccionada] = useState('');
 
   const [modoReceta, setModoReceta] = useState('porcentaje'); 
@@ -206,10 +205,7 @@ function CrearOrden() {
   const handleSeleccionarProducto = (producto) => {
     setFormData({ ...formData, id_producto_terminado: producto.id_producto });
     setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
-    
-    // CAMBIO: Capturar la unidad de medida y guardarla en el estado
     setUnidadMedidaSeleccionada(producto.unidad_medida || 'UND');
-    
     setMostrarDropdown(false);
     setListaInsumos([]);
   };
@@ -217,10 +213,7 @@ function CrearOrden() {
   const handleLimpiarProducto = () => {
     setFormData({ ...formData, id_producto_terminado: '' });
     setBusquedaProducto('');
-    
-    // CAMBIO: Limpiar la unidad de medida
     setUnidadMedidaSeleccionada('');
-    
     setListaInsumos([]);
     setMostrarDropdown(true); 
     setTimeout(() => {
@@ -433,8 +426,8 @@ function CrearOrden() {
 
                     {mostrarDropdown && (
                         <div 
-                          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg overflow-y-auto max-h-60"
-                          style={{ backgroundColor: 'white', zIndex: 9999 }}
+                          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-xl max-h-96 overflow-y-auto overscroll-contain"
+                          style={{ zIndex: 9999 }}
                         >
                             {productosFiltrados.length > 0 ? (
                                 productosFiltrados.map((prod) => (
@@ -456,7 +449,6 @@ function CrearOrden() {
                 </div>
 
                 <div className="form-group">
-                    {/* CAMBIO: Mostrar unidad dinámica en el label */}
                     <label className="form-label">
                         {esProductoLamina ? 'Cantidad Unidades (Meta) *' : 'Cantidad Unidades (Meta)'}
                         {unidadMedidaSeleccionada && (
@@ -841,7 +833,7 @@ function CrearOrden() {
           </div>
           {formData.cantidad_planificada && nuevoInsumo.porcentaje && (
              <p className="text-sm text-blue-600 mt-1 text-right font-medium">
-                Equivale a: {((parseFloat(formData.cantidad_planificada) * parseFloat(nuevoInsumo.porcentaje)) / 100).toFixed(2)} Kg
+               Equivale a: {((parseFloat(formData.cantidad_planificada) * parseFloat(nuevoInsumo.porcentaje)) / 100).toFixed(2)} Kg
              </p>
           )}
         </div>

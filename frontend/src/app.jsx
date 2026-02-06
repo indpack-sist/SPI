@@ -45,6 +45,7 @@ import DetalleGuiaRemision from './pages/Ventas/DetalleGuiaRemision';
 import GuiasTransportista from './pages/Ventas/GuiasTransportista';
 import NuevaGuiaTransportista from './pages/Ventas/NuevaGuiaTransportista';
 import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
+import ReporteVentas from './pages/Ventas/ReporteVentas'; // <--- NUEVO IMPORT
 
 import Compras from './pages/Compras/Compras';
 import NuevaCompra from './pages/Compras/NuevaCompra';
@@ -365,6 +366,17 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
+
+                      {/* --- NUEVA RUTA DE REPORTES VENTAS --- */}
+                      <Route 
+                        path="/ventas/reportes" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="reportes">
+                            <ReporteVentas />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      {/* ------------------------------------- */}
                       
                       <Route 
                         path="/compras" 

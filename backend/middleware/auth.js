@@ -97,7 +97,7 @@ const PERMISOS_POR_ROL = {
       proveedores: true,
       clientes: true,
       solicitudesCredito: false,
-      productos: true, 
+      productos: true,
       consultarStock: false,
       entradas: false,
       salidas: false,
@@ -109,7 +109,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -130,7 +130,7 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true
+      reportes: false
     }
   },
   'Ventas': {
@@ -157,9 +157,9 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,     
-      flota: true,         
-      proveedores: true,   
+      empleados: true,
+      flota: true,
+      proveedores: true,
       clientes: true,
       solicitudesCredito: true,
       productos: true,
@@ -180,10 +180,10 @@ const PERMISOS_POR_ROL = {
   'Produccion': {
     ui: {
       dashboard: false,
-      empleados: false,       
-      flota: false,           
-      proveedores: false,     
-      clientes: false,        
+      empleados: false,
+      flota: false,
+      proveedores: false,
+      clientes: false,
       solicitudesCredito: false,
       productos: true,
       consultarStock: true,
@@ -201,10 +201,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,        
-      flota: true,           
-      proveedores: true,      
-      clientes: true,         
+      empleados: true,
+      flota: true,
+      proveedores: true,
+      clientes: true,
       solicitudesCredito: false,
       productos: true,
       consultarStock: true,
@@ -229,7 +229,7 @@ const PERMISOS_POR_ROL = {
       proveedores: false,
       clientes: false,
       solicitudesCredito: false,
-      productos: true, 
+      productos: true,
       consultarStock: true,
       entradas: false,
       salidas: false,
@@ -245,12 +245,12 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,      
-      flota: true,          
-      proveedores: true,    
-      clientes: true,       
+      empleados: true,
+      flota: true,
+      proveedores: true,
+      clientes: true,
       solicitudesCredito: false,
-      productos: true, 
+      productos: true,
       consultarStock: true,
       entradas: true,
       salidas: true,
@@ -289,7 +289,7 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,      
+      empleados: true,
       flota: false,
       proveedores: false,
       clientes: false,
@@ -333,10 +333,10 @@ const PERMISOS_POR_ROL = {
     },
     api: {
       dashboard: false,
-      empleados: true,      
-      flota: true,          
-      proveedores: true,    
-      clientes: true,       
+      empleados: true,
+      flota: true,
+      proveedores: true,
+      clientes: true,
       solicitudesCredito: false,
       productos: true,
       consultarStock: true,

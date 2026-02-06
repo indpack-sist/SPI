@@ -3,7 +3,8 @@ import {
   Package, Search, Factory, Calendar, FileText, 
   Tags, ShoppingCart, FileCheck, ShoppingBag, 
   CreditCard, Banknote, FileInput, ArrowDownToLine, 
-  ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet
+  ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet,
+  TrendingUp // <--- AGREGADO: Nuevo icono para reportes
 } from 'lucide-react';
 
 export const menuConfig = [
@@ -42,6 +43,8 @@ export const menuConfig = [
       { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
       { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },
+      // NUEVO ITEM AGREGADO AQUÍ:
+      { path: '/ventas/reportes', icon: TrendingUp, label: 'Reportes', modulo: 'reportes', color: '#884EA0' },
     ]
   },
   {

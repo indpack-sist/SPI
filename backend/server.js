@@ -36,7 +36,7 @@ import cuentasPagoRoutes from './routes/cuentas-pago.routes.js';
 import pagosCobranzasRoutes from './routes/pagos-cobranzas.routes.js';
 import notificacionesRoutes from './routes/notificaciones.routes.js';
 import archivosRoutes from './routes/archivos.routes.js';
-import reportesRoutes from './routes/reportes.routes.js';
+import reportesRoutes from './routes/reportesventas.routes.js';
 
 dotenv.config();
 

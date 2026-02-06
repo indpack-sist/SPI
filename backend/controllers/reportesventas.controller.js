@@ -1,4 +1,4 @@
-import db from '../config/db.js'; // Tu conexión a la BD
+import db from '../config/database.js'; // Tu conexión a la BD
 
 export const getReporteVentas = async (req, res) => {
     try {

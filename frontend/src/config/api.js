@@ -776,7 +776,7 @@ export const notificacionesAPI = {
 };
 export const reportesAPI = {
   getSireVentas: (params) => api.get('/reportes/sire/ventas', { params }),
-  getSireCompras: (params) => api.get('/reportes/sire/compras', { params })
+  getSireCompras: (params) => api.get('/reportes/sire/compras', { params }),
   getVentas: (params) => api.get('/reportes/ventas', { params })
 };
 export const archivosAPI = {

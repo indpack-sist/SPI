@@ -216,9 +216,8 @@ export async function createCompra(req, res) {
       tipo_impuesto, porcentaje_impuesto, observaciones, id_responsable, contacto_proveedor,
       direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
       serie_documento, numero_documento, fecha_emision_documento, url_comprobante, cronograma,
-      // NUEVOS PARAMETROS PARA CONTROLAR EL PAGO
-      accion_pago, // 'completo', 'adelanto', 'registro'
-      monto_adelanto // Cantidad si es adelanto
+      accion_pago, 
+      monto_adelanto 
     } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
@@ -227,7 +226,6 @@ export async function createCompra(req, res) {
     if (!id_registrado_por) return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     if (!moneda) return res.status(400).json({ success: false, error: 'Especifique la moneda' });
 
-    // --- CÁLCULOS DE TOTALES ---
     let subtotal = 0;
     let subtotalRecepcion = 0;
     let tieneItemsParaRecepcion = false;
@@ -263,32 +261,30 @@ export async function createCompra(req, res) {
     const impuestoRecepcion = subtotalRecepcion * (porcentaje / 100);
     const totalRecepcion = subtotalRecepcion + impuestoRecepcion;
 
-    // --- LÓGICA DE PAGO AL CONTADO/INICIAL (NUEVO) ---
     let montoAPagarAhora = 0;
 
-    // Si es Contado, miramos la acción elegida por el usuario
     if (tipo_compra === 'Contado') {
         if (accion_pago === 'completo') {
             montoAPagarAhora = total;
         } else if (accion_pago === 'adelanto') {
             montoAPagarAhora = parseFloat(monto_adelanto || 0);
         } else {
-            // Caso 'registro': No se paga nada ahora, se registra la deuda
             montoAPagarAhora = 0;
         }
     } else {
-        // Si es Crédito/Letras, usamos la lógica de adelanto si existe, o 0
         montoAPagarAhora = parseFloat(monto_adelanto || 0);
+    }
+
+    if (montoAPagarAhora > 0 && !id_cuenta_pago) {
+        return res.status(400).json({ success: false, error: 'Debe seleccionar una cuenta de pago para realizar el pago inicial.' });
     }
 
     const saldoPendiente = total - montoAPagarAhora;
     
-    // Determinamos estado de pago
     let estadoPago = 'Pendiente';
     if (saldoPendiente <= 0.01) estadoPago = 'Pagado';
     else if (montoAPagarAhora > 0) estadoPago = 'Parcial';
 
-    // Validaciones de Crédito
     const esCredito = ['Credito', 'Letra', 'Letras'].includes(tipo_compra);
     if ((tipo_compra === 'Letra' || tipo_compra === 'Letras') && (!numero_cuotas || parseInt(numero_cuotas) < 1)) {
         return res.status(400).json({ success: false, error: 'Para compras a Letras, debe indicar más de 1 cuota/letra.' });
@@ -297,7 +293,6 @@ export async function createCompra(req, res) {
     let cronogramaDefinido = 0;
     if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
         const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
-        // Validamos contra el saldo pendiente real
         if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
             return res.status(400).json({ 
                 success: false, 
@@ -311,7 +306,6 @@ export async function createCompra(req, res) {
     await connection.beginTransaction();
 
     try {
-      // 1. Validar Cuenta y Moneda (Solo si vamos a mover dinero)
       let cuenta = null;
       let tipoCambioFinal = parseFloat(tipo_cambio || 1.0000);
 
@@ -323,18 +317,14 @@ export async function createCompra(req, res) {
         if (cuenta.moneda !== moneda) {
             if (!tipo_cambio || parseFloat(tipo_cambio) <= 0) throw new Error(`Falta tipo de cambio: ${cuenta.moneda} vs ${moneda}`);
         }
-        
-        // Validar saldo si se va a pagar algo ahora
+
         if (montoAPagarAhora > 0) {
              if (parseFloat(cuenta.saldo_actual) < montoAPagarAhora) {
-                 throw new Error(`Saldo insuficiente en la cuenta ${cuenta.nombre} para realizar el pago inicial.`);
+                 throw new Error(`Saldo insuficiente en la cuenta ${cuenta.nombre}.`);
              }
         }
-      } else if (montoAPagarAhora > 0) {
-          throw new Error('Debe seleccionar una cuenta de pago para registrar un pago inicial.');
       }
 
-      // 2. Generar Número de Orden
       const [ultimaResult] = await connection.query('SELECT numero_orden FROM ordenes_compra ORDER BY id_orden_compra DESC LIMIT 1');
       let numeroSecuencia = 1;
       if (ultimaResult.length > 0) {
@@ -343,14 +333,13 @@ export async function createCompra(req, res) {
       }
       const numeroCompra = `COM-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(5, '0')}`;
 
-      // 3. Calcular Fecha Vencimiento
       let fechaVencimientoFinal = fecha_vencimiento;
       if (!fechaVencimientoFinal) {
         const fechaBase = new Date(fecha_emision);
-        let diasTotal = 0; // Si es contado puro, vence hoy (o fecha base)
+        let diasTotal = 0; 
         
         if (esCredito) {
-          diasTotal = 30; // Default
+          diasTotal = 30; 
           if (dias_credito) diasTotal = parseInt(dias_credito);
           else if (numero_cuotas && dias_entre_cuotas) diasTotal = parseInt(numero_cuotas) * parseInt(dias_entre_cuotas);
         }
@@ -361,7 +350,6 @@ export async function createCompra(req, res) {
       let estadoOrden = 'Confirmada';
       if (tipo_recepcion === 'Total') estadoOrden = 'Recibida';
 
-      // 4. Insertar Orden de Compra
       const [resultCompra] = await connection.query(`
         INSERT INTO ordenes_compra (
           numero_orden, id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
@@ -369,8 +357,8 @@ export async function createCompra(req, res) {
           numero_cuotas, dias_entre_cuotas, dias_credito, contacto_proveedor, direccion_entrega,
           observaciones, id_responsable, id_registrado_por, subtotal, igv, total,
           estado, estado_pago, saldo_pendiente, monto_pagado, cronograma_definido,
-          tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante, forma_pago_detalle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         numeroCompra, id_proveedor, id_cuenta_pago || null, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
         prioridad || 'Media', moneda, tipoCambioFinal, tipoImpuestoFinal, porcentaje, tipo_compra,
@@ -380,18 +368,16 @@ export async function createCompra(req, res) {
         contacto_proveedor || null, direccion_entrega || null, observaciones, id_responsable || null, id_registrado_por,
         subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, montoAPagarAhora, 
         cronogramaDefinido,
-        tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null
+        tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null,
+        tipo_compra
       ]);
 
       const idCompra = resultCompra.insertId;
 
-      // 5. EJECUTAR EL PAGO REAL (Descontar saldo y Movimiento) - ¡ESTO FALTABA!
       if (montoAPagarAhora > 0 && id_cuenta_pago) {
-          // A. Descontar de la cuenta
           await connection.query('UPDATE cuentas_pago SET saldo_actual = saldo_actual - ? WHERE id_cuenta = ?', [montoAPagarAhora, id_cuenta_pago]);
           
-          // B. Registrar Movimiento
-          const conceptoMov = accion_pago === 'completo' 
+          const conceptoMov = (tipo_compra === 'Contado' && Math.abs(montoAPagarAhora - total) < 0.1)
               ? `Pago Compra Contado ${numeroCompra}` 
               : `Adelanto Compra ${numeroCompra}`;
               
@@ -412,7 +398,6 @@ export async function createCompra(req, res) {
           ]);
       }
       
-      // 6. Insertar Cronograma (Letras)
       if (cronogramaDefinido === 1) {
           for (const letra of cronograma) {
               await connection.query(`
@@ -423,7 +408,6 @@ export async function createCompra(req, res) {
           }
       }
 
-      // 7. Insertar Entrada (Inventario)
       let idEntrada = null;
       if (tieneItemsParaRecepcion) {
         const [primerProducto] = await connection.query('SELECT id_tipo_inventario FROM productos WHERE id_producto = ?', [detalle[0].id_producto]);
@@ -432,9 +416,6 @@ export async function createCompra(req, res) {
 
         const estadoIngresoFinal = (tipo_recepcion === 'Total') ? 'Completo' : 'Parcial';
         const fechaIngresoFinal = (tipo_recepcion === 'Total') ? new Date() : null;
-
-        // Nota: En la entrada se registra lo pagado proporcionalmente o el total si es contado, 
-        // pero para efectos de inventario el 'estado_pago' de la entrada es informativo.
         const pagadoEntrada = montoAPagarAhora >= totalRecepcion ? totalRecepcion : montoAPagarAhora;
 
         const [resultEntrada] = await connection.query(`
@@ -454,7 +435,6 @@ export async function createCompra(req, res) {
         idEntrada = resultEntrada.insertId;
       }
 
-      // 8. Insertar Detalle
       for (let i = 0; i < detalle.length; i++) {
         const item = detalle[i];
         const precioUnitario = parseFloat(item.precio_unitario);
@@ -470,7 +450,6 @@ export async function createCompra(req, res) {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [idCompra, item.id_producto, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
 
-        // Actualizar Stock y Costo Promedio
         if (idEntrada && cantidadRecibida > 0) {
            const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
            let costoPEN = 0, costoUSD = 0;

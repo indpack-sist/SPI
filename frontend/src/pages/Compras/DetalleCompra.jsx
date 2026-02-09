@@ -6,7 +6,7 @@ import {
   CreditCard, DollarSign, TrendingUp,
   PackageCheck, FileText, Plus, Receipt,
   RefreshCw, PackagePlus, Truck, AlertTriangle,
-  ArrowRightLeft
+  ArrowRightLeft, ExternalLink, MapPin, FileCheck
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -153,12 +153,12 @@ function DetalleCompra() {
   const handleAbrirPagarCuota = (cuota) => {
     setCuotaSeleccionada(cuota);
     const saldoPendiente = parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0);
-    setDatosPago({ ...datosPago, monto_pagado: saldoPendiente.toFixed(2), observaciones: `Pago Letra ${cuota.numero_cuota}` });
+    setDatosPago({ ...datosPago, monto_pagado: saldoPendiente.toFixed(2), observaciones: `Pago Cuota ${cuota.numero_cuota}` });
     setModalPagarCuotaOpen(true);
   };
 
   const handleAbrirPagoDirecto = () => {
-    setDatosPago({ ...datosPago, monto_pagado: parseFloat(compra.saldo_pendiente).toFixed(2), observaciones: 'Amortización' });
+    setDatosPago({ ...datosPago, monto_pagado: parseFloat(compra.saldo_pendiente).toFixed(2), observaciones: 'Amortización / Regularización' });
     setModalPagoDirectoOpen(true);
   };
 
@@ -214,7 +214,7 @@ function DetalleCompra() {
   const handleAbrirCronograma = () => {
     const numCuotas = compra.numero_cuotas || 1;
     const montoBase = parseFloat(compra.saldo_pendiente) / numCuotas;
-    const fechaBase = new Date(compra.fecha_vencimiento);
+    const fechaBase = new Date(compra.fecha_vencimiento || new Date());
     const nuevoCrono = [];
     
     for(let i=1; i<=numCuotas; i++) {
@@ -235,7 +235,7 @@ function DetalleCompra() {
           setLoading(true);
           const response = await comprasAPI.establecerCronograma(id, { cuotas: cronogramaForm });
           if(response.data.success) {
-              setSuccess('Cronograma de letras establecido');
+              setSuccess('Cronograma establecido');
               setModalCronogramaOpen(false);
               await cargarDatos();
           } else setError(response.data.error);
@@ -393,9 +393,9 @@ function DetalleCompra() {
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
   
-  const esCredito = compra.tipo_compra === 'Credito' || compra.tipo_compra === 'Crédito';
+  const esCredito = compra.tipo_compra === 'Crédito' || compra.forma_pago_detalle === 'Crédito';
   const esLetras = compra.tipo_compra === 'Letras' || compra.forma_pago_detalle === 'Letras';
-  const esContado = compra.tipo_compra === 'Contado';
+  const esContado = compra.tipo_compra === 'Contado' || compra.forma_pago_detalle === 'Contado';
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -410,13 +410,19 @@ function DetalleCompra() {
                 <span className="flex items-center gap-1"><Calendar size={14}/> {formatearFecha(compra.fecha_emision)}</span>
                 <span className={`badge ${compra.estado === 'Recibida' ? 'badge-success' : compra.estado === 'En Tránsito' ? 'badge-info' : compra.estado === 'Cancelada' ? 'badge-danger' : 'badge-warning'}`}>{compra.estado}</span>
                 {compra.usa_fondos_propios === 1 && <span className="badge badge-purple">Fondos Propios</span>}
-                <span className="badge badge-outline">{compra.tipo_compra}</span>
+                <span className="badge badge-outline">{compra.forma_pago_detalle || compra.tipo_compra}</span>
             </div>
           </div>
         </div>
         
         <div className="flex gap-2 flex-wrap justify-end">
+          {compra.url_comprobante && (
+             <a href={compra.url_comprobante} target="_blank" rel="noopener noreferrer" className="btn btn-outline text-blue-600 border-blue-200 hover:bg-blue-50">
+                <FileCheck size={18} /> Ver Comprobante
+             </a>
+          )}
           <button className="btn btn-outline" onClick={handleDescargarPDF}><Download size={18} /> PDF</button>
+          
           {compra.estado !== 'Cancelada' && (
             <>
               {compra.estado_pago !== 'Pagado' && !compra.usa_fondos_propios && (
@@ -424,11 +430,14 @@ function DetalleCompra() {
                     <ArrowRightLeft size={18} /> Mover Cuenta
                   </button>
               )}
-              {compra.estado_pago !== 'Pagado' && esContado && !compra.usa_fondos_propios && (
+              
+              {/* Botón dinámico para pagos: Aplica a Contado pendiente o Crédito sin cuotas */}
+              {compra.estado_pago !== 'Pagado' && !compra.usa_fondos_propios && (esContado || (esCredito && !compra.cronograma_definido)) && (
                   <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
-                    <DollarSign size={18} /> Registrar Pago
+                    <DollarSign size={18} /> {esContado ? 'Regularizar Pago' : 'Amortizar Deuda'}
                   </button>
               )}
+
               {compra.estado_pago !== 'Pagado' && (esCredito || esLetras) && !compra.cronograma_definido && (
                   <button className="btn btn-warning text-white" onClick={handleAbrirCronograma}>
                     <FileText size={18} /> Definir Cronograma
@@ -454,7 +463,13 @@ function DetalleCompra() {
         <div className="card-body grid grid-cols-1 md:grid-cols-4 gap-6">
             <div><p className="text-sm text-muted">Total Compra</p><p className="text-2xl font-bold">{formatearMoneda(compra.total)}</p></div>
             <div><p className="text-sm text-muted">Pagado a la fecha</p><p className="text-2xl font-bold text-success">{formatearMoneda(compra.monto_pagado)}</p></div>
-            <div><p className="text-sm text-muted">Saldo Pendiente</p><p className="text-2xl font-bold text-danger">{formatearMoneda(compra.saldo_pendiente)}</p></div>
+            <div>
+                <p className="text-sm text-muted">Saldo Pendiente</p>
+                <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold text-danger">{formatearMoneda(compra.saldo_pendiente)}</p>
+                    {esContado && compra.saldo_pendiente > 0 && <span className="badge badge-warning text-xs">Regularizar</span>}
+                </div>
+            </div>
             <div>
                 <p className="text-sm text-muted">Vencimiento</p>
                 <div className="flex items-center gap-2">
@@ -560,6 +575,22 @@ function DetalleCompra() {
                     </table>
                 </div>
             </div>
+            
+            {/* Notas y Direccion */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="card">
+                    <div className="card-header bg-gray-50"><h3 className="card-title flex gap-2 text-sm"><FileText size={16}/> Notas Internas</h3></div>
+                    <div className="card-body text-sm text-gray-600">
+                        {compra.observaciones ? compra.observaciones : <span className="italic text-muted">Sin observaciones.</span>}
+                    </div>
+                </div>
+                <div className="card">
+                    <div className="card-header bg-gray-50"><h3 className="card-title flex gap-2 text-sm"><MapPin size={16}/> Dirección de Entrega</h3></div>
+                    <div className="card-body text-sm text-gray-600">
+                        {compra.direccion_entrega ? compra.direccion_entrega : <span className="italic text-muted">No especificada.</span>}
+                    </div>
+                </div>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -573,6 +604,11 @@ function DetalleCompra() {
                         <p className="text-xs font-bold text-muted uppercase">Documento Físico</p>
                         <p className="font-mono text-lg">{compra.serie_documento}-{compra.numero_documento}</p>
                         <p className="text-xs text-muted">{compra.tipo_documento}</p>
+                        {compra.url_comprobante && (
+                            <a href={compra.url_comprobante} target="_blank" rel="noreferrer" className="text-blue-600 text-xs hover:underline flex items-center gap-1 mt-1">
+                                <ExternalLink size={12}/> Ver archivo adjunto
+                            </a>
+                        )}
                     </div>
                 </div>
             </div>

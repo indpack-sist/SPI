@@ -112,7 +112,7 @@ function Compras() {
     const configs = {
       'Contado': { clase: 'text-green-700', icono: Wallet, texto: 'Contado' },
       'Crédito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' },
-      'Credito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' }, // Soporte sin tilde
+      'Credito': { clase: 'text-orange-700', icono: CreditCard, texto: 'Crédito' },
       'Letras': { clase: 'text-purple-700', icono: Receipt, texto: 'Letras' },
       'Letra': { clase: 'text-purple-700', icono: Receipt, texto: 'Letras' }
     };
@@ -171,7 +171,6 @@ function Compras() {
         const config = getFormaPagoConfig(formaPago);
         const Icono = config.icono;
         
-        // Normalizamos para comparar
         const esCredito = formaPago === 'Crédito' || formaPago === 'Credito';
         const esLetras = formaPago === 'Letras' || formaPago === 'Letra';
 
@@ -221,18 +220,26 @@ function Compras() {
       accessor: 'total',
       width: '130px',
       align: 'right',
-      render: (value, row) => (
-        <div>
-          <div className="font-bold text-gray-800">
-            {formatearMoneda(value, row.moneda)}
-          </div>
-          {parseFloat(row.saldo_pendiente) > 0 && (
-            <div className="text-xs text-danger font-medium">
-              Debe: {formatearMoneda(row.saldo_pendiente, row.moneda)}
+      render: (value, row) => {
+        const esContado = (row.forma_pago_detalle || row.tipo_compra) === 'Contado';
+        return (
+            <div>
+            <div className="font-bold text-gray-800">
+                {formatearMoneda(value, row.moneda)}
             </div>
-          )}
-        </div>
-      )
+            {parseFloat(row.saldo_pendiente) > 0 && (
+                <div className="flex flex-col items-end">
+                    <div className="text-xs text-danger font-medium">
+                    Debe: {formatearMoneda(row.saldo_pendiente, row.moneda)}
+                    </div>
+                    {esContado && (
+                        <span className="badge badge-warning text-[9px] mt-0.5">Regularizar</span>
+                    )}
+                </div>
+            )}
+            </div>
+        );
+      }
     },
     {
       header: 'Pago',

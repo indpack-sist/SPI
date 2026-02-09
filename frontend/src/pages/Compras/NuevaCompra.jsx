@@ -4,7 +4,8 @@ import {
   ArrowLeft, Save, ShoppingCart, Building,
   Plus, Trash2, Search, Wallet, CreditCard,
   ArrowRightLeft, PackagePlus, UserPlus, FileText,
-  Receipt, User, CheckCircle, Calendar, AlertCircle
+  Receipt, User, CheckCircle, Calendar, AlertCircle,
+  Banknote, FileClock
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -40,6 +41,8 @@ function NuevaCompra() {
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   const [requiereConversion, setRequiereConversion] = useState(false);
   
+  const [accionPago, setAccionPago] = useState('completo');
+
   const [formData, setFormData] = useState({
     id_proveedor: '',
     id_cuenta_pago: '',
@@ -98,12 +101,15 @@ function NuevaCompra() {
   
   useEffect(() => {
     if (formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios) {
-      setFormData(prev => ({ ...prev, monto_pagado_inicial: totales.total }));
+      if (accionPago === 'completo') {
+        setFormData(prev => ({ ...prev, monto_pagado_inicial: totales.total }));
+      } else if (accionPago === 'registro') {
+        setFormData(prev => ({ ...prev, monto_pagado_inicial: 0, id_cuenta_pago: '' }));
+      }
     }
-  }, [totales.total, formData.forma_pago_detalle, formData.usa_fondos_propios]);
+  }, [totales.total, formData.forma_pago_detalle, formData.usa_fondos_propios, accionPago]);
 
   useEffect(() => {
-    // Solo calculamos cronograma si NO es Letras pendiente
     if ((formData.tipo_compra === 'Credito' || (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro)) && totales.total > 0) {
       calcularCronograma();
     }
@@ -272,13 +278,15 @@ function NuevaCompra() {
       ...prev,
       forma_pago_detalle: forma,
       tipo_compra: esLetras ? 'Letras' : (esCredito ? 'Credito' : 'Contado'),
-      letras_pendientes_registro: esLetras, // Por defecto pendiente si es Letras
+      letras_pendientes_registro: esLetras, 
       numero_cuotas: esCredito || esLetras ? (prev.numero_cuotas || 1) : 0,
       dias_credito: esCredito || esLetras ? 30 : 0,
       dias_entre_cuotas: esCredito || esLetras ? 30 : 0,
       monto_pagado_inicial: esContado && !prev.usa_fondos_propios ? totales.total : 0,
       id_cuenta_pago: prev.usa_fondos_propios ? '' : prev.id_cuenta_pago
     }));
+    
+    if (esContado) setAccionPago('completo');
   };
 
   const calcularMontoConversion = () => {
@@ -296,9 +304,13 @@ function NuevaCompra() {
     if (detalle.length === 0) { setError('Agregue productos'); return; }
     if (!formData.moneda) { setError('Especifique moneda'); return; }
     if (formData.usa_fondos_propios && !formData.id_comprador) { setError('Debe seleccionar al comprador'); return; }
-    if (!formData.usa_fondos_propios && formData.forma_pago_detalle === 'Contado' && !formData.id_cuenta_pago) { setError('Seleccione cuenta de pago'); return; }
     
-    // Validar cuotas solo si NO es letras pendiente
+    if (!formData.usa_fondos_propios && formData.forma_pago_detalle === 'Contado') {
+        if (accionPago !== 'registro' && !formData.id_cuenta_pago) {
+            setError('Seleccione cuenta de pago para realizar el desembolso'); return; 
+        }
+    }
+    
     if ((formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro) && parseInt(formData.numero_cuotas) < 1) {
         setError('Debe indicar al menos 1 cuota/letra.'); return;
     }
@@ -326,6 +338,8 @@ function NuevaCompra() {
         tipo_cambio: requiereConversion ? parseFloat(formData.tipo_cambio) : 1.0,
         monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
         usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
+        accion_pago: accionPago,
+        monto_adelanto: parseFloat(formData.monto_pagado_inicial || 0),
         cronograma: cronogramaPayload,
         detalle: detalle.map(item => ({
           id_producto: item.id_producto,
@@ -536,22 +550,60 @@ function NuevaCompra() {
                             </div>
 
                             {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
-                                <div className="slide-down space-y-3">
-                                    <div className="alert alert-success">
-                                        <CheckCircle size={16} />
-                                        <div><p className="font-bold">Pago Inmediato</p><p>Se registrará un egreso por {formatearMoneda(totales.total)}.</p></div>
+                                <div className="slide-down space-y-3 pt-2 border-t border-dashed">
+                                    <div className="grid grid-cols-3 gap-2 mb-3">
+                                        <button 
+                                            type="button" 
+                                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${accionPago === 'completo' ? 'bg-green-50 border-green-500 text-green-700 font-bold' : 'hover:bg-gray-50 text-muted'}`}
+                                            onClick={() => setAccionPago('completo')}
+                                        >
+                                            <CheckCircle size={16}/> Completo
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${accionPago === 'adelanto' ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' : 'hover:bg-gray-50 text-muted'}`}
+                                            onClick={() => setAccionPago('adelanto')}
+                                        >
+                                            <Banknote size={16}/> Adelanto
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${accionPago === 'registro' ? 'bg-orange-50 border-orange-500 text-orange-700 font-bold' : 'hover:bg-gray-50 text-muted'}`}
+                                            onClick={() => setAccionPago('registro')}
+                                        >
+                                            <FileClock size={16}/> Solo Reg.
+                                        </button>
                                     </div>
-                                    <div className="form-group">
-                                        <label className="form-label text-xs uppercase text-muted">Cuenta de Origen</label>
-                                        <select className="form-select" value={formData.id_cuenta_pago} onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} required>
-                                            <option value="">Seleccionar cuenta...</option>
-                                            {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
-                                        </select>
-                                    </div>
+
+                                    {accionPago === 'completo' && (
+                                        <div className="alert alert-success py-2 text-sm">
+                                            <CheckCircle size={14} /> Se descontará <strong>{formatearMoneda(totales.total)}</strong> de la cuenta.
+                                        </div>
+                                    )}
+                                    {accionPago === 'adelanto' && (
+                                        <div className="form-group">
+                                            <label className="form-label text-xs uppercase text-muted">Monto Adelanto</label>
+                                            <input type="number" className="form-input font-bold" value={formData.monto_pagado_inicial} onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} min="0.01" max={totales.total} step="0.01" />
+                                        </div>
+                                    )}
+                                    {accionPago === 'registro' && (
+                                        <div className="alert alert-warning py-2 text-sm">
+                                            <AlertCircle size={14} /> Se generará una cuenta por pagar. No se mueve dinero ahora.
+                                        </div>
+                                    )}
+
+                                    {accionPago !== 'registro' && (
+                                        <div className="form-group">
+                                            <label className="form-label text-xs uppercase text-muted">Cuenta de Origen</label>
+                                            <select className="form-select" value={formData.id_cuenta_pago} onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} required>
+                                                <option value="">Seleccionar cuenta...</option>
+                                                {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            {/* CONFIGURACIÓN ESPECÍFICA PARA LETRAS */}
                             {formData.forma_pago_detalle === 'Letras' && (
                                 <div className="slide-down">
                                     <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
@@ -572,7 +624,6 @@ function NuevaCompra() {
                                 </div>
                             )}
 
-                            {/* LOGICA CORREGIDA: Mostrar inputs solo si es Crédito O (Letras Y NO Pendiente) */}
                             {(formData.forma_pago_detalle === 'Credito' || (formData.forma_pago_detalle === 'Letras' && !formData.letras_pendientes_registro)) && (
                                 <div className="slide-down space-y-4 pt-2 border-t border-dashed">
                                     
@@ -595,7 +646,6 @@ function NuevaCompra() {
                                         </div>
                                     </div>
 
-                                    {/* Previsualización del Cronograma si es Letras y NO está pendiente */}
                                     {formData.forma_pago_detalle === 'Letras' && cronograma.length > 0 && (
                                         <div className="bg-gray-50 rounded border overflow-hidden">
                                             <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">

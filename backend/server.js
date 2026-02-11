@@ -84,7 +84,6 @@ io.on('connection', (socket) => {
     if (id_usuario) {
       socket.join(`usuario_${id_usuario}`);
       console.log(`Usuario ${id_usuario} unido a sala: usuario_${id_usuario}`);
-      console.log(`Salas activas del socket:`, Array.from(socket.rooms));
     } else {
       console.warn('Intento de identificacion sin id_usuario');
     }
@@ -167,7 +166,6 @@ app.use('/api/archivos', (req, res, next) => {
     next();
 }, verificarToken, archivosRoutes);
 
-
 app.use((req, res) => {
   res.status(404).json({
     error: 'Ruta no encontrada',
@@ -175,7 +173,6 @@ app.use((req, res) => {
     method: req.method
   });
 });
-
 
 app.use((err, req, res, next) => {
   console.error('='.repeat(80));
@@ -234,80 +231,22 @@ app.use((err, req, res, next) => {
   });
 });
 
-async function startServer() {
-  try {
-    const dbConnected = await testConnection();
-    
-    if (!dbConnected) {
-      console.error('No se pudo conectar a la base de datos. Verifica la configuración.');
-      process.exit(1);
-    }
+httpServer.listen(PORT, () => {
+  console.log('='.repeat(80));
+  console.log(`SERVIDOR INDPACK ERP - INICIADO EXITOSAMENTE`);
+  console.log('='.repeat(80));
+  console.log(`Puerto: ${PORT}`);
+  console.log(`Entorno: ${process.env.NODE_ENV || 'development'}`);
+  console.log('='.repeat(80));
 
-    httpServer.listen(PORT, () => {
-      console.log('='.repeat(80));
-      console.log(`SERVIDOR INDPACK ERP - INICIADO EXITOSAMENTE`);
-      console.log('='.repeat(80));
-      console.log(`Puerto: ${PORT}`);
-      console.log(`Entorno: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`URL Local: http://localhost:${PORT}`);
-      console.log(`Health Check: http://localhost:${PORT}/api/health`);
-      console.log(`Base de datos: CONECTADA`);
-      console.log('='.repeat(80));
-      console.log('MODULOS DISPONIBLES CON CONTROL DE ACCESO:');
-      console.log('');
-      console.log('AUTENTICACION (Sin restriccion):');
-      console.log('   - /api/auth');
-      console.log('');
-      console.log('MODULOS BASE:');
-      console.log('   - /api/empleados [empleados]');
-      console.log('   - /api/flota [flota]');
-      console.log('   - /api/proveedores [proveedores]');
-      console.log('   - /api/clientes [clientes]');
-      console.log('   - /api/solicitudes-credito [solicitudesCredito]');
-      console.log('');
-      console.log('PRODUCTOS Y AJUSTES:');
-      console.log('   - /api/productos [productos]');
-      console.log('   - /api/ajustes [productos]');
-      console.log('');
-      console.log('INVENTARIO:');
-      console.log('   - /api/inventario/movimientos-entradas [entradas]');
-      console.log('   - /api/inventario/movimientos-salidas [salidas]');
-      console.log('   - /api/inventario/transferencias [transferencias]');
-      console.log('   - /api/inventario [general]');
-      console.log('');
-      console.log('PRODUCCION:');
-      console.log('   - /api/produccion/ordenes [ordenesProduccion]');
-      console.log('');
-      console.log('VENTAS:');
-      console.log('   - /api/cotizaciones [cotizaciones]');
-      console.log('   - /api/ordenes-venta [ordenesVenta]');
-      console.log('   - /api/guias-remision [guiasRemision]');
-      console.log('   - /api/guias-transportista [guiasTransportista]');
-      console.log('   - /api/listas-precios [listasPrecios]');
-      console.log('');
-      console.log('COMPRAS:');
-      console.log('   - /api/compras [compras]');
-      console.log('');
-      console.log('ANALYTICS & REPORTES:');
-      console.log('   - /api/dashboard [dashboard]');
-      console.log('   - /api/reportes [reportes]');
-      console.log('');
-      console.log('FINANZAS:');
-      console.log('   - /api/cuentas-pago [cuentasPago]');
-      console.log('   - /api/pagos-cobranzas [pagosCobranzas]');
-      console.log('');
-      console.log('SISTEMA:');
-      console.log('   - /api/notificaciones [General]');
-      console.log('');
-      console.log('='.repeat(80));
-      console.log('SISTEMA LISTO PARA RECIBIR PETICIONES');
-      console.log('='.repeat(80));
-    });
-  } catch (error) {
-    console.error('Error al iniciar el servidor:', error);
-    process.exit(1);
-  }
-}
+  testConnection().then(connected => {
+    if (connected) {
+      console.log('✓ BASE DE DATOS: CONECTADA CORRECTAMENTE');
+    } else {
+      console.error('⚠️ ALERTA: EL SERVIDOR WEB ESTA ACTIVO PERO LA BD FALLO');
+    }
+  });
+});
 
 process.on('SIGTERM', () => {
   console.log('\nSIGTERM recibido. Cerrando servidor gracefully...');
@@ -334,5 +273,3 @@ process.on('uncaughtException', (error) => {
   console.error('='.repeat(80));
   process.exit(1);
 });
-
-startServer();

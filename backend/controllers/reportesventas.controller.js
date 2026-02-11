@@ -53,27 +53,27 @@ export const getReporteVentas = async (req, res) => {
         const ordenesIds = ordenes.map(o => o.id_orden_venta);
         let detallesMap = {};
 
-        if (ordenesIds.length > 0) {
-            const [detalles] = await db.query(`
-                SELECT 
-                    dov.*,
-                    p.nombre as producto_nombre,
-                    p.codigo as codigo_producto,
-                    p.unidad_medida,
-                    p.descripcion as producto_descripcion
-                FROM detalle_orden_venta dov
-                LEFT JOIN productos p ON dov.id_producto = p.id_producto
-                WHERE dov.id_orden_venta IN (?)
-                ORDER BY dov.id_detalle_orden
-            `, [ordenesIds]);
+       if (ordenesIds.length > 0) {
+    const [detalles] = await db.query(`
+        SELECT 
+            dov.*,
+            p.nombre as producto_nombre,
+            p.codigo as codigo_producto,
+            p.unidad_medida,
+            p.descripcion as producto_descripcion
+        FROM detalle_orden_venta dov
+        LEFT JOIN productos p ON dov.id_producto = p.id_producto
+        WHERE dov.id_orden_venta IN (?)
+        ORDER BY dov.id_detalle
+    `, [ordenesIds]);
 
-            detalles.forEach(det => {
-                if (!detallesMap[det.id_orden_venta]) {
-                    detallesMap[det.id_orden_venta] = [];
-                }
-                detallesMap[det.id_orden_venta].push(det);
-            });
+    detalles.forEach(det => {
+        if (!detallesMap[det.id_orden_venta]) {
+            detallesMap[det.id_orden_venta] = [];
         }
+        detallesMap[det.id_orden_venta].push(det);
+    });
+}
 
         let kpis = {
             totalVentasPEN: 0,
@@ -217,7 +217,7 @@ export const getReporteVentas = async (req, res) => {
                 motivo_rechazo: orden.motivo_rechazo,
                 observaciones_verificador: orden.observaciones_verificador,
                 detalles: detallesOrden.map(det => ({
-                    id: det.id_detalle_orden,
+                    id: det.id_detalle,
                     producto_nombre: det.producto_nombre,
                     codigo_producto: det.codigo_producto,
                     descripcion: det.producto_descripcion,

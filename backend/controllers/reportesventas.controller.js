@@ -6,33 +6,33 @@ export const getReporteVentas = async (req, res) => {
         const { fechaInicio, fechaFin, idCliente, idVendedor, format } = req.query;
 
         let sql = `
-    SELECT 
-        ov.*,
-        c.razon_social,
-        c.ruc,
-        c.direccion_despacho as direccion_cliente,
-        c.email as email_cliente,
-        c.telefono as telefono_cliente,
-        c.contacto,
-        e.nombre_completo as nombre_vendedor,
-        ev.nombre_completo as nombre_verificador,
-        er.nombre_completo as nombre_registrador,
-        v.placa as vehiculo_placa,
-        v.marca_modelo as vehiculo_marca,
-        ec.nombre_completo as nombre_conductor,
-        ec.dni as dni_conductor,
-        cot.numero_cotizacion
-    FROM ordenes_venta ov
-    INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
-    LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
-    LEFT JOIN empleados ev ON ov.id_verificador = ev.id_empleado
-    LEFT JOIN empleados er ON ov.id_registrado_por = er.id_empleado
-    LEFT JOIN flota v ON ov.id_vehiculo = v.id_vehiculo
-    LEFT JOIN empleados ec ON ov.id_conductor = ec.id_empleado
-    LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
-    WHERE DATE(ov.fecha_emision) BETWEEN ? AND ?
-    AND ov.estado != 'Cancelada'
-`;
+            SELECT 
+                ov.*,
+                c.razon_social,
+                c.ruc,
+                c.direccion_despacho as direccion_cliente,
+                c.email as email_cliente,
+                c.telefono as telefono_cliente,
+                c.contacto,
+                e.nombre_completo as nombre_vendedor,
+                ev.nombre_completo as nombre_verificador,
+                er.nombre_completo as nombre_registrador,
+                v.placa as vehiculo_placa,
+                v.marca_modelo as vehiculo_marca,
+                ec.nombre_completo as nombre_conductor,
+                ec.dni as dni_conductor,
+                cot.numero_cotizacion
+            FROM ordenes_venta ov
+            INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
+            LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+            LEFT JOIN empleados ev ON ov.id_verificador = ev.id_empleado
+            LEFT JOIN empleados er ON ov.id_registrado_por = er.id_empleado
+            LEFT JOIN flota v ON ov.id_vehiculo = v.id_vehiculo
+            LEFT JOIN empleados ec ON ov.id_conductor = ec.id_empleado
+            LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
+            WHERE DATE(ov.fecha_emision) BETWEEN ? AND ?
+            AND ov.estado != 'Cancelada'
+        `;
 
         const params = [fechaInicio, fechaFin];
 
@@ -58,7 +58,7 @@ export const getReporteVentas = async (req, res) => {
                 SELECT 
                     dov.*,
                     p.nombre as producto_nombre,
-                    p.codigo_producto,
+                    p.codigo as codigo_producto,
                     p.unidad_medida,
                     p.descripcion as producto_descripcion
                 FROM detalle_orden_venta dov

@@ -1,5 +1,5 @@
 import db from '../config/database.js';
-import PDFDocument from 'pdfkit';
+import { generarReporteVentasPDF } from '../utils/reporteVentasPDF.js';
 
 export const getReporteVentas = async (req, res) => {
     try {
@@ -235,76 +235,31 @@ export const getReporteVentas = async (req, res) => {
         });
 
         if (format === 'pdf') {
-            const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
-            
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=reporte_ventas_${Date.now()}.pdf`);
-            
-            doc.pipe(res);
+            try {
+                const dataReporte = {
+                    resumen: {
+                        total_ventas_pen: parseFloat(kpis.totalVentasPEN.toFixed(2)),
+                        total_pagado_pen: parseFloat(kpis.totalPagadoPEN.toFixed(2)),
+                        total_pendiente_pen: parseFloat(kpis.totalPorCobrarPEN.toFixed(2)),
+                        total_comisiones_pen: parseFloat(kpis.totalComisionesPEN.toFixed(2)),
+                        contado_pen: parseFloat(kpis.totalContado.toFixed(2)),
+                        credito_pen: parseFloat(kpis.totalCredito.toFixed(2)),
+                        pedidos_retrasados: kpis.pedidosAtrasados,
+                        cantidad_ordenes: ordenes.length
+                    },
+                    detalle: listaDetalle
+                };
 
-            doc.fontSize(18).font('Helvetica-Bold').text('Reporte General de Ventas', { align: 'center' });
-            doc.fontSize(10).font('Helvetica').text(`Periodo: ${fechaInicio} al ${fechaFin}`, { align: 'center' });
-            doc.text(`Generado: ${new Date().toLocaleString('es-PE')}`, { align: 'center' });
-            doc.moveDown();
-
-            doc.fontSize(12).font('Helvetica-Bold').text('Resumen Ejecutivo', { underline: true });
-            doc.fontSize(10).font('Helvetica');
-            doc.text(`Total Ventas (PEN): S/ ${kpis.totalVentasPEN.toFixed(2)}`);
-            doc.text(`Total Cobrado: S/ ${kpis.totalPagadoPEN.toFixed(2)}`);
-            doc.text(`Por Cobrar: S/ ${kpis.totalPorCobrarPEN.toFixed(2)}`);
-            doc.text(`Total Comisiones: S/ ${kpis.totalComisionesPEN.toFixed(2)}`);
-            doc.text(`Ventas al Contado: S/ ${kpis.totalContado.toFixed(2)}`);
-            doc.text(`Ventas al Crédito: S/ ${kpis.totalCredito.toFixed(2)}`);
-            doc.text(`Pedidos Atrasados: ${kpis.pedidosAtrasados}`);
-            doc.text(`Cantidad de Órdenes: ${ordenes.length}`);
-            doc.moveDown();
-
-            doc.fontSize(12).font('Helvetica-Bold').text('Detalle de Órdenes', { underline: true });
-            doc.moveDown(0.5);
-
-            listaDetalle.forEach((item, index) => {
-                if (doc.y > 500) {
-                    doc.addPage({ layout: 'landscape' });
-                }
-
-                doc.fontSize(10).font('Helvetica-Bold');
-                doc.text(`${index + 1}. Orden: ${item.numero} | Cliente: ${item.cliente}`, { continued: false });
+                const pdfBuffer = await generarReporteVentasPDF(dataReporte);
                 
-                doc.fontSize(8).font('Helvetica');
-                doc.text(`   RUC: ${item.ruc} | Vendedor: ${item.vendedor}`);
-                doc.text(`   Estado: ${item.estado} | Estado Pago: ${item.estado_pago} | Verificación: ${item.estado_verificacion}`);
-                doc.text(`   Emisión: ${new Date(item.fecha_emision).toLocaleDateString('es-PE')} | Creación: ${new Date(item.fecha_creacion).toLocaleDateString('es-PE')}`);
-                
-                if (item.fecha_entrega_real) {
-                    doc.text(`   Despacho: ${new Date(item.fecha_entrega_real).toLocaleDateString('es-PE')}`);
-                }
-                if (item.fecha_vencimiento) {
-                    doc.text(`   Vencimiento: ${new Date(item.fecha_vencimiento).toLocaleDateString('es-PE')}`);
-                }
-
-                doc.text(`   Subtotal: ${item.moneda} ${item.subtotal} | IGV: ${item.moneda} ${item.igv} | Total: ${item.moneda} ${item.total}`);
-                doc.text(`   Pagado: ${item.moneda} ${item.monto_pagado} | Pendiente: ${item.moneda} ${item.pendiente_cobro}`);
-                
-                if (item.tipo_entrega === 'Vehiculo Empresa' && item.vehiculo_placa) {
-                    doc.text(`   Vehículo: ${item.vehiculo_placa} ${item.vehiculo_marca || ''} | Conductor: ${item.conductor_nombre || 'N/A'}`);
-                } else if (item.tipo_entrega === 'Transporte Privado' && item.transporte_nombre) {
-                    doc.text(`   Transporte: ${item.transporte_nombre} | Placa: ${item.transporte_placa || 'N/A'}`);
-                }
-
-                if (item.detalles && item.detalles.length > 0) {
-                    doc.fontSize(7).font('Helvetica-Bold');
-                    doc.text(`   Productos:`, { continued: false });
-                    doc.font('Helvetica');
-                    item.detalles.forEach(det => {
-                        doc.text(`      - ${det.producto_nombre} | Cant: ${det.cantidad} ${det.unidad_medida} | P.Unit: ${item.moneda} ${det.precio_unitario} | Subtotal: ${item.moneda} ${det.subtotal}`);
-                    });
-                }
-
-                doc.moveDown(0.5);
-            });
-
-            doc.end();
-            return;
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', `attachment; filename=reporte_ventas_${Date.now()}.pdf`);
+                res.send(pdfBuffer);
+                return;
+            } catch (pdfError) {
+                console.error('Error generando PDF:', pdfError);
+                return res.status(500).json({ success: false, error: 'Error al generar PDF' });
+            }
         }
 
         const graficoVendedores = Object.keys(ventasPorVendedor)
@@ -351,7 +306,7 @@ export const getReporteVentas = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error('Error en getReporteVentas:', error);
         res.status(500).json({ success: false, error: 'Error al generar reporte' });
     }
 };

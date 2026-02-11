@@ -21,7 +21,7 @@ export async function getAllCotizaciones(req, res) {
         c.subtotal,
         c.igv,
         (
-            SELECT COALESCE(SUM(dc.cantidad * dc.precio_unitario * (1 - COALESCE(dc.descuento_porcentaje, 0) / 100)), 0)
+            SELECT COALESCE(SUM(dc.cantidad * dc.precio_unitario), 0)
             FROM detalle_cotizacion dc
             WHERE dc.id_cotizacion = c.id_cotizacion
         ) * CASE 

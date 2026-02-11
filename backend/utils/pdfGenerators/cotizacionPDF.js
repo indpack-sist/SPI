@@ -267,7 +267,7 @@ export async function generarCotizacionPDF(cotizacion) {
         
         // Si tienes descuento por ítem, úsalo aquí
         const descuento = parseFloat(item.descuento_porcentaje || 0);
-        const valorVentaItem = (cantidad * precioUnitario) * (1 - descuento/100);
+        const valorVentaItem = cantidad * precioUnitario;
         
         subtotalCalculado += valorVentaItem;
 

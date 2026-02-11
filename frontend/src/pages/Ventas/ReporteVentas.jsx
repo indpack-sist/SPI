@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -6,34 +6,38 @@ import {
 import { 
   Calendar, Search, Filter, Download, 
   DollarSign, TrendingUp, PieChart as PieIcon, 
-  FileText, CheckCircle, AlertCircle, Clock 
+  FileText, CheckCircle, AlertCircle, Clock, Truck, User, X
 } from 'lucide-react';
-import { reportesAPI, clientesAPI } from '../../config/api';
+import { reportesAPI, clientesAPI, empleadosAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 
-// Colores para los gráficos
 const COLORS_PIE = {
-  'Pagado': '#10B981',   // Verde Esmeralda
-  'Parcial': '#F59E0B',  // Ambar
-  'Pendiente': '#EF4444' // Rojo
+  'Pagado': '#10B981',
+  'Parcial': '#F59E0B',
+  'Pendiente': '#EF4444'
 };
 
 const ReporteVentas = () => {
-  // --- Estados ---
   const [loading, setLoading] = useState(false);
+  const [loadingPdf, setLoadingPdf] = useState(false);
   const [error, setError] = useState(null);
   
-  const [clientes, setClientes] = useState([]);
+  const [vendedores, setVendedores] = useState([]);
   
-  // Fechas por defecto: Primer día del mes actual hasta hoy
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [clientesSugeridos, setClientesSugeridos] = useState([]);
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+  const wrapperRef = useRef(null);
+
   const fechaHoy = new Date();
   const primerDiaMes = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth(), 1);
 
   const [filtros, setFiltros] = useState({
     fechaInicio: primerDiaMes.toISOString().split('T')[0],
     fechaFin: fechaHoy.toISOString().split('T')[0],
-    idCliente: ''
+    idCliente: '',
+    idVendedor: ''
   });
 
   const [dataReporte, setDataReporte] = useState({
@@ -41,31 +45,75 @@ const ReporteVentas = () => {
       total_ventas_pen: 0,
       total_pagado_pen: 0,
       total_pendiente_pen: 0,
+      contado_pen: 0,
+      credito_pen: 0,
+      pedidos_retrasados: 0,
       cantidad_ordenes: 0
     },
     graficos: {
       estado_pago: [],
-      ventas_dia: []
+      ventas_dia: [],
+      top_vendedores: []
     },
     detalle: []
   });
 
-  // --- Efectos ---
   useEffect(() => {
-    cargarClientes();
-    generarReporte(); // Cargar reporte inicial al montar
+    cargarDatosIniciales();
+    generarReporte();
+    
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setMostrarSugerencias(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- Funciones de Carga ---
-  const cargarClientes = async () => {
+  useEffect(() => {
+    const buscarClientes = async () => {
+        if (busquedaCliente.length > 1 && !filtros.idCliente) {
+            try {
+                const response = await clientesAPI.search(busquedaCliente);
+                if (response.data.success) {
+                    setClientesSugeridos(response.data.data);
+                    setMostrarSugerencias(true);
+                }
+            } catch (error) {
+                console.error("Error buscando clientes", error);
+            }
+        } else {
+            setClientesSugeridos([]);
+        }
+    };
+
+    const timeoutId = setTimeout(() => {
+        buscarClientes();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [busquedaCliente, filtros.idCliente]);
+
+  const cargarDatosIniciales = async () => {
     try {
-      const response = await clientesAPI.getAll({ estado: 'Activo' });
-      if (response.data.success) {
-        setClientes(response.data.data);
-      }
+      const resVendedores = await empleadosAPI.getAll({ area: 'Comercial' }); 
+      if (resVendedores.data.success) setVendedores(resVendedores.data.data);
     } catch (err) {
-      console.error("Error cargando clientes", err);
+      console.error("Error cargando listas", err);
     }
+  };
+
+  const seleccionarCliente = (cliente) => {
+    setFiltros({ ...filtros, idCliente: cliente.id_cliente });
+    setBusquedaCliente(cliente.razon_social);
+    setMostrarSugerencias(false);
+  };
+
+  const limpiarCliente = () => {
+    setFiltros({ ...filtros, idCliente: '' });
+    setBusquedaCliente('');
+    setClientesSugeridos([]);
   };
 
   const generarReporte = async (e) => {
@@ -74,11 +122,11 @@ const ReporteVentas = () => {
     setError(null);
 
     try {
-      // Llamada al endpoint que definimos anteriormente
       const response = await reportesAPI.getVentas({
         fechaInicio: filtros.fechaInicio,
         fechaFin: filtros.fechaFin,
-        idCliente: filtros.idCliente
+        idCliente: filtros.idCliente,
+        idVendedor: filtros.idVendedor
       });
 
       if (response.data.success) {
@@ -92,7 +140,28 @@ const ReporteVentas = () => {
     }
   };
 
-  // --- Formateadores ---
+  const descargarPDF = async () => {
+    setLoadingPdf(true);
+    try {
+        const response = await reportesAPI.getVentas({
+            ...filtros,
+            format: 'pdf'
+        }, { responseType: 'blob' });
+
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Reporte_Ventas_${Date.now()}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (err) {
+        setError('Error al descargar el PDF');
+    } finally {
+        setLoadingPdf(false);
+    }
+  };
+
   const formatearMoneda = (valor) => {
     return new Intl.NumberFormat('es-PE', {
       style: 'currency',
@@ -107,75 +176,137 @@ const ReporteVentas = () => {
       'Parcial': 'bg-yellow-100 text-yellow-800 border-yellow-200',
       'Pendiente': 'bg-red-100 text-red-800 border-red-200'
     };
-    const iconos = {
-        'Pagado': <CheckCircle size={12}/>,
-        'Parcial': <AlertCircle size={12}/>,
-        'Pendiente': <Clock size={12}/>
-    };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold border flex items-center gap-1 w-fit ${estilos[estado] || 'bg-gray-100'}`}>
-        {iconos[estado]} {estado}
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold border w-fit mx-auto block ${estilos[estado] || 'bg-gray-100'}`}>
+        {estado}
       </span>
     );
   };
 
-// --- Render ---
+  const obtenerBadgeLogistica = (estado) => {
+    const estilos = {
+        'A tiempo': 'bg-blue-100 text-blue-800',
+        'En plazo': 'bg-blue-50 text-blue-600',
+        'Retrasado': 'bg-red-100 text-red-800 font-bold',
+        'Vencido': 'bg-red-200 text-red-900 font-bold'
+    };
+    return (
+        <span className={`px-2 py-0.5 rounded text-xs ${estilos[estado] || 'bg-gray-100'}`}>
+            {estado}
+        </span>
+    );
+  };
+
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+    <div className="p-6 space-y-6 bg-gray-50 min-h-screen font-sans">
       
-      {/* 1. Encabezado */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <TrendingUp className="text-blue-600" /> Reporte de Ventas
+            <TrendingUp className="text-blue-600" /> Dashboard de Ventas
           </h1>
-          <p className="text-gray-500 text-sm">Analítica financiera y operativa de ventas</p>
+          <p className="text-gray-500 text-sm">Monitor de rendimiento comercial y logístico</p>
         </div>
+        <button 
+            onClick={descargarPDF}
+            disabled={loadingPdf}
+            className="btn bg-red-600 hover:bg-red-700 text-white flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+        >
+            {loadingPdf ? <Loading size="sm" color="white"/> : <Download size={18} />}
+            Exportar PDF
+        </button>
       </div>
 
-      {/* 2. Filtros */}
-      <div className="card bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <form onSubmit={generarReporte} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha Inicio</label>
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+        <form onSubmit={generarReporte} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Desde</label>
             <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                <Calendar className="absolute left-3 top-2.5 text-gray-400" size={16} />
                 <input 
                     type="date" 
-                    className="form-input pl-10 w-full"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     value={filtros.fechaInicio}
                     onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})}
                 />
             </div>
           </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha Fin</label>
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Hasta</label>
             <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                <Calendar className="absolute left-3 top-2.5 text-gray-400" size={16} />
                 <input 
                     type="date" 
-                    className="form-input pl-10 w-full"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     value={filtros.fechaFin}
                     onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})}
                 />
             </div>
           </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">Cliente (Opcional)</label>
-            <select 
-                className="form-select w-full"
-                value={filtros.idCliente}
-                onChange={(e) => setFiltros({...filtros, idCliente: e.target.value})}
-            >
-                <option value="">Todos los clientes</option>
-                {clientes.map(c => (
-                    <option key={c.id_cliente} value={c.id_cliente}>{c.razon_social}</option>
-                ))}
-            </select>
+          
+          <div className="md:col-span-4 relative" ref={wrapperRef}>
+            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Cliente</label>
+            <div className="relative">
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                <input 
+                    type="text"
+                    placeholder="Buscar cliente por nombre o RUC..."
+                    className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    value={busquedaCliente}
+                    onChange={(e) => {
+                        setBusquedaCliente(e.target.value);
+                        if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
+                    }}
+                    onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
+                />
+                {filtros.idCliente && (
+                    <button 
+                        type="button"
+                        onClick={limpiarCliente}
+                        className="absolute right-2 top-2 text-gray-400 hover:text-red-500"
+                    >
+                        <X size={16} />
+                    </button>
+                )}
+            </div>
+            
+            {mostrarSugerencias && clientesSugeridos.length > 0 && (
+                <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    {clientesSugeridos.map(cliente => (
+                        <li 
+                            key={cliente.id_cliente}
+                            onClick={() => seleccionarCliente(cliente)}
+                            className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-0"
+                        >
+                            <div className="font-medium">{cliente.razon_social}</div>
+                            <div className="text-xs text-gray-500">RUC: {cliente.ruc}</div>
+                        </li>
+                    ))}
+                </ul>
+            )}
           </div>
-          <div>
-            <button type="submit" className="btn btn-primary w-full flex items-center justify-center gap-2" disabled={loading}>
-                {loading ? <Loading size="sm" color="white" /> : <><Search size={18} /> Generar Reporte</>}
+
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Vendedor</label>
+            <div className="relative">
+                <User className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                <select 
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none bg-white"
+                    value={filtros.idVendedor}
+                    onChange={(e) => setFiltros({...filtros, idVendedor: e.target.value})}
+                >
+                    <option value="">Todos</option>
+                    {vendedores.map(v => (
+                        <option key={v.id_empleado} value={v.id_empleado}>{v.nombres}</option>
+                    ))}
+                </select>
+            </div>
+          </div>
+
+          <div className="md:col-span-2">
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow transition-colors flex items-center justify-center gap-2" disabled={loading}>
+                {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />}
+                Filtrar
             </button>
           </div>
         </form>
@@ -183,181 +314,190 @@ const ReporteVentas = () => {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {/* 3. Tarjetas de Resumen (KPIs) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card bg-white p-4 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="text-xs text-gray-500 uppercase font-bold">Ventas Totales (Est.)</p>
-                    <h3 className="text-2xl font-bold text-blue-700 mt-1">{formatearMoneda(dataReporte.resumen.total_ventas_pen)}</h3>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Ventas Totales</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{formatearMoneda(dataReporte.resumen.total_ventas_pen)}</h3>
+                    <div className="flex gap-2 mt-2 text-xs">
+                        <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Ct: {formatearMoneda(dataReporte.resumen.contado_pen)}</span>
+                        <span className="text-purple-600 bg-purple-50 px-2 py-0.5 rounded">Cr: {formatearMoneda(dataReporte.resumen.credito_pen)}</span>
+                    </div>
                 </div>
-                <div className="p-2 bg-blue-50 rounded-full text-blue-600"><DollarSign size={20}/></div>
+                <div className="p-3 bg-blue-50 rounded-lg text-blue-600"><DollarSign size={24}/></div>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Convertido a Soles</p>
         </div>
 
-        <div className="card bg-white p-4 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-green-500">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="text-xs text-gray-500 uppercase font-bold">Total Cobrado</p>
-                    <h3 className="text-2xl font-bold text-green-700 mt-1">{formatearMoneda(dataReporte.resumen.total_pagado_pen)}</h3>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Cobrado</p>
+                    <h3 className="text-2xl font-bold text-green-600 mt-1">{formatearMoneda(dataReporte.resumen.total_pagado_pen)}</h3>
+                    <p className="text-xs text-gray-400 mt-2">Liquidez ingresada</p>
                 </div>
-                <div className="p-2 bg-green-50 rounded-full text-green-600"><CheckCircle size={20}/></div>
+                <div className="p-3 bg-green-50 rounded-lg text-green-600"><CheckCircle size={24}/></div>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Liquidez real ingresada</p>
         </div>
 
-        <div className="card bg-white p-4 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-red-500">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="text-xs text-gray-500 uppercase font-bold">Por Cobrar</p>
-                    <h3 className="text-2xl font-bold text-red-700 mt-1">{formatearMoneda(dataReporte.resumen.total_pendiente_pen)}</h3>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Por Cobrar</p>
+                    <h3 className="text-2xl font-bold text-red-500 mt-1">{formatearMoneda(dataReporte.resumen.total_pendiente_pen)}</h3>
+                    <p className="text-xs text-gray-400 mt-2">Crédito pendiente</p>
                 </div>
-                <div className="p-2 bg-red-50 rounded-full text-red-600"><AlertCircle size={20}/></div>
+                <div className="p-3 bg-red-50 rounded-lg text-red-500"><AlertCircle size={24}/></div>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Créditos pendientes</p>
         </div>
 
-        <div className="card bg-white p-4 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-purple-500">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="text-xs text-gray-500 uppercase font-bold">Ordenes</p>
-                    <h3 className="text-2xl font-bold text-purple-700 mt-1">{dataReporte.resumen.cantidad_ordenes}</h3>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Operaciones</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{dataReporte.resumen.cantidad_ordenes}</h3>
+                    <div className="mt-2 text-xs flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded font-medium ${dataReporte.resumen.pedidos_retrasados > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                            {dataReporte.resumen.pedidos_retrasados} Retrasos
+                        </span>
+                    </div>
                 </div>
-                <div className="p-2 bg-purple-50 rounded-full text-purple-600"><FileText size={20}/></div>
+                <div className="p-3 bg-orange-50 rounded-lg text-orange-600"><Truck size={24}/></div>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Transacciones en el periodo</p>
         </div>
       </div>
 
-      {/* 4. Sección de Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Gráfico Circular: Estado de Pagos */}
-        <div className="card bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <PieIcon size={18} className="text-gray-500"/> Composición de Pagos
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
+            <h3 className="text-base font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <TrendingUp size={18} className="text-gray-500"/> Evolución de Ventas Diarias
             </h3>
-            <div className="h-64 w-full">
+            <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataReporte.graficos.ventas_dia} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                        <XAxis dataKey="fecha" tick={{fontSize: 12, fill: '#9CA3AF'}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis tick={{fontSize: 12, fill: '#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={(value) => `S/ ${value/1000}k`} />
+                        <RechartsTooltip 
+                            cursor={{fill: '#F9FAFB'}}
+                            formatter={(value) => [formatearMoneda(value), "Total"]}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        />
+                        <Bar dataKey="total" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={40} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <h3 className="text-base font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <PieIcon size={18} className="text-gray-500"/> Estado de Cartera
+            </h3>
+            <div className="h-72 w-full relative">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
                             data={dataReporte.graficos.estado_pago}
                             cx="50%"
                             cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
+                            innerRadius={70}
+                            outerRadius={90}
                             paddingAngle={5}
                             dataKey="value"
                         >
                             {dataReporte.graficos.estado_pago.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
                             ))}
                         </Pie>
-                        <RechartsTooltip 
-                            formatter={(value) => formatearMoneda(value)}
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        />
-                        <Legend verticalAlign="bottom" height={36}/>
+                        <RechartsTooltip formatter={(value) => formatearMoneda(value)} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle"/>
                     </PieChart>
                 </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-xs text-gray-400">Total Facturado</span>
+                    <span className="text-lg font-bold text-gray-800">{formatearMoneda(dataReporte.resumen.total_ventas_pen)}</span>
+                </div>
             </div>
-            <p className="text-center text-xs text-gray-400 mt-2">Distribución del dinero facturado según estado de cobro.</p>
         </div>
 
-        {/* Gráfico de Barras: Evolución de Ventas */}
-        <div className="card bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <TrendingUp size={18} className="text-gray-500"/> Evolución Diaria de Ventas (S/)
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-3">
+             <h3 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <User size={18} className="text-gray-500"/> Ranking de Vendedores
             </h3>
-            <div className="h-64 w-full">
+            <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                        data={dataReporte.graficos.ventas_dia}
-                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                        <XAxis 
-                            dataKey="fecha" 
-                            tick={{fontSize: 12, fill: '#6B7280'}} 
-                            axisLine={false} 
-                            tickLine={false} 
-                        />
-                        <YAxis 
-                            tick={{fontSize: 12, fill: '#6B7280'}} 
-                            axisLine={false} 
-                            tickLine={false}
-                            tickFormatter={(value) => `S/ ${value/1000}k`}
-                        />
-                        <RechartsTooltip 
-                            cursor={{fill: '#F3F4F6'}}
-                            formatter={(value) => [formatearMoneda(value), "Venta Total"]}
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        />
-                        <Bar 
-                            dataKey="total" 
-                            fill="#3B82F6" 
-                            radius={[4, 4, 0, 0]} 
-                            barSize={30}
-                        />
+                     <BarChart data={dataReporte.graficos.top_vendedores} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6"/>
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" width={150} tick={{fontSize: 12, fill: '#4B5563'}} axisLine={false} tickLine={false}/>
+                        <RechartsTooltip formatter={(value) => formatearMoneda(value)} cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px' }}/>
+                        <Bar dataKey="value" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20} background={{ fill: '#F9FAFB' }} />
                     </BarChart>
                 </ResponsiveContainer>
             </div>
         </div>
       </div>
 
-      {/* 5. Tabla Detallada */}
-      <div className="card bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-gray-800">Detalle de Operaciones</h3>
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                {dataReporte.detalle.length} registros encontrados
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            <h3 className="font-bold text-gray-800 text-sm">Detalle de Transacciones</h3>
+            <span className="text-xs font-medium text-gray-500 bg-white border px-2 py-1 rounded shadow-sm">
+                {dataReporte.detalle.length} Registros
             </span>
         </div>
         <div className="overflow-x-auto">
-            <table className="table w-full text-sm text-left">
-                <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
+            <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                     <tr>
-                        <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Nº Orden</th>
-                        <th className="px-4 py-3">Cliente</th>
-                        <th className="px-4 py-3 text-right">Total Orig.</th>
-                        <th className="px-4 py-3 text-right">Pagado Orig.</th>
-                        <th className="px-4 py-3 text-center">Estado Pago</th>
-                        <th className="px-4 py-3 text-center">Estado Orden</th>
+                        <th className="px-4 py-3 font-semibold">Emisión</th>
+                        <th className="px-4 py-3 font-semibold">Orden</th>
+                        <th className="px-4 py-3 font-semibold">Cliente</th>
+                        <th className="px-4 py-3 font-semibold">Vendedor</th>
+                        <th className="px-4 py-3 font-semibold text-right">Total Orig.</th>
+                        <th className="px-4 py-3 font-semibold text-center">Pago</th>
+                        <th className="px-4 py-3 font-semibold text-center">Entrega</th>
+                        <th className="px-4 py-3 font-semibold text-center">Estado</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                     {dataReporte.detalle.length > 0 ? (
                         dataReporte.detalle.map((item) => (
-                            <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                            <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
                                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                                    {new Date(item.fecha).toLocaleDateString('es-PE')}
+                                    {new Date(item.fecha_emision).toLocaleDateString('es-PE', {day: '2-digit', month: '2-digit', year: '2-digit'})}
                                 </td>
-                                <td className="px-4 py-3 font-mono font-medium text-blue-600">
+                                <td className="px-4 py-3 font-mono font-medium text-blue-600 group-hover:text-blue-700">
                                     {item.numero}
                                 </td>
-                                <td className="px-4 py-3 text-gray-800 font-medium">
-                                    {item.cliente}
+                                <td className="px-4 py-3 text-gray-800">
+                                    <div className="font-medium truncate max-w-[200px]" title={item.cliente}>{item.cliente}</div>
+                                    <div className="text-xs text-gray-400">{item.ruc}</div>
+                                </td>
+                                <td className="px-4 py-3 text-gray-600 text-xs truncate max-w-[120px]">
+                                    {item.vendedor}
                                 </td>
                                 <td className="px-4 py-3 text-right font-bold text-gray-700">
-                                    {item.moneda === 'USD' ? '$' : 'S/'} {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(item.total)}
+                                    <span className="text-xs text-gray-400 mr-1">{item.moneda}</span>
+                                    {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(item.total_original)}
                                 </td>
-                                <td className="px-4 py-3 text-right text-gray-600">
-                                    {item.moneda === 'USD' ? '$' : 'S/'} {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(item.pagado)}
-                                </td>
-                                <td className="px-4 py-3 flex justify-center">
+                                <td className="px-4 py-3 text-center">
                                     {obtenerBadgeEstadoPago(item.estado_pago)}
                                 </td>
-                                <td className="px-4 py-3 text-center text-xs text-gray-500">
-                                    {item.estado}
+                                <td className="px-4 py-3 text-center">
+                                    {obtenerBadgeLogistica(item.estado_logistico)}
+                                    <div className="text-[10px] text-gray-400 mt-0.5">{item.fecha_despacho}</div>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                    <span className="text-xs text-gray-500">{item.estado_pedido}</span>
                                 </td>
                             </tr>
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="7" className="px-4 py-8 text-center text-gray-400">
-                                No se encontraron ventas en este rango de fechas.
+                            <td colSpan="8" className="px-4 py-12 text-center text-gray-400 flex flex-col items-center justify-center">
+                                <Search size={32} className="mb-2 opacity-20"/>
+                                No se encontraron ventas con los filtros seleccionados.
                             </td>
                         </tr>
                     )}

@@ -115,7 +115,7 @@ export const proveedoresAPI = {
 
 export const clientesAPI = {
   getAll: (params) => api.get('/clientes', { params }),
-  search: (query) => api.get('/clientes', { params: { busqueda: query } }), // ← AGREGAR ESTA LÍNEA
+  search: (query) => api.get('/clientes', { params: { search: query } }), // cambiar 'busqueda' a 'search'
   getById: (id) => api.get(`/clientes/${id}`),
   getByRuc: (ruc) => api.get(`/clientes/ruc/${ruc}`),
   validarRUC: (ruc) => api.get(`/clientes/validar-ruc/${ruc}`),

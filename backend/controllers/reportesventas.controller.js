@@ -14,13 +14,13 @@ export const getReporteVentas = async (req, res) => {
         c.email as email_cliente,
         c.telefono as telefono_cliente,
         c.contacto,
-        CONCAT(COALESCE(e.nombres,''), ' ', COALESCE(e.apellidos,'')) as nombre_vendedor,
-        CONCAT(COALESCE(ev.nombres,''), ' ', COALESCE(ev.apellidos,'')) as nombre_verificador,
-        CONCAT(COALESCE(er.nombres,''), ' ', COALESCE(er.apellidos,'')) as nombre_registrador,
+        e.nombre_completo as nombre_vendedor,
+        ev.nombre_completo as nombre_verificador,
+        er.nombre_completo as nombre_registrador,
         v.placa as vehiculo_placa,
         v.marca as vehiculo_marca,
         v.modelo as vehiculo_modelo,
-        CONCAT(COALESCE(ec.nombres,''), ' ', COALESCE(ec.apellidos,'')) as nombre_conductor,
+        ec.nombre_completo as nombre_conductor,
         ec.dni as dni_conductor,
         cot.numero_cotizacion
     FROM ordenes_venta ov

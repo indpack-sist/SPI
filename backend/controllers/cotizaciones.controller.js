@@ -20,16 +20,13 @@ export async function getAllCotizaciones(req, res) {
         c.prioridad,
         c.subtotal,
         c.igv,
-        CASE 
-          WHEN c.total > 0.001 THEN c.total
-          ELSE (
-            SELECT SUM(dc.cantidad * dc.precio_unitario * (1 - COALESCE(dc.descuento_porcentaje, 0) / 100))
+        (
+            SELECT COALESCE(SUM(dc.cantidad * dc.precio_unitario * (1 - COALESCE(dc.descuento_porcentaje, 0) / 100)), 0)
             FROM detalle_cotizacion dc
             WHERE dc.id_cotizacion = c.id_cotizacion
-          ) * CASE 
+        ) * CASE 
             WHEN c.tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 1
             ELSE (1 + (COALESCE(c.porcentaje_impuesto, 18) / 100))
-          END
         END AS total,
         c.moneda,
         c.tipo_impuesto,

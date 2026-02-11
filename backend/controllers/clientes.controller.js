@@ -3,7 +3,7 @@ import { validarRUC, validarDNI } from '../services/api-validation.service.js';
 
 export async function getAllClientes(req, res) {
   try {
-    const { estado } = req.query;
+    const { estado, search } = req.query; // ← AGREGAR search
     
     let sql = 'SELECT * FROM clientes WHERE 1=1';
     const params = [];
@@ -11,6 +11,12 @@ export async function getAllClientes(req, res) {
     if (estado) {
       sql += ' AND estado = ?';
       params.push(estado);
+    }
+    
+    // ← AGREGAR ESTA BÚSQUEDA
+    if (search) {
+      sql += ' AND (razon_social LIKE ? OR ruc LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
     }
     
     sql += ' ORDER BY razon_social ASC';

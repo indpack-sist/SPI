@@ -18,8 +18,7 @@ export const getReporteVentas = async (req, res) => {
         ev.nombre_completo as nombre_verificador,
         er.nombre_completo as nombre_registrador,
         v.placa as vehiculo_placa,
-        v.marca as vehiculo_marca,
-        v.modelo as vehiculo_modelo,
+        v.marca_modelo as vehiculo_marca,
         ec.nombre_completo as nombre_conductor,
         ec.dni as dni_conductor,
         cot.numero_cotizacion
@@ -179,7 +178,6 @@ export const getReporteVentas = async (req, res) => {
                 tipo_entrega: orden.tipo_entrega,
                 vehiculo_placa: orden.vehiculo_placa,
                 vehiculo_marca: orden.vehiculo_marca,
-                vehiculo_modelo: orden.vehiculo_modelo,
                 conductor_nombre: orden.nombre_conductor,
                 conductor_dni: orden.dni_conductor,
                 conductor_licencia: orden.transporte_licencia,

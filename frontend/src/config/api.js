@@ -777,7 +777,43 @@ export const notificacionesAPI = {
 export const reportesAPI = {
   getSireVentas: (params) => api.get('/reportes/sire/ventas', { params }),
   getSireCompras: (params) => api.get('/reportes/sire/compras', { params }),
-  getVentas: (params) => api.get('/reportes/ventas', { params })
+  getVentas: (params, config = {}) => api.get('/reportes/ventas', { params, ...config }),
+  
+  descargarVentasPDF: async (params) => {
+    try {
+      const response = await fetch(`${API_URL}/reportes/ventas?${new URLSearchParams({...params, format: 'pdf'}).toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ 
+          error: 'Error al generar PDF' 
+        }));
+        throw new Error(errorData.error || 'Error al generar PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `reporte-ventas-${Date.now()}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar PDF reporte ventas:', error);
+      throw error;
+    }
+  }
 };
 export const archivosAPI = {
   getProxyUrl: (urlCloudinary) => {

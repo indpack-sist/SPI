@@ -41,11 +41,10 @@ function NuevaCompra() {
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   const [requiereConversion, setRequiereConversion] = useState(false);
   
-  const [accionPago, setAccionPago] = useState('completo');
-
+  const [accionPago, setAccionPago] = useState('registro');
   const [formData, setFormData] = useState({
     id_proveedor: '',
-    id_cuenta_pago: '',
+    id_cuenta_pago: '', // Puede estar vacío si accionPago = 'registro'
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_entrega_estimada: '',
     fecha_vencimiento: '', 
@@ -85,7 +84,6 @@ function NuevaCompra() {
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
   const [cronograma, setCronograma] = useState([]);
-
   const proveedoresFiltrados = proveedores.filter(p => 
     p.razon_social.toLowerCase().includes(busquedaProveedor.toLowerCase()) || 
     p.ruc.includes(busquedaProveedor)
@@ -99,13 +97,15 @@ function NuevaCompra() {
   useEffect(() => { cargarCatalogos(); }, []);
   useEffect(() => { calcularTotales(); }, [detalle, formData.porcentaje_impuesto, formData.tipo_impuesto]);
   
+  // CORRECCIÓN: Solo actualiza monto_pagado_inicial cuando cambia accionPago
   useEffect(() => {
     if (formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios) {
       if (accionPago === 'completo') {
         setFormData(prev => ({ ...prev, monto_pagado_inicial: totales.total }));
       } else if (accionPago === 'registro') {
-        setFormData(prev => ({ ...prev, monto_pagado_inicial: 0, id_cuenta_pago: '' }));
+        setFormData(prev => ({ ...prev, monto_pagado_inicial: 0 }));
       }
+      // Para 'adelanto', el usuario ingresa el monto manualmente
     }
   }, [totales.total, formData.forma_pago_detalle, formData.usa_fondos_propios, accionPago]);
 
@@ -115,6 +115,7 @@ function NuevaCompra() {
     }
   }, [formData.tipo_compra, formData.letras_pendientes_registro, formData.numero_cuotas, formData.dias_entre_cuotas, formData.fecha_primera_cuota, totales.total, formData.monto_pagado_inicial]);
 
+  // CORRECCIÓN: Solo valida conversión si hay cuenta seleccionada
   useEffect(() => {
     if (formData.id_cuenta_pago) {
       const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(formData.id_cuenta_pago));
@@ -129,7 +130,6 @@ function NuevaCompra() {
       setRequiereConversion(false);
     }
   }, [formData.id_cuenta_pago, formData.moneda, cuentasPago]);
-
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
@@ -213,12 +213,34 @@ function NuevaCompra() {
     };
     setDetalle([...detalle, nuevoItem]); setModalProductoOpen(false); setBusquedaProducto('');
   };
-
-  const handleCantidadChange = (index, val) => { const newD = [...detalle]; newD[index].cantidad = parseFloat(val)||0; newD[index].cantidad_a_recibir = parseFloat(val)||0; setDetalle(newD); };
-  const handleCantidadRecibirChange = (index, val) => { const newD = [...detalle]; newD[index].cantidad_a_recibir = parseFloat(val)||0; setDetalle(newD); };
-  const handlePrecioChange = (index, val) => { const newD = [...detalle]; newD[index].precio_unitario = parseFloat(val)||0; setDetalle(newD); };
-  const handleDescuentoChange = (index, val) => { const newD = [...detalle]; newD[index].descuento_porcentaje = parseFloat(val)||0; setDetalle(newD); };
-  const handleEliminarProducto = (index) => { setDetalle(detalle.filter((_, i) => i !== index)); };
+  const handleCantidadChange = (index, val) => { 
+    const newD = [...detalle]; 
+    newD[index].cantidad = parseFloat(val)||0; 
+    newD[index].cantidad_a_recibir = parseFloat(val)||0; 
+    setDetalle(newD); 
+  };
+  
+  const handleCantidadRecibirChange = (index, val) => { 
+    const newD = [...detalle]; 
+    newD[index].cantidad_a_recibir = parseFloat(val)||0; 
+    setDetalle(newD); 
+  };
+  
+  const handlePrecioChange = (index, val) => { 
+    const newD = [...detalle]; 
+    newD[index].precio_unitario = parseFloat(val)||0; 
+    setDetalle(newD); 
+  };
+  
+  const handleDescuentoChange = (index, val) => { 
+    const newD = [...detalle]; 
+    newD[index].descuento_porcentaje = parseFloat(val)||0; 
+    setDetalle(newD); 
+  };
+  
+  const handleEliminarProducto = (index) => { 
+    setDetalle(detalle.filter((_, i) => i !== index)); 
+  };
 
   const calcularSubtotalItem = (item) => {
     const base = item.cantidad * item.precio_unitario;
@@ -258,17 +280,24 @@ function NuevaCompra() {
     let ultimaFecha = new Date(fechaBase);
 
     for (let i = 1; i <= numCuotas; i++) {
-        nuevoCronograma.push({ numero: i, fecha: new Date(ultimaFecha), monto: montoPorCuota });
+        nuevoCronograma.push({ 
+          numero: i, 
+          fecha: new Date(ultimaFecha), 
+          monto: montoPorCuota 
+        });
         ultimaFecha.setDate(ultimaFecha.getDate() + diasEntre);
     }
     setCronograma(nuevoCronograma);
 
     if (nuevoCronograma.length > 0) {
         const fechaFinal = nuevoCronograma[nuevoCronograma.length - 1].fecha;
-        setFormData(prev => ({ ...prev, fecha_vencimiento: fechaFinal.toISOString().split('T')[0] }));
+        setFormData(prev => ({ 
+          ...prev, 
+          fecha_vencimiento: fechaFinal.toISOString().split('T')[0] 
+        }));
     }
   };
-
+  // CORRECCIÓN CRÍTICA: Esta función ahora maneja correctamente todos los escenarios
   const handleFormaPagoChange = (forma) => {
     const esContado = forma === 'Contado';
     const esCredito = forma === 'Credito';
@@ -282,11 +311,14 @@ function NuevaCompra() {
       numero_cuotas: esCredito || esLetras ? (prev.numero_cuotas || 1) : 0,
       dias_credito: esCredito || esLetras ? 30 : 0,
       dias_entre_cuotas: esCredito || esLetras ? 30 : 0,
-      monto_pagado_inicial: esContado && !prev.usa_fondos_propios ? totales.total : 0,
-      id_cuenta_pago: prev.usa_fondos_propios ? '' : prev.id_cuenta_pago
+      monto_pagado_inicial: 0, // SIEMPRE empieza en 0, se ajusta por accionPago
+      // NO limpiamos id_cuenta_pago aquí, se maneja por accionPago
     }));
     
-    if (esContado) setAccionPago('completo');
+    // Al cambiar a Contado, ponemos por defecto "Solo Registro"
+    if (esContado) {
+      setAccionPago('registro');
+    }
   };
 
   const calcularMontoConversion = () => {
@@ -297,27 +329,61 @@ function NuevaCompra() {
     else if (cuentaSeleccionada.moneda === 'USD' && formData.moneda === 'PEN') return montoAPagar / tc;
     return null;
   };
-
   const handleSubmit = async (e) => {
-    e.preventDefault(); setError(null); setSuccess(null);
-    if (!formData.id_proveedor) { setError('Seleccione proveedor'); return; }
-    if (detalle.length === 0) { setError('Agregue productos'); return; }
-    if (!formData.moneda) { setError('Especifique moneda'); return; }
-    if (formData.usa_fondos_propios && !formData.id_comprador) { setError('Debe seleccionar al comprador'); return; }
+    e.preventDefault(); 
+    setError(null); 
+    setSuccess(null);
     
-    if (!formData.usa_fondos_propios && formData.forma_pago_detalle === 'Contado') {
-        if (accionPago !== 'registro' && !formData.id_cuenta_pago) {
-            setError('Seleccione cuenta de pago para realizar el desembolso'); return; 
-        }
+    // Validaciones básicas
+    if (!formData.id_proveedor) { 
+      setError('Seleccione proveedor'); 
+      return; 
+    }
+    if (detalle.length === 0) { 
+      setError('Agregue productos'); 
+      return; 
+    }
+    if (!formData.moneda) { 
+      setError('Especifique moneda'); 
+      return; 
     }
     
+    // Validación fondos propios
+    if (formData.usa_fondos_propios && !formData.id_comprador) { 
+      setError('Debe seleccionar al comprador'); 
+      return; 
+    }
+    
+    // CORRECCIÓN: Solo validar cuenta si NO es "Solo Registro" y NO usa fondos propios
+    if (!formData.usa_fondos_propios && accionPago !== 'registro') {
+      if (!formData.id_cuenta_pago) {
+        setError('Seleccione cuenta de pago para realizar el desembolso'); 
+        return; 
+      }
+      
+      // Validar saldo SOLO si hay pago
+      const montoPago = parseFloat(formData.monto_pagado_inicial || 0);
+      if (montoPago > 0 && cuentaSeleccionada) {
+        const saldoDisponible = parseFloat(cuentaSeleccionada.saldo_actual);
+        const montoReal = requiereConversion ? calcularMontoConversion() : montoPago;
+        
+        if (saldoDisponible < montoReal) {
+          setError(`Saldo insuficiente. Disponible: ${formatearMoneda(saldoDisponible, cuentaSeleccionada.moneda)}`);
+          return;
+        }
+      }
+    }
+    
+    // Validación letras
     if ((formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro) && parseInt(formData.numero_cuotas) < 1) {
-        setError('Debe indicar al menos 1 cuota/letra.'); return;
+        setError('Debe indicar al menos 1 cuota/letra.'); 
+        return;
     }
 
     try {
       setLoading(true);
 
+      // Cronograma solo si es Letras con registro inmediato
       const cronogramaPayload = (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro && cronograma.length > 0)
         ? cronograma.map(c => ({
             numero: c.numero,
@@ -329,7 +395,10 @@ function NuevaCompra() {
       const payload = {
         ...formData,
         id_proveedor: parseInt(formData.id_proveedor),
-        id_cuenta_pago: formData.usa_fondos_propios ? null : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
+        // CORRECCIÓN: Cuenta puede ser null si es "Solo Registro" o usa fondos propios
+        id_cuenta_pago: (formData.usa_fondos_propios || accionPago === 'registro') 
+          ? null 
+          : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
         id_comprador: formData.usa_fondos_propios ? parseInt(formData.id_comprador) : null,
         numero_cuotas: parseInt(formData.numero_cuotas),
         dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
@@ -354,15 +423,20 @@ function NuevaCompra() {
       if (response.data.success) {
         setSuccess(`Compra ${response.data.data.numero} registrada`);
         setTimeout(() => navigate('/compras'), 1500);
-      } else { setError(response.data.error || 'Error al crear compra'); }
-    } catch (err) { setError('Error al crear compra'); } finally { setLoading(false); }
+      } else { 
+        setError(response.data.error || 'Error al crear compra'); 
+      }
+    } catch (err) { 
+      setError(err.response?.data?.error || 'Error al crear compra'); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const formatearMoneda = (val, moneda = null) => {
     const m = moneda || formData.moneda;
     return `${m === 'USD' ? '$' : 'S/'} ${parseFloat(val).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
   };
-
   if (loading && proveedores.length === 0) return <Loading message="Cargando configuración..." />;
   const montoConvertido = calcularMontoConversion();
 
@@ -370,9 +444,13 @@ function NuevaCompra() {
     <div className="container py-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
-          <button className="btn btn-outline" onClick={() => navigate('/compras')}><ArrowLeft size={20} /></button>
+          <button className="btn btn-outline" onClick={() => navigate('/compras')}>
+            <ArrowLeft size={20} />
+          </button>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingCart size={28} className="text-primary" /> Nueva Compra</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ShoppingCart size={28} className="text-primary" /> Nueva Compra
+            </h1>
             <p className="text-sm text-muted">Ingreso de mercadería y provisión de gastos</p>
           </div>
         </div>
@@ -385,10 +463,11 @@ function NuevaCompra() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <div className="lg:col-span-2 space-y-6">
-            
             <div className="card">
               <div className="card-header bg-gray-50">
-                <h2 className="card-title text-base"><Building size={18} className="text-primary"/> Datos del Proveedor</h2>
+                <h2 className="card-title text-base">
+                  <Building size={18} className="text-primary"/> Datos del Proveedor
+                </h2>
               </div>
               <div className="card-body">
                 {proveedorSeleccionado ? (
@@ -397,10 +476,23 @@ function NuevaCompra() {
                       <p className="font-bold text-lg text-blue-900">{proveedorSeleccionado.razon_social}</p>
                       <p className="text-sm text-blue-700 font-mono">RUC: {proveedorSeleccionado.ruc}</p>
                     </div>
-                    <button type="button" className="btn btn-sm btn-outline bg-white hover:text-blue-700" onClick={() => { setProveedorSeleccionado(null); setFormData({ ...formData, id_proveedor: '' }); }}>Cambiar</button>
+                    <button 
+                      type="button" 
+                      className="btn btn-sm btn-outline bg-white hover:text-blue-700" 
+                      onClick={() => { 
+                        setProveedorSeleccionado(null); 
+                        setFormData({ ...formData, id_proveedor: '' }); 
+                      }}
+                    >
+                      Cambiar
+                    </button>
                   </div>
                 ) : (
-                  <button type="button" className="w-full py-8 border-2 border-dashed border-gray-200 rounded text-muted hover:border-primary hover:text-primary transition-colors flex flex-col items-center gap-2" onClick={() => setModalProveedorOpen(true)}>
+                  <button 
+                    type="button" 
+                    className="w-full py-8 border-2 border-dashed border-gray-200 rounded text-muted hover:border-primary hover:text-primary transition-colors flex flex-col items-center gap-2" 
+                    onClick={() => setModalProveedorOpen(true)}
+                  >
                     <Search size={32} />
                     <span className="font-medium">Clic para buscar proveedor</span>
                   </button>
@@ -410,440 +502,847 @@ function NuevaCompra() {
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="form-group">
                       <label className="form-label text-xs uppercase text-muted">Fecha Emisión</label>
-                      <input type="date" className="form-input" value={formData.fecha_emision} onChange={(e) => setFormData({ ...formData, fecha_emision: e.target.value })} required />
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={formData.fecha_emision} 
+                        onChange={(e) => setFormData({ ...formData, fecha_emision: e.target.value })} 
+                        required 
+                      />
                     </div>
                     <div className="form-group md:col-span-2">
-                        <label className="form-label text-xs uppercase text-muted">Contacto (Opcional)</label>
-                        <input type="text" className="form-input" placeholder="Nombre del vendedor" value={formData.contacto_proveedor} onChange={(e) => setFormData({ ...formData, contacto_proveedor: e.target.value })} />
+                      <label className="form-label text-xs uppercase text-muted">Contacto (Opcional)</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Nombre del vendedor" 
+                        value={formData.contacto_proveedor} 
+                        onChange={(e) => setFormData({ ...formData, contacto_proveedor: e.target.value })} 
+                      />
                     </div>
                   </div>
                 )}
               </div>
             </div>
-
             <div className="card">
-                <div className="card-header bg-gray-50">
-                    <h2 className="card-title text-base"><FileText size={18} className="text-primary"/> Documento Físico</h2>
+              <div className="card-header bg-gray-50">
+                <h2 className="card-title text-base">
+                  <FileText size={18} className="text-primary"/> Documento Físico
+                </h2>
+              </div>
+              <div className="card-body grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="form-group">
+                  <label className="form-label text-xs uppercase text-muted">Tipo</label>
+                  <select 
+                    className="form-select" 
+                    value={formData.tipo_documento} 
+                    onChange={(e) => setFormData({ ...formData, tipo_documento: e.target.value })}
+                  >
+                    <option value="Factura">Factura</option>
+                    <option value="Boleta">Boleta</option>
+                    <option value="Guia">Guía Remisión</option>
+                  </select>
                 </div>
-                <div className="card-body grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="form-group">
-                        <label className="form-label text-xs uppercase text-muted">Tipo</label>
-                        <select className="form-select" value={formData.tipo_documento} onChange={(e) => setFormData({ ...formData, tipo_documento: e.target.value })}>
-                            <option value="Factura">Factura</option><option value="Boleta">Boleta</option><option value="Guia">Guía Remisión</option>
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label text-xs uppercase text-muted">Serie</label>
-                        <input type="text" className="form-input uppercase" placeholder="F001" value={formData.serie_documento} onChange={(e) => setFormData({ ...formData, serie_documento: e.target.value.toUpperCase() })} />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label text-xs uppercase text-muted">Número</label>
-                        <input type="text" className="form-input" placeholder="00001234" value={formData.numero_documento} onChange={(e) => setFormData({ ...formData, numero_documento: e.target.value })} />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label text-xs uppercase text-muted">Fecha Doc.</label>
-                        <input type="date" className="form-input" value={formData.fecha_emision_documento} onChange={(e) => setFormData({ ...formData, fecha_emision_documento: e.target.value })} />
-                    </div>
+                <div className="form-group">
+                  <label className="form-label text-xs uppercase text-muted">Serie</label>
+                  <input 
+                    type="text" 
+                    className="form-input uppercase" 
+                    placeholder="F001" 
+                    value={formData.serie_documento} 
+                    onChange={(e) => setFormData({ ...formData, serie_documento: e.target.value.toUpperCase() })} 
+                  />
                 </div>
+                <div className="form-group">
+                  <label className="form-label text-xs uppercase text-muted">Número</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="00001234" 
+                    value={formData.numero_documento} 
+                    onChange={(e) => setFormData({ ...formData, numero_documento: e.target.value })} 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label text-xs uppercase text-muted">Fecha Doc.</label>
+                  <input 
+                    type="date" 
+                    className="form-input" 
+                    value={formData.fecha_emision_documento} 
+                    onChange={(e) => setFormData({ ...formData, fecha_emision_documento: e.target.value })} 
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="card">
-                <div className="card-body">
-                    <div className="flex gap-4">
-                        <button type="button" className={`selection-card-btn ${formData.moneda === 'PEN' ? 'active' : ''}`} onClick={() => setFormData({...formData, moneda: 'PEN'})}>
-                            <div className="font-bold text-xl">S/</div><span className="text-xs font-bold uppercase">Soles</span>
-                        </button>
-                        <button type="button" className={`selection-card-btn ${formData.moneda === 'USD' ? 'active' : ''}`} onClick={() => setFormData({...formData, moneda: 'USD'})}>
-                            <div className="font-bold text-xl">$</div><span className="text-xs font-bold uppercase">Dólares</span>
-                        </button>
-                    </div>
+              <div className="card-body">
+                <div className="flex gap-4">
+                  <button 
+                    type="button" 
+                    className={`selection-card-btn ${formData.moneda === 'PEN' ? 'active' : ''}`} 
+                    onClick={() => setFormData({...formData, moneda: 'PEN'})}
+                  >
+                    <div className="font-bold text-xl">S/</div>
+                    <span className="text-xs font-bold uppercase">Soles</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`selection-card-btn ${formData.moneda === 'USD' ? 'active' : ''}`} 
+                    onClick={() => setFormData({...formData, moneda: 'USD'})}
+                  >
+                    <div className="font-bold text-xl">$</div>
+                    <span className="text-xs font-bold uppercase">Dólares</span>
+                  </button>
                 </div>
+              </div>
             </div>
-
             {formData.moneda && (
-                <div className="card">
-                    <div className="card-header bg-gray-50 flex justify-between items-center">
-                        <h2 className="card-title text-base"><ShoppingCart size={18} className="text-primary"/> Detalle de Productos</h2>
-                        <div className="flex gap-2">
-                            <select className="form-select text-xs w-36" value={formData.tipo_recepcion} onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}>
-                                <option value="Total">Recepción Total</option><option value="Parcial">Recepción Parcial</option><option value="Ninguna">Solo Orden</option>
-                            </select>
-                            <button type="button" className="btn btn-sm btn-primary" onClick={() => setModalProductoOpen(true)}><Plus size={16} /> Agregar</button>
-                        </div>
-                    </div>
-                    
-                    <div className="card-body p-0 overflow-hidden">
-                        <div className="table-container shadow-none rounded-none border-0">
-                            <table className="table">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="w-12 text-center">#</th>
-                                        <th>Producto</th>
-                                        <th className="w-24 text-right">Cant.</th>
-                                        {formData.tipo_recepcion === 'Parcial' && <th className="w-24 text-right bg-blue-50 text-blue-800">Recibir</th>}
-                                        <th className="w-28 text-right">Precio Unit.</th>
-                                        <th className="w-20 text-center">% Desc.</th>
-                                        <th className="w-28 text-right">Total</th>
-                                        <th className="w-12 text-center"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {detalle.length > 0 ? detalle.map((item, index) => (
-                                        <tr key={index} className="hover:bg-gray-50">
-                                            <td className="text-center text-muted text-xs">{index + 1}</td>
-                                            <td>
-                                                <div className="font-medium text-sm text-gray-800">{item.producto}</div>
-                                                <div className="text-xs text-muted font-mono">{item.codigo_producto}</div>
-                                            </td>
-                                            <td><input type="number" className="form-input form-input-sm text-right" value={item.cantidad} onChange={(e) => handleCantidadChange(index, e.target.value)} min="0" step="0.01" /></td>
-                                            {formData.tipo_recepcion === 'Parcial' && <td className="bg-blue-50"><input type="number" className="form-input form-input-sm text-right border-blue-500" value={item.cantidad_a_recibir} onChange={(e) => handleCantidadRecibirChange(index, e.target.value)} min="0" max={item.cantidad} step="0.01" /></td>}
-                                            <td><input type="number" className="form-input form-input-sm text-right" value={item.precio_unitario} onChange={(e) => handlePrecioChange(index, e.target.value)} min="0" step="0.01" /></td>
-                                            <td><input type="number" className="form-input form-input-sm text-center" value={item.descuento_porcentaje} onChange={(e) => handleDescuentoChange(index, e.target.value)} min="0" max="100" /></td>
-                                            <td className="text-right font-bold text-gray-800 text-sm">{formatearMoneda(calcularSubtotalItem(item))}</td>
-                                            <td className="text-center"><button type="button" className="btn btn-xs btn-ghost text-red-600 hover:bg-red-50" onClick={() => handleEliminarProducto(index)}><Trash2 size={14} /></button></td>
-                                        </tr>
-                                    )) : (
-                                        <tr><td colSpan="8" className="p-8 text-center text-muted italic">No hay productos agregados a la lista.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div className="p-4 bg-gray-50 border-t flex justify-end">
-                        <div className="w-80 space-y-2">
-                            <div className="flex justify-between text-sm"><span className="text-muted">Subtotal:</span><span className="font-medium">{formatearMoneda(totales.subtotal)}</span></div>
-                            <div className="flex justify-between text-sm items-center">
-                                <div className="flex items-center gap-1">
-                                    <select className="form-select form-select-sm border-transparent bg-transparent p-0 pr-6 font-medium text-muted cursor-pointer hover:text-primary focus:ring-0" value={formData.tipo_impuesto} onChange={(e) => setFormData({...formData, tipo_impuesto: e.target.value})}>
-                                            <option value="IGV">IGV (18%)</option><option value="EXO">Exonerado</option><option value="INA">Inafecto</option>
-                                    </select>
-                                </div>
-                                <span className="font-medium">{formatearMoneda(totales.igv)}</span>
-                            </div>
-                            <div className="flex justify-between text-xl font-bold text-primary pt-3 border-t border-gray-200">
-                                <span>Total:</span><span>{formatearMoneda(totales.total)}</span>
-                            </div>
-                        </div>
-                    </div>
+              <div className="card">
+                <div className="card-header bg-gray-50 flex justify-between items-center">
+                  <h2 className="card-title text-base">
+                    <ShoppingCart size={18} className="text-primary"/> Detalle de Productos
+                  </h2>
+                  <div className="flex gap-2">
+                    <select 
+                      className="form-select text-xs w-36" 
+                      value={formData.tipo_recepcion} 
+                      onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}
+                    >
+                      <option value="Total">Recepción Total</option>
+                      <option value="Parcial">Recepción Parcial</option>
+                      <option value="Ninguna">Solo Orden</option>
+                    </select>
+                    <button 
+                      type="button" 
+                      className="btn btn-sm btn-primary" 
+                      onClick={() => setModalProductoOpen(true)}
+                    >
+                      <Plus size={16} /> Agregar
+                    </button>
+                  </div>
                 </div>
-            )}
-          </div>
+                
+                <div className="card-body p-0 overflow-hidden">
+                  <div className="table-container shadow-none rounded-none border-0">
+                    <table className="table">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="w-12 text-center">#</th>
+                          <th>Producto</th>
+                          <th className="w-24 text-right">Cant.</th>
+                          {formData.tipo_recepcion === 'Parcial' && (
+                            <th className="w-24 text-right bg-blue-50 text-blue-800">Recibir</th>
+                          )}
+                          <th className="w-28 text-right">Precio Unit.</th>
+                          <th className="w-20 text-center">% Desc.</th>
+                          <th className="w-28 text-right">Total</th>
+                          <th className="w-12 text-center"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalle.length > 0 ? detalle.map((item, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="text-center text-muted text-xs">{index + 1}</td>
+                            <td>
+                              <div className="font-medium text-sm text-gray-800">{item.producto}</div>
+                              <div className="text-xs text-muted font-mono">{item.codigo_producto}</div>
+                            </td>
+                            <td>
+                              <input 
+                                type="number" 
+                                className="form-input form-input-sm text-right" 
+                                value={item.cantidad} 
+                                onChange={(e) => handleCantidadChange(index, e.target.value)} 
+                                min="0" 
+                                step="0.01" 
+                              />
+                            </td>
+                            {formData.tipo_recepcion === 'Parcial' && (
+                              <td className="bg-blue-50">
+                                <input 
+                                  type="number" 
+                                  className="form-input form-input-sm text-right border-blue-500" 
+                                  value={item.cantidad_a_recibir} 
+                                  onChange={(e) => handleCantidadRecibirChange(index, e.target.value)} 
+                                  min="0" 
+                                  max={item.cantidad} 
+                                  step="0.01" 
+                                />
+                              </td>
+                            )}
+                            <td>
+                              <input 
+                                type="number" 
+                                className="form-input form-input-sm text-right" 
+                                value={item.precio_unitario} 
+                                onChange={(e) => handlePrecioChange(index, e.target.value)} 
+                                min="0" 
+                                step="0.01" 
+                              />
+                            </td>
+                            <td>
+                              <input 
+                                type="number" 
+                                className="form-input form-input-sm text-center" 
+                                value={item.descuento_porcentaje} 
+                                onChange={(e) => handleDescuentoChange(index, e.target.value)} 
+                                min="0" 
+                                max="100" 
+                              />
+                            </td>
+                            <td className="text-right font-bold text-gray-800 text-sm">
+                              {formatearMoneda(calcularSubtotalItem(item))}
+                            </td>
+                            <td className="text-center">
+                              <button 
+                                type="button" 
+                                className="btn btn-xs btn-ghost text-red-600 hover:bg-red-50" 
+                                onClick={() => handleEliminarProducto(index)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        )) : (
+                          <tr>
+                            <td colSpan="8" className="p-8 text-center text-muted italic">
+                              No hay productos agregados a la lista.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
+                <div className="p-4 bg-gray-50 border-t flex justify-end">
+                  <div className="w-80 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Subtotal:</span>
+                      <span className="font-medium">{formatearMoneda(totales.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm items-center">
+                      <div className="flex items-center gap-1">
+                        <select 
+                          className="form-select form-select-sm border-transparent bg-transparent p-0 pr-6 font-medium text-muted cursor-pointer hover:text-primary focus:ring-0" 
+                          value={formData.tipo_impuesto} 
+                          onChange={(e) => setFormData({...formData, tipo_impuesto: e.target.value})}
+                        >
+                          <option value="IGV">IGV (18%)</option>
+                          <option value="EXO">Exonerado</option>
+                          <option value="INA">Inafecto</option>
+                        </select>
+                      </div>
+                      <span className="font-medium">{formatearMoneda(totales.igv)}</span>
+                    </div>
+                    <div className="flex justify-between text-xl font-bold text-primary pt-3 border-t border-gray-200">
+                      <span>Total:</span>
+                      <span>{formatearMoneda(totales.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
           <div className="space-y-6">
             
             {detalle.length > 0 && (
-                <>
-                    <div className="card">
-                        <div className="card-header bg-gray-50"><h2 className="card-title text-base"><Wallet size={18} className="text-primary"/> Forma de Pago</h2></div>
-                        <div className="card-body space-y-4">
-                            <div className="grid grid-cols-3 gap-2">
-                                <button type="button" className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Contado' ? 'active' : ''}`} onClick={() => handleFormaPagoChange('Contado')}>
-                                    <Wallet size={20} /><span className="text-xs font-bold uppercase">Contado</span>
-                                </button>
-                                <button type="button" className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Credito' ? 'active' : ''}`} onClick={() => handleFormaPagoChange('Credito')}>
-                                    <CreditCard size={20} /><span className="text-xs font-bold uppercase">Crédito</span>
-                                </button>
-                                <button type="button" className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Letras' ? 'active' : ''}`} onClick={() => handleFormaPagoChange('Letras')}>
-                                    <Receipt size={20} /><span className="text-xs font-bold uppercase">Letras</span>
-                                </button>
-                            </div>
-
-                            {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
-                                <div className="slide-down space-y-3 pt-2 border-t border-dashed">
-                                    <div className="grid grid-cols-3 gap-2 mb-3">
-                                        <button 
-                                            type="button" 
-                                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${accionPago === 'completo' ? 'bg-green-50 border-green-500 text-green-700 font-bold' : 'hover:bg-gray-50 text-muted'}`}
-                                            onClick={() => setAccionPago('completo')}
-                                        >
-                                            <CheckCircle size={16}/> Completo
-                                        </button>
-                                        <button 
-                                            type="button" 
-                                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${accionPago === 'adelanto' ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' : 'hover:bg-gray-50 text-muted'}`}
-                                            onClick={() => setAccionPago('adelanto')}
-                                        >
-                                            <Banknote size={16}/> Adelanto
-                                        </button>
-                                        <button 
-                                            type="button" 
-                                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${accionPago === 'registro' ? 'bg-orange-50 border-orange-500 text-orange-700 font-bold' : 'hover:bg-gray-50 text-muted'}`}
-                                            onClick={() => setAccionPago('registro')}
-                                        >
-                                            <FileClock size={16}/> Solo Reg.
-                                        </button>
-                                    </div>
-
-                                    {accionPago === 'completo' && (
-                                        <div className="alert alert-success py-2 text-sm">
-                                            <CheckCircle size={14} /> Se descontará <strong>{formatearMoneda(totales.total)}</strong> de la cuenta.
-                                        </div>
-                                    )}
-                                    {accionPago === 'adelanto' && (
-                                        <div className="form-group">
-                                            <label className="form-label text-xs uppercase text-muted">Monto Adelanto</label>
-                                            <input type="number" className="form-input font-bold" value={formData.monto_pagado_inicial} onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} min="0.01" max={totales.total} step="0.01" />
-                                        </div>
-                                    )}
-                                    {accionPago === 'registro' && (
-                                        <div className="alert alert-warning py-2 text-sm">
-                                            <AlertCircle size={14} /> Se generará una cuenta por pagar. No se mueve dinero ahora.
-                                        </div>
-                                    )}
-
-                                    {accionPago !== 'registro' && (
-                                        <div className="form-group">
-                                            <label className="form-label text-xs uppercase text-muted">Cuenta de Origen</label>
-                                            <select className="form-select" value={formData.id_cuenta_pago} onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} required>
-                                                <option value="">Seleccionar cuenta...</option>
-                                                {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre} ({c.moneda})</option>)}
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {formData.forma_pago_detalle === 'Letras' && (
-                                <div className="slide-down">
-                                    <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
-                                        <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="font-bold">Compra a Letras</p>
-                                            <p className="text-purple-900/80">
-                                                {formData.letras_pendientes_registro 
-                                                ? "Se registrará la deuda total. Podrás canjear las letras y definir fechas más adelante." 
-                                                : "Define el cronograma de cuotas ahora mismo."}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <label className="flex items-center gap-2 cursor-pointer mb-3 p-3 border rounded hover:bg-gray-50 transition-colors">
-                                        <input type="checkbox" className="form-checkbox h-4 w-4 text-purple-600 rounded" checked={formData.letras_pendientes_registro} onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} />
-                                        <span className="font-medium text-sm">Registrar detalle de letras después</span>
-                                    </label>
-                                </div>
-                            )}
-
-                            {(formData.forma_pago_detalle === 'Credito' || (formData.forma_pago_detalle === 'Letras' && !formData.letras_pendientes_registro)) && (
-                                <div className="slide-down space-y-4 pt-2 border-t border-dashed">
-                                    
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="form-group">
-                                            <label className="form-label text-xs uppercase text-muted">
-                                                {formData.forma_pago_detalle === 'Letras' ? 'N° Letras' : 'Cuotas'}
-                                            </label>
-                                            <input type="number" className="form-input text-center font-bold" min="1" value={formData.numero_cuotas} onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="form-label text-xs uppercase text-muted">Días/Intervalo</label>
-                                            <input type="number" className="form-input text-center" min="1" value={formData.dias_entre_cuotas} onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} />
-                                        </div>
-                                        <div className="form-group col-span-2">
-                                            <label className="form-label text-xs uppercase text-muted">
-                                                {formData.forma_pago_detalle === 'Letras' ? 'Vencimiento 1° Letra' : '1° Vencimiento'}
-                                            </label>
-                                            <input type="date" className="form-input" value={formData.fecha_primera_cuota} onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} />
-                                        </div>
-                                    </div>
-
-                                    {formData.forma_pago_detalle === 'Letras' && cronograma.length > 0 && (
-                                        <div className="bg-gray-50 rounded border overflow-hidden">
-                                            <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
-                                                <span>Cronograma Preliminar</span>
-                                                <Calendar size={14}/>
-                                            </div>
-                                            <div className="max-h-48 overflow-y-auto">
-                                                <table className="w-full text-xs">
-                                                    <thead className="text-gray-500 bg-gray-50">
-                                                        <tr>
-                                                            <th className="px-2 py-1 text-left">#</th>
-                                                            <th className="px-2 py-1 text-left">Vence</th>
-                                                            <th className="px-2 py-1 text-right">Monto</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y">
-                                                        {cronograma.map((cuota) => (
-                                                            <tr key={cuota.numero}>
-                                                                <td className="px-2 py-1 font-medium">{cuota.numero}</td>
-                                                                <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
-                                                                <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {!formData.usa_fondos_propios && (
-                                        <div className="bg-gray-50 p-3 rounded border">
-                                            <label className="form-label text-xs uppercase text-blue-700 font-bold mb-2">Adelanto (Opcional)</label>
-                                            <div className="flex gap-2 mb-2">
-                                                <div className="relative flex-1">
-                                                    <span className="absolute left-3 top-2 text-gray-500 text-sm">{formData.moneda === 'USD' ? '$' : 'S/'}</span>
-                                                    <input type="number" className="form-input pl-8 font-bold" value={formData.monto_pagado_inicial} onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} min="0" max={totales.total} step="0.01" />
-                                                </div>
-                                            </div>
-                                            {parseFloat(formData.monto_pagado_inicial) > 0 && (
-                                                <select className="form-select text-xs" value={formData.id_cuenta_pago} onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}>
-                                                    <option value="">Cuenta para adelanto...</option>
-                                                    {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre}</option>)}
-                                                </select>
-                                            )}
-                                            <div className="text-right mt-1 text-xs text-muted">Saldo: {formatearMoneda(totales.total - parseFloat(formData.monto_pagado_inicial || 0))}</div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {cuentaSeleccionada && (
-                                <div className="flex justify-between items-center text-xs px-3 py-2 bg-gray-100 rounded text-gray-600">
-                                    <span>Saldo disponible:</span>
-                                    <span className={`font-bold ${parseFloat(cuentaSeleccionada.saldo_actual) < 0 ? 'text-red-600' : 'text-gray-800'}`}>{formatearMoneda(cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}</span>
-                                </div>
-                            )}
-
-                            {requiereConversion && (
-                                <div className="bg-orange-50 border border-orange-200 rounded p-3 text-xs space-y-2">
-                                    <div className="font-bold text-orange-800 flex items-center gap-1"><ArrowRightLeft size={12}/> Conversión Necesaria</div>
-                                    <div className="flex items-center justify-between">
-                                        <label>Tipo de Cambio:</label>
-                                        <input type="number" className="form-input py-1 text-right font-bold w-24 border-orange-300" value={formData.tipo_cambio} onChange={(e) => setFormData({...formData, tipo_cambio: e.target.value})} step="0.001" placeholder="0.000" />
-                                    </div>
-                                    {montoConvertido && <div className="text-right font-bold text-orange-700 border-t border-orange-200 pt-1 mt-1">Descargo real: {formatearMoneda(montoConvertido, cuentaSeleccionada.moneda)}</div>}
-                                </div>
-                            )}
-                        </div>
+              <>
+                <div className="card">
+                  <div className="card-header bg-gray-50">
+                    <h2 className="card-title text-base">
+                      <Wallet size={18} className="text-primary"/> Forma de Pago
+                    </h2>
+                  </div>
+                  <div className="card-body space-y-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      <button 
+                        type="button" 
+                        className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Contado' ? 'active' : ''}`} 
+                        onClick={() => handleFormaPagoChange('Contado')}
+                      >
+                        <Wallet size={20} />
+                        <span className="text-xs font-bold uppercase">Contado</span>
+                      </button>
+                      <button 
+                        type="button" 
+                        className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Credito' ? 'active' : ''}`} 
+                        onClick={() => handleFormaPagoChange('Credito')}
+                      >
+                        <CreditCard size={20} />
+                        <span className="text-xs font-bold uppercase">Crédito</span>
+                      </button>
+                      <button 
+                        type="button" 
+                        className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Letras' ? 'active' : ''}`} 
+                        onClick={() => handleFormaPagoChange('Letras')}
+                      >
+                        <Receipt size={20} />
+                        <span className="text-xs font-bold uppercase">Letras</span>
+                      </button>
                     </div>
 
-                    <div className="card">
-                        <div className="card-header bg-gray-50"><h2 className="card-title text-base"><User size={18} className="text-primary"/> Comprador</h2></div>
-                        <div className="card-body">
-                            <label className="flex items-start gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded transition-colors">
-                                <input type="checkbox" className="mt-1" checked={formData.usa_fondos_propios} onChange={(e) => {
-                                    const usa = e.target.checked;
-                                    setFormData({ ...formData, usa_fondos_propios: usa, id_comprador: usa ? formData.id_comprador : '', id_cuenta_pago: usa ? '' : formData.id_cuenta_pago, monto_pagado_inicial: usa ? 0 : (formData.forma_pago_detalle === 'Contado' ? totales.total : formData.monto_pagado_inicial) });
-                                }} />
-                                <div>
-                                    <span className="font-medium text-sm block">Usar Fondos Propios</span>
-                                    <span className="text-xs text-muted">Empleado paga con su dinero (reembolso pendiente)</span>
-                                </div>
+                    {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
+                      <div className="slide-down space-y-3 pt-2 border-t border-dashed">
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          <button 
+                            type="button" 
+                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
+                              accionPago === 'completo' 
+                                ? 'bg-green-50 border-green-500 text-green-700 font-bold' 
+                                : 'hover:bg-gray-50 text-muted'
+                            }`}
+                            onClick={() => setAccionPago('completo')}
+                          >
+                            <CheckCircle size={16}/> Completo
+                          </button>
+                          <button 
+                            type="button" 
+                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
+                              accionPago === 'adelanto' 
+                                ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' 
+                                : 'hover:bg-gray-50 text-muted'
+                            }`}
+                            onClick={() => setAccionPago('adelanto')}
+                          >
+                            <Banknote size={16}/> Adelanto
+                          </button>
+                          <button 
+                            type="button" 
+                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
+                              accionPago === 'registro' 
+                                ? 'bg-orange-50 border-orange-500 text-orange-700 font-bold' 
+                                : 'hover:bg-gray-50 text-muted'
+                            }`}
+                            onClick={() => setAccionPago('registro')}
+                          >
+                            <FileClock size={16}/> Solo Reg.
+                          </button>
+                        </div>
+
+                        {accionPago === 'completo' && (
+                          <div className="alert alert-success py-2 text-sm">
+                            <CheckCircle size={14} /> Se descontará <strong>{formatearMoneda(totales.total)}</strong> de la cuenta.
+                          </div>
+                        )}
+                        
+                        {accionPago === 'adelanto' && (
+                          <div className="form-group">
+                            <label className="form-label text-xs uppercase text-muted">Monto Adelanto</label>
+                            <input 
+                              type="number" 
+                              className="form-input font-bold" 
+                              value={formData.monto_pagado_inicial} 
+                              onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} 
+                              min="0.01" 
+                              max={totales.total} 
+                              step="0.01" 
+                            />
+                          </div>
+                        )}
+                        
+                        {accionPago === 'registro' && (
+                          <div className="alert alert-warning py-2 text-sm">
+                            <AlertCircle size={14} /> Se generará una cuenta por pagar. No se mueve dinero ahora.
+                          </div>
+                        )}
+
+                        {accionPago !== 'registro' && (
+                          <div className="form-group">
+                            <label className="form-label text-xs uppercase text-muted">Cuenta de Origen</label>
+                            <select 
+                              className="form-select" 
+                              value={formData.id_cuenta_pago} 
+                              onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} 
+                              required
+                            >
+                              <option value="">Seleccionar cuenta...</option>
+                              {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => (
+                                <option key={c.id_cuenta} value={c.id_cuenta}>
+                                  {c.nombre} ({c.moneda})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {formData.forma_pago_detalle === 'Letras' && (
+                      <div className="slide-down">
+                        <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
+                          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold">Compra a Letras</p>
+                            <p className="text-purple-900/80">
+                              {formData.letras_pendientes_registro 
+                                ? "Se registrará la deuda total. Podrás canjear las letras y definir fechas más adelante." 
+                                : "Define el cronograma de cuotas ahora mismo."}
+                            </p>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer mb-3 p-3 border rounded hover:bg-gray-50 transition-colors">
+                          <input 
+                            type="checkbox" 
+                            className="form-checkbox h-4 w-4 text-purple-600 rounded" 
+                            checked={formData.letras_pendientes_registro} 
+                            onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} 
+                          />
+                          <span className="font-medium text-sm">Registrar detalle de letras después</span>
+                        </label>
+                      </div>
+                    )}
+
+                    {(formData.forma_pago_detalle === 'Credito' || (formData.forma_pago_detalle === 'Letras' && !formData.letras_pendientes_registro)) && (
+                      <div className="slide-down space-y-4 pt-2 border-t border-dashed">
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="form-group">
+                            <label className="form-label text-xs uppercase text-muted">
+                              {formData.forma_pago_detalle === 'Letras' ? 'N° Letras' : 'Cuotas'}
                             </label>
+                            <input 
+                              type="number" 
+                              className="form-input text-center font-bold" 
+                              min="1" 
+                              value={formData.numero_cuotas} 
+                              onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} 
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label text-xs uppercase text-muted">Días/Intervalo</label>
+                            <input 
+                              type="number" 
+                              className="form-input text-center" 
+                              min="1" 
+                              value={formData.dias_entre_cuotas} 
+                              onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} 
+                            />
+                          </div>
+                          <div className="form-group col-span-2">
+                            <label className="form-label text-xs uppercase text-muted">
+                              {formData.forma_pago_detalle === 'Letras' ? 'Vencimiento 1° Letra' : '1° Vencimiento'}
+                            </label>
+                            <input 
+                              type="date" 
+                              className="form-input" 
+                              value={formData.fecha_primera_cuota} 
+                              onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} 
+                            />
+                          </div>
+                        </div>
 
-                            {formData.usa_fondos_propios && (
-                                <div className="mt-3 slide-down">
-                                    <select className="form-select" value={formData.id_comprador} onChange={(e) => setFormData({...formData, id_comprador: e.target.value})} required>
-                                            <option value="">Seleccione empleado...</option>
-                                            {empleados.map(emp => <option key={emp.id_empleado} value={emp.id_empleado}>{emp.nombre_completo}</option>)}
-                                    </select>
-                                </div>
+                        {formData.forma_pago_detalle === 'Letras' && cronograma.length > 0 && (
+                          <div className="bg-gray-50 rounded border overflow-hidden">
+                            <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
+                              <span>Cronograma Preliminar</span>
+                              <Calendar size={14}/>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              <table className="w-full text-xs">
+                                <thead className="text-gray-500 bg-gray-50">
+                                  <tr>
+                                    <th className="px-2 py-1 text-left">#</th>
+                                    <th className="px-2 py-1 text-left">Vence</th>
+                                    <th className="px-2 py-1 text-right">Monto</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                  {cronograma.map((cuota) => (
+                                    <tr key={cuota.numero}>
+                                      <td className="px-2 py-1 font-medium">{cuota.numero}</td>
+                                      <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
+                                      <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {!formData.usa_fondos_propios && (
+                          <div className="bg-gray-50 p-3 rounded border">
+                            <label className="form-label text-xs uppercase text-blue-700 font-bold mb-2">
+                              Adelanto (Opcional)
+                            </label>
+                            <div className="flex gap-2 mb-2">
+                              <div className="relative flex-1">
+                                <span className="absolute left-3 top-2 text-gray-500 text-sm">
+                                  {formData.moneda === 'USD' ? '$' : 'S/'}
+                                </span>
+                                <input 
+                                  type="number" 
+                                  className="form-input pl-8 font-bold" 
+                                  value={formData.monto_pagado_inicial} 
+                                  onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} 
+                                  min="0" 
+                                  max={totales.total} 
+                                  step="0.01" 
+                                />
+                              </div>
+                            </div>
+                            {parseFloat(formData.monto_pagado_inicial) > 0 && (
+                              <select 
+                                className="form-select text-xs" 
+                                value={formData.id_cuenta_pago} 
+                                onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
+                              >
+                                <option value="">Cuenta para adelanto...</option>
+                                {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => (
+                                  <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre}</option>
+                                ))}
+                              </select>
                             )}
-                        </div>
-                    </div>
-
-                    <div className="card">
-                        <div className="card-body space-y-3">
-                            <div className="form-group m-0">
-                                <label className="form-label text-xs uppercase text-muted">Dirección Entrega</label>
-                                <textarea className="form-textarea text-sm min-h-[60px]" value={formData.direccion_entrega} onChange={(e) => setFormData({...formData, direccion_entrega: e.target.value})} />
+                            <div className="text-right mt-1 text-xs text-muted">
+                              Saldo: {formatearMoneda(totales.total - parseFloat(formData.monto_pagado_inicial || 0))}
                             </div>
-                            <div className="form-group m-0">
-                                <label className="form-label text-xs uppercase text-muted">Notas Internas</label>
-                                <textarea className="form-textarea text-sm min-h-[60px]" value={formData.observaciones} onChange={(e) => setFormData({...formData, observaciones: e.target.value})} />
-                            </div>
-                        </div>
-                    </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                    <button type="submit" className="btn btn-primary w-full btn-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all" disabled={loading}>
-                        {loading ? 'Procesando...' : <><Save size={20} /> Guardar Compra</>}
-                    </button>
-                </>
+                    {cuentaSeleccionada && (
+                      <div className="flex justify-between items-center text-xs px-3 py-2 bg-gray-100 rounded text-gray-600">
+                        <span>Saldo disponible:</span>
+                        <span className={`font-bold ${parseFloat(cuentaSeleccionada.saldo_actual) < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                          {formatearMoneda(cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}
+                        </span>
+                      </div>
+                    )}
+
+                    {requiereConversion && (
+                      <div className="bg-orange-50 border border-orange-200 rounded p-3 text-xs space-y-2">
+                        <div className="font-bold text-orange-800 flex items-center gap-1">
+                          <ArrowRightLeft size={12}/> Conversión Necesaria
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label>Tipo de Cambio:</label>
+                          <input 
+                            type="number" 
+                            className="form-input py-1 text-right font-bold w-24 border-orange-300" 
+                            value={formData.tipo_cambio} 
+                            onChange={(e) => setFormData({...formData, tipo_cambio: e.target.value})} 
+                            step="0.001" 
+                            placeholder="0.000" 
+                          />
+                        </div>
+                        {montoConvertido && (
+                          <div className="text-right font-bold text-orange-700 border-t border-orange-200 pt-1 mt-1">
+                            Descargo real: {formatearMoneda(montoConvertido, cuentaSeleccionada.moneda)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="card">
+                  <div className="card-header bg-gray-50">
+                    <h2 className="card-title text-base">
+                      <User size={18} className="text-primary"/> Comprador
+                    </h2>
+                  </div>
+                  <div className="card-body">
+                    <label className="flex items-start gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded transition-colors">
+                      <input 
+                        type="checkbox" 
+                        className="mt-1" 
+                        checked={formData.usa_fondos_propios} 
+                        onChange={(e) => {
+                          const usa = e.target.checked;
+                          setFormData({ 
+                            ...formData, 
+                            usa_fondos_propios: usa, 
+                            id_comprador: usa ? formData.id_comprador : '', 
+                            id_cuenta_pago: usa ? '' : formData.id_cuenta_pago, 
+                            monto_pagado_inicial: usa ? 0 : (formData.forma_pago_detalle === 'Contado' ? totales.total : formData.monto_pagado_inicial) 
+                          });
+                        }} 
+                      />
+                      <div>
+                        <span className="font-medium text-sm block">Usar Fondos Propios</span>
+                        <span className="text-xs text-muted">Empleado paga con su dinero (reembolso pendiente)</span>
+                      </div>
+                    </label>
+
+                    {formData.usa_fondos_propios && (
+                      <div className="mt-3 slide-down">
+                        <select 
+                          className="form-select" 
+                          value={formData.id_comprador} 
+                          onChange={(e) => setFormData({...formData, id_comprador: e.target.value})} 
+                          required
+                        >
+                          <option value="">Seleccione empleado...</option>
+                          {empleados.map(emp => (
+                            <option key={emp.id_empleado} value={emp.id_empleado}>
+                              {emp.nombre_completo}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-body space-y-3">
+                    <div className="form-group m-0">
+                      <label className="form-label text-xs uppercase text-muted">Dirección Entrega</label>
+                      <textarea 
+                        className="form-textarea text-sm min-h-[60px]" 
+                        value={formData.direccion_entrega} 
+                        onChange={(e) => setFormData({...formData, direccion_entrega: e.target.value})} 
+                      />
+                    </div>
+                    <div className="form-group m-0">
+                      <label className="form-label text-xs uppercase text-muted">Notas Internas</label>
+                      <textarea 
+                        className="form-textarea text-sm min-h-[60px]" 
+                        value={formData.observaciones} 
+                        onChange={(e) => setFormData({...formData, observaciones: e.target.value})} 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="btn btn-primary w-full btn-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all" 
+                  disabled={loading}
+                >
+                  {loading ? 'Procesando...' : (
+                    <>
+                      <Save size={20} /> Guardar Compra
+                    </>
+                  )}
+                </button>
+              </>
             )}
           </div>
         </div>
       </form>
-
-      <Modal isOpen={modalProveedorOpen} onClose={() => { setModalProveedorOpen(false); setBusquedaProveedor(''); }} title="Buscar Proveedor">
+      <Modal 
+        isOpen={modalProveedorOpen} 
+        onClose={() => { setModalProveedorOpen(false); setBusquedaProveedor(''); }} 
+        title="Buscar Proveedor"
+      >
         <div className="space-y-4">
-             <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <input type="text" className="form-input pl-10" placeholder="Buscar por Razón Social o RUC..." value={busquedaProveedor} onChange={(e) => setBusquedaProveedor(e.target.value)} autoFocus />
-                    <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input 
+                type="text" 
+                className="form-input pl-10" 
+                placeholder="Buscar por Razón Social o RUC..." 
+                value={busquedaProveedor} 
+                onChange={(e) => setBusquedaProveedor(e.target.value)} 
+                autoFocus 
+              />
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+            </div>
+            <button 
+              type="button" 
+              className="btn btn-success" 
+              onClick={() => { setModalProveedorOpen(false); setModalCrearProveedorOpen(true); }}
+            >
+              <UserPlus size={18} />
+            </button>
+          </div>
+          <div className="max-h-80 overflow-y-auto border rounded divide-y">
+            {proveedoresFiltrados.length > 0 ? proveedoresFiltrados.map((prov) => (
+              <div 
+                key={prov.id_proveedor} 
+                className="p-3 hover:bg-blue-50 cursor-pointer transition-colors" 
+                onClick={() => handleSelectProveedor(prov)}
+              >
+                <div className="font-bold text-blue-900">{prov.razon_social}</div>
+                <div className="text-xs text-muted flex gap-2">
+                  <span>RUC: {prov.ruc}</span>
+                  {prov.contacto && <span>| Contacto: {prov.contacto}</span>}
                 </div>
-                <button type="button" className="btn btn-success" onClick={() => { setModalProveedorOpen(false); setModalCrearProveedorOpen(true); }}><UserPlus size={18} /></button>
-            </div>
-            <div className="max-h-80 overflow-y-auto border rounded divide-y">
-                {proveedoresFiltrados.length > 0 ? proveedoresFiltrados.map((prov) => (
-                    <div key={prov.id_proveedor} className="p-3 hover:bg-blue-50 cursor-pointer transition-colors" onClick={() => handleSelectProveedor(prov)}>
-                        <div className="font-bold text-blue-900">{prov.razon_social}</div>
-                        <div className="text-xs text-muted flex gap-2"><span>RUC: {prov.ruc}</span>{prov.contacto && <span>| Contacto: {prov.contacto}</span>}</div>
-                    </div>
-                )) : <div className="p-4 text-center text-muted">No se encontraron proveedores.</div>}
-            </div>
+              </div>
+            )) : (
+              <div className="p-4 text-center text-muted">No se encontraron proveedores.</div>
+            )}
+          </div>
         </div>
       </Modal>
 
-      <Modal isOpen={modalProductoOpen} onClose={() => { setModalProductoOpen(false); setBusquedaProducto(''); }} title="Agregar Producto" size="lg">
+      <Modal 
+        isOpen={modalProductoOpen} 
+        onClose={() => { setModalProductoOpen(false); setBusquedaProducto(''); }} 
+        title="Agregar Producto" 
+        size="lg"
+      >
         <div className="space-y-4">
-             <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <input type="text" className="form-input pl-10" placeholder="Buscar producto..." value={busquedaProducto} onChange={(e) => setBusquedaProducto(e.target.value)} autoFocus />
-                    <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input 
+                type="text" 
+                className="form-input pl-10" 
+                placeholder="Buscar producto..." 
+                value={busquedaProducto} 
+                onChange={(e) => setBusquedaProducto(e.target.value)} 
+                autoFocus 
+              />
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+            </div>
+            <button 
+              type="button" 
+              className="btn btn-success" 
+              onClick={() => { setModalProductoOpen(false); setModalCrearProductoOpen(true); }}
+            >
+              <PackagePlus size={18} />
+            </button>
+          </div>
+          <div className="max-h-96 overflow-y-auto border rounded divide-y">
+            {productosFiltrados.length > 0 ? productosFiltrados.map((prod) => (
+              <div 
+                key={prod.id_producto} 
+                className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center transition-colors" 
+                onClick={() => handleSelectProducto(prod)}
+              >
+                <div>
+                  <div className="font-bold text-sm text-gray-800">{prod.nombre}</div>
+                  <div className="text-xs text-muted">Código: {prod.codigo}</div>
                 </div>
-                <button type="button" className="btn btn-success" onClick={() => { setModalProductoOpen(false); setModalCrearProductoOpen(true); }}><PackagePlus size={18} /></button>
-            </div>
-            <div className="max-h-96 overflow-y-auto border rounded divide-y">
-                {productosFiltrados.length > 0 ? productosFiltrados.map((prod) => (
-                    <div key={prod.id_producto} className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center transition-colors" onClick={() => handleSelectProducto(prod)}>
-                        <div>
-                            <div className="font-bold text-sm text-gray-800">{prod.nombre}</div>
-                            <div className="text-xs text-muted">Código: {prod.codigo}</div>
-                        </div>
-                        <div className="text-right text-xs">
-                            <span className="block font-medium">Stock: {parseFloat(prod.stock_actual).toFixed(2)} {prod.unidad_medida}</span>
-                            <span className="text-muted block">{prod.categoria}</span>
-                        </div>
-                    </div>
-                )) : <div className="p-4 text-center text-muted">No se encontraron productos.</div>}
-            </div>
+                <div className="text-right text-xs">
+                  <span className="block font-medium">
+                    Stock: {parseFloat(prod.stock_actual).toFixed(2)} {prod.unidad_medida}
+                  </span>
+                  <span className="text-muted block">{prod.categoria}</span>
+                </div>
+              </div>
+            )) : (
+              <div className="p-4 text-center text-muted">No se encontraron productos.</div>
+            )}
+          </div>
         </div>
       </Modal>
-
-      <Modal isOpen={modalCrearProveedorOpen} onClose={() => setModalCrearProveedorOpen(false)} title="Nuevo Proveedor">
+      <Modal 
+        isOpen={modalCrearProveedorOpen} 
+        onClose={() => setModalCrearProveedorOpen(false)} 
+        title="Nuevo Proveedor"
+      >
         <form onSubmit={handleGuardarNuevoProveedor} className="space-y-3">
-            <div className="flex gap-2">
-                <div className="flex-1 input-with-icon">
-                    <Search size={18} className="icon"/>
-                    <input className="form-input" placeholder="RUC (11 dígitos)" value={formNuevoProveedor.ruc} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, ruc: e.target.value})} maxLength={11} required />
-                </div>
-                <button type="button" className="btn btn-secondary" onClick={handleBuscarRUC} disabled={buscandoRuc}>{buscandoRuc ? <Loading size="sm"/> : 'SUNAT'}</button>
+          <div className="flex gap-2">
+            <div className="flex-1 input-with-icon">
+              <Search size={18} className="icon"/>
+              <input 
+                className="form-input" 
+                placeholder="RUC (11 dígitos)" 
+                value={formNuevoProveedor.ruc} 
+                onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, ruc: e.target.value})} 
+                maxLength={11} 
+                required 
+              />
             </div>
-            <input className="form-input" placeholder="Razón Social" value={formNuevoProveedor.razon_social} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, razon_social: e.target.value})} required />
-            <input className="form-input" placeholder="Dirección Fiscal" value={formNuevoProveedor.direccion} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, direccion: e.target.value})} />
-            <div className="grid grid-cols-2 gap-3">
-                <input className="form-input" placeholder="Teléfono" value={formNuevoProveedor.telefono} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, telefono: e.target.value})} />
-                <input className="form-input" placeholder="Email" value={formNuevoProveedor.email} onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, email: e.target.value})} />
-            </div>
-            <div className="pt-2"><button type="submit" className="btn btn-primary w-full" disabled={loading}>Guardar Proveedor</button></div>
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={handleBuscarRUC} 
+              disabled={buscandoRuc}
+            >
+              {buscandoRuc ? <Loading size="sm"/> : 'SUNAT'}
+            </button>
+          </div>
+          <input 
+            className="form-input" 
+            placeholder="Razón Social" 
+            value={formNuevoProveedor.razon_social} 
+            onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, razon_social: e.target.value})} 
+            required 
+          />
+          <input 
+            className="form-input" 
+            placeholder="Dirección Fiscal" 
+            value={formNuevoProveedor.direccion} 
+            onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, direccion: e.target.value})} 
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <input 
+              className="form-input" 
+              placeholder="Teléfono" 
+              value={formNuevoProveedor.telefono} 
+              onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, telefono: e.target.value})} 
+            />
+            <input 
+              className="form-input" 
+              placeholder="Email" 
+              value={formNuevoProveedor.email} 
+              onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, email: e.target.value})} 
+            />
+          </div>
+          <div className="pt-2">
+            <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+              Guardar Proveedor
+            </button>
+          </div>
         </form>
       </Modal>
 
-      <Modal isOpen={modalCrearProductoOpen} onClose={() => setModalCrearProductoOpen(false)} title="Nuevo Producto">
+      <Modal 
+        isOpen={modalCrearProductoOpen} 
+        onClose={() => setModalCrearProductoOpen(false)} 
+        title="Nuevo Producto"
+      >
         <form onSubmit={handleGuardarNuevoProducto} className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2"><input className="form-input" placeholder="Nombre del Producto" value={formNuevoProducto.nombre} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, nombre: e.target.value})} required /></div>
-                <div><input className="form-input" placeholder="Código" value={formNuevoProducto.codigo} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, codigo: e.target.value})} required /></div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <input 
+                className="form-input" 
+                placeholder="Nombre del Producto" 
+                value={formNuevoProducto.nombre} 
+                onChange={(e) => setFormNuevoProducto({...formNuevoProducto, nombre: e.target.value})} 
+                required 
+              />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-                <select className="form-select" value={formNuevoProducto.id_tipo_inventario} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, id_tipo_inventario: e.target.value})} required>
-                    <option value="">Tipo Inventario...</option>{tiposInventario.map(t => <option key={t.id_tipo_inventario} value={t.id_tipo_inventario}>{t.nombre}</option>)}
-                </select>
-                <select className="form-select" value={formNuevoProducto.unidad_medida} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, unidad_medida: e.target.value})}>
-                    <option value="UND">Unidad (UND)</option><option value="KG">Kilos (KG)</option><option value="MTR">Metros (MTR)</option>
-                </select>
+            <div>
+              <input 
+                className="form-input" 
+                placeholder="Código" 
+                value={formNuevoProducto.codigo} 
+                onChange={(e) => setFormNuevoProducto({...formNuevoProducto, codigo: e.target.value})} 
+                required 
+              />
             </div>
-            <textarea className="form-textarea h-20" placeholder="Descripción (Opcional)" value={formNuevoProducto.descripcion} onChange={(e) => setFormNuevoProducto({...formNuevoProducto, descripcion: e.target.value})} />
-            <div className="pt-2"><button type="submit" className="btn btn-primary w-full" disabled={loading}>Guardar Producto</button></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <select 
+              className="form-select" 
+              value={formNuevoProducto.id_tipo_inventario} 
+              onChange={(e) => setFormNuevoProducto({...formNuevoProducto, id_tipo_inventario: e.target.value})} 
+              required
+            >
+              <option value="">Tipo Inventario...</option>
+              {tiposInventario.map(t => (
+                <option key={t.id_tipo_inventario} value={t.id_tipo_inventario}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+            <select 
+              className="form-select" 
+              value={formNuevoProducto.unidad_medida} 
+              onChange={(e) => setFormNuevoProducto({...formNuevoProducto, unidad_medida: e.target.value})}
+            >
+              <option value="UND">Unidad (UND)</option>
+              <option value="KG">Kilos (KG)</option>
+              <option value="MTR">Metros (MTR)</option>
+            </select>
+          </div>
+          <textarea 
+            className="form-textarea h-20" 
+            placeholder="Descripción (Opcional)" 
+            value={formNuevoProducto.descripcion} 
+            onChange={(e) => setFormNuevoProducto({...formNuevoProducto, descripcion: e.target.value})} 
+          />
+          <div className="pt-2">
+            <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+              Guardar Producto
+            </button>
+          </div>
         </form>
       </Modal>
     </div>

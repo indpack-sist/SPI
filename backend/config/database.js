@@ -14,6 +14,7 @@ export const pool = mysql.createPool({
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
+  connectTimeout: 60000,
   ssl: {
     rejectUnauthorized: false
   },
@@ -35,41 +36,63 @@ export async function testConnection() {
 }
 
 export async function executeQuery(sql, params = []) {
-  try {
+  const performQuery = async () => {
     console.log('='.repeat(80));
     console.log('EXECUTEQUERY INICIADO');
     console.log('SQL (primeros 300 chars):', sql.substring(0, 300));
     console.log('Params:', params);
     console.log('='.repeat(80));
-    
+
     const [rows] = await pool.execute(sql, params);
-    
+
     console.log('Query ejecutada exitosamente');
     console.log('Filas afectadas:', rows.affectedRows || rows.length);
     console.log('='.repeat(80));
-    
+
+    return rows;
+  };
+
+  try {
+    const rows = await performQuery();
     return { success: true, data: rows };
   } catch (error) {
-    console.error('='.repeat(80));
-    console.error('ERROR EN EXECUTEQUERY');
-    console.error('SQL completo:', sql);
-    console.error('Params:', params);
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.code);
-    console.error('SQL State:', error.sqlState);
-    console.error('SQL original del error:', error.sql);
-    console.error('Stack trace:');
-    console.error(error.stack);
-    console.error('='.repeat(80));
+    const retryCodes = ['PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'CANNOT_CONNECT'];
     
-    return { 
-      success: false, 
-      error: error.message, 
-      code: error.code, 
-      sqlState: error.sqlState, 
-      sql: error.sql
-    };
+    if (retryCodes.includes(error.code)) {
+      console.warn(`⚠️ Error de conexión detectado (${error.code}). Reintentando consulta...`);
+      try {
+        const rows = await performQuery();
+        console.log('✅ Reintento exitoso');
+        return { success: true, data: rows };
+      } catch (retryError) {
+        return handleExecuteError(retryError, sql, params);
+      }
+    }
+
+    return handleExecuteError(error, sql, params);
   }
+}
+
+function handleExecuteError(error, sql, params) {
+  console.error('='.repeat(80));
+  console.error('ERROR EN EXECUTEQUERY');
+  console.error('SQL completo:', sql);
+  console.error('Params:', params);
+  console.error('Error message:', error.message);
+  console.error('Error code:', error.code);
+  console.error('SQL State:', error.sqlState);
+  console.error('SQL original del error:', error.sql);
+  console.error('Stack trace:');
+  console.error(error.stack);
+  console.error('='.repeat(80));
+
+  return { 
+    success: false, 
+    error: error.message, 
+    code: error.code, 
+    sqlState: error.sqlState, 
+    sql: error.sql
+  };
 }
 
 export async function executeTransaction(queries) {

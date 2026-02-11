@@ -15,9 +15,6 @@ export const pool = mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   connectTimeout: 60000,
-  ssl: {
-    rejectUnauthorized: false
-  },
   timezone: '-05:00'
 });
 

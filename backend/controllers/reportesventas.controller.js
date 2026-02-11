@@ -1,17 +1,20 @@
-import db from '../config/database.js'; // Tu conexión a la BD
+import db from '../config/database.js';
+import PDFDocument from 'pdfkit';
 
 export const getReporteVentas = async (req, res) => {
     try {
-        const { fechaInicio, fechaFin, idCliente } = req.query;
+        const { fechaInicio, fechaFin, idCliente, idVendedor, format } = req.query;
 
-        // 1. Construcción de la Query Dinámica
         let sql = `
             SELECT 
                 ov.*,
                 c.razon_social,
-                c.ruc
+                c.ruc,
+                c.direccion,
+                CONCAT(COALESCE(e.nombres,''), ' ', COALESCE(e.apellidos,'')) as nombre_vendedor
             FROM ordenes_venta ov
             INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
+            LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
             WHERE DATE(ov.fecha_emision) BETWEEN ? AND ?
             AND ov.estado != 'Cancelada'
         `;
@@ -23,95 +26,183 @@ export const getReporteVentas = async (req, res) => {
             params.push(idCliente);
         }
 
+        if (idVendedor && idVendedor !== 'null' && idVendedor !== '') {
+            sql += ` AND ov.id_comercial = ?`;
+            params.push(idVendedor);
+        }
+
         sql += ` ORDER BY ov.fecha_emision DESC`;
 
-        // 2. Ejecutar la consulta
         const [ordenes] = await db.query(sql, params);
 
-        // 3. Procesamiento de Datos (Resumen y Gráficos)
-        let totalVentasPEN = 0;
-        let totalPagadoPEN = 0;
-        let totalPendientePEN = 0;
+        let kpis = {
+            totalVentasPEN: 0,
+            totalPagadoPEN: 0,
+            totalPorCobrarPEN: 0,
+            totalContado: 0,
+            totalCredito: 0,
+            pedidosAtrasados: 0
+        };
 
-        // Acumuladores para gráficos
         const conteoEstadoPago = { 'Pagado': 0, 'Parcial': 0, 'Pendiente': 0 };
-        const ventasPorDia = {}; // Objeto para agrupar: { '2025-02-01': 1500.00 }
+        const ventasPorDia = {};
+        const ventasPorVendedor = {};
 
         const listaDetalle = ordenes.map(orden => {
-            // Normalización de Moneda a Soles para el reporte
             const esDolar = orden.moneda === 'USD';
             const tipoCambio = parseFloat(orden.tipo_cambio) || 1;
             
-            // Valores originales
             const totalOriginal = parseFloat(orden.total) || 0;
             const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
 
-            // Conversión a PEN para estadísticas globales
             const totalPEN = esDolar ? totalOriginal * tipoCambio : totalOriginal;
             const pagadoPEN = esDolar ? pagadoOriginal * tipoCambio : pagadoOriginal;
             const pendientePEN = totalPEN - pagadoPEN;
 
-            // Sumar a totales generales
-            totalVentasPEN += totalPEN;
-            totalPagadoPEN += pagadoPEN;
-            totalPendientePEN += pendientePEN;
+            kpis.totalVentasPEN += totalPEN;
+            kpis.totalPagadoPEN += pagadoPEN;
+            kpis.totalPorCobrarPEN += pendientePEN;
 
-            // Conteo para gráfico circular
+            if (orden.tipo_venta === 'Crédito') {
+                kpis.totalCredito += totalPEN;
+            } else {
+                kpis.totalContado += totalPEN;
+            }
+
+            let estadoLogistico = 'A tiempo';
+            if (orden.fecha_entrega_programada && orden.fecha_entrega_real) {
+                if (new Date(orden.fecha_entrega_real) > new Date(orden.fecha_entrega_programada)) {
+                    estadoLogistico = 'Retrasado';
+                    kpis.pedidosAtrasados++;
+                }
+            } else if (orden.fecha_entrega_programada && !orden.fecha_entrega_real) {
+                if (new Date() > new Date(orden.fecha_entrega_programada)) {
+                    estadoLogistico = 'Vencido';
+                    kpis.pedidosAtrasados++;
+                } else {
+                    estadoLogistico = 'En plazo';
+                }
+            }
+
             if (conteoEstadoPago[orden.estado_pago] !== undefined) {
-                conteoEstadoPago[orden.estado_pago] += totalPEN; // Sumamos monto, no cantidad (opcional: puedes sumar +1 si prefieres cantidad de ordenes)
+                conteoEstadoPago[orden.estado_pago] += totalPEN;
             }
 
-            // Agrupación para gráfico de barras (Ventas por día)
-            const fechaStr = new Date(orden.fecha_emision).toISOString().split('T')[0]; // YYYY-MM-DD
-            if (!ventasPorDia[fechaStr]) {
-                ventasPorDia[fechaStr] = 0;
-            }
+            const vendedor = orden.nombre_vendedor || 'Sin Asignar';
+            if (!ventasPorVendedor[vendedor]) ventasPorVendedor[vendedor] = 0;
+            ventasPorVendedor[vendedor] += totalPEN;
+
+            const fechaStr = new Date(orden.fecha_emision).toISOString().split('T')[0];
+            if (!ventasPorDia[fechaStr]) ventasPorDia[fechaStr] = 0;
             ventasPorDia[fechaStr] += totalPEN;
 
-            // Retornamos la orden formateada para la tabla de detalle
             return {
                 id: orden.id_orden_venta,
                 numero: orden.numero_orden,
                 cliente: orden.razon_social,
-                fecha: fechaStr,
+                ruc: orden.ruc,
+                vendedor: vendedor,
+                fecha_emision: fechaStr,
+                fecha_despacho: orden.fecha_entrega_real ? new Date(orden.fecha_entrega_real).toISOString().split('T')[0] : 'Pendiente',
                 moneda: orden.moneda,
-                total: totalOriginal,
-                pagado: pagadoOriginal,
+                total_original: totalOriginal.toFixed(2),
+                total_pen: totalPEN.toFixed(2),
+                pagado: pagadoOriginal.toFixed(2),
+                tipo_venta: orden.tipo_venta,
                 estado_pago: orden.estado_pago,
-                estado: orden.estado,
-                tipo_cambio: orden.tipo_cambio
+                estado_logistico: estadoLogistico,
+                estado_pedido: orden.estado
             };
         });
 
-        // 4. Formatear datos para Recharts
+        if (format === 'pdf') {
+            const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+            
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=reporte_ventas_${Date.now()}.pdf`);
+            
+            doc.pipe(res);
 
-        // A) Gráfico Circular (Pie Chart)
+            doc.fontSize(18).text('Reporte General de Ventas', { align: 'center' });
+            doc.fontSize(10).text(`Generado: ${new Date().toLocaleString()}`, { align: 'center' });
+            doc.moveDown();
+
+            doc.fontSize(12).text(`Total Ventas (PEN): S/ ${kpis.totalVentasPEN.toFixed(2)}`);
+            doc.text(`Total Cobrado: S/ ${kpis.totalPagadoPEN.toFixed(2)}`);
+            doc.text(`Por Cobrar: S/ ${kpis.totalPorCobrarPEN.toFixed(2)}`);
+            doc.moveDown();
+
+            const tableTop = 150;
+            let currentY = tableTop;
+            const rowHeight = 20;
+
+            doc.fontSize(8).font('Helvetica-Bold');
+            doc.text('Orden', 30, currentY);
+            doc.text('Cliente', 80, currentY);
+            doc.text('Emisión', 230, currentY);
+            doc.text('Despacho', 280, currentY);
+            doc.text('Total', 330, currentY);
+            doc.text('Pago', 380, currentY);
+            doc.text('Logística', 430, currentY);
+            doc.text('Vendedor', 480, currentY);
+
+            doc.moveTo(30, currentY + 10).lineTo(800, currentY + 10).stroke();
+            doc.font('Helvetica');
+
+            listaDetalle.forEach(item => {
+                currentY += rowHeight;
+                
+                if (currentY > 550) {
+                    doc.addPage({ layout: 'landscape' });
+                    currentY = 50;
+                }
+
+                doc.text(item.numero, 30, currentY);
+                doc.text(item.cliente.substring(0, 25), 80, currentY);
+                doc.text(item.fecha_emision, 230, currentY);
+                doc.text(item.fecha_despacho, 280, currentY);
+                doc.text(`${item.moneda} ${item.total_original}`, 330, currentY);
+                doc.text(item.estado_pago, 380, currentY);
+                doc.text(item.estado_logistico, 430, currentY);
+                doc.text(item.vendedor.substring(0, 15), 480, currentY);
+            });
+
+            doc.end();
+            return;
+        }
+
+        const graficoVendedores = Object.keys(ventasPorVendedor)
+            .map(v => ({ name: v, value: parseFloat(ventasPorVendedor[v].toFixed(2)) }))
+            .sort((a, b) => b.value - a.value);
+
         const graficoEstadoPago = [
-            { name: 'Pagado', value: parseFloat(conteoEstadoPago['Pagado'].toFixed(2)), color: '#10B981' }, // Verde
-            { name: 'Parcial', value: parseFloat(conteoEstadoPago['Parcial'].toFixed(2)), color: '#F59E0B' }, // Ambar
-            { name: 'Pendiente', value: parseFloat(conteoEstadoPago['Pendiente'].toFixed(2)), color: '#EF4444' } // Rojo
-        ].filter(item => item.value > 0); // Solo enviamos lo que tenga datos
+            { name: 'Pagado', value: parseFloat(conteoEstadoPago['Pagado'].toFixed(2)), color: '#10B981' },
+            { name: 'Parcial', value: parseFloat(conteoEstadoPago['Parcial'].toFixed(2)), color: '#F59E0B' },
+            { name: 'Pendiente', value: parseFloat(conteoEstadoPago['Pendiente'].toFixed(2)), color: '#EF4444' }
+        ].filter(item => item.value > 0);
 
-        // B) Gráfico de Barras (Bar Chart) - Ordenado por fecha
         const graficoVentasDia = Object.keys(ventasPorDia).sort().map(fecha => ({
-            fecha: fecha.split('-').slice(1).join('/'), // Formato DD/MM para el gráfico
+            fecha: fecha.split('-').slice(1).join('/'),
             total: parseFloat(ventasPorDia[fecha].toFixed(2)),
-            fechaCompleta: fecha // Para tooltips o referencias
+            fechaCompleta: fecha
         }));
 
-        // 5. Respuesta Final
         res.json({
             success: true,
             data: {
                 resumen: {
-                    total_ventas_pen: parseFloat(totalVentasPEN.toFixed(2)),
-                    total_pagado_pen: parseFloat(totalPagadoPEN.toFixed(2)),
-                    total_pendiente_pen: parseFloat(totalPendientePEN.toFixed(2)),
+                    total_ventas_pen: parseFloat(kpis.totalVentasPEN.toFixed(2)),
+                    total_pagado_pen: parseFloat(kpis.totalPagadoPEN.toFixed(2)),
+                    total_pendiente_pen: parseFloat(kpis.totalPorCobrarPEN.toFixed(2)),
+                    contado_pen: parseFloat(kpis.totalContado.toFixed(2)),
+                    credito_pen: parseFloat(kpis.totalCredito.toFixed(2)),
+                    pedidos_retrasados: kpis.pedidosAtrasados,
                     cantidad_ordenes: ordenes.length
                 },
                 graficos: {
                     estado_pago: graficoEstadoPago,
-                    ventas_dia: graficoVentasDia
+                    ventas_dia: graficoVentasDia,
+                    top_vendedores: graficoVendedores
                 },
                 detalle: listaDetalle
             }
@@ -119,6 +210,6 @@ export const getReporteVentas = async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ success: false, error: 'Error al generar el reporte de ventas' });
+        res.status(500).json({ success: false, error: 'Error al generar reporte' });
     }
 };

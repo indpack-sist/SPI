@@ -2101,7 +2101,7 @@ export async function registrarPagoOrden(req, res) {
       numero_operacion,
       banco,
       observaciones,
-      id_cuenta_destino 
+      id_cuenta_destino
     } = req.body;
     
     const id_registrado_por = req.user?.id_empleado || null;
@@ -2190,9 +2190,10 @@ export async function registrarPagoOrden(req, res) {
           metodo_pago,
           numero_operacion,
           banco,
+          id_cuenta_destino,
           observaciones,
           id_registrado_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id,
           numeroPago,
@@ -2201,6 +2202,7 @@ export async function registrarPagoOrden(req, res) {
           metodo_pago || 'Transferencia',
           numero_operacion || null,
           banco || null,
+          id_cuenta_destino || null,
           observaciones || null,
           id_registrado_por
         ]
@@ -2224,47 +2226,6 @@ export async function registrarPagoOrden(req, res) {
       params: [nuevoMontoPagado, estadoPago, id]
     });
 
-    if (id_cuenta_destino) {
-      const cuentaResult = await executeQuery(
-        'SELECT saldo_actual, moneda FROM cuentas_pago WHERE id_cuenta = ?',
-        [id_cuenta_destino]
-      );
-      
-      const cuenta = cuentaResult.data[0];
-      const saldoAnterior = parseFloat(cuenta.saldo_actual);
-      const saldoNuevo = saldoAnterior + montoNuevoPago;
-
-      queries.push({
-        sql: `INSERT INTO movimientos_cuentas (
-          id_cuenta,
-          tipo_movimiento,
-          monto,
-          concepto,
-          referencia,
-          saldo_anterior,
-          saldo_nuevo,
-          id_registrado_por,
-          fecha_movimiento
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          id_cuenta_destino,
-          'Ingreso',
-          montoNuevoPago,
-          `Cobranza Orden ${orden.numero_orden}`,
-          numeroPago,
-          saldoAnterior,
-          saldoNuevo,
-          id_registrado_por,
-          fecha_pago
-        ]
-      });
-
-      queries.push({
-        sql: 'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
-        params: [saldoNuevo, id_cuenta_destino]
-      });
-    }
-
     const result = await executeTransaction(queries);
     
     if (!result.success) {
@@ -2275,6 +2236,33 @@ export async function registrarPagoOrden(req, res) {
     }
 
     const idPagoOrden = result.data[0].insertId;
+
+    if (id_cuenta_destino) {
+      await executeQuery(`
+        INSERT INTO movimientos_cuentas (
+          id_cuenta,
+          tipo_movimiento,
+          moneda,
+          monto,
+          concepto,
+          referencia,
+          id_pago_orden_venta,
+          id_registrado_por,
+          fecha_movimiento
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id_cuenta_destino,
+          'Ingreso',
+          orden.moneda,
+          montoNuevoPago,
+          `Cobranza Orden ${orden.numero_orden}`,
+          numeroPago,
+          idPagoOrden,
+          id_registrado_por,
+          fecha_pago
+        ]
+      );
+    }
     
     res.status(201).json({
       success: true,
@@ -2317,9 +2305,12 @@ export async function getPagosOrden(req, res) {
     const result = await executeQuery(`
       SELECT 
         p.*,
-        e.nombre_completo AS registrado_por
+        e.nombre_completo AS registrado_por,
+        cp.nombre as nombre_cuenta,
+        cp.tipo as tipo_cuenta
       FROM pagos_ordenes_venta p
       LEFT JOIN empleados e ON p.id_registrado_por = e.id_empleado
+      LEFT JOIN cuentas_pago cp ON p.id_cuenta_destino = cp.id_cuenta
       WHERE p.id_orden_venta = ?
       ORDER BY p.fecha_pago DESC, p.id_pago_orden DESC
     `, [id]);
@@ -2364,8 +2355,10 @@ export async function anularPagoOrden(req, res) {
     }
     
     const pagoResult = await executeQuery(`
-      SELECT * FROM pagos_ordenes_venta 
-      WHERE id_pago_orden = ? AND id_orden_venta = ?
+      SELECT p.*, o.numero_orden, o.moneda
+      FROM pagos_ordenes_venta p
+      INNER JOIN ordenes_venta o ON p.id_orden_venta = o.id_orden_venta
+      WHERE p.id_pago_orden = ? AND p.id_orden_venta = ?
     `, [idPago, id]);
     
     if (!pagoResult.success || pagoResult.data.length === 0) {
@@ -2392,10 +2385,13 @@ export async function anularPagoOrden(req, res) {
     const orden = ordenResult.data[0];
     const montoPagadoActual = parseFloat(orden.monto_pagado || 0);
     const totalOrden = parseFloat(orden.total);
-    
-    await executeQuery(`
-      DELETE FROM pagos_ordenes_venta WHERE id_pago_orden = ?
-    `, [idPago]);
+
+    const queries = [];
+
+    queries.push({
+      sql: 'DELETE FROM pagos_ordenes_venta WHERE id_pago_orden = ?',
+      params: [idPago]
+    });
     
     const nuevoMontoPagado = montoPagadoActual - montoPago;
     let estadoPago = 'Parcial';
@@ -2406,12 +2402,48 @@ export async function anularPagoOrden(req, res) {
       estadoPago = 'Pendiente';
     }
     
-    await executeQuery(`
-      UPDATE ordenes_venta 
-      SET monto_pagado = ?,
-          estado_pago = ?
-      WHERE id_orden_venta = ?
-    `, [nuevoMontoPagado, estadoPago, id]);
+    queries.push({
+      sql: `UPDATE ordenes_venta 
+            SET monto_pagado = ?,
+                estado_pago = ?
+            WHERE id_orden_venta = ?`,
+      params: [nuevoMontoPagado, estadoPago, id]
+    });
+
+    if (pago.id_cuenta_destino) {
+      queries.push({
+        sql: `INSERT INTO movimientos_cuentas (
+          id_cuenta,
+          tipo_movimiento,
+          moneda,
+          monto,
+          concepto,
+          referencia,
+          id_pago_orden_venta,
+          id_registrado_por,
+          fecha_movimiento
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        params: [
+          pago.id_cuenta_destino,
+          'Egreso',
+          pago.moneda,
+          montoPago,
+          `Anulación pago ${pago.numero_pago} - Orden ${pago.numero_orden}`,
+          pago.numero_pago,
+          idPago,
+          id_usuario
+        ]
+      });
+    }
+
+    const result = await executeTransaction(queries);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
     
     res.json({
       success: true,

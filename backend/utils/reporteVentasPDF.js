@@ -50,6 +50,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
+      // --- LOGO Y ENCABEZADO ---
       let logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
 
       if (logoBuffer) {
@@ -81,15 +82,17 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
 
       let yPos = 115;
 
+      // --- RESUMEN EJECUTIVO ---
       doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000');
       doc.text('RESUMEN EJECUTIVO', 40, yPos);
       
       yPos += 20;
-
       const resumen = data.resumen;
 
+      // Fondo del resumen
       doc.roundedRect(40, yPos, 515, 75, 5).fillAndStroke('#F5F5F5', '#CCCCCC');
 
+      // Columna Izquierda
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333');
       doc.text('Total Ventas (PEN):', 50, yPos + 10);
       doc.font('Helvetica').fillColor('#1976D2');
@@ -110,6 +113,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       doc.font('Helvetica');
       doc.text(`S/ ${fmtNum(resumen.contado_pen)}`, 200, yPos + 55);
 
+      // Columna Derecha
       doc.font('Helvetica-Bold').fillColor('#333333');
       doc.text('Ventas al Crédito:', 300, yPos + 10);
       doc.font('Helvetica');
@@ -129,6 +133,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
 
       yPos += 95;
 
+      // --- DETALLE DE ÓRDENES ---
       if (incluirDetalle) {
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
         doc.text('DETALLE DE ÓRDENES', 40, yPos);
@@ -145,6 +150,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
         }
 
         ordenes.forEach((orden, index) => {
+          // --- LÓGICA DE SALTO DE PÁGINA PARA EL ENCABEZADO ---
           if (yPos + 80 > 750) {
             doc.addPage();
             yPos = 50;
@@ -152,6 +158,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
 
           let yInicioCuadro = yPos; 
 
+          // --- HEADER DE LA ORDEN ---
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#1976D2');
           doc.text(`${index + 1}. ${orden.numero}`, 45, yPos + 8);
 
@@ -166,6 +173,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
           
           let colY = yPos;
           
+          // Columna 1
           doc.text(`RUC: ${orden.ruc}`, 45, colY);
           colY += 12;
           doc.text(`Vendedor: ${orden.vendedor || 'N/A'}`, 45, colY);
@@ -175,28 +183,30 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
             doc.text(`${orden.tipo_comprobante}: ${orden.numero_comprobante}`, 45, colY);
             colY += 12;
           }
-          
           doc.text(`Estado: ${orden.estado}`, 45, colY);
           
+          // Columna 2
           colY = yPos;
-          
           doc.text(`Emisión: ${fmtFecha(orden.fecha_emision)}`, 200, colY);
           colY += 12;
-          
           if (orden.fecha_despacho) {
             doc.text(`Despacho: ${fmtFecha(orden.fecha_despacho)}`, 200, colY);
             colY += 12;
           }
-          
           if (orden.fecha_vencimiento) {
             doc.text(`Vencimiento: ${fmtFecha(orden.fecha_vencimiento)}`, 200, colY);
             colY += 12;
           }
-
           doc.text(`Tipo Venta: ${orden.tipo_venta}`, 200, colY);
-
-          colY = yPos;
           
+          // -- AGREGADO PARA CRÉDITO EN PDF --
+          if (orden.tipo_venta === 'Crédito' && orden.dias_credito) {
+            colY += 12;
+            doc.text(`Forma Pago: Crédito ${orden.dias_credito} Días`, 200, colY);
+          }
+
+          // Columna 3
+          colY = yPos;
           doc.text(`Moneda: ${orden.moneda}`, 360, colY);
           colY += 12;
           doc.text(`Subtotal: ${orden.moneda} ${fmtNum(orden.subtotal)}`, 360, colY);
@@ -211,8 +221,9 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
           doc.text(`Pagado: ${orden.moneda} ${fmtNum(orden.monto_pagado)}`, 360, colY);
           doc.fillColor('#666666');
 
-          yPos += 65;
+          yPos += 75; // Espacio después de datos generales (aumentado un poco por si hay crédito)
 
+          // --- PRODUCTOS ---
           if (orden.detalles && orden.detalles.length > 0) {
             doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
             
@@ -247,6 +258,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
             });
           }
 
+          // --- OBSERVACIONES ---
           if (orden.observaciones && orden.observaciones.length > 0) {
             if (yPos + 30 > 780) {
                 doc.roundedRect(40, yInicioCuadro, 515, yPos - yInicioCuadro + 5, 3).stroke('#DDDDDD');

@@ -40,7 +40,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ 
-        size: 'A4',
+        size: 'A4', 
         margins: { top: 40, bottom: 40, left: 40, right: 40 },
         bufferPages: true
       });
@@ -88,7 +88,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
 
       const resumen = data.resumen;
 
-      doc.roundedRect(40, yPos, 515, 90, 5).fillAndStroke('#F5F5F5', '#CCCCCC');
+      doc.roundedRect(40, yPos, 515, 75, 5).fillAndStroke('#F5F5F5', '#CCCCCC');
 
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333');
       doc.text('Total Ventas (PEN):', 50, yPos + 10);
@@ -106,14 +106,9 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       doc.text(`S/ ${fmtNum(resumen.total_pendiente_pen)}`, 200, yPos + 40);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Comisiones:', 50, yPos + 55);
-      doc.font('Helvetica').fillColor('#7B1FA2');
-      doc.text(`S/ ${fmtNum(resumen.total_comisiones_pen || 0)}`, 200, yPos + 55);
-
-      doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Ventas al Contado:', 50, yPos + 70);
+      doc.text('Ventas al Contado:', 50, yPos + 55);
       doc.font('Helvetica');
-      doc.text(`S/ ${fmtNum(resumen.contado_pen)}`, 200, yPos + 70);
+      doc.text(`S/ ${fmtNum(resumen.contado_pen)}`, 200, yPos + 55);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
       doc.text('Ventas al Crédito:', 300, yPos + 10);
@@ -125,19 +120,14 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       doc.font('Helvetica');
       doc.text(`${resumen.cantidad_ordenes}`, 430, yPos + 25);
 
-      doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Pedidos Atrasados:', 300, yPos + 40);
-      doc.font('Helvetica').fillColor(resumen.pedidos_retrasados > 0 ? '#D32F2F' : '#388E3C');
-      doc.text(`${resumen.pedidos_retrasados}`, 430, yPos + 40);
-
       if (resumen.total_ventas_usd > 0) {
         doc.font('Helvetica-Bold').fillColor('#333333');
-        doc.text('Total Ventas (USD):', 300, yPos + 55);
+        doc.text('Total Ventas (USD):', 300, yPos + 40);
         doc.font('Helvetica').fillColor('#1976D2');
-        doc.text(`$ ${fmtNum(resumen.total_ventas_usd)}`, 430, yPos + 55);
+        doc.text(`$ ${fmtNum(resumen.total_ventas_usd)}`, 430, yPos + 40);
       }
 
-      yPos += 110;
+      yPos += 95;
 
       if (incluirDetalle) {
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
@@ -230,37 +220,37 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
           yPos += 65;
 
           if (orden.detalles && orden.detalles.length > 0) {
-  doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
-  doc.text('Productos:', 45, yPos);
-  yPos += 10;
-  
-  doc.fontSize(6).font('Helvetica').fillColor('#777777');
-  orden.detalles.forEach(det => {
-    if (yPos > 750) {
-      doc.addPage();
-      yPos = 50;
-    }
-    
-    const lineaProducto = `• ${det.producto_nombre} | ${det.cantidad} ${det.unidad_medida} | ${orden.moneda} ${det.precio_unitario} c/u | Sub: ${orden.moneda} ${det.subtotal}`;
-    doc.text(lineaProducto, 50, yPos, { width: 495 });
-    yPos += 10;
-  });
-}
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
+            doc.text('Productos:', 45, yPos);
+            yPos += 10;
+            
+            doc.fontSize(6).font('Helvetica').fillColor('#777777');
+            orden.detalles.forEach(det => {
+              if (yPos > 750) {
+                doc.addPage();
+                yPos = 50;
+              }
+              
+              const lineaProducto = `• ${det.producto_nombre} | ${det.cantidad} ${det.unidad_medida} | ${orden.moneda} ${det.precio_unitario} c/u | Sub: ${orden.moneda} ${det.subtotal}`;
+              doc.text(lineaProducto, 50, yPos, { width: 495 });
+              yPos += 10;
+            });
+          }
 
           if (tieneObservaciones) {
-  if (yPos > 730) {
-    doc.addPage();
-    yPos = 50;
-  }
-  
-  doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
-  doc.text('Obs:', 45, yPos);
-  doc.fontSize(6).font('Helvetica').fillColor('#777777');
-  const textoObservaciones = orden.observaciones.substring(0, 200);
-  const lineas = doc.heightOfString(textoObservaciones, { width: 475 });
-  doc.text(textoObservaciones, 70, yPos, { width: 475 });
-  yPos += Math.max(lineas, 15);
-}
+            if (yPos > 730) {
+              doc.addPage();
+              yPos = 50;
+            }
+            
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
+            doc.text('Obs:', 45, yPos);
+            doc.fontSize(6).font('Helvetica').fillColor('#777777');
+            const textoObservaciones = orden.observaciones.substring(0, 200);
+            const lineas = doc.heightOfString(textoObservaciones, { width: 475 });
+            doc.text(textoObservaciones, 70, yPos, { width: 475 });
+            yPos += Math.max(lineas, 15);
+          }
 
           const alturaFinal = yPos - yInicio;
           doc.roundedRect(40, yInicio, 515, alturaFinal, 3).stroke('#DDDDDD');

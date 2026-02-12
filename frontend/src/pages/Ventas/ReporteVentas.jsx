@@ -14,6 +14,8 @@ import {
 import { reportesAPI, clientesAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
+// Importamos la función del PDF que modificaremos después
+import { generarReporteVentasPDF } from './reporteVentasPDF'; 
 
 const COLORS_PIE = {
   'Pagado': '#10B981',
@@ -32,7 +34,7 @@ const ReporteVentas = () => {
   
   // Estados para opciones de descarga
   const [incluirDetalleExcel, setIncluirDetalleExcel] = useState(true);
-  const [incluirDetallePDF, setIncluirDetallePDF] = useState(true); // <--- NUEVO ESTADO
+  const [incluirDetallePDF, setIncluirDetallePDF] = useState(true);
 
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [clientesSugeridos, setClientesSugeridos] = useState([]);
@@ -84,7 +86,6 @@ const ReporteVentas = () => {
 
   useEffect(() => {
     generarReporte();
-    
     function handleClickOutside(event) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
         setMostrarSugerencias(false);
@@ -110,11 +111,7 @@ const ReporteVentas = () => {
             setClientesSugeridos([]);
         }
     };
-
-    const timeoutId = setTimeout(() => {
-        buscarClientes();
-    }, 300);
-
+    const timeoutId = setTimeout(() => { buscarClientes(); }, 300);
     return () => clearTimeout(timeoutId);
   }, [busquedaCliente, filtros.idCliente]);
 
@@ -138,15 +135,12 @@ const ReporteVentas = () => {
 
   const aplicarFiltrosLocales = () => {
     let filtrada = [...dataReporte.detalle];
-
     if (filtros.estadoOrden) {
       filtrada = filtrada.filter(item => item.estado === filtros.estadoOrden);
     }
-
     if (filtros.estadoPago) {
       filtrada = filtrada.filter(item => item.estado_pago === filtros.estadoPago);
     }
-
     setDataFiltrada(filtrada);
   };
 
@@ -154,14 +148,12 @@ const ReporteVentas = () => {
     if(e) e.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
       const response = await reportesAPI.getVentas({
         fechaInicio: filtros.fechaInicio,
         fechaFin: filtros.fechaFin,
         idCliente: filtros.idCliente
       });
-
       if (response.data.success) {
         setDataReporte(response.data.data);
         setDataFiltrada(response.data.data.detalle);
@@ -174,29 +166,11 @@ const ReporteVentas = () => {
     }
   };
 
-  // FUNCIÓN DESCARGAR PDF ACTUALIZADA
   const descargarPDF = async () => {
     setLoadingPdf(true);
     try {
-        const response = await reportesAPI.getVentas({
-            fechaInicio: filtros.fechaInicio,
-            fechaFin: filtros.fechaFin,
-            idCliente: filtros.idCliente,
-            incluirDetalle: incluirDetallePDF, // <--- PARÁMETRO AGREGADO
-            format: 'pdf'
-        }, { responseType: 'blob' });
-
-        const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
-        const fechaActual = new Date().toISOString().split('T')[0];
-        const nombreArchivo = `Reporte_${nombreCliente}_${fechaActual}.pdf`;
-
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', nombreArchivo);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        // Llamamos a la función externa que modificaremos en el siguiente paso
+        await generarReporteVentasPDF(dataReporte, incluirDetallePDF);
     } catch (err) {
         console.error(err);
         setError('Error al descargar el PDF');
@@ -228,6 +202,7 @@ const ReporteVentas = () => {
         'Estado Pago': item.estado_pago,
         'Estado': item.estado,
         'Tipo Venta': item.tipo_venta,
+        'Días Crédito': item.dias_credito || 0, // Agregado
         'Estado Logístico': item.estado_logistico
       }));
   
@@ -237,15 +212,23 @@ const ReporteVentas = () => {
         { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
         { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
         { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
-        { wch: 15 }
+        { wch: 15 }, { wch: 12 }
       ];
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
   
-      // HOJAS DE DETALLE (SOLO SI EL CHECKBOX ESTÁ MARCADO)
       if (incluirDetalleExcel) {
         dataFiltrada.forEach((orden) => {
           const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
           
+          // Construcción de la forma de pago para Excel
+          const formaPagoTexto = orden.tipo_venta === 'Crédito' 
+            ? `Crédito ${orden.dias_credito} Días` 
+            : 'Contado';
+
+          const vencimientoTexto = orden.tipo_venta === 'Crédito'
+            ? formatearFecha(orden.fecha_vencimiento)
+            : '-';
+
           const datosOrden = [
             ['INFORMACIÓN DE LA ORDEN'],
             ['Número de Orden', orden.numero],
@@ -255,6 +238,8 @@ const ReporteVentas = () => {
             ['Estado Verificación', orden.estado_verificacion],
             ['Estado Pago', orden.estado_pago],
             ['Tipo de Venta', orden.tipo_venta],
+            ['Forma de Pago', formaPagoTexto], // <--- AGREGADO
+            ['Fecha Vencimiento', vencimientoTexto], // <--- AGREGADO
             [''],
             ['INFORMACIÓN DEL CLIENTE'],
             ['Razón Social', orden.cliente],
@@ -266,7 +251,6 @@ const ReporteVentas = () => {
             ['FECHAS'],
             ['Creación', formatearFechaHora(orden.fecha_creacion)],
             ['Emisión', formatearFecha(orden.fecha_emision)],
-            ['Vencimiento', formatearFecha(orden.fecha_vencimiento)],
             ['Despacho', orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente'],
             ['Verificación', orden.fecha_verificacion ? formatearFechaHora(orden.fecha_verificacion) : ''],
             [''],
@@ -413,9 +397,7 @@ const ReporteVentas = () => {
       'Entregada': 'badge badge-success',
       'Cancelada': 'badge badge-danger'
     };
-    
     const claseExtra = estado === 'Atendido por Producción' ? 'bg-purple-100 text-purple-900 border border-purple-200' : (estilos[estado] || 'badge badge-secondary');
-
     return (
       <span className={claseExtra.startsWith('badge') ? claseExtra : `badge ${claseExtra}`}>
         {estado}
@@ -520,17 +502,17 @@ const ReporteVentas = () => {
                     <div className="search-input-wrapper">
                         <Search className="search-icon" size={16} />
                         <input 
-    type="text"
-    placeholder="Buscar cliente por nombre o RUC..."
-    className="form-input search-input w-full pl-10 !bg-white border border-gray-300 rounded-md text-gray-900 shadow-sm"
-    style={{ backgroundColor: '#ffffff', opacity: 1 }}
-    value={busquedaCliente}
-    onChange={(e) => {
-        setBusquedaCliente(e.target.value);
-        if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
-    }}
-    onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
-/>
+                            type="text"
+                            placeholder="Buscar cliente por nombre o RUC..."
+                            className="form-input search-input w-full pl-10 !bg-white border border-gray-300 rounded-md text-gray-900 shadow-sm"
+                            style={{ backgroundColor: '#ffffff', opacity: 1 }}
+                            value={busquedaCliente}
+                            onChange={(e) => {
+                                setBusquedaCliente(e.target.value);
+                                if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
+                            }}
+                            onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
+                        />
                         {filtros.idCliente && (
                             <button 
                                 type="button"
@@ -592,7 +574,6 @@ const ReporteVentas = () => {
                       </select>
                   </div>
 
-                  {/* CHECKBOX PARA DETALLE EXCEL */}
                   <div className="form-group mb-0">
                       <label className="form-label uppercase text-xs text-muted">Detalle Excel</label>
                       <label className="flex items-center gap-2 mt-2 cursor-pointer">
@@ -606,7 +587,6 @@ const ReporteVentas = () => {
                       </label>
                   </div>
 
-                  {/* NUEVO CHECKBOX PARA PDF */}
                   <div className="form-group mb-0">
                       <label className="form-label uppercase text-xs text-muted">Detalle PDF</label>
                       <label className="flex items-center gap-2 mt-2 cursor-pointer">
@@ -723,7 +703,6 @@ const ReporteVentas = () => {
             </div>
         </div>
       )}
-
 
       <div className="card">
         <div className="card-header bg-gray-50 flex justify-between items-center">
@@ -855,8 +834,15 @@ const ReporteVentas = () => {
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                   <p className="text-xs text-purple-600 font-semibold uppercase mb-1">Tipo de Venta</p>
                   <p className="text-lg font-bold text-purple-900">{ordenSeleccionada.tipo_venta}</p>
-                  {ordenSeleccionada.dias_credito > 0 && (
-                    <p className="text-xs text-gray-600">{ordenSeleccionada.dias_credito} días de crédito</p>
+                  {ordenSeleccionada.tipo_venta === 'Crédito' && (
+                    <div className="mt-1">
+                      <p className="text-sm font-semibold text-purple-800">
+                        Forma Pago: Crédito {ordenSeleccionada.dias_credito} Días
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        Vence: {formatearFecha(ordenSeleccionada.fecha_vencimiento)}
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

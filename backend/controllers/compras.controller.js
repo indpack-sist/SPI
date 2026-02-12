@@ -41,7 +41,6 @@ export async function getAllCompras(req, res) {
         e_registrado.nombre_completo AS registrado_por,
         cp.nombre AS cuenta_pago,
         cp.tipo AS tipo_cuenta_pago,
-        cp.moneda AS moneda_cuenta,
         (SELECT COUNT(*) FROM detalle_orden_compra WHERE id_orden_compra = oc.id_orden_compra) AS total_items,
         (SELECT COUNT(*) FROM cuotas_orden_compra WHERE id_orden_compra = oc.id_orden_compra AND estado = 'Pendiente') AS cuotas_pendientes,
         DATEDIFF(COALESCE(pl.fecha_vencimiento, pc.fecha_vencimiento, oc.fecha_vencimiento), CURDATE()) AS dias_para_vencer,
@@ -134,8 +133,6 @@ export async function getCompraById(req, res) {
         e_reg.nombre_completo AS registrado_por,
         cp.nombre AS cuenta_pago,
         cp.tipo AS tipo_cuenta,
-        cp.moneda AS moneda_cuenta,
-        cp.saldo_actual AS saldo_cuenta,
         cp.banco AS banco_cuenta,
         cp.numero_cuenta AS numero_cuenta_pago,
         DATEDIFF(oc.fecha_vencimiento, CURDATE()) AS dias_para_vencer
@@ -313,16 +310,6 @@ export async function createCompra(req, res) {
         const [cuentas] = await connection.query('SELECT * FROM cuentas_pago WHERE id_cuenta = ? AND estado = "Activo"', [id_cuenta_pago]);
         if (cuentas.length === 0) throw new Error('Cuenta de pago no válida');
         cuenta = cuentas[0];
-        
-        if (cuenta.moneda !== moneda) {
-            if (!tipo_cambio || parseFloat(tipo_cambio) <= 0) throw new Error(`Falta tipo de cambio: ${cuenta.moneda} vs ${moneda}`);
-        }
-
-        if (montoAPagarAhora > 0) {
-             if (parseFloat(cuenta.saldo_actual) < montoAPagarAhora) {
-                 throw new Error(`Saldo insuficiente en la cuenta ${cuenta.nombre}.`);
-             }
-        }
       }
 
       const [ultimaResult] = await connection.query('SELECT numero_orden FROM ordenes_compra ORDER BY id_orden_compra DESC LIMIT 1');
@@ -375,25 +362,22 @@ export async function createCompra(req, res) {
       const idCompra = resultCompra.insertId;
 
       if (montoAPagarAhora > 0 && id_cuenta_pago) {
-          await connection.query('UPDATE cuentas_pago SET saldo_actual = saldo_actual - ? WHERE id_cuenta = ?', [montoAPagarAhora, id_cuenta_pago]);
-          
           const conceptoMov = (tipo_compra === 'Contado' && Math.abs(montoAPagarAhora - total) < 0.1)
               ? `Pago Compra Contado ${numeroCompra}` 
               : `Adelanto Compra ${numeroCompra}`;
               
           await connection.query(`
             INSERT INTO movimientos_cuentas (
-                id_cuenta, tipo_movimiento, monto, concepto, referencia, 
-                id_orden_compra, saldo_anterior, saldo_nuevo, id_registrado_por, fecha_movimiento
-            ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, NOW())
+                id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
+                id_orden_compra, id_registrado_por, fecha_movimiento
+            ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, NOW())
           `, [
               id_cuenta_pago, 
+              moneda,
               montoAPagarAhora, 
               conceptoMov, 
               numero_documento || 'S/N', 
               idCompra, 
-              parseFloat(cuenta.saldo_actual), 
-              parseFloat(cuenta.saldo_actual) - montoAPagarAhora, 
               id_registrado_por
           ]);
       }
@@ -586,8 +570,6 @@ export async function cancelarCompra(req, res) {
   try {
     const { id } = req.params;
     
-    // CORRECCIÓN PRINCIPAL: Acceso directo y seguro al string
-    // Aseguramos que sea texto plano. Si viene un objeto, lo forzamos a string vacío.
     const motivoTexto = (req.body.motivo_cancelacion && typeof req.body.motivo_cancelacion === 'string') 
       ? req.body.motivo_cancelacion 
       : (req.body.motivo_cancelacion?.motivo_cancelacion || 'Sin motivo especificado');
@@ -596,7 +578,6 @@ export async function cancelarCompra(req, res) {
 
     connection = await pool.getConnection();
 
-    // 1. Validar existencia
     const [orders] = await connection.query('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
     
     if (orders.length === 0) {
@@ -613,45 +594,28 @@ export async function cancelarCompra(req, res) {
     await connection.beginTransaction();
 
     try {
-      // 2. Reversión de Dinero (Si hubo pagos)
       const [movimientos] = await connection.query(
         'SELECT * FROM movimientos_cuentas WHERE id_orden_compra = ? AND tipo_movimiento = "Egreso"', 
         [id]
       );
 
       for (const mov of movimientos) {
-        // Devolver saldo
-        await connection.query(
-          'UPDATE cuentas_pago SET saldo_actual = saldo_actual + ? WHERE id_cuenta = ?', 
-          [mov.monto, mov.id_cuenta]
-        );
-
-        // Obtener saldo nuevo
-        const [cuentaInfo] = await connection.query(
-          'SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ?', 
-          [mov.id_cuenta]
-        );
-        
-        // Registrar contra-asiento
         await connection.query(`
           INSERT INTO movimientos_cuentas (
-            id_cuenta, tipo_movimiento, monto, concepto, referencia, 
-            id_orden_compra, saldo_anterior, saldo_nuevo, fecha_movimiento, id_registrado_por
-          ) VALUES (?, 'Ingreso', ?, ?, ?, ?, ?, ?, NOW(), ?)
+            id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
+            id_orden_compra, fecha_movimiento, id_registrado_por
+          ) VALUES (?, 'Ingreso', ?, ?, ?, ?, ?, NOW(), ?)
         `, [
           mov.id_cuenta, 
+          mov.moneda,
           mov.monto, 
           `ANULACIÓN COMPRA ${compra.numero_orden}`, 
           `REF-${mov.id_movimiento}`, 
           id, 
-          parseFloat(cuentaInfo[0].saldo_actual) - parseFloat(mov.monto), 
-          cuentaInfo[0].saldo_actual, 
           id_registrado_por
         ]);
       }
 
-      // 3. Actualizar Orden (CONCAT seguro)
-      // Usamos 'motivoTexto' que garantizamos arriba que es un string
       await connection.query(
         `UPDATE ordenes_compra SET 
             estado = 'Cancelada', 
@@ -665,10 +629,8 @@ export async function cancelarCompra(req, res) {
         [motivoTexto, id]
       );
 
-      // 4. Cancelar Cuotas
       await connection.query(`UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=?`, [id]);
 
-      // 5. Revertir Stock
       const [detalles] = await connection.query(
         'SELECT id_producto, cantidad_recibida FROM detalle_orden_compra WHERE id_orden_compra = ?', 
         [id]
@@ -698,6 +660,7 @@ export async function cancelarCompra(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function getCuotasCompra(req, res) {
   try {
     const { id } = req.params;
@@ -746,6 +709,7 @@ export async function getCuotaById(req, res) {
 }
 
 export async function pagarCuota(req, res) {
+  const connection = await pool.getConnection();
   try {
     const { id, idCuota } = req.params;
     const { id_cuenta_pago, monto_pagado, referencia, observaciones } = req.body;
@@ -753,39 +717,45 @@ export async function pagarCuota(req, res) {
     
     if (!id_cuenta_pago || !monto_pagado) return res.status(400).json({ success: false, error: 'Faltan datos' });
 
-    const operations = async (connection) => {
-      const [cuotas] = await connection.query('SELECT coc.*, oc.moneda, oc.total, oc.monto_pagado FROM cuotas_orden_compra coc INNER JOIN ordenes_compra oc ON coc.id_orden_compra = oc.id_orden_compra WHERE coc.id_cuota = ? FOR UPDATE', [idCuota]);
-      if (cuotas.length === 0) throw new Error('Cuota no encontrada');
-      const cuota = cuotas[0];
-      if (cuota.estado === 'Pagada') throw new Error('Cuota ya pagada');
+    await connection.beginTransaction();
 
-      const [cuentas] = await connection.query('SELECT * FROM cuentas_pago WHERE id_cuenta = ? FOR UPDATE', [id_cuenta_pago]);
-      if (cuentas.length === 0) throw new Error('Cuenta no encontrada');
-      const cuenta = cuentas[0];
-      if (cuenta.moneda !== cuota.moneda) throw new Error('Moneda no coincide');
+    const [cuotas] = await connection.query('SELECT coc.*, oc.moneda, oc.total, oc.monto_pagado FROM cuotas_orden_compra coc INNER JOIN ordenes_compra oc ON coc.id_orden_compra = oc.id_orden_compra WHERE coc.id_cuota = ? FOR UPDATE', [idCuota]);
+    if (cuotas.length === 0) throw new Error('Cuota no encontrada');
+    const cuota = cuotas[0];
+    if (cuota.estado === 'Pagada') throw new Error('Cuota ya pagada');
 
-      const nuevoSaldoCuenta = parseFloat(cuenta.saldo_actual) - parseFloat(monto_pagado);
-      await connection.query('UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?', [nuevoSaldoCuenta, id_cuenta_pago]);
+    const [cuentas] = await connection.query('SELECT * FROM cuentas_pago WHERE id_cuenta = ? FOR UPDATE', [id_cuenta_pago]);
+    if (cuentas.length === 0) throw new Error('Cuenta no encontrada');
 
-      await connection.query(`
-        INSERT INTO movimientos_cuentas (id_cuenta, tipo_movimiento, monto, concepto, referencia, id_orden_compra, id_cuota, saldo_anterior, saldo_nuevo, id_registrado_por, fecha_movimiento)
-        VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-      `, [id_cuenta_pago, monto_pagado, observaciones||`Pago Cuota ${cuota.numero_cuota}`, referencia, id, idCuota, cuenta.saldo_actual, nuevoSaldoCuenta, id_registrado_por]);
+    await connection.query(`
+      INSERT INTO movimientos_cuentas (
+        id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
+        id_orden_compra, id_cuota, id_registrado_por, fecha_movimiento
+      ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      id_cuenta_pago, 
+      cuota.moneda,
+      monto_pagado, 
+      observaciones||`Pago Cuota ${cuota.numero_cuota}`, 
+      referencia, 
+      id, 
+      idCuota, 
+      id_registrado_por
+    ]);
 
-      const nuevoPagadoCuota = parseFloat(cuota.monto_pagado || 0) + parseFloat(monto_pagado);
-      const estadoCuota = nuevoPagadoCuota >= parseFloat(cuota.monto_cuota) - 0.01 ? 'Pagada' : 'Parcial';
-      await connection.query('UPDATE cuotas_orden_compra SET monto_pagado = ?, estado = ?, fecha_pago = NOW() WHERE id_cuota = ?', [nuevoPagadoCuota, estadoCuota, idCuota]);
+    const nuevoPagadoCuota = parseFloat(cuota.monto_pagado || 0) + parseFloat(monto_pagado);
+    const estadoCuota = nuevoPagadoCuota >= parseFloat(cuota.monto_cuota) - 0.01 ? 'Pagada' : 'Parcial';
+    await connection.query('UPDATE cuotas_orden_compra SET monto_pagado = ?, estado = ?, fecha_pago = NOW() WHERE id_cuota = ?', [nuevoPagadoCuota, estadoCuota, idCuota]);
 
-      await connection.query('UPDATE ordenes_compra SET monto_pagado = monto_pagado + ?, saldo_pendiente = saldo_pendiente - ? WHERE id_orden_compra = ?', [monto_pagado, monto_pagado, id]);
-      
-      return { nuevo_saldo: nuevoSaldoCuenta };
-    };
+    await connection.query('UPDATE ordenes_compra SET monto_pagado = monto_pagado + ?, saldo_pendiente = saldo_pendiente - ? WHERE id_orden_compra = ?', [monto_pagado, monto_pagado, id]);
 
-    const result = await executeTransaction(operations);
-    if (!result.success) return res.status(500).json({ success: false, error: result.error });
-    res.json({ success: true, message: 'Cuota pagada', data: result.data });
+    await connection.commit();
+    res.json({ success: true, message: 'Cuota pagada' });
   } catch (error) {
+    await connection.rollback();
     res.status(500).json({ success: false, error: error.message });
+  } finally {
+    connection.release();
   }
 }
 
@@ -804,13 +774,20 @@ export async function registrarPagoCompra(req, res) {
     if (parseFloat(compra.saldo_pendiente) <= 0) throw new Error('La compra ya está pagada');
     if (parseFloat(monto_pagado) > parseFloat(compra.saldo_pendiente) + 0.1) throw new Error('Monto excede saldo pendiente');
 
-    await connection.query('UPDATE cuentas_pago SET saldo_actual = saldo_actual - ? WHERE id_cuenta = ?', [monto_pagado, id_cuenta_pago]);
-    const [cuentaInfo] = await connection.query('SELECT saldo_actual FROM cuentas_pago WHERE id_cuenta = ?', [id_cuenta_pago]);
-
     await connection.query(`
-        INSERT INTO movimientos_cuentas (id_cuenta, tipo_movimiento, monto, concepto, referencia, id_orden_compra, saldo_anterior, saldo_nuevo, id_registrado_por, fecha_movimiento)
-        VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, NOW())
-    `, [id_cuenta_pago, monto_pagado, observaciones || `Amortización Compra ${compra.numero_orden}`, referencia, id, parseFloat(cuentaInfo[0].saldo_actual) + parseFloat(monto_pagado), cuentaInfo[0].saldo_actual, id_registrado_por]);
+        INSERT INTO movimientos_cuentas (
+          id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
+          id_orden_compra, id_registrado_por, fecha_movimiento
+        ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      id_cuenta_pago, 
+      compra.moneda,
+      monto_pagado, 
+      observaciones || `Amortización Compra ${compra.numero_orden}`, 
+      referencia, 
+      id, 
+      id_registrado_por
+    ]);
 
     const nuevoMontoPagado = parseFloat(compra.monto_pagado) + parseFloat(monto_pagado);
     const nuevoSaldo = parseFloat(compra.saldo_pendiente) - parseFloat(monto_pagado);
@@ -936,6 +913,7 @@ export async function getComprasPorCuenta(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function registrarLetrasCompra(req, res) {
   const connection = await pool.getConnection();
   try {
@@ -1114,23 +1092,6 @@ export async function pagarLetraCompra(req, res) {
       throw new Error('Cuenta de pago no encontrada o inactiva');
     }
 
-    const cuenta = cuentas[0];
-
-    if (cuenta.moneda !== letra.moneda) {
-      throw new Error(`La moneda de la cuenta (${cuenta.moneda}) no coincide con la de la letra (${letra.moneda})`);
-    }
-
-    if (parseFloat(cuenta.saldo_actual) < parseFloat(monto_pagado)) {
-      throw new Error('Saldo insuficiente en la cuenta');
-    }
-
-    const nuevoSaldoCuenta = parseFloat(cuenta.saldo_actual) - parseFloat(monto_pagado);
-
-    await connection.query(
-      'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
-      [nuevoSaldoCuenta, id_cuenta_pago]
-    );
-
     await connection.query(`
       INSERT INTO pagos_letras_compra (
         id_letra, id_cuenta_pago, monto_pagado, fecha_pago, 
@@ -1161,19 +1122,17 @@ export async function pagarLetraCompra(req, res) {
 
     await connection.query(`
       INSERT INTO movimientos_cuentas (
-        id_cuenta, tipo_movimiento, monto, concepto, referencia, 
-        id_orden_compra, id_letra_compra, saldo_anterior, saldo_nuevo, 
-        id_registrado_por, fecha_movimiento
-      ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
+        id_orden_compra, id_letra_compra, id_registrado_por, fecha_movimiento
+      ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?, NOW())
     `, [
       id_cuenta_pago,
+      letra.moneda,
       monto_pagado,
       `Pago Letra ${letra.numero_letra} - OC ${letra.numero_orden}`,
       numero_operacion || letra.numero_letra,
       letra.id_orden_compra,
       idLetra,
-      cuenta.saldo_actual,
-      nuevoSaldoCuenta,
       id_registrado_por
     ]);
 
@@ -1183,7 +1142,6 @@ export async function pagarLetraCompra(req, res) {
       success: true, 
       message: 'Pago de letra registrado exitosamente',
       data: {
-        nuevo_saldo_cuenta: nuevoSaldoCuenta,
         estado_letra: nuevoEstadoLetra
       }
     });
@@ -1244,15 +1202,6 @@ export async function registrarReembolsoComprador(req, res) {
       throw new Error('Cuenta de pago no encontrada');
     }
 
-    const cuenta = cuentas[0];
-
-    const nuevoSaldoCuenta = parseFloat(cuenta.saldo_actual) - parseFloat(monto_reembolso);
-
-    await connection.query(
-      'UPDATE cuentas_pago SET saldo_actual = ? WHERE id_cuenta = ?',
-      [nuevoSaldoCuenta, id_cuenta_pago]
-    );
-
     const [resultPago] = await connection.query(`
       INSERT INTO pagos_ordenes_compra (
         id_orden_compra, fecha_pago, monto_pagado, metodo_pago, 
@@ -1283,21 +1232,19 @@ export async function registrarReembolsoComprador(req, res) {
 
     await connection.query(`
       INSERT INTO movimientos_cuentas (
-        id_cuenta, tipo_movimiento, monto, concepto, referencia, 
+        id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
         id_orden_compra, id_pago_orden_compra, es_reembolso, 
-        id_empleado_relacionado, saldo_anterior, saldo_nuevo, 
-        id_registrado_por, fecha_movimiento
-      ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NOW())
+        id_empleado_relacionado, id_registrado_por, fecha_movimiento
+      ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, 1, ?, ?, NOW())
     `, [
       id_cuenta_pago,
+      compra.moneda,
       monto_reembolso,
       `Reembolso Comprador - OC ${compra.numero_orden}`,
       referencia || 'Reembolso fondos propios',
       id,
       resultPago.insertId,
       compra.id_comprador,
-      cuenta.saldo_actual,
-      nuevoSaldoCuenta,
       id_registrado_por
     ]);
 
@@ -1584,6 +1531,7 @@ export async function getItemsPendientesIngreso(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function cambiarCuentaCompra(req, res) {
   let connection;
   try {
@@ -1595,7 +1543,6 @@ export async function cambiarCuentaCompra(req, res) {
 
     connection = await pool.getConnection();
     
-    // 1. Obtener datos de la compra y la cuenta actual
     const [orders] = await connection.query('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
     if (orders.length === 0) {
       connection.release();
@@ -1604,34 +1551,20 @@ export async function cambiarCuentaCompra(req, res) {
     const compra = orders[0];
     const id_cuenta_anterior = compra.id_cuenta_pago;
 
-    // Si es la misma cuenta, no hacemos nada
     if (id_cuenta_anterior == id_nueva_cuenta) {
       connection.release();
       return res.status(400).json({ success: false, error: 'La compra ya está asignada a esta cuenta' });
     }
 
-    // 2. Validar nueva cuenta
     const [nuevasCuentas] = await connection.query('SELECT * FROM cuentas_pago WHERE id_cuenta = ?', [id_nueva_cuenta]);
     if (nuevasCuentas.length === 0) {
       connection.release();
       return res.status(404).json({ success: false, error: 'La nueva cuenta no existe' });
     }
-    const nuevaCuenta = nuevasCuentas[0];
-
-    // Validar moneda (IMPORTANTE: No puedes migrar de una cuenta Soles a una Dólares directamente sin recalcular T.C.)
-    if (compra.moneda !== nuevaCuenta.moneda) {
-        connection.release();
-        return res.status(400).json({ 
-            success: false, 
-            error: `Conflicto de monedas. Compra: ${compra.moneda}, Nueva Cuenta: ${nuevaCuenta.moneda}` 
-        });
-    }
 
     await connection.beginTransaction();
 
     try {
-      // 3. MOVER EL DINERO (Si hubo pagos registrados)
-      // Buscamos los movimientos de dinero (Egresos) de esta compra en la cuenta anterior
       const [movimientos] = await connection.query(
         'SELECT * FROM movimientos_cuentas WHERE id_orden_compra = ? AND id_cuenta = ? AND tipo_movimiento = "Egreso"', 
         [id, id_cuenta_anterior]
@@ -1643,36 +1576,44 @@ export async function cambiarCuentaCompra(req, res) {
         const monto = parseFloat(mov.monto);
         totalMovido += monto;
 
-        // A. Devolver dinero a la cuenta anterior (Test)
-        await connection.query(
-          'UPDATE cuentas_pago SET saldo_actual = saldo_actual + ? WHERE id_cuenta = ?',
-          [monto, id_cuenta_anterior]
-        );
+        await connection.query(`
+          INSERT INTO movimientos_cuentas (
+            id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
+            id_orden_compra, fecha_movimiento, id_registrado_por
+          ) VALUES (?, 'Ingreso', ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          id_cuenta_anterior,
+          mov.moneda,
+          monto,
+          `Reversión por cambio de cuenta - OC ${compra.numero_orden}`,
+          `REV-${mov.id_movimiento}`,
+          id,
+          mov.fecha_movimiento,
+          id_registrado_por
+        ]);
 
-        // B. Restar dinero a la nueva cuenta (Real)
-        await connection.query(
-          'UPDATE cuentas_pago SET saldo_actual = saldo_actual - ? WHERE id_cuenta = ?',
-          [monto, id_nueva_cuenta]
-        );
+        await connection.query(`
+          INSERT INTO movimientos_cuentas (
+            id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
+            id_orden_compra, fecha_movimiento, id_registrado_por
+          ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          id_nueva_cuenta,
+          mov.moneda,
+          monto,
+          mov.concepto,
+          mov.referencia,
+          id,
+          mov.fecha_movimiento,
+          id_registrado_por
+        ]);
 
-        // C. Actualizar el registro del movimiento para que apunte a la nueva cuenta
-        // NOTA: Mantenemos la fecha original para no romper el historial temporal,
-        // pero cambiamos la cuenta asociada.
         await connection.query(
-          'UPDATE movimientos_cuentas SET id_cuenta = ? WHERE id_movimiento = ?',
-          [id_nueva_cuenta, mov.id_movimiento]
+          'DELETE FROM movimientos_cuentas WHERE id_movimiento = ?',
+          [mov.id_movimiento]
         );
-        
-        // D. Si existen pagos en la tabla pagos_ordenes_compra (si la usas), actualizarlos también
-        /* await connection.query(
-            'UPDATE pagos_ordenes_compra SET id_cuenta_bancaria_origen = ? WHERE id_orden_compra = ? AND id_cuenta_bancaria_origen = ?',
-            [id_nueva_cuenta, id, id_cuenta_anterior]
-        );
-        */
       }
 
-      // 4. ACTUALIZAR CABECERAS
-      // Actualizar Orden de Compra
       await connection.query(
         `UPDATE ordenes_compra SET 
             id_cuenta_pago = ?, 
@@ -1681,13 +1622,11 @@ export async function cambiarCuentaCompra(req, res) {
         [id_nueva_cuenta, id_cuenta_anterior || 'NULL', id_nueva_cuenta, id]
       );
 
-      // Actualizar Entradas (si existen)
       await connection.query(
         'UPDATE entradas SET id_cuenta_pago = ? WHERE id_orden_compra = ?',
         [id_nueva_cuenta, id]
       );
 
-      // Actualizar Pagos de Letras (si hubiera)
       await connection.query(
         'UPDATE pagos_letras_compra plc JOIN letras_compra lc ON plc.id_letra = lc.id_letra SET plc.id_cuenta_pago = ? WHERE lc.id_orden_compra = ? AND plc.id_cuenta_pago = ?',
         [id_nueva_cuenta, id, id_cuenta_anterior]

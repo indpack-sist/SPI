@@ -145,19 +145,13 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
         }
 
         ordenes.forEach((orden, index) => {
-          const numProductos = (orden.detalles && orden.detalles.length) || 0;
-          const alturaProductos = Math.min(numProductos, 3) * 10;
-          const tieneObservaciones = orden.observaciones && orden.observaciones.length > 0;
-          const alturaObservaciones = tieneObservaciones ? 15 : 0;
-          const alturaOrdenCompleta = 85 + alturaProductos + alturaObservaciones;
-
-          if (yPos + alturaOrdenCompleta > 750) {
+          if (yPos + 80 > 750) {
             doc.addPage();
             yPos = 50;
           }
 
-          const yInicio = yPos;
-          
+          let yInicioCuadro = yPos; 
+
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#1976D2');
           doc.text(`${index + 1}. ${orden.numero}`, 45, yPos + 8);
 
@@ -221,14 +215,30 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
 
           if (orden.detalles && orden.detalles.length > 0) {
             doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
+            
+            if (yPos + 15 > 780) {
+                doc.roundedRect(40, yInicioCuadro, 515, yPos - yInicioCuadro + 5, 3).stroke('#DDDDDD');
+                doc.addPage();
+                yPos = 50;
+                yInicioCuadro = 50;
+            }
+
             doc.text('Productos:', 45, yPos);
             yPos += 10;
             
             doc.fontSize(6).font('Helvetica').fillColor('#777777');
+            
             orden.detalles.forEach(det => {
-              if (yPos > 750) {
+              if (yPos + 10 > 780) {
+                doc.roundedRect(40, yInicioCuadro, 515, yPos - yInicioCuadro + 5, 3).stroke('#DDDDDD');
                 doc.addPage();
                 yPos = 50;
+                yInicioCuadro = 50;
+                
+                doc.fontSize(7).font('Helvetica-Bold').fillColor('#1976D2');
+                doc.text(`(Cont.) ${orden.numero}`, 45, yPos + 5);
+                yPos += 15;
+                doc.fontSize(6).font('Helvetica').fillColor('#777777');
               }
               
               const lineaProducto = `• ${det.producto_nombre} | ${det.cantidad} ${det.unidad_medida} | ${orden.moneda} ${det.precio_unitario} c/u | Sub: ${orden.moneda} ${det.subtotal}`;
@@ -237,25 +247,40 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
             });
           }
 
-          if (tieneObservaciones) {
-            if (yPos > 730) {
-              doc.addPage();
-              yPos = 50;
+          if (orden.observaciones && orden.observaciones.length > 0) {
+            if (yPos + 30 > 780) {
+                doc.roundedRect(40, yInicioCuadro, 515, yPos - yInicioCuadro + 5, 3).stroke('#DDDDDD');
+                doc.addPage();
+                yPos = 50;
+                yInicioCuadro = 50;
+                
+                doc.fontSize(7).font('Helvetica-Bold').fillColor('#1976D2');
+                doc.text(`(Cont.) ${orden.numero}`, 45, yPos + 5);
+                yPos += 15;
             }
             
             doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
             doc.text('Obs:', 45, yPos);
             doc.fontSize(6).font('Helvetica').fillColor('#777777');
+            
             const textoObservaciones = orden.observaciones.substring(0, 200);
             const lineas = doc.heightOfString(textoObservaciones, { width: 475 });
+            
+            if (yPos + lineas > 780) {
+                 doc.roundedRect(40, yInicioCuadro, 515, yPos - yInicioCuadro + 5, 3).stroke('#DDDDDD');
+                 doc.addPage();
+                 yPos = 50;
+                 yInicioCuadro = 50;
+            }
+
             doc.text(textoObservaciones, 70, yPos, { width: 475 });
             yPos += Math.max(lineas, 15);
           }
 
-          const alturaFinal = yPos - yInicio;
-          doc.roundedRect(40, yInicio, 515, alturaFinal, 3).stroke('#DDDDDD');
+          const alturaFinal = yPos - yInicioCuadro;
+          doc.roundedRect(40, yInicioCuadro, 515, alturaFinal + 5, 3).stroke('#DDDDDD');
 
-          yPos += 8;
+          yPos += 15;
         });
       }
 

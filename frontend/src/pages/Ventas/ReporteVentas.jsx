@@ -17,7 +17,10 @@ import Alert from '../../components/UI/Alert';
 const COLORS_PIE = {
   'Pagado': '#10B981',
   'Parcial': '#F59E0B',
-  'Pendiente': '#EF4444'
+  'Pendiente': '#EF4444',
+  'Pagado USD': '#059669',
+  'Parcial USD': '#D97706',
+  'Pendiente USD': '#DC2626'
 };
 
 const ReporteVentas = () => {
@@ -48,11 +51,17 @@ const ReporteVentas = () => {
   const [dataReporte, setDataReporte] = useState({
     resumen: {
       total_ventas_pen: 0,
+      total_ventas_usd: 0,
       total_pagado_pen: 0,
+      total_pagado_usd: 0,
       total_pendiente_pen: 0,
+      total_pendiente_usd: 0,
       total_comisiones_pen: 0,
+      total_comisiones_usd: 0,
       contado_pen: 0,
+      contado_usd: 0,
       credito_pen: 0,
+      credito_usd: 0,
       pedidos_retrasados: 0,
       cantidad_ordenes: 0
     },
@@ -174,12 +183,9 @@ const ReporteVentas = () => {
     setMostrarDetalleOrden(true);
   };
 
-  const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-PE', {
-      style: 'currency',
-      currency: 'PEN',
-      minimumFractionDigits: 2
-    }).format(valor || 0);
+  const formatearMoneda = (valor, moneda = 'PEN') => {
+    const simbolo = moneda === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(valor || 0)}`;
   };
 
   const formatearFecha = (fecha) => {
@@ -204,12 +210,12 @@ const ReporteVentas = () => {
 
   const obtenerBadgeEstadoPago = (estado) => {
     const estilos = {
-      'Pagado': 'bg-green-100 text-green-800 border-green-200',
-      'Parcial': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      'Pendiente': 'bg-red-100 text-red-800 border-red-200'
+      'Pagado': 'badge badge-success',
+      'Parcial': 'badge badge-warning',
+      'Pendiente': 'badge badge-danger'
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold border w-fit ${estilos[estado] || 'bg-gray-100'}`}>
+      <span className={estilos[estado] || 'badge badge-secondary'}>
         {estado}
       </span>
     );
@@ -217,16 +223,19 @@ const ReporteVentas = () => {
 
   const obtenerBadgeEstado = (estado) => {
     const estilos = {
-      'En Espera': 'bg-gray-100 text-gray-800',
-      'En Proceso': 'bg-blue-100 text-blue-800',
-      'Atendido por Producción': 'bg-purple-100 text-purple-800',
-      'Despacho Parcial': 'bg-yellow-100 text-yellow-800',
-      'Despachada': 'bg-green-100 text-green-800',
-      'Entregada': 'bg-emerald-100 text-emerald-800',
-      'Cancelada': 'bg-red-100 text-red-800'
+      'En Espera': 'badge badge-secondary',
+      'En Proceso': 'badge badge-info',
+      'Atendido por Producción': 'badge badge-purple-100 text-purple-900 border-purple-200', 
+      'Despacho Parcial': 'badge badge-warning',
+      'Despachada': 'badge badge-success',
+      'Entregada': 'badge badge-success',
+      'Cancelada': 'badge badge-danger'
     };
+    
+    const claseExtra = estado === 'Atendido por Producción' ? 'bg-purple-100 text-purple-900 border border-purple-200' : (estilos[estado] || 'badge badge-secondary');
+
     return (
-      <span className={`px-2 py-1 rounded text-xs font-semibold ${estilos[estado] || 'bg-gray-100'}`}>
+      <span className={claseExtra.startsWith('badge') ? claseExtra : `badge ${claseExtra}`}>
         {estado}
       </span>
     );
@@ -234,12 +243,12 @@ const ReporteVentas = () => {
 
   const obtenerBadgeVerificacion = (estado) => {
     const estilos = {
-      'Pendiente': 'bg-yellow-100 text-yellow-800',
-      'Aprobada': 'bg-green-100 text-green-800',
-      'Rechazada': 'bg-red-100 text-red-800'
+      'Pendiente': 'badge badge-warning',
+      'Aprobada': 'badge badge-success',
+      'Rechazada': 'badge badge-danger'
     };
     return (
-      <span className={`px-2 py-1 rounded text-xs font-semibold ${estilos[estado] || 'bg-gray-100'}`}>
+      <span className={estilos[estado] || 'badge badge-secondary'}>
         {estado}
       </span>
     );
@@ -247,13 +256,13 @@ const ReporteVentas = () => {
 
   const obtenerBadgeLogistica = (estado) => {
     const estilos = {
-        'A tiempo': 'bg-blue-100 text-blue-800',
-        'En plazo': 'bg-blue-50 text-blue-600',
-        'Retrasado': 'bg-red-100 text-red-800 font-bold',
-        'Vencido': 'bg-red-200 text-red-900 font-bold'
+        'A tiempo': 'badge badge-info',
+        'En plazo': 'badge badge-info badge-outline',
+        'Retrasado': 'badge badge-danger',
+        'Vencido': 'badge badge-danger badge-outline'
     };
     return (
-        <span className={`px-2 py-0.5 rounded text-xs ${estilos[estado] || 'bg-gray-100'}`}>
+        <span className={estilos[estado] || 'badge badge-secondary'}>
             {estado}
         </span>
     );
@@ -266,198 +275,214 @@ const ReporteVentas = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen font-sans">
+    <div className="container py-8 font-sans">
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <TrendingUp className="text-blue-600" /> Dashboard de Ventas
+            <TrendingUp className="text-primary" /> Dashboard de Ventas
           </h1>
-          <p className="text-gray-500 text-sm">Monitor de rendimiento comercial y logístico</p>
+          <p className="text-muted text-sm">Monitor de rendimiento comercial y logístico</p>
         </div>
         <button 
             onClick={descargarPDF}
             disabled={loadingPdf}
-            className="btn bg-red-600 hover:bg-red-700 text-white flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+            className="btn btn-danger"
         >
             {loadingPdf ? <Loading size="sm" color="white"/> : <Download size={18} />}
             Exportar PDF
         </button>
       </div>
 
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-        <form onSubmit={generarReporte} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-          <div className="md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Desde</label>
-            <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                <input 
-                    type="date" 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={filtros.fechaInicio}
-                    onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})}
-                />
+      <div className="card mb-6">
+        <div className="card-body">
+            <form onSubmit={generarReporte} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            <div className="form-group mb-0">
+                <label className="form-label uppercase text-xs text-muted">Desde</label>
+                <div className="input-with-icon">
+                    <Calendar className="icon" size={16} />
+                    <input 
+                        type="date" 
+                        className="form-input"
+                        value={filtros.fechaInicio}
+                        onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})}
+                    />
+                </div>
             </div>
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Hasta</label>
-            <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                <input 
-                    type="date" 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={filtros.fechaFin}
-                    onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})}
-                />
-            </div>
-          </div>
-          
-          <div className="md:col-span-4 relative" ref={wrapperRef}>
-            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Cliente</label>
-            <div className="relative">
-                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                <input 
-                    type="text"
-                    placeholder="Buscar cliente por nombre o RUC..."
-                    className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={busquedaCliente}
-                    onChange={(e) => {
-                        setBusquedaCliente(e.target.value);
-                        if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
-                    }}
-                    onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
-                />
-                {filtros.idCliente && (
-                    <button 
-                        type="button"
-                        onClick={limpiarCliente}
-                        className="absolute right-2 top-2 text-gray-400 hover:text-red-500"
-                    >
-                        <X size={16} />
-                    </button>
-                )}
+            <div className="form-group mb-0">
+                <label className="form-label uppercase text-xs text-muted">Hasta</label>
+                <div className="input-with-icon">
+                    <Calendar className="icon" size={16} />
+                    <input 
+                        type="date" 
+                        className="form-input"
+                        value={filtros.fechaFin}
+                        onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})}
+                    />
+                </div>
             </div>
             
-            {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
-                    {clientesSugeridos.map(cliente => (
-                        <li 
-                            key={cliente.id_cliente}
-                            onClick={() => seleccionarCliente(cliente)}
-                            className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-0"
+            <div className="form-group mb-0 lg:col-span-2 relative" ref={wrapperRef}>
+                <label className="form-label uppercase text-xs text-muted">Cliente</label>
+                <div className="search-input-wrapper">
+                    <Search className="search-icon" size={16} />
+                    <input 
+                        type="text"
+                        placeholder="Buscar cliente por nombre o RUC..."
+                        className="form-input search-input"
+                        value={busquedaCliente}
+                        onChange={(e) => {
+                            setBusquedaCliente(e.target.value);
+                            if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
+                        }}
+                        onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
+                    />
+                    {filtros.idCliente && (
+                        <button 
+                            type="button"
+                            onClick={limpiarCliente}
+                            className="absolute right-2 top-2.5 text-gray-400 hover:text-red-500"
                         >
-                            <div className="font-medium">{cliente.razon_social}</div>
-                            <div className="text-xs text-gray-500">RUC: {cliente.ruc}</div>
-                        </li>
-                    ))}
-                </ul>
-            )}
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Vendedor</label>
-            <div className="relative">
-                <User className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                <select 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none bg-white"
-                    value={filtros.idVendedor}
-                    onChange={(e) => setFiltros({...filtros, idVendedor: e.target.value})}
-                >
-                    <option value="">Todos</option>
-                    {vendedores.map(v => (
-                        <option key={v.id_empleado} value={v.id_empleado}>{v.nombres}</option>
-                    ))}
-                </select>
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
+                
+                {mostrarSugerencias && clientesSugeridos.length > 0 && (
+                    <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-96 overflow-y-auto">
+                        {clientesSugeridos.map(cliente => (
+                            <li 
+                                key={cliente.id_cliente}
+                                onClick={() => seleccionarCliente(cliente)}
+                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-800 border-b border-gray-100 last:border-0"
+                            >
+                                <div className="font-medium">{cliente.razon_social}</div>
+                                <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
-          </div>
 
-          <div className="md:col-span-2">
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow transition-colors flex items-center justify-center gap-2" disabled={loading}>
-                {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />}
-                Filtrar
-            </button>
-          </div>
-        </form>
+            <div className="form-group mb-0">
+                <label className="form-label uppercase text-xs text-muted">Vendedor</label>
+                <div className="input-with-icon">
+                    <User className="icon" size={16} />
+                    <select 
+                        className="form-select pl-10"
+                        value={filtros.idVendedor}
+                        onChange={(e) => setFiltros({...filtros, idVendedor: e.target.value})}
+                    >
+                        <option value="">Todos</option>
+                        {vendedores.map(v => (
+                            <option key={v.id_empleado} value={v.id_empleado}>{v.nombre_completo}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            <div className="lg:col-span-5 md:col-span-2 flex justify-end">
+                <button type="submit" className="btn btn-primary w-full md:w-auto" disabled={loading}>
+                    {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />}
+                    Filtrar
+                </button>
+            </div>
+            </form>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Ventas Totales</p>
-                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{formatearMoneda(dataReporte.resumen.total_ventas_pen)}</h3>
-                    <div className="flex gap-2 mt-2 text-xs">
-                        <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Ct: {formatearMoneda(dataReporte.resumen.contado_pen)}</span>
-                        <span className="text-purple-600 bg-purple-50 px-2 py-0.5 rounded">Cr: {formatearMoneda(dataReporte.resumen.credito_pen)}</span>
-                    </div>
+      <div className="stats-grid">
+        <div className="stat-card border-l-4 border-blue-500">
+            <div className="stat-content">
+                <p className="text-xs text-muted font-bold uppercase tracking-wider">Ventas Totales</p>
+                <h3 className="stat-value text-gray-900">{formatearMoneda(dataReporte.resumen.total_ventas_pen, 'PEN')}</h3>
+                {dataReporte.resumen.total_ventas_usd > 0 && (
+                    <p className="text-sm text-blue-700 font-semibold mt-1">{formatearMoneda(dataReporte.resumen.total_ventas_usd, 'USD')}</p>
+                )}
+                <div className="flex gap-2 mt-2 text-xs flex-wrap">
+                    <span className="badge badge-info badge-sm">Ct PEN: {formatearMoneda(dataReporte.resumen.contado_pen, 'PEN')}</span>
+                    <span className="badge badge-purple-100 text-purple-900 badge-sm border border-purple-200">Cr PEN: {formatearMoneda(dataReporte.resumen.credito_pen, 'PEN')}</span>
+                    {dataReporte.resumen.contado_usd > 0 && (
+                        <span className="badge badge-info badge-sm">Ct USD: {formatearMoneda(dataReporte.resumen.contado_usd, 'USD')}</span>
+                    )}
+                    {dataReporte.resumen.credito_usd > 0 && (
+                        <span className="badge badge-purple-100 text-purple-900 badge-sm border border-purple-200">Cr USD: {formatearMoneda(dataReporte.resumen.credito_usd, 'USD')}</span>
+                    )}
                 </div>
-                <div className="p-3 bg-blue-50 rounded-lg text-blue-600"><DollarSign size={24}/></div>
             </div>
+            <div className="stat-icon bg-blue-50 text-blue-600"><DollarSign size={24}/></div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Cobrado</p>
-                    <h3 className="text-2xl font-bold text-green-600 mt-1">{formatearMoneda(dataReporte.resumen.total_pagado_pen)}</h3>
-                    <p className="text-xs text-gray-400 mt-2">Liquidez ingresada</p>
-                </div>
-                <div className="p-3 bg-green-50 rounded-lg text-green-600"><CheckCircle size={24}/></div>
+        <div className="stat-card border-l-4 border-green-500">
+            <div className="stat-content">
+                <p className="text-xs text-muted font-bold uppercase tracking-wider">Cobrado</p>
+                <h3 className="stat-value text-success">{formatearMoneda(dataReporte.resumen.total_pagado_pen, 'PEN')}</h3>
+                {dataReporte.resumen.total_pagado_usd > 0 && (
+                    <p className="text-sm text-green-700 font-semibold mt-1">{formatearMoneda(dataReporte.resumen.total_pagado_usd, 'USD')}</p>
+                )}
+                <p className="text-xs text-gray-400 mt-2">Liquidez ingresada</p>
             </div>
+            <div className="stat-icon bg-green-50 text-success"><CheckCircle size={24}/></div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Por Cobrar</p>
-                    <h3 className="text-2xl font-bold text-red-500 mt-1">{formatearMoneda(dataReporte.resumen.total_pendiente_pen)}</h3>
-                    <p className="text-xs text-gray-400 mt-2">Crédito pendiente</p>
-                </div>
-                <div className="p-3 bg-red-50 rounded-lg text-red-500"><AlertCircle size={24}/></div>
+        <div className="stat-card border-l-4 border-red-500">
+            <div className="stat-content">
+                <p className="text-xs text-muted font-bold uppercase tracking-wider">Por Cobrar</p>
+                <h3 className="stat-value text-danger">{formatearMoneda(dataReporte.resumen.total_pendiente_pen, 'PEN')}</h3>
+                {dataReporte.resumen.total_pendiente_usd > 0 && (
+                    <p className="text-sm text-red-700 font-semibold mt-1">{formatearMoneda(dataReporte.resumen.total_pendiente_usd, 'USD')}</p>
+                )}
+                <p className="text-xs text-gray-400 mt-2">Crédito pendiente</p>
             </div>
+            <div className="stat-icon bg-red-50 text-danger"><AlertCircle size={24}/></div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Operaciones</p>
-                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{dataReporte.resumen.cantidad_ordenes}</h3>
-                    <div className="mt-2 text-xs flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded font-medium ${dataReporte.resumen.pedidos_retrasados > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                            {dataReporte.resumen.pedidos_retrasados} Retrasos
-                        </span>
-                    </div>
+        <div className="stat-card border-l-4 border-orange-500">
+            <div className="stat-content">
+                <p className="text-xs text-muted font-bold uppercase tracking-wider">Operaciones</p>
+                <h3 className="stat-value text-gray-900">{dataReporte.resumen.cantidad_ordenes}</h3>
+                <div className="mt-2 text-xs flex items-center gap-2">
+                    <span className={`badge ${dataReporte.resumen.pedidos_retrasados > 0 ? 'badge-danger' : 'badge-success'}`}>
+                        {dataReporte.resumen.pedidos_retrasados} Retrasos
+                    </span>
                 </div>
-                <div className="p-3 bg-orange-50 rounded-lg text-orange-600"><Truck size={24}/></div>
             </div>
+            <div className="stat-icon bg-orange-50 text-orange-600"><Truck size={24}/></div>
         </div>
       </div>
 
-      {dataReporte.resumen.total_comisiones_pen > 0 && (
-        <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-xl border border-purple-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Percent size={20} className="text-purple-600" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-purple-600 uppercase">Total Comisiones</p>
-                <p className="text-lg font-bold text-purple-900">{formatearMoneda(dataReporte.resumen.total_comisiones_pen)}</p>
-              </div>
+      {(dataReporte.resumen.total_comisiones_pen > 0 || dataReporte.resumen.total_comisiones_usd > 0) && (
+        <div className="card mb-6 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+            <div className="card-body p-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                        <Percent size={20} className="text-purple-600" />
+                    </div>
+                    <div>
+                        <p className="text-xs font-semibold text-purple-600 uppercase">Total Comisiones</p>
+                        <p className="text-lg font-bold text-purple-900">{formatearMoneda(dataReporte.resumen.total_comisiones_pen, 'PEN')}</p>
+                        {dataReporte.resumen.total_comisiones_usd > 0 && (
+                            <p className="text-sm font-semibold text-purple-700">{formatearMoneda(dataReporte.resumen.total_comisiones_usd, 'USD')}</p>
+                        )}
+                    </div>
+                    </div>
+                </div>
             </div>
-          </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
-            <h3 className="text-base font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <TrendingUp size={18} className="text-gray-500"/> Evolución de Ventas Diarias
-            </h3>
-            <div className="h-72 w-full">
+        <div className="card lg:col-span-2">
+            <div className="card-header">
+                <h3 className="card-title text-base text-gray-800">
+                    <TrendingUp size={18} className="text-muted"/> Evolución de Ventas Diarias
+                </h3>
+            </div>
+            <div className="card-body p-4" style={{ height: '320px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={dataReporte.graficos.ventas_dia} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                         <defs>
@@ -468,10 +493,10 @@ const ReporteVentas = () => {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                         <XAxis dataKey="fecha" tick={{fontSize: 12, fill: '#9CA3AF'}} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis tick={{fontSize: 12, fill: '#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={(value) => `S/ ${value/1000}k`} />
+                        <YAxis tick={{fontSize: 12, fill: '#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={(value) => `${value/1000}k`} />
                         <RechartsTooltip 
                             cursor={{fill: '#F9FAFB'}}
-                            formatter={(value) => [formatearMoneda(value), "Total"]}
+                            formatter={(value, name, props) => [formatearMoneda(value, props.payload.moneda), "Total"]}
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                         />
                         <Area type="monotone" dataKey="total" stroke="#3B82F6" strokeWidth={2} fill="url(#colorVentas)" />
@@ -480,11 +505,13 @@ const ReporteVentas = () => {
             </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h3 className="text-base font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <PieIcon size={18} className="text-gray-500"/> Estado de Cartera
-            </h3>
-            <div className="h-72 w-full relative">
+        <div className="card">
+            <div className="card-header">
+                <h3 className="card-title text-base text-gray-800">
+                    <PieIcon size={18} className="text-muted"/> Estado de Cartera
+                </h3>
+            </div>
+            <div className="card-body p-4 relative" style={{ height: '320px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
@@ -497,31 +524,29 @@ const ReporteVentas = () => {
                             dataKey="value"
                         >
                             {dataReporte.graficos.estado_pago.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                                <Cell key={`cell-${index}`} fill={COLORS_PIE[entry.name] || entry.color} strokeWidth={0} />
                             ))}
                         </Pie>
-                        <RechartsTooltip formatter={(value) => formatearMoneda(value)} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                        <RechartsTooltip formatter={(value) => formatearMoneda(value, 'PEN')} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                         <Legend verticalAlign="bottom" height={36} iconType="circle"/>
                     </PieChart>
                 </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-xs text-gray-400">Total Facturado</span>
-                    <span className="text-lg font-bold text-gray-800">{formatearMoneda(dataReporte.resumen.total_ventas_pen)}</span>
-                </div>
             </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
-             <h3 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <User size={18} className="text-gray-500"/> Ranking de Vendedores
-            </h3>
-            <div className="h-60 w-full">
+        <div className="card lg:col-span-2">
+             <div className="card-header">
+                <h3 className="card-title text-base text-gray-800">
+                    <User size={18} className="text-muted"/> Ranking de Vendedores
+                </h3>
+            </div>
+            <div className="card-body p-4" style={{ height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                     <BarChart data={dataReporte.graficos.top_vendedores} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                      <BarChart data={dataReporte.graficos.top_vendedores} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6"/>
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" width={150} tick={{fontSize: 12, fill: '#4B5563'}} axisLine={false} tickLine={false}/>
-                        <RechartsTooltip formatter={(value) => formatearMoneda(value)} cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px' }}/>
+                        <RechartsTooltip formatter={(value, name, props) => [formatearMoneda(value, props.payload.moneda), "Total"]} cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px' }}/>
                         <Bar dataKey="value" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20} background={{ fill: '#F9FAFB' }} />
                     </BarChart>
                 </ResponsiveContainer>
@@ -529,11 +554,13 @@ const ReporteVentas = () => {
         </div>
 
         {dataReporte.graficos.ventas_por_estado && dataReporte.graficos.ventas_por_estado.length > 0 && (
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <Package size={18} className="text-gray-500"/> Ventas por Estado
-              </h3>
-              <div className="h-60 w-full">
+          <div className="card">
+              <div className="card-header">
+                  <h3 className="card-title text-base text-gray-800">
+                      <Package size={18} className="text-muted"/> Ventas por Estado
+                  </h3>
+              </div>
+              <div className="card-body p-4" style={{ height: '300px' }}>
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie
@@ -550,7 +577,7 @@ const ReporteVentas = () => {
                                   <Cell key={`cell-${index}`} fill={['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][index % 6]} />
                               ))}
                           </Pie>
-                          <RechartsTooltip formatter={(value) => formatearMoneda(value)} />
+                          <RechartsTooltip formatter={(value, name, props) => [formatearMoneda(value, props.payload.moneda), name]} />
                       </PieChart>
                   </ResponsiveContainer>
               </div>
@@ -558,37 +585,37 @@ const ReporteVentas = () => {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-            <h3 className="font-bold text-gray-800 text-sm">Detalle de Transacciones</h3>
-            <span className="text-xs font-medium text-gray-500 bg-white border px-2 py-1 rounded shadow-sm">
+      <div className="card">
+        <div className="card-header bg-gray-50 flex justify-between items-center">
+            <h3 className="card-title text-sm text-gray-800">Detalle de Transacciones</h3>
+            <span className="badge badge-secondary badge-outline">
                 {dataReporte.detalle.length} Registros
             </span>
         </div>
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+        <div className="table-container">
+            <table className="table">
+                <thead>
                     <tr>
-                        <th className="px-4 py-3 font-semibold">Acciones</th>
-                        <th className="px-4 py-3 font-semibold">Orden</th>
-                        <th className="px-4 py-3 font-semibold">Cliente</th>
-                        <th className="px-4 py-3 font-semibold">Vendedor</th>
-                        <th className="px-4 py-3 font-semibold">Emisión</th>
-                        <th className="px-4 py-3 font-semibold">Despacho</th>
-                        <th className="px-4 py-3 font-semibold text-right">Total</th>
-                        <th className="px-4 py-3 font-semibold text-center">Estado Pago</th>
-                        <th className="px-4 py-3 font-semibold text-center">Estado</th>
-                        <th className="px-4 py-3 font-semibold text-center">Logística</th>
+                        <th className="px-4 py-3">Acciones</th>
+                        <th className="px-4 py-3">Orden</th>
+                        <th className="px-4 py-3">Cliente</th>
+                        <th className="px-4 py-3">Vendedor</th>
+                        <th className="px-4 py-3">Emisión</th>
+                        <th className="px-4 py-3">Despacho</th>
+                        <th className="px-4 py-3 text-right">Total</th>
+                        <th className="px-4 py-3 text-center">Estado Pago</th>
+                        <th className="px-4 py-3 text-center">Estado</th>
+                        <th className="px-4 py-3 text-center">Logística</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                     {dataReporte.detalle.length > 0 ? (
                         dataReporte.detalle.map((item) => (
-                            <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
-                                <td className="px-4 py-3">
+                            <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => verDetalleOrden(item)}>
+                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         onClick={() => verDetalleOrden(item)}
-                                        className="btn-ghost btn-xs flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                                        className="btn btn-ghost btn-xs text-primary"
                                         title="Ver detalles"
                                     >
                                         <Eye size={14} />
@@ -596,29 +623,29 @@ const ReporteVentas = () => {
                                     </button>
                                 </td>
                                 <td className="px-4 py-3">
-                                    <div className="font-mono font-medium text-blue-600 group-hover:text-blue-700">
+                                    <div className="font-mono font-medium text-primary">
                                         {item.numero}
                                     </div>
                                     {item.numero_comprobante && (
-                                        <div className="text-xs text-gray-400">{item.tipo_comprobante}: {item.numero_comprobante}</div>
+                                        <div className="text-xs text-muted">{item.tipo_comprobante}: {item.numero_comprobante}</div>
                                     )}
                                 </td>
                                 <td className="px-4 py-3 text-gray-800">
-                                    <div className="font-medium truncate max-w-[200px]" title={item.cliente}>{item.cliente}</div>
-                                    <div className="text-xs text-gray-400">{item.ruc}</div>
+                                    <div className="font-medium truncate w-32" title={item.cliente}>{item.cliente}</div>
+                                    <div className="text-xs text-muted">{item.ruc}</div>
                                 </td>
-                                <td className="px-4 py-3 text-gray-600 text-xs truncate max-w-[120px]">
+                                <td className="px-4 py-3 text-muted text-xs truncate w-24">
                                     {item.vendedor}
                                 </td>
-                                <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
+                                <td className="px-4 py-3 text-muted whitespace-nowrap text-xs">
                                     {formatearFecha(item.fecha_emision)}
                                 </td>
-                                <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
+                                <td className="px-4 py-3 text-muted whitespace-nowrap text-xs">
                                     {item.fecha_entrega_real ? formatearFecha(item.fecha_entrega_real) : 
                                      <span className="text-gray-400 italic">Pendiente</span>}
                                 </td>
                                 <td className="px-4 py-3 text-right font-bold text-gray-700">
-                                    <span className="text-xs text-gray-400 mr-1">{item.moneda}</span>
+                                    <span className="text-xs text-muted mr-1">{item.moneda}</span>
                                     {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(item.total)}
                                 </td>
                                 <td className="px-4 py-3 text-center">
@@ -634,7 +661,7 @@ const ReporteVentas = () => {
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="10" className="px-4 py-12 text-center text-gray-400">
+                            <td colSpan="10" className="px-4 py-12 text-center text-muted">
                                 <div className="flex flex-col items-center justify-center">
                                     <Search size={32} className="mb-2 opacity-20"/>
                                     No se encontraron ventas con los filtros seleccionados.
@@ -648,25 +675,25 @@ const ReporteVentas = () => {
       </div>
 
       {mostrarDetalleOrden && ordenSeleccionada && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 modal-overlay">
-          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto modal-content">
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-content bg-white rounded-xl shadow-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto m-4 flex flex-col">
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-start z-10">
               <div>
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <FileText className="text-blue-600" />
+                  <FileText className="text-primary" />
                   Detalle de Orden: {ordenSeleccionada.numero}
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">Información completa de la orden de venta</p>
+                <p className="text-sm text-muted mt-1">Información completa de la orden de venta</p>
               </div>
               <button
                 onClick={() => setMostrarDetalleOrden(false)}
-                className="btn-ghost p-2 rounded-lg hover:bg-gray-100"
+                className="btn btn-ghost"
               >
                 <X size={24} />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 flex-1 overflow-y-auto">
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -695,232 +722,240 @@ const ReporteVentas = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white border border-gray-200 rounded-lg p-5">
-                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <Building2 size={18} className="text-blue-600" />
-                    Información del Cliente
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Razón Social:</span>
-                      <p className="font-medium text-gray-800">{ordenSeleccionada.cliente}</p>
+                <div className="card shadow-none">
+                  <div className="card-body p-5">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <Building2 size={18} className="text-primary" />
+                        Información del Cliente
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                        <div>
+                        <span className="text-muted">Razón Social:</span>
+                        <p className="font-medium text-gray-800">{ordenSeleccionada.cliente}</p>
+                        </div>
+                        <div>
+                        <span className="text-muted">RUC:</span>
+                        <p className="font-medium text-gray-800">{ordenSeleccionada.ruc}</p>
+                        </div>
+                        {ordenSeleccionada.direccion_cliente && (
+                        <div>
+                            <span className="text-muted flex items-center gap-1">
+                            <MapPin size={14} /> Dirección:
+                            </span>
+                            <p className="font-medium text-gray-800">{ordenSeleccionada.direccion_cliente}</p>
+                        </div>
+                        )}
+                        {ordenSeleccionada.telefono_cliente && (
+                        <div className="flex items-center gap-2">
+                            <Phone size={14} className="text-muted" />
+                            <span className="text-gray-800">{ordenSeleccionada.telefono_cliente}</span>
+                        </div>
+                        )}
+                        {ordenSeleccionada.email_cliente && (
+                        <div className="flex items-center gap-2">
+                            <Mail size={14} className="text-muted" />
+                            <span className="text-gray-800">{ordenSeleccionada.email_cliente}</span>
+                        </div>
+                        )}
                     </div>
-                    <div>
-                      <span className="text-gray-500">RUC:</span>
-                      <p className="font-medium text-gray-800">{ordenSeleccionada.ruc}</p>
-                    </div>
-                    {ordenSeleccionada.direccion_cliente && (
-                      <div>
-                        <span className="text-gray-500 flex items-center gap-1">
-                          <MapPin size={14} /> Dirección:
-                        </span>
-                        <p className="font-medium text-gray-800">{ordenSeleccionada.direccion_cliente}</p>
-                      </div>
-                    )}
-                    {ordenSeleccionada.telefono_cliente && (
-                      <div className="flex items-center gap-2">
-                        <Phone size={14} className="text-gray-400" />
-                        <span className="text-gray-800">{ordenSeleccionada.telefono_cliente}</span>
-                      </div>
-                    )}
-                    {ordenSeleccionada.email_cliente && (
-                      <div className="flex items-center gap-2">
-                        <Mail size={14} className="text-gray-400" />
-                        <span className="text-gray-800">{ordenSeleccionada.email_cliente}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 rounded-lg p-5">
-                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <Calendar size={18} className="text-green-600" />
-                    Fechas Importantes
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Creación:</span>
-                      <span className="font-medium text-gray-800">{formatearFechaHora(ordenSeleccionada.fecha_creacion)}</span>
+                <div className="card shadow-none">
+                    <div className="card-body p-5">
+                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <Calendar size={18} className="text-success" />
+                            Fechas Importantes
+                        </h3>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                            <span className="text-muted">Creación:</span>
+                            <span className="font-medium text-gray-800">{formatearFechaHora(ordenSeleccionada.fecha_creacion)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-muted">Emisión:</span>
+                            <span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_emision)}</span>
+                            </div>
+                            {ordenSeleccionada.fecha_vencimiento && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Vencimiento:</span>
+                                <span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_vencimiento)}</span>
+                            </div>
+                            )}
+                            {ordenSeleccionada.fecha_entrega_programada && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Entrega Programada:</span>
+                                <span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_entrega_programada)}</span>
+                            </div>
+                            )}
+                            {ordenSeleccionada.fecha_entrega_real && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Entrega Real:</span>
+                                <span className="font-medium text-green-700">{formatearFecha(ordenSeleccionada.fecha_entrega_real)}</span>
+                            </div>
+                            )}
+                            {ordenSeleccionada.fecha_verificacion && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Verificación:</span>
+                                <span className="font-medium text-gray-800">{formatearFechaHora(ordenSeleccionada.fecha_verificacion)}</span>
+                            </div>
+                            )}
+                        </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Emisión:</span>
-                      <span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_emision)}</span>
-                    </div>
-                    {ordenSeleccionada.fecha_vencimiento && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Vencimiento:</span>
-                        <span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_vencimiento)}</span>
-                      </div>
-                    )}
-                    {ordenSeleccionada.fecha_entrega_programada && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Entrega Programada:</span>
-                        <span className="font-medium text-gray-800">{formatearFecha(ordenSeleccionada.fecha_entrega_programada)}</span>
-                      </div>
-                    )}
-                    {ordenSeleccionada.fecha_entrega_real && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Entrega Real:</span>
-                        <span className="font-medium text-green-700">{formatearFecha(ordenSeleccionada.fecha_entrega_real)}</span>
-                      </div>
-                    )}
-                    {ordenSeleccionada.fecha_verificacion && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Verificación:</span>
-                        <span className="font-medium text-gray-800">{formatearFechaHora(ordenSeleccionada.fecha_verificacion)}</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-lg p-5">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  {obtenerIconoTipoEntrega(ordenSeleccionada.tipo_entrega)}
-                  Información de Entrega
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Tipo de Entrega:</span>
-                    <p className="font-medium text-gray-800">{ordenSeleccionada.tipo_entrega}</p>
-                  </div>
-                  {ordenSeleccionada.tipo_entrega === 'Vehiculo Empresa' && (
-                    <>
-                      {ordenSeleccionada.vehiculo_placa && (
+              <div className="card shadow-none">
+                <div className="card-body p-5">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        {obtenerIconoTipoEntrega(ordenSeleccionada.tipo_entrega)}
+                        Información de Entrega
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-500">Vehículo:</span>
-                          <p className="font-medium text-gray-800">
-                            {ordenSeleccionada.vehiculo_placa} - {ordenSeleccionada.vehiculo_marca} {ordenSeleccionada.vehiculo_modelo}
-                          </p>
+                        <span className="text-muted">Tipo de Entrega:</span>
+                        <p className="font-medium text-gray-800">{ordenSeleccionada.tipo_entrega}</p>
                         </div>
-                      )}
-                      {ordenSeleccionada.conductor_nombre && (
+                        {ordenSeleccionada.tipo_entrega === 'Vehiculo Empresa' && (
+                        <>
+                            {ordenSeleccionada.vehiculo_placa && (
+                            <div>
+                                <span className="text-muted">Vehículo:</span>
+                                <p className="font-medium text-gray-800">
+                                {ordenSeleccionada.vehiculo_placa} - {ordenSeleccionada.vehiculo_marca}
+                                </p>
+                            </div>
+                            )}
+                            {ordenSeleccionada.conductor_nombre && (
+                            <div>
+                                <span className="text-muted">Conductor:</span>
+                                <p className="font-medium text-gray-800">{ordenSeleccionada.conductor_nombre}</p>
+                                {ordenSeleccionada.conductor_dni && (
+                                <p className="text-xs text-muted">DNI: {ordenSeleccionada.conductor_dni}</p>
+                                )}
+                                {ordenSeleccionada.conductor_licencia && (
+                                <p className="text-xs text-muted">Licencia: {ordenSeleccionada.conductor_licencia}</p>
+                                )}
+                            </div>
+                            )}
+                        </>
+                        )}
+                        {ordenSeleccionada.tipo_entrega === 'Transporte Privado' && (
+                        <>
+                            {ordenSeleccionada.transporte_nombre && (
+                            <div>
+                                <span className="text-muted">Empresa de Transporte:</span>
+                                <p className="font-medium text-gray-800">{ordenSeleccionada.transporte_nombre}</p>
+                            </div>
+                            )}
+                            {ordenSeleccionada.transporte_placa && (
+                            <div>
+                                <span className="text-muted">Placa:</span>
+                                <p className="font-medium text-gray-800">{ordenSeleccionada.transporte_placa}</p>
+                            </div>
+                            )}
+                            {ordenSeleccionada.transporte_conductor && (
+                            <div>
+                                <span className="text-muted">Conductor:</span>
+                                <p className="font-medium text-gray-800">{ordenSeleccionada.transporte_conductor}</p>
+                                {ordenSeleccionada.transporte_dni && (
+                                <p className="text-xs text-muted">DNI: {ordenSeleccionada.transporte_dni}</p>
+                                )}
+                            </div>
+                            )}
+                        </>
+                        )}
+                        {ordenSeleccionada.direccion_entrega && (
+                        <div className="md:col-span-2">
+                            <span className="text-muted flex items-center gap-1">
+                            <MapPin size={14} /> Dirección de Entrega:
+                            </span>
+                            <p className="font-medium text-gray-800">{ordenSeleccionada.direccion_entrega}</p>
+                            {ordenSeleccionada.ciudad_entrega && (
+                            <p className="text-xs text-muted">{ordenSeleccionada.ciudad_entrega}</p>
+                            )}
+                        </div>
+                        )}
+                        {ordenSeleccionada.contacto_entrega && (
                         <div>
-                          <span className="text-gray-500">Conductor:</span>
-                          <p className="font-medium text-gray-800">{ordenSeleccionada.conductor_nombre}</p>
-                          {ordenSeleccionada.conductor_dni && (
-                            <p className="text-xs text-gray-500">DNI: {ordenSeleccionada.conductor_dni}</p>
-                          )}
-                          {ordenSeleccionada.conductor_licencia && (
-                            <p className="text-xs text-gray-500">Licencia: {ordenSeleccionada.conductor_licencia}</p>
-                          )}
+                            <span className="text-muted">Contacto:</span>
+                            <p className="font-medium text-gray-800">{ordenSeleccionada.contacto_entrega}</p>
+                            {ordenSeleccionada.telefono_entrega && (
+                            <p className="text-xs text-muted">{ordenSeleccionada.telefono_entrega}</p>
+                            )}
                         </div>
-                      )}
-                    </>
-                  )}
-                  {ordenSeleccionada.tipo_entrega === 'Transporte Privado' && (
-                    <>
-                      {ordenSeleccionada.transporte_nombre && (
-                        <div>
-                          <span className="text-gray-500">Empresa de Transporte:</span>
-                          <p className="font-medium text-gray-800">{ordenSeleccionada.transporte_nombre}</p>
-                        </div>
-                      )}
-                      {ordenSeleccionada.transporte_placa && (
-                        <div>
-                          <span className="text-gray-500">Placa:</span>
-                          <p className="font-medium text-gray-800">{ordenSeleccionada.transporte_placa}</p>
-                        </div>
-                      )}
-                      {ordenSeleccionada.transporte_conductor && (
-                        <div>
-                          <span className="text-gray-500">Conductor:</span>
-                          <p className="font-medium text-gray-800">{ordenSeleccionada.transporte_conductor}</p>
-                          {ordenSeleccionada.transporte_dni && (
-                            <p className="text-xs text-gray-500">DNI: {ordenSeleccionada.transporte_dni}</p>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {ordenSeleccionada.direccion_entrega && (
-                    <div className="md:col-span-2">
-                      <span className="text-gray-500 flex items-center gap-1">
-                        <MapPin size={14} /> Dirección de Entrega:
-                      </span>
-                      <p className="font-medium text-gray-800">{ordenSeleccionada.direccion_entrega}</p>
-                      {ordenSeleccionada.ciudad_entrega && (
-                        <p className="text-xs text-gray-500">{ordenSeleccionada.ciudad_entrega}</p>
-                      )}
+                        )}
                     </div>
-                  )}
-                  {ordenSeleccionada.contacto_entrega && (
-                    <div>
-                      <span className="text-gray-500">Contacto:</span>
-                      <p className="font-medium text-gray-800">{ordenSeleccionada.contacto_entrega}</p>
-                      {ordenSeleccionada.telefono_entrega && (
-                        <p className="text-xs text-gray-500">{ordenSeleccionada.telefono_entrega}</p>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
               {ordenSeleccionada.detalles && ordenSeleccionada.detalles.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-lg p-5">
-                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <Package size={18} className="text-purple-600" />
-                    Productos ({ordenSeleccionada.detalles.length})
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-semibold text-gray-600">Producto</th>
-                          <th className="px-3 py-2 text-center font-semibold text-gray-600">Código</th>
-                          <th className="px-3 py-2 text-center font-semibold text-gray-600">Cantidad</th>
-                          <th className="px-3 py-2 text-right font-semibold text-gray-600">P. Unitario</th>
-                          <th className="px-3 py-2 text-right font-semibold text-gray-600">Descuento</th>
-                          <th className="px-3 py-2 text-right font-semibold text-gray-600">Subtotal</th>
-                          <th className="px-3 py-2 text-center font-semibold text-gray-600">Despachado</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {ordenSeleccionada.detalles.map((det, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="px-3 py-2">
-                              <div className="font-medium text-gray-800">{det.producto_nombre}</div>
-                              {det.descripcion && (
-                                <div className="text-xs text-gray-500">{det.descripcion}</div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-center text-gray-600 font-mono text-xs">
-                              {det.codigo_producto}
-                            </td>
-                            <td className="px-3 py-2 text-center font-semibold text-gray-800">
-                              {det.cantidad} {det.unidad_medida}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-700">
-                              {ordenSeleccionada.moneda} {det.precio_unitario}
-                            </td>
-                            <td className="px-3 py-2 text-right text-red-600">
-                              {parseFloat(det.descuento) > 0 ? `-${ordenSeleccionada.moneda} ${det.descuento}` : '-'}
-                            </td>
-                            <td className="px-3 py-2 text-right font-bold text-gray-800">
-                              {ordenSeleccionada.moneda} {det.subtotal}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                det.cantidad_despachada >= det.cantidad 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : det.cantidad_despachada > 0 
-                                    ? 'bg-yellow-100 text-yellow-800' 
-                                    : 'bg-gray-100 text-gray-600'
-                              }`}>
-                                {det.cantidad_despachada}/{det.cantidad}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="card shadow-none">
+                    <div className="card-body p-5">
+                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <Package size={18} className="text-purple-600" />
+                            Productos ({ordenSeleccionada.detalles.length})
+                        </h3>
+                        <div className="table-container">
+                            <table className="table">
+                            <thead>
+                                <tr>
+                                <th className="px-3 py-2 text-left">Producto</th>
+                                <th className="px-3 py-2 text-center">Código</th>
+                                <th className="px-3 py-2 text-center">Cantidad</th>
+                                <th className="px-3 py-2 text-right">P. Unitario</th>
+                                <th className="px-3 py-2 text-right">Descuento</th>
+                                <th className="px-3 py-2 text-right">Subtotal</th>
+                                <th className="px-3 py-2 text-center">Despachado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {ordenSeleccionada.detalles.map((det, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2">
+                                    <div className="font-medium text-gray-800">{det.producto_nombre}</div>
+                                    {det.descripcion && (
+                                        <div className="text-xs text-muted">{det.descripcion}</div>
+                                    )}
+                                    </td>
+                                    <td className="px-3 py-2 text-center text-muted font-mono text-xs">
+                                    {det.codigo_producto}
+                                    </td>
+                                    <td className="px-3 py-2 text-center font-semibold text-gray-800">
+                                    {det.cantidad} {det.unidad_medida}
+                                    </td>
+                                    <td className="px-3 py-2 text-right text-gray-700">
+                                    {ordenSeleccionada.moneda} {det.precio_unitario}
+                                    </td>
+                                    <td className="px-3 py-2 text-right text-red-600">
+                                    {parseFloat(det.descuento) > 0 ? `-${ordenSeleccionada.moneda} ${det.descuento}` : '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-bold text-gray-800">
+                                    {ordenSeleccionada.moneda} {det.subtotal}
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                    <span className={`badge ${
+                                        det.cantidad_despachada >= det.cantidad 
+                                        ? 'badge-success' 
+                                        : det.cantidad_despachada > 0 
+                                            ? 'badge-warning' 
+                                            : 'badge-secondary'
+                                    }`}>
+                                        {det.cantidad_despachada}/{det.cantidad}
+                                    </span>
+                                    </td>
+                                </tr>
+                                ))}
+                            </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
               )}
 
               <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-5">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <CreditCard size={18} className="text-blue-600" />
+                  <CreditCard size={18} className="text-primary" />
                   Resumen Financiero
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -935,14 +970,8 @@ const ReporteVentas = () => {
                     </div>
                     <div className="flex justify-between text-lg border-t border-gray-300 pt-2">
                       <span className="font-bold text-gray-800">Total:</span>
-                      <span className="font-bold text-blue-600">{ordenSeleccionada.moneda} {ordenSeleccionada.total}</span>
+                      <span className="font-bold text-primary">{ordenSeleccionada.moneda} {ordenSeleccionada.total}</span>
                     </div>
-                    {ordenSeleccionada.moneda === 'USD' && (
-                      <div className="flex justify-between text-xs text-gray-500 border-t border-gray-200 pt-2">
-                        <span>Equivalente en PEN (TC: {ordenSeleccionada.tipo_cambio}):</span>
-                        <span className="font-semibold">{ordenSeleccionada.total_pen}</span>
-                      </div>
-                    )}
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
@@ -964,48 +993,52 @@ const ReporteVentas = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-700 mb-2 text-sm">Personal Involucrado</h4>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Vendedor:</span>
-                      <span className="font-medium text-gray-800">{ordenSeleccionada.vendedor}</span>
+                <div className="card shadow-none">
+                    <div className="card-body p-4">
+                        <h4 className="font-semibold text-gray-700 mb-2 text-sm">Personal Involucrado</h4>
+                        <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                            <span className="text-muted">Vendedor:</span>
+                            <span className="font-medium text-gray-800">{ordenSeleccionada.vendedor}</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-muted">Registrado por:</span>
+                            <span className="font-medium text-gray-800">{ordenSeleccionada.registrador}</span>
+                            </div>
+                            {ordenSeleccionada.verificador !== 'No asignado' && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Verificador:</span>
+                                <span className="font-medium text-gray-800">{ordenSeleccionada.verificador}</span>
+                            </div>
+                            )}
+                        </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Registrado por:</span>
-                      <span className="font-medium text-gray-800">{ordenSeleccionada.registrador}</span>
-                    </div>
-                    {ordenSeleccionada.verificador !== 'No asignado' && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Verificador:</span>
-                        <span className="font-medium text-gray-800">{ordenSeleccionada.verificador}</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-700 mb-2 text-sm">Documentos Asociados</h4>
-                  <div className="space-y-1 text-sm">
-                    {ordenSeleccionada.numero_cotizacion && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Cotización:</span>
-                        <span className="font-medium text-gray-800">{ordenSeleccionada.numero_cotizacion}</span>
-                      </div>
-                    )}
-                    {ordenSeleccionada.numero_guia_interna && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Guía Interna:</span>
-                        <span className="font-medium text-gray-800">{ordenSeleccionada.numero_guia_interna}</span>
-                      </div>
-                    )}
-                    {ordenSeleccionada.orden_compra_cliente && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">OC Cliente:</span>
-                        <span className="font-medium text-gray-800">{ordenSeleccionada.orden_compra_cliente}</span>
-                      </div>
-                    )}
-                  </div>
+                <div className="card shadow-none">
+                    <div className="card-body p-4">
+                        <h4 className="font-semibold text-gray-700 mb-2 text-sm">Documentos Asociados</h4>
+                        <div className="space-y-1 text-sm">
+                            {ordenSeleccionada.numero_cotizacion && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Cotización:</span>
+                                <span className="font-medium text-gray-800">{ordenSeleccionada.numero_cotizacion}</span>
+                            </div>
+                            )}
+                            {ordenSeleccionada.numero_guia_interna && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Guía Interna:</span>
+                                <span className="font-medium text-gray-800">{ordenSeleccionada.numero_guia_interna}</span>
+                            </div>
+                            )}
+                            {ordenSeleccionada.orden_compra_cliente && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">OC Cliente:</span>
+                                <span className="font-medium text-gray-800">{ordenSeleccionada.orden_compra_cliente}</span>
+                            </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
               </div>
 
@@ -1040,7 +1073,7 @@ const ReporteVentas = () => {
 
             </div>
 
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 flex justify-end">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 flex justify-end rounded-b-xl">
               <button
                 onClick={() => setMostrarDetalleOrden(false)}
                 className="btn btn-secondary"

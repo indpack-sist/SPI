@@ -31,7 +31,7 @@ export const getReporteVentas = async (req, res) => {
             LEFT JOIN flota v ON ov.id_vehiculo = v.id_vehiculo
             LEFT JOIN empleados ec ON ov.id_conductor = ec.id_empleado
             LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
-            LEFT JOIN salidas_inventario s ON ov.id_salida = s.id_salida
+            LEFT JOIN salidas s ON ov.id_salida = s.id_salida
             WHERE DATE(ov.fecha_emision) BETWEEN ? AND ?
             AND ov.estado != 'Cancelada'
         `;

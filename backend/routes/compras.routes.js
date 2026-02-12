@@ -37,11 +37,9 @@ router.get('/', verificarToken, getAllCompras);
 router.post('/', verificarToken, createCompra);
 
 router.get('/:id/pdf', verificarToken, descargarPDFCompra);
-
 router.get('/:id/pagos/resumen', verificarToken, getResumenPagosCompra);
 router.get('/:id/pagos/historial', verificarToken, getHistorialPagosCompra);
 router.post('/:id/pagos', verificarToken, registrarPagoCompra);
-
 router.post('/:id/reembolsos', verificarToken, registrarReembolsoComprador);
 
 router.post('/:id/cronograma', verificarToken, establecerCronograma);

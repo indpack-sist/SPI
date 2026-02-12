@@ -23,7 +23,8 @@ function DetalleCuenta() {
   const [filtros, setFiltros] = useState({
     fecha_inicio: '',
     fecha_fin: '',
-    tipo_movimiento: ''
+    tipo_movimiento: '',
+    moneda: ''
   });
 
   useEffect(() => {
@@ -62,9 +63,8 @@ function DetalleCuenta() {
     }
   };
 
-  const formatearMoneda = (valor) => {
-    if (!cuenta) return '0.00';
-    const simbolo = cuenta.moneda === 'USD' ? '$' : 'S/';
+  const formatearMoneda = (valor, moneda) => {
+    const simbolo = moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${parseFloat(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
   };
 
@@ -111,6 +111,17 @@ function DetalleCuenta() {
       render: (value) => (
         <span className={`badge ${value === 'Ingreso' ? 'badge-success' : 'badge-danger'} flex w-fit items-center gap-1`}>
           {value === 'Ingreso' ? <ArrowUpCircle size={14} /> : <ArrowDownCircle size={14} />}
+          {value}
+        </span>
+      )
+    },
+    {
+      header: 'Moneda',
+      accessor: 'moneda',
+      width: '80px',
+      align: 'center',
+      render: (value) => (
+        <span className={`badge ${value === 'USD' ? 'badge-success' : 'badge-info'} font-mono`}>
           {value}
         </span>
       )
@@ -203,7 +214,7 @@ function DetalleCuenta() {
                 Cobro Venta #{row.numero_orden_venta}
                 <button 
                   className="text-primary hover:text-blue-700"
-                  onClick={() => navigate(`/ventas/${row.id_orden_venta}`)}
+                  onClick={() => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
                   title="Ir a la Venta"
                 >
                   <ExternalLink size={12} />
@@ -266,17 +277,6 @@ function DetalleCuenta() {
           {row.tipo_movimiento === 'Ingreso' ? '+' : '-'} {parseFloat(value).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
         </span>
       )
-    },
-    {
-      header: 'Saldo',
-      accessor: 'saldo_nuevo',
-      align: 'right',
-      width: '120px',
-      render: (value) => (
-        <span className="font-mono font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded">
-          {parseFloat(value).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-        </span>
-      )
     }
   ];
 
@@ -286,7 +286,6 @@ function DetalleCuenta() {
   const Icon = getTipoIcon(cuenta.tipo);
 
   const totalReembolsos = movimientos.filter(m => m.es_reembolso === 1).reduce((sum, m) => sum + parseFloat(m.monto), 0);
-  const totalLetras = movimientos.filter(m => m.numero_letra).reduce((sum, m) => sum + parseFloat(m.monto), 0);
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -321,49 +320,34 @@ function DetalleCuenta() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="card bg-white border-l-4 border-blue-600 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="card bg-gradient-to-br from-white to-blue-50 border-l-4 border-blue-600 shadow-sm">
           <div className="card-body">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Saldo Disponible</p>
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Saldo Soles (PEN)</p>
             <div className="flex items-center justify-between mt-2">
-              <h2 className={`text-3xl font-bold ${parseFloat(cuenta.saldo_actual) < 0 ? 'text-danger' : 'text-gray-800'}`}>
-                {formatearMoneda(cuenta.saldo_actual)}
+              <h2 className={`text-3xl font-bold ${parseFloat(cuenta.saldo_pen) < 0 ? 'text-danger' : 'text-gray-800'}`}>
+                {formatearMoneda(cuenta.saldo_pen, 'PEN')}
               </h2>
               <div className="p-3 bg-blue-50 rounded-full text-blue-600">
-                <Wallet size={24} />
+                <span className="font-bold text-xl">S/</span>
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">Calculado al momento</p>
           </div>
         </div>
 
-        <div className="card bg-white border-l-4 border-green-500 shadow-sm">
+        <div className="card bg-gradient-to-br from-white to-green-50 border-l-4 border-green-600 shadow-sm">
           <div className="card-body">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Total Ingresos</p>
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Saldo Dólares (USD)</p>
             <div className="flex items-center justify-between mt-2">
-              <h2 className="text-2xl font-bold text-green-600">
-                {formatearMoneda(cuenta.total_ingresos)}
+              <h2 className={`text-3xl font-bold ${parseFloat(cuenta.saldo_usd) < 0 ? 'text-danger' : 'text-gray-800'}`}>
+                {formatearMoneda(cuenta.saldo_usd, 'USD')}
               </h2>
-              <div className="p-2 bg-green-50 rounded-full text-green-600">
-                <ArrowUpCircle size={22} />
+              <div className="p-3 bg-green-50 rounded-full text-green-600">
+                <span className="font-bold text-xl">$</span>
               </div>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Entradas acumuladas</p>
-          </div>
-        </div>
-
-        <div className="card bg-white border-l-4 border-red-500 shadow-sm">
-          <div className="card-body">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Total Egresos</p>
-            <div className="flex items-center justify-between mt-2">
-              <h2 className="text-2xl font-bold text-red-600">
-                {formatearMoneda(cuenta.total_gastado)}
-              </h2>
-              <div className="p-2 bg-red-50 rounded-full text-red-600">
-                <ArrowDownCircle size={22} />
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 mt-2">Salidas acumuladas</p>
+            <p className="text-xs text-gray-400 mt-2">Calculado al momento</p>
           </div>
         </div>
 
@@ -372,13 +356,57 @@ function DetalleCuenta() {
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Reembolsos</p>
             <div className="flex items-center justify-between mt-2">
               <h2 className="text-2xl font-bold text-purple-600">
-                {formatearMoneda(totalReembolsos)}
+                {totalReembolsos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
               </h2>
               <div className="p-2 bg-purple-50 rounded-full text-purple-600">
                 <RefreshCw size={22} />
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">A empleados</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="card bg-white border-l-4 border-green-500 shadow-sm">
+          <div className="card-body">
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Total Ingresos</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">PEN:</span>
+                <span className="text-xl font-bold text-green-600">
+                  S/ {parseFloat(cuenta.total_ingresos_pen || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">USD:</span>
+                <span className="text-xl font-bold text-green-600">
+                  $ {parseFloat(cuenta.total_ingresos_usd || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">Entradas acumuladas</p>
+          </div>
+        </div>
+
+        <div className="card bg-white border-l-4 border-red-500 shadow-sm">
+          <div className="card-body">
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Total Egresos</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">PEN:</span>
+                <span className="text-xl font-bold text-red-600">
+                  S/ {parseFloat(cuenta.total_egresos_pen || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">USD:</span>
+                <span className="text-xl font-bold text-red-600">
+                  $ {parseFloat(cuenta.total_egresos_usd || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">Salidas acumuladas</p>
           </div>
         </div>
       </div>
@@ -422,10 +450,20 @@ function DetalleCuenta() {
               <option value="Egreso">Egresos</option>
             </select>
 
-            {(filtros.fecha_inicio || filtros.fecha_fin || filtros.tipo_movimiento) && (
+            <select 
+              className="form-select py-1.5 px-3 text-sm w-24 bg-white"
+              value={filtros.moneda}
+              onChange={(e) => setFiltros({...filtros, moneda: e.target.value})}
+            >
+              <option value="">Ambas</option>
+              <option value="PEN">PEN</option>
+              <option value="USD">USD</option>
+            </select>
+
+            {(filtros.fecha_inicio || filtros.fecha_fin || filtros.tipo_movimiento || filtros.moneda) && (
               <button 
                 className="btn btn-xs btn-ghost text-muted hover:text-danger"
-                onClick={() => setFiltros({fecha_inicio: '', fecha_fin: '', tipo_movimiento: ''})}
+                onClick={() => setFiltros({fecha_inicio: '', fecha_fin: '', tipo_movimiento: '', moneda: ''})}
               >
                 Limpiar
               </button>

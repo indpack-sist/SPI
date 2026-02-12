@@ -523,7 +523,7 @@ const ReporteVentas = () => {
                         <input 
                             type="text"
                             placeholder="Buscar cliente por nombre o RUC..."
-                            className="form-input search-input bg-black"
+                            className="form-input search-input !bg-white border border-gray-300 text-gray-900"
                             value={busquedaCliente}
                             onChange={(e) => {
                                 setBusquedaCliente(e.target.value);

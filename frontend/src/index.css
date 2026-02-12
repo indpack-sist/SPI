@@ -732,33 +732,22 @@ body {
 .bg-primary\/10 { background-color: rgba(37, 99, 235, 0.1); }
 .bg-blue-50\/50 { background-color: rgba(239, 246, 255, 0.5); }
 
-.bg-gradient-to-r { background-image: linear-gradient(to right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent)); }
-.bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--tw-gradient-from, transparent), var(--tw-gradient-to, transparent)); }
+/* Secciones de degradado eliminadas y reemplazadas por colores planos */
 
-.from-blue-50 { --tw-gradient-from: #eff6ff; }
-.from-green-50 { --tw-gradient-from: #f0fdf4; }
-.from-yellow-50 { --tw-gradient-from: #fefce8; }
-.from-purple-50 { --tw-gradient-from: #faf5ff; }
-.from-gray-50 { --tw-gradient-from: #f9fafb; }
-.from-orange-100 { --tw-gradient-from: #ffedd5; }
-.from-primary\/5 { --tw-gradient-from: rgba(37, 99, 235, 0.05); }
-.from-blue-100 { --tw-gradient-from: #dbeafe; --tw-gradient-to: #dbeafe; }
-.from-green-100 { --tw-gradient-from: #dcfce7; --tw-gradient-to: #dcfce7; }
-.from-yellow-100 { --tw-gradient-from: #fef9c3; --tw-gradient-to: #fef9c3; }
-.from-purple-100 { --tw-gradient-from: #f3e8ff; --tw-gradient-to: #f3e8ff; }
-.from-emerald-100 { --tw-gradient-from: #d1fae5; --tw-gradient-to: #d1fae5; }
-.from-red-100 { --tw-gradient-from: #fee2e2; --tw-gradient-to: #fee2e2; }
-.from-primary { --tw-gradient-from: var(--primary); }
-
-.to-white { --tw-gradient-to: #ffffff; }
-.to-blue-200 { --tw-gradient-to: #bfdbfe; }
-.to-blue-600 { --tw-gradient-to: #2563eb; }
-.to-green-200 { --tw-gradient-to: #bbf7d0; }
-.to-yellow-200 { --tw-gradient-to: #fef08a; }
-.to-orange-200 { --tw-gradient-to: #fed7aa; }
-.to-purple-200 { --tw-gradient-to: #e9d5ff; }
-.to-emerald-200 { --tw-gradient-to: #a7f3d0; }
-.to-red-200 { --tw-gradient-to: #fecaca; }
+.from-blue-50 { background-color: #eff6ff; }
+.from-green-50 { background-color: #f0fdf4; }
+.from-yellow-50 { background-color: #fefce8; }
+.from-purple-50 { background-color: #faf5ff; }
+.from-gray-50 { background-color: #f9fafb; }
+.from-orange-100 { background-color: #ffedd5; }
+.from-primary\/5 { background-color: rgba(37, 99, 235, 0.05); }
+.from-blue-100 { background-color: #dbeafe; }
+.from-green-100 { background-color: #dcfce7; }
+.from-yellow-100 { background-color: #fef9c3; }
+.from-purple-100 { background-color: #f3e8ff; }
+.from-emerald-100 { background-color: #d1fae5; }
+.from-red-100 { background-color: #fee2e2; }
+.from-primary { background-color: var(--primary); }
 
 .hover\:bg-gray-100:hover { background-color: #f3f4f6; }
 .hover\:bg-blue-50:hover { background-color: #eff6ff; }
@@ -1069,9 +1058,10 @@ body {
 
 .btn.text-left { text-align: left; justify-content: flex-start; height: auto; }
 
-.card-account-bank { background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%); border-left: 4px solid var(--primary); }
-.card-account-cash { background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%); border-left: 4px solid var(--success); }
-.card-account-credit { background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%); border-left: 4px solid var(--warning); }
+/* Modificados para eliminar degradados */
+.card-account-bank { background-color: #f0f9ff; border-left: 4px solid var(--primary); }
+.card-account-cash { background-color: #f0fdf4; border-left: 4px solid var(--success); }
+.card-account-credit { background-color: #fff7ed; border-left: 4px solid var(--warning); }
 
 .total-summary-container { background-color: var(--bg-secondary); border-radius: 0.5rem; padding: 1rem; border: 1px solid var(--border); }
 .total-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.875rem; }

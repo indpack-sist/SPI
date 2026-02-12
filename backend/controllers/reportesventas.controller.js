@@ -53,67 +53,90 @@ export const getReporteVentas = async (req, res) => {
         const ordenesIds = ordenes.map(o => o.id_orden_venta);
         let detallesMap = {};
 
-       if (ordenesIds.length > 0) {
-    const [detalles] = await db.query(`
-        SELECT 
-            dov.*,
-            p.nombre as producto_nombre,
-            p.codigo as codigo_producto,
-            p.unidad_medida,
-            p.descripcion as producto_descripcion
-        FROM detalle_orden_venta dov
-        LEFT JOIN productos p ON dov.id_producto = p.id_producto
-        WHERE dov.id_orden_venta IN (?)
-        ORDER BY dov.id_detalle
-    `, [ordenesIds]);
+        if (ordenesIds.length > 0) {
+            const [detalles] = await db.query(`
+                SELECT 
+                    dov.*,
+                    p.nombre as producto_nombre,
+                    p.codigo as codigo_producto,
+                    p.unidad_medida,
+                    p.descripcion as producto_descripcion
+                FROM detalle_orden_venta dov
+                LEFT JOIN productos p ON dov.id_producto = p.id_producto
+                WHERE dov.id_orden_venta IN (?)
+                ORDER BY dov.id_detalle
+            `, [ordenesIds]);
 
-    detalles.forEach(det => {
-        if (!detallesMap[det.id_orden_venta]) {
-            detallesMap[det.id_orden_venta] = [];
+            detalles.forEach(det => {
+                if (!detallesMap[det.id_orden_venta]) {
+                    detallesMap[det.id_orden_venta] = [];
+                }
+                detallesMap[det.id_orden_venta].push(det);
+            });
         }
-        detallesMap[det.id_orden_venta].push(det);
-    });
-}
 
         let kpis = {
             totalVentasPEN: 0,
+            totalVentasUSD: 0,
             totalPagadoPEN: 0,
+            totalPagadoUSD: 0,
             totalPorCobrarPEN: 0,
-            totalContado: 0,
-            totalCredito: 0,
+            totalPorCobrarUSD: 0,
+            totalContadoPEN: 0,
+            totalContadoUSD: 0,
+            totalCreditoPEN: 0,
+            totalCreditoUSD: 0,
             pedidosAtrasados: 0,
-            totalComisionesPEN: 0
+            totalComisionesPEN: 0,
+            totalComisionesUSD: 0
         };
 
-        const conteoEstadoPago = { 'Pagado': 0, 'Parcial': 0, 'Pendiente': 0 };
+        const conteoEstadoPagoPEN = { 'Pagado': 0, 'Parcial': 0, 'Pendiente': 0 };
+        const conteoEstadoPagoUSD = { 'Pagado': 0, 'Parcial': 0, 'Pendiente': 0 };
         const ventasPorDia = {};
         const ventasPorVendedor = {};
         const ventasPorEstado = {};
 
         const listaDetalle = ordenes.map(orden => {
             const esDolar = orden.moneda === 'USD';
-            const tipoCambio = parseFloat(orden.tipo_cambio) || 1;
             
             const totalOriginal = parseFloat(orden.total) || 0;
             const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
             const subtotalOriginal = parseFloat(orden.subtotal) || 0;
             const igvOriginal = parseFloat(orden.igv) || 0;
             const comisionOriginal = parseFloat(orden.total_comision) || 0;
+            const pendienteOriginal = totalOriginal - pagadoOriginal;
 
-            const totalPEN = esDolar ? totalOriginal * tipoCambio : totalOriginal;
-            const pagadoPEN = esDolar ? pagadoOriginal * tipoCambio : pagadoOriginal;
-            const pendientePEN = totalPEN - pagadoPEN;
-            const comisionPEN = esDolar ? comisionOriginal * tipoCambio : comisionOriginal;
-
-            kpis.totalVentasPEN += totalPEN;
-            kpis.totalPagadoPEN += pagadoPEN;
-            kpis.totalPorCobrarPEN += pendientePEN;
-            kpis.totalComisionesPEN += comisionPEN;
-
-            if (orden.tipo_venta === 'Crédito') {
-                kpis.totalCredito += totalPEN;
+            if (esDolar) {
+                kpis.totalVentasUSD += totalOriginal;
+                kpis.totalPagadoUSD += pagadoOriginal;
+                kpis.totalPorCobrarUSD += pendienteOriginal;
+                kpis.totalComisionesUSD += comisionOriginal;
+                
+                if (orden.tipo_venta === 'Crédito') {
+                    kpis.totalCreditoUSD += totalOriginal;
+                } else {
+                    kpis.totalContadoUSD += totalOriginal;
+                }
+                
+                if (conteoEstadoPagoUSD[orden.estado_pago] !== undefined) {
+                    conteoEstadoPagoUSD[orden.estado_pago] += totalOriginal;
+                }
             } else {
-                kpis.totalContado += totalPEN;
+                kpis.totalVentasPEN += totalOriginal;
+                kpis.totalPagadoPEN += pagadoOriginal;
+                kpis.totalPorCobrarPEN += pendienteOriginal;
+                kpis.totalComisionesPEN += comisionOriginal;
+                
+                if (orden.tipo_venta === 'Crédito') {
+                    kpis.totalCreditoPEN += totalOriginal;
+                } else {
+                    kpis.totalContadoPEN += totalOriginal;
+                }
+                
+                if (conteoEstadoPagoPEN[orden.estado_pago] !== undefined) {
+                    conteoEstadoPagoPEN[orden.estado_pago] += totalOriginal;
+                }
             }
 
             let estadoLogistico = 'A tiempo';
@@ -131,20 +154,19 @@ export const getReporteVentas = async (req, res) => {
                 }
             }
 
-            if (conteoEstadoPago[orden.estado_pago] !== undefined) {
-                conteoEstadoPago[orden.estado_pago] += totalPEN;
-            }
-
             const vendedor = orden.nombre_vendedor || 'Sin Asignar';
-            if (!ventasPorVendedor[vendedor]) ventasPorVendedor[vendedor] = 0;
-            ventasPorVendedor[vendedor] += totalPEN;
+            const keyVendedor = `${vendedor}_${orden.moneda}`;
+            if (!ventasPorVendedor[keyVendedor]) ventasPorVendedor[keyVendedor] = 0;
+            ventasPorVendedor[keyVendedor] += totalOriginal;
 
-            if (!ventasPorEstado[orden.estado]) ventasPorEstado[orden.estado] = 0;
-            ventasPorEstado[orden.estado] += totalPEN;
+            const keyEstado = `${orden.estado}_${orden.moneda}`;
+            if (!ventasPorEstado[keyEstado]) ventasPorEstado[keyEstado] = 0;
+            ventasPorEstado[keyEstado] += totalOriginal;
 
             const fechaStr = new Date(orden.fecha_emision).toISOString().split('T')[0];
-            if (!ventasPorDia[fechaStr]) ventasPorDia[fechaStr] = 0;
-            ventasPorDia[fechaStr] += totalPEN;
+            const keyDia = `${fechaStr}_${orden.moneda}`;
+            if (!ventasPorDia[keyDia]) ventasPorDia[keyDia] = 0;
+            ventasPorDia[keyDia] += totalOriginal;
 
             const detallesOrden = detallesMap[orden.id_orden_venta] || [];
 
@@ -192,15 +214,14 @@ export const getReporteVentas = async (req, res) => {
                 contacto_entrega: orden.contacto_entrega,
                 telefono_entrega: orden.telefono_entrega,
                 moneda: orden.moneda,
-                tipo_cambio: tipoCambio,
+                tipo_cambio: parseFloat(orden.tipo_cambio) || 1,
                 subtotal: subtotalOriginal.toFixed(2),
                 igv: igvOriginal.toFixed(2),
                 total: totalOriginal.toFixed(2),
                 total_comision: comisionOriginal.toFixed(2),
                 porcentaje_comision_promedio: parseFloat(orden.porcentaje_comision_promedio) || 0,
-                total_pen: totalPEN.toFixed(2),
                 monto_pagado: pagadoOriginal.toFixed(2),
-                pendiente_cobro: (totalOriginal - pagadoOriginal).toFixed(2),
+                pendiente_cobro: pendienteOriginal.toFixed(2),
                 tipo_venta: orden.tipo_venta,
                 dias_credito: orden.dias_credito,
                 plazo_pago: orden.plazo_pago,
@@ -238,11 +259,17 @@ export const getReporteVentas = async (req, res) => {
                 const dataReporte = {
                     resumen: {
                         total_ventas_pen: parseFloat(kpis.totalVentasPEN.toFixed(2)),
+                        total_ventas_usd: parseFloat(kpis.totalVentasUSD.toFixed(2)),
                         total_pagado_pen: parseFloat(kpis.totalPagadoPEN.toFixed(2)),
+                        total_pagado_usd: parseFloat(kpis.totalPagadoUSD.toFixed(2)),
                         total_pendiente_pen: parseFloat(kpis.totalPorCobrarPEN.toFixed(2)),
+                        total_pendiente_usd: parseFloat(kpis.totalPorCobrarUSD.toFixed(2)),
                         total_comisiones_pen: parseFloat(kpis.totalComisionesPEN.toFixed(2)),
-                        contado_pen: parseFloat(kpis.totalContado.toFixed(2)),
-                        credito_pen: parseFloat(kpis.totalCredito.toFixed(2)),
+                        total_comisiones_usd: parseFloat(kpis.totalComisionesUSD.toFixed(2)),
+                        contado_pen: parseFloat(kpis.totalContadoPEN.toFixed(2)),
+                        contado_usd: parseFloat(kpis.totalContadoUSD.toFixed(2)),
+                        credito_pen: parseFloat(kpis.totalCreditoPEN.toFixed(2)),
+                        credito_usd: parseFloat(kpis.totalCreditoUSD.toFixed(2)),
                         pedidos_retrasados: kpis.pedidosAtrasados,
                         cantidad_ordenes: ordenes.length
                     },
@@ -262,23 +289,41 @@ export const getReporteVentas = async (req, res) => {
         }
 
         const graficoVendedores = Object.keys(ventasPorVendedor)
-            .map(v => ({ name: v, value: parseFloat(ventasPorVendedor[v].toFixed(2)) }))
+            .map(key => {
+                const [nombre, moneda] = key.split('_');
+                return { name: `${nombre} (${moneda})`, value: parseFloat(ventasPorVendedor[key].toFixed(2)), moneda };
+            })
             .sort((a, b) => b.value - a.value);
 
-        const graficoEstadoPago = [
-            { name: 'Pagado', value: parseFloat(conteoEstadoPago['Pagado'].toFixed(2)), color: '#10B981' },
-            { name: 'Parcial', value: parseFloat(conteoEstadoPago['Parcial'].toFixed(2)), color: '#F59E0B' },
-            { name: 'Pendiente', value: parseFloat(conteoEstadoPago['Pendiente'].toFixed(2)), color: '#EF4444' }
+        const graficoEstadoPagoPEN = [
+            { name: 'Pagado', value: parseFloat(conteoEstadoPagoPEN['Pagado'].toFixed(2)), color: '#10B981' },
+            { name: 'Parcial', value: parseFloat(conteoEstadoPagoPEN['Parcial'].toFixed(2)), color: '#F59E0B' },
+            { name: 'Pendiente', value: parseFloat(conteoEstadoPagoPEN['Pendiente'].toFixed(2)), color: '#EF4444' }
         ].filter(item => item.value > 0);
 
-        const graficoVentasDia = Object.keys(ventasPorDia).sort().map(fecha => ({
-            fecha: fecha.split('-').slice(1).join('/'),
-            total: parseFloat(ventasPorDia[fecha].toFixed(2)),
-            fechaCompleta: fecha
-        }));
+        const graficoEstadoPagoUSD = [
+            { name: 'Pagado USD', value: parseFloat(conteoEstadoPagoUSD['Pagado'].toFixed(2)), color: '#059669' },
+            { name: 'Parcial USD', value: parseFloat(conteoEstadoPagoUSD['Parcial'].toFixed(2)), color: '#D97706' },
+            { name: 'Pendiente USD', value: parseFloat(conteoEstadoPagoUSD['Pendiente'].toFixed(2)), color: '#DC2626' }
+        ].filter(item => item.value > 0);
+
+        const graficoEstadoPago = [...graficoEstadoPagoPEN, ...graficoEstadoPagoUSD];
+
+        const graficoVentasDia = Object.keys(ventasPorDia).sort().map(key => {
+            const [fecha, moneda] = key.split('_');
+            return {
+                fecha: fecha.split('-').slice(1).join('/'),
+                total: parseFloat(ventasPorDia[key].toFixed(2)),
+                fechaCompleta: fecha,
+                moneda
+            };
+        });
 
         const graficoEstados = Object.keys(ventasPorEstado)
-            .map(e => ({ name: e, value: parseFloat(ventasPorEstado[e].toFixed(2)) }))
+            .map(key => {
+                const [estado, moneda] = key.split('_');
+                return { name: `${estado} (${moneda})`, value: parseFloat(ventasPorEstado[key].toFixed(2)), moneda };
+            })
             .sort((a, b) => b.value - a.value);
 
         res.json({
@@ -286,11 +331,17 @@ export const getReporteVentas = async (req, res) => {
             data: {
                 resumen: {
                     total_ventas_pen: parseFloat(kpis.totalVentasPEN.toFixed(2)),
+                    total_ventas_usd: parseFloat(kpis.totalVentasUSD.toFixed(2)),
                     total_pagado_pen: parseFloat(kpis.totalPagadoPEN.toFixed(2)),
+                    total_pagado_usd: parseFloat(kpis.totalPagadoUSD.toFixed(2)),
                     total_pendiente_pen: parseFloat(kpis.totalPorCobrarPEN.toFixed(2)),
+                    total_pendiente_usd: parseFloat(kpis.totalPorCobrarUSD.toFixed(2)),
                     total_comisiones_pen: parseFloat(kpis.totalComisionesPEN.toFixed(2)),
-                    contado_pen: parseFloat(kpis.totalContado.toFixed(2)),
-                    credito_pen: parseFloat(kpis.totalCredito.toFixed(2)),
+                    total_comisiones_usd: parseFloat(kpis.totalComisionesUSD.toFixed(2)),
+                    contado_pen: parseFloat(kpis.totalContadoPEN.toFixed(2)),
+                    contado_usd: parseFloat(kpis.totalContadoUSD.toFixed(2)),
+                    credito_pen: parseFloat(kpis.totalCreditoPEN.toFixed(2)),
+                    credito_usd: parseFloat(kpis.totalCreditoUSD.toFixed(2)),
                     pedidos_retrasados: kpis.pedidosAtrasados,
                     cantidad_ordenes: ordenes.length
                 },

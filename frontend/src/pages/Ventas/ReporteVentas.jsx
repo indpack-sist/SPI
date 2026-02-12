@@ -325,7 +325,6 @@ const ReporteVentas = () => {
             [''],
             ['DOCUMENTOS ASOCIADOS'],
             ['Cotización', orden.numero_cotizacion || ''],
-            ['Guía Interna', orden.numero_guia_interna || ''],
             ['OC Cliente', orden.orden_compra_cliente || '']
           );
   

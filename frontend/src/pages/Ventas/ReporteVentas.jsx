@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, Area, AreaChart
+  PieChart, Pie, Cell, Area, AreaChart
 } from 'recharts';
 import { 
-  Calendar, Search, Filter, Download, 
+  Calendar, Search, Filter, Download, FileSpreadsheet,
   DollarSign, TrendingUp, PieChart as PieIcon, 
-  FileText, CheckCircle, AlertCircle, Clock, Truck, User, X,
+  FileText, CheckCircle, AlertCircle, Truck, User, X,
   Eye, Package, MapPin, Phone, Mail, CreditCard, FileCheck,
-  ChevronDown, ChevronUp, ShoppingCart, Percent, Building2
+  ShoppingCart, Percent, Building2, RefreshCw
 } from 'lucide-react';
-import { reportesAPI, clientesAPI, empleadosAPI } from '../../config/api';
+import { reportesAPI, clientesAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 
@@ -26,13 +27,13 @@ const COLORS_PIE = {
 const ReporteVentas = () => {
   const [loading, setLoading] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [loadingExcel, setLoadingExcel] = useState(false);
   const [error, setError] = useState(null);
-  
-  const [vendedores, setVendedores] = useState([]);
   
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [clientesSugeridos, setClientesSugeridos] = useState([]);
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const wrapperRef = useRef(null);
 
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
@@ -45,7 +46,8 @@ const ReporteVentas = () => {
     fechaInicio: primerDiaMes.toISOString().split('T')[0],
     fechaFin: fechaHoy.toISOString().split('T')[0],
     idCliente: '',
-    idVendedor: ''
+    estadoOrden: '',
+    estadoPago: ''
   });
 
   const [dataReporte, setDataReporte] = useState({
@@ -74,8 +76,9 @@ const ReporteVentas = () => {
     detalle: []
   });
 
+  const [dataFiltrada, setDataFiltrada] = useState([]);
+
   useEffect(() => {
-    cargarDatosIniciales();
     generarReporte();
     
     function handleClickOutside(event) {
@@ -111,25 +114,36 @@ const ReporteVentas = () => {
     return () => clearTimeout(timeoutId);
   }, [busquedaCliente, filtros.idCliente]);
 
-  const cargarDatosIniciales = async () => {
-    try {
-      const resVendedores = await empleadosAPI.getAll({ area: 'Comercial' }); 
-      if (resVendedores.data.success) setVendedores(resVendedores.data.data);
-    } catch (err) {
-      console.error("Error cargando listas", err);
-    }
-  };
+  useEffect(() => {
+    aplicarFiltrosLocales();
+  }, [filtros.estadoOrden, filtros.estadoPago, dataReporte.detalle]);
 
   const seleccionarCliente = (cliente) => {
     setFiltros({ ...filtros, idCliente: cliente.id_cliente });
     setBusquedaCliente(cliente.razon_social);
+    setClienteSeleccionado(cliente);
     setMostrarSugerencias(false);
   };
 
   const limpiarCliente = () => {
     setFiltros({ ...filtros, idCliente: '' });
     setBusquedaCliente('');
+    setClienteSeleccionado(null);
     setClientesSugeridos([]);
+  };
+
+  const aplicarFiltrosLocales = () => {
+    let filtrada = [...dataReporte.detalle];
+
+    if (filtros.estadoOrden) {
+      filtrada = filtrada.filter(item => item.estado === filtros.estadoOrden);
+    }
+
+    if (filtros.estadoPago) {
+      filtrada = filtrada.filter(item => item.estado_pago === filtros.estadoPago);
+    }
+
+    setDataFiltrada(filtrada);
   };
 
   const generarReporte = async (e) => {
@@ -141,12 +155,12 @@ const ReporteVentas = () => {
       const response = await reportesAPI.getVentas({
         fechaInicio: filtros.fechaInicio,
         fechaFin: filtros.fechaFin,
-        idCliente: filtros.idCliente,
-        idVendedor: filtros.idVendedor
+        idCliente: filtros.idCliente
       });
 
       if (response.data.success) {
         setDataReporte(response.data.data);
+        setDataFiltrada(response.data.data.detalle);
       }
     } catch (err) {
       console.error(err);
@@ -160,21 +174,76 @@ const ReporteVentas = () => {
     setLoadingPdf(true);
     try {
         const response = await reportesAPI.getVentas({
-            ...filtros,
+            fechaInicio: filtros.fechaInicio,
+            fechaFin: filtros.fechaFin,
+            idCliente: filtros.idCliente,
             format: 'pdf'
         }, { responseType: 'blob' });
+
+        const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
+        const fechaActual = new Date().toISOString().split('T')[0];
+        const nombreArchivo = `Reporte_${nombreCliente}_${fechaActual}.pdf`;
 
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `Reporte_Ventas_${Date.now()}.pdf`);
+        link.setAttribute('download', nombreArchivo);
         document.body.appendChild(link);
         link.click();
         link.remove();
     } catch (err) {
+        console.error(err);
         setError('Error al descargar el PDF');
     } finally {
         setLoadingPdf(false);
+    }
+  };
+
+  const descargarExcel = () => {
+    setLoadingExcel(true);
+    try {
+      const datosExcel = dataFiltrada.map(item => ({
+        'Orden': item.numero,
+        'Comprobante': item.numero_comprobante || '',
+        'Cliente': item.cliente,
+        'RUC': item.ruc,
+        'Vendedor': item.vendedor,
+        'Fecha Emisión': formatearFecha(item.fecha_emision),
+        'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
+        'Moneda': item.moneda,
+        'Subtotal': parseFloat(item.subtotal),
+        'IGV': parseFloat(item.igv),
+        'Total': parseFloat(item.total),
+        'Pagado': parseFloat(item.monto_pagado),
+        'Por Cobrar': parseFloat(item.pendiente_cobro),
+        'Estado Pago': item.estado_pago,
+        'Estado': item.estado,
+        'Tipo Venta': item.tipo_venta,
+        'Estado Logístico': item.estado_logistico
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(datosExcel);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Reporte Ventas');
+
+      ws['!cols'] = [
+        { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 15 },
+        { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+        { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
+        { wch: 15 }
+      ];
+
+      const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
+      const fechaActual = new Date().toISOString().split('T')[0];
+      const nombreArchivo = `Reporte_${nombreCliente}_${fechaActual}.xlsx`;
+
+      XLSX.writeFile(wb, nombreArchivo);
+    } catch (err) {
+      console.error(err);
+      setError('Error al generar el archivo Excel');
+    } finally {
+      setLoadingExcel(false);
     }
   };
 
@@ -284,109 +353,148 @@ const ReporteVentas = () => {
           </h1>
           <p className="text-muted text-sm">Monitor de rendimiento comercial y logístico</p>
         </div>
-        <button 
-            onClick={descargarPDF}
-            disabled={loadingPdf}
-            className="btn btn-danger"
-        >
-            {loadingPdf ? <Loading size="sm" color="white"/> : <Download size={18} />}
-            Exportar PDF
-        </button>
+        <div className="flex gap-2">
+          <button 
+              onClick={descargarExcel}
+              disabled={loadingExcel || dataFiltrada.length === 0}
+              className="btn btn-success"
+          >
+              {loadingExcel ? <Loading size="sm" color="white"/> : <FileSpreadsheet size={18} />}
+              Excel
+          </button>
+          <button 
+              onClick={descargarPDF}
+              disabled={loadingPdf}
+              className="btn btn-danger"
+          >
+              {loadingPdf ? <Loading size="sm" color="white"/> : <Download size={18} />}
+              PDF
+          </button>
+        </div>
       </div>
 
       <div className="card mb-6">
         <div className="card-body">
-            <form onSubmit={generarReporte} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-            <div className="form-group mb-0">
-                <label className="form-label uppercase text-xs text-muted">Desde</label>
-                <div className="input-with-icon">
-                    <Calendar className="icon" size={16} />
-                    <input 
-                        type="date" 
-                        className="form-input"
-                        value={filtros.fechaInicio}
-                        onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})}
-                    />
+            <form onSubmit={generarReporte} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="form-group mb-0">
+                    <label className="form-label uppercase text-xs text-muted">Desde</label>
+                    <div className="input-with-icon">
+                        <Calendar className="icon" size={16} />
+                        <input 
+                            type="date" 
+                            className="form-input"
+                            value={filtros.fechaInicio}
+                            onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})}
+                        />
+                    </div>
                 </div>
-            </div>
-            <div className="form-group mb-0">
-                <label className="form-label uppercase text-xs text-muted">Hasta</label>
-                <div className="input-with-icon">
-                    <Calendar className="icon" size={16} />
-                    <input 
-                        type="date" 
-                        className="form-input"
-                        value={filtros.fechaFin}
-                        onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})}
-                    />
-                </div>
-            </div>
-            
-            <div className="form-group mb-0 lg:col-span-2 relative" ref={wrapperRef}>
-                <label className="form-label uppercase text-xs text-muted">Cliente</label>
-                <div className="search-input-wrapper">
-                    <Search className="search-icon" size={16} />
-                    <input 
-                        type="text"
-                        placeholder="Buscar cliente por nombre o RUC..."
-                        className="form-input search-input"
-                        value={busquedaCliente}
-                        onChange={(e) => {
-                            setBusquedaCliente(e.target.value);
-                            if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
-                        }}
-                        onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
-                    />
-                    {filtros.idCliente && (
-                        <button 
-                            type="button"
-                            onClick={limpiarCliente}
-                            className="absolute right-2 top-2.5 text-gray-400 hover:text-red-500"
-                        >
-                            <X size={16} />
-                        </button>
-                    )}
+                <div className="form-group mb-0">
+                    <label className="form-label uppercase text-xs text-muted">Hasta</label>
+                    <div className="input-with-icon">
+                        <Calendar className="icon" size={16} />
+                        <input 
+                            type="date" 
+                            className="form-input"
+                            value={filtros.fechaFin}
+                            onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})}
+                        />
+                    </div>
                 </div>
                 
-                {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                    <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-96 overflow-y-auto">
-                        {clientesSugeridos.map(cliente => (
-                            <li 
-                                key={cliente.id_cliente}
-                                onClick={() => seleccionarCliente(cliente)}
-                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-800 border-b border-gray-100 last:border-0"
+                <div className="form-group mb-0 relative" ref={wrapperRef}>
+                    <label className="form-label uppercase text-xs text-muted">Cliente</label>
+                    <div className="search-input-wrapper">
+                        <Search className="search-icon" size={16} />
+                        <input 
+                            type="text"
+                            placeholder="Buscar cliente por nombre o RUC..."
+                            className="form-input search-input"
+                            value={busquedaCliente}
+                            onChange={(e) => {
+                                setBusquedaCliente(e.target.value);
+                                if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
+                            }}
+                            onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
+                        />
+                        {filtros.idCliente && (
+                            <button 
+                                type="button"
+                                onClick={limpiarCliente}
+                                className="absolute right-2 top-2.5 text-gray-400 hover:text-red-500"
                             >
-                                <div className="font-medium">{cliente.razon_social}</div>
-                                <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-
-            <div className="form-group mb-0">
-                <label className="form-label uppercase text-xs text-muted">Vendedor</label>
-                <div className="input-with-icon">
-                    <User className="icon" size={16} />
-                    <select 
-                        className="form-select pl-10"
-                        value={filtros.idVendedor}
-                        onChange={(e) => setFiltros({...filtros, idVendedor: e.target.value})}
-                    >
-                        <option value="">Todos</option>
-                        {vendedores.map(v => (
-                            <option key={v.id_empleado} value={v.id_empleado}>{v.nombre_completo}</option>
-                        ))}
-                    </select>
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
+                    
+                    {mostrarSugerencias && clientesSugeridos.length > 0 && (
+                        <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-96 overflow-y-auto">
+                            {clientesSugeridos.map(cliente => (
+                                <li 
+                                    key={cliente.id_cliente}
+                                    onClick={() => seleccionarCliente(cliente)}
+                                    className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-800 border-b border-gray-100 last:border-0"
+                                >
+                                    <div className="font-medium">{cliente.razon_social}</div>
+                                    <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
-            </div>
+              </div>
 
-            <div className="lg:col-span-5 md:col-span-2 flex justify-end">
-                <button type="submit" className="btn btn-primary w-full md:w-auto" disabled={loading}>
+              <div className="flex justify-between items-end border-t border-gray-200 pt-4">
+                <div className="flex gap-3">
+                  <div className="form-group mb-0">
+                      <label className="form-label uppercase text-xs text-muted">Estado Orden</label>
+                      <select 
+                          className="form-select"
+                          value={filtros.estadoOrden}
+                          onChange={(e) => setFiltros({...filtros, estadoOrden: e.target.value})}
+                      >
+                          <option value="">Todos</option>
+                          <option value="En Espera">En Espera</option>
+                          <option value="En Proceso">En Proceso</option>
+                          <option value="Atendido por Producción">Atendido por Producción</option>
+                          <option value="Despacho Parcial">Despacho Parcial</option>
+                          <option value="Despachada">Despachada</option>
+                          <option value="Entregada">Entregada</option>
+                      </select>
+                  </div>
+
+                  <div className="form-group mb-0">
+                      <label className="form-label uppercase text-xs text-muted">Estado Pago</label>
+                      <select 
+                          className="form-select"
+                          value={filtros.estadoPago}
+                          onChange={(e) => setFiltros({...filtros, estadoPago: e.target.value})}
+                      >
+                          <option value="">Todos</option>
+                          <option value="Pendiente">Pendiente</option>
+                          <option value="Parcial">Parcial</option>
+                          <option value="Pagado">Pagado</option>
+                      </select>
+                  </div>
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setFiltros({...filtros, estadoOrden: '', estadoPago: ''});
+                    }}
+                    className="btn btn-ghost"
+                    title="Limpiar filtros"
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                </div>
+
+                <button type="submit" className="btn btn-primary" disabled={loading}>
                     {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />}
-                    Filtrar
+                    Buscar
                 </button>
-            </div>
+              </div>
             </form>
         </div>
       </div>
@@ -589,7 +697,7 @@ const ReporteVentas = () => {
         <div className="card-header bg-gray-50 flex justify-between items-center">
             <h3 className="card-title text-sm text-gray-800">Detalle de Transacciones</h3>
             <span className="badge badge-secondary badge-outline">
-                {dataReporte.detalle.length} Registros
+                {dataFiltrada.length} Registros
             </span>
         </div>
         <div className="table-container">
@@ -609,8 +717,8 @@ const ReporteVentas = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {dataReporte.detalle.length > 0 ? (
-                        dataReporte.detalle.map((item) => (
+                    {dataFiltrada.length > 0 ? (
+                        dataFiltrada.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => verDetalleOrden(item)}>
                                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                                     <button
@@ -641,7 +749,7 @@ const ReporteVentas = () => {
                                     {formatearFecha(item.fecha_emision)}
                                 </td>
                                 <td className="px-4 py-3 text-muted whitespace-nowrap text-xs">
-                                    {item.fecha_entrega_real ? formatearFecha(item.fecha_entrega_real) : 
+                                    {item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 
                                      <span className="text-gray-400 italic">Pendiente</span>}
                                 </td>
                                 <td className="px-4 py-3 text-right font-bold text-gray-700">

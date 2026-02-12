@@ -1,14 +1,10 @@
 import PDFDocument from 'pdfkit';
 import https from 'https';
 
-const ETIQUETAS_IMPUESTO = {
-  'IGV': 'IGV (18%)',
-  'EXO': 'EXONERADO (0%)',
-  'INA': 'INAFECTO (0%)'
-};
-
 const fmtNum = (num) => {
-  return Number(num).toLocaleString('en-US', { 
+  const valor = Number(num);
+  if (isNaN(valor)) return '0.00';
+  return valor.toLocaleString('en-US', { 
     minimumFractionDigits: 2, 
     maximumFractionDigits: 2
   });
@@ -133,6 +129,13 @@ export async function generarReporteVentasPDF(data) {
       doc.font('Helvetica').fillColor(resumen.pedidos_retrasados > 0 ? '#D32F2F' : '#388E3C');
       doc.text(`${resumen.pedidos_retrasados}`, 430, yPos + 40);
 
+      if (resumen.total_ventas_usd > 0) {
+        doc.font('Helvetica-Bold').fillColor('#333333');
+        doc.text('Total Ventas (USD):', 300, yPos + 55);
+        doc.font('Helvetica').fillColor('#1976D2');
+        doc.text(`$ ${fmtNum(resumen.total_ventas_usd)}`, 430, yPos + 55);
+      }
+
       yPos += 110;
 
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
@@ -155,7 +158,8 @@ export async function generarReporteVentasPDF(data) {
           yPos = 50;
         }
 
-        doc.roundedRect(40, yPos, 515, 'auto').stroke('#DDDDDD');
+        const alturaOrden = 85;
+        doc.roundedRect(40, yPos, 515, alturaOrden, 3).stroke('#DDDDDD');
 
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#1976D2');
         doc.text(`${index + 1}. ${orden.numero}`, 45, yPos + 8);
@@ -173,7 +177,7 @@ export async function generarReporteVentasPDF(data) {
         
         doc.text(`RUC: ${orden.ruc}`, 45, colY);
         colY += 12;
-        doc.text(`Vendedor: ${orden.vendedor}`, 45, colY);
+        doc.text(`Vendedor: ${orden.vendedor || 'N/A'}`, 45, colY);
         colY += 12;
         
         if (orden.tipo_comprobante && orden.numero_comprobante) {
@@ -182,18 +186,14 @@ export async function generarReporteVentasPDF(data) {
         }
         
         doc.text(`Estado: ${orden.estado}`, 45, colY);
-        colY += 12;
-        doc.text(`Verificación: ${orden.estado_verificacion}`, 45, colY);
         
         colY = yPos;
         
         doc.text(`Emisión: ${fmtFecha(orden.fecha_emision)}`, 200, colY);
         colY += 12;
-        doc.text(`Creación: ${fmtFecha(orden.fecha_creacion)}`, 200, colY);
-        colY += 12;
         
-        if (orden.fecha_entrega_real) {
-          doc.text(`Despacho: ${fmtFecha(orden.fecha_entrega_real)}`, 200, colY);
+        if (orden.fecha_despacho) {
+          doc.text(`Despacho: ${fmtFecha(orden.fecha_despacho)}`, 200, colY);
           colY += 12;
         }
         
@@ -208,58 +208,18 @@ export async function generarReporteVentasPDF(data) {
         
         doc.text(`Moneda: ${orden.moneda}`, 360, colY);
         colY += 12;
-        doc.text(`Subtotal: ${orden.moneda} ${orden.subtotal}`, 360, colY);
+        doc.text(`Subtotal: ${orden.moneda} ${fmtNum(orden.subtotal)}`, 360, colY);
         colY += 12;
-        doc.text(`IGV: ${orden.moneda} ${orden.igv}`, 360, colY);
+        doc.text(`IGV: ${orden.moneda} ${fmtNum(orden.igv)}`, 360, colY);
         colY += 12;
         doc.font('Helvetica-Bold');
-        doc.text(`Total: ${orden.moneda} ${orden.total}`, 360, colY);
+        doc.text(`Total: ${orden.moneda} ${fmtNum(orden.total)}`, 360, colY);
         doc.font('Helvetica');
         colY += 12;
         doc.fillColor('#388E3C');
-        doc.text(`Pagado: ${orden.moneda} ${orden.monto_pagado}`, 360, colY);
-        colY += 12;
-        doc.fillColor('#D32F2F');
-        doc.text(`Pendiente: ${orden.moneda} ${orden.pendiente_cobro}`, 360, colY);
+        doc.text(`Pagado: ${orden.moneda} ${fmtNum(orden.monto_pagado)}`, 360, colY);
 
-        yPos = Math.max(yPos + 60, colY + 5);
-
-        if (orden.tipo_entrega === 'Vehiculo Empresa' && orden.vehiculo_placa) {
-          doc.fontSize(7).fillColor('#666666');
-          doc.text(`Vehículo: ${orden.vehiculo_placa} ${orden.vehiculo_marca || ''} - Conductor: ${orden.conductor_nombre || 'N/A'}`, 45, yPos);
-          yPos += 12;
-        } else if (orden.tipo_entrega === 'Transporte Privado' && orden.transporte_nombre) {
-          doc.fontSize(7).fillColor('#666666');
-          doc.text(`Transporte: ${orden.transporte_nombre} - Placa: ${orden.transporte_placa || 'N/A'}`, 45, yPos);
-          yPos += 12;
-        }
-
-        if (orden.detalles && orden.detalles.length > 0) {
-          const maxProductos = 3;
-          const productosAMostrar = orden.detalles.slice(0, maxProductos);
-          
-          doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
-          doc.text('Productos:', 45, yPos);
-          yPos += 10;
-          
-          productosAMostrar.forEach(det => {
-            if (yPos > 720) {
-              doc.addPage();
-              yPos = 50;
-            }
-            
-            doc.fontSize(6).font('Helvetica').fillColor('#777777');
-            const lineaProducto = `• ${det.producto_nombre} | Cant: ${det.cantidad} ${det.unidad_medida} | P.Unit: ${orden.moneda} ${det.precio_unitario} | Subtotal: ${orden.moneda} ${det.subtotal}`;
-            doc.text(lineaProducto, 50, yPos, { width: 495 });
-            yPos += 10;
-          });
-          
-          if (orden.detalles.length > maxProductos) {
-            doc.fontSize(6).fillColor('#999999');
-            doc.text(`... y ${orden.detalles.length - maxProductos} producto(s) más`, 50, yPos);
-            yPos += 10;
-          }
-        }
+        yPos += alturaOrden + 10;
 
         if (orden.observaciones) {
           if (yPos > 720) {
@@ -268,13 +228,13 @@ export async function generarReporteVentasPDF(data) {
           }
           
           doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
-          doc.text('Observaciones:', 45, yPos);
+          doc.text('Obs:', 45, yPos);
           doc.font('Helvetica').fillColor('#777777');
-          doc.text(orden.observaciones.substring(0, 150), 120, yPos, { width: 425 });
+          doc.text(orden.observaciones.substring(0, 100), 70, yPos, { width: 475 });
           yPos += 12;
         }
 
-        yPos += 8;
+        yPos += 5;
       });
 
       const numeroPaginas = doc.bufferedPageRange().count;

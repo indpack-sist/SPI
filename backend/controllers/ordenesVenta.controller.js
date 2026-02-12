@@ -1391,6 +1391,11 @@ export async function registrarDespacho(req, res) {
 
     await executeTransaction(queriesDetalle);
 
+    await executeQuery(
+      'UPDATE ordenes_venta SET id_salida = ? WHERE id_orden_venta = ?',
+      [idSalida, id]
+    );
+
     const verificacion = await executeQuery(`
       SELECT 
         COUNT(*) as total_items,
@@ -1439,7 +1444,6 @@ export async function registrarDespacho(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-
 export async function anularDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;

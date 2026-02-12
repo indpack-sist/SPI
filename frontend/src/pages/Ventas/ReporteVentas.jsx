@@ -200,52 +200,180 @@ const ReporteVentas = () => {
   };
 
   const descargarExcel = () => {
-    setLoadingExcel(true);
-    try {
-      const datosExcel = dataFiltrada.map(item => ({
-        'Orden': item.numero,
-        'Comprobante': item.numero_comprobante || '',
-        'Cliente': item.cliente,
-        'RUC': item.ruc,
-        'Vendedor': item.vendedor,
-        'Fecha Emisión': formatearFecha(item.fecha_emision),
-        'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
-        'Moneda': item.moneda,
-        'Subtotal': parseFloat(item.subtotal),
-        'IGV': parseFloat(item.igv),
-        'Total': parseFloat(item.total),
-        'Pagado': parseFloat(item.monto_pagado),
-        'Por Cobrar': parseFloat(item.pendiente_cobro),
-        'Estado Pago': item.estado_pago,
-        'Estado': item.estado,
-        'Tipo Venta': item.tipo_venta,
-        'Estado Logístico': item.estado_logistico
-      }));
+  setLoadingExcel(true);
+  try {
+    const wb = XLSX.utils.book_new();
 
-      const ws = XLSX.utils.json_to_sheet(datosExcel);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Reporte Ventas');
+    // HOJA 1: RESUMEN GENERAL
+    const datosResumen = dataFiltrada.map(item => ({
+      'Orden': item.numero,
+      'Comprobante': item.numero_comprobante || '',
+      'Cliente': item.cliente,
+      'RUC': item.ruc,
+      'Vendedor': item.vendedor,
+      'Fecha Emisión': formatearFecha(item.fecha_emision),
+      'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
+      'Moneda': item.moneda,
+      'Subtotal': parseFloat(item.subtotal),
+      'IGV': parseFloat(item.igv),
+      'Total': parseFloat(item.total),
+      'Pagado': parseFloat(item.monto_pagado),
+      'Por Cobrar': parseFloat(item.pendiente_cobro),
+      'Estado Pago': item.estado_pago,
+      'Estado': item.estado,
+      'Tipo Venta': item.tipo_venta,
+      'Estado Logístico': item.estado_logistico
+    }));
 
-      ws['!cols'] = [
-        { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 15 },
-        { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
-        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-        { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
-        { wch: 15 }
+    const wsResumen = XLSX.utils.json_to_sheet(datosResumen);
+    wsResumen['!cols'] = [
+      { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 15 },
+      { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
+      { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
+      { wch: 15 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+
+    // HOJAS 2-N: DETALLE DE CADA ORDEN
+    dataFiltrada.forEach((orden) => {
+      const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
+      
+      const datosOrden = [
+        ['INFORMACIÓN DE LA ORDEN'],
+        ['Número de Orden', orden.numero],
+        ['Tipo Comprobante', orden.tipo_comprobante],
+        ['Número Comprobante', orden.numero_comprobante || ''],
+        ['Estado', orden.estado],
+        ['Estado Verificación', orden.estado_verificacion],
+        ['Estado Pago', orden.estado_pago],
+        ['Tipo de Venta', orden.tipo_venta],
+        [''],
+        ['INFORMACIÓN DEL CLIENTE'],
+        ['Razón Social', orden.cliente],
+        ['RUC', orden.ruc],
+        ['Dirección', orden.direccion_cliente || ''],
+        ['Teléfono', orden.telefono_cliente || ''],
+        ['Email', orden.email_cliente || ''],
+        [''],
+        ['FECHAS'],
+        ['Creación', formatearFechaHora(orden.fecha_creacion)],
+        ['Emisión', formatearFecha(orden.fecha_emision)],
+        ['Vencimiento', formatearFecha(orden.fecha_vencimiento)],
+        ['Despacho', orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente'],
+        ['Verificación', orden.fecha_verificacion ? formatearFechaHora(orden.fecha_verificacion) : ''],
+        [''],
+        ['INFORMACIÓN DE ENTREGA'],
+        ['Tipo de Entrega', orden.tipo_entrega],
+        ['Vehículo', orden.vehiculo_placa ? `${orden.vehiculo_placa} - ${orden.vehiculo_marca}` : ''],
+        ['Conductor', orden.conductor_nombre || ''],
+        ['DNI Conductor', orden.conductor_dni || ''],
+        ['Transporte', orden.transporte_nombre || ''],
+        ['Placa Transporte', orden.transporte_placa || ''],
+        ['Dirección Entrega', orden.direccion_entrega || ''],
+        ['Ciudad', orden.ciudad_entrega || ''],
+        [''],
+        ['PRODUCTOS'],
+        ['Producto', 'Código', 'Cantidad', 'Unidad', 'P. Unitario', 'Descuento', 'Subtotal', 'Despachado']
       ];
 
-      const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
-      const fechaActual = new Date().toISOString().split('T')[0];
-      const nombreArchivo = `Reporte_${nombreCliente}_${fechaActual}.xlsx`;
+      if (orden.detalles && orden.detalles.length > 0) {
+        orden.detalles.forEach(det => {
+          datosOrden.push([
+            det.producto_nombre,
+            det.codigo_producto,
+            det.cantidad,
+            det.unidad_medida,
+            `${orden.moneda} ${det.precio_unitario}`,
+            parseFloat(det.descuento) > 0 ? `${orden.moneda} ${det.descuento}` : '-',
+            `${orden.moneda} ${det.subtotal}`,
+            `${det.cantidad_despachada}/${det.cantidad}`
+          ]);
+        });
+      }
 
-      XLSX.writeFile(wb, nombreArchivo);
-    } catch (err) {
-      console.error(err);
-      setError('Error al generar el archivo Excel');
-    } finally {
-      setLoadingExcel(false);
-    }
-  };
+      datosOrden.push(
+        [''],
+        ['RESUMEN FINANCIERO'],
+        ['Subtotal', `${orden.moneda} ${orden.subtotal}`],
+        ['IGV (' + orden.porcentaje_impuesto + '%)', `${orden.moneda} ${orden.igv}`],
+        ['Total', `${orden.moneda} ${orden.total}`],
+        ['Monto Pagado', `${orden.moneda} ${orden.monto_pagado}`],
+        ['Pendiente de Cobro', `${orden.moneda} ${orden.pendiente_cobro}`]
+      );
+
+      if (parseFloat(orden.total_comision) > 0) {
+        datosOrden.push(['Comisión (' + orden.porcentaje_comision_promedio + '%)', `${orden.moneda} ${orden.total_comision}`]);
+      }
+
+      datosOrden.push(
+        [''],
+        ['PERSONAL'],
+        ['Vendedor', orden.vendedor],
+        ['Registrado por', orden.registrador],
+        ['Verificador', orden.verificador]
+      );
+
+      datosOrden.push(
+        [''],
+        ['DOCUMENTOS ASOCIADOS'],
+        ['Cotización', orden.numero_cotizacion || ''],
+        ['Guía Interna', orden.numero_guia_interna || ''],
+        ['OC Cliente', orden.orden_compra_cliente || '']
+      );
+
+      if (orden.observaciones || orden.observaciones_verificador || orden.motivo_rechazo) {
+        datosOrden.push([''], ['OBSERVACIONES']);
+        if (orden.observaciones) {
+          datosOrden.push(['Observaciones Generales', orden.observaciones]);
+        }
+        if (orden.observaciones_verificador) {
+          datosOrden.push(['Observaciones Verificador', orden.observaciones_verificador]);
+        }
+        if (orden.motivo_rechazo) {
+          datosOrden.push(['Motivo de Rechazo', orden.motivo_rechazo]);
+        }
+      }
+
+      const wsOrden = XLSX.utils.aoa_to_sheet(datosOrden);
+      
+      wsOrden['!cols'] = [
+        { wch: 30 },
+        { wch: 50 }
+      ];
+
+      const titleStyle = {
+        font: { bold: true, sz: 12 },
+        fill: { fgColor: { rgb: "1976D2" } },
+        alignment: { horizontal: "left" }
+      };
+
+      const headerStyle = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: "E3F2FD" } }
+      };
+
+      if (wsOrden['A1']) wsOrden['A1'].s = titleStyle;
+      if (wsOrden['A10']) wsOrden['A10'].s = titleStyle;
+      if (wsOrden['A17']) wsOrden['A17'].s = titleStyle;
+      if (wsOrden['A24']) wsOrden['A24'].s = titleStyle;
+      if (wsOrden['A33']) wsOrden['A33'].s = titleStyle;
+
+      XLSX.utils.book_append_sheet(wb, wsOrden, nombreHoja);
+    });
+
+    const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
+    const fechaActual = new Date().toISOString().split('T')[0];
+    const nombreArchivo = `Reporte_${nombreCliente}_${fechaActual}.xlsx`;
+
+    XLSX.writeFile(wb, nombreArchivo);
+  } catch (err) {
+    console.error(err);
+    setError('Error al generar el archivo Excel');
+  } finally {
+    setLoadingExcel(false);
+  }
+};
 
   const verDetalleOrden = (orden) => {
     setOrdenSeleccionada(orden);

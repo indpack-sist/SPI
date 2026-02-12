@@ -21,7 +21,8 @@ export const getReporteVentas = async (req, res) => {
                 v.marca_modelo as vehiculo_marca,
                 ec.nombre_completo as nombre_conductor,
                 ec.dni as dni_conductor,
-                cot.numero_cotizacion
+                cot.numero_cotizacion,
+                s.fecha_movimiento as fecha_despacho
             FROM ordenes_venta ov
             INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
             LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
@@ -30,6 +31,7 @@ export const getReporteVentas = async (req, res) => {
             LEFT JOIN flota v ON ov.id_vehiculo = v.id_vehiculo
             LEFT JOIN empleados ec ON ov.id_conductor = ec.id_empleado
             LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
+            LEFT JOIN salidas_inventario s ON ov.id_salida = s.id_salida
             WHERE DATE(ov.fecha_emision) BETWEEN ? AND ?
             AND ov.estado != 'Cancelada'
         `;
@@ -140,12 +142,14 @@ export const getReporteVentas = async (req, res) => {
             }
 
             let estadoLogistico = 'A tiempo';
-            if (orden.fecha_entrega_programada && orden.fecha_entrega_real) {
-                if (new Date(orden.fecha_entrega_real) > new Date(orden.fecha_entrega_programada)) {
+            const fechaReferencia = orden.fecha_despacho || orden.fecha_entrega_real;
+            
+            if (orden.fecha_entrega_programada && fechaReferencia) {
+                if (new Date(fechaReferencia) > new Date(orden.fecha_entrega_programada)) {
                     estadoLogistico = 'Retrasado';
                     kpis.pedidosAtrasados++;
                 }
-            } else if (orden.fecha_entrega_programada && !orden.fecha_entrega_real) {
+            } else if (orden.fecha_entrega_programada && !fechaReferencia) {
                 if (new Date() > new Date(orden.fecha_entrega_programada)) {
                     estadoLogistico = 'Vencido';
                     kpis.pedidosAtrasados++;
@@ -195,6 +199,7 @@ export const getReporteVentas = async (req, res) => {
                 fecha_entrega_estimada: orden.fecha_entrega_estimada,
                 fecha_entrega_programada: orden.fecha_entrega_programada,
                 fecha_entrega_real: orden.fecha_entrega_real,
+                fecha_despacho: orden.fecha_despacho,
                 fecha_verificacion: orden.fecha_verificacion,
                 prioridad: orden.prioridad,
                 tipo_entrega: orden.tipo_entrega,

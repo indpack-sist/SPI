@@ -237,12 +237,12 @@ export async function generarReporteVentasPDF(data) {
         yPos += 5;
       });
 
-      const numeroPaginas = doc.bufferedPageRange().count;
-      for (let i = 0; i < numeroPaginas; i++) {
-        doc.switchToPage(i);
-        doc.fontSize(7).font('Helvetica').fillColor('#999999');
-        doc.text(`Página ${i + 1} de ${numeroPaginas}`, 40, 780, { align: 'center', width: 515 });
-      }
+      const range = doc.bufferedPageRange();
+for (let i = 0; i < range.count; i++) {
+  doc.switchToPage(range.start + i);
+  doc.fontSize(7).font('Helvetica').fillColor('#999999');
+  doc.text(`Página ${i + 1} de ${range.count}`, 40, 780, { align: 'center', width: 515 });
+}
 
       doc.end();
       

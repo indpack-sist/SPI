@@ -3,7 +3,7 @@ import { generarReporteVentasPDF } from '../utils/reporteVentasPDF.js';
 
 export const getReporteVentas = async (req, res) => {
     try {
-        const { fechaInicio, fechaFin, idCliente, idVendedor, format } = req.query;
+        const { fechaInicio, fechaFin, idCliente, idVendedor, format, incluirDetalle } = req.query;
 
         let sql = `
             SELECT 
@@ -281,7 +281,8 @@ export const getReporteVentas = async (req, res) => {
                     detalle: listaDetalle
                 };
 
-                const pdfBuffer = await generarReporteVentasPDF(dataReporte);
+                const incluirDetallePDF = incluirDetalle === 'true' || incluirDetalle === true;
+                const pdfBuffer = await generarReporteVentasPDF(dataReporte, incluirDetallePDF);
                 
                 res.setHeader('Content-Type', 'application/pdf');
                 res.setHeader('Content-Disposition', `attachment; filename=reporte_ventas_${Date.now()}.pdf`);

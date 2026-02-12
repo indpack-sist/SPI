@@ -36,7 +36,7 @@ function descargarImagen(url) {
   });
 }
 
-export async function generarReporteVentasPDF(data) {
+export async function generarReporteVentasPDF(data, incluirDetalle = true) {
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ 
@@ -138,111 +138,119 @@ export async function generarReporteVentasPDF(data) {
 
       yPos += 110;
 
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('DETALLE DE ÓRDENES', 40, yPos);
-      
-      yPos += 20;
-
-      const ordenes = data.detalle || [];
-
-      if (ordenes.length === 0) {
-        doc.fontSize(9).font('Helvetica').fillColor('#999999');
-        doc.text('No se encontraron órdenes en el período seleccionado.', 40, yPos);
-        doc.end();
-        return;
-      }
-
-      ordenes.forEach((orden, index) => {
-        if (yPos > 700) {
-          doc.addPage();
-          yPos = 50;
-        }
-
-        const alturaOrden = 85;
-        doc.roundedRect(40, yPos, 515, alturaOrden, 3).stroke('#DDDDDD');
-
-        doc.fontSize(9).font('Helvetica-Bold').fillColor('#1976D2');
-        doc.text(`${index + 1}. ${orden.numero}`, 45, yPos + 8);
-
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333');
-        doc.text('Cliente:', 300, yPos + 8);
-        doc.font('Helvetica');
-        doc.text(orden.cliente.substring(0, 35), 340, yPos + 8);
-
+      if (incluirDetalle) {
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('DETALLE DE ÓRDENES', 40, yPos);
+        
         yPos += 20;
 
-        doc.fontSize(7).font('Helvetica').fillColor('#666666');
-        
-        let colY = yPos;
-        
-        doc.text(`RUC: ${orden.ruc}`, 45, colY);
-        colY += 12;
-        doc.text(`Vendedor: ${orden.vendedor || 'N/A'}`, 45, colY);
-        colY += 12;
-        
-        if (orden.tipo_comprobante && orden.numero_comprobante) {
-          doc.text(`${orden.tipo_comprobante}: ${orden.numero_comprobante}`, 45, colY);
-          colY += 12;
-        }
-        
-        doc.text(`Estado: ${orden.estado}`, 45, colY);
-        
-        colY = yPos;
-        
-        doc.text(`Emisión: ${fmtFecha(orden.fecha_emision)}`, 200, colY);
-        colY += 12;
-        
-        if (orden.fecha_despacho) {
-          doc.text(`Despacho: ${fmtFecha(orden.fecha_despacho)}`, 200, colY);
-          colY += 12;
-        }
-        
-        if (orden.fecha_vencimiento) {
-          doc.text(`Vencimiento: ${fmtFecha(orden.fecha_vencimiento)}`, 200, colY);
-          colY += 12;
+        const ordenes = data.detalle || [];
+
+        if (ordenes.length === 0) {
+          doc.fontSize(9).font('Helvetica').fillColor('#999999');
+          doc.text('No se encontraron órdenes en el período seleccionado.', 40, yPos);
+          doc.end();
+          return;
         }
 
-        doc.text(`Tipo Venta: ${orden.tipo_venta}`, 200, colY);
-
-        colY = yPos;
-        
-        doc.text(`Moneda: ${orden.moneda}`, 360, colY);
-        colY += 12;
-        doc.text(`Subtotal: ${orden.moneda} ${fmtNum(orden.subtotal)}`, 360, colY);
-        colY += 12;
-        doc.text(`IGV: ${orden.moneda} ${fmtNum(orden.igv)}`, 360, colY);
-        colY += 12;
-        doc.font('Helvetica-Bold');
-        doc.text(`Total: ${orden.moneda} ${fmtNum(orden.total)}`, 360, colY);
-        doc.font('Helvetica');
-        colY += 12;
-        doc.fillColor('#388E3C');
-        doc.text(`Pagado: ${orden.moneda} ${fmtNum(orden.monto_pagado)}`, 360, colY);
-
-        yPos += alturaOrden + 10;
-
-        if (orden.observaciones) {
-          if (yPos > 720) {
+        ordenes.forEach((orden, index) => {
+          if (yPos > 700) {
             doc.addPage();
             yPos = 50;
           }
-          
-          doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
-          doc.text('Obs:', 45, yPos);
-          doc.font('Helvetica').fillColor('#777777');
-          doc.text(orden.observaciones.substring(0, 100), 70, yPos, { width: 475 });
-          yPos += 12;
-        }
 
-        yPos += 5;
-      });
+          const alturaBase = 85;
+          const alturaObservaciones = orden.observaciones ? Math.min(30, Math.ceil(orden.observaciones.length / 80) * 10) : 0;
+          const alturaTotal = alturaBase + alturaObservaciones;
+
+          doc.roundedRect(40, yPos, 515, alturaTotal, 3).stroke('#DDDDDD');
+
+          doc.fontSize(9).font('Helvetica-Bold').fillColor('#1976D2');
+          doc.text(`${index + 1}. ${orden.numero}`, 45, yPos + 8);
+
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333');
+          doc.text('Cliente:', 300, yPos + 8);
+          doc.font('Helvetica');
+          doc.text(orden.cliente.substring(0, 35), 340, yPos + 8);
+
+          yPos += 20;
+
+          doc.fontSize(7).font('Helvetica').fillColor('#666666');
+          
+          let colY = yPos;
+          
+          doc.text(`RUC: ${orden.ruc}`, 45, colY);
+          colY += 12;
+          doc.text(`Vendedor: ${orden.vendedor || 'N/A'}`, 45, colY);
+          colY += 12;
+          
+          if (orden.tipo_comprobante && orden.numero_comprobante) {
+            doc.text(`${orden.tipo_comprobante}: ${orden.numero_comprobante}`, 45, colY);
+            colY += 12;
+          }
+          
+          doc.text(`Estado: ${orden.estado}`, 45, colY);
+          
+          colY = yPos;
+          
+          doc.text(`Emisión: ${fmtFecha(orden.fecha_emision)}`, 200, colY);
+          colY += 12;
+          
+          if (orden.fecha_despacho) {
+            doc.text(`Despacho: ${fmtFecha(orden.fecha_despacho)}`, 200, colY);
+            colY += 12;
+          }
+          
+          if (orden.fecha_vencimiento) {
+            doc.text(`Vencimiento: ${fmtFecha(orden.fecha_vencimiento)}`, 200, colY);
+            colY += 12;
+          }
+
+          doc.text(`Tipo Venta: ${orden.tipo_venta}`, 200, colY);
+
+          colY = yPos;
+          
+          doc.text(`Moneda: ${orden.moneda}`, 360, colY);
+          colY += 12;
+          doc.text(`Subtotal: ${orden.moneda} ${fmtNum(orden.subtotal)}`, 360, colY);
+          colY += 12;
+          doc.text(`IGV: ${orden.moneda} ${fmtNum(orden.igv)}`, 360, colY);
+          colY += 12;
+          doc.font('Helvetica-Bold');
+          doc.text(`Total: ${orden.moneda} ${fmtNum(orden.total)}`, 360, colY);
+          doc.font('Helvetica');
+          colY += 12;
+          doc.fillColor('#388E3C');
+          doc.text(`Pagado: ${orden.moneda} ${fmtNum(orden.monto_pagado)}`, 360, colY);
+
+          yPos += alturaBase - 10;
+
+          if (orden.observaciones) {
+            if (yPos + alturaObservaciones > 750) {
+              doc.addPage();
+              yPos = 50;
+            }
+            
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
+            doc.text('Obs:', 45, yPos);
+            doc.font('Helvetica').fillColor('#777777');
+            
+            const textoObservaciones = orden.observaciones.substring(0, 250);
+            doc.text(textoObservaciones, 70, yPos, { width: 475, lineGap: 2 });
+            
+            yPos += alturaObservaciones;
+          }
+
+          yPos += 10;
+        });
+      }
 
       const range = doc.bufferedPageRange();
-for (let i = 0; i < range.count; i++) {
-  doc.switchToPage(range.start + i);
-  doc.fontSize(7).font('Helvetica').fillColor('#999999');
-  doc.text(`Página ${i + 1} de ${range.count}`, 40, 780, { align: 'center', width: 515 });
-}
+      for (let i = 0; i < range.count; i++) {
+        doc.switchToPage(range.start + i);
+        doc.fontSize(7).font('Helvetica').fillColor('#999999');
+        doc.text(`Página ${i + 1} de ${range.count}`, 40, 780, { align: 'center', width: 515 });
+      }
 
       doc.end();
       

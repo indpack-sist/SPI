@@ -30,6 +30,10 @@ const ReporteVentas = () => {
   const [loadingExcel, setLoadingExcel] = useState(false);
   const [error, setError] = useState(null);
   
+  // Estados para opciones de descarga
+  const [incluirDetalleExcel, setIncluirDetalleExcel] = useState(true);
+  const [incluirDetallePDF, setIncluirDetallePDF] = useState(true); // <--- NUEVO ESTADO
+
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [clientesSugeridos, setClientesSugeridos] = useState([]);
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
@@ -170,6 +174,7 @@ const ReporteVentas = () => {
     }
   };
 
+  // FUNCIÓN DESCARGAR PDF ACTUALIZADA
   const descargarPDF = async () => {
     setLoadingPdf(true);
     try {
@@ -177,6 +182,7 @@ const ReporteVentas = () => {
             fechaInicio: filtros.fechaInicio,
             fechaFin: filtros.fechaFin,
             idCliente: filtros.idCliente,
+            incluirDetalle: incluirDetallePDF, // <--- PARÁMETRO AGREGADO
             format: 'pdf'
         }, { responseType: 'blob' });
 
@@ -200,180 +206,160 @@ const ReporteVentas = () => {
   };
 
   const descargarExcel = () => {
-  setLoadingExcel(true);
-  try {
-    const wb = XLSX.utils.book_new();
-
-    // HOJA 1: RESUMEN GENERAL
-    const datosResumen = dataFiltrada.map(item => ({
-      'Orden': item.numero,
-      'Comprobante': item.numero_comprobante || '',
-      'Cliente': item.cliente,
-      'RUC': item.ruc,
-      'Vendedor': item.vendedor,
-      'Fecha Emisión': formatearFecha(item.fecha_emision),
-      'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
-      'Moneda': item.moneda,
-      'Subtotal': parseFloat(item.subtotal),
-      'IGV': parseFloat(item.igv),
-      'Total': parseFloat(item.total),
-      'Pagado': parseFloat(item.monto_pagado),
-      'Por Cobrar': parseFloat(item.pendiente_cobro),
-      'Estado Pago': item.estado_pago,
-      'Estado': item.estado,
-      'Tipo Venta': item.tipo_venta,
-      'Estado Logístico': item.estado_logistico
-    }));
-
-    const wsResumen = XLSX.utils.json_to_sheet(datosResumen);
-    wsResumen['!cols'] = [
-      { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 15 },
-      { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
-      { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-      { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
-      { wch: 15 }
-    ];
-    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
-
-    // HOJAS 2-N: DETALLE DE CADA ORDEN
-    dataFiltrada.forEach((orden) => {
-      const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
-      
-      const datosOrden = [
-        ['INFORMACIÓN DE LA ORDEN'],
-        ['Número de Orden', orden.numero],
-        ['Tipo Comprobante', orden.tipo_comprobante],
-        ['Número Comprobante', orden.numero_comprobante || ''],
-        ['Estado', orden.estado],
-        ['Estado Verificación', orden.estado_verificacion],
-        ['Estado Pago', orden.estado_pago],
-        ['Tipo de Venta', orden.tipo_venta],
-        [''],
-        ['INFORMACIÓN DEL CLIENTE'],
-        ['Razón Social', orden.cliente],
-        ['RUC', orden.ruc],
-        ['Dirección', orden.direccion_cliente || ''],
-        ['Teléfono', orden.telefono_cliente || ''],
-        ['Email', orden.email_cliente || ''],
-        [''],
-        ['FECHAS'],
-        ['Creación', formatearFechaHora(orden.fecha_creacion)],
-        ['Emisión', formatearFecha(orden.fecha_emision)],
-        ['Vencimiento', formatearFecha(orden.fecha_vencimiento)],
-        ['Despacho', orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente'],
-        ['Verificación', orden.fecha_verificacion ? formatearFechaHora(orden.fecha_verificacion) : ''],
-        [''],
-        ['INFORMACIÓN DE ENTREGA'],
-        ['Tipo de Entrega', orden.tipo_entrega],
-        ['Vehículo', orden.vehiculo_placa ? `${orden.vehiculo_placa} - ${orden.vehiculo_marca}` : ''],
-        ['Conductor', orden.conductor_nombre || ''],
-        ['DNI Conductor', orden.conductor_dni || ''],
-        ['Transporte', orden.transporte_nombre || ''],
-        ['Placa Transporte', orden.transporte_placa || ''],
-        ['Dirección Entrega', orden.direccion_entrega || ''],
-        ['Ciudad', orden.ciudad_entrega || ''],
-        [''],
-        ['PRODUCTOS'],
-        ['Producto', 'Código', 'Cantidad', 'Unidad', 'P. Unitario', 'Descuento', 'Subtotal', 'Despachado']
+    setLoadingExcel(true);
+    try {
+      const wb = XLSX.utils.book_new();
+  
+      // HOJA 1: RESUMEN GENERAL
+      const datosResumen = dataFiltrada.map(item => ({
+        'Orden': item.numero,
+        'Comprobante': item.numero_comprobante || '',
+        'Cliente': item.cliente,
+        'RUC': item.ruc,
+        'Vendedor': item.vendedor,
+        'Fecha Emisión': formatearFecha(item.fecha_emision),
+        'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
+        'Moneda': item.moneda,
+        'Subtotal': parseFloat(item.subtotal),
+        'IGV': parseFloat(item.igv),
+        'Total': parseFloat(item.total),
+        'Pagado': parseFloat(item.monto_pagado),
+        'Por Cobrar': parseFloat(item.pendiente_cobro),
+        'Estado Pago': item.estado_pago,
+        'Estado': item.estado,
+        'Tipo Venta': item.tipo_venta,
+        'Estado Logístico': item.estado_logistico
+      }));
+  
+      const wsResumen = XLSX.utils.json_to_sheet(datosResumen);
+      wsResumen['!cols'] = [
+        { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 15 },
+        { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+        { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
+        { wch: 15 }
       ];
-
-      if (orden.detalles && orden.detalles.length > 0) {
-        orden.detalles.forEach(det => {
-          datosOrden.push([
-            det.producto_nombre,
-            det.codigo_producto,
-            det.cantidad,
-            det.unidad_medida,
-            `${orden.moneda} ${det.precio_unitario}`,
-            parseFloat(det.descuento) > 0 ? `${orden.moneda} ${det.descuento}` : '-',
-            `${orden.moneda} ${det.subtotal}`,
-            `${det.cantidad_despachada}/${det.cantidad}`
-          ]);
+      XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+  
+      // HOJAS DE DETALLE (SOLO SI EL CHECKBOX ESTÁ MARCADO)
+      if (incluirDetalleExcel) {
+        dataFiltrada.forEach((orden) => {
+          const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
+          
+          const datosOrden = [
+            ['INFORMACIÓN DE LA ORDEN'],
+            ['Número de Orden', orden.numero],
+            ['Tipo Comprobante', orden.tipo_comprobante],
+            ['Número Comprobante', orden.numero_comprobante || ''],
+            ['Estado', orden.estado],
+            ['Estado Verificación', orden.estado_verificacion],
+            ['Estado Pago', orden.estado_pago],
+            ['Tipo de Venta', orden.tipo_venta],
+            [''],
+            ['INFORMACIÓN DEL CLIENTE'],
+            ['Razón Social', orden.cliente],
+            ['RUC', orden.ruc],
+            ['Dirección', orden.direccion_cliente || ''],
+            ['Teléfono', orden.telefono_cliente || ''],
+            ['Email', orden.email_cliente || ''],
+            [''],
+            ['FECHAS'],
+            ['Creación', formatearFechaHora(orden.fecha_creacion)],
+            ['Emisión', formatearFecha(orden.fecha_emision)],
+            ['Vencimiento', formatearFecha(orden.fecha_vencimiento)],
+            ['Despacho', orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente'],
+            ['Verificación', orden.fecha_verificacion ? formatearFechaHora(orden.fecha_verificacion) : ''],
+            [''],
+            ['INFORMACIÓN DE ENTREGA'],
+            ['Tipo de Entrega', orden.tipo_entrega],
+            ['Vehículo', orden.vehiculo_placa ? `${orden.vehiculo_placa} - ${orden.vehiculo_marca}` : ''],
+            ['Conductor', orden.conductor_nombre || ''],
+            ['DNI Conductor', orden.conductor_dni || ''],
+            ['Transporte', orden.transporte_nombre || ''],
+            ['Placa Transporte', orden.transporte_placa || ''],
+            ['Dirección Entrega', orden.direccion_entrega || ''],
+            ['Ciudad', orden.ciudad_entrega || ''],
+            [''],
+            ['PRODUCTOS'],
+            ['Producto', 'Código', 'Cantidad', 'Unidad', 'P. Unitario', 'Descuento', 'Subtotal', 'Despachado']
+          ];
+  
+          if (orden.detalles && orden.detalles.length > 0) {
+            orden.detalles.forEach(det => {
+              datosOrden.push([
+                det.producto_nombre,
+                det.codigo_producto,
+                det.cantidad,
+                det.unidad_medida,
+                `${orden.moneda} ${det.precio_unitario}`,
+                parseFloat(det.descuento) > 0 ? `${orden.moneda} ${det.descuento}` : '-',
+                `${orden.moneda} ${det.subtotal}`,
+                `${det.cantidad_despachada}/${det.cantidad}`
+              ]);
+            });
+          }
+  
+          datosOrden.push(
+            [''],
+            ['RESUMEN FINANCIERO'],
+            ['Subtotal', `${orden.moneda} ${orden.subtotal}`],
+            ['IGV (' + orden.porcentaje_impuesto + '%)', `${orden.moneda} ${orden.igv}`],
+            ['Total', `${orden.moneda} ${orden.total}`],
+            ['Monto Pagado', `${orden.moneda} ${orden.monto_pagado}`],
+            ['Pendiente de Cobro', `${orden.moneda} ${orden.pendiente_cobro}`]
+          );
+  
+          if (parseFloat(orden.total_comision) > 0) {
+            datosOrden.push(['Comisión (' + orden.porcentaje_comision_promedio + '%)', `${orden.moneda} ${orden.total_comision}`]);
+          }
+  
+          datosOrden.push(
+            [''],
+            ['PERSONAL'],
+            ['Vendedor', orden.vendedor],
+            ['Registrado por', orden.registrador],
+            ['Verificador', orden.verificador]
+          );
+  
+          datosOrden.push(
+            [''],
+            ['DOCUMENTOS ASOCIADOS'],
+            ['Cotización', orden.numero_cotizacion || ''],
+            ['Guía Interna', orden.numero_guia_interna || ''],
+            ['OC Cliente', orden.orden_compra_cliente || '']
+          );
+  
+          if (orden.observaciones || orden.observaciones_verificador || orden.motivo_rechazo) {
+            datosOrden.push([''], ['OBSERVACIONES']);
+            if (orden.observaciones) {
+              datosOrden.push(['Observaciones Generales', orden.observaciones]);
+            }
+            if (orden.observaciones_verificador) {
+              datosOrden.push(['Observaciones Verificador', orden.observaciones_verificador]);
+            }
+            if (orden.motivo_rechazo) {
+              datosOrden.push(['Motivo de Rechazo', orden.motivo_rechazo]);
+            }
+          }
+  
+          const wsOrden = XLSX.utils.aoa_to_sheet(datosOrden);
+          wsOrden['!cols'] = [{ wch: 30 }, { wch: 50 }];
+          XLSX.utils.book_append_sheet(wb, wsOrden, nombreHoja);
         });
       }
-
-      datosOrden.push(
-        [''],
-        ['RESUMEN FINANCIERO'],
-        ['Subtotal', `${orden.moneda} ${orden.subtotal}`],
-        ['IGV (' + orden.porcentaje_impuesto + '%)', `${orden.moneda} ${orden.igv}`],
-        ['Total', `${orden.moneda} ${orden.total}`],
-        ['Monto Pagado', `${orden.moneda} ${orden.monto_pagado}`],
-        ['Pendiente de Cobro', `${orden.moneda} ${orden.pendiente_cobro}`]
-      );
-
-      if (parseFloat(orden.total_comision) > 0) {
-        datosOrden.push(['Comisión (' + orden.porcentaje_comision_promedio + '%)', `${orden.moneda} ${orden.total_comision}`]);
-      }
-
-      datosOrden.push(
-        [''],
-        ['PERSONAL'],
-        ['Vendedor', orden.vendedor],
-        ['Registrado por', orden.registrador],
-        ['Verificador', orden.verificador]
-      );
-
-      datosOrden.push(
-        [''],
-        ['DOCUMENTOS ASOCIADOS'],
-        ['Cotización', orden.numero_cotizacion || ''],
-        ['Guía Interna', orden.numero_guia_interna || ''],
-        ['OC Cliente', orden.orden_compra_cliente || '']
-      );
-
-      if (orden.observaciones || orden.observaciones_verificador || orden.motivo_rechazo) {
-        datosOrden.push([''], ['OBSERVACIONES']);
-        if (orden.observaciones) {
-          datosOrden.push(['Observaciones Generales', orden.observaciones]);
-        }
-        if (orden.observaciones_verificador) {
-          datosOrden.push(['Observaciones Verificador', orden.observaciones_verificador]);
-        }
-        if (orden.motivo_rechazo) {
-          datosOrden.push(['Motivo de Rechazo', orden.motivo_rechazo]);
-        }
-      }
-
-      const wsOrden = XLSX.utils.aoa_to_sheet(datosOrden);
-      
-      wsOrden['!cols'] = [
-        { wch: 30 },
-        { wch: 50 }
-      ];
-
-      const titleStyle = {
-        font: { bold: true, sz: 12 },
-        fill: { fgColor: { rgb: "1976D2" } },
-        alignment: { horizontal: "left" }
-      };
-
-      const headerStyle = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: "E3F2FD" } }
-      };
-
-      if (wsOrden['A1']) wsOrden['A1'].s = titleStyle;
-      if (wsOrden['A10']) wsOrden['A10'].s = titleStyle;
-      if (wsOrden['A17']) wsOrden['A17'].s = titleStyle;
-      if (wsOrden['A24']) wsOrden['A24'].s = titleStyle;
-      if (wsOrden['A33']) wsOrden['A33'].s = titleStyle;
-
-      XLSX.utils.book_append_sheet(wb, wsOrden, nombreHoja);
-    });
-
-    const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
-    const fechaActual = new Date().toISOString().split('T')[0];
-    const nombreArchivo = `Reporte_${nombreCliente}_${fechaActual}.xlsx`;
-
-    XLSX.writeFile(wb, nombreArchivo);
-  } catch (err) {
-    console.error(err);
-    setError('Error al generar el archivo Excel');
-  } finally {
-    setLoadingExcel(false);
-  }
-};
+  
+      const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
+      const fechaActual = new Date().toISOString().split('T')[0];
+      const nombreArchivo = `Reporte_${nombreCliente}_${fechaActual}.xlsx`;
+  
+      XLSX.writeFile(wb, nombreArchivo);
+    } catch (err) {
+      console.error(err);
+      setError('Error al generar el archivo Excel');
+    } finally {
+      setLoadingExcel(false);
+    }
+  };
 
   const verDetalleOrden = (orden) => {
     setOrdenSeleccionada(orden);
@@ -606,6 +592,34 @@ const ReporteVentas = () => {
                       </select>
                   </div>
 
+                  {/* CHECKBOX PARA DETALLE EXCEL */}
+                  <div className="form-group mb-0">
+                      <label className="form-label uppercase text-xs text-muted">Detalle Excel</label>
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                          <input 
+                              type="checkbox"
+                              checked={incluirDetalleExcel}
+                              onChange={(e) => setIncluirDetalleExcel(e.target.checked)}
+                              className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2"
+                          />
+                          <span className="text-sm text-gray-700">Incluir hojas de detalle</span>
+                      </label>
+                  </div>
+
+                  {/* NUEVO CHECKBOX PARA PDF */}
+                  <div className="form-group mb-0">
+                      <label className="form-label uppercase text-xs text-muted">Detalle PDF</label>
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                          <input 
+                              type="checkbox"
+                              checked={incluirDetallePDF}
+                              onChange={(e) => setIncluirDetallePDF(e.target.checked)}
+                              className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2"
+                          />
+                          <span className="text-sm text-gray-700">Incluir detalle órdenes</span>
+                      </label>
+                  </div>
+
                   <button 
                     type="button"
                     onClick={() => {
@@ -709,7 +723,118 @@ const ReporteVentas = () => {
             </div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         
+        <div className="card lg:col-span-2">
+            <div className="card-header">
+                <h3 className="card-title text-base text-gray-800">
+                    <TrendingUp size={18} className="text-muted"/> Evolución de Ventas Diarias
+                </h3>
+            </div>
+            <div className="card-body p-4" style={{ height: '320px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dataReporte.graficos.ventas_dia} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                        <XAxis dataKey="fecha" tick={{fontSize: 12, fill: '#9CA3AF'}} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis tick={{fontSize: 12, fill: '#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={(value) => `${value/1000}k`} />
+                        <RechartsTooltip 
+                            cursor={{fill: '#F9FAFB'}}
+                            formatter={(value, name, props) => [formatearMoneda(value, props.payload.moneda), "Total"]}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        />
+                        <Area type="monotone" dataKey="total" stroke="#3B82F6" strokeWidth={2} fill="url(#colorVentas)" />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        <div className="card">
+            <div className="card-header">
+                <h3 className="card-title text-base text-gray-800">
+                    <PieIcon size={18} className="text-muted"/> Estado de Cartera
+                </h3>
+            </div>
+            <div className="card-body p-4 relative" style={{ height: '320px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={dataReporte.graficos.estado_pago}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={70}
+                            outerRadius={90}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {dataReporte.graficos.estado_pago.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS_PIE[entry.name] || entry.color} strokeWidth={0} />
+                            ))}
+                        </Pie>
+                        <RechartsTooltip formatter={(value) => formatearMoneda(value, 'PEN')} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle"/>
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        <div className="card lg:col-span-2">
+             <div className="card-header">
+                <h3 className="card-title text-base text-gray-800">
+                    <User size={18} className="text-muted"/> Ranking de Vendedores
+                </h3>
+            </div>
+            <div className="card-body p-4" style={{ height: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dataReporte.graficos.top_vendedores} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6"/>
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" width={150} tick={{fontSize: 12, fill: '#4B5563'}} axisLine={false} tickLine={false}/>
+                        <RechartsTooltip formatter={(value, name, props) => [formatearMoneda(value, props.payload.moneda), "Total"]} cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px' }}/>
+                        <Bar dataKey="value" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20} background={{ fill: '#F9FAFB' }} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        {dataReporte.graficos.ventas_por_estado && dataReporte.graficos.ventas_por_estado.length > 0 && (
+          <div className="card">
+              <div className="card-header">
+                  <h3 className="card-title text-base text-gray-800">
+                      <Package size={18} className="text-muted"/> Ventas por Estado
+                  </h3>
+              </div>
+              <div className="card-body p-4" style={{ height: '300px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                          <Pie
+                              data={dataReporte.graficos.ventas_por_estado}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          >
+                              {dataReporte.graficos.ventas_por_estado.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][index % 6]} />
+                              ))}
+                          </Pie>
+                          <RechartsTooltip formatter={(value, name, props) => [formatearMoneda(value, props.payload.moneda), name]} />
+                      </PieChart>
+                  </ResponsiveContainer>
+              </div>
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <div className="card-header bg-gray-50 flex justify-between items-center">
             <h3 className="card-title text-sm text-gray-800">Detalle de Transacciones</h3>

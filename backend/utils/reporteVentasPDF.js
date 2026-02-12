@@ -6,7 +6,7 @@ const fmtNum = (num) => {
   if (isNaN(valor)) return '0.00';
   return valor.toLocaleString('en-US', { 
     minimumFractionDigits: 2, 
-    maximumFractionDigits: 2
+    maximumFractionDigits: 3
   });
 };
 

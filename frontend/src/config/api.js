@@ -757,9 +757,7 @@ export const cuentasPagoAPI = {
   getResumen: (id, params) => api.get(`/cuentas-pago/${id}/resumen`, { params }),
   getEstadisticas: (params) => api.get('/cuentas-pago/estadisticas', { params }),
   registrarMovimiento: (id, data) => api.post(`/cuentas-pago/${id}/movimientos`, data),
-  getMovimientos: (id, params) => api.get(`/cuentas-pago/${id}/movimientos`, { params }),
-  transferir: (data) => api.post('/cuentas-pago/transferencias', data),
-  renovarCredito: (id, data) => api.post(`/cuentas-pago/${id}/renovar-credito`, data)
+  getMovimientos: (id, params) => api.get(`/cuentas-pago/${id}/movimientos`, { params })
 };
 
 export const listasPreciosAPI = {

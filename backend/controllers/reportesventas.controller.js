@@ -1,9 +1,8 @@
 import db from '../config/database.js';
-import { generarReporteVentasPDF } from '../utils/reporteVentasPDF.js';
 
 export const getReporteVentas = async (req, res) => {
     try {
-        const { fechaInicio, fechaFin, idCliente, idVendedor, format, incluirDetalle } = req.query;
+        const { fechaInicio, fechaFin, idCliente, idVendedor } = req.query;
 
         let sql = `
             SELECT 
@@ -258,41 +257,6 @@ export const getReporteVentas = async (req, res) => {
                 }))
             };
         });
-
-        if (format === 'pdf') {
-            try {
-                const dataReporte = {
-                    resumen: {
-                        total_ventas_pen: parseFloat(kpis.totalVentasPEN.toFixed(2)),
-                        total_ventas_usd: parseFloat(kpis.totalVentasUSD.toFixed(2)),
-                        total_pagado_pen: parseFloat(kpis.totalPagadoPEN.toFixed(2)),
-                        total_pagado_usd: parseFloat(kpis.totalPagadoUSD.toFixed(2)),
-                        total_pendiente_pen: parseFloat(kpis.totalPorCobrarPEN.toFixed(2)),
-                        total_pendiente_usd: parseFloat(kpis.totalPorCobrarUSD.toFixed(2)),
-                        total_comisiones_pen: parseFloat(kpis.totalComisionesPEN.toFixed(2)),
-                        total_comisiones_usd: parseFloat(kpis.totalComisionesUSD.toFixed(2)),
-                        contado_pen: parseFloat(kpis.totalContadoPEN.toFixed(2)),
-                        contado_usd: parseFloat(kpis.totalContadoUSD.toFixed(2)),
-                        credito_pen: parseFloat(kpis.totalCreditoPEN.toFixed(2)),
-                        credito_usd: parseFloat(kpis.totalCreditoUSD.toFixed(2)),
-                        pedidos_retrasados: kpis.pedidosAtrasados,
-                        cantidad_ordenes: ordenes.length
-                    },
-                    detalle: listaDetalle
-                };
-
-                const incluirDetallePDF = incluirDetalle === 'true' || incluirDetalle === true;
-                const pdfBuffer = await generarReporteVentasPDF(dataReporte, incluirDetallePDF);
-                
-                res.setHeader('Content-Type', 'application/pdf');
-                res.setHeader('Content-Disposition', `attachment; filename=reporte_ventas_${Date.now()}.pdf`);
-                res.send(pdfBuffer);
-                return;
-            } catch (pdfError) {
-                console.error('Error generando PDF:', pdfError);
-                return res.status(500).json({ success: false, error: 'Error al generar PDF' });
-            }
-        }
 
         const graficoVendedores = Object.keys(ventasPorVendedor)
             .map(key => {

@@ -247,13 +247,19 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
 }
 
           if (tieneObservaciones) {
-            doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
-            doc.text('Obs:', 45, yPos);
-            doc.fontSize(6).font('Helvetica').fillColor('#777777');
-            const textoObservaciones = orden.observaciones.substring(0, 120);
-            doc.text(textoObservaciones, 70, yPos, { width: 475 });
-            yPos += 15;
-          }
+  if (yPos > 730) {
+    doc.addPage();
+    yPos = 50;
+  }
+  
+  doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
+  doc.text('Obs:', 45, yPos);
+  doc.fontSize(6).font('Helvetica').fillColor('#777777');
+  const textoObservaciones = orden.observaciones.substring(0, 200);
+  const lineas = doc.heightOfString(textoObservaciones, { width: 475 });
+  doc.text(textoObservaciones, 70, yPos, { width: 475 });
+  yPos += Math.max(lineas, 15);
+}
 
           const alturaFinal = yPos - yInicio;
           doc.roundedRect(40, yInicio, 515, alturaFinal, 3).stroke('#DDDDDD');

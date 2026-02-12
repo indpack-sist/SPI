@@ -2224,22 +2224,22 @@ function DetalleOrdenVenta() {
             )}
 
             <div className="form-group">
-                <label className="form-label">Cuenta de Depósito *</label>
-                <select
-                    className="form-select"
-                    value={pagoForm.id_cuenta_destino || ''}
-                    onChange={(e) => setPagoForm({ ...pagoForm, id_cuenta_destino: e.target.value })}
-                    required
-                >
-                    <option value="">Seleccione cuenta</option>
-                    {cuentasPago.filter(c => c.estado === 'Activo' && c.moneda === orden.moneda).map(c => (
-                        <option key={c.id_cuenta} value={c.id_cuenta}>
-                            {c.nombre} - {c.tipo} ({c.moneda} {c.saldo_actual})
-                        </option>
-                    ))}
-                </select>
-                <small className="text-muted">Cuenta donde ingresa el dinero</small>
-            </div>
+    <label className="form-label">Cuenta de Depósito *</label>
+    <select
+        className="form-select"
+        value={pagoForm.id_cuenta_destino || ''}
+        onChange={(e) => setPagoForm({ ...pagoForm, id_cuenta_destino: e.target.value })}
+        required
+    >
+        <option value="">Seleccione cuenta</option>
+        {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
+            <option key={c.id_cuenta} value={c.id_cuenta}>
+                {c.nombre} - {c.tipo} (PEN: S/ {formatearNumero(c.saldo_pen || 0)} | USD: $ {formatearNumero(c.saldo_usd || 0)})
+            </option>
+        ))}
+    </select>
+    <small className="text-muted">Cuenta donde ingresa el dinero (soporta múltiples monedas)</small>
+</div>
 
             <div className="form-group">
               <label className="form-label">Fecha de Pago *</label>

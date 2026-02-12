@@ -1,4 +1,4 @@
-import PDFDocument from 'pdfkit';
+import PDFDocument from 'pdfkit/js/pdfkit.standalone';
 
 const fmtNum = (num) => {
   const valor = Number(num);
@@ -75,60 +75,57 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       yPos += 20;
       const resumen = data.resumen;
 
-      doc.roundedRect(40, yPos, 515, 85, 5).fillAndStroke('#F5F5F5', '#CCCCCC');
-
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Total Ventas (PEN):', 50, yPos + 10);
+      doc.text('Total Ventas (PEN):', 50, yPos);
       doc.font('Helvetica').fillColor('#1976D2');
-      doc.text(`S/ ${fmtNum(resumen.total_ventas_pen)}`, 200, yPos + 10);
+      doc.text(`S/ ${fmtNum(resumen.total_ventas_pen)}`, 200, yPos);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Total Cobrado (PEN):', 50, yPos + 22);
+      doc.text('Total Cobrado (PEN):', 50, yPos + 15);
       doc.font('Helvetica').fillColor('#388E3C');
-      doc.text(`S/ ${fmtNum(resumen.total_pagado_pen)}`, 200, yPos + 22);
+      doc.text(`S/ ${fmtNum(resumen.total_pagado_pen)}`, 200, yPos + 15);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Por Cobrar (PEN):', 50, yPos + 34);
+      doc.text('Por Cobrar (PEN):', 50, yPos + 30);
       doc.font('Helvetica').fillColor('#D32F2F');
-      doc.text(`S/ ${fmtNum(resumen.total_pendiente_pen)}`, 200, yPos + 34);
+      doc.text(`S/ ${fmtNum(resumen.total_pendiente_pen)}`, 200, yPos + 30);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Ventas Contado (PEN):', 50, yPos + 46);
+      doc.text('Ventas Contado (PEN):', 50, yPos + 45);
       doc.font('Helvetica');
-      doc.text(`S/ ${fmtNum(resumen.contado_pen)}`, 200, yPos + 46);
+      doc.text(`S/ ${fmtNum(resumen.contado_pen)}`, 200, yPos + 45);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Ventas Crédito (PEN):', 50, yPos + 58);
+      doc.text('Ventas Crédito (PEN):', 50, yPos + 60);
       doc.font('Helvetica');
-      doc.text(`S/ ${fmtNum(resumen.credito_pen)}`, 200, yPos + 58);
+      doc.text(`S/ ${fmtNum(resumen.credito_pen)}`, 200, yPos + 60);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Total Ventas (USD):', 300, yPos + 10);
+      doc.text('Total Ventas (USD):', 300, yPos);
       doc.font('Helvetica').fillColor('#1976D2');
-      doc.text(`$ ${fmtNum(resumen.total_ventas_usd)}`, 430, yPos + 10);
-      
+      doc.text(`$ ${fmtNum(resumen.total_ventas_usd)}`, 430, yPos);
+
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Por Cobrar (USD):', 300, yPos + 22);
+      doc.text('Por Cobrar (USD):', 300, yPos + 15);
       doc.font('Helvetica').fillColor('#D32F2F');
-      doc.text(`$ ${fmtNum(resumen.total_pendiente_usd || 0)}`, 430, yPos + 22);
+      doc.text(`$ ${fmtNum(resumen.total_pendiente_usd || 0)}`, 430, yPos + 15);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Ventas Contado (USD):', 300, yPos + 34);
+      doc.text('Ventas Contado (USD):', 300, yPos + 30);
       doc.font('Helvetica');
-      doc.text(`$ ${fmtNum(resumen.contado_usd)}`, 430, yPos + 34);
+      doc.text(`$ ${fmtNum(resumen.contado_usd)}`, 430, yPos + 30);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Ventas Crédito (USD):', 300, yPos + 46);
+      doc.text('Ventas Crédito (USD):', 300, yPos + 45);
       doc.font('Helvetica');
-      doc.text(`$ ${fmtNum(resumen.credito_usd)}`, 430, yPos + 46);
+      doc.text(`$ ${fmtNum(resumen.credito_usd)}`, 430, yPos + 45);
 
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Cantidad Órdenes:', 300, yPos + 58);
+      doc.text('Cantidad Órdenes:', 300, yPos + 60);
       doc.font('Helvetica');
-      doc.text(`${resumen.cantidad_ordenes}`, 430, yPos + 58);
+      doc.text(`${resumen.cantidad_ordenes}`, 430, yPos + 60);
 
-      yPos += 105;
-
+      yPos += 80;
       doc.moveTo(40, yPos).lineTo(555, yPos).strokeColor('#CCCCCC').lineWidth(1).stroke();
       yPos += 20;
 
@@ -259,7 +256,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       doc.end();
       
     } catch (error) {
-      console.error(error);
+      console.error('Error PDF:', error);
       reject(error);
     }
   });

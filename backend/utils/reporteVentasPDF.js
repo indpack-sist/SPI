@@ -89,7 +89,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       yPos += 20;
       const resumen = data.resumen;
 
-      // Fondo del resumen (Aumentado a 85 de altura para que quepan las líneas extra)
+      // Fondo del resumen
       doc.roundedRect(40, yPos, 515, 85, 5).fillAndStroke('#F5F5F5', '#CCCCCC');
 
       // --- COLUMNA IZQUIERDA (SOLES - PEN) ---
@@ -150,6 +150,12 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       doc.text('Cantidad Órdenes:', 300, yPos + 46);
       doc.font('Helvetica');
       doc.text(`${resumen.cantidad_ordenes}`, 430, yPos + 46);
+
+      // Fila 5: Por Cobrar USD (AGREGADO)
+      doc.font('Helvetica-Bold').fillColor('#333333');
+      doc.text('Por Cobrar (USD):', 300, yPos + 58);
+      doc.font('Helvetica').fillColor('#D32F2F');
+      doc.text(`$ ${fmtNum(resumen.total_pendiente_usd)}`, 430, yPos + 58);
 
       yPos += 105;
 
@@ -277,6 +283,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
             });
           }
 
+          // --- OBSERVACIONES ---
           if (orden.observaciones && orden.observaciones.length > 0) {
             if (yPos + 30 > 780) {
                 doc.roundedRect(40, yInicioCuadro, 515, yPos - yInicioCuadro + 5, 3).stroke('#DDDDDD');

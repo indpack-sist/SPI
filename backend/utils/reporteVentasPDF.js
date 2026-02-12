@@ -89,49 +89,69 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
       yPos += 20;
       const resumen = data.resumen;
 
-      // Fondo del resumen
-      doc.roundedRect(40, yPos, 515, 75, 5).fillAndStroke('#F5F5F5', '#CCCCCC');
+      // Fondo del resumen (Aumentado a 85 de altura para que quepan las líneas extra)
+      doc.roundedRect(40, yPos, 515, 85, 5).fillAndStroke('#F5F5F5', '#CCCCCC');
 
-      // Columna Izquierda
+      // --- COLUMNA IZQUIERDA (SOLES - PEN) ---
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333');
+      
+      // Fila 1: Total
       doc.text('Total Ventas (PEN):', 50, yPos + 10);
       doc.font('Helvetica').fillColor('#1976D2');
       doc.text(`S/ ${fmtNum(resumen.total_ventas_pen)}`, 200, yPos + 10);
 
+      // Fila 2: Contado
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Total Cobrado:', 50, yPos + 25);
+      doc.text('Ventas Contado (PEN):', 50, yPos + 22);
+      doc.font('Helvetica');
+      doc.text(`S/ ${fmtNum(resumen.contado_pen)}`, 200, yPos + 22);
+
+      // Fila 3: Crédito
+      doc.font('Helvetica-Bold').fillColor('#333333');
+      doc.text('Ventas Crédito (PEN):', 50, yPos + 34);
+      doc.font('Helvetica');
+      doc.text(`S/ ${fmtNum(resumen.credito_pen)}`, 200, yPos + 34);
+
+      // Fila 4: Cobrado
+      doc.font('Helvetica-Bold').fillColor('#333333');
+      doc.text('Total Cobrado (PEN):', 50, yPos + 46);
       doc.font('Helvetica').fillColor('#388E3C');
-      doc.text(`S/ ${fmtNum(resumen.total_pagado_pen)}`, 200, yPos + 25);
+      doc.text(`S/ ${fmtNum(resumen.total_pagado_pen)}`, 200, yPos + 46);
 
+      // Fila 5: Por Cobrar
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Por Cobrar:', 50, yPos + 40);
+      doc.text('Por Cobrar (PEN):', 50, yPos + 58);
       doc.font('Helvetica').fillColor('#D32F2F');
-      doc.text(`S/ ${fmtNum(resumen.total_pendiente_pen)}`, 200, yPos + 40);
+      doc.text(`S/ ${fmtNum(resumen.total_pendiente_pen)}`, 200, yPos + 58);
 
+
+      // --- COLUMNA DERECHA (DÓLARES - USD & OTROS) ---
+      
+      // Fila 1: Total USD
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Ventas al Contado:', 50, yPos + 55);
-      doc.font('Helvetica');
-      doc.text(`S/ ${fmtNum(resumen.contado_pen)}`, 200, yPos + 55);
+      doc.text('Total Ventas (USD):', 300, yPos + 10);
+      doc.font('Helvetica').fillColor('#1976D2');
+      doc.text(`$ ${fmtNum(resumen.total_ventas_usd)}`, 430, yPos + 10);
 
-      // Columna Derecha
+      // Fila 2: Contado USD
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Ventas al Crédito:', 300, yPos + 10);
+      doc.text('Ventas Contado (USD):', 300, yPos + 22);
       doc.font('Helvetica');
-      doc.text(`S/ ${fmtNum(resumen.credito_pen)}`, 430, yPos + 10);
+      doc.text(`$ ${fmtNum(resumen.contado_usd)}`, 430, yPos + 22);
 
+      // Fila 3: Crédito USD
       doc.font('Helvetica-Bold').fillColor('#333333');
-      doc.text('Cantidad Órdenes:', 300, yPos + 25);
+      doc.text('Ventas Crédito (USD):', 300, yPos + 34);
       doc.font('Helvetica');
-      doc.text(`${resumen.cantidad_ordenes}`, 430, yPos + 25);
+      doc.text(`$ ${fmtNum(resumen.credito_usd)}`, 430, yPos + 34);
 
-      if (resumen.total_ventas_usd > 0) {
-        doc.font('Helvetica-Bold').fillColor('#333333');
-        doc.text('Total Ventas (USD):', 300, yPos + 40);
-        doc.font('Helvetica').fillColor('#1976D2');
-        doc.text(`$ ${fmtNum(resumen.total_ventas_usd)}`, 430, yPos + 40);
-      }
+      // Fila 4: Cantidad de Órdenes
+      doc.font('Helvetica-Bold').fillColor('#333333');
+      doc.text('Cantidad Órdenes:', 300, yPos + 46);
+      doc.font('Helvetica');
+      doc.text(`${resumen.cantidad_ordenes}`, 430, yPos + 46);
 
-      yPos += 95;
+      yPos += 105;
 
       // --- DETALLE DE ÓRDENES ---
       if (incluirDetalle) {
@@ -150,7 +170,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
         }
 
         ordenes.forEach((orden, index) => {
-          // --- LÓGICA DE SALTO DE PÁGINA PARA EL ENCABEZADO ---
+          // Lógica de salto de página para el encabezado
           if (yPos + 80 > 750) {
             doc.addPage();
             yPos = 50;
@@ -158,7 +178,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
 
           let yInicioCuadro = yPos; 
 
-          // --- HEADER DE LA ORDEN ---
+          // Header Orden
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#1976D2');
           doc.text(`${index + 1}. ${orden.numero}`, 45, yPos + 8);
 
@@ -199,7 +219,6 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
           }
           doc.text(`Tipo Venta: ${orden.tipo_venta}`, 200, colY);
           
-          // -- AGREGADO PARA CRÉDITO EN PDF --
           if (orden.tipo_venta === 'Crédito' && orden.dias_credito) {
             colY += 12;
             doc.text(`Forma Pago: Crédito ${orden.dias_credito} Días`, 200, colY);
@@ -221,9 +240,9 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
           doc.text(`Pagado: ${orden.moneda} ${fmtNum(orden.monto_pagado)}`, 360, colY);
           doc.fillColor('#666666');
 
-          yPos += 75; // Espacio después de datos generales (aumentado un poco por si hay crédito)
+          yPos += 75; // Espacio después de datos generales
 
-          // --- PRODUCTOS ---
+          // Productos
           if (orden.detalles && orden.detalles.length > 0) {
             doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
             
@@ -258,7 +277,6 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
             });
           }
 
-          // --- OBSERVACIONES ---
           if (orden.observaciones && orden.observaciones.length > 0) {
             if (yPos + 30 > 780) {
                 doc.roundedRect(40, yInicioCuadro, 515, yPos - yInicioCuadro + 5, 3).stroke('#DDDDDD');

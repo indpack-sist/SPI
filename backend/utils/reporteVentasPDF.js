@@ -74,7 +74,7 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
         month: '2-digit', 
         year: 'numeric',
         hour: '2-digit',
-        minute: '2-minute'
+        minute: '2-digit'
       });
       doc.text(`Generado: ${ahora}`, 230, 72, { align: 'center', width: 325 });
 

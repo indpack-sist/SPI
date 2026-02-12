@@ -8,15 +8,12 @@ import {
   registrarMovimiento,
   getMovimientosCuenta,
   getResumenCuenta,
-  transferirEntreCuentas,
-  getEstadisticasCuentas,
-  renovarCreditoManual
+  getEstadisticasCuentas
 } from '../controllers/cuentas-pago.controller.js';
 
 const router = express.Router();
 
 router.get('/estadisticas', getEstadisticasCuentas);
-router.post('/transferencias', transferirEntreCuentas);
 
 router.get('/', getAllCuentasPago);
 router.post('/', createCuentaPago);
@@ -29,5 +26,5 @@ router.post('/:id/movimientos', registrarMovimiento);
 router.get('/:id/movimientos', getMovimientosCuenta);
 
 router.get('/:id/resumen', getResumenCuenta);
-router.post('/:id/renovar-credito', renovarCreditoManual);
+
 export default router;

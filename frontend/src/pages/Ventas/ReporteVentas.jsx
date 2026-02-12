@@ -14,7 +14,6 @@ import {
 import { reportesAPI, clientesAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
-// Importamos la función del PDF que modificaremos después
 import { generarReporteVentasPDF } from './reporteVentasPDF'; 
 
 const COLORS_PIE = {
@@ -32,7 +31,6 @@ const ReporteVentas = () => {
   const [loadingExcel, setLoadingExcel] = useState(false);
   const [error, setError] = useState(null);
   
-  // Estados para opciones de descarga
   const [incluirDetalleExcel, setIncluirDetalleExcel] = useState(true);
   const [incluirDetallePDF, setIncluirDetallePDF] = useState(true);
 
@@ -183,35 +181,25 @@ const ReporteVentas = () => {
     try {
       const wb = XLSX.utils.book_new();
   
-      // HOJA 1: RESUMEN GENERAL
-      const datosResumen = dataFiltrada.map(item => {
-        // Lógica para determinar el texto de la forma de pago
-        const formaPagoTexto = item.tipo_venta === 'Crédito' 
-            ? `Crédito ${item.dias_credito || 0} Días` 
-            : 'Contado';
-
-        return {
-            'Orden': item.numero,
-            'Comprobante': item.numero_comprobante || '',
-            'Cliente': item.cliente,
-            'RUC': item.ruc,
-            'Vendedor': item.vendedor,
-            'Fecha Emisión': formatearFecha(item.fecha_emision),
-            'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
-            'Moneda': item.moneda,
-            'Subtotal': parseFloat(item.subtotal),
-            'IGV': parseFloat(item.igv),
-            'Total': parseFloat(item.total),
-            'Pagado': parseFloat(item.monto_pagado),
-            'Por Cobrar': parseFloat(item.pendiente_cobro),
-            'Estado Pago': item.estado_pago,
-            'Estado': item.estado,
-            'Tipo Venta': item.tipo_venta,
-            'Forma Pago': formaPagoTexto, // <--- COLUMNA AGREGADA
-            'Vencimiento': item.tipo_venta === 'Crédito' ? formatearFecha(item.fecha_vencimiento) : '-', // <--- COLUMNA AGREGADA
-            'Estado Logístico': item.estado_logistico
-        };
-      });
+      const datosResumen = dataFiltrada.map(item => ({
+        'Orden': item.numero,
+        'Comprobante': item.numero_comprobante || '',
+        'Cliente': item.cliente,
+        'RUC': item.ruc,
+        'Vendedor': item.vendedor,
+        'Fecha Emisión': formatearFecha(item.fecha_emision),
+        'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
+        'Moneda': item.moneda,
+        'Subtotal': parseFloat(item.subtotal),
+        'IGV': parseFloat(item.igv),
+        'Total': parseFloat(item.total),
+        'Pagado': parseFloat(item.monto_pagado),
+        'Por Cobrar': parseFloat(item.pendiente_cobro),
+        'Estado Pago': item.estado_pago,
+        'Estado': item.estado,
+        'Tipo Venta': item.tipo_venta,
+        'Estado Logístico': item.estado_logistico
+      }));
   
       const wsResumen = XLSX.utils.json_to_sheet(datosResumen);
       wsResumen['!cols'] = [
@@ -219,7 +207,7 @@ const ReporteVentas = () => {
         { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
         { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
         { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },
-        { wch: 20 }, { wch: 15 }, { wch: 15 } // Ajustado anchos para nuevas columnas
+        { wch: 15 }
       ];
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
   
@@ -227,14 +215,13 @@ const ReporteVentas = () => {
         dataFiltrada.forEach((orden) => {
           const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
           
-          // Construcción de la forma de pago para el detalle de Excel
           const formaPagoTexto = orden.tipo_venta === 'Crédito' 
-            ? `Crédito ${orden.dias_credito} Días` 
-            : 'Contado';
-
-          const vencimientoTexto = orden.tipo_venta === 'Crédito'
-            ? formatearFecha(orden.fecha_vencimiento)
-            : '-';
+             ? `Crédito ${orden.dias_credito} Días` 
+             : 'Contado';
+          
+          const fechaVencimientoTexto = orden.tipo_venta === 'Crédito'
+             ? formatearFecha(orden.fecha_vencimiento)
+             : '-';
 
           const datosOrden = [
             ['INFORMACIÓN DE LA ORDEN'],
@@ -245,8 +232,8 @@ const ReporteVentas = () => {
             ['Estado Verificación', orden.estado_verificacion],
             ['Estado Pago', orden.estado_pago],
             ['Tipo de Venta', orden.tipo_venta],
-            ['Forma de Pago', formaPagoTexto], // <--- AGREGADO EN DETALLE
-            ['Fecha Vencimiento', vencimientoTexto], // <--- AGREGADO EN DETALLE
+            ['Forma de Pago', formaPagoTexto],
+            ['Fecha Vencimiento', fechaVencimientoTexto],
             [''],
             ['INFORMACIÓN DEL CLIENTE'],
             ['Razón Social', orden.cliente],
@@ -258,6 +245,7 @@ const ReporteVentas = () => {
             ['FECHAS'],
             ['Creación', formatearFechaHora(orden.fecha_creacion)],
             ['Emisión', formatearFecha(orden.fecha_emision)],
+            ['Vencimiento', formatearFecha(orden.fecha_vencimiento)],
             ['Despacho', orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente'],
             ['Verificación', orden.fecha_verificacion ? formatearFechaHora(orden.fecha_verificacion) : ''],
             [''],
@@ -316,6 +304,7 @@ const ReporteVentas = () => {
             [''],
             ['DOCUMENTOS ASOCIADOS'],
             ['Cotización', orden.numero_cotizacion || ''],
+            ['Guía Interna', orden.numero_guia_interna || ''],
             ['OC Cliente', orden.orden_compra_cliente || '']
           );
   

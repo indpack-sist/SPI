@@ -344,7 +344,7 @@ const ReporteVentas = () => {
   };
 
   return (
-    <div className="container py-8 font-sans">
+    <div className="w-full px-6 py-8 font-sans">
       
       <div className="flex justify-between items-center mb-6">
         <div>

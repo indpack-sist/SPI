@@ -78,6 +78,7 @@ function DetalleCompra() {
     productos: [],
     observaciones: ''
   });
+
   useEffect(() => {
     cargarDatos();
   }, [id]);
@@ -156,6 +157,7 @@ function DetalleCompra() {
       console.error(err); 
     }
   };
+
   const handleAbrirPagarCuota = (cuota) => {
     setCuotaSeleccionada(cuota);
     const saldoPendiente = parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0);
@@ -196,17 +198,6 @@ function DetalleCompra() {
       return;
     }
 
-    const cuentaSeleccionada = cuentasPago.find(c => c.id_cuenta === parseInt(datosPago.id_cuenta_pago));
-    if (cuentaSeleccionada) {
-      const montoPago = parseFloat(datosPago.monto_pagado);
-      const saldoDisponible = parseFloat(cuentaSeleccionada.saldo_actual);
-      
-      if (saldoDisponible < montoPago) {
-        setError(`Saldo insuficiente. Disponible: ${formatearMoneda(saldoDisponible, cuentaSeleccionada.moneda)}`);
-        return;
-      }
-    }
-
     try {
       setLoading(true);
       const response = await comprasAPI.pagarCuota(id, cuotaSeleccionada.id_cuota, datosPago);
@@ -230,17 +221,6 @@ function DetalleCompra() {
     if (!datosPago.id_cuenta_pago) {
       setError('Debe seleccionar una cuenta de pago');
       return;
-    }
-
-    const cuentaSeleccionada = cuentasPago.find(c => c.id_cuenta === parseInt(datosPago.id_cuenta_pago));
-    if (cuentaSeleccionada) {
-      const montoPago = parseFloat(datosPago.monto_pagado);
-      const saldoDisponible = parseFloat(cuentaSeleccionada.saldo_actual);
-      
-      if (saldoDisponible < montoPago) {
-        setError(`Saldo insuficiente. Disponible: ${formatearMoneda(saldoDisponible, cuentaSeleccionada.moneda)}`);
-        return;
-      }
     }
 
     try {
@@ -268,17 +248,6 @@ function DetalleCompra() {
       return;
     }
 
-    const cuentaSeleccionada = cuentasPago.find(c => c.id_cuenta === parseInt(datosReembolso.id_cuenta_pago));
-    if (cuentaSeleccionada) {
-      const montoReembolso = parseFloat(datosReembolso.monto_reembolso);
-      const saldoDisponible = parseFloat(cuentaSeleccionada.saldo_actual);
-      
-      if (saldoDisponible < montoReembolso) {
-        setError(`Saldo insuficiente. Disponible: ${formatearMoneda(saldoDisponible, cuentaSeleccionada.moneda)}`);
-        return;
-      }
-    }
-
     try {
       setLoading(true);
       const response = await comprasAPI.registrarReembolso(id, datosReembolso);
@@ -295,6 +264,7 @@ function DetalleCompra() {
       setLoading(false); 
     }
   };
+
   const handleAbrirCronograma = () => {
     const numCuotas = compra.numero_cuotas || 1;
     const montoBase = parseFloat(compra.saldo_pendiente) / numCuotas;
@@ -427,17 +397,6 @@ function DetalleCompra() {
       return;
     }
 
-    const cuentaSeleccionada = cuentasPago.find(c => c.id_cuenta === parseInt(datosLetra.id_cuenta_pago));
-    if (cuentaSeleccionada) {
-      const montoPago = parseFloat(datosLetra.monto_pagado);
-      const saldoDisponible = parseFloat(cuentaSeleccionada.saldo_actual);
-      
-      if (saldoDisponible < montoPago) {
-        setError(`Saldo insuficiente. Disponible: ${formatearMoneda(saldoDisponible, cuentaSeleccionada.moneda)}`);
-        return;
-      }
-    }
-
     try {
       setLoading(true);
       const response = await comprasAPI.pagarLetra(letraSeleccionada.id_letra, datosLetra);
@@ -455,6 +414,7 @@ function DetalleCompra() {
       setLoading(false); 
     }
   };
+
   const handleAbrirIngresoInventario = () => {
     setModalIngresoInventarioOpen(true);
   };
@@ -577,6 +537,7 @@ function DetalleCompra() {
     const mon = m || compra?.moneda || 'PEN';
     return `${mon === 'USD' ? '$' : 'S/'} ${parseFloat(v||0).toLocaleString('es-PE', {minimumFractionDigits: 2})}`;
   };
+
   if (loading && !compra) return <Loading message="Cargando detalles..." />;
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
 
@@ -724,7 +685,8 @@ function DetalleCompra() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
-        <div className={`card mb-6 border-l-4 ${
+
+      <div className={`card mb-6 border-l-4 ${
         estaCancelada ? 'border-danger' : 
         estaPagado ? 'border-success' : 
         'border-warning'
@@ -835,6 +797,7 @@ function DetalleCompra() {
           </div>
         </div>
       )}
+
       <div className="mb-6">
         <div className="border-b border-gray-200">
           <nav className="flex gap-4">
@@ -893,6 +856,7 @@ function DetalleCompra() {
           </nav>
         </div>
       </div>
+
       {tabActiva === 'general' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -1000,6 +964,7 @@ function DetalleCompra() {
               </div>
             </div>
           </div>
+
           <div className="space-y-6">
             <div className="card">
               <div className="card-header bg-gray-50">
@@ -1016,7 +981,7 @@ function DetalleCompra() {
                   </p>
                 )}
                 <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs font-bold text-muted uppercase">Documento Físico</p>
+                  <p className="text-xs font-bold text-muted uppercase mb-1">Documento Físico</p>
                   <p className="font-mono text-lg">
                     {compra.serie_documento}-{compra.numero_documento}
                   </p>
@@ -1045,7 +1010,7 @@ function DetalleCompra() {
                 <div className="card-body">
                   <p className="font-medium text-lg">{compra.cuenta_pago || 'Cuenta no encontrada'}</p>
                   <p className="text-sm text-muted">
-                    {compra.tipo_cuenta_pago} - {compra.moneda_cuenta}
+                    {compra.tipo_cuenta_pago}
                   </p>
                   {compra.banco_cuenta && (
                     <p className="text-xs text-muted mt-1">Banco: {compra.banco_cuenta}</p>
@@ -1069,7 +1034,6 @@ function DetalleCompra() {
                 </div>
               </div>
             )}
-
             {(esCredito || esLetras) && (
               <div className="card">
                 <div className="card-header bg-gray-50 flex justify-between items-center">
@@ -1146,6 +1110,7 @@ function DetalleCompra() {
           </div>
         </div>
       )}
+
       {tabActiva === 'pagos' && (
         <div className="card">
           <div className="card-header bg-gray-50">
@@ -1230,6 +1195,7 @@ function DetalleCompra() {
           </div>
         </div>
       )}
+
       {tabActiva === 'letras' && (
         <div className="space-y-6">
           <div className="card">
@@ -1327,6 +1293,7 @@ function DetalleCompra() {
           </div>
         </div>
       )}
+
       {tabActiva === 'ingresos' && (
         <div className="space-y-6">
           {itemsPendientes.length > 0 ? (
@@ -1418,6 +1385,7 @@ function DetalleCompra() {
           </div>
         </div>
       )}
+
       <Modal 
         isOpen={modalPagarCuotaOpen} 
         onClose={() => setModalPagarCuotaOpen(false)} 
@@ -1445,9 +1413,9 @@ function DetalleCompra() {
               required
             >
               <option value="">Seleccione...</option>
-              {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => (
+              {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
                 <option key={c.id_cuenta} value={c.id_cuenta}>
-                  {c.nombre} ({c.moneda}) - Saldo: {formatearMoneda(c.saldo_actual, c.moneda)}
+                  {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
                 </option>
               ))}
             </select>
@@ -1502,7 +1470,7 @@ function DetalleCompra() {
             <div className="bg-orange-50 border border-orange-200 rounded p-3 text-sm text-orange-800">
               <p className="font-medium mb-1">Regularización de Pago al Contado</p>
               <p>
-                Esta compra fue registrada sin desembolso. Al confirmar, se descontará el monto de la cuenta seleccionada.
+                Esta compra fue registrada sin desembolso. Al confirmar, se registrará el egreso en la cuenta seleccionada.
               </p>
             </div>
           )}
@@ -1515,9 +1483,9 @@ function DetalleCompra() {
               required
             >
               <option value="">Seleccione...</option>
-              {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => (
+              {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
                 <option key={c.id_cuenta} value={c.id_cuenta}>
-                  {c.nombre} ({c.moneda}) - Saldo: {formatearMoneda(c.saldo_actual, c.moneda)}
+                  {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
                 </option>
               ))}
             </select>
@@ -1565,6 +1533,7 @@ function DetalleCompra() {
           </button>
         </form>
       </Modal>
+
       <Modal 
         isOpen={modalReembolsoOpen} 
         onClose={() => setModalReembolsoOpen(false)} 
@@ -1586,9 +1555,9 @@ function DetalleCompra() {
               required
             >
               <option value="">Seleccione cuenta de empresa...</option>
-              {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => (
+              {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
                 <option key={c.id_cuenta} value={c.id_cuenta}>
-                  {c.nombre} ({c.moneda}) - Saldo: {formatearMoneda(c.saldo_actual, c.moneda)}
+                  {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
                 </option>
               ))}
             </select>
@@ -1636,6 +1605,7 @@ function DetalleCompra() {
           </button>
         </form>
       </Modal>
+
       <Modal 
         isOpen={modalCronogramaOpen} 
         onClose={() => setModalCronogramaOpen(false)} 
@@ -1723,6 +1693,7 @@ function DetalleCompra() {
           </div>
         </form>
       </Modal>
+
       <Modal 
         isOpen={modalRegistrarLetrasOpen} 
         onClose={() => setModalRegistrarLetrasOpen(false)} 
@@ -1855,6 +1826,7 @@ function DetalleCompra() {
           </div>
         </form>
       </Modal>
+
       <Modal 
         isOpen={modalPagarLetraOpen} 
         onClose={() => setModalPagarLetraOpen(false)} 
@@ -1880,9 +1852,9 @@ function DetalleCompra() {
               required
             >
               <option value="">Seleccione...</option>
-              {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => (
+              {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
                 <option key={c.id_cuenta} value={c.id_cuenta}>
-                  {c.nombre} ({c.moneda}) - Saldo: {formatearMoneda(c.saldo_actual, c.moneda)}
+                  {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
                 </option>
               ))}
             </select>
@@ -2016,6 +1988,7 @@ function DetalleCompra() {
           </div>
         </form>
       </Modal>
+
       <Modal 
         isOpen={modalCancelarOpen} 
         onClose={() => setModalCancelarOpen(false)} 
@@ -2029,7 +2002,7 @@ function DetalleCompra() {
                 <p className="font-bold mb-2">Advertencia: Esta acción es irreversible</p>
                 <ul className="list-disc list-inside space-y-1">
                   <li>Se revertirá el stock de los productos ingresados.</li>
-                  <li>Se anularán todos los pagos, generando devoluciones a las cuentas de origen.</li>
+                  <li>Se registrarán movimientos de reversión (ingresos) en las cuentas de origen.</li>
                   <li>Se cancelarán todas las cuotas y letras pendientes.</li>
                   <li>La compra quedará marcada como "Cancelada" permanentemente.</li>
                 </ul>
@@ -2041,7 +2014,7 @@ function DetalleCompra() {
             <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
               <p className="font-medium">Pagos a Revertir:</p>
               <p className="mt-1">
-                Se devolverán <span className="font-bold">{formatearMoneda(compra.monto_pagado)}</span> a las cuentas de origen.
+                Se registrarán ingresos de reversión por <span className="font-bold">{formatearMoneda(compra.monto_pagado)}</span> en las cuentas de origen.
               </p>
             </div>
           )}
@@ -2075,6 +2048,7 @@ function DetalleCompra() {
           </div>
         </div>
       </Modal>
+
       <Modal 
         isOpen={modalCambiarCuentaOpen} 
         onClose={() => setModalCambiarCuentaOpen(false)} 
@@ -2087,7 +2061,7 @@ function DetalleCompra() {
             </p>
             <p className="text-sm text-blue-700">
               Esta operación transferirá todos los pagos y la deuda de esta compra a una nueva cuenta. 
-              El dinero pagado será "devuelto" a la cuenta actual y "descontado" de la nueva cuenta.
+              Se crearán movimientos de reversión en la cuenta actual y nuevos egresos en la cuenta destino.
             </p>
           </div>
           
@@ -2095,7 +2069,7 @@ function DetalleCompra() {
             <div className="bg-gray-50 border border-gray-200 rounded p-3">
               <p className="text-xs font-bold text-muted uppercase mb-1">Cuenta Actual</p>
               <p className="font-medium">{compra.cuenta_pago}</p>
-              <p className="text-sm text-muted">{compra.tipo_cuenta_pago} - {compra.moneda_cuenta}</p>
+              <p className="text-sm text-muted">{compra.tipo_cuenta_pago}</p>
             </div>
           )}
           
@@ -2108,14 +2082,14 @@ function DetalleCompra() {
               required
             >
               <option value="">Seleccione...</option>
-              {cuentasPago.filter(c => c.moneda === compra.moneda).map(c => (
+              {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
                 <option key={c.id_cuenta} value={c.id_cuenta}>
-                  {c.nombre} ({c.moneda}) - Saldo: {formatearMoneda(c.saldo_actual, c.moneda)}
+                  {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
                 </option>
               ))}
             </select>
             <p className="text-xs text-muted mt-1">
-              Solo se muestran cuentas de la misma moneda ({compra.moneda})
+              Se mostrarán cuentas de todas las monedas disponibles
             </p>
           </div>
           
@@ -2123,8 +2097,8 @@ function DetalleCompra() {
             <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
               <p className="font-medium mb-1">Movimientos a Realizar:</p>
               <ul className="list-disc list-inside space-y-1">
-                <li>Cuenta actual: +{formatearMoneda(compra.monto_pagado)} (devolución)</li>
-                <li>Cuenta nueva: -{formatearMoneda(compra.monto_pagado)} (cargo)</li>
+                <li>Cuenta actual: Ingreso de reversión {formatearMoneda(compra.monto_pagado)}</li>
+                <li>Cuenta nueva: Egreso {formatearMoneda(compra.monto_pagado)}</li>
               </ul>
             </div>
           )}

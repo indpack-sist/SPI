@@ -39,12 +39,11 @@ function NuevaCompra() {
   
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState(null);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
-  const [requiereConversion, setRequiereConversion] = useState(false);
   
   const [accionPago, setAccionPago] = useState('registro');
   const [formData, setFormData] = useState({
     id_proveedor: '',
-    id_cuenta_pago: '', // Puede estar vacío si accionPago = 'registro'
+    id_cuenta_pago: '',
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_entrega_estimada: '',
     fecha_vencimiento: '', 
@@ -84,6 +83,7 @@ function NuevaCompra() {
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, igv: 0, total: 0 });
   const [cronograma, setCronograma] = useState([]);
+  
   const proveedoresFiltrados = proveedores.filter(p => 
     p.razon_social.toLowerCase().includes(busquedaProveedor.toLowerCase()) || 
     p.ruc.includes(busquedaProveedor)
@@ -97,7 +97,6 @@ function NuevaCompra() {
   useEffect(() => { cargarCatalogos(); }, []);
   useEffect(() => { calcularTotales(); }, [detalle, formData.porcentaje_impuesto, formData.tipo_impuesto]);
   
-  // CORRECCIÓN: Solo actualiza monto_pagado_inicial cuando cambia accionPago
   useEffect(() => {
     if (formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios) {
       if (accionPago === 'completo') {
@@ -105,7 +104,6 @@ function NuevaCompra() {
       } else if (accionPago === 'registro') {
         setFormData(prev => ({ ...prev, monto_pagado_inicial: 0 }));
       }
-      // Para 'adelanto', el usuario ingresa el monto manualmente
     }
   }, [totales.total, formData.forma_pago_detalle, formData.usa_fondos_propios, accionPago]);
 
@@ -115,21 +113,15 @@ function NuevaCompra() {
     }
   }, [formData.tipo_compra, formData.letras_pendientes_registro, formData.numero_cuotas, formData.dias_entre_cuotas, formData.fecha_primera_cuota, totales.total, formData.monto_pagado_inicial]);
 
-  // CORRECCIÓN: Solo valida conversión si hay cuenta seleccionada
   useEffect(() => {
     if (formData.id_cuenta_pago) {
       const cuenta = cuentasPago.find(c => c.id_cuenta === parseInt(formData.id_cuenta_pago));
       setCuentaSeleccionada(cuenta);
-      if (cuenta) {
-        const necesitaConversion = cuenta.moneda !== formData.moneda && formData.moneda;
-        setRequiereConversion(necesitaConversion);
-        if (!necesitaConversion) setFormData(prev => ({ ...prev, tipo_cambio: '' }));
-      }
     } else {
       setCuentaSeleccionada(null);
-      setRequiereConversion(false);
     }
-  }, [formData.id_cuenta_pago, formData.moneda, cuentasPago]);
+  }, [formData.id_cuenta_pago, cuentasPago]);
+
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
@@ -213,6 +205,7 @@ function NuevaCompra() {
     };
     setDetalle([...detalle, nuevoItem]); setModalProductoOpen(false); setBusquedaProducto('');
   };
+
   const handleCantidadChange = (index, val) => { 
     const newD = [...detalle]; 
     newD[index].cantidad = parseFloat(val)||0; 
@@ -297,7 +290,7 @@ function NuevaCompra() {
         }));
     }
   };
-  // CORRECCIÓN CRÍTICA: Esta función ahora maneja correctamente todos los escenarios
+
   const handleFormaPagoChange = (forma) => {
     const esContado = forma === 'Contado';
     const esCredito = forma === 'Credito';
@@ -311,30 +304,19 @@ function NuevaCompra() {
       numero_cuotas: esCredito || esLetras ? (prev.numero_cuotas || 1) : 0,
       dias_credito: esCredito || esLetras ? 30 : 0,
       dias_entre_cuotas: esCredito || esLetras ? 30 : 0,
-      monto_pagado_inicial: 0, // SIEMPRE empieza en 0, se ajusta por accionPago
-      // NO limpiamos id_cuenta_pago aquí, se maneja por accionPago
+      monto_pagado_inicial: 0,
     }));
     
-    // Al cambiar a Contado, ponemos por defecto "Solo Registro"
     if (esContado) {
       setAccionPago('registro');
     }
   };
 
-  const calcularMontoConversion = () => {
-    if (!requiereConversion || !formData.tipo_cambio || !totales.total) return null;
-    const tc = parseFloat(formData.tipo_cambio);
-    const montoAPagar = parseFloat(formData.monto_pagado_inicial || 0);
-    if (cuentaSeleccionada.moneda === 'PEN' && formData.moneda === 'USD') return montoAPagar * tc;
-    else if (cuentaSeleccionada.moneda === 'USD' && formData.moneda === 'PEN') return montoAPagar / tc;
-    return null;
-  };
   const handleSubmit = async (e) => {
     e.preventDefault(); 
     setError(null); 
     setSuccess(null);
     
-    // Validaciones básicas
     if (!formData.id_proveedor) { 
       setError('Seleccione proveedor'); 
       return; 
@@ -348,33 +330,18 @@ function NuevaCompra() {
       return; 
     }
     
-    // Validación fondos propios
     if (formData.usa_fondos_propios && !formData.id_comprador) { 
       setError('Debe seleccionar al comprador'); 
       return; 
     }
     
-    // CORRECCIÓN: Solo validar cuenta si NO es "Solo Registro" y NO usa fondos propios
     if (!formData.usa_fondos_propios && accionPago !== 'registro') {
       if (!formData.id_cuenta_pago) {
         setError('Seleccione cuenta de pago para realizar el desembolso'); 
         return; 
       }
-      
-      // Validar saldo SOLO si hay pago
-      const montoPago = parseFloat(formData.monto_pagado_inicial || 0);
-      if (montoPago > 0 && cuentaSeleccionada) {
-        const saldoDisponible = parseFloat(cuentaSeleccionada.saldo_actual);
-        const montoReal = requiereConversion ? calcularMontoConversion() : montoPago;
-        
-        if (saldoDisponible < montoReal) {
-          setError(`Saldo insuficiente. Disponible: ${formatearMoneda(saldoDisponible, cuentaSeleccionada.moneda)}`);
-          return;
-        }
-      }
     }
     
-    // Validación letras
     if ((formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro) && parseInt(formData.numero_cuotas) < 1) {
         setError('Debe indicar al menos 1 cuota/letra.'); 
         return;
@@ -383,7 +350,6 @@ function NuevaCompra() {
     try {
       setLoading(true);
 
-      // Cronograma solo si es Letras con registro inmediato
       const cronogramaPayload = (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro && cronograma.length > 0)
         ? cronograma.map(c => ({
             numero: c.numero,
@@ -395,7 +361,6 @@ function NuevaCompra() {
       const payload = {
         ...formData,
         id_proveedor: parseInt(formData.id_proveedor),
-        // CORRECCIÓN: Cuenta puede ser null si es "Solo Registro" o usa fondos propios
         id_cuenta_pago: (formData.usa_fondos_propios || accionPago === 'registro') 
           ? null 
           : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
@@ -404,7 +369,7 @@ function NuevaCompra() {
         dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
         dias_credito: parseInt(formData.dias_credito),
         porcentaje_impuesto: parseFloat(formData.porcentaje_impuesto),
-        tipo_cambio: requiereConversion ? parseFloat(formData.tipo_cambio) : 1.0,
+        tipo_cambio: parseFloat(formData.tipo_cambio || 1.0),
         monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
         usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
         accion_pago: accionPago,
@@ -437,8 +402,8 @@ function NuevaCompra() {
     const m = moneda || formData.moneda;
     return `${m === 'USD' ? '$' : 'S/'} ${parseFloat(val).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
   };
+
   if (loading && proveedores.length === 0) return <Loading message="Cargando configuración..." />;
-  const montoConvertido = calcularMontoConversion();
 
   return (
     <div className="container py-6">
@@ -461,7 +426,6 @@ function NuevaCompra() {
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
           <div className="lg:col-span-2 space-y-6">
             <div className="card">
               <div className="card-header bg-gray-50">
@@ -524,6 +488,7 @@ function NuevaCompra() {
                 )}
               </div>
             </div>
+
             <div className="card">
               <div className="card-header bg-gray-50">
                 <h2 className="card-title text-base">
@@ -597,6 +562,7 @@ function NuevaCompra() {
                 </div>
               </div>
             </div>
+
             {formData.moneda && (
               <div className="card">
                 <div className="card-header bg-gray-50 flex justify-between items-center">
@@ -744,7 +710,6 @@ function NuevaCompra() {
                 </div>
               </div>
             )}
-
           </div>
           <div className="space-y-6">
             
@@ -824,7 +789,7 @@ function NuevaCompra() {
 
                         {accionPago === 'completo' && (
                           <div className="alert alert-success py-2 text-sm">
-                            <CheckCircle size={14} /> Se descontará <strong>{formatearMoneda(totales.total)}</strong> de la cuenta.
+                            <CheckCircle size={14} /> Se registrará egreso de <strong>{formatearMoneda(totales.total)}</strong>
                           </div>
                         )}
                         
@@ -845,7 +810,7 @@ function NuevaCompra() {
                         
                         {accionPago === 'registro' && (
                           <div className="alert alert-warning py-2 text-sm">
-                            <AlertCircle size={14} /> Se generará una cuenta por pagar. No se mueve dinero ahora.
+                            <AlertCircle size={14} /> Se generará cuenta por pagar. No se registran movimientos ahora.
                           </div>
                         )}
 
@@ -859,9 +824,9 @@ function NuevaCompra() {
                               required
                             >
                               <option value="">Seleccionar cuenta...</option>
-                              {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => (
+                              {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
                                 <option key={c.id_cuenta} value={c.id_cuenta}>
-                                  {c.nombre} ({c.moneda})
+                                  {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
                                 </option>
                               ))}
                             </select>
@@ -869,6 +834,7 @@ function NuevaCompra() {
                         )}
                       </div>
                     )}
+
                     {formData.forma_pago_detalle === 'Letras' && (
                       <div className="slide-down">
                         <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
@@ -990,8 +956,10 @@ function NuevaCompra() {
                                 onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
                               >
                                 <option value="">Cuenta para adelanto...</option>
-                                {cuentasPago.filter(c => c.moneda === formData.moneda).map(c => (
-                                  <option key={c.id_cuenta} value={c.id_cuenta}>{c.nombre}</option>
+                                {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
+                                  <option key={c.id_cuenta} value={c.id_cuenta}>
+                                    {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
+                                  </option>
                                 ))}
                               </select>
                             )}
@@ -1002,41 +970,9 @@ function NuevaCompra() {
                         )}
                       </div>
                     )}
-
-                    {cuentaSeleccionada && (
-                      <div className="flex justify-between items-center text-xs px-3 py-2 bg-gray-100 rounded text-gray-600">
-                        <span>Saldo disponible:</span>
-                        <span className={`font-bold ${parseFloat(cuentaSeleccionada.saldo_actual) < 0 ? 'text-red-600' : 'text-gray-800'}`}>
-                          {formatearMoneda(cuentaSeleccionada.saldo_actual, cuentaSeleccionada.moneda)}
-                        </span>
-                      </div>
-                    )}
-
-                    {requiereConversion && (
-                      <div className="bg-orange-50 border border-orange-200 rounded p-3 text-xs space-y-2">
-                        <div className="font-bold text-orange-800 flex items-center gap-1">
-                          <ArrowRightLeft size={12}/> Conversión Necesaria
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <label>Tipo de Cambio:</label>
-                          <input 
-                            type="number" 
-                            className="form-input py-1 text-right font-bold w-24 border-orange-300" 
-                            value={formData.tipo_cambio} 
-                            onChange={(e) => setFormData({...formData, tipo_cambio: e.target.value})} 
-                            step="0.001" 
-                            placeholder="0.000" 
-                          />
-                        </div>
-                        {montoConvertido && (
-                          <div className="text-right font-bold text-orange-700 border-t border-orange-200 pt-1 mt-1">
-                            Descargo real: {formatearMoneda(montoConvertido, cuentaSeleccionada.moneda)}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
+
                 <div className="card">
                   <div className="card-header bg-gray-50">
                     <h2 className="card-title text-base">
@@ -1220,6 +1156,7 @@ function NuevaCompra() {
           </div>
         </div>
       </Modal>
+
       <Modal 
         isOpen={modalCrearProveedorOpen} 
         onClose={() => setModalCrearProveedorOpen(false)} 

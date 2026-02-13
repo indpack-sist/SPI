@@ -539,7 +539,7 @@ function Compras() {
                 <option value="">Todas las cuentas</option>
                 {cuentas.map(cuenta => (
                   <option key={cuenta.id_cuenta} value={cuenta.id_cuenta}>
-                    {cuenta.nombre} ({cuenta.moneda})
+                    {cuenta.nombre} - {cuenta.tipo}
                   </option>
                 ))}
               </select>

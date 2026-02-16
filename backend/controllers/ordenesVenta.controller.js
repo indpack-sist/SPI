@@ -3226,30 +3226,34 @@ export async function descargarPDFGuiaInterna(req, res) {
 
     orden.direccion_entrega = direccionFinal;
 
-    const ultimaGuia = await executeQuery(`
-      SELECT numero_guia_interna 
-      FROM ordenes_venta 
-      WHERE numero_guia_interna IS NOT NULL
-      ORDER BY id_orden_venta DESC 
-      LIMIT 1
-    `);
+    let numeroGuiaInterna = orden.numero_guia_interna;
 
-    let numeroSecuencia = 1;
-    const year = new Date().getFullYear();
-    
-    if (ultimaGuia.success && ultimaGuia.data.length > 0) {
-      const match = ultimaGuia.data[0].numero_guia_interna.match(/GI-\d{4}-(\d+)$/);
-      if (match) {
-        numeroSecuencia = parseInt(match[1]) + 1;
+    if (!numeroGuiaInterna) {
+      const ultimaGuia = await executeQuery(`
+        SELECT numero_guia_interna 
+        FROM ordenes_venta 
+        WHERE numero_guia_interna IS NOT NULL
+        ORDER BY id_orden_venta DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuencia = 1;
+      const year = new Date().getFullYear();
+      
+      if (ultimaGuia.success && ultimaGuia.data.length > 0) {
+        const match = ultimaGuia.data[0].numero_guia_interna.match(/GI-\d{4}-(\d+)$/);
+        if (match) {
+          numeroSecuencia = parseInt(match[1]) + 1;
+        }
       }
+
+      numeroGuiaInterna = `GI-${year}-${String(numeroSecuencia).padStart(4, '0')}`;
+
+      await executeQuery(
+        'UPDATE ordenes_venta SET numero_guia_interna = ? WHERE id_orden_venta = ?',
+        [numeroGuiaInterna, id]
+      );
     }
-
-    const numeroGuiaInterna = `GI-${year}-${String(numeroSecuencia).padStart(4, '0')}`;
-
-    await executeQuery(
-      'UPDATE ordenes_venta SET numero_guia_interna = ? WHERE id_orden_venta = ?',
-      [numeroGuiaInterna, id]
-    );
 
     const { generarPDFGuiaInterna } = await import('../utils/pdfGenerators/guiaInternaPDF.js');
     const pdfBuffer = await generarPDFGuiaInterna(orden, numeroGuiaInterna);

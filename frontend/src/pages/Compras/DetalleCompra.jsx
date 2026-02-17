@@ -543,9 +543,13 @@ function DetalleCompra() {
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
   
-  const esCredito = compra.tipo_compra === 'Credito' || compra.forma_pago_detalle === 'Credito';
-  const esLetras = compra.tipo_compra === 'Letras' || compra.forma_pago_detalle === 'Letras';
-  const esContado = compra.tipo_compra === 'Contado' || compra.forma_pago_detalle === 'Contado';
+ const normalizar = (v) => (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const tipoCompra = normalizar(compra.tipo_compra);
+const formaPago = normalizar(compra.forma_pago_detalle);
+
+const esCredito = tipoCompra === 'credito' || formaPago === 'credito';
+const esLetras = tipoCompra === 'letras' || formaPago === 'letras';
+const esContado = tipoCompra === 'contado' || formaPago === 'contado';
   
   const tieneSaldoPendiente = parseFloat(compra.saldo_pendiente) > 0.01;
   const estaPagado = compra.estado_pago === 'Pagado';
@@ -560,7 +564,7 @@ function DetalleCompra() {
   
   const mostrarBotonPagoDirecto = !estaCancelada && !estaPagado && !usaFondosPropios && tieneSaldoPendiente && (
   esContado ||
-  ((esCredito || esLetras) && tieneCronogramaPendiente)
+  (esCredito || esLetras)
 );
   
   const mostrarBotonCronograma = !estaCancelada && !estaPagado && (esCredito || esLetras) && tieneCronogramaPendiente;
@@ -820,23 +824,23 @@ function DetalleCompra() {
             >
               Pagos
             </button>
-            {esLetras && (
-              <button 
-                className={`px-4 py-2 border-b-2 font-medium transition ${
-                  tabActiva === 'letras' 
-                    ? 'border-primary text-primary' 
-                    : 'border-transparent text-muted hover:text-gray-700'
-                }`} 
-                onClick={() => setTabActiva('letras')}
-              >
-                Letras 
-                {letras.filter(l => l.estado === 'Pendiente').length > 0 && (
-                  <span className="ml-2 badge badge-warning text-xs">
-                    {letras.filter(l => l.estado === 'Pendiente').length}
-                  </span>
-                )}
-              </button>
-            )}
+            {(esLetras || esCredito) && (
+  <button 
+    className={`px-4 py-2 border-b-2 font-medium transition ${
+      tabActiva === 'letras' 
+        ? 'border-primary text-primary' 
+        : 'border-transparent text-muted hover:text-gray-700'
+    }`} 
+    onClick={() => setTabActiva('letras')}
+  >
+    {esLetras ? 'Letras' : 'Cuotas'}
+    {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
+      <span className="ml-2 badge badge-warning text-xs">
+        {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
+      </span>
+    )}
+  </button>
+)}
             <button 
               className={`px-4 py-2 border-b-2 font-medium transition ${
                 tabActiva === 'ingresos' 
@@ -1196,102 +1200,198 @@ function DetalleCompra() {
       )}
 
       {tabActiva === 'letras' && (
-        <div className="space-y-6">
-          <div className="card">
-            <div className="card-header bg-gray-50 flex justify-between items-center">
-              <h3 className="card-title flex gap-2">
-                <Receipt size={18}/> Letras de Cambio
-              </h3>
-              {!tieneLetrasRegistradas && !estaCancelada && (
-                <button 
-                  className="btn btn-sm btn-primary" 
-                  onClick={handleAbrirRegistrarLetras}
-                >
-                  <Plus size={16} /> Registrar Letras
+  <div className="space-y-6">
+    {esCredito && (
+      <div className="card">
+        <div className="card-header bg-gray-50 flex justify-between items-center">
+          <h3 className="card-title flex gap-2">
+            <CreditCard size={18}/> Cronograma de Cuotas
+          </h3>
+          {tieneCronogramaPendiente && !estaCancelada && (
+            <button className="btn btn-sm btn-warning text-white" onClick={handleAbrirCronograma}>
+              <FileText size={14}/> Definir Cronograma
+            </button>
+          )}
+          {compra.cronograma_definido && (
+            <span className="badge badge-success text-[10px]">Cronograma Definido</span>
+          )}
+        </div>
+        <div className="card-body p-0">
+          {compra.cuotas && compra.cuotas.length > 0 ? (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Cuota</th>
+                  <th>Vencimiento</th>
+                  <th>Estado</th>
+                  <th className="text-right">Monto</th>
+                  <th className="text-right">Pagado</th>
+                  <th className="text-right">Saldo</th>
+                  <th className="text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {compra.cuotas.map((cuota) => (
+                  <tr
+                    key={cuota.id_cuota}
+                    className={
+                      cuota.nivel_alerta === 'danger' ? 'bg-red-50' :
+                      cuota.nivel_alerta === 'warning' ? 'bg-yellow-50' : ''
+                    }
+                  >
+                    <td className="font-bold">
+                      #{cuota.numero_cuota}
+                      {cuota.codigo_letra ? ` (${cuota.codigo_letra})` : ''}
+                    </td>
+                    <td>
+                      <div>{formatearFecha(cuota.fecha_vencimiento)}</div>
+                      {cuota.dias_para_vencer !== undefined && cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && (
+                        <div className={`text-xs ${cuota.dias_para_vencer < 0 ? 'text-danger' : cuota.dias_para_vencer <= 7 ? 'text-warning' : 'text-muted'}`}>
+                          {cuota.dias_para_vencer < 0
+                            ? `Vencida hace ${Math.abs(cuota.dias_para_vencer)}d`
+                            : `Vence en ${cuota.dias_para_vencer}d`}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${
+                        cuota.estado === 'Pagada' ? 'badge-success' :
+                        cuota.estado === 'Cancelada' ? 'badge-danger' :
+                        cuota.nivel_alerta === 'danger' ? 'badge-danger' :
+                        cuota.nivel_alerta === 'warning' ? 'badge-warning' :
+                        'badge-info'
+                      }`}>
+                        {cuota.estado}
+                      </span>
+                    </td>
+                    <td className="text-right font-medium">{formatearMoneda(cuota.monto_cuota)}</td>
+                    <td className="text-right text-success">{formatearMoneda(cuota.monto_pagado || 0)}</td>
+                    <td className="text-right font-bold text-danger">
+                      {formatearMoneda(parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0))}
+                    </td>
+                    <td className="text-center">
+                      {cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && !estaCancelada && (
+                        <button
+                          className="btn btn-xs btn-primary"
+                          onClick={() => handleAbrirPagarCuota(cuota)}
+                        >
+                          Pagar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50">
+                <tr>
+                  <td colSpan="3" className="text-right font-bold">Totales:</td>
+                  <td className="text-right font-bold">{formatearMoneda(compra.total)}</td>
+                  <td className="text-right font-bold text-success">{formatearMoneda(compra.monto_pagado)}</td>
+                  <td className="text-right font-bold text-danger">{formatearMoneda(compra.saldo_pendiente)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            <div className="p-8 text-center text-muted">
+              <CreditCard size={48} className="mx-auto mb-3 opacity-20"/>
+              <p>No hay cronograma definido aún.</p>
+              {!estaCancelada && (
+                <button className="btn btn-sm btn-outline mt-3" onClick={handleAbrirCronograma}>
+                  Crear Cronograma
                 </button>
               )}
             </div>
-            <div className="card-body p-0">
-              {letras.length > 0 ? (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Número Letra</th>
-                      <th>Banco</th>
-                      <th>Emisión</th>
-                      <th>Vencimiento</th>
-                      <th>Estado</th>
-                      <th className="text-right">Monto</th>
-                      <th className="text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {letras.map((letra) => (
-                      <tr 
-                        key={letra.id_letra} 
-                        className={
-                          letra.nivel_alerta === 'danger' ? 'bg-red-50' : 
-                          letra.nivel_alerta === 'warning' ? 'bg-yellow-50' : 
-                          ''
-                        }
-                      >
-                        <td>
-                          <div className="font-medium">{letra.numero_letra}</div>
-                          {letra.dias_para_vencer !== undefined && letra.dias_para_vencer < 7 && letra.estado === 'Pendiente' && (
-                            <div className={`text-xs ${
-                              letra.dias_para_vencer < 0 ? 'text-danger' : 'text-warning'
-                            }`}>
-                              {letra.dias_para_vencer < 0 
-                                ? `Vencida hace ${Math.abs(letra.dias_para_vencer)} días` 
-                                : `Vence en ${letra.dias_para_vencer} días`}
-                            </div>
-                          )}
-                        </td>
-                        <td className="text-sm">{letra.banco || '-'}</td>
-                        <td>{formatearFecha(letra.fecha_emision)}</td>
-                        <td>{formatearFecha(letra.fecha_vencimiento)}</td>
-                        <td>
-                          <span className={`badge ${
-                            letra.estado === 'Pagada' ? 'badge-success' : 
-                            letra.estado === 'Vencida' ? 'badge-danger' : 
-                            'badge-warning'
-                          }`}>
-                            {letra.estado}
-                          </span>
-                        </td>
-                        <td className="text-right font-bold">{formatearMoneda(letra.monto)}</td>
-                        <td className="text-center">
-                          {letra.estado === 'Pendiente' && (
-                            <button 
-                              className="btn btn-xs btn-primary" 
-                              onClick={() => handleAbrirPagarLetra(letra)}
-                            >
-                              Pagar
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="p-8 text-center text-muted">
-                  <Receipt size={48} className="mx-auto mb-3 opacity-20" />
-                  <p>No hay letras registradas</p>
-                  {!tieneLetrasRegistradas && !estaCancelada && (
-                    <button 
-                      className="btn btn-sm btn-primary mt-3" 
-                      onClick={handleAbrirRegistrarLetras}
-                    >
-                      Registrar Letras
-                    </button>
-                  )}
-                </div>
+          )}
+        </div>
+      </div>
+    )}
+
+    {esLetras && (
+      <div className="card">
+        <div className="card-header bg-gray-50 flex justify-between items-center">
+          <h3 className="card-title flex gap-2">
+            <Receipt size={18}/> Letras de Cambio
+          </h3>
+          {!tieneLetrasRegistradas && !estaCancelada && (
+            <button className="btn btn-sm btn-primary" onClick={handleAbrirRegistrarLetras}>
+              <Plus size={16}/> Registrar Letras
+            </button>
+          )}
+        </div>
+        <div className="card-body p-0">
+          {letras.length > 0 ? (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Número Letra</th>
+                  <th>Banco</th>
+                  <th>Emisión</th>
+                  <th>Vencimiento</th>
+                  <th>Estado</th>
+                  <th className="text-right">Monto</th>
+                  <th className="text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {letras.map((letra) => (
+                  <tr
+                    key={letra.id_letra}
+                    className={
+                      letra.nivel_alerta === 'danger' ? 'bg-red-50' :
+                      letra.nivel_alerta === 'warning' ? 'bg-yellow-50' : ''
+                    }
+                  >
+                    <td>
+                      <div className="font-medium">{letra.numero_letra}</div>
+                      {letra.dias_para_vencer !== undefined && letra.dias_para_vencer < 7 && letra.estado === 'Pendiente' && (
+                        <div className={`text-xs ${letra.dias_para_vencer < 0 ? 'text-danger' : 'text-warning'}`}>
+                          {letra.dias_para_vencer < 0
+                            ? `Vencida hace ${Math.abs(letra.dias_para_vencer)} días`
+                            : `Vence en ${letra.dias_para_vencer} días`}
+                        </div>
+                      )}
+                    </td>
+                    <td className="text-sm">{letra.banco || '-'}</td>
+                    <td>{formatearFecha(letra.fecha_emision)}</td>
+                    <td>{formatearFecha(letra.fecha_vencimiento)}</td>
+                    <td>
+                      <span className={`badge ${
+                        letra.estado === 'Pagada' ? 'badge-success' :
+                        letra.estado === 'Vencida' ? 'badge-danger' :
+                        'badge-warning'
+                      }`}>
+                        {letra.estado}
+                      </span>
+                    </td>
+                    <td className="text-right font-bold">{formatearMoneda(letra.monto)}</td>
+                    <td className="text-center">
+                      {letra.estado === 'Pendiente' && (
+                        <button className="btn btn-xs btn-primary" onClick={() => handleAbrirPagarLetra(letra)}>
+                          Pagar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-8 text-center text-muted">
+              <Receipt size={48} className="mx-auto mb-3 opacity-20"/>
+              <p>No hay letras registradas</p>
+              {!tieneLetrasRegistradas && !estaCancelada && (
+                <button className="btn btn-sm btn-primary mt-3" onClick={handleAbrirRegistrarLetras}>
+                  Registrar Letras
+                </button>
               )}
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
+    )}
+  </div>
+)}
 
       {tabActiva === 'ingresos' && (
         <div className="space-y-6">

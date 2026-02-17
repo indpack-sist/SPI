@@ -350,13 +350,18 @@ function NuevaCompra() {
     try {
       setLoading(true);
 
-      const cronogramaPayload = (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro && cronograma.length > 0)
-        ? cronograma.map(c => ({
-            numero: c.numero,
-            monto: c.monto,
-            fecha_vencimiento: c.fecha.toISOString().split('T')[0]
-        }))
-        : [];
+      const debeEnviarCronograma = (
+  (formData.tipo_compra === 'Credito' || (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro))
+  && cronograma.length > 0
+);
+
+const cronogramaPayload = debeEnviarCronograma
+  ? cronograma.map(c => ({
+      numero: c.numero,
+      monto: parseFloat(c.monto.toFixed(2)),
+      fecha_vencimiento: c.fecha.toISOString().split('T')[0]
+  }))
+  : [];
 
       const payload = {
         ...formData,
@@ -899,34 +904,34 @@ function NuevaCompra() {
                           </div>
                         </div>
 
-                        {formData.forma_pago_detalle === 'Letras' && cronograma.length > 0 && (
-                          <div className="bg-gray-50 rounded border overflow-hidden">
-                            <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
-                              <span>Cronograma Preliminar</span>
-                              <Calendar size={14}/>
-                            </div>
-                            <div className="max-h-48 overflow-y-auto">
-                              <table className="w-full text-xs">
-                                <thead className="text-gray-500 bg-gray-50">
-                                  <tr>
-                                    <th className="px-2 py-1 text-left">#</th>
-                                    <th className="px-2 py-1 text-left">Vence</th>
-                                    <th className="px-2 py-1 text-right">Monto</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                  {cronograma.map((cuota) => (
-                                    <tr key={cuota.numero}>
-                                      <td className="px-2 py-1 font-medium">{cuota.numero}</td>
-                                      <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
-                                      <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
+                        {(formData.forma_pago_detalle === 'Letras' || formData.forma_pago_detalle === 'Credito') && cronograma.length > 0 && (
+  <div className="bg-gray-50 rounded border overflow-hidden">
+    <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
+      <span>Cronograma Preliminar</span>
+      <Calendar size={14}/>
+    </div>
+    <div className="max-h-48 overflow-y-auto">
+      <table className="w-full text-xs">
+        <thead className="text-gray-500 bg-gray-50">
+          <tr>
+            <th className="px-2 py-1 text-left">#</th>
+            <th className="px-2 py-1 text-left">Vence</th>
+            <th className="px-2 py-1 text-right">Monto</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {cronograma.map((cuota) => (
+            <tr key={cuota.numero}>
+              <td className="px-2 py-1 font-medium">{cuota.numero}</td>
+              <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
+              <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
 
                         {!formData.usa_fondos_propios && (
                           <div className="bg-gray-50 p-3 rounded border">

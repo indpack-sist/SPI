@@ -288,16 +288,38 @@ export async function createCompra(req, res) {
     }
 
     let cronogramaDefinido = 0;
-    if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
-        const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
-        if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
-            return res.status(400).json({ 
-                success: false, 
-                error: `La suma de las letras (${totalCronograma.toFixed(2)}) no coincide con el saldo pendiente (${saldoPendiente.toFixed(2)})` 
-            });
-        }
-        cronogramaDefinido = 1;
+let cronogramaFinal = [];
+
+if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
+    const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
+    if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
+        return res.status(400).json({ 
+            success: false, 
+            error: `La suma de las letras (${totalCronograma.toFixed(2)}) no coincide con el saldo pendiente (${saldoPendiente.toFixed(2)})` 
+        });
     }
+    cronogramaFinal = cronograma;
+    cronogramaDefinido = 1;
+} else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0) {
+    const numCuotas = parseInt(numero_cuotas);
+    const diasEntreC = parseInt(dias_entre_cuotas || 30);
+    const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(2));
+    const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(2));
+    const fechaBase = new Date(fecha_emision);
+
+    for (let i = 1; i <= numCuotas; i++) {
+        const fechaCuota = new Date(fechaBase);
+        fechaCuota.setDate(fechaCuota.getDate() + diasEntreC * i);
+        const montoEsta = i === numCuotas ? parseFloat((montoPorCuota + diferencia).toFixed(2)) : montoPorCuota;
+        cronogramaFinal.push({
+            numero: i,
+            codigo_letra: null,
+            monto: montoEsta,
+            fecha_vencimiento: fechaCuota.toISOString().split('T')[0]
+        });
+    }
+    cronogramaDefinido = 1;
+}
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -383,14 +405,14 @@ export async function createCompra(req, res) {
       }
       
       if (cronogramaDefinido === 1) {
-          for (const letra of cronograma) {
-              await connection.query(`
-                INSERT INTO cuotas_orden_compra (
-                    id_orden_compra, numero_cuota, codigo_letra, monto_cuota, fecha_vencimiento, estado
-                ) VALUES (?, ?, ?, ?, ?, 'Pendiente')
-              `, [idCompra, letra.numero, letra.codigo_letra || null, letra.monto, letra.fecha_vencimiento]);
-          }
-      }
+    for (const letra of cronogramaFinal) {
+        await connection.query(`
+            INSERT INTO cuotas_orden_compra (
+                id_orden_compra, numero_cuota, codigo_letra, monto_cuota, fecha_vencimiento, estado
+            ) VALUES (?, ?, ?, ?, ?, 'Pendiente')
+        `, [idCompra, letra.numero, letra.codigo_letra || null, letra.monto, letra.fecha_vencimiento]);
+    }
+}
 
       let idEntrada = null;
       if (tieneItemsParaRecepcion) {

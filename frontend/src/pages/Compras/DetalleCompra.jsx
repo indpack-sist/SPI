@@ -558,11 +558,10 @@ function DetalleCompra() {
   const esContadoSinPago = esContado && tieneSaldoPendiente && parseFloat(compra.monto_pagado) === 0;
   const esContadoPendienteRegularizar = esContado && tieneSaldoPendiente && parseFloat(compra.monto_pagado) > 0;
   
-  const mostrarBotonPagoDirecto = !estaCancelada && !estaPagado && !usaFondosPropios && (
-    esContadoSinPago || 
-    esContadoPendienteRegularizar ||
-    ((esCredito || esLetras) && tieneCronogramaPendiente)
-  );
+  const mostrarBotonPagoDirecto = !estaCancelada && !estaPagado && !usaFondosPropios && tieneSaldoPendiente && (
+  esContado ||
+  ((esCredito || esLetras) && tieneCronogramaPendiente)
+);
   
   const mostrarBotonCronograma = !estaCancelada && !estaPagado && (esCredito || esLetras) && tieneCronogramaPendiente;
   const mostrarBotonRegistrarLetras = !estaCancelada && !estaPagado && esLetras && !tieneLetrasRegistradas;

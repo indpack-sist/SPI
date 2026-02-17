@@ -1392,7 +1392,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
     )}
   </div>
 )}
-
+  
       {tabActiva === 'ingresos' && (
         <div className="space-y-6">
           {itemsPendientes.length > 0 ? (

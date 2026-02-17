@@ -208,14 +208,13 @@ export async function createCompra(req, res) {
   let connection;
   try {
     const {
-      id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
-      prioridad, moneda, tipo_compra, numero_cuotas, dias_entre_cuotas, dias_credito,
-      tipo_impuesto, porcentaje_impuesto, observaciones, id_responsable, contacto_proveedor,
-      direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
-      serie_documento, numero_documento, fecha_emision_documento, url_comprobante, cronograma,
-      accion_pago, 
-      monto_adelanto 
-    } = req.body;
+  id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
+  prioridad, moneda, tipo_compra, numero_cuotas, dias_entre_cuotas, dias_credito,
+  tipo_impuesto, porcentaje_impuesto, observaciones, id_responsable, contacto_proveedor,
+  direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
+  serie_documento, numero_documento, fecha_emision_documento, url_comprobante, cronograma,
+  accion_pago, monto_adelanto, fecha_primera_cuota
+} = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
 
@@ -305,11 +304,18 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
     const diasEntreC = parseInt(dias_entre_cuotas || 30);
     const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(2));
     const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(2));
-    const fechaBase = new Date(fecha_emision);
+
+    let fechaBase;
+    if (fecha_primera_cuota) {
+        fechaBase = new Date(fecha_primera_cuota);
+    } else {
+        fechaBase = new Date(fecha_emision);
+        fechaBase.setDate(fechaBase.getDate() + diasEntreC);
+    }
 
     for (let i = 1; i <= numCuotas; i++) {
         const fechaCuota = new Date(fechaBase);
-        fechaCuota.setDate(fechaCuota.getDate() + diasEntreC * i);
+        fechaCuota.setDate(fechaCuota.getDate() + diasEntreC * (i - 1));
         const montoEsta = i === numCuotas ? parseFloat((montoPorCuota + diferencia).toFixed(2)) : montoPorCuota;
         cronogramaFinal.push({
             numero: i,

@@ -25,7 +25,8 @@ import {
   Factory,
   Shield,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  BadgeCheck
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -188,65 +189,22 @@ function OrdenesVenta() {
 
   const getEstadoVerificacionConfig = (estadoVerif) => {
     const configs = {
-      'Pendiente': {
-        icono: Clock,
-        clase: 'badge-warning',
-        texto: 'Pend. Verif.',
-        color: '#f59e0b'
-      },
-      'Aprobada': {
-        icono: CheckCircle,
-        clase: 'badge-success',
-        texto: 'Aprobada',
-        color: '#10b981'
-      },
-      'Rechazada': {
-        icono: XCircle,
-        clase: 'badge-danger',
-        texto: 'Rechazada',
-        color: '#ef4444'
-      }
+      'Pendiente': { icono: Clock, clase: 'badge-warning', texto: 'Pend. Verif.', color: '#f59e0b' },
+      'Aprobada': { icono: CheckCircle, clase: 'badge-success', texto: 'Aprobada', color: '#10b981' },
+      'Rechazada': { icono: XCircle, clase: 'badge-danger', texto: 'Rechazada', color: '#ef4444' }
     };
     return configs[estadoVerif] || configs['Pendiente'];
   };
 
   const getEstadoConfig = (estado) => {
     const configs = {
-      'En Espera': { 
-        icono: Clock, 
-        clase: 'badge-warning',
-        texto: 'En Espera'
-      },
-      'En Proceso': {
-        icono: PlayCircle,
-        clase: 'badge-info',
-        texto: 'En Proceso'
-      },
-      'Atendido por Producción': { 
-        icono: Factory, 
-        clase: 'badge-primary',
-        texto: 'Atendido'
-      },
-      'Despacho Parcial': {
-        icono: Truck,
-        clase: 'badge-warning',
-        texto: 'Desp. Parcial'
-      },
-      'Despachada': { 
-        icono: Truck, 
-        clase: 'badge-primary',
-        texto: 'Despachada'
-      },
-      'Entregada': { 
-        icono: CheckCircle, 
-        clase: 'badge-success',
-        texto: 'Entregada'
-      },
-      'Cancelada': { 
-        icono: XCircle, 
-        clase: 'badge-danger',
-        texto: 'Cancelada'
-      }
+      'En Espera': { icono: Clock, clase: 'badge-warning', texto: 'En Espera' },
+      'En Proceso': { icono: PlayCircle, clase: 'badge-info', texto: 'En Proceso' },
+      'Atendido por Producción': { icono: Factory, clase: 'badge-primary', texto: 'Atendido' },
+      'Despacho Parcial': { icono: Truck, clase: 'badge-warning', texto: 'Desp. Parcial' },
+      'Despachada': { icono: Truck, clase: 'badge-primary', texto: 'Despachada' },
+      'Entregada': { icono: CheckCircle, clase: 'badge-success', texto: 'Entregada' },
+      'Cancelada': { icono: XCircle, clase: 'badge-danger', texto: 'Cancelada' }
     };
     return configs[estado] || configs['En Espera'];
   };
@@ -427,6 +385,35 @@ function OrdenesVenta() {
           <span className={`badge ${config.clase}`}>
             <Icono size={14} />
             {value}
+          </span>
+        );
+      }
+    },
+    {
+      header: 'SUNAT',
+      accessor: 'facturado_sunat',
+      width: '90px',
+      align: 'center',
+      render: (value, row) => {
+        if (value === 1) {
+          return (
+            <div className="flex flex-col items-center gap-0.5">
+              <span className="flex items-center gap-1 text-emerald-600 font-semibold text-xs">
+                <BadgeCheck size={15} className="text-emerald-600" />
+                Enviado
+              </span>
+              {row.numero_comprobante_sunat && (
+                <span className="font-mono text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                  {row.numero_comprobante_sunat}
+                </span>
+              )}
+            </div>
+          );
+        }
+        return (
+          <span className="flex items-center justify-center gap-1 text-amber-500 text-xs font-medium">
+            <Clock size={13} />
+            Pendiente
           </span>
         );
       }
@@ -615,10 +602,7 @@ function OrdenesVenta() {
           <div className="flex flex-col md:flex-row gap-4">
             
             <div className="search-input-wrapper flex-1">
-              <Search 
-                size={20} 
-                className="search-icon" 
-              />
+              <Search size={20} className="search-icon" />
               <input
                 type="text"
                 className="form-input search-input"

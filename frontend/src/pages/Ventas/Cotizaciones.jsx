@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Plus, Eye, Download, Filter, FileText, Search,
   ChevronLeft, ChevronRight, RefreshCw, Calendar,
-  TrendingUp, DollarSign, Edit, Copy, ExternalLink, CheckCircle2
+  TrendingUp, DollarSign, Edit, Copy, ExternalLink, CheckCircle2,
+  ArrowUpDown
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -22,6 +23,7 @@ function Cotizaciones() {
   
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [ordenAscendente, setOrdenAscendente] = useState(false); // ← NUEVO
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -31,7 +33,7 @@ function Cotizaciones() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtroEstado, busqueda]);
+  }, [filtroEstado, busqueda, ordenAscendente]); // ← ordenAscendente resetea página
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -49,9 +51,7 @@ function Cotizaciones() {
       setError(null);
       
       const filtros = {};
-      if (filtroEstado) {
-        filtros.estado = filtroEstado;
-      }
+      if (filtroEstado) filtros.estado = filtroEstado;
       
       const response = await cotizacionesAPI.getAll(filtros);
       
@@ -68,16 +68,24 @@ function Cotizaciones() {
     }
   };
 
-  const cotizacionesFiltradas = cotizaciones.filter(item => {
-    if (!busqueda) return true;
-    const term = busqueda.toLowerCase();
-    return (
-      item.numero_cotizacion?.toLowerCase().includes(term) ||
-      item.cliente?.toLowerCase().includes(term) ||
-      item.ruc_cliente?.toLowerCase().includes(term) ||
-      item.comercial?.toLowerCase().includes(term)
-    );
-  });
+  // ← APLICAR ORDEN ANTES DE PAGINAR
+  const cotizacionesFiltradas = (() => {
+    const filtradas = cotizaciones.filter(item => {
+      if (!busqueda) return true;
+      const term = busqueda.toLowerCase();
+      return (
+        item.numero_cotizacion?.toLowerCase().includes(term) ||
+        item.cliente?.toLowerCase().includes(term) ||
+        item.ruc_cliente?.toLowerCase().includes(term) ||
+        item.comercial?.toLowerCase().includes(term)
+      );
+    });
+
+    if (ordenAscendente) {
+      return [...filtradas].reverse();
+    }
+    return filtradas;
+  })();
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -194,9 +202,7 @@ function Cotizaciones() {
       
       if (response.data.success) {
         setSuccessMessage(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
-        
         await cargarDatos(true);
-        
         setTimeout(() => {
           navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
         }, 1500);
@@ -432,10 +438,7 @@ function Cotizaciones() {
           <div className="flex flex-col md:flex-row gap-4">
             
             <div className="search-input-wrapper flex-1">
-              <Search 
-                size={20} 
-                className="search-icon" 
-              />
+              <Search size={20} className="search-icon" />
               <input
                 type="text"
                 className="form-input search-input"
@@ -471,6 +474,17 @@ function Cotizaciones() {
                   onClick={() => setFiltroEstado('Convertida')}
                 >
                   Convertida
+                </button>
+
+                {/* ← BOTÓN DE ORDEN */}
+                <div className="border-l h-6 self-center mx-1"></div>
+                <button
+                  className={`btn btn-sm ${ordenAscendente ? 'btn-secondary' : 'btn-outline'}`}
+                  onClick={() => setOrdenAscendente(prev => !prev)}
+                  title={ordenAscendente ? 'Mostrando: más antiguos primero' : 'Mostrando: más recientes primero'}
+                >
+                  <ArrowUpDown size={14} />
+                  {ordenAscendente ? 'Más antiguos' : 'Más recientes'}
                 </button>
               </div>
             </div>

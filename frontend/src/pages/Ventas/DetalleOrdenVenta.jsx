@@ -3070,7 +3070,7 @@ className="btn btn-success"
               </button>
               <button
                 type="submit"
-                className="btn bg-emerald-600 text-white hover:bg-emerald-700"
+                className="btn !bg-emerald-600 !text-white hover:!bg-emerald-700"
                 disabled={procesando}
               >
                 <BadgeCheck size={18} />

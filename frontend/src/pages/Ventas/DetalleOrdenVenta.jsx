@@ -5,7 +5,8 @@ import {
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
-  ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw, Eye
+  ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw, Eye,
+  BadgeCheck
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -51,6 +52,7 @@ function DetalleOrdenVenta() {
   const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   const [modalReservaStock, setModalReservaStock] = useState(false);
+  const [modalFacturarSunatOpen, setModalFacturarSunatOpen] = useState(false);
   
   const [visorArchivo, setVisorArchivo] = useState({
     open: false,
@@ -63,6 +65,7 @@ function DetalleOrdenVenta() {
   const [cantidadOP, setCantidadOP] = useState('');
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [nuevoTipoComprobante, setNuevoTipoComprobante] = useState('');
+  const [numeroComprobanteSunat, setNumeroComprobanteSunat] = useState('');
   
   const [productoRectificar, setProductoRectificar] = useState(null);
   const [rectificarForm, setRectificarForm] = useState({ nueva_cantidad: '', motivo: '' });
@@ -529,6 +532,7 @@ function DetalleOrdenVenta() {
       setProcesando(false);
     }
   };
+
   const handleGenerarGuiaInterna = async () => {
     try {
       setDescargandoPDF('guia-interna');
@@ -909,6 +913,51 @@ function DetalleOrdenVenta() {
     }
   };
 
+  const handleMarcarFacturadoSunat = async (e) => {
+    e.preventDefault();
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.marcarFacturadoSunat(id, {
+        numero_comprobante_sunat: numeroComprobanteSunat.trim() || null
+      });
+
+      if (response.data.success) {
+        setSuccess('Orden marcada como facturada en SUNAT');
+        setModalFacturarSunatOpen(false);
+        setNumeroComprobanteSunat('');
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al marcar facturación SUNAT');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleDesmarcarFacturadoSunat = async () => {
+    if (!confirm('¿Está seguro de desmarcar la facturación SUNAT? Se borrarán los datos registrados.')) return;
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.desmarcarFacturadoSunat(id);
+
+      if (response.data.success) {
+        setSuccess('Facturación SUNAT desmarcada correctamente');
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al desmarcar facturación SUNAT');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const getTipoImpuestoNombre = (valor) => {
     const codigo = String(valor || '').toUpperCase().trim();
     
@@ -927,72 +976,22 @@ function DetalleOrdenVenta() {
 
   const getEstadoVerificacionConfig = (estadoVerif) => {
     const configs = {
-      'Pendiente': {
-        icono: Clock,
-        clase: 'badge-warning',
-        texto: 'Pendiente Verificación',
-        color: '#f59e0b'
-      },
-      'Aprobada': {
-        icono: CheckCircle,
-        clase: 'badge-success',
-        texto: 'Verificada y Aprobada',
-        color: '#10b981'
-      },
-      'Rechazada': {
-        icono: XCircle,
-        clase: 'badge-danger',
-        texto: 'Rechazada - Requiere Corrección',
-        color: '#ef4444'
-      }
+      'Pendiente': { icono: Clock, clase: 'badge-warning', texto: 'Pendiente Verificación', color: '#f59e0b' },
+      'Aprobada': { icono: CheckCircle, clase: 'badge-success', texto: 'Verificada y Aprobada', color: '#10b981' },
+      'Rechazada': { icono: XCircle, clase: 'badge-danger', texto: 'Rechazada - Requiere Corrección', color: '#ef4444' }
     };
     return configs[estadoVerif] || configs['Pendiente'];
   };
 
   const getEstadoConfig = (estado) => {
     const configs = {
-      'En Espera': { 
-        icono: Clock, 
-        clase: 'badge-warning', 
-        color: 'border-warning', 
-        siguientes: ['En Proceso', 'Cancelada'] 
-      },
-      'En Proceso': { 
-        icono: Factory, 
-        clase: 'badge-info', 
-        color: 'border-info', 
-        siguientes: ['Atendido por Producción', 'Cancelada']
-      },
-      'Atendido por Producción': {  
-        icono: CheckCircle, 
-        clase: 'badge-primary', 
-        color: 'border-primary', 
-        siguientes: ['Despacho Parcial', 'Despachada', 'Cancelada']
-      },
-      'Despacho Parcial': {
-        icono: Truck,
-        clase: 'badge-warning',
-        color: 'border-warning',
-        siguientes: ['Entregada']
-      },
-      'Despachada': { 
-        icono: Truck, 
-        clase: 'badge-primary', 
-        color: 'border-primary', 
-        siguientes: ['Entregada']
-      },
-      'Entregada': { 
-        icono: CheckCircle, 
-        clase: 'badge-success', 
-        color: 'border-success', 
-        siguientes: []
-      },
-      'Cancelada': { 
-        icono: XCircle, 
-        clase: 'badge-danger', 
-        color: 'border-danger', 
-        siguientes: []
-      }
+      'En Espera': { icono: Clock, clase: 'badge-warning', color: 'border-warning', siguientes: ['En Proceso', 'Cancelada'] },
+      'En Proceso': { icono: Factory, clase: 'badge-info', color: 'border-info', siguientes: ['Atendido por Producción', 'Cancelada'] },
+      'Atendido por Producción': { icono: CheckCircle, clase: 'badge-primary', color: 'border-primary', siguientes: ['Despacho Parcial', 'Despachada', 'Cancelada'] },
+      'Despacho Parcial': { icono: Truck, clase: 'badge-warning', color: 'border-warning', siguientes: ['Entregada'] },
+      'Despachada': { icono: Truck, clase: 'badge-primary', color: 'border-primary', siguientes: ['Entregada'] },
+      'Entregada': { icono: CheckCircle, clase: 'badge-success', color: 'border-success', siguientes: [] },
+      'Cancelada': { icono: XCircle, clase: 'badge-danger', color: 'border-danger', siguientes: [] }
     };
     return configs[estado] || configs['En Espera'];
   };
@@ -1017,12 +1016,8 @@ function DetalleOrdenVenta() {
   };
 
   const puedeDespachar = () => {
-    if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') {
-      return false;
-    }
-    if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') {
-      return false;
-    }
+    if (!orden || orden.estado === 'Cancelada' || orden.estado === 'Entregada') return false;
+    if (orden.estado_verificacion === 'Pendiente' || orden.estado_verificacion === 'Rechazada') return false;
     const pendientes = orden.detalle.some(item => (parseFloat(item.cantidad) - parseFloat(item.cantidad_despachada || 0)) > 0);
     return pendientes;
   };
@@ -1055,9 +1050,7 @@ function DetalleOrdenVenta() {
     );
   }
 
-  // --- CÁLCULO DE TOTALES EN VIVO (Corrección Matemática) ---
   const subtotalReal = orden.detalle.reduce((acc, item) => {
-      // Forzamos el cálculo Cantidad * Precio Unitario
       const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
       return acc + (isNaN(val) ? 0 : val);
   }, 0);
@@ -1068,7 +1061,6 @@ function DetalleOrdenVenta() {
   const totalCorregido = subtotalReal + impuestoReal;
   
   const saldoCorregido = resumenPagos ? Math.max(0, totalCorregido - parseFloat(resumenPagos.monto_pagado)) : 0;
-  // -----------------------------------------------------------
 
   const estadosConDespacho = ['Despacho Parcial', 'Despachada', 'Entregada'];
   const mostrarAlertaStock = !estadosConDespacho.includes(orden.estado);
@@ -1278,10 +1270,7 @@ function DetalleOrdenVenta() {
               className="btn btn-xs btn-ghost text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200"
               onClick={() => {
                 setProductoRectificar(row);
-                setRectificarForm({ 
-                    nueva_cantidad: row.cantidad, 
-                    motivo: '' 
-                });
+                setRectificarForm({ nueva_cantidad: row.cantidad, motivo: '' });
                 setModalRectificarOpen(true);
               }}
               disabled={procesando}
@@ -1299,7 +1288,6 @@ function DetalleOrdenVenta() {
       width: '120px',
       align: 'right',
       render: (value, row) => {
-        // CORRECCIÓN MATEMÁTICA: Calculamos Subtotal = Cantidad * Precio Unitario en vivo
         const subtotalCalc = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
         return <span className="font-bold text-primary">{formatearMoneda(subtotalCalc)}</span>
       }
@@ -1375,7 +1363,6 @@ function DetalleOrdenVenta() {
   const productosRequierenOP = orden.detalle.filter(item => {
     if(item.stock_reservado === 1) return false;
     if(!mostrarAlertaStock) return false;
-
     const stockDisponible = parseFloat(item.stock_disponible || 0);
     const cantidadRequerida = parseFloat(item.cantidad);
     return item.requiere_receta && 
@@ -1384,7 +1371,6 @@ function DetalleOrdenVenta() {
            orden.estado !== 'Entregada' &&
            orden.estado !== 'Despachada';
   });
-
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -1429,6 +1415,11 @@ function DetalleOrdenVenta() {
                   <Lock size={12} className="mr-1"/> Reserva Parcial
                 </span>
               )}
+              {orden.facturado_sunat === 1 && (
+                <span className="badge badge-sm bg-emerald-600 text-white border-emerald-700 ml-2" title="Facturado en SUNAT">
+                  <BadgeCheck size={12} className="mr-1"/> SUNAT
+                </span>
+              )}
             </h1>
             <div className="flex items-center gap-3 mt-2">
               <p className="text-xl font-bold text-gray-700 bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-2 rounded-lg border border-blue-200 shadow-sm">
@@ -1460,6 +1451,31 @@ function DetalleOrdenVenta() {
               <ClipboardList size={20} /> 
               {orden.numero_guia_interna ? `GI: ${orden.numero_guia_interna}` : 'Generar Guía Interna'}
             </button>
+          )}
+
+          {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
+            orden.facturado_sunat === 1 ? (
+              <button
+                className="btn btn-outline border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                onClick={handleDesmarcarFacturadoSunat}
+                disabled={procesando}
+                title="Desmarcar facturación SUNAT"
+              >
+                <BadgeCheck size={20} /> Facturado SUNAT
+              </button>
+            ) : (
+              <button
+                className="btn btn-outline border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100"
+                onClick={() => {
+                  setNumeroComprobanteSunat('');
+                  setModalFacturarSunatOpen(true);
+                }}
+                disabled={procesando}
+                title="Marcar como facturado en SUNAT"
+              >
+                <BadgeCheck size={20} /> Marcar SUNAT
+              </button>
+            )
           )}
 
           {puedeReservarStock() && (
@@ -1699,29 +1715,17 @@ function DetalleOrdenVenta() {
                     
                     let colorClases = '';
                     if (estado === 'En Proceso') {
-                      colorClases = esActual 
-                        ? 'bg-blue-500 text-white cursor-not-allowed opacity-70' 
-                        : 'bg-white text-blue-600 border-2 border-blue-500 hover:bg-blue-500 hover:text-white';
+                      colorClases = esActual ? 'bg-blue-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-blue-600 border-2 border-blue-500 hover:bg-blue-500 hover:text-white';
                     } else if (estado === 'Atendido por Producción') {
-                      colorClases = esActual 
-                        ? 'bg-green-500 text-white cursor-not-allowed opacity-70' 
-                        : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
+                      colorClases = esActual ? 'bg-green-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-green-600 border-2 border-green-500 hover:bg-green-500 hover:text-white';
                     } else if (estado === 'Despacho Parcial') {
-                      colorClases = esActual 
-                        ? 'bg-orange-500 text-white cursor-not-allowed opacity-70' 
-                        : 'bg-white text-orange-600 border-2 border-orange-500 hover:bg-orange-500 hover:text-white';
+                      colorClases = esActual ? 'bg-orange-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-orange-600 border-2 border-orange-500 hover:bg-orange-500 hover:text-white';
                     } else if (estado === 'Despachada') {
-                      colorClases = esActual 
-                        ? 'bg-purple-500 text-white cursor-not-allowed opacity-70' 
-                        : 'bg-white text-purple-600 border-2 border-purple-500 hover:bg-purple-500 hover:text-white';
+                      colorClases = esActual ? 'bg-purple-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-purple-600 border-2 border-purple-500 hover:bg-purple-500 hover:text-white';
                     } else if (estado === 'Entregada') {
-                      colorClases = esActual 
-                        ? 'bg-emerald-500 text-white cursor-not-allowed opacity-70' 
-                        : 'bg-white text-emerald-600 border-2 border-emerald-500 hover:bg-emerald-500 hover:text-white';
+                      colorClases = esActual ? 'bg-emerald-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-emerald-600 border-2 border-emerald-500 hover:bg-emerald-500 hover:text-white';
                     } else if (estado === 'Cancelada') {
-                      colorClases = esActual 
-                        ? 'bg-red-500 text-white cursor-not-allowed opacity-70' 
-                        : 'bg-white text-red-600 border-2 border-red-500 hover:bg-red-500 hover:text-white';
+                      colorClases = esActual ? 'bg-red-500 text-white cursor-not-allowed opacity-70' : 'bg-white text-red-600 border-2 border-red-500 hover:bg-red-500 hover:text-white';
                     }
 
                     return (
@@ -1893,6 +1897,45 @@ function DetalleOrdenVenta() {
                 <div>
                     <label className="text-sm font-medium text-muted">Forma Pago:</label>
                     <p>{orden.forma_pago || orden.plazo_pago || '-'}</p>
+                </div>
+
+                <div className="pt-3 mt-2 border-t border-gray-100">
+                    <p className="text-xs font-bold uppercase text-muted mb-2 flex items-center gap-1">
+                        <BadgeCheck size={14} /> Estado Facturación SUNAT
+                    </p>
+                    {orden.facturado_sunat === 1 ? (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded p-3 space-y-1">
+                            <div className="flex items-center gap-2">
+                                <BadgeCheck size={16} className="text-emerald-600" />
+                                <span className="font-bold text-emerald-700 text-sm">Facturado en SUNAT</span>
+                            </div>
+                            {orden.numero_comprobante_sunat && (
+                                <div>
+                                    <span className="text-xs text-muted">N° Comprobante SUNAT:</span>
+                                    <p className="font-mono font-bold text-emerald-800">{orden.numero_comprobante_sunat}</p>
+                                </div>
+                            )}
+                            {orden.fecha_facturacion_sunat && (
+                                <div>
+                                    <span className="text-xs text-muted">Fecha:</span>
+                                    <p className="text-sm">{formatearFecha(orden.fecha_facturacion_sunat)}</p>
+                                </div>
+                            )}
+                            {orden.facturado_por && (
+                                <div>
+                                    <span className="text-xs text-muted">Registrado por:</span>
+                                    <p className="text-sm font-medium">{orden.facturado_por}</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="bg-gray-50 border border-gray-200 rounded p-3">
+                            <p className="text-sm text-muted flex items-center gap-2">
+                                <Clock size={14} />
+                                Pendiente de facturar en SUNAT
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -2224,22 +2267,22 @@ function DetalleOrdenVenta() {
             )}
 
             <div className="form-group">
-    <label className="form-label">Cuenta de Depósito *</label>
-    <select
-        className="form-select"
-        value={pagoForm.id_cuenta_destino || ''}
-        onChange={(e) => setPagoForm({ ...pagoForm, id_cuenta_destino: e.target.value })}
-        required
-    >
-        <option value="">Seleccione cuenta</option>
-        {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
-            <option key={c.id_cuenta} value={c.id_cuenta}>
-                {c.nombre} - {c.tipo} (PEN: S/ {formatearNumero(c.saldo_pen || 0)} | USD: $ {formatearNumero(c.saldo_usd || 0)})
-            </option>
-        ))}
-    </select>
-    <small className="text-muted">Cuenta donde ingresa el dinero (soporta múltiples monedas)</small>
-</div>
+              <label className="form-label">Cuenta de Depósito *</label>
+              <select
+                  className="form-select"
+                  value={pagoForm.id_cuenta_destino || ''}
+                  onChange={(e) => setPagoForm({ ...pagoForm, id_cuenta_destino: e.target.value })}
+                  required
+              >
+                  <option value="">Seleccione cuenta</option>
+                  {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
+                      <option key={c.id_cuenta} value={c.id_cuenta}>
+                          {c.nombre} - {c.tipo} (PEN: S/ {formatearNumero(c.saldo_pen || 0)} | USD: $ {formatearNumero(c.saldo_usd || 0)})
+                      </option>
+                  ))}
+              </select>
+              <small className="text-muted">Cuenta donde ingresa el dinero (soporta múltiples monedas)</small>
+            </div>
 
             <div className="form-group">
               <label className="form-label">Fecha de Pago *</label>
@@ -2386,18 +2429,10 @@ function DetalleOrdenVenta() {
                   <div className="text-sm text-blue-700">
                     <p className="font-semibold mb-1">Producto: {productoSeleccionado.producto}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <strong>Código:</strong> {productoSeleccionado.codigo_producto}
-                      </div>
-                      <div>
-                        <strong>Cantidad OV:</strong> {parseFloat(productoSeleccionado.cantidad).toFixed(2)} {productoSeleccionado.unidad_medida}
-                      </div>
-                      <div>
-                        <strong>Stock actual:</strong> {parseFloat(productoSeleccionado.stock_disponible || 0).toFixed(2)} {productoSeleccionado.unidad_medida}
-                      </div>
-                      <div>
-                        <strong>Faltante:</strong> {Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(2)} {productoSeleccionado.unidad_medida}
-                      </div>
+                      <div><strong>Código:</strong> {productoSeleccionado.codigo_producto}</div>
+                      <div><strong>Cantidad OV:</strong> {parseFloat(productoSeleccionado.cantidad).toFixed(2)} {productoSeleccionado.unidad_medida}</div>
+                      <div><strong>Stock actual:</strong> {parseFloat(productoSeleccionado.stock_disponible || 0).toFixed(2)} {productoSeleccionado.unidad_medida}</div>
+                      <div><strong>Faltante:</strong> {Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(2)} {productoSeleccionado.unidad_medida}</div>
                     </div>
                   </div>
                 </div>
@@ -2525,18 +2560,10 @@ function DetalleOrdenVenta() {
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
-            <button
-              className="btn btn-outline"
-              onClick={() => setModalDespacho(false)}
-              disabled={procesando}
-            >
+            <button className="btn btn-outline" onClick={() => setModalDespacho(false)} disabled={procesando}>
               Cancelar
             </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleRegistrarDespacho}
-              disabled={procesando}
-            >
+            <button className="btn btn-primary" onClick={handleRegistrarDespacho} disabled={procesando}>
               {procesando ? 'Procesando...' : 'Confirmar Despacho'}
             </button>
           </div>
@@ -2635,11 +2662,7 @@ function DetalleOrdenVenta() {
             <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
-                className={`btn py-4 text-left ${
-                  nuevoTipoComprobante === 'Factura' 
-                    ? 'btn-success text-white shadow-md' 
-                    : 'btn-outline hover:bg-green-50'
-                }`}
+                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Factura' ? 'btn-success text-white shadow-md' : 'btn-outline hover:bg-green-50'}`}
                 onClick={() => setNuevoTipoComprobante('Factura')}
               >
                 <div className="flex items-center gap-3">
@@ -2652,11 +2675,8 @@ function DetalleOrdenVenta() {
               </button>
               
               <button
-                type="button" className={`btn py-4 text-left ${
-                  nuevoTipoComprobante === 'Nota de Venta' 
-                    ? 'btn-info text-white shadow-md' 
-                    : 'btn-outline hover:bg-blue-50'
-                }`}
+                type="button"
+                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Nota de Venta' ? 'btn-info text-white shadow-md' : 'btn-outline hover:bg-blue-50'}`}
                 onClick={() => setNuevoTipoComprobante('Nota de Venta')}
               >
                 <div className="flex items-center gap-3">
@@ -2992,22 +3012,73 @@ function DetalleOrdenVenta() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t mt-2">
-            <button
-              className="btn btn-outline"
-              onClick={() => setModalReservaStock(false)}
-              disabled={procesando}
-            >
+            <button className="btn btn-outline" onClick={() => setModalReservaStock(false)} disabled={procesando}>
               Cancelar
             </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleEjecutarReservaStock}
-              disabled={procesando}
-            >
+            <button className="btn btn-primary" onClick={handleEjecutarReservaStock} disabled={procesando}>
               <Lock size={16} className="mr-1"/> Confirmar Reserva
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalFacturarSunatOpen}
+        onClose={() => {
+          setModalFacturarSunatOpen(false);
+          setNumeroComprobanteSunat('');
+        }}
+        title="Marcar como Facturado en SUNAT"
+        size="sm"
+      >
+        <form onSubmit={handleMarcarFacturadoSunat}>
+          <div className="space-y-4">
+            <div className="bg-emerald-50 border-l-4 border-emerald-500 p-3 rounded">
+              <div className="flex gap-2 items-start">
+                <BadgeCheck className="text-emerald-600 shrink-0 mt-0.5" size={20} />
+                <div className="text-sm text-emerald-800">
+                  <p className="font-bold mb-1">Confirmar Facturación SUNAT</p>
+                  <p>Indica que esta orden ya fue enviada y aceptada por SUNAT. Puedes registrar el número de comprobante real de forma opcional.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">N° Comprobante SUNAT (opcional)</label>
+              <input
+                type="text"
+                className="form-input"
+                value={numeroComprobanteSunat}
+                onChange={(e) => setNumeroComprobanteSunat(e.target.value)}
+                placeholder="Ej: F001-00000123"
+                maxLength={50}
+              />
+              <small className="text-muted">El correlativo tal como aparece en SUNAT / OSE.</small>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  setModalFacturarSunatOpen(false);
+                  setNumeroComprobanteSunat('');
+                }}
+                disabled={procesando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn bg-emerald-600 text-white hover:bg-emerald-700"
+                disabled={procesando}
+              >
+                <BadgeCheck size={18} />
+                {procesando ? 'Guardando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </form>
       </Modal>
 
       <Modal

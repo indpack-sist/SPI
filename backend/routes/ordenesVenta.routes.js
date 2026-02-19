@@ -37,7 +37,9 @@ import {
   getDatosVerificacionOrden,
   aprobarOrdenVerificacion,
   rechazarOrdenVerificacion,
-  reenviarOrdenVerificacion
+  reenviarOrdenVerificacion,
+  marcarFacturadoSunat,
+  desmarcarFacturadoSunat
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -73,6 +75,9 @@ router.post('/:id/crear-orden-produccion', verificarToken, verificarOrdenAprobad
 router.post('/:id/reservar', verificarToken, verificarOrdenAprobada, reservarStockOrden);
 router.post('/:id/ejecutar-reserva', verificarToken, verificarOrdenAprobada, ejecutarReservaStock);
 router.post('/:id/guia-interna', verificarToken, verificarOrdenAprobada, generarGuiaInterna);
+
+router.patch('/:id/facturar-sunat', verificarToken, marcarFacturadoSunat);
+router.patch('/:id/desmarcar-sunat', verificarToken, desmarcarFacturadoSunat);
 
 router.put('/:id/estado', verificarToken, verificarOrdenAprobada, actualizarEstadoOrdenVenta);
 router.put('/:id/prioridad', verificarToken, verificarOrdenAprobada, actualizarPrioridadOrdenVenta);

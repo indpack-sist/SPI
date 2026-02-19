@@ -1456,8 +1456,8 @@ function DetalleOrdenVenta() {
           {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
             orden.facturado_sunat === 1 ? (
               <button
-                className="btn btn-outline border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                onClick={handleDesmarcarFacturadoSunat}
+className="btn btn-success"               
+ onClick={handleDesmarcarFacturadoSunat}
                 disabled={procesando}
                 title="Desmarcar facturación SUNAT"
               >

@@ -556,6 +556,10 @@ export const ordenesVentaAPI = {
 
   reenviarVerificacion: (id) => api.post(`/ordenes-venta/${id}/verificacion/reenviar`),
 
+  marcarFacturadoSunat: (id, data) => api.patch(`/ordenes-venta/${id}/facturar-sunat`, data),
+
+  desmarcarFacturadoSunat: (id) => api.patch(`/ordenes-venta/${id}/desmarcar-sunat`),
+
   descargarPDF: (id, tipo = 'orden') => {
     return api.get(`/ordenes-venta/${id}/pdf`, {
       params: { tipo },

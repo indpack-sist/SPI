@@ -151,28 +151,30 @@ export async function getOrdenVentaById(req, res) {
     const { id } = req.params;
 
     const ordenResult = await executeQuery(`
-      SELECT 
-        ov.*,
-        cl.razon_social AS cliente,
-        cl.ruc AS ruc_cliente,
-        cl.direccion_despacho AS direccion_cliente,
-        cl.telefono AS telefono_cliente,
-        e.nombre_completo AS comercial,
-        e_conductor.nombre_completo AS conductor_nombre,
-        e_verificador.nombre_completo AS verificado_por,
-        f.placa AS vehiculo_placa_interna,
-        f.marca_modelo AS vehiculo_modelo,
-        f.capacidad_kg AS vehiculo_capacidad_kg,
-        c.numero_cotizacion
-      FROM ordenes_venta ov
-      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
-      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
-      LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
-      LEFT JOIN empleados e_verificador ON ov.id_verificador = e_verificador.id_empleado
-      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
-      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
-      WHERE ov.id_orden_venta = ?
-    `, [id]);
+  SELECT 
+    ov.*,
+    cl.razon_social AS cliente,
+    cl.ruc AS ruc_cliente,
+    cl.direccion_despacho AS direccion_cliente,
+    cl.telefono AS telefono_cliente,
+    e.nombre_completo AS comercial,
+    e_conductor.nombre_completo AS conductor_nombre,
+    e_verificador.nombre_completo AS verificado_por,
+    e_facturador.nombre_completo AS facturado_por,
+    f.placa AS vehiculo_placa_interna,
+    f.marca_modelo AS vehiculo_modelo,
+    f.capacidad_kg AS vehiculo_capacidad_kg,
+    c.numero_cotizacion
+  FROM ordenes_venta ov
+  LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+  LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+  LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
+  LEFT JOIN empleados e_verificador ON ov.id_verificador = e_verificador.id_empleado
+  LEFT JOIN empleados e_facturador ON ov.id_facturador = e_facturador.id_empleado
+  LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
+  LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+  WHERE ov.id_orden_venta = ?
+`, [id]);
 
     if (!ordenResult.success) {
       return res.status(500).json({
@@ -3809,5 +3811,131 @@ export async function reenviarOrdenVerificacion(req, res) {
       success: false,
       error: error.message
     });
+  }
+}
+export async function marcarFacturadoSunat(req, res) {
+  try {
+    const { id } = req.params;
+    const { numero_comprobante_sunat } = req.body;
+    const { id_empleado, rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({ success: false, error: 'No tienes permisos para marcar la facturación SUNAT' });
+    }
+
+    const ordenResult = await executeQuery(
+      'SELECT id_orden_venta, numero_orden, estado, tipo_comprobante FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.estado === 'Cancelada') {
+      return res.status(400).json({ success: false, error: 'No se puede facturar una orden cancelada' });
+    }
+
+    if (numero_comprobante_sunat && numero_comprobante_sunat.trim() !== '') {
+      const duplicadoResult = await executeQuery(
+        'SELECT id_orden_venta FROM ordenes_venta WHERE numero_comprobante_sunat = ? AND id_orden_venta != ?',
+        [numero_comprobante_sunat.trim(), id]
+      );
+      if (duplicadoResult.success && duplicadoResult.data.length > 0) {
+        return res.status(400).json({ success: false, error: 'Ese número de comprobante SUNAT ya está registrado en otra orden' });
+      }
+    }
+
+    const updateResult = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET 
+        facturado_sunat = 1,
+        fecha_facturacion_sunat = NOW(),
+        numero_comprobante_sunat = ?,
+        id_facturador = ?
+      WHERE id_orden_venta = ?
+    `, [numero_comprobante_sunat?.trim() || null, id_empleado, id]);
+
+    if (!updateResult.success) {
+      return res.status(500).json({ success: false, error: updateResult.error });
+    }
+
+    const facturadorResult = await executeQuery(
+      'SELECT nombre_completo FROM empleados WHERE id_empleado = ?',
+      [id_empleado]
+    );
+
+    res.json({
+      success: true,
+      message: 'Orden marcada como facturada en SUNAT',
+      data: {
+        id_orden_venta: parseInt(id),
+        numero_orden: orden.numero_orden,
+        facturado_sunat: true,
+        fecha_facturacion_sunat: new Date(),
+        numero_comprobante_sunat: numero_comprobante_sunat?.trim() || null,
+        facturado_por: facturadorResult.data[0]?.nombre_completo || null
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function desmarcarFacturadoSunat(req, res) {
+  try {
+    const { id } = req.params;
+    const { id_empleado, rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({ success: false, error: 'No tienes permisos para desmarcar la facturación SUNAT' });
+    }
+
+    const ordenResult = await executeQuery(
+      'SELECT id_orden_venta, numero_orden, estado, facturado_sunat FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.facturado_sunat !== 1) {
+      return res.status(400).json({ success: false, error: 'Esta orden no está marcada como facturada en SUNAT' });
+    }
+
+    const updateResult = await executeQuery(`
+      UPDATE ordenes_venta 
+      SET 
+        facturado_sunat = 0,
+        fecha_facturacion_sunat = NULL,
+        numero_comprobante_sunat = NULL,
+        id_facturador = NULL
+      WHERE id_orden_venta = ?
+    `, [id]);
+
+    if (!updateResult.success) {
+      return res.status(500).json({ success: false, error: updateResult.error });
+    }
+
+    res.json({
+      success: true,
+      message: 'Facturación SUNAT desmarcada correctamente',
+      data: {
+        id_orden_venta: parseInt(id),
+        numero_orden: orden.numero_orden,
+        facturado_sunat: false
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }

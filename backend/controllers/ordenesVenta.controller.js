@@ -1312,18 +1312,25 @@ export async function registrarDespacho(req, res) {
         return res.status(400).json({ error: `Exceso de cantidad para el producto ${itemDespacho.id_producto}. Pendiente: ${pendiente}, Solicitado: ${cantidadADespachar}` });
       }
 
-      const productoStock = await executeQuery('SELECT stock_actual, costo_unitario_promedio, requiere_receta FROM productos WHERE id_producto = ?', [itemDespacho.id_producto]);
+      const productoStock = await executeQuery(
+        'SELECT stock_actual, costo_unitario_promedio, requiere_receta FROM productos WHERE id_producto = ?',
+        [itemDespacho.id_producto]
+      );
 
       if (productoStock.data.length === 0) {
         return res.status(404).json({ error: `Producto ID ${itemDespacho.id_producto} no encontrado en inventario` });
       }
 
       const infoProducto = productoStock.data[0];
-      const estabaReservado = itemDb.stock_reservado === 1;
+      // stock_reservado === 1 significa reserva completa, === 2 parcial
+      const estabaReservado = itemDb.stock_reservado === 1 || itemDb.stock_reservado === 2;
 
+      // Solo validar stock disponible si NO estaba reservado
       if (!estabaReservado) {
         if (parseFloat(infoProducto.stock_actual) < cantidadADespachar) {
-          return res.status(400).json({ error: `Stock insuficiente para el producto ID ${itemDespacho.id_producto}. Stock actual: ${infoProducto.stock_actual}` });
+          return res.status(400).json({
+            error: `Stock insuficiente para el producto ID ${itemDespacho.id_producto}. Stock actual: ${infoProducto.stock_actual}`
+          });
         }
       }
 
@@ -1343,58 +1350,60 @@ export async function registrarDespacho(req, res) {
       });
     }
 
-    const queries = [];
-
-    queries.push({
+    // Insertar cabecera salida primero para obtener el ID
+    const resultCabecera = await executeTransaction([{
       sql: `INSERT INTO salidas (
-        id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, 
+        id_tipo_inventario, tipo_movimiento, id_cliente, total_costo,
         total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
-        3,
-        'Venta',
-        orden.id_cliente,
-        totalCosto,
-        totalPrecio,
-        orden.moneda,
-        id_usuario,
+        3, 'Venta', orden.id_cliente, totalCosto, totalPrecio,
+        orden.moneda, id_usuario,
         `Despacho Orden ${orden.numero_orden}`,
-        'Activo',
-        fecha_despacho || getFechaPeru()
+        'Activo', fecha_despacho || getFechaPeru()
       ]
-    });
+    }]);
 
-    const resultTx = await executeTransaction(queries);
-    if (!resultTx.success) return res.status(500).json({ error: resultTx.error });
+    if (!resultCabecera.success) return res.status(500).json({ error: resultCabecera.error });
 
-    const idSalida = resultTx.data[0].insertId;
+    const idSalida = resultCabecera.data[0].insertId;
     const queriesDetalle = [];
 
     for (const item of itemsProcesados) {
+      // Guardar fue_reservado en detalle_salidas para saber cómo revertir al anular
       queriesDetalle.push({
-        sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) VALUES (?, ?, ?, ?, ?)`,
-        params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario]
+        sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario, fue_reservado)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario, item.estaba_reservado ? 1 : 0]
       });
 
-      queriesDetalle.push({
-        sql: `UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?`,
-        params: [item.cantidad, item.id_producto]
-      });
+      // CORRECCIÓN CLAVE: Solo descontar stock si NO estaba reservado
+      // Si estaba reservado, el stock ya fue descontado al momento de reservar
+      if (!item.estaba_reservado && item.requiere_receta === 0) {
+        queriesDetalle.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+          params: [item.cantidad, item.id_producto]
+        });
+      }
 
+      // Limpiar reserva del detalle (ya se concretó en despacho)
       if (item.estaba_reservado) {
         queriesDetalle.push({
-          sql: `UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0 WHERE id_orden_venta = ? AND id_producto = ?`,
+          sql: `UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0
+                WHERE id_orden_venta = ? AND id_producto = ?`,
           params: [id, item.id_producto]
         });
       }
 
       queriesDetalle.push({
-        sql: `UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ? WHERE id_orden_venta = ? AND id_producto = ?`,
+        sql: `UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada + ?
+              WHERE id_orden_venta = ? AND id_producto = ?`,
         params: [item.cantidad, id, item.id_producto]
       });
     }
 
-    await executeTransaction(queriesDetalle);
+    const resultDetalle = await executeTransaction(queriesDetalle);
+    if (!resultDetalle.success) return res.status(500).json({ error: resultDetalle.error });
 
     await executeQuery(
       'UPDATE ordenes_venta SET id_salida = ? WHERE id_orden_venta = ?',
@@ -1409,39 +1418,19 @@ export async function registrarDespacho(req, res) {
     `, [id]);
 
     const { total_items, items_completados } = verificacion.data[0];
+    const nuevoEstado = parseInt(total_items) === parseInt(items_completados) ? 'Despachada' : 'Despacho Parcial';
 
-    let nuevoEstado = 'Despacho Parcial';
-    if (parseInt(total_items) === parseInt(items_completados)) {
-      nuevoEstado = 'Despachada';
-    }
-
-    await executeQuery(
-      'UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?',
-      [nuevoEstado, id]
-    );
+    await executeQuery('UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?', [nuevoEstado, id]);
 
     if (orden.id_cotizacion) {
-      let estadoCotizacion = 'Convertida';
-
-      if (nuevoEstado === 'Despacho Parcial') {
-        estadoCotizacion = 'Despachado parcial desde OV';
-      } else if (nuevoEstado === 'Despachada') {
-        estadoCotizacion = 'Despachado desde OV';
-      }
-
-      await executeQuery(
-        'UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?',
-        [estadoCotizacion, orden.id_cotizacion]
-      );
+      const estadoCotizacion = nuevoEstado === 'Despachada' ? 'Despachado desde OV' : 'Despachado parcial desde OV';
+      await executeQuery('UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?', [estadoCotizacion, orden.id_cotizacion]);
     }
 
     res.json({
       success: true,
       message: `Despacho registrado correctamente. Orden pasó a estado: ${nuevoEstado}`,
-      data: {
-        id_salida: idSalida,
-        nuevo_estado: nuevoEstado
-      }
+      data: { id_salida: idSalida, nuevo_estado: nuevoEstado }
     });
 
   } catch (error) {
@@ -1473,9 +1462,7 @@ export async function anularDespacho(req, res) {
       return res.status(404).json({ error: 'Salida no encontrada o no pertenece a esta orden' });
     }
 
-    const salida = salidaResult.data[0];
-
-    if (salida.estado !== 'Activo') {
+    if (salidaResult.data[0].estado !== 'Activo') {
       return res.status(400).json({ error: 'Esta salida ya fue anulada' });
     }
 
@@ -1492,22 +1479,36 @@ export async function anularDespacho(req, res) {
         [item.id_producto]
       );
 
-      if (productoInfo.success && productoInfo.data.length > 0) {
-        const requiereReceta = productoInfo.data[0].requiere_receta;
-
-        // CORRECCIÓN: Siempre devolver stock al anular despacho si no requiere receta.
-        // Al despachar, el stock físico SIEMPRE se descuenta (tanto si estaba reservado
-        // como si no). Por tanto, al anular siempre hay que devolverlo.
-        if (requiereReceta === 0) {
+      if (productoInfo.success && productoInfo.data.length > 0 && productoInfo.data[0].requiere_receta === 0) {
+        // CORRECCIÓN CLAVE: Solo devolver stock si el despacho NO fue con reserva previa.
+        // Si fue_reservado=1, el stock ya estaba descontado desde la reserva y al anular
+        // el despacho debe volver a quedar como "reservado" (no libre en almacén).
+        if (!item.fue_reservado) {
           queriesReversion.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
             params: [item.cantidad, item.id_producto]
+          });
+        } else {
+          // Era reservado: restaurar la reserva en detalle_orden_venta y descontar de nuevo del stock
+          // porque al despachar se limpió la reserva pero el stock físico no se tocó
+          queriesReversion.push({
+            sql: `UPDATE detalle_orden_venta 
+                  SET stock_reservado = 1, cantidad_reservada = ?
+                  WHERE id_orden_venta = ? AND id_producto = ?`,
+            params: [item.cantidad, id, item.id_producto]
+          });
+          // Actualizar stock_reservado en cabecera de la orden
+          queriesReversion.push({
+            sql: 'UPDATE ordenes_venta SET stock_reservado = 1 WHERE id_orden_venta = ?',
+            params: [id]
           });
         }
       }
 
       queriesReversion.push({
-        sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = GREATEST(0, cantidad_despachada - ?) WHERE id_orden_venta = ? AND id_producto = ?',
+        sql: `UPDATE detalle_orden_venta 
+              SET cantidad_despachada = GREATEST(0, cantidad_despachada - ?)
+              WHERE id_orden_venta = ? AND id_producto = ?`,
         params: [item.cantidad, id, item.id_producto]
       });
     }
@@ -1517,7 +1518,8 @@ export async function anularDespacho(req, res) {
       params: ['Anulado', idSalida]
     });
 
-    await executeTransaction(queriesReversion);
+    const resultReversion = await executeTransaction(queriesReversion);
+    if (!resultReversion.success) return res.status(500).json({ error: resultReversion.error });
 
     const verificacion = await executeQuery(`
       SELECT 
@@ -1536,29 +1538,19 @@ export async function anularDespacho(req, res) {
       nuevoEstado = 'Despacho Parcial';
     }
 
-    await executeQuery(
-      'UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?',
-      [nuevoEstado, id]
-    );
+    await executeQuery('UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?', [nuevoEstado, id]);
 
     if (orden.id_cotizacion) {
       let estadoCotizacion = 'Convertida';
       if (nuevoEstado === 'Despacho Parcial') estadoCotizacion = 'Despachado parcial desde OV';
       else if (nuevoEstado === 'Despachada') estadoCotizacion = 'Despachado desde OV';
-
-      await executeQuery(
-        'UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?',
-        [estadoCotizacion, orden.id_cotizacion]
-      );
+      await executeQuery('UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?', [estadoCotizacion, orden.id_cotizacion]);
     }
 
     res.json({
       success: true,
       message: `Despacho anulado correctamente. Orden pasó a estado: ${nuevoEstado}`,
-      data: {
-        id_salida_anulada: idSalida,
-        nuevo_estado: nuevoEstado
-      }
+      data: { id_salida_anulada: idSalida, nuevo_estado: nuevoEstado }
     });
 
   } catch (error) {
@@ -1588,44 +1580,31 @@ export async function anularOrdenVenta(req, res) {
     }
 
     if (orden.estado_verificacion !== 'Aprobada') {
-      return res.status(400).json({
-        success: false,
-        error: 'Solo se pueden anular órdenes aprobadas'
-      });
+      return res.status(400).json({ success: false, error: 'Solo se pueden anular órdenes aprobadas' });
     }
 
     const queriesAnulacion = [];
 
-    // Traer detalle con cantidad_reservada y cantidad_despachada
     const detalleOrden = await executeQuery(
       `SELECT id_producto, cantidad, cantidad_reservada, cantidad_despachada, stock_reservado
-       FROM detalle_orden_venta
-       WHERE id_orden_venta = ?`,
+       FROM detalle_orden_venta WHERE id_orden_venta = ?`,
       [id]
     );
 
-    // PASO 1: Devolver stock reservado (aún no despachado)
-    // cantidad_reservada refleja el stock físico que fue apartado y todavía no salió
+    // PASO 1: Devolver stock reservado pendiente de despacho
     for (const item of detalleOrden.data) {
       const reservada = parseFloat(item.cantidad_reservada || 0);
-
       if (reservada > 0) {
         const productoInfo = await executeQuery(
           'SELECT requiere_receta FROM productos WHERE id_producto = ?',
           [item.id_producto]
         );
-
-        if (
-          productoInfo.success &&
-          productoInfo.data.length > 0 &&
-          productoInfo.data[0].requiere_receta === 0
-        ) {
+        if (productoInfo.success && productoInfo.data.length > 0 && productoInfo.data[0].requiere_receta === 0) {
           queriesAnulacion.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
             params: [reservada, item.id_producto]
           });
         }
-
         queriesAnulacion.push({
           sql: 'UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0 WHERE id_orden_venta = ? AND id_producto = ?',
           params: [id, item.id_producto]
@@ -1633,10 +1612,8 @@ export async function anularOrdenVenta(req, res) {
       }
     }
 
-    // PASO 2: Anular salidas activas y devolver stock despachado
-    // Al despachar, el stock físico siempre se descuenta y la reserva se libera.
-    // Por tanto, al anular la OV debemos devolver lo que fue despachado, sin importar
-    // si antes tuvo reserva o no.
+    // PASO 2: Anular salidas activas
+    // Usar fue_reservado de detalle_salidas para saber si devolver o no el stock
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
       [`%${orden.numero_orden}%`, 'Activo']
@@ -1654,17 +1631,15 @@ export async function anularOrdenVenta(req, res) {
           [item.id_producto]
         );
 
-        if (
-          productoInfo.success &&
-          productoInfo.data.length > 0 &&
-          productoInfo.data[0].requiere_receta === 0
-        ) {
-          // CORRECCIÓN: Siempre devolver lo despachado. La reserva ya fue liberada
-          // cuando se registró el despacho, así que no hay riesgo de devolución doble.
-          queriesAnulacion.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [item.cantidad, item.id_producto]
-          });
+        if (productoInfo.success && productoInfo.data.length > 0 && productoInfo.data[0].requiere_receta === 0) {
+          // Solo devolver stock si el despacho fue SIN reserva previa.
+          // Si fue con reserva, el stock ya se devolvió en el PASO 1 (cantidad_reservada).
+          if (!item.fue_reservado) {
+            queriesAnulacion.push({
+              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+              params: [item.cantidad, item.id_producto]
+            });
+          }
         }
       }
 
@@ -1702,7 +1677,8 @@ export async function anularOrdenVenta(req, res) {
       params: [id]
     });
 
-    await executeTransaction(queriesAnulacion);
+    const resultAnulacion = await executeTransaction(queriesAnulacion);
+    if (!resultAnulacion.success) return res.status(500).json({ error: resultAnulacion.error });
 
     res.json({
       success: true,

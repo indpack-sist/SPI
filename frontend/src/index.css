@@ -1240,3 +1240,76 @@ html { scroll-behavior: smooth; }
   .card { box-shadow: none; border: 1px solid var(--border); page-break-inside: avoid; break-inside: avoid; }
   .table { font-size: 0.75rem; }
 }
+
+/* =====================================================
+   FIXES — NuevaCotizacion y formularios con clases
+   utilitarias hardcodeadas del JSX
+   ===================================================== */
+
+/* Fondos claros que aparecen en el JSX hardcodeados */
+.bg-blue-50  { background-color: rgba(93,173,226,0.06) !important; }
+.bg-gray-50  { background-color: var(--bg-tertiary) !important; }
+.bg-gray-100 { background-color: var(--carbon-light) !important; }
+.bg-white    { background-color: var(--carbon-mid) !important; }
+.bg-amber-50 { background-color: rgba(232,184,75,0.06) !important; }
+.bg-green-50 { background-color: rgba(46,204,113,0.06) !important; }
+
+/* Textos claros que se vuelven invisibles sobre dark */
+.text-gray-800 { color: var(--white) !important; }
+.text-gray-700 { color: var(--mist) !important; }
+.text-gray-400 { color: var(--wire) !important; }
+.text-gray-300 { color: var(--steel-light) !important; }
+
+/* Bordes */
+.border-gray-200 { border-color: var(--border) !important; }
+.border-gray-100 { border-color: var(--steel) !important; }
+.border-blue-200 { border-color: rgba(93,173,226,0.25) !important; }
+.border-green-200{ border-color: rgba(46,204,113,0.25) !important; }
+.border-amber-400 { border-color: rgba(232,184,75,0.5) !important; }
+
+/* Input readonly (fecha vencimiento) */
+input[readonly] {
+  background-color: var(--carbon-light) !important;
+  color: var(--wire) !important;
+  cursor: not-allowed;
+}
+
+/* Input precio_venta con bg-blue-50 inline */
+.form-input[style*="fffbeb"],
+.form-input[style*="fffbeb"]:focus {
+  background-color: rgba(232,184,75,0.06) !important;
+  border-color: rgba(232,184,75,0.4) !important;
+  color: var(--white) !important;
+}
+
+/* Totales card */
+.bg-gray-100.text-black {
+  background-color: var(--carbon-light) !important;
+  color: var(--white) !important;
+}
+
+/* Hover en modales */
+.hover\:bg-blue-50:hover  { background-color: rgba(93,173,226,0.08) !important; }
+.hover\:bg-gray-50:hover  { background-color: var(--carbon-light) !important; }
+.hover\:border-primary:hover { border-color: var(--accent) !important; }
+.group:hover .group-hover\:text-primary { color: var(--accent) !important; }
+
+/* Checkbox muestra */
+.border-gray-300 { border-color: var(--steel) !important; }
+.text-amber-800  { color: #e8b84b !important; }
+.text-amber-600  { color: #c99b30 !important; }
+.bg-amber-500    { background-color: #e8b84b !important; }
+.border-amber-500 { border-color: #e8b84b !important; }
+
+/* Línea divisora en tabla totales */
+.border-b { border-bottom-color: var(--border) !important; }
+
+/* Empty state borde dashed */
+.border-dashed { border-color: var(--steel) !important; }
+
+/* Badge colores que se usan en el JSX */
+.text-blue-600  { color: #5dade2 !important; }
+.bg-blue-500    { background-color: #5dade2 !important; }
+.border-blue-500 { border-color: #5dade2 !important; }
+.text-red-600   { color: #e74c3c !important; }
+.text-green-600 { color: #2ecc71 !important; }

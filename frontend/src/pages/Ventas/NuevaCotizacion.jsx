@@ -714,16 +714,17 @@ function NuevaCotizacion() {
           const precioBase = parseFloat(item.precio_base) || precioVenta;
 
           return {
-            id_producto: item.es_producto_libre ? null : item.id_producto,
-            es_producto_libre: item.es_producto_libre || false,
-            codigo_producto_libre: item.es_producto_libre ? item.codigo_producto_libre?.trim() : null,
-            nombre_producto_libre: item.es_producto_libre ? item.nombre_producto_libre?.trim() : null,
-            cantidad: parseFloat(item.cantidad),
-            precio_base: precioBase,
-            precio_venta: precioVenta,
-            descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
-            orden: index + 1
-          };
+  id_producto: item.es_producto_libre ? null : item.id_producto,
+  es_producto_libre: item.es_producto_libre || false,
+  codigo_producto_libre: item.es_producto_libre ? item.codigo_producto_libre?.trim() : null,
+  nombre_producto_libre: item.es_producto_libre ? item.nombre_producto_libre?.trim() : null,
+  unidad_medida: item.unidad_medida || null,   // <- agregar esto
+  cantidad: parseFloat(item.cantidad),
+  precio_base: precioBase,
+  precio_venta: precioVenta,
+  descuento_porcentaje: parseFloat(item.descuento_porcentaje) || 0,
+  orden: index + 1
+};
         })
       };
       let response;

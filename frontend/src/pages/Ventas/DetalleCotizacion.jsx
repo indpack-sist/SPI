@@ -86,9 +86,8 @@ function DetalleCotizacion() {
   };
 
   const handleVolverListado = () => {
-    const queryString = location.search;
-    navigate(`/ventas/cotizaciones${queryString}`);
-  };
+  navigate(-1);
+};
 
   const cargarDatos = async () => {
     try {

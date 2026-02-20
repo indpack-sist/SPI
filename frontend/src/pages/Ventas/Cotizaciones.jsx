@@ -29,31 +29,31 @@ function Cotizaciones() {
   const tablaRef = useRef(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const estado = params.get('estado');
+    const search = params.get('busqueda');
+    if (estado) setFiltroEstado(estado);
+    if (search) setBusqueda(search);
+  }, []);
+
+  useEffect(() => {
     cargarDatos();
   }, [filtroEstado]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (!params.get('pagina')) {
-      setCurrentPage(1);
-    }
+    setCurrentPage(1);
   }, [filtroEstado, busqueda, ordenAscendente]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const estado = params.get('estado');
-    const search = params.get('busqueda');
-    const pagina = params.get('pagina');
-    
-    if (estado) setFiltroEstado(estado);
-    if (search) setBusqueda(search);
-    if (pagina) {
-      setCurrentPage(parseInt(pagina));
+    const paginaGuardada = sessionStorage.getItem('cotizaciones_pagina');
+    if (paginaGuardada) {
+      setCurrentPage(parseInt(paginaGuardada));
+      sessionStorage.removeItem('cotizaciones_pagina');
       setTimeout(() => {
         tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+      }, 150);
     }
-  }, [location.search]);
+  }, [cotizaciones]);
 
   const cargarDatos = async (silencioso = false) => {
     try {
@@ -225,11 +225,10 @@ function Cotizaciones() {
   };
 
   const handleVerDetalle = (id) => {
+    sessionStorage.setItem('cotizaciones_pagina', currentPage);
     const params = new URLSearchParams();
     if (filtroEstado) params.set('estado', filtroEstado);
     if (busqueda) params.set('busqueda', busqueda);
-    if (currentPage > 1) params.set('pagina', currentPage);
-    
     const queryString = params.toString();
     navigate(`/ventas/cotizaciones/${id}${queryString ? `?${queryString}` : ''}`);
   };

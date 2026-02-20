@@ -139,8 +139,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
       
       doc.fontSize(12).font('Helvetica-Bold');
-      doc.text('COTIZACION', 385, 65, { align: 'center', width: 155 });
-      
+      doc.text(cotizacion.es_muestra ? 'MUESTRA' : 'COTIZACION', 385, 65, { align: 'center', width: 155 }); 
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${cotizacion.numero_cotizacion}`, 385, 83, { align: 'center', width: 155 });
 
@@ -271,7 +270,7 @@ export async function generarCotizacionPDF(cotizacion) {
         
         subtotalCalculado += valorVentaItem;
 
-        const descripcion = item.producto;
+const descripcion = item.producto || item.nombre_producto_libre || '';
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
@@ -292,7 +291,7 @@ export async function generarCotizacionPDF(cotizacion) {
 
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         
-        doc.text(item.codigo_producto, 40, yPos + 5);
+        doc.text(item.codigo_producto || item.codigo_producto_libre || '', 40, yPos + 5);
         doc.text(fmtNum(cantidad), 130, yPos + 5, { width: 50, align: 'center' });
         doc.text(item.unidad_medida, 185, yPos + 5, { width: 40, align: 'center' });
         doc.text(descripcion, 230, yPos + 5, { width: 215, lineGap: 2 });

@@ -31,106 +31,115 @@ function Login() {
 
   return (
     <div className="login-container">
-      <div className="login-wrapper">
-        {/* Logo y Título */}
-        <div className="login-header">
-          <div className="login-logo-container">
-            <img 
-              src="https://indpackperu.com/images/logohorizontal.png" 
-              alt="INDPACK Logo" 
+
+      {/* Panel izquierdo decorativo */}
+      <div className="login-left-panel">
+        <div className="login-brand-mark">
+          <div className="login-logo-wrap">
+            <img
+              src="https://indpackperu.com/images/logohorizontal.png"
+              alt="INDPACK Logo"
               className="login-logo"
               onError={(e) => {
                 e.target.style.display = 'none';
-                e.target.nextElementSibling.style.display = 'block';
               }}
             />
-            <div style={{ display: 'none', fontSize: '3rem' }}>📦</div>
           </div>
-          <h1 className="login-title">INDPACK</h1>
-          <p className="login-subtitle">Sistema de Gestión</p>
+          <div>
+            <div className="login-brand-name">Indpack</div>
+            <div className="login-brand-sub">Industrial Packaging</div>
+          </div>
         </div>
 
-        {/* Card del Formulario */}
-        <div className="login-card">
-          <div className="login-card-header">
-            <h2 className="login-card-title">Bienvenido</h2>
-            <p className="login-card-description">
-              Ingresa tus credenciales para continuar
-            </p>
-          </div>
+        <div className="login-deco-number" aria-hidden="true">SAC</div>
 
-          <form onSubmit={handleSubmit} className="login-form">
-            {/* Email */}
-            <div className="login-form-group">
-              <label className="login-form-label">
-                Correo Electrónico
-              </label>
-              <div className="login-input-wrapper">
-                <Mail className="login-input-icon" size={20} />
-                <input
-                  type="email"
-                  className="login-input"
-                  placeholder="admin@indpack.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-
-            {/* Contraseña */}
-            <div className="login-form-group">
-              <label className="login-form-label">
-                Contraseña
-              </label>
-              <div className="login-input-wrapper">
-                <Lock className="login-input-icon" size={20} />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  className="login-input"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  className="login-password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Botón Submit */}
-            <button
-              type="submit"
-              className="login-submit-btn"
-              disabled={loading}
-            >
-              {loading ? (
-                <span className="login-loading">
-                  <div className="login-spinner"></div>
-                  Iniciando sesión...
-                </span>
-              ) : (
-                'Iniciar Sesión'
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="login-footer">
-          <p className="login-footer-text">
-            © 2025 INDPACK. Todos los derechos reservados.
+        <div className="login-left-bottom">
+          <div className="login-accent-bar"></div>
+          <h2 className="login-tagline">
+            Control<br />
+            <em>total</em> de<br />
+            tu operación
+          </h2>
+          <p className="login-tagline-desc">
+            Gestión de ventas, producción e inventario
+            para INDPACK S.A.C.
           </p>
         </div>
       </div>
+
+      {/* Panel derecho — formulario */}
+      <div className="login-wrapper">
+        <span className="login-sys-label">Sistema de Gestión</span>
+
+        <div>
+          <h1 className="login-card-title">Acceso</h1>
+          <p className="login-card-description">
+            Ingresa tus credenciales para continuar
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-form-group">
+            <label className="login-form-label">Correo electrónico</label>
+            <div className="login-input-wrapper">
+              <Mail className="login-input-icon" size={18} />
+              <input
+                type="email"
+                className="login-input"
+                placeholder="usuario@indpack.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+                autoComplete="email"
+              />
+            </div>
+          </div>
+
+          <div className="login-form-group">
+            <label className="login-form-label">Contraseña</label>
+            <div className="login-input-wrapper">
+              <Lock className="login-input-icon" size={18} />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="login-input"
+                placeholder="••••••••"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="login-password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="login-submit-btn"
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="login-loading">
+                <div className="login-spinner"></div>
+                Verificando...
+              </span>
+            ) : (
+              'Ingresar'
+            )}
+          </button>
+        </form>
+
+        <div className="login-footer">
+          <p className="login-footer-text">© 2025 INDPACK S.A.C. — Todos los derechos reservados</p>
+        </div>
+      </div>
+
     </div>
   );
 }

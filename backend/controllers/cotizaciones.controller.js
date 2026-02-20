@@ -98,7 +98,7 @@ export async function getAllCotizaciones(req, res) {
 export async function getCotizacionById(req, res) {
   try {
     const { id } = req.params;
-    
+
     const cotizacionResult = await executeQuery(`
       SELECT 
         c.*,
@@ -112,69 +112,57 @@ export async function getCotizacionById(req, res) {
       LEFT JOIN empleados e ON c.id_comercial = e.id_empleado
       WHERE c.id_cotizacion = ?
     `, [id]);
-    
+
     if (!cotizacionResult.success) {
-      return res.status(500).json({ 
-        success: false,
-        error: cotizacionResult.error 
-      });
+      return res.status(500).json({ success: false, error: cotizacionResult.error });
     }
-    
+
     if (cotizacionResult.data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Cotización no encontrada'
-      });
+      return res.status(404).json({ success: false, error: 'Cotizacion no encontrada' });
     }
-    
+
     const cotizacion = cotizacionResult.data[0];
-    
+
     const detalleResult = await executeQuery(`
-  SELECT 
-    dc.id_detalle,
-    dc.id_cotizacion,
-    dc.id_producto,
-    dc.cantidad,
-    dc.precio_unitario,
-    dc.precio_base,
-    dc.porcentaje_comision,
-    dc.monto_comision,
-    dc.descuento_porcentaje,
-    -- Forzamos el calculo aqui tambien
-    (dc.cantidad * dc.precio_unitario * (1 - COALESCE(dc.descuento_porcentaje, 0) / 100)) AS valor_venta,
-    (dc.cantidad * dc.precio_unitario * (1 - COALESCE(dc.descuento_porcentaje, 0) / 100)) AS subtotal,
-    dc.orden,
-    p.codigo AS codigo_producto,
-    p.nombre AS producto,
-    p.unidad_medida,
-    p.stock_actual AS stock_disponible,
-    p.requiere_receta
-  FROM detalle_cotizacion dc
-  INNER JOIN productos p ON dc.id_producto = p.id_producto
-  WHERE dc.id_cotizacion = ?
-  ORDER BY dc.orden
-`, [id]);
-    
+      SELECT 
+        dc.id_detalle,
+        dc.id_cotizacion,
+        dc.id_producto,
+        dc.cantidad,
+        dc.precio_unitario,
+        dc.precio_base,
+        dc.porcentaje_comision,
+        dc.monto_comision,
+        dc.descuento_porcentaje,
+        dc.es_producto_libre,
+        dc.codigo_producto_libre,
+        dc.nombre_producto_libre,
+        dc.unidad_medida_libre,
+        (dc.cantidad * dc.precio_unitario) AS valor_venta,
+        (dc.cantidad * dc.precio_unitario) AS subtotal,
+        dc.orden,
+        COALESCE(p.codigo, dc.codigo_producto_libre)      AS codigo_producto,
+        COALESCE(p.nombre, dc.nombre_producto_libre)      AS producto,
+        COALESCE(p.unidad_medida, dc.unidad_medida_libre) AS unidad_medida,
+        p.stock_actual AS stock_disponible,
+        p.requiere_receta
+      FROM detalle_cotizacion dc
+      LEFT JOIN productos p ON dc.id_producto = p.id_producto
+      WHERE dc.id_cotizacion = ?
+      ORDER BY dc.orden
+    `, [id]);
+
     if (!detalleResult.success) {
-      return res.status(500).json({ 
-        success: false,
-        error: detalleResult.error 
-      });
+      return res.status(500).json({ success: false, error: detalleResult.error });
     }
-    
+
     cotizacion.detalle = detalleResult.data || [];
-    
-    res.json({
-      success: true,
-      data: cotizacion
-    });
-    
+
+    res.json({ success: true, data: cotizacion });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 
@@ -209,14 +197,14 @@ export async function createCotizacion(req, res) {
     for (const item of detalle) {
       if (item.es_producto_libre) {
         if (!item.codigo_producto_libre?.trim()) {
-          return res.status(400).json({ success: false, error: 'El código del producto muestra es obligatorio' });
+          return res.status(400).json({ success: false, error: 'El codigo del producto muestra es obligatorio' });
         }
         if (!item.nombre_producto_libre?.trim()) {
           return res.status(400).json({ success: false, error: 'El nombre del producto muestra es obligatorio' });
         }
       } else {
         if (!item.id_producto) {
-          return res.status(400).json({ success: false, error: 'Producto no válido en el detalle' });
+          return res.status(400).json({ success: false, error: 'Producto no valido en el detalle' });
         }
       }
     }
@@ -320,7 +308,7 @@ export async function createCotizacion(req, res) {
           const limite = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
           const deudaActual = parseFloat(deudaRes.data[0]?.deuda_actual || 0);
           if ((deudaActual + total) > limite) {
-            console.warn(`Cliente ${id_cliente} excede límite de crédito.`);
+            console.warn(`Cliente ${id_cliente} excede limite de credito.`);
           }
         }
       }
@@ -359,21 +347,22 @@ export async function createCotizacion(req, res) {
         INSERT INTO detalle_cotizacion (
           id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
           descuento_porcentaje, orden, valor_venta, subtotal,
-          es_producto_libre, codigo_producto_libre, nombre_producto_libre
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          es_producto_libre, codigo_producto_libre, nombre_producto_libre, unidad_medida_libre
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idCotizacion,
         esProductoLibre ? null : item.id_producto,
         cantidad,
         precioVenta,
         precioBase,
-        0,
+        parseFloat(item.descuento_porcentaje || 0),
         i + 1,
         valorVentaCalculado,
         valorVentaCalculado,
         esProductoLibre,
         esProductoLibre ? item.codigo_producto_libre?.trim() : null,
-        esProductoLibre ? item.nombre_producto_libre?.trim() : null
+        esProductoLibre ? item.nombre_producto_libre?.trim() : null,
+        esProductoLibre ? item.unidad_medida?.trim() || null : null
       ]);
     }
 
@@ -385,7 +374,7 @@ export async function createCotizacion(req, res) {
         fecha_vencimiento: fechaVencimientoCalculada,
         es_muestra: esMuestra
       },
-      message: esMuestra ? 'Cotización muestra creada exitosamente' : 'Cotización creada exitosamente'
+      message: esMuestra ? 'Cotizacion muestra creada exitosamente' : 'Cotizacion creada exitosamente'
     });
 
   } catch (error) {
@@ -425,7 +414,7 @@ export async function updateCotizacion(req, res) {
     `, [id]);
 
     if (!cotizacionExistente.success || cotizacionExistente.data.length === 0) {
-      return res.status(404).json({ success: false, error: 'Cotización no encontrada' });
+      return res.status(404).json({ success: false, error: 'Cotizacion no encontrada' });
     }
 
     const cotActual = cotizacionExistente.data[0];
@@ -439,11 +428,11 @@ export async function updateCotizacion(req, res) {
 
     let fechaEmisionFinal = fecha_emision;
     if (!fechaEmisionFinal) {
-        const peruDate = getFechaPeru();
-        const year = peruDate.getFullYear();
-        const month = String(peruDate.getMonth() + 1).padStart(2, '0');
-        const day = String(peruDate.getDate()).padStart(2, '0');
-        fechaEmisionFinal = `${year}-${month}-${day}`;
+      const peruDate = getFechaPeru();
+      const year = peruDate.getFullYear();
+      const month = String(peruDate.getMonth() + 1).padStart(2, '0');
+      const day = String(peruDate.getDate()).padStart(2, '0');
+      fechaEmisionFinal = `${year}-${month}-${day}`;
     }
 
     const validezDiasFinal = parseInt(validez_dias) || 7;
@@ -461,18 +450,170 @@ export async function updateCotizacion(req, res) {
     for (const item of detalle) {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
-      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
-      
-      const valorVenta = cantidad * precioVenta * (1 - (pctDescuento / 100));
-      
+      const valorVenta = cantidad * precioVenta;
       if (!isNaN(valorVenta)) subtotal += valorVenta;
-      
+
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (pctComision / 100);
       totalComision += montoComision * cantidad;
       sumaComisionPorcentual += pctComision;
     }
+
+    const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
+
+    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    let porcentaje = 18.00;
+
+    if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
+      porcentaje = 0.00;
+    } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
+      porcentaje = parseFloat(porcentaje_impuesto);
+    }
+
+    const igv = subtotal * (porcentaje / 100);
+    const total = subtotal + igv;
+
+    if (cotActual.usar_limite_credito == 1 && plazo_pago !== 'Contado') {
+      const deudaRes = await executeQuery(`
+        SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
+        FROM ordenes_venta
+        WHERE id_cliente = ? AND moneda = ? AND estado != 'Cancelada' AND estado_pago != 'Pagado'
+      `, [id_cliente, moneda]);
+
+      const limite = moneda === 'USD' ? parseFloat(cotActual.limite_credito_usd || 0) : parseFloat(cotActual.limite_credito_pen || 0);
+      const deudaActual = parseFloat(deudaRes.data[0].deuda_actual);
+
+      if ((deudaActual + total) > limite) {
+        console.warn(`Cliente ${id_cliente} excede limite de credito en edicion.`);
+      }
+    }
+
+    const queries = [];
+
+    queries.push({
+      sql: `UPDATE cotizaciones 
+            SET id_cliente=?, id_comercial=?, fecha_emision=?, fecha_vencimiento=?, prioridad=?, moneda=?, tipo_impuesto=?, porcentaje_impuesto=?, tipo_cambio=?, plazo_pago=?, forma_pago=?, direccion_entrega=?, observaciones=?, validez_dias=?, plazo_entrega=?, lugar_entrega=?, 
+            subtotal=?, igv=?, total=?, total_comision=?, porcentaje_comision_promedio=?
+            WHERE id_cotizacion=?`,
+      params: [
+        id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada, prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal, plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal, plazo_entrega || null, lugar_entrega || null,
+        subtotal, igv, total, totalComision, porcentajeComisionPromedio, id
+      ]
+    });
+
+    queries.push({
+      sql: 'DELETE FROM detalle_cotizacion WHERE id_cotizacion = ?',
+      params: [id]
+    });
+
+    for (let i = 0; i < detalle.length; i++) {
+      const item = detalle[i];
+      const esProductoLibre = item.es_producto_libre ? 1 : 0;
+      const cantidad = parseFloat(item.cantidad || 0);
+      const precioBase = parseFloat(item.precio_base || 0);
+      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+      const pctComision = parseFloat(item.porcentaje_comision || 0);
+      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+      const montoComision = precioBase * (pctComision / 100);
+      const valorVentaCalculado = cantidad * precioVenta;
+
+      queries.push({
+        sql: `INSERT INTO detalle_cotizacion (
+                id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
+                porcentaje_comision, monto_comision, descuento_porcentaje, orden,
+                valor_venta, subtotal,
+                es_producto_libre, codigo_producto_libre, nombre_producto_libre, unidad_medida_libre
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          id,
+          esProductoLibre ? null : item.id_producto,
+          cantidad, precioVenta, precioBase,
+          pctComision, montoComision, pctDescuento, i + 1,
+          valorVentaCalculado, valorVentaCalculado,
+          esProductoLibre,
+          esProductoLibre ? item.codigo_producto_libre?.trim() : null,
+          esProductoLibre ? item.nombre_producto_libre?.trim() : null,
+          esProductoLibre ? item.unidad_medida?.trim() || null : null
+        ]
+      });
+    }
+
+    if (cotActual.convertida_venta === 1 && cotActual.id_orden_venta) {
+      const idOrden = cotActual.id_orden_venta;
+
+      const ordenCheck = await executeQuery('SELECT stock_reservado FROM ordenes_venta WHERE id_orden_venta = ?', [idOrden]);
+      const stockReservado = ordenCheck.data.length > 0 && ordenCheck.data[0].stock_reservado === 1;
+
+      if (stockReservado) {
+        const detalleAnteriorOV = await executeQuery('SELECT id_producto, cantidad FROM detalle_orden_venta WHERE id_orden_venta = ?', [idOrden]);
+        for (const itemAnt of detalleAnteriorOV.data) {
+          const prodInfo = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [itemAnt.id_producto]);
+          if (prodInfo.data.length > 0 && prodInfo.data[0].requiere_receta === 0) {
+            queries.push({
+              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+              params: [parseFloat(itemAnt.cantidad), itemAnt.id_producto]
+            });
+          }
+        }
+      }
+
+      queries.push({
+        sql: `UPDATE ordenes_venta 
+              SET id_cliente=?, fecha_emision=?, fecha_vencimiento=?, prioridad=?, moneda=?, tipo_impuesto=?, porcentaje_impuesto=?, tipo_cambio=?, plazo_pago=?, forma_pago=?, direccion_entrega=?, observaciones=?, lugar_entrega=?, 
+              subtotal=?, igv=?, total=?, total_comision=?, porcentaje_comision_promedio=?
+              WHERE id_orden_venta=?`,
+        params: [
+          id_cliente, fechaEmisionFinal, fechaVencimientoCalculada, prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal, plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, lugar_entrega || null,
+          subtotal, igv, total, totalComision, porcentajeComisionPromedio, idOrden
+        ]
+      });
+
+      queries.push({
+        sql: 'DELETE FROM detalle_orden_venta WHERE id_orden_venta = ?',
+        params: [idOrden]
+      });
+
+      for (let i = 0; i < detalle.length; i++) {
+        const item = detalle[i];
+        if (item.es_producto_libre) continue;
+
+        const cantidad = parseFloat(item.cantidad || 0);
+        const precioBase = parseFloat(item.precio_base || 0);
+        const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+        const pctComision = parseFloat(item.porcentaje_comision || 0);
+        const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+        const montoComision = precioBase * (pctComision / 100);
+
+        queries.push({
+          sql: `INSERT INTO detalle_orden_venta (id_orden_venta, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [idOrden, item.id_producto, cantidad, precioVenta, precioBase, pctComision, montoComision, pctDescuento, stockReservado ? 1 : 0]
+        });
+
+        if (stockReservado) {
+          const prodCheck = await executeQuery('SELECT requiere_receta FROM productos WHERE id_producto = ?', [item.id_producto]);
+          if (prodCheck.data.length > 0 && prodCheck.data[0].requiere_receta === 0) {
+            queries.push({
+              sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
+              params: [cantidad, item.id_producto]
+            });
+          }
+        }
+      }
+    }
+
+    await executeTransaction(queries);
+
+    res.json({
+      success: true,
+      message: 'Cotizacion actualizada exitosamente' + (cotActual.convertida_venta ? ' y sincronizada con Orden de Venta' : '')
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
 
     const porcentajeComisionPromedio = detalle.length > 0 ? sumaComisionPorcentual / detalle.length : 0;
     
@@ -522,22 +663,35 @@ export async function updateCotizacion(req, res) {
     });
 
     for (let i = 0; i < detalle.length; i++) {
-      const item = detalle[i];
-      const cantidad = parseFloat(item.cantidad || 0);
-      const precioBase = parseFloat(item.precio_base || 0);
-      const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
-      
-      const pctComision = parseFloat(item.porcentaje_comision || 0);
-      const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
-      const montoComision = precioBase * (pctComision / 100);
+  const item = detalle[i];
+  const esProductoLibre = item.es_producto_libre ? 1 : 0;
+  const cantidad = parseFloat(item.cantidad || 0);
+  const precioBase = parseFloat(item.precio_base || 0);
+  const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
+  const pctComision = parseFloat(item.porcentaje_comision || 0);
+  const pctDescuento = parseFloat(item.descuento_porcentaje || 0);
+  const montoComision = precioBase * (pctComision / 100);
+  const valorVentaCalculado = cantidad * precioVenta;
 
-      const valorVentaCalculado = cantidad * precioVenta * (1 - (pctDescuento / 100));
-
-      queries.push({
-        sql: `INSERT INTO detalle_cotizacion (id_cotizacion, id_producto, cantidad, precio_unitario, precio_base, porcentaje_comision, monto_comision, descuento_porcentaje, orden, valor_venta, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [id, item.id_producto, cantidad, precioVenta, precioBase, pctComision, montoComision, pctDescuento, i + 1, valorVentaCalculado, valorVentaCalculado]
-      });
-    }
+  queries.push({
+    sql: `INSERT INTO detalle_cotizacion (
+            id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
+            porcentaje_comision, monto_comision, descuento_porcentaje, orden,
+            valor_venta, subtotal,
+            es_producto_libre, codigo_producto_libre, nombre_producto_libre
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      id,
+      esProductoLibre ? null : item.id_producto,
+      cantidad, precioVenta, precioBase,
+      pctComision, montoComision, pctDescuento, i + 1,
+      valorVentaCalculado, valorVentaCalculado,
+      esProductoLibre,
+      esProductoLibre ? item.codigo_producto_libre?.trim() : null,
+      esProductoLibre ? item.nombre_producto_libre?.trim() : null
+    ]
+  });
+}
 
     if (cotActual.convertida_venta === 1 && cotActual.id_orden_venta) {
       const idOrden = cotActual.id_orden_venta;

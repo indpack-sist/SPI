@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Eye, 
@@ -8,7 +8,6 @@ import {
   Filter, 
   TrendingUp, 
   Clock,
-  Package, 
   Truck, 
   CheckCircle, 
   XCircle, 
@@ -24,8 +23,6 @@ import {
   PlayCircle,
   Factory,
   Shield,
-  AlertCircle,
-  RefreshCw,
   BadgeCheck
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
@@ -35,7 +32,6 @@ import { ordenesVentaAPI } from '../../config/api';
 
 function OrdenesVenta() {
   const navigate = useNavigate();
-  const location = useLocation();
   
   const [ordenes, setOrdenes] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
@@ -58,23 +54,19 @@ function OrdenesVenta() {
   }, [filtroEstado, filtroPrioridad, filtroVerificacion]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (!params.get('pagina')) {
-      setCurrentPage(1);
-    }
+    setCurrentPage(1);
   }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, busqueda]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const pagina = params.get('pagina');
-
-    if (pagina) {
-      setCurrentPage(parseInt(pagina));
+    const paginaGuardada = sessionStorage.getItem('ordenes_pagina');
+    if (paginaGuardada) {
+      setCurrentPage(parseInt(paginaGuardada));
+      sessionStorage.removeItem('ordenes_pagina');
       setTimeout(() => {
         tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+      }, 150);
     }
-  }, [location.search]);
+  }, [ordenes]);
 
   const cargarDatos = async () => {
     try {
@@ -109,7 +101,6 @@ function OrdenesVenta() {
 
   const ordenesFiltradas = ordenes.filter(orden => {
     if (filtroEstadoPago && orden.estado_pago !== filtroEstadoPago) return false;
-    
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
     return (
@@ -132,10 +123,8 @@ function OrdenesVenta() {
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
   const handleNavegaDetalle = (id) => {
-    const params = new URLSearchParams();
-    if (currentPage > 1) params.set('pagina', currentPage);
-    const queryString = params.toString();
-    navigate(`/ventas/ordenes/${id}${queryString ? `?${queryString}` : ''}`);
+    sessionStorage.setItem('ordenes_pagina', currentPage);
+    navigate(`/ventas/ordenes/${id}`);
   };
 
   const handleDescargarPDF = async (idOrden, numeroOrden, cliente) => {
@@ -161,10 +150,8 @@ function OrdenesVenta() {
       const nombreArchivo = `${clienteSanitizado}_${nroOrden}.pdf`;
       
       link.setAttribute('download', nombreArchivo);
-      
       document.body.appendChild(link);
       link.click();
-      
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
       
@@ -173,13 +160,11 @@ function OrdenesVenta() {
       
     } catch (err) {
       console.error("Error original:", err);
-
       if (err.response && err.response.data instanceof Blob) {
         try {
           const errorText = await err.response.data.text();
           const errorJson = JSON.parse(errorText);
-          const mensajeError = errorJson.error || 'Error al generar el PDF';
-          setError(mensajeError);
+          setError(errorJson.error || 'Error al generar el PDF');
         } catch (e) {
           setError('Ocurrió un error inesperado al descargar el archivo.');
         }
@@ -193,9 +178,8 @@ function OrdenesVenta() {
 
   const formatearFechaVisual = (fechaStr) => {
     if (!fechaStr) return '-';
-    const cleanFecha = fechaStr.split('T')[0];
-    const partes = cleanFecha.split('-');
-    if (partes.length !== 3) return cleanFecha;
+    const partes = fechaStr.split('T')[0].split('-');
+    if (partes.length !== 3) return fechaStr;
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
 
@@ -213,9 +197,9 @@ function OrdenesVenta() {
 
   const getEstadoVerificacionConfig = (estadoVerif) => {
     const configs = {
-      'Pendiente': { icono: Clock, clase: 'badge-warning', texto: 'Pend. Verif.', color: '#f59e0b' },
-      'Aprobada': { icono: CheckCircle, clase: 'badge-success', texto: 'Aprobada', color: '#10b981' },
-      'Rechazada': { icono: XCircle, clase: 'badge-danger', texto: 'Rechazada', color: '#ef4444' }
+      'Pendiente': { icono: Clock, clase: 'badge-warning', texto: 'Pend. Verif.' },
+      'Aprobada': { icono: CheckCircle, clase: 'badge-success', texto: 'Aprobada' },
+      'Rechazada': { icono: XCircle, clase: 'badge-danger', texto: 'Rechazada' }
     };
     return configs[estadoVerif] || configs['Pendiente'];
   };
@@ -235,19 +219,19 @@ function OrdenesVenta() {
 
   const getPrioridadConfig = (prioridad) => {
     const configs = {
-      'Baja': { clase: 'badge-secondary', color: '#6b7280' },
-      'Media': { clase: 'badge-info', color: '#3b82f6' },
-      'Alta': { clase: 'badge-warning', color: '#f59e0b' },
-      'Urgente': { clase: 'badge-danger', color: '#ef4444' }
+      'Baja': { clase: 'badge-secondary' },
+      'Media': { clase: 'badge-info' },
+      'Alta': { clase: 'badge-warning' },
+      'Urgente': { clase: 'badge-danger' }
     };
     return configs[prioridad] || configs['Media'];
   };
 
   const getEstadoPagoConfig = (estadoPago) => {
     const configs = {
-      'Pendiente': { clase: 'badge-warning', icono: Clock, color: '#f59e0b' },
-      'Parcial': { clase: 'badge-info', icono: CreditCard, color: '#3b82f6' },
-      'Pagado': { clase: 'badge-success', icono: CheckCircle, color: '#10b981' }
+      'Pendiente': { clase: 'badge-warning', icono: Clock },
+      'Parcial': { clase: 'badge-info', icono: CreditCard },
+      'Pagado': { clase: 'badge-success', icono: CheckCircle }
     };
     return configs[estadoPago] || configs['Pendiente'];
   };
@@ -268,14 +252,10 @@ function OrdenesVenta() {
               {config.texto}
             </span>
             {value === 'Aprobada' && row.verificado_por && (
-              <div className="text-[10px] text-muted mt-1">
-                {row.verificado_por}
-              </div>
+              <div className="text-[10px] text-muted mt-1">{row.verificado_por}</div>
             )}
             {value === 'Rechazada' && (
-              <div className="text-[10px] text-danger mt-1 font-semibold">
-                Corregir
-              </div>
+              <div className="text-[10px] text-danger mt-1 font-semibold">Corregir</div>
             )}
           </div>
         );
@@ -286,17 +266,15 @@ function OrdenesVenta() {
       accessor: 'numero_orden',
       width: '200px',
       render: (value, row) => {
-        const tipoRaw = row.tipo_comprobante || ''; 
+        const tipoRaw = row.tipo_comprobante || '';
         const esFactura = tipoRaw.toLowerCase().includes('factura');
-        const textoMostrar = tipoRaw || 'Sin Tipo'; 
-
+        const textoMostrar = tipoRaw || 'Sin Tipo';
         return (
           <div>
             <div className="flex items-center gap-1 mb-1.5">
               <span className={`badge badge-xs ${esFactura ? 'badge-success' : 'badge-info'}`}>
                 {textoMostrar}
               </span>
-              
               {!esFactura && row.numero_comprobante && (
                 <span className="font-mono text-xs text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
                   {row.numero_comprobante}
@@ -381,15 +359,10 @@ function OrdenesVenta() {
         return (
           <div>
             <div className="font-bold text-gray-800">{formatearMoneda(total, row.moneda)}</div>
-            <div className="text-xs text-muted">
-              Pagado: {formatearMoneda(pagado, row.moneda)}
-            </div>
+            <div className="text-xs text-muted">Pagado: {formatearMoneda(pagado, row.moneda)}</div>
             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
               <div 
-                className={`h-1.5 rounded-full ${
-                  porcentaje >= 99.9 ? 'bg-success' : 
-                  porcentaje > 0 ? 'bg-info' : 'bg-warning'
-                }`}
+                className={`h-1.5 rounded-full ${porcentaje >= 99.9 ? 'bg-success' : porcentaje > 0 ? 'bg-info' : 'bg-warning'}`}
                 style={{ width: `${porcentaje}%` }}
               ></div>
             </div>
@@ -449,11 +422,7 @@ function OrdenesVenta() {
       align: 'center',
       render: (value) => {
         const config = getPrioridadConfig(value);
-        return (
-          <span className={`badge ${config.clase}`}>
-            {value}
-          </span>
-        );
+        return <span className={`badge ${config.clase}`}>{value}</span>;
       }
     },
     {
@@ -481,33 +450,22 @@ function OrdenesVenta() {
         <div className="flex gap-1 justify-center">
           <button
             className="btn btn-sm btn-primary"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleNavegaDetalle(value);
-            }}
+            onClick={(e) => { e.stopPropagation(); handleNavegaDetalle(value); }}
             title="Ver detalle"
           >
             <Eye size={14} />
           </button>
-          
           <button
             className="btn btn-sm btn-secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/ventas/ordenes/${value}/editar`);
-            }}
+            onClick={(e) => { e.stopPropagation(); navigate(`/ventas/ordenes/${value}/editar`); }}
             title="Editar orden"
             disabled={row.estado_verificacion === 'Pendiente'}
           >
             <Edit size={14} />
           </button>
-
           <button
             className="btn btn-sm btn-outline"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDescargarPDF(value, row.numero_orden, row.cliente);
-            }}
+            onClick={(e) => { e.stopPropagation(); handleDescargarPDF(value, row.numero_orden, row.cliente); }}
             disabled={descargandoPDF === value}
             title="Descargar PDF"
           >
@@ -563,22 +521,16 @@ function OrdenesVenta() {
               <p className="stat-value">{estadisticas.total_ordenes || 0}</p>
               <p className="stat-sublabel">{estadisticas.clientes_unicos || 0} clientes</p>
             </div>
-            <div className="stat-icon">
-              <ShoppingCart size={24} />
-            </div>
+            <div className="stat-icon"><ShoppingCart size={24} /></div>
           </div>
-
           <div className="stat-card border-l-4 border-warning">
             <div className="stat-content">
               <p className="stat-label">En Espera</p>
               <p className="stat-value text-warning">{estadisticas.en_espera || 0}</p>
               <p className="stat-sublabel">Por producir</p>
             </div>
-            <div className="stat-icon">
-              <Clock size={24} className="text-warning" />
-            </div>
+            <div className="stat-icon"><Clock size={24} className="text-warning" /></div>
           </div>
-
           <div className="stat-card border-l-4 border-info">
             <div className="stat-content">
               <p className="stat-label">En Proceso</p>
@@ -590,33 +542,23 @@ function OrdenesVenta() {
                 </p>
               )}
             </div>
-            <div className="stat-icon">
-              <PlayCircle size={24} className="text-info" />
-            </div>
+            <div className="stat-icon"><PlayCircle size={24} className="text-info" /></div>
           </div>
-
           <div className="stat-card border-l-4 border-orange-400">
             <div className="stat-content">
               <p className="stat-label">Desp. Parcial</p>
               <p className="stat-value text-orange-600">{estadisticas.despacho_parcial || 0}</p>
               <p className="stat-sublabel">Pendientes</p>
             </div>
-            <div className="stat-icon">
-              <Truck size={24} className="text-orange-600" />
-            </div>
+            <div className="stat-icon"><Truck size={24} className="text-orange-600" /></div>
           </div>
-
           <div className="stat-card border-l-4 border-success">
             <div className="stat-content">
               <p className="stat-label">Monto Total</p>
-              <p className="stat-value text-success">
-                {formatearMoneda(estadisticas.monto_total || 0, 'PEN')}
-              </p>
+              <p className="stat-value text-success">{formatearMoneda(estadisticas.monto_total || 0, 'PEN')}</p>
               <p className="stat-sublabel">{estadisticas.entregadas || 0} entregadas</p>
             </div>
-            <div className="stat-icon">
-              <TrendingUp size={24} className="text-success" />
-            </div>
+            <div className="stat-icon"><TrendingUp size={24} className="text-success" /></div>
           </div>
         </div>
       )}
@@ -624,7 +566,6 @@ function OrdenesVenta() {
       <div className="card mb-4 shadow-sm">
         <div className="card-body">
           <div className="flex flex-col md:flex-row gap-4">
-            
             <div className="search-input-wrapper flex-1">
               <Search size={20} className="search-icon" />
               <input
@@ -640,121 +581,57 @@ function OrdenesVenta() {
               <Filter size={20} className="text-muted shrink-0" />
               
               <div className="flex gap-2">
-                <button
-                  className={`btn btn-sm ${!filtroVerificacion ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setFiltroVerificacion('')}
-                >
-                  Todas
+                <button className={`btn btn-sm ${!filtroVerificacion ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroVerificacion('')}>Todas</button>
+                <button className={`btn btn-sm ${filtroVerificacion === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroVerificacion('Pendiente')}>
+                  <Clock size={14} /> Pendientes
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroVerificacion === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setFiltroVerificacion('Pendiente')}
-                >
-                  <Clock size={14} />
-                  Pendientes
-                </button>
-                <button
-                  className={`btn btn-sm ${filtroVerificacion === 'Rechazada' ? 'btn-danger' : 'btn-outline'}`}
-                  onClick={() => setFiltroVerificacion('Rechazada')}
-                >
-                  <XCircle size={14} />
-                  Rechazadas
+                <button className={`btn btn-sm ${filtroVerificacion === 'Rechazada' ? 'btn-danger' : 'btn-outline'}`} onClick={() => setFiltroVerificacion('Rechazada')}>
+                  <XCircle size={14} /> Rechazadas
                 </button>
               </div>
 
               <div className="border-l h-6 mx-2 hidden md:block"></div>
 
               <div className="flex gap-2">
-                <button
-                  className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('')}
-                >
-                  Todos
+                <button className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroEstado('')}>Todos</button>
+                <button className={`btn btn-sm ${filtroEstado === 'En Espera' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroEstado('En Espera')}>
+                  <Clock size={14} /> En Espera
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'En Espera' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('En Espera')}
-                >
-                  <Clock size={14} />
-                  En Espera
+                <button className={`btn btn-sm ${filtroEstado === 'En Proceso' ? 'btn-info' : 'btn-outline'}`} onClick={() => setFiltroEstado('En Proceso')}>
+                  <PlayCircle size={14} /> En Proceso
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'En Proceso' ? 'btn-info' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('En Proceso')}
-                >
-                  <PlayCircle size={14} />
-                  En Proceso
+                <button className={`btn btn-sm ${filtroEstado === 'Atendido por Producción' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroEstado('Atendido por Producción')}>
+                  <Factory size={14} /> Atendido
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'Atendido por Producción' ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Atendido por Producción')}
-                >
-                  <Factory size={14} />
-                  Atendido
+                <button className={`btn btn-sm ${filtroEstado === 'Despacho Parcial' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroEstado('Despacho Parcial')}>
+                  <Truck size={14} /> Desp. Parcial
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'Despacho Parcial' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Despacho Parcial')}
-                >
-                  <Truck size={14} />
-                  Desp. Parcial
+                <button className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroEstado('Despachada')}>
+                  <Truck size={14} /> Despachada
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Despachada')}
-                >
-                  <Truck size={14} />
-                  Despachada
-                </button>
-                <button
-                  className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstado('Entregada')}
-                >
-                  <CheckCircle size={14} />
-                  Entregada
+                <button className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`} onClick={() => setFiltroEstado('Entregada')}>
+                  <CheckCircle size={14} /> Entregada
                 </button>
               </div>
 
               <div className="border-l h-6 mx-2 hidden md:block"></div>
 
               <div className="flex gap-2">
-                <button
-                  className={`btn btn-sm ${filtroPrioridad === 'Urgente' ? 'btn-danger' : 'btn-outline'}`}
-                  onClick={() => setFiltroPrioridad(filtroPrioridad === 'Urgente' ? '' : 'Urgente')}
-                >
-                  Urgente
-                </button>
-                <button
-                  className={`btn btn-sm ${filtroPrioridad === 'Alta' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setFiltroPrioridad(filtroPrioridad === 'Alta' ? '' : 'Alta')}
-                >
-                  Alta
-                </button>
+                <button className={`btn btn-sm ${filtroPrioridad === 'Urgente' ? 'btn-danger' : 'btn-outline'}`} onClick={() => setFiltroPrioridad(filtroPrioridad === 'Urgente' ? '' : 'Urgente')}>Urgente</button>
+                <button className={`btn btn-sm ${filtroPrioridad === 'Alta' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroPrioridad(filtroPrioridad === 'Alta' ? '' : 'Alta')}>Alta</button>
               </div>
 
               <div className="border-l h-6 mx-2 hidden md:block"></div>
 
               <div className="flex gap-2">
-                <button
-                  className={`btn btn-sm ${filtroEstadoPago === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pendiente' ? '' : 'Pendiente')}
-                >
-                  <DollarSign size={14} />
-                  Sin Pagar
+                <button className={`btn btn-sm ${filtroEstadoPago === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pendiente' ? '' : 'Pendiente')}>
+                  <DollarSign size={14} /> Sin Pagar
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroEstadoPago === 'Parcial' ? 'btn-info' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Parcial' ? '' : 'Parcial')}
-                >
-                  <CreditCard size={14} />
-                  Pago Parcial
+                <button className={`btn btn-sm ${filtroEstadoPago === 'Parcial' ? 'btn-info' : 'btn-outline'}`} onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Parcial' ? '' : 'Parcial')}>
+                  <CreditCard size={14} /> Pago Parcial
                 </button>
-                <button
-                  className={`btn btn-sm ${filtroEstadoPago === 'Pagado' ? 'btn-success' : 'btn-outline'}`}
-                  onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pagado' ? '' : 'Pagado')}
-                >
-                  <CheckCircle size={14} />
-                  Pagado
+                <button className={`btn btn-sm ${filtroEstadoPago === 'Pagado' ? 'btn-success' : 'btn-outline'}`} onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pagado' ? '' : 'Pagado')}>
+                  <CheckCircle size={14} /> Pagado
                 </button>
               </div>
             </div>
@@ -795,13 +672,9 @@ function OrdenesVenta() {
             >
               <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
             </button>
-
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">
-                Página {currentPage} de {totalPages}
-              </span>
+              <span className="text-sm font-medium">Página {currentPage} de {totalPages}</span>
             </div>
-
             <button 
               className="btn btn-sm btn-outline flex items-center gap-1"
               onClick={goToNextPage}

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Plus, 
   Eye, 
@@ -35,6 +35,7 @@ import { ordenesVentaAPI } from '../../config/api';
 
 function OrdenesVenta() {
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [ordenes, setOrdenes] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
@@ -50,14 +51,30 @@ function OrdenesVenta() {
   const [busqueda, setBusqueda] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const tablaRef = useRef(null);
 
   useEffect(() => {
     cargarDatos();
   }, [filtroEstado, filtroPrioridad, filtroVerificacion]);
 
   useEffect(() => {
-    setCurrentPage(1);
+    const params = new URLSearchParams(location.search);
+    if (!params.get('pagina')) {
+      setCurrentPage(1);
+    }
   }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, busqueda]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const pagina = params.get('pagina');
+
+    if (pagina) {
+      setCurrentPage(parseInt(pagina));
+      setTimeout(() => {
+        tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [location.search]);
 
   const cargarDatos = async () => {
     try {
@@ -113,6 +130,13 @@ function OrdenesVenta() {
 
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
+  const handleNavegaDetalle = (id) => {
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set('pagina', currentPage);
+    const queryString = params.toString();
+    navigate(`/ventas/ordenes/${id}${queryString ? `?${queryString}` : ''}`);
+  };
 
   const handleDescargarPDF = async (idOrden, numeroOrden, cliente) => {
     try {
@@ -459,7 +483,7 @@ function OrdenesVenta() {
             className="btn btn-sm btn-primary"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/ventas/ordenes/${value}`);
+              handleNavegaDetalle(value);
             }}
             title="Ver detalle"
           >
@@ -738,7 +762,7 @@ function OrdenesVenta() {
         </div>
       </div>
 
-      <div className="card shadow-sm">
+      <div className="card shadow-sm" ref={tablaRef}>
         <div className="card-header">
           <div className="flex items-center gap-2">
             <h2 className="card-title">
@@ -747,7 +771,7 @@ function OrdenesVenta() {
             </h2>
           </div>
           <div className="text-sm text-muted">
-              Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
+            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
           </div>
         </div>
         
@@ -757,7 +781,7 @@ function OrdenesVenta() {
               columns={columns}
               data={currentItems}
               emptyMessage="No hay órdenes de venta registradas"
-              onRowClick={(row) => navigate(`/ventas/ordenes/${row.id_orden_venta}`)}
+              onRowClick={(row) => handleNavegaDetalle(row.id_orden_venta)}
             />
           </div>
         </div>
@@ -765,11 +789,11 @@ function OrdenesVenta() {
         {ordenesFiltradas.length > itemsPerPage && (
           <div className="card-footer flex-wrap gap-2">
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToPrevPage}
-                disabled={currentPage === 1}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
             >
-                <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
+              <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
             </button>
 
             <div className="flex items-center gap-2">
@@ -779,11 +803,11 @@ function OrdenesVenta() {
             </div>
 
             <button 
-                className="btn btn-sm btn-outline flex items-center gap-1"
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
+              className="btn btn-sm btn-outline flex items-center gap-1"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
             >
-                <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
+              <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
             </button>
           </div>
         )}

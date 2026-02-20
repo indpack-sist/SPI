@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Plus, Eye, Download, Filter, FileText, Search,
@@ -26,6 +26,7 @@ function Cotizaciones() {
   const [ordenAscendente, setOrdenAscendente] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const tablaRef = useRef(null);
 
   useEffect(() => {
     cargarDatos();
@@ -46,7 +47,12 @@ function Cotizaciones() {
     
     if (estado) setFiltroEstado(estado);
     if (search) setBusqueda(search);
-    if (pagina) setCurrentPage(parseInt(pagina));
+    if (pagina) {
+      setCurrentPage(parseInt(pagina));
+      setTimeout(() => {
+        tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
   }, [location.search]);
 
   const cargarDatos = async (silencioso = false) => {
@@ -496,7 +502,7 @@ function Cotizaciones() {
         </div>
       </div>
 
-      <div className="card shadow-sm">
+      <div className="card shadow-sm" ref={tablaRef}>
         <div className="card-header">
           <div className="flex items-center gap-2">
             <h2 className="card-title">Lista de Cotizaciones</h2>

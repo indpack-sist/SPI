@@ -1347,3 +1347,33 @@ textarea::placeholder {
   color: var(--steel-light) !important;
   opacity: 1;
 }
+/* Inputs modo muestra — fondo amarillo claro requiere texto oscuro */
+input[style*="fffbeb"],
+input[style*="fcd34d"] {
+  background-color: #1e1800 !important;
+  border-color: rgba(232, 184, 75, 0.5) !important;
+  color: #f5f5f0 !important;
+}
+
+input[style*="fffbeb"]::placeholder,
+input[style*="fcd34d"]::placeholder {
+  color: #555 !important;
+  opacity: 1;
+}
+
+/* Fila muestra en tabla */
+tr.bg-amber-50 td {
+  background-color: rgba(232, 184, 75, 0.05) !important;
+}
+
+/* Input P. Base readonly (bg-gray-100 via clase) */
+input.bg-gray-100 {
+  background-color: var(--carbon-light) !important;
+  color: var(--wire) !important;
+}
+
+/* Input P. Venta (bg-blue-50 via clase) */
+input.bg-blue-50 {
+  background-color: rgba(93, 173, 226, 0.08) !important;
+  color: var(--white) !important;
+}

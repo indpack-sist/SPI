@@ -1,4 +1,5 @@
 /* Layout.css */
+
 .layout {
   display: flex;
   min-height: 100dvh;
@@ -7,10 +8,13 @@
   overflow-x: hidden;
 }
 
-/* --- WRAPPER DEL SIDEBAR --- */
+/* =====================================================
+   SIDEBAR WRAPPER
+   ===================================================== */
+
 .layout-sidebar-wrapper {
   width: 260px;
-  background-color: var(--bg-primary);
+  background-color: var(--carbon);
   border-right: 1px solid var(--border);
   position: fixed;
   top: 0;
@@ -22,11 +26,33 @@
   flex-direction: column;
 }
 
+/* Línea de acento amarilla en el borde derecho del sidebar */
+.layout-sidebar-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -1px;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--accent) 25%,
+    var(--accent) 75%,
+    transparent
+  );
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .layout-sidebar-wrapper.closed {
   transform: translateX(-100%);
 }
 
-/* --- MAIN CONTAINER --- */
+/* =====================================================
+   MAIN CONTAINER
+   ===================================================== */
+
 .layout-main {
   flex: 1;
   display: flex;
@@ -35,79 +61,87 @@
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.layout-main.sidebar-open {
-  margin-left: 260px; /* En PC empuja el contenido */
-}
+.layout-main.sidebar-open  { margin-left: 260px; }
+.layout-main.sidebar-closed { margin-left: 0; }
+.layout-main.layout-full   { margin-left: 0; }
 
-.layout-main.sidebar-closed {
-  margin-left: 0;
-}
+/* =====================================================
+   CONTENIDO
+   ===================================================== */
 
-/* --- CONTENIDO INTERNO --- */
 .layout-content {
   flex: 1;
   padding: 1.5rem;
-  container-type: inline-size; 
+  container-type: inline-size;
 }
+
+.content-launcher {
+  padding: 0;
+}
+
+/* =====================================================
+   FOOTER
+   ===================================================== */
 
 .layout-footer {
-  padding: 1rem 1.5rem;
-  background-color: var(--bg-primary);
+  padding: 0.75rem 1.5rem;
+  background-color: var(--carbon);
   border-top: 1px solid var(--border);
   text-align: center;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--steel-light);
 }
 
-/* --- OVERLAY (CAPA INVISIBLE) --- */
+/* =====================================================
+   OVERLAY (solo móvil)
+   ===================================================== */
+
 .layout-overlay {
-  display: none; /* CRÍTICO: En PC no existe, para no bloquear clics */
+  display: none;
 }
 
-/* --- RESPONSIVE (Móvil y Tablet) --- */
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
 @media (max-width: 768px) {
-  
-  /* Configuración del Overlay solo para móvil */
+
   .layout-overlay {
     display: block;
     position: fixed;
     inset: 0;
-    background-color: transparent; /* Transparente total */
+    background-color: rgba(0, 0, 0, 0);
     z-index: 40;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: background-color 0.3s ease, opacity 0.3s ease;
   }
 
   .layout-overlay.visible {
+    background-color: rgba(0, 0, 0, 0.7);
     opacity: 1;
-    pointer-events: auto; /* Solo captura clics si está abierto en móvil */
+    pointer-events: auto;
   }
-  
-  /* Sidebar flotante */
+
   .layout-sidebar-wrapper {
-    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
-  }
-  
-  .layout-sidebar-wrapper.closed {
-    transform: translateX(-100%);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6);
   }
 
-  .layout-sidebar-wrapper.open {
-    transform: translateX(0);
-  }
+  .layout-sidebar-wrapper.closed { transform: translateX(-100%); }
+  .layout-sidebar-wrapper.open   { transform: translateX(0); }
 
-  /* El contenido NO se empuja en móvil */
   .layout-main.sidebar-open,
   .layout-main.sidebar-closed {
     margin-left: 0 !important;
   }
-  
-  .layout-content {
-    padding: 1rem;
-  }
-  
-  .layout-main {
-    width: 100%;
-  }
+
+  .layout-main { width: 100%; }
+
+  .layout-content { padding: 1rem; }
+
+  .layout-footer { padding: 0.75rem 1rem; }
 }

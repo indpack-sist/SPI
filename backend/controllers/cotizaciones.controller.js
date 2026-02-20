@@ -196,12 +196,30 @@ export async function createCotizacion(req, res) {
       validez_dias,
       plazo_entrega,
       lugar_entrega,
-      detalle
+      detalle,
+      es_muestra
     } = req.body;
+
+    const esMuestra = es_muestra ? 1 : 0;
 
     if (!id_cliente) return res.status(400).json({ success: false, error: 'Cliente es obligatorio' });
     if (!detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Debe agregar al menos un producto' });
     if (!plazo_pago || plazo_pago.trim() === '') return res.status(400).json({ success: false, error: 'Plazo de pago es obligatorio' });
+
+    for (const item of detalle) {
+      if (item.es_producto_libre) {
+        if (!item.codigo_producto_libre?.trim()) {
+          return res.status(400).json({ success: false, error: 'El código del producto muestra es obligatorio' });
+        }
+        if (!item.nombre_producto_libre?.trim()) {
+          return res.status(400).json({ success: false, error: 'El nombre del producto muestra es obligatorio' });
+        }
+      } else {
+        if (!item.id_producto) {
+          return res.status(400).json({ success: false, error: 'Producto no válido en el detalle' });
+        }
+      }
+    }
 
     const comercialFinal = id_comercial || req.user?.id_empleado;
     if (!comercialFinal) return res.status(400).json({ success: false, error: 'No se pudo determinar el comercial responsable' });
@@ -223,43 +241,60 @@ export async function createCotizacion(req, res) {
     let tipoCambioFinal = parseFloat(tipo_cambio) || 1.0000;
     if (moneda === 'PEN') tipoCambioFinal = 1.0000;
 
-    const ultimaResult = await executeQuery(`
-      SELECT numero_cotizacion 
-      FROM cotizaciones 
-      ORDER BY id_cotizacion DESC 
-      LIMIT 1
-    `);
+    const anioActual = getFechaPeru().getFullYear();
 
-    let numeroSecuencia = 1;
-    if (ultimaResult.success && ultimaResult.data.length > 0) {
-      const match = ultimaResult.data[0].numero_cotizacion.match(/(\d+)$/);
-      if (match) numeroSecuencia = parseInt(match[1]) + 1;
+    let numeroCotizacion;
+
+    if (esMuestra) {
+      const ultimaMuestraResult = await executeQuery(`
+        SELECT numero_cotizacion 
+        FROM cotizaciones 
+        WHERE es_muestra = 1 AND numero_cotizacion LIKE 'MUE-${anioActual}-%'
+        ORDER BY id_cotizacion DESC 
+        LIMIT 1
+      `);
+
+      let secuenciaMuestra = 1;
+      if (ultimaMuestraResult.success && ultimaMuestraResult.data.length > 0) {
+        const match = ultimaMuestraResult.data[0].numero_cotizacion.match(/(\d+)$/);
+        if (match) secuenciaMuestra = parseInt(match[1]) + 1;
+      }
+      numeroCotizacion = `MUE-${anioActual}-${String(secuenciaMuestra).padStart(4, '0')}`;
+    } else {
+      const ultimaResult = await executeQuery(`
+        SELECT numero_cotizacion 
+        FROM cotizaciones 
+        WHERE es_muestra = 0 AND numero_cotizacion LIKE 'COT-${anioActual}-%'
+        ORDER BY id_cotizacion DESC 
+        LIMIT 1
+      `);
+
+      let numeroSecuencia = 1;
+      if (ultimaResult.success && ultimaResult.data.length > 0) {
+        const match = ultimaResult.data[0].numero_cotizacion.match(/(\d+)$/);
+        if (match) numeroSecuencia = parseInt(match[1]) + 1;
+      }
+      numeroCotizacion = `COT-${anioActual}-${String(numeroSecuencia).padStart(4, '0')}`;
     }
-    const numeroCotizacion = `COT-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
 
     let subtotal = 0;
-
     for (const item of detalle) {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || 0);
       const valorVenta = cantidad * precioVenta;
-
-      if (!isNaN(valorVenta)) {
-        subtotal += valorVenta;
-      }
+      if (!isNaN(valorVenta)) subtotal += valorVenta;
     }
 
     const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
-
     if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
 
-    let igv = subtotal * (porcentaje / 100);
-    let total = subtotal + igv;
+    const igv = subtotal * (porcentaje / 100);
+    const total = subtotal + igv;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -284,9 +319,8 @@ export async function createCotizacion(req, res) {
 
           const limite = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
           const deudaActual = parseFloat(deudaRes.data[0]?.deuda_actual || 0);
-
           if ((deudaActual + total) > limite) {
-             console.warn(`Cliente ${id_cliente} excede límite de crédito.`);
+            console.warn(`Cliente ${id_cliente} excede límite de crédito.`);
           }
         }
       }
@@ -297,15 +331,16 @@ export async function createCotizacion(req, res) {
         numero_cotizacion, id_cliente, id_comercial, fecha_emision, fecha_vencimiento,
         prioridad, moneda, tipo_impuesto, porcentaje_impuesto, tipo_cambio,
         plazo_pago, forma_pago, direccion_entrega, observaciones, validez_dias,
-        plazo_entrega, lugar_entrega, subtotal, igv, total, estado, id_creado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
+        plazo_entrega, lugar_entrega, subtotal, igv, total, estado, id_creado_por, es_muestra
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?, ?)
     `, [
       numeroCotizacion, id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada,
       prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal,
       plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,
       plazo_entrega || null, lugar_entrega || null,
       subtotal, igv, total,
-      comercialFinal
+      comercialFinal,
+      esMuestra
     ]);
 
     if (!result.success) return res.status(500).json({ success: false, error: result.error });
@@ -314,34 +349,43 @@ export async function createCotizacion(req, res) {
 
     for (let i = 0; i < detalle.length; i++) {
       const item = detalle[i];
+      const esProductoLibre = item.es_producto_libre ? 1 : 0;
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || 0);
       const precioBase = parseFloat(item.precio_base || 0);
-      
       const valorVentaCalculado = cantidad * precioVenta;
 
       await executeQuery(`
         INSERT INTO detalle_cotizacion (
           id_cotizacion, id_producto, cantidad, precio_unitario, precio_base,
-          descuento_porcentaje, orden, valor_venta, subtotal
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          descuento_porcentaje, orden, valor_venta, subtotal,
+          es_producto_libre, codigo_producto_libre, nombre_producto_libre
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         idCotizacion,
-        item.id_producto,
+        esProductoLibre ? null : item.id_producto,
         cantidad,
         precioVenta,
         precioBase,
-        0, 
+        0,
         i + 1,
         valorVentaCalculado,
-        valorVentaCalculado
+        valorVentaCalculado,
+        esProductoLibre,
+        esProductoLibre ? item.codigo_producto_libre?.trim() : null,
+        esProductoLibre ? item.nombre_producto_libre?.trim() : null
       ]);
     }
 
     res.status(201).json({
       success: true,
-      data: { id_cotizacion: idCotizacion, numero_cotizacion: numeroCotizacion, fecha_vencimiento: fechaVencimientoCalculada },
-      message: 'Cotización creada exitosamente'
+      data: {
+        id_cotizacion: idCotizacion,
+        numero_cotizacion: numeroCotizacion,
+        fecha_vencimiento: fechaVencimientoCalculada,
+        es_muestra: esMuestra
+      },
+      message: esMuestra ? 'Cotización muestra creada exitosamente' : 'Cotización creada exitosamente'
     });
 
   } catch (error) {

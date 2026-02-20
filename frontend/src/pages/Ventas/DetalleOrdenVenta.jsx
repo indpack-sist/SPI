@@ -1375,9 +1375,9 @@ function DetalleOrdenVenta() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <button className="btn btn-outline" onClick={() => navigate('/ventas/ordenes')}>
-            <ArrowLeft size={20} />
-          </button>
+          <button className="btn btn-outline" onClick={() => navigate(-1)}>
+  <ArrowLeft size={20} />
+</button>
           
           <div className="flex items-center bg-white rounded-lg border border-gray-200 px-1 py-0.5">
             <button 

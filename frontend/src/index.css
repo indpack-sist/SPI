@@ -1313,3 +1313,37 @@ input[readonly] {
 .border-blue-500 { border-color: #5dade2 !important; }
 .text-red-600   { color: #e74c3c !important; }
 .text-green-600 { color: #2ecc71 !important; }
+
+/* Inputs con estilos inline hardcodeados (modo muestra) */
+input[style*="fffbeb"],
+input[style*="fffbeb"]:focus {
+  background-color: #2a2200 !important;
+  border-color: rgba(232,184,75,0.5) !important;
+  color: #f5f5f0 !important;
+}
+
+input[style*="fffbeb"]::placeholder {
+  color: #666 !important;
+}
+
+/* Input P. Base readonly con bg-gray-100 inline */
+input[style*="backgroundColor"][readonly] {
+  background-color: var(--carbon-light) !important;
+  color: var(--wire) !important;
+}
+
+/* P. Venta con bg-blue-50 inline */
+.form-input.bg-blue-50,
+input.form-input[style*="backgroundColor"] {
+  background-color: rgba(93,173,226,0.08) !important;
+  color: #f5f5f0 !important;
+}
+
+/* Placeholder global para todos los inputs */
+.form-input::placeholder,
+.form-select::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: var(--steel-light) !important;
+  opacity: 1;
+}

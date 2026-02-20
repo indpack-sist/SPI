@@ -1465,10 +1465,10 @@ export async function anularDespacho(req, res) {
     const orden = ordenResult.data[0];
 
     const salidaResult = await executeQuery(
-      'SELECT * FROM salidas WHERE id_salida = ? AND observaciones LIKE ?', 
+      'SELECT * FROM salidas WHERE id_salida = ? AND observaciones LIKE ?',
       [idSalida, `%${orden.numero_orden}%`]
     );
-    
+
     if (salidaResult.data.length === 0) {
       return res.status(404).json({ error: 'Salida no encontrada o no pertenece a esta orden' });
     }
@@ -1495,7 +1495,10 @@ export async function anularDespacho(req, res) {
       if (productoInfo.success && productoInfo.data.length > 0) {
         const requiereReceta = productoInfo.data[0].requiere_receta;
 
-        if (requiereReceta === 0 && !orden.stock_reservado) {
+        // CORRECCIÓN: Siempre devolver stock al anular despacho si no requiere receta.
+        // Al despachar, el stock físico SIEMPRE se descuenta (tanto si estaba reservado
+        // como si no). Por tanto, al anular siempre hay que devolverlo.
+        if (requiereReceta === 0) {
           queriesReversion.push({
             sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
             params: [item.cantidad, item.id_producto]
@@ -1504,7 +1507,7 @@ export async function anularDespacho(req, res) {
       }
 
       queriesReversion.push({
-        sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = cantidad_despachada - ? WHERE id_orden_venta = ? AND id_producto = ?',
+        sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = GREATEST(0, cantidad_despachada - ?) WHERE id_orden_venta = ? AND id_producto = ?',
         params: [item.cantidad, id, item.id_producto]
       });
     }
@@ -1525,11 +1528,11 @@ export async function anularDespacho(req, res) {
     `, [id]);
 
     const { total_items, items_con_despachos, items_completados } = verificacion.data[0];
-    
+
     let nuevoEstado = 'En Espera';
-    if (items_completados == total_items && total_items > 0) {
+    if (parseInt(items_completados) === parseInt(total_items) && parseInt(total_items) > 0) {
       nuevoEstado = 'Despachada';
-    } else if (items_con_despachos > 0) {
+    } else if (parseInt(items_con_despachos) > 0) {
       nuevoEstado = 'Despacho Parcial';
     }
 
@@ -1540,12 +1543,8 @@ export async function anularDespacho(req, res) {
 
     if (orden.id_cotizacion) {
       let estadoCotizacion = 'Convertida';
-
-      if (nuevoEstado === 'Despacho Parcial') {
-        estadoCotizacion = 'Despachado parcial desde OV';
-      } else if (nuevoEstado === 'Despachada') {
-        estadoCotizacion = 'Despachado desde OV';
-      }
+      if (nuevoEstado === 'Despacho Parcial') estadoCotizacion = 'Despachado parcial desde OV';
+      else if (nuevoEstado === 'Despachada') estadoCotizacion = 'Despachado desde OV';
 
       await executeQuery(
         'UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?',
@@ -1597,21 +1596,35 @@ export async function anularOrdenVenta(req, res) {
 
     const queriesAnulacion = [];
 
+    // Traer detalle con cantidad_reservada y cantidad_despachada
     const detalleOrden = await executeQuery(
-      `SELECT id_producto, cantidad, cantidad_reservada, stock_reservado 
-       FROM detalle_orden_venta 
+      `SELECT id_producto, cantidad, cantidad_reservada, cantidad_despachada, stock_reservado
+       FROM detalle_orden_venta
        WHERE id_orden_venta = ?`,
       [id]
     );
 
+    // PASO 1: Devolver stock reservado (aún no despachado)
+    // cantidad_reservada refleja el stock físico que fue apartado y todavía no salió
     for (const item of detalleOrden.data) {
-      const reservado = parseFloat(item.cantidad_reservada || 0);
+      const reservada = parseFloat(item.cantidad_reservada || 0);
 
-      if (reservado > 0) {
-        queriesAnulacion.push({
-          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-          params: [reservado, item.id_producto]
-        });
+      if (reservada > 0) {
+        const productoInfo = await executeQuery(
+          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
+          [item.id_producto]
+        );
+
+        if (
+          productoInfo.success &&
+          productoInfo.data.length > 0 &&
+          productoInfo.data[0].requiere_receta === 0
+        ) {
+          queriesAnulacion.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+            params: [reservada, item.id_producto]
+          });
+        }
 
         queriesAnulacion.push({
           sql: 'UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0 WHERE id_orden_venta = ? AND id_producto = ?',
@@ -1620,6 +1633,10 @@ export async function anularOrdenVenta(req, res) {
       }
     }
 
+    // PASO 2: Anular salidas activas y devolver stock despachado
+    // Al despachar, el stock físico siempre se descuenta y la reserva se libera.
+    // Por tanto, al anular la OV debemos devolver lo que fue despachado, sin importar
+    // si antes tuvo reserva o no.
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
       [`%${orden.numero_orden}%`, 'Activo']
@@ -1633,21 +1650,21 @@ export async function anularOrdenVenta(req, res) {
 
       for (const item of detalleSalida.data) {
         const productoInfo = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?', 
+          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
           [item.id_producto]
         );
 
-        if (productoInfo.success && productoInfo.data.length > 0) {
-           const requiereReceta = productoInfo.data[0].requiere_receta;
-           const itemEnOrden = detalleOrden.data.find(d => d.id_producto === item.id_producto);
-           const teniaReserva = itemEnOrden && parseFloat(itemEnOrden.cantidad_reservada) > 0;
-
-           if (requiereReceta === 0 && !teniaReserva) {
-             queriesAnulacion.push({
-               sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-               params: [item.cantidad, item.id_producto]
-             });
-           }
+        if (
+          productoInfo.success &&
+          productoInfo.data.length > 0 &&
+          productoInfo.data[0].requiere_receta === 0
+        ) {
+          // CORRECCIÓN: Siempre devolver lo despachado. La reserva ya fue liberada
+          // cuando se registró el despacho, así que no hay riesgo de devolución doble.
+          queriesAnulacion.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+            params: [item.cantidad, item.id_producto]
+          });
         }
       }
 
@@ -1663,7 +1680,7 @@ export async function anularOrdenVenta(req, res) {
     });
 
     const motivoFinal = motivo_anulacion || 'Sin motivo especificado';
-    
+
     queriesAnulacion.push({
       sql: 'UPDATE ordenes_venta SET estado = ?, stock_reservado = 0, observaciones = CONCAT(COALESCE(observaciones, ""), " - ANULADA: ", ?) WHERE id_orden_venta = ?',
       params: ['Cancelada', motivoFinal, id]
@@ -1677,12 +1694,12 @@ export async function anularOrdenVenta(req, res) {
     }
 
     queriesAnulacion.push({
-        sql: `UPDATE ordenes_produccion 
-              SET estado = 'Cancelada', 
-                  observaciones = CONCAT(COALESCE(observaciones, ''), ' - Cancelada autom. por anulación de OV') 
-              WHERE id_orden_venta_origen = ? 
-              AND estado NOT IN ('Cancelada', 'Terminada')`,
-        params: [id]
+      sql: `UPDATE ordenes_produccion 
+            SET estado = 'Cancelada',
+                observaciones = CONCAT(COALESCE(observaciones, ''), ' - Cancelada autom. por anulación de OV')
+            WHERE id_orden_venta_origen = ?
+            AND estado NOT IN ('Cancelada', 'Terminada')`,
+      params: [id]
     });
 
     await executeTransaction(queriesAnulacion);

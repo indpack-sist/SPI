@@ -1,57 +1,52 @@
-/* =====================================================
-   SIDEBAR STYLES (Adaptado a Layout 2026)
-   ===================================================== */
+/* Sidebar.css */
 
 .sidebar {
   width: 100%;
   height: 100%;
-  /* Tu gradiente original */
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  color: white;
+  background-color: var(--carbon);
+  color: var(--white);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* El borde derecho sutil */
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid var(--border);
 }
 
 /* =====================================================
-   HEADER & LOGO
+   HEADER
    ===================================================== */
 
 .sidebar-header {
-  padding: 1rem 1.5rem;
-  height: 64px; /* Altura fija para alinear con Navbar */
+  padding: 0 1.25rem;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  background-color: var(--carbon);
+  flex-shrink: 0;
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .sidebar-logo-image-container {
-  width: 40px;
-  height: 40px;
-  background: white;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  background: var(--white);
+  border-radius: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.25rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  padding: 4px;
+  flex-shrink: 0;
+  transition: box-shadow 0.2s;
 }
 
 .sidebar-logo:hover .sidebar-logo-image-container {
-  transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .sidebar-logo-image {
@@ -60,51 +55,58 @@
   object-fit: contain;
 }
 
+.sidebar-logo-fallback {
+  color: var(--carbon);
+}
+
 .sidebar-logo-text {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 2px;
 }
 
 .sidebar-title {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: white;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--white);
   line-height: 1;
-  letter-spacing: -0.02em;
 }
 
-/* Rol con tu estilo de gradiente */
 .sidebar-rol {
   display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 2px 8px;
-  border-radius: 12px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  padding: 1px 6px;
+  border-radius: 1px;
   width: fit-content;
 }
 
-/* Botón cerrar (Solo visible en móvil mediante media query) */
 .sidebar-close-btn {
-  display: none; /* Oculto en PC por defecto */
+  display: none;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 8px;
-  color: white;
+  width: 30px;
+  height: 30px;
+  background: var(--carbon-light);
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  color: var(--wire);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .sidebar-close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--steel);
+  color: var(--white);
 }
 
 /* =====================================================
@@ -114,38 +116,28 @@
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 0;
-  /* Scroll suave */
+  padding: 1rem 0;
   scroll-behavior: smooth;
 }
 
-/* Scrollbar personalizada oscura */
-.sidebar-nav::-webkit-scrollbar {
-  width: 5px;
-}
-.sidebar-nav::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-}
-.sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-}
-.sidebar-nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
+.sidebar-nav::-webkit-scrollbar { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 2px; }
+.sidebar-nav::-webkit-scrollbar-thumb:hover { background: var(--wire); }
 
 .sidebar-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .sidebar-section-title {
-  padding: 0.5rem 1.5rem;
-  font-size: 0.7rem;
+  padding: 0.25rem 1.25rem 0.4rem 1.25rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 0.5rem;
+  letter-spacing: 0.2em;
+  color: var(--steel-light);
+  margin-bottom: 0.25rem;
 }
 
 .sidebar-menu {
@@ -155,53 +147,54 @@
 }
 
 .sidebar-menu li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 1px;
 }
 
 /* =====================================================
-   LINKS (Tus efectos originales)
+   LINKS
    ===================================================== */
 
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
-  padding: 0.75rem 1.5rem;
-  color: rgba(255, 255, 255, 0.7);
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  color: var(--wire);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all 0.15s;
   position: relative;
   overflow: hidden;
+  animation: slideInLink 0.3s ease-out backwards;
 }
 
-/* Efecto de barra lateral al hacer hover */
+/* Barra lateral de acento */
 .sidebar-link::before {
   content: '';
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 4px;
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  width: 2px;
+  background: var(--accent);
   transform: scaleY(0);
   transition: transform 0.2s;
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
+  background: var(--carbon-light);
+  color: var(--white);
 }
 
 .sidebar-link:hover::before {
   transform: scaleY(1);
 }
 
-/* Estado Activo */
+/* Activo */
 .sidebar-link.active {
-  background: rgba(102, 126, 234, 0.15);
-  color: white;
+  background: var(--accent-dim);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -209,7 +202,7 @@
   transform: scaleY(1);
 }
 
-/* Contenedor de iconos para alineación */
+/* Contenedor de ícono */
 .sidebar-icon-container {
   display: flex;
   align-items: center;
@@ -219,21 +212,30 @@
   flex-shrink: 0;
 }
 
-/* Link especial de Apps (Menu Principal) */
+/* Link especial — Menú Principal */
 .sidebar-link-apps {
-  background-color: rgba(255, 255, 255, 0.03);
-  margin-bottom: 0.5rem;
-  border: 1px solid transparent;
+  background-color: var(--carbon-light);
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  margin: 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  color: var(--mist);
 }
 
 .sidebar-link-apps:hover {
-  border-color: rgba(255,255,255,0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+  background-color: var(--accent-dim);
+}
+
+.sidebar-link-apps.active {
+  border-color: var(--accent);
 }
 
 .sidebar-divider {
   height: 1px;
-  background-color: rgba(255, 255, 255, 0.1);
-  margin: 0.5rem 1.5rem 1rem 1.5rem;
+  background: var(--border);
+  margin: 0.75rem 1.25rem;
 }
 
 /* =====================================================
@@ -241,51 +243,52 @@
    ===================================================== */
 
 .sidebar-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  text-align: center;
-  background: rgba(0, 0, 0, 0.2);
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background-color: var(--carbon);
+  flex-shrink: 0;
 }
 
 .sidebar-footer-text {
   margin: 0;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
-  font-weight: 500;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--steel-light);
+  text-align: center;
 }
 
 .sidebar-footer-version {
-  margin: 0.25rem 0 0 0;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.3);
+  margin: 2px 0 0 0;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--steel);
+  text-align: center;
 }
 
 /* =====================================================
-   ANIMACIONES DE ENTRADA (Tus originales)
+   ANIMACIONES
    ===================================================== */
 
 @keyframes slideInLink {
-  from { opacity: 0; transform: translateX(-10px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
-.sidebar-link {
-  animation: slideInLink 0.3s ease-out backwards;
-}
-
-/* Retrasos escalonados */
-.sidebar-section:nth-child(1) .sidebar-link { animation-delay: 0.05s; }
-.sidebar-section:nth-child(2) .sidebar-link { animation-delay: 0.1s; }
-.sidebar-section:nth-child(3) .sidebar-link { animation-delay: 0.15s; }
-.sidebar-section:nth-child(4) .sidebar-link { animation-delay: 0.2s; }
+.sidebar-section:nth-child(1) .sidebar-link { animation-delay: 0.04s; }
+.sidebar-section:nth-child(2) .sidebar-link { animation-delay: 0.08s; }
+.sidebar-section:nth-child(3) .sidebar-link { animation-delay: 0.12s; }
+.sidebar-section:nth-child(4) .sidebar-link { animation-delay: 0.16s; }
+.sidebar-section:nth-child(5) .sidebar-link { animation-delay: 0.20s; }
 
 /* =====================================================
-   RESPONSIVE (Controlado por el padre, solo ajustes internos)
+   RESPONSIVE
    ===================================================== */
 
 @media (max-width: 768px) {
-  /* Mostrar botón de cerrar solo en móvil */
-  .sidebar-close-btn {
-    display: flex;
-  }
+  .sidebar-close-btn { display: flex; }
+
+  .sidebar-header { height: 56px; }
 }

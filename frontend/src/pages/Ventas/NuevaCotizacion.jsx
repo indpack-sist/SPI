@@ -21,12 +21,12 @@ const TIPOS_IMPUESTO = [
 
 const PLAZOS_PAGO = [
   'Contado',
-  'Crédito 7 Días',
-  'Crédito 15 Días',
-  'Crédito 30 Días',
-  'Crédito 45 Días',
-  'Crédito 60 Días',
-  'Crédito 90 Días'
+  'Credito 7 Dias',
+  'Credito 15 Dias',
+  'Credito 30 Dias',
+  'Credito 45 Dias',
+  'Credito 60 Dias',
+  'Credito 90 Dias'
 ];
 
 const FORMAS_PAGO = [
@@ -37,12 +37,12 @@ const FORMAS_PAGO = [
 
 const PLAZOS_ENTREGA = [
   'Inmediata (Stock)',
-  '2 a 3 Días Hábiles',
-  '5 a 7 Días Hábiles',
-  '7 a 10 Días Hábiles',
-  '10 a 15 Días Hábiles',
-  '15 a 20 Días Hábiles',
-  '25 a 30 Días Hábiles'
+  '2 a 3 Dias Habiles',
+  '5 a 7 Dias Habiles',
+  '7 a 10 Dias Habiles',
+  '10 a 15 Dias Habiles',
+  '15 a 20 Dias Habiles',
+  '25 a 30 Dias Habiles'
 ];
 
 function NuevaCotizacion() {
@@ -60,6 +60,7 @@ function NuevaCotizacion() {
   const [success, setSuccess] = useState(null);
   const [cotizacionConvertida, setCotizacionConvertida] = useState(false);
   const [idOrdenVenta, setIdOrdenVenta] = useState(null);
+  const [esMuestra, setEsMuestra] = useState(false);
     
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -86,7 +87,7 @@ function NuevaCotizacion() {
 
   const [listasPreciosCliente, setListasPreciosCliente] = useState([]);
   const [loadingListas, setLoadingListas] = useState(false);
-  const [detallesListas, setDetallesListas] = useState({}); 
+  const [detallesListas, setDetallesListas] = useState({});
   const [listasDesplegadas, setListasDesplegadas] = useState({});
   const [busquedaLista, setBusquedaLista] = useState('');
 
@@ -114,7 +115,7 @@ function NuevaCotizacion() {
     plazo_pago: 'Contado',
     forma_pago: '',
     direccion_entrega: '',
-    observaciones: 'OBSERVACIONES\nPlazo de entrega: 1-2 DÍAS CONFIRMADO EL ABONO\nLugar de entrega: RECOJO\nValidez de la oferta: 7 DÍAS / DE ACUERDO AL PRECIO DE LA MATERIA PRIMA',
+    observaciones: 'OBSERVACIONES\nPlazo de entrega: 1-2 DIAS CONFIRMADO EL ABONO\nLugar de entrega: RECOJO\nValidez de la oferta: 7 DIAS / DE ACUERDO AL PRECIO DE LA MATERIA PRIMA',
     validez_dias: 7,
     plazo_entrega: '',
     lugar_entrega: ''
@@ -220,7 +221,7 @@ function NuevaCotizacion() {
       }
     } catch (err) {
       console.error(err);
-      setError('Error al cargar catálogos');
+      setError('Error al cargar catalogos');
     } finally {
       setLoading(false);
     }
@@ -237,6 +238,7 @@ function NuevaCotizacion() {
           setIdOrdenVenta(cotizacion.id_orden_venta);
         }
         const fechaEmision = modoDuplicar ? getFechaPeru() : cotizacion.fecha_emision.split('T')[0];
+        setEsMuestra(cotizacion.es_muestra === 1);
         setFormCabecera({
           id_cliente: cotizacion.id_cliente,
           id_comercial: cotizacion.id_comercial || user?.id_empleado || '',
@@ -272,53 +274,56 @@ function NuevaCotizacion() {
               setEstadoCredito(resCredito.data.data);
             }
           } catch (err) {
-            console.error('Error al cargar estado de crédito:', err);
+            console.error('Error al cargar estado de credito:', err);
           }
         }
 
         if (cotizacion.detalle && cotizacion.detalle.length > 0) {
           setDetalle(cotizacion.detalle.map(item => ({
-            id_producto: item.id_producto,
-            codigo_producto: item.codigo_producto,
-            producto: item.producto,
-            unidad_medida: item.unidad_medida,
+            id_producto: item.id_producto || null,
+            codigo_producto: item.codigo_producto || item.codigo_producto_libre || '',
+            producto: item.producto || item.nombre_producto_libre || '',
+            unidad_medida: item.unidad_medida || '',
             cantidad: parseFloat(item.cantidad),
-            precio_base: parseFloat(item.precio_base || item.precio_unitario),
-            precio_venta: parseFloat(item.precio_unitario),
+            precio_base: parseFloat(item.precio_base || item.precio_unitario || 0),
+            precio_venta: parseFloat(item.precio_unitario || 0),
             descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-            stock_actual: item.stock_disponible
+            stock_actual: item.stock_disponible || null,
+            es_producto_libre: item.es_producto_libre === 1,
+            codigo_producto_libre: item.codigo_producto_libre || '',
+            nombre_producto_libre: item.nombre_producto_libre || ''
           })));
         }
       }
     } catch (err) {
       console.error(err);
-      setError('Error al cargar la cotización');
+      setError('Error al cargar la cotizacion');
     } finally {
       setLoading(false);
     }
   };
 
   const cargarListasPrecios = async (idCliente) => {
-      try {
-          setLoadingListas(true);
-          const res = await listasPreciosAPI.getByCliente(idCliente);
-          if (res.data.success) {
-              setListasPreciosCliente(res.data.data);
-              
-              const detalles = {};
-              for (const lista of res.data.data) {
-                  const resDetalle = await listasPreciosAPI.getDetalle(lista.id_lista);
-                  if (resDetalle.data.success) {
-                      detalles[lista.id_lista] = resDetalle.data.data;
-                  }
-              }
-              setDetallesListas(detalles);
+    try {
+      setLoadingListas(true);
+      const res = await listasPreciosAPI.getByCliente(idCliente);
+      if (res.data.success) {
+        setListasPreciosCliente(res.data.data);
+        
+        const detalles = {};
+        for (const lista of res.data.data) {
+          const resDetalle = await listasPreciosAPI.getDetalle(lista.id_lista);
+          if (resDetalle.data.success) {
+            detalles[lista.id_lista] = resDetalle.data.data;
           }
-      } catch (err) {
-          console.error("Error cargando listas de precios", err);
-      } finally {
-          setLoadingListas(false);
+        }
+        setDetallesListas(detalles);
       }
+    } catch (err) {
+      console.error('Error cargando listas de precios', err);
+    } finally {
+      setLoadingListas(false);
+    }
   };
 
   const toggleListaDesplegada = (idLista) => {
@@ -405,11 +410,11 @@ function NuevaCotizacion() {
       return;
     }
     if (tipo === 'RUC' && !/^\d{11}$/.test(documento)) {
-      setErrorApi('El RUC debe tener 11 dígitos');
+      setErrorApi('El RUC debe tener 11 digitos');
       return;
     }
     if (tipo === 'DNI' && !/^\d{8}$/.test(documento)) {
-      setErrorApi('El DNI debe tener 8 dígitos');
+      setErrorApi('El DNI debe tener 8 digitos');
       return;
     }
     try {
@@ -426,10 +431,10 @@ function NuevaCotizacion() {
           documento: documento
         });
         if (response.data.ya_registrado) {
-          setErrorApi(`Este ${tipo} ya está registrado en el sistema`);
+          setErrorApi(`Este ${tipo} ya esta registrado en el sistema`);
         }
       } else {
-        setErrorApi(response.data.error || `${tipo} no válido`);
+        setErrorApi(response.data.error || `${tipo} no valido`);
       }
     } catch (err) {
       setErrorApi(err.error || `Error al validar ${tipo}`);
@@ -458,7 +463,7 @@ function NuevaCotizacion() {
         const clienteCreado = response.data.data;
         setClientes(prev => [...prev, clienteCreado]);
         handleSelectCliente(clienteCreado);
-        setSuccess('Cliente creado y seleccionado automáticamente');
+        setSuccess('Cliente creado y seleccionado automaticamente');
         setModalClienteOpen(false);
         setTabCliente('lista');
         setNuevoClienteDoc({ tipo: 'RUC', numero: '' });
@@ -466,7 +471,7 @@ function NuevaCotizacion() {
       }
     } catch (err) {
       console.error(err);
-      setErrorApi('Error al crear el cliente automáticamente');
+      setErrorApi('Error al crear el cliente automaticamente');
     } finally {
       setLoadingApi(false);
     }
@@ -475,7 +480,7 @@ function NuevaCotizacion() {
   const handleAgregarProducto = (producto) => {
     const existe = detalle.find(d => d.id_producto === producto.id_producto);
     if (existe) {
-      setError('El producto ya está en el detalle');
+      setError('El producto ya esta en el detalle');
       return;
     }
     const precioVenta = parseFloat(producto.precio_venta || 0);
@@ -488,34 +493,66 @@ function NuevaCotizacion() {
       precio_base: precioVenta,
       precio_venta: precioVenta,
       descuento_porcentaje: 0,
-      stock_actual: producto.stock_actual
+      stock_actual: producto.stock_actual,
+      es_producto_libre: false,
+      codigo_producto_libre: null,
+      nombre_producto_libre: null
     };
     setDetalle([...detalle, nuevoItem]);
     setModalProductoOpen(false);
     setBusquedaProducto('');
   };
 
+  const handleAgregarProductoLibre = () => {
+    const nuevoItem = {
+      id_producto: null,
+      codigo_producto: '',
+      producto: '',
+      unidad_medida: '',
+      cantidad: 1,
+      precio_base: 0,
+      precio_venta: 0,
+      descuento_porcentaje: 0,
+      stock_actual: null,
+      es_producto_libre: true,
+      codigo_producto_libre: '',
+      nombre_producto_libre: ''
+    };
+    setDetalle([...detalle, nuevoItem]);
+  };
+
+  const handleProductoLibreChange = (index, campo, valor) => {
+    const newDetalle = [...detalle];
+    newDetalle[index][campo] = valor;
+    if (campo === 'codigo_producto_libre') newDetalle[index].codigo_producto = valor;
+    if (campo === 'nombre_producto_libre') newDetalle[index].producto = valor;
+    setDetalle(newDetalle);
+  };
+
   const toggleProductoDesdeLista = (prod, monedaLista) => {
-      const existeIndex = detalle.findIndex(d => d.id_producto === prod.id_producto);
-      
-      if (existeIndex >= 0) {
-          const newDetalle = detalle.filter((_, i) => i !== existeIndex);
-          setDetalle(newDetalle);
-      } else {
-          const precioLista = parseFloat(prod.precio_especial);
-          const nuevoItem = {
-              id_producto: prod.id_producto,
-              codigo_producto: prod.codigo,
-              producto: prod.producto,
-              unidad_medida: prod.unidad_medida,
-              cantidad: 1,
-              precio_base: precioLista,
-              precio_venta: precioLista,
-              descuento_porcentaje: 0,
-              stock_actual: 0 
-          };
-          setDetalle([...detalle, nuevoItem]);
-      }
+    const existeIndex = detalle.findIndex(d => d.id_producto === prod.id_producto);
+    
+    if (existeIndex >= 0) {
+      const newDetalle = detalle.filter((_, i) => i !== existeIndex);
+      setDetalle(newDetalle);
+    } else {
+      const precioLista = parseFloat(prod.precio_especial);
+      const nuevoItem = {
+        id_producto: prod.id_producto,
+        codigo_producto: prod.codigo,
+        producto: prod.producto,
+        unidad_medida: prod.unidad_medida,
+        cantidad: 1,
+        precio_base: precioLista,
+        precio_venta: precioLista,
+        descuento_porcentaje: 0,
+        stock_actual: 0,
+        es_producto_libre: false,
+        codigo_producto_libre: null,
+        nombre_producto_libre: null
+      };
+      setDetalle([...detalle, nuevoItem]);
+    }
   };
 
   const handlePrecioVentaChange = (index, valor) => {
@@ -529,7 +566,7 @@ function NuevaCotizacion() {
       const margen = ((precioVenta - precioBase) / precioBase) * 100;
       newDetalle[index].descuento_porcentaje = margen;
     } else {
-      newDetalle[index].descuento_porcentaje = 0; 
+      newDetalle[index].descuento_porcentaje = 0;
     }
     
     setDetalle(newDetalle);
@@ -605,11 +642,11 @@ function NuevaCotizacion() {
         setFormCabecera(prev => ({ ...prev, lugar_entrega: nuevaDir.direccion }));
         setModalDireccionOpen(false);
         setNuevaDireccion({ direccion: '', referencia: '' });
-        setSuccess('Dirección agregada correctamente');
+        setSuccess('Direccion agregada correctamente');
       }
     } catch (err) {
       console.error(err);
-      setError('Error al guardar la dirección');
+      setError('Error al guardar la direccion');
     } finally {
       setSavingDireccion(false);
     }
@@ -619,7 +656,7 @@ function NuevaCotizacion() {
     e.preventDefault();
     setError(null);
     if (cotizacionConvertida) {
-      setError('No se puede editar una cotización que ya ha sido convertida a Orden de Venta');
+      setError('No se puede editar una cotizacion que ya ha sido convertida a Orden de Venta');
       return;
     }
     if (!formCabecera.id_cliente) {
@@ -630,11 +667,26 @@ function NuevaCotizacion() {
       setError('Debe agregar al menos un producto');
       return;
     }
-    const productosSinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
-    if (productosSinPrecio) {
-      setError('Todos los productos deben tener un precio de venta válido');
-      return;
+
+    if (esMuestra) {
+      const itemsLibresSinCodigo = detalle.some(item => item.es_producto_libre && !item.codigo_producto_libre?.trim());
+      if (itemsLibresSinCodigo) {
+        setError('Todos los productos muestra deben tener un codigo');
+        return;
+      }
+      const itemsLibresSinNombre = detalle.some(item => item.es_producto_libre && !item.nombre_producto_libre?.trim());
+      if (itemsLibresSinNombre) {
+        setError('Todos los productos muestra deben tener un nombre');
+        return;
+      }
+    } else {
+      const productosSinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
+      if (productosSinPrecio) {
+        setError('Todos los productos deben tener un precio de venta valido');
+        return;
+      }
     }
+
     if (!formCabecera.plazo_pago || formCabecera.plazo_pago.trim() === '') {
       setError('Plazo de pago es obligatorio (define el riesgo de la venta)');
       return;
@@ -656,12 +708,16 @@ function NuevaCotizacion() {
         plazo_entrega: formCabecera.plazo_entrega || null,
         validez_dias: parseInt(formCabecera.validez_dias) || 7,
         observaciones: formCabecera.observaciones || null,
+        es_muestra: esMuestra,
         detalle: detalle.map((item, index) => {
-          const precioVenta = parseFloat(item.precio_venta);
+          const precioVenta = parseFloat(item.precio_venta) || 0;
           const precioBase = parseFloat(item.precio_base) || precioVenta;
 
           return {
-            id_producto: item.id_producto,
+            id_producto: item.es_producto_libre ? null : item.id_producto,
+            es_producto_libre: item.es_producto_libre || false,
+            codigo_producto_libre: item.es_producto_libre ? item.codigo_producto_libre?.trim() : null,
+            nombre_producto_libre: item.es_producto_libre ? item.nombre_producto_libre?.trim() : null,
             cantidad: parseFloat(item.cantidad),
             precio_base: precioBase,
             precio_venta: precioVenta,
@@ -674,19 +730,19 @@ function NuevaCotizacion() {
       if (modoEdicion) {
         response = await cotizacionesAPI.update(id, payload);
         if (response.data.success) {
-          setSuccess('Cotización actualizada exitosamente');
+          setSuccess('Cotizacion actualizada exitosamente');
           setTimeout(() => navigate(`/ventas/cotizaciones/${id}`), 1500);
         }
       } else {
         response = await cotizacionesAPI.create(payload);
         if (response.data.success) {
-          setSuccess(`Cotización creada: ${response.data.data.numero_cotizacion}`);
+          setSuccess(`Cotizacion creada: ${response.data.data.numero_cotizacion}`);
           setTimeout(() => navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`), 1500);
         }
       }
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} cotización`);
+      setError(err.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} cotizacion`);
     } finally {
       setLoading(false);
     }
@@ -706,8 +762,8 @@ function NuevaCotizacion() {
     return <Loading message="Cargando formulario..." />;
   }
 
-  const tituloFormulario = modoEdicion ? 'Editar Cotización' : modoDuplicar ? 'Duplicar Cotización' : 'Nueva Cotización';
-  const subtituloFormulario = modoEdicion ? 'Modificar cotización existente' : modoDuplicar ? 'Crear nueva cotización basada en una existente' : 'Emitir cotización de venta al cliente';
+  const tituloFormulario = modoEdicion ? 'Editar Cotizacion' : modoDuplicar ? 'Duplicar Cotizacion' : 'Nueva Cotizacion';
+  const subtituloFormulario = modoEdicion ? 'Modificar cotizacion existente' : modoDuplicar ? 'Crear nueva cotizacion basada en una existente' : 'Emitir cotizacion de venta al cliente';
 
   return (
     <div className="p-6">
@@ -719,6 +775,11 @@ function NuevaCotizacion() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FileText size={32} />
             {tituloFormulario}
+            {esMuestra && (
+              <span className="badge badge-warning ml-2 text-xs font-bold uppercase tracking-wide">
+                Muestra
+              </span>
+            )}
             {cotizacionConvertida && (
               <span className="badge badge-primary ml-2">
                 <Lock size={14} className="inline mr-1" />
@@ -738,7 +799,7 @@ function NuevaCotizacion() {
           type="info" 
           message={
             <div className="flex items-center justify-between">
-              <span>Esta cotización ya fue convertida a Orden de Venta y no puede ser editada.</span>
+              <span>Esta cotizacion ya fue convertida a Orden de Venta y no puede ser editada.</span>
               {idOrdenVenta && (
                 <button
                   className="btn btn-sm btn-primary ml-4"
@@ -798,10 +859,10 @@ function NuevaCotizacion() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 border rounded-lg bg-white shadow-sm">
                       <div className="flex items-center gap-2 mb-2 text-primary font-bold text-sm">
-                        <CreditCard size={16}/> LÍNEA DE CRÉDITO PEN
+                        <CreditCard size={16}/> LINEA DE CREDITO PEN
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
-                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">S/ {formatearNumero(estadoCredito.credito_pen.limite)}</span>
+                        <span className="text-muted">Limite:</span> <span className="font-bold text-right">S/ {formatearNumero(estadoCredito.credito_pen.limite)}</span>
                         <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">S/ {formatearNumero(estadoCredito.credito_pen.utilizado)}</span>
                         <div className="col-span-2 border-t my-1"></div>
                         <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">S/ {formatearNumero(estadoCredito.credito_pen.disponible)}</span>
@@ -809,10 +870,10 @@ function NuevaCotizacion() {
                     </div>
                     <div className="p-3 border rounded-lg bg-white shadow-sm">
                       <div className="flex items-center gap-2 mb-2 text-blue-600 font-bold text-sm">
-                        <DollarSign size={16}/> LÍNEA DE CRÉDITO USD
+                        <DollarSign size={16}/> LINEA DE CREDITO USD
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-xs">
-                        <span className="text-muted">Límite:</span> <span className="font-bold text-right">$ {formatearNumero(estadoCredito.credito_usd.limite)}</span>
+                        <span className="text-muted">Limite:</span> <span className="font-bold text-right">$ {formatearNumero(estadoCredito.credito_usd.limite)}</span>
                         <span className="text-muted">Utilizado:</span> <span className="font-bold text-right text-red-600">$ {formatearNumero(estadoCredito.credito_usd.utilizado)}</span>
                         <div className="col-span-2 border-t my-1"></div>
                         <span className="text-muted font-bold">Disponible:</span> <span className="font-bold text-right text-green-600 text-sm">$ {formatearNumero(estadoCredito.credito_usd.disponible)}</span>
@@ -845,13 +906,13 @@ function NuevaCotizacion() {
           <div className="card-header">
             <h2 className="card-title">
               <Calendar size={20} />
-              Datos de la Cotización
+              Datos de la Cotizacion
             </h2>
           </div>
           <div className="card-body">
             <div className="grid grid-cols-3 gap-4">
               <div className="form-group">
-                <label className="form-label">Fecha de Emisión *</label>
+                <label className="form-label">Fecha de Emision *</label>
                 <input
                   type="date"
                   className="form-input"
@@ -862,7 +923,7 @@ function NuevaCotizacion() {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Validez (días) *</label>
+                <label className="form-label">Validez (dias) *</label>
                 <input
                   type="number"
                   className="form-input"
@@ -884,7 +945,7 @@ function NuevaCotizacion() {
                   style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
                 />
                 <small className="text-muted block mt-1">
-                  <Info size={12} className="inline" /> Se calcula automáticamente
+                  <Info size={12} className="inline" /> Se calcula automaticamente
                 </small>
               </div>
               <div className="form-group">
@@ -897,7 +958,7 @@ function NuevaCotizacion() {
                   required
                 >
                   <option value="PEN">Soles (PEN)</option>
-                  <option value="USD">Dólares (USD)</option>
+                  <option value="USD">Dolares (USD)</option>
                 </select>
               </div>
               <div className="form-group">
@@ -945,7 +1006,7 @@ function NuevaCotizacion() {
                 </div>
               )}
               <div className="form-group">
-                <label className="form-label">Condición de Pago *</label>
+                <label className="form-label">Condicion de Pago *</label>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -964,16 +1025,16 @@ function NuevaCotizacion() {
                       }
                     }}
                     disabled={cotizacionConvertida || !estadoCredito?.usar_limite_credito}
-                    title={!estadoCredito?.usar_limite_credito ? "Este cliente no tiene crédito habilitado" : ""}
+                    title={!estadoCredito?.usar_limite_credito ? 'Este cliente no tiene credito habilitado' : ''}
                   >
                     {!estadoCredito?.usar_limite_credito && <Lock size={14} className="mr-1" />}
-                    Crédito
+                    Credito
                   </button>
                 </div>
               </div>
               {formCabecera.plazo_pago !== 'Contado' && (
                 <div className="form-group animate-fadeIn">
-                  <label className="form-label">Días de Crédito *</label>
+                  <label className="form-label">Dias de Credito *</label>
                   <select
                     className="form-select border-primary"
                     value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
@@ -981,7 +1042,7 @@ function NuevaCotizacion() {
                     disabled={cotizacionConvertida}
                     required={formCabecera.plazo_pago !== 'Contado'}
                   >
-                    <option value="">Seleccione los días...</option>
+                    <option value="">Seleccione los dias...</option>
                     {PLAZOS_PAGO.filter(p => p !== 'Contado').map(plazo => (
                       <option key={plazo} value={plazo}>{plazo}</option>
                     ))}
@@ -1045,7 +1106,7 @@ function NuevaCotizacion() {
                         onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
                         disabled={cotizacionConvertida}
                       >
-                        <option value="">Seleccione una dirección...</option>
+                        <option value="">Seleccione una direccion...</option>
                         {direccionesCliente.map((dir, idx) => (
                           <option key={idx} value={dir.direccion}>
                             {dir.direccion} {dir.es_principal ? '(Principal)' : ''}
@@ -1060,7 +1121,7 @@ function NuevaCotizacion() {
                       className="form-input"
                       value={formCabecera.lugar_entrega}
                       onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
-                      placeholder="Dirección de entrega"
+                      placeholder="Direccion de entrega"
                       disabled={cotizacionConvertida}
                     />
                   )}
@@ -1070,7 +1131,7 @@ function NuevaCotizacion() {
                     type="button" 
                     className="btn btn-outline px-3" 
                     onClick={() => setModalDireccionOpen(true)}
-                    title="Guardar nueva dirección"
+                    title="Guardar nueva direccion"
                   >
                     <Plus size={18} />
                   </button>
@@ -1088,107 +1149,179 @@ function NuevaCotizacion() {
                 disabled={cotizacionConvertida}
               />
             </div>
+
+            <div className="form-group mt-2">
+              <label
+                className={`flex items-center gap-3 cursor-pointer w-fit select-none px-4 py-3 rounded-lg border-2 transition-all ${
+                  esMuestra
+                    ? 'border-amber-400 bg-amber-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                } ${cotizacionConvertida ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="relative flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={esMuestra}
+                    onChange={(e) => {
+                      setEsMuestra(e.target.checked);
+                      if (e.target.checked) setDetalle([]);
+                    }}
+                    disabled={cotizacionConvertida}
+                  />
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      esMuestra ? 'bg-amber-500 border-amber-500' : 'border-gray-300 bg-white'
+                    }`}
+                  >
+                    {esMuestra && <Check size={12} className="text-white" />}
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <span className={`font-semibold text-sm ${esMuestra ? 'text-amber-800' : 'text-gray-700'}`}>
+                    Cotizacion de Muestra
+                  </span>
+                  <span className="text-xs text-muted">
+                    Numeracion MUE-YYYY-XXXX. Permite ingresar productos sin codigo de inventario.
+                  </span>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
 
         {listasPreciosCliente.length > 0 && !cotizacionConvertida && (
-            <div className="card mb-4 animate-fadeIn">
-                <div className="card-header flex justify-between items-center">
-                    <h2 className="card-title text-primary">
-                        <Package size={20} /> Listas de Precios
-                    </h2>
-                    <div className="relative w-64">
-                        <input 
-                            type="text" 
-                            className="form-input form-input-sm pl-8" 
-                            placeholder="Buscar lista..." 
-                            value={busquedaLista}
-                            onChange={(e) => setBusquedaLista(e.target.value)}
-                        />
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-b-lg">
-                    <div className="flex gap-4 overflow-x-auto pb-2">
-                        {listasPreciosCliente
-                            .filter(l => l.nombre_lista.toLowerCase().includes(busquedaLista.toLowerCase()))
-                            .map(lista => (
-                            <div key={lista.id_lista} className="border rounded-lg min-w-[280px] bg-white shadow-sm flex flex-col transition-all duration-200">
-                                <div 
-                                    className="p-3 border-b bg-white flex justify-between items-center rounded-t-lg cursor-pointer hover:bg-gray-50"
-                                    onClick={() => toggleListaDesplegada(lista.id_lista)}
-                                >
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-sm text-gray-800">{lista.nombre_lista}</span>
-                                        <span className="text-xs text-muted">{lista.total_productos} productos</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="badge badge-sm badge-outline">{lista.moneda}</span>
-                                        {listasDesplegadas[lista.id_lista] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                    </div>
-                                </div>
-                                
-                                {listasDesplegadas[lista.id_lista] && (
-                                    <div className="p-0 flex-1 max-h-60 overflow-y-auto animate-fadeIn border-t">
-                                        {detallesListas[lista.id_lista] ? (
-                                            <table className="table w-full text-xs">
-                                                <tbody>
-                                                    {detallesListas[lista.id_lista].map(prod => {
-                                                        const isSelected = detalle.some(d => d.id_producto === prod.id_producto);
-                                                        return (
-                                                            <tr key={prod.id_producto} className={isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'} onClick={() => toggleProductoDesdeLista(prod, lista.moneda)}>
-                                                                <td className="p-2 cursor-pointer border-b border-gray-100 last:border-0">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
-                                                                            {isSelected && <Check size={10} className="text-white" />}
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <p className="font-medium truncate text-gray-700" title={prod.producto}>{prod.producto}</p>
-                                                                            <div className="flex justify-between items-center mt-1">
-                                                                                <span className="text-gray-400 font-mono text-[10px]">{prod.codigo}</span>
-                                                                                <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">{lista.moneda} {parseFloat(prod.precio_especial).toFixed(2)}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        ) : (
-                                            <div className="p-4 text-center text-muted text-xs flex items-center justify-center gap-2">
-                                                <Loader size={14} className="animate-spin" /> Cargando...
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                        {listasPreciosCliente.length === 0 && (
-                            <div className="w-full text-center py-4 text-muted text-sm italic">
-                                No se encontraron listas de precios para este cliente.
-                            </div>
-                        )}
-                    </div>
-                </div>
+          <div className="card mb-4 animate-fadeIn">
+            <div className="card-header flex justify-between items-center">
+              <h2 className="card-title text-primary">
+                <Package size={20} /> Listas de Precios
+              </h2>
+              <div className="relative w-64">
+                <input 
+                  type="text" 
+                  className="form-input form-input-sm pl-8" 
+                  placeholder="Buscar lista..." 
+                  value={busquedaLista}
+                  onChange={(e) => setBusquedaLista(e.target.value)}
+                />
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              </div>
             </div>
+            <div className="p-4 bg-gray-50 rounded-b-lg">
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {listasPreciosCliente
+                  .filter(l => l.nombre_lista.toLowerCase().includes(busquedaLista.toLowerCase()))
+                  .map(lista => (
+                  <div key={lista.id_lista} className="border rounded-lg min-w-[280px] bg-white shadow-sm flex flex-col transition-all duration-200">
+                    <div 
+                      className="p-3 border-b bg-white flex justify-between items-center rounded-t-lg cursor-pointer hover:bg-gray-50"
+                      onClick={() => toggleListaDesplegada(lista.id_lista)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm text-gray-800">{lista.nombre_lista}</span>
+                        <span className="text-xs text-muted">{lista.total_productos} productos</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="badge badge-sm badge-outline">{lista.moneda}</span>
+                        {listasDesplegadas[lista.id_lista] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </div>
+                    </div>
+                    
+                    {listasDesplegadas[lista.id_lista] && (
+                      <div className="p-0 flex-1 max-h-60 overflow-y-auto animate-fadeIn border-t">
+                        {detallesListas[lista.id_lista] ? (
+                          <table className="table w-full text-xs">
+                            <tbody>
+                              {detallesListas[lista.id_lista].map(prod => {
+                                const isSelected = detalle.some(d => d.id_producto === prod.id_producto);
+                                return (
+                                  <tr
+                                    key={prod.id_producto}
+                                    className={isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                                    onClick={() => toggleProductoDesdeLista(prod, lista.moneda)}
+                                  >
+                                    <td className="p-2 cursor-pointer border-b border-gray-100 last:border-0">
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
+                                          {isSelected && <Check size={10} className="text-white" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-medium truncate text-gray-700" title={prod.producto}>{prod.producto}</p>
+                                          <div className="flex justify-between items-center mt-1">
+                                            <span className="text-gray-400 font-mono text-[10px]">{prod.codigo}</span>
+                                            <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">{lista.moneda} {parseFloat(prod.precio_especial).toFixed(2)}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <div className="p-4 text-center text-muted text-xs flex items-center justify-center gap-2">
+                            <Loader size={14} className="animate-spin" /> Cargando...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {listasPreciosCliente.length === 0 && (
+                  <div className="w-full text-center py-4 text-muted text-sm italic">
+                    No se encontraron listas de precios para este cliente.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         <div className="card mb-4">
           <div className="card-header">
             <div className="flex justify-between items-center">
               <h2 className="card-title">
-                <Calculator size={20} /> Productos *
+                <Calculator size={20} />
+                Productos *
+                {esMuestra && (
+                  <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                    Modo Muestra — MUE-YYYY-XXXX
+                  </span>
+                )}
               </h2>
-              <button 
-                type="button" 
-                className="btn btn-primary" 
-                onClick={() => setModalProductoOpen(true)}
-                disabled={cotizacionConvertida}
-              >
-                <Plus size={20} /> Agregar Producto
-              </button>
+              <div className="flex gap-2">
+                {esMuestra ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ borderColor: '#f59e0b', color: '#b45309' }}
+                      onClick={handleAgregarProductoLibre}
+                      disabled={cotizacionConvertida}
+                    >
+                      <Plus size={18} /> Producto Muestra
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => setModalProductoOpen(true)}
+                      disabled={cotizacionConvertida}
+                    >
+                      <Plus size={18} /> Desde Inventario
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setModalProductoOpen(true)}
+                    disabled={cotizacionConvertida}
+                  >
+                    <Plus size={20} /> Agregar Producto
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div className="card-body">
@@ -1197,8 +1330,8 @@ function NuevaCotizacion() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Código</th>
-                      <th>Descripción</th>
+                      <th>Codigo</th>
+                      <th>Descripcion</th>
                       <th className="text-right">Cantidad</th>
                       <th>UM</th>
                       <th className="text-right">P. Base</th>
@@ -1213,9 +1346,39 @@ function NuevaCotizacion() {
                       const precioVenta = parseFloat(item.precio_venta) || 0;
                       const valorVenta = item.cantidad * precioVenta;
                       return (
-                        <tr key={index}>
-                          <td className="font-mono text-sm">{item.codigo_producto}</td>
-                          <td>{item.producto}</td>
+                        <tr key={index} className={item.es_producto_libre ? 'bg-amber-50' : ''}>
+                          <td className="font-mono text-sm">
+                            {item.es_producto_libre ? (
+                              <input
+                                type="text"
+                                className="form-input font-mono text-sm"
+                                style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb' }}
+                                value={item.codigo_producto_libre || ''}
+                                onChange={(e) => handleProductoLibreChange(index, 'codigo_producto_libre', e.target.value)}
+                                placeholder="Cod. muestra"
+                                disabled={cotizacionConvertida}
+                                required
+                              />
+                            ) : (
+                              item.codigo_producto
+                            )}
+                          </td>
+                          <td>
+                            {item.es_producto_libre ? (
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb', minWidth: '220px' }}
+                                value={item.nombre_producto_libre || ''}
+                                onChange={(e) => handleProductoLibreChange(index, 'nombre_producto_libre', e.target.value)}
+                                placeholder="Nombre del producto muestra"
+                                disabled={cotizacionConvertida}
+                                required
+                              />
+                            ) : (
+                              item.producto
+                            )}
+                          </td>
                           <td>
                             <input
                               type="number"
@@ -1229,16 +1392,32 @@ function NuevaCotizacion() {
                               onWheel={handleWheelDisable}
                             />
                           </td>
-                          <td className="text-sm text-muted">{item.unidad_medida}</td>
+                          <td className="text-sm text-muted">
+                            {item.es_producto_libre ? (
+                              <input
+                                type="text"
+                                className="form-input text-sm"
+                                style={{ borderColor: '#fcd34d', backgroundColor: '#fffbeb', width: '80px' }}
+                                value={item.unidad_medida || ''}
+                                onChange={(e) => handleProductoLibreChange(index, 'unidad_medida', e.target.value)}
+                                placeholder="UM"
+                                disabled={cotizacionConvertida}
+                              />
+                            ) : (
+                              item.unidad_medida
+                            )}
+                          </td>
                           <td>
                             <input
                               type="number"
                               className="form-input text-right bg-gray-100"
                               value={item.precio_base}
-                              readOnly
+                              readOnly={!item.es_producto_libre}
+                              onChange={item.es_producto_libre ? (e) => handleProductoLibreChange(index, 'precio_base', parseFloat(e.target.value) || 0) : undefined}
                               min="0"
                               step="0.001"
                               disabled={cotizacionConvertida}
+                              style={item.es_producto_libre ? { backgroundColor: '#fffbeb', borderColor: '#fcd34d' } : {}}
                             />
                           </td>
                           <td>
@@ -1251,7 +1430,7 @@ function NuevaCotizacion() {
                               step="0.001"
                               placeholder="0.000"
                               disabled={cotizacionConvertida}
-                              required
+                              required={!esMuestra}
                               onWheel={handleWheelDisable}
                             />
                           </td>
@@ -1268,9 +1447,9 @@ function NuevaCotizacion() {
                           </td>
                           <td className="text-right font-bold">{formatearMonedaGral(valorVenta)}</td>
                           <td>
-                            <button 
-                              type="button" 
-                              className="btn btn-sm btn-danger" 
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
                               onClick={() => handleEliminarItem(index)}
                               disabled={cotizacionConvertida}
                             >
@@ -1287,14 +1466,38 @@ function NuevaCotizacion() {
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
                 <Calculator size={64} className="mx-auto text-muted mb-4" style={{ opacity: 0.3 }} />
                 <p className="text-muted font-bold mb-2">No hay productos agregados</p>
-                <button 
-                  type="button" 
-                  className="btn btn-primary" 
-                  onClick={() => setModalProductoOpen(true)}
-                  disabled={cotizacionConvertida}
-                >
-                  <Plus size={20} /> Agregar Primer Producto
-                </button>
+                <div className="flex gap-2 justify-center">
+                  {esMuestra ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ borderColor: '#f59e0b', color: '#b45309' }}
+                        onClick={handleAgregarProductoLibre}
+                        disabled={cotizacionConvertida}
+                      >
+                        <Plus size={20} /> Producto Muestra
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => setModalProductoOpen(true)}
+                        disabled={cotizacionConvertida}
+                      >
+                        <Plus size={20} /> Desde Inventario
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setModalProductoOpen(true)}
+                      disabled={cotizacionConvertida}
+                    >
+                      <Plus size={20} /> Agregar Primer Producto
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1336,7 +1539,7 @@ function NuevaCotizacion() {
               disabled={loading || !clienteSeleccionado || detalle.length === 0}
             >
               <Save size={20} />
-              {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotización' : 'Guardar Cotización'}
+              {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotizacion' : 'Guardar Cotizacion'}
             </button>
           )}
         </div>
@@ -1344,20 +1547,41 @@ function NuevaCotizacion() {
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
         <div className="flex gap-2 mb-4 border-b">
-          <button className={`px-4 py-2 font-medium ${tabCliente === 'lista' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`} onClick={() => setTabCliente('lista')}>Buscar en Lista</button>
-          <button className={`px-4 py-2 font-medium ${tabCliente === 'nuevo' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`} onClick={() => setTabCliente('nuevo')}>Nuevo / Validar</button>
+          <button
+            className={`px-4 py-2 font-medium ${tabCliente === 'lista' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
+            onClick={() => setTabCliente('lista')}
+          >
+            Buscar en Lista
+          </button>
+          <button
+            className={`px-4 py-2 font-medium ${tabCliente === 'nuevo' ? 'text-primary border-b-2 border-primary' : 'text-muted'}`}
+            onClick={() => setTabCliente('nuevo')}
+          >
+            Nuevo / Validar
+          </button>
         </div>
         {tabCliente === 'lista' ? (
           <>
             <div className="mb-4 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input type="text" className="form-input pl-10" placeholder="Buscar por razón social o RUC..." value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} autoFocus />
+              <input
+                type="text"
+                className="form-input pl-10"
+                placeholder="Buscar por razon social o RUC..."
+                value={busquedaCliente}
+                onChange={(e) => setBusquedaCliente(e.target.value)}
+                autoFocus
+              />
             </div>
             <div className="max-h-96 overflow-y-auto">
               {clientesFiltrados.length > 0 ? (
                 <div className="space-y-2 pr-2">
                   {clientesFiltrados.map(cliente => (
-                    <div key={cliente.id_cliente} className="p-4 border rounded-lg hover:border-primary hover:bg-blue-50 cursor-pointer transition flex justify-between items-center group" onClick={() => handleSelectCliente(cliente)}>
+                    <div
+                      key={cliente.id_cliente}
+                      className="p-4 border rounded-lg hover:border-primary hover:bg-blue-50 cursor-pointer transition flex justify-between items-center group"
+                      onClick={() => handleSelectCliente(cliente)}
+                    >
                       <div>
                         <div className="font-bold text-gray-800 group-hover:text-primary transition-colors">{cliente.razon_social}</div>
                         <div className="text-sm text-muted font-mono">{cliente.ruc}</div>
@@ -1365,11 +1589,17 @@ function NuevaCotizacion() {
                       <div className="text-right flex flex-col items-end gap-1">
                         {cliente.usar_limite_credito === 1 ? (
                           <>
-                            <div className="flex items-center gap-1 badge badge-success text-[10px] uppercase font-bold py-0.5"><CheckCircle size={10}/> Crédito Activo</div>
-                            <div className="text-[10px] font-bold text-muted">S/ {formatearNumero(parseFloat(cliente.limite_credito_pen))} | $ {formatearNumero(parseFloat(cliente.limite_credito_usd))}</div>
+                            <div className="flex items-center gap-1 badge badge-success text-[10px] uppercase font-bold py-0.5">
+                              <CheckCircle size={10}/> Credito Activo
+                            </div>
+                            <div className="text-[10px] font-bold text-muted">
+                              S/ {formatearNumero(parseFloat(cliente.limite_credito_pen))} | $ {formatearNumero(parseFloat(cliente.limite_credito_usd))}
+                            </div>
                           </>
                         ) : (
-                          <div className="flex items-center gap-1 badge badge-secondary text-[10px] uppercase font-bold py-0.5"><Lock size={10}/> Solo Contado</div>
+                          <div className="flex items-center gap-1 badge badge-secondary text-[10px] uppercase font-bold py-0.5">
+                            <Lock size={10}/> Solo Contado
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1383,14 +1613,44 @@ function NuevaCotizacion() {
         ) : (
           <div className="space-y-4">
             <div className="flex gap-2">
-              <button type="button" className={`btn flex-1 ${nuevoClienteDoc.tipo === 'RUC' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'RUC', numero: '' })}><Building2 size={18} className="mr-2" /> Empresa (RUC)</button>
-              <button type="button" className={`btn flex-1 ${nuevoClienteDoc.tipo === 'DNI' ? 'btn-info' : 'btn-outline'}`} onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'DNI', numero: '' })}><User size={18} className="mr-2" /> Persona (DNI)</button>
+              <button
+                type="button"
+                className={`btn flex-1 ${nuevoClienteDoc.tipo === 'RUC' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'RUC', numero: '' })}
+              >
+                <Building2 size={18} className="mr-2" /> Empresa (RUC)
+              </button>
+              <button
+                type="button"
+                className={`btn flex-1 ${nuevoClienteDoc.tipo === 'DNI' ? 'btn-info' : 'btn-outline'}`}
+                onClick={() => setNuevoClienteDoc({ ...nuevoClienteDoc, tipo: 'DNI', numero: '' })}
+              >
+                <User size={18} className="mr-2" /> Persona (DNI)
+              </button>
             </div>
             <div className="form-group">
               <label className="form-label">{nuevoClienteDoc.tipo}</label>
               <div className="flex gap-2">
-                <input type="text" className="form-input" value={nuevoClienteDoc.numero} onChange={(e) => { setNuevoClienteDoc({ ...nuevoClienteDoc, numero: e.target.value }); setClienteApiData(null); setErrorApi(null); }} placeholder={nuevoClienteDoc.tipo === 'RUC' ? '20...' : '70...'} maxLength={nuevoClienteDoc.tipo === 'RUC' ? 11 : 8} />
-                <button type="button" className="btn btn-outline min-w-[120px]" onClick={validarClienteExterno} disabled={loadingApi || !nuevoClienteDoc.numero}>{loadingApi ? <Loader size={18} className="animate-spin" /> : 'Validar'}</button>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={nuevoClienteDoc.numero}
+                  onChange={(e) => {
+                    setNuevoClienteDoc({ ...nuevoClienteDoc, numero: e.target.value });
+                    setClienteApiData(null);
+                    setErrorApi(null);
+                  }}
+                  placeholder={nuevoClienteDoc.tipo === 'RUC' ? '20...' : '70...'}
+                  maxLength={nuevoClienteDoc.tipo === 'RUC' ? 11 : 8}
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline min-w-[120px]"
+                  onClick={validarClienteExterno}
+                  disabled={loadingApi || !nuevoClienteDoc.numero}
+                >
+                  {loadingApi ? <Loader size={18} className="animate-spin" /> : 'Validar'}
+                </button>
               </div>
               {errorApi && <p className="text-danger text-sm mt-1">{errorApi}</p>}
             </div>
@@ -1400,9 +1660,16 @@ function NuevaCotizacion() {
                   <CheckCircle className="text-success mt-1" size={20} />
                   <div className="flex-1">
                     <h4 className="font-bold text-success mb-1">Datos Encontrados</h4>
-                    <p className="text-sm"><strong>Razón Social:</strong> {clienteApiData.razon_social || clienteApiData.nombre_completo}</p>
-                    <p className="text-sm"><strong>Dirección:</strong> {clienteApiData.direccion || '-'}</p>
-                    <button type="button" className="btn btn-success w-full mt-3" onClick={crearYSeleccionarCliente} disabled={loadingApi}>Registrar y Seleccionar Cliente</button>
+                    <p className="text-sm"><strong>Razon Social:</strong> {clienteApiData.razon_social || clienteApiData.nombre_completo}</p>
+                    <p className="text-sm"><strong>Direccion:</strong> {clienteApiData.direccion || '-'}</p>
+                    <button
+                      type="button"
+                      className="btn btn-success w-full mt-3"
+                      onClick={crearYSeleccionarCliente}
+                      disabled={loadingApi}
+                    >
+                      Registrar y Seleccionar Cliente
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1413,13 +1680,24 @@ function NuevaCotizacion() {
 
       <Modal isOpen={modalProductoOpen} onClose={() => setModalProductoOpen(false)} title="Agregar Producto" size="lg">
         <div className="mb-4">
-          <input type="text" className="form-input" placeholder="Buscar por código o nombre..." value={busquedaProducto} onChange={(e) => setBusquedaProducto(e.target.value)} autoFocus />
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Buscar por codigo o nombre..."
+            value={busquedaProducto}
+            onChange={(e) => setBusquedaProducto(e.target.value)}
+            autoFocus
+          />
         </div>
         <div className="max-h-96 overflow-y-auto">
           {productosFiltrados.length > 0 ? (
             <div className="space-y-2">
               {productosFiltrados.map(producto => (
-                <div key={producto.id_producto} className="p-4 border rounded-lg hover:border-primary hover:bg-blue-50 cursor-pointer transition flex justify-between items-start group" onClick={() => handleAgregarProducto(producto)}>
+                <div
+                  key={producto.id_producto}
+                  className="p-4 border rounded-lg hover:border-primary hover:bg-blue-50 cursor-pointer transition flex justify-between items-start group"
+                  onClick={() => handleAgregarProducto(producto)}
+                >
                   <div className="flex-1">
                     <div className="font-bold text-gray-800 group-hover:text-primary transition-colors">{producto.nombre}</div>
                     <div className="text-sm text-muted font-mono">{producto.codigo}</div>
@@ -1437,15 +1715,15 @@ function NuevaCotizacion() {
         </div>
       </Modal>
 
-      <Modal isOpen={modalDireccionOpen} onClose={() => setModalDireccionOpen(false)} title="Nueva Dirección de Entrega" size="md">
+      <Modal isOpen={modalDireccionOpen} onClose={() => setModalDireccionOpen(false)} title="Nueva Direccion de Entrega" size="md">
         <div className="space-y-4">
           <div className="form-group">
-            <label className="form-label">Dirección *</label>
+            <label className="form-label">Direccion *</label>
             <textarea
               className="form-textarea"
               value={nuevaDireccion.direccion}
               onChange={(e) => setNuevaDireccion({ ...nuevaDireccion, direccion: e.target.value })}
-              placeholder="Ingresa la dirección completa..."
+              placeholder="Ingresa la direccion completa..."
               rows={3}
               required
             />
@@ -1461,11 +1739,21 @@ function NuevaCotizacion() {
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="btn btn-outline" onClick={() => setModalDireccionOpen(false)} disabled={savingDireccion}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setModalDireccionOpen(false)}
+              disabled={savingDireccion}
+            >
               Cancelar
             </button>
-            <button type="button" className="btn btn-primary" onClick={handleGuardarDireccion} disabled={savingDireccion || !nuevaDireccion.direccion.trim()}>
-              {savingDireccion ? 'Guardando...' : 'Guardar Dirección'}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleGuardarDireccion}
+              disabled={savingDireccion || !nuevaDireccion.direccion.trim()}
+            >
+              {savingDireccion ? 'Guardando...' : 'Guardar Direccion'}
             </button>
           </div>
         </div>

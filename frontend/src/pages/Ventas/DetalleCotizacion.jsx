@@ -5,7 +5,7 @@ import {
   Building, AlertCircle,
   CheckCircle, XCircle, Calculator, Percent, TrendingUp,
   AlertTriangle, User, CreditCard, Package, MapPin, Copy, ExternalLink, Lock,
-  ChevronLeft, ChevronRight, Save
+  ChevronLeft, ChevronRight, Save, FlaskConical
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -74,7 +74,7 @@ function DetalleCotizacion() {
         }
       }
     } catch (err) {
-      console.error('Error cargando navegación', err);
+      console.error('Error cargando navegacion', err);
     }
   };
 
@@ -86,8 +86,8 @@ function DetalleCotizacion() {
   };
 
   const handleVolverListado = () => {
-  navigate(-1);
-};
+    navigate(-1);
+  };
 
   const cargarDatos = async () => {
     try {
@@ -104,12 +104,12 @@ function DetalleCotizacion() {
           setEstadoCredito(creditoRes.data.data);
         }
       } else {
-        setError('Cotización no encontrada');
+        setError('Cotizacion no encontrada');
       }
       
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || 'Error al cargar la cotización');
+      setError(err.response?.data?.error || 'Error al cargar la cotizacion');
     } finally {
       setLoading(false);
     }
@@ -189,10 +189,10 @@ function DetalleCotizacion() {
           const mensajeError = errorJson.error || 'Error al generar el PDF';
           setError(mensajeError);
         } catch (e) {
-          setError('Ocurrió un error inesperado al descargar el archivo.');
+          setError('Ocurrio un error inesperado al descargar el archivo.');
         }
       } else {
-        setError(err.message || 'Error de conexión al descargar el PDF');
+        setError(err.message || 'Error de conexion al descargar el PDF');
       }
     } finally {
       setLoading(false);
@@ -207,7 +207,7 @@ function DetalleCotizacion() {
       const response = await cotizacionesAPI.duplicar(id);
       
       if (response.data.success) {
-        setSuccess(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
+        setSuccess(`Cotizacion duplicada: ${response.data.data.numero_cotizacion}`);
         
         setTimeout(() => {
           const queryString = location.search;
@@ -216,8 +216,8 @@ function DetalleCotizacion() {
       }
       
     } catch (err) {
-      console.error('Error al duplicar cotización:', err);
-      setError(err.response?.data?.error || 'Error al duplicar cotización');
+      console.error('Error al duplicar cotizacion:', err);
+      setError(err.response?.data?.error || 'Error al duplicar cotizacion');
     } finally {
       setLoading(false);
     }
@@ -252,7 +252,7 @@ function DetalleCotizacion() {
       
       if (response.data.success) {
         if (estado === 'Aprobada') {
-          setSuccess('Cotización aprobada. Redirigiendo a crear Orden de Venta...');
+          setSuccess('Cotizacion aprobada. Redirigiendo a crear Orden de Venta...');
           
           setTimeout(() => {
             navigate(`/ventas/ordenes/nueva?cotizacion=${id}`);
@@ -304,7 +304,7 @@ function DetalleCotizacion() {
 
     if (tipos[codigo]) return tipos[codigo];
     
-    return valor; 
+    return valor;
   };
 
   const getEstadoConfig = (estado) => {
@@ -350,12 +350,21 @@ function DetalleCotizacion() {
       render: (value, row) => (
         <div>
           <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted font-mono">{row.codigo_producto}</div>
-          {parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
-            <div className="text-xs text-warning flex items-center gap-1 mt-1">
-              <AlertTriangle size={12} />
-              Stock insuficiente ({parseFloat(row.stock_disponible || 0).toFixed(2)} {row.unidad_medida})
+          <div className="text-xs text-muted font-mono">{row.codigo_producto || row.codigo_producto_libre}</div>
+          {row.es_producto_libre ? (
+            <div className="text-xs text-amber-600 flex items-center gap-1 mt-1"
+              style={{ backgroundColor: '#fffbeb', padding: '2px 6px', borderRadius: '4px', width: 'fit-content' }}
+            >
+              <FlaskConical size={10} />
+              Producto muestra
             </div>
+          ) : (
+            parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
+              <div className="text-xs text-warning flex items-center gap-1 mt-1">
+                <AlertTriangle size={12} />
+                Stock insuficiente ({parseFloat(row.stock_disponible || 0).toFixed(2)} {row.unidad_medida})
+              </div>
+            )
           )}
         </div>
       )
@@ -413,7 +422,7 @@ function DetalleCotizacion() {
       align: 'right',
       render: (value, row) => {
         const subtotalCalculado = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
-        return <span className="font-bold text-lg">{formatearMoneda(subtotalCalculado)}</span>
+        return <span className="font-bold text-lg">{formatearMoneda(subtotalCalculado)}</span>;
       }
     },
     {
@@ -422,14 +431,15 @@ function DetalleCotizacion() {
       width: '80px',
       align: 'center',
       render: (value, row) => {
+        if (row.es_producto_libre) return null;
         return (
           <button
             className="btn btn-xs btn-ghost text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200"
             onClick={() => {
               setProductoRectificar(row);
               setRectificarForm({ 
-                  nueva_cantidad: row.cantidad, 
-                  motivo: '' 
+                nueva_cantidad: row.cantidad, 
+                motivo: '' 
               });
               setModalRectificarOpen(true);
             }}
@@ -444,13 +454,13 @@ function DetalleCotizacion() {
   ];
 
   if (loading && !cotizacion) {
-    return <Loading message="Cargando cotización..." />;
+    return <Loading message="Cargando cotizacion..." />;
   }
 
   if (!cotizacion) {
     return (
       <div className="p-6">
-        <Alert type="error" message="Cotización no encontrada" />
+        <Alert type="error" message="Cotizacion no encontrada" />
         <button 
           className="btn btn-outline mt-4"
           onClick={handleVolverListado}
@@ -466,8 +476,8 @@ function DetalleCotizacion() {
     if (!cotizacion.detalle) return { sub: 0, tax: 0, tot: 0 };
 
     const sub = cotizacion.detalle.reduce((acc, item) => {
-        const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
-        return acc + (isNaN(val) ? 0 : val);
+      const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+      return acc + (isNaN(val) ? 0 : val);
     }, 0);
 
     const tipoImp = (cotizacion.tipo_impuesto || 'IGV').toUpperCase();
@@ -486,6 +496,7 @@ function DetalleCotizacion() {
     ? Math.ceil((new Date(cotizacion.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
   const estaConvertida = cotizacion.convertida_venta || cotizacion.estado === 'Convertida';
+  const esMuestra = cotizacion.es_muestra === 1;
 
   const disponible = estadoCredito ? (cotizacion.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible) : 0;
   const creditoInsuficiente = estadoCredito?.usar_limite_credito && cotizacion.plazo_pago !== 'Contado' && totalReal > parseFloat(disponible);
@@ -507,7 +518,7 @@ function DetalleCotizacion() {
                 className="btn btn-sm btn-ghost p-1" 
                 disabled={!navInfo.prev} 
                 onClick={() => handleNavegar(navInfo.prev)}
-                title="Cotización anterior"
+                title="Cotizacion anterior"
               >
                 <ChevronLeft size={20} />
               </button>
@@ -518,7 +529,7 @@ function DetalleCotizacion() {
                 className="btn btn-sm btn-ghost p-1" 
                 disabled={!navInfo.next} 
                 onClick={() => handleNavegar(navInfo.next)}
-                title="Cotización siguiente"
+                title="Cotizacion siguiente"
               >
                 <ChevronRight size={20} />
               </button>
@@ -528,6 +539,15 @@ function DetalleCotizacion() {
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <FileText size={32} className="text-primary" />
                 {cotizacion.numero_cotizacion}
+                {esMuestra && (
+                  <span
+                    className="text-xs font-bold uppercase tracking-wide px-2 py-1 rounded-full flex items-center gap-1"
+                    style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                  >
+                    <FlaskConical size={12} />
+                    Muestra
+                  </span>
+                )}
                 {estaConvertida && (
                   <span className="badge badge-primary ml-2">
                     <Lock size={14} className="inline mr-1" />
@@ -539,7 +559,7 @@ function DetalleCotizacion() {
                 Emitida el {formatearFecha(cotizacion.fecha_emision)}
                 {diasVencimiento !== null && diasVencimiento > 0 && !estaConvertida && (
                   <span className="ml-2 text-warning">
-                    Vence en {diasVencimiento} día(s)
+                    Vence en {diasVencimiento} dia(s)
                   </span>
                 )}
               </p>
@@ -570,6 +590,22 @@ function DetalleCotizacion() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      {esMuestra && (
+        <div
+          className="rounded-lg p-4 mb-6 flex items-start gap-3"
+          style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d' }}
+        >
+          <FlaskConical size={20} style={{ color: '#b45309', flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <p className="font-bold text-sm" style={{ color: '#92400e' }}>Cotizacion de Muestra</p>
+            <p className="text-sm" style={{ color: '#b45309' }}>
+              Esta cotizacion es de tipo muestra y no puede ser convertida en Orden de Venta. 
+              Puede editarla, descargar el PDF o duplicarla para generar una cotizacion regular.
+            </p>
+          </div>
+        </div>
+      )}
+
       {estaConvertida && cotizacion.id_orden_venta && (
         <Alert 
           type="info"
@@ -577,7 +613,7 @@ function DetalleCotizacion() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle size={20} />
-                <span>Esta cotización fue convertida a Orden de Venta</span>
+                <span>Esta cotizacion fue convertida a Orden de Venta</span>
               </div>
               <button
                 className="btn btn-sm btn-primary"
@@ -590,7 +626,7 @@ function DetalleCotizacion() {
         />
       )}
 
-      <div className={`card mb-6`} style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : '#e2e8f0' }}>
+      <div className="card mb-6" style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : '#e2e8f0' }}>
         <div className={`card-body rounded-lg border-2 ${estadoConfig.clase}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
@@ -602,7 +638,7 @@ function DetalleCotizacion() {
                 <h3 className="text-3xl font-bold">{cotizacion.estado}</h3>
                 {cotizacion.fecha_vencimiento && cotizacion.estado === 'Pendiente' && (
                   <p className="text-sm mt-1 opacity-70">
-                    Válida hasta: {formatearFecha(cotizacion.fecha_vencimiento)}
+                    Valida hasta: {formatearFecha(cotizacion.fecha_vencimiento)}
                   </p>
                 )}
               </div>
@@ -650,19 +686,30 @@ function DetalleCotizacion() {
                   Enviada
                 </button>
 
-                <button
-                  className={`btn btn-sm ${
-                    cotizacion.estado === 'Aprobada' || creditoInsuficiente
-                      ? 'btn-success cursor-not-allowed opacity-60' 
-                      : 'btn-outline btn-success hover:btn-success'
-                  }`}
-                  onClick={() => !creditoInsuficiente && handleCambiarEstado('Aprobada')}
-                  disabled={cotizacion.estado === 'Aprobada' || loading || creditoInsuficiente}
-                  title={creditoInsuficiente ? "Crédito insuficiente para aprobar" : ""}
-                >
-                  {creditoInsuficiente ? <Lock size={16} className="mr-1.5" /> : <CheckCircle size={16} className="mr-1.5" />}
-                  Aprobar (Nueva OV)
-                </button>
+                {esMuestra ? (
+                  <button
+                    className="btn btn-sm btn-outline cursor-not-allowed opacity-50"
+                    disabled
+                    title="Las cotizaciones de muestra no pueden convertirse en Orden de Venta"
+                  >
+                    <Lock size={16} className="mr-1.5" />
+                    Aprobar (Nueva OV)
+                  </button>
+                ) : (
+                  <button
+                    className={`btn btn-sm ${
+                      cotizacion.estado === 'Aprobada' || creditoInsuficiente
+                        ? 'btn-success cursor-not-allowed opacity-60' 
+                        : 'btn-outline btn-success hover:btn-success'
+                    }`}
+                    onClick={() => !creditoInsuficiente && handleCambiarEstado('Aprobada')}
+                    disabled={cotizacion.estado === 'Aprobada' || loading || creditoInsuficiente}
+                    title={creditoInsuficiente ? "Credito insuficiente para aprobar" : ""}
+                  >
+                    {creditoInsuficiente ? <Lock size={16} className="mr-1.5" /> : <CheckCircle size={16} className="mr-1.5" />}
+                    Aprobar (Nueva OV)
+                  </button>
+                )}
 
                 <button
                   className={`btn btn-sm ${
@@ -678,15 +725,22 @@ function DetalleCotizacion() {
                 </button>
               </div>
 
-              {creditoInsuficiente ? (
+              {esMuestra ? (
+                <div className="mt-3 text-xs rounded p-2 flex items-center gap-2"
+                  style={{ backgroundColor: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e' }}
+                >
+                  <FlaskConical size={12} />
+                  Las cotizaciones de tipo muestra no pueden convertirse en Orden de Venta.
+                </div>
+              ) : creditoInsuficiente ? (
                 <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 flex items-center gap-2">
                   <AlertTriangle size={14} />
-                  <strong>Bloqueado:</strong> El total de la cotización excede el crédito disponible del cliente. No se puede aprobar.
+                  <strong>Bloqueado:</strong> El total de la cotizacion excede el credito disponible del cliente. No se puede aprobar.
                 </div>
               ) : (
                 <div className="mt-3 text-xs text-muted bg-blue-50 border border-blue-200 rounded p-2">
                   <AlertCircle size={12} className="inline mr-1" />
-                  <strong>Nota:</strong> Al aprobar, se abrirá el formulario de Nueva Orden de Venta con los datos de esta cotización precargados.
+                  <strong>Nota:</strong> Al aprobar, se abrira el formulario de Nueva Orden de Venta con los datos de esta cotizacion precargados.
                 </div>
               )}
             </div>
@@ -704,7 +758,7 @@ function DetalleCotizacion() {
           </div>
           <div className="card-body space-y-3">
             <div>
-              <p className="text-xs text-muted uppercase font-semibold mb-1">Razón Social</p>
+              <p className="text-xs text-muted uppercase font-semibold mb-1">Razon Social</p>
               <p className="font-bold text-lg">{cotizacion.cliente}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -714,7 +768,7 @@ function DetalleCotizacion() {
               </div>
               {cotizacion.telefono_cliente && (
                 <div>
-                  <p className="text-xs text-muted uppercase font-semibold mb-1">Teléfono</p>
+                  <p className="text-xs text-muted uppercase font-semibold mb-1">Telefono</p>
                   <p className="font-medium">{cotizacion.telefono_cliente}</p>
                 </div>
               )}
@@ -723,7 +777,7 @@ function DetalleCotizacion() {
               <div>
                 <p className="text-xs text-muted uppercase font-semibold mb-1 flex items-center gap-1">
                   <MapPin size={12} />
-                  Dirección
+                  Direccion
                 </p>
                 <p className="text-sm">{cotizacion.direccion_cliente}</p>
               </div>
@@ -790,7 +844,7 @@ function DetalleCotizacion() {
           <div className="card-header bg-gradient-to-r from-purple-50 to-white" style={{ borderBottom: '1px solid #e2e8f0' }}>
             <h2 className="card-title text-purple-900">
               <User size={20} />
-              Información Adicional
+              Informacion Adicional
             </h2>
           </div>
           <div className="card-body space-y-3">
@@ -828,13 +882,22 @@ function DetalleCotizacion() {
             <Package size={20} />
             Productos Cotizados
             <span className="badge badge-primary ml-2">{cotizacion.detalle?.length || 0}</span>
+            {esMuestra && (
+              <span
+                className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
+                style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+              >
+                <FlaskConical size={11} />
+                Muestra
+              </span>
+            )}
           </h2>
         </div>
         <div className="card-body p-0">
           <Table
             columns={columns}
             data={cotizacion.detalle || []}
-            emptyMessage="No hay productos en esta cotización"
+            emptyMessage="No hay productos en esta cotizacion"
           />
         </div>
       </div>
@@ -890,10 +953,10 @@ function DetalleCotizacion() {
               )}
             </div>
 
-            {estadoCredito && estadoCredito.usar_limite_credito && (
+            {estadoCredito && estadoCredito.usar_limite_credito && !esMuestra && (
               <div className="mt-6 pt-4 border-t" style={{ borderTopColor: '#e2e8f0' }}>
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-                  <CreditCard size={14} /> Saldo de Crédito del Cliente
+                  <CreditCard size={14} /> Saldo de Credito del Cliente
                 </h4>
                 <div className="grid grid-cols-1 gap-2">
                   <div className={`p-3 rounded-lg border ${parseFloat(estadoCredito.credito_pen.disponible) < totalReal && cotizacion.moneda === 'PEN' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
@@ -911,7 +974,7 @@ function DetalleCotizacion() {
                 </div>
                 {creditoInsuficiente && (
                   <p className="text-[10px] text-red-600 mt-2 font-bold flex items-center gap-1">
-                    <AlertTriangle size={10} /> No podrá convertirse a OV: saldo insuficiente.
+                    <AlertTriangle size={10} /> No podra convertirse a OV: saldo insuficiente.
                   </p>
                 )}
               </div>
@@ -969,7 +1032,7 @@ function DetalleCotizacion() {
                     <p className="font-bold">{productoRectificar.producto}</p>
                     <p>Cantidad actual: <strong>{formatearNumero(productoRectificar.cantidad)}</strong></p>
                     <p className="text-xs mt-1">
-                        Si esta cotización ya fue convertida, se actualizará también la Orden de Venta.
+                      Si esta cotizacion ya fue convertida, se actualizara tambien la Orden de Venta.
                     </p>
                   </div>
                 </div>
@@ -997,7 +1060,7 @@ function DetalleCotizacion() {
                   rows={2}
                   value={rectificarForm.motivo}
                   onChange={(e) => setRectificarForm({ ...rectificarForm, motivo: e.target.value })}
-                  placeholder="Ej: Error de digitación, cambio de requerimiento, etc."
+                  placeholder="Ej: Error de digitacion, cambio de requerimiento, etc."
                   required
                 ></textarea>
               </div>
@@ -1016,7 +1079,7 @@ function DetalleCotizacion() {
                   className="btn btn-warning text-white"
                   disabled={procesando}
                 >
-                  <Save size={16} className="mr-1"/> Confirmar Rectificación
+                  <Save size={16} className="mr-1" /> Confirmar Rectificacion
                 </button>
               </div>
             </div>

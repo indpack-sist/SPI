@@ -961,25 +961,26 @@ export async function descargarPDFCotizacion(req, res) {
     // AQUI ESTA LA MAGIA: No seleccionamos 'dc.valor_venta' de la BD.
     // Lo calculamos: cantidad * precio_unitario * descuento
     const detalleResult = await executeQuery(`
-      SELECT 
-        dc.id_detalle,
-        dc.cantidad,
-        dc.precio_unitario,
-        dc.descuento_porcentaje,
-        
-        -- CÁLCULO MATEMÁTICO FORZADO PARA CORREGIR EL PDF
-        (dc.cantidad * dc.precio_unitario * (1 - COALESCE(dc.descuento_porcentaje, 0) / 100)) AS valor_venta,
-        (dc.cantidad * dc.precio_unitario * (1 - COALESCE(dc.descuento_porcentaje, 0) / 100)) AS total,
-        
-        dc.orden,
-        p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida
-      FROM detalle_cotizacion dc
-      INNER JOIN productos p ON dc.id_producto = p.id_producto
-      WHERE dc.id_cotizacion = ?
-      ORDER BY dc.orden
-    `, [id]);
+  SELECT 
+    dc.id_detalle,
+    dc.cantidad,
+    dc.precio_unitario,
+    dc.descuento_porcentaje,
+    dc.es_producto_libre,
+    dc.codigo_producto_libre,
+    dc.nombre_producto_libre,
+    dc.unidad_medida_libre,
+    (dc.cantidad * dc.precio_unitario) AS valor_venta,
+    (dc.cantidad * dc.precio_unitario) AS total,
+    dc.orden,
+    COALESCE(p.codigo, dc.codigo_producto_libre)      AS codigo_producto,
+    COALESCE(p.nombre, dc.nombre_producto_libre)      AS producto,
+    COALESCE(p.unidad_medida, dc.unidad_medida_libre) AS unidad_medida
+  FROM detalle_cotizacion dc
+  LEFT JOIN productos p ON dc.id_producto = p.id_producto
+  WHERE dc.id_cotizacion = ?
+  ORDER BY dc.orden
+`, [id]);
 
     if (!detalleResult.success) {
       return res.status(500).json({ success: false, error: 'Error al obtener detalle' });

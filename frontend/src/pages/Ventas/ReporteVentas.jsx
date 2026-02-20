@@ -183,6 +183,7 @@ const ReporteVentas = () => {
   
       const datosResumen = dataFiltrada.map(item => ({
         'Orden': item.numero,
+        'Tipo Comprobante': item.tipo_comprobante || '',   // ← AÑADIR
         'Comprobante': item.numero_comprobante || '',
         'Cliente': item.cliente,
         'RUC': item.ruc,
@@ -203,7 +204,7 @@ const ReporteVentas = () => {
   
       const wsResumen = XLSX.utils.json_to_sheet(datosResumen);
       wsResumen['!cols'] = [
-        { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 15 },
+        { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 15 },
         { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 8 },
         { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
         { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 10 },

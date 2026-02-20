@@ -1313,7 +1313,7 @@ export async function registrarDespacho(req, res) {
       }
 
       const productoStock = await executeQuery(
-        'SELECT stock_actual, costo_unitario_promedio, requiere_receta FROM productos WHERE id_producto = ?',
+        'SELECT stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?',
         [itemDespacho.id_producto]
       );
 
@@ -1322,9 +1322,8 @@ export async function registrarDespacho(req, res) {
       }
 
       const infoProducto = productoStock.data[0];
-      // stock_reservado === 1 significa reserva completa, === 2 parcial
-const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemDb.stock_reservado) === 2;
-      // Solo validar stock disponible si NO estaba reservado
+      const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemDb.stock_reservado) === 2;
+
       if (!estabaReservado) {
         if (parseFloat(infoProducto.stock_actual) < cantidadADespachar) {
           return res.status(400).json({
@@ -1344,12 +1343,10 @@ const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemD
         cantidad: cantidadADespachar,
         costo_unitario: costoUnitario,
         precio_unitario: precioUnitario,
-        requiere_receta: infoProducto.requiere_receta,
         estaba_reservado: estabaReservado
       });
     }
 
-    // Insertar cabecera salida primero para obtener el ID
     const resultCabecera = await executeTransaction([{
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, total_costo,
@@ -1369,23 +1366,19 @@ const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemD
     const queriesDetalle = [];
 
     for (const item of itemsProcesados) {
-      // Guardar fue_reservado en detalle_salidas para saber cómo revertir al anular
       queriesDetalle.push({
         sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario, fue_reservado)
               VALUES (?, ?, ?, ?, ?, ?)`,
         params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario, item.estaba_reservado ? 1 : 0]
       });
 
-      // CORRECCIÓN CLAVE: Solo descontar stock si NO estaba reservado
-      // Si estaba reservado, el stock ya fue descontado al momento de reservar
-      if (!item.estaba_reservado && parseInt(item.requiere_receta) === 0) {
+      if (!item.estaba_reservado) {
         queriesDetalle.push({
           sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
           params: [item.cantidad, item.id_producto]
         });
       }
 
-      // Limpiar reserva del detalle (ya se concretó en despacho)
       if (item.estaba_reservado) {
         queriesDetalle.push({
           sql: `UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0
@@ -1404,10 +1397,7 @@ const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemD
     const resultDetalle = await executeTransaction(queriesDetalle);
     if (!resultDetalle.success) return res.status(500).json({ error: resultDetalle.error });
 
-    await executeQuery(
-      'UPDATE ordenes_venta SET id_salida = ? WHERE id_orden_venta = ?',
-      [idSalida, id]
-    );
+    await executeQuery('UPDATE ordenes_venta SET id_salida = ? WHERE id_orden_venta = ?', [idSalida, id]);
 
     const verificacion = await executeQuery(`
       SELECT 
@@ -1437,6 +1427,7 @@ const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemD
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
 export async function anularDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
@@ -1473,40 +1464,25 @@ export async function anularDespacho(req, res) {
     const queriesReversion = [];
 
     for (const item of detalleSalida.data) {
-      const productoInfo = await executeQuery(
-        'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-        [item.id_producto]
-      );
-
-      if (productoInfo.success && productoInfo.data.length > 0 && productoInfo.data[0].requiere_receta === 0) {
-        // CORRECCIÓN CLAVE: Solo devolver stock si el despacho NO fue con reserva previa.
-        // Si fue_reservado=1, el stock ya estaba descontado desde la reserva y al anular
-        // el despacho debe volver a quedar como "reservado" (no libre en almacén).
-        if (!item.fue_reservado) {
-          queriesReversion.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [item.cantidad, item.id_producto]
-          });
-        } else {
-          // Era reservado: restaurar la reserva en detalle_orden_venta y descontar de nuevo del stock
-          // porque al despachar se limpió la reserva pero el stock físico no se tocó
-          queriesReversion.push({
-            sql: `UPDATE detalle_orden_venta 
-                  SET stock_reservado = 1, cantidad_reservada = ?
-                  WHERE id_orden_venta = ? AND id_producto = ?`,
-            params: [item.cantidad, id, item.id_producto]
-          });
-          // Actualizar stock_reservado en cabecera de la orden
-          queriesReversion.push({
-            sql: 'UPDATE ordenes_venta SET stock_reservado = 1 WHERE id_orden_venta = ?',
-            params: [id]
-          });
-        }
+      if (!item.fue_reservado) {
+        queriesReversion.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          params: [item.cantidad, item.id_producto]
+        });
+      } else {
+        queriesReversion.push({
+          sql: `UPDATE detalle_orden_venta SET stock_reservado = 1, cantidad_reservada = ?
+                WHERE id_orden_venta = ? AND id_producto = ?`,
+          params: [item.cantidad, id, item.id_producto]
+        });
+        queriesReversion.push({
+          sql: 'UPDATE ordenes_venta SET stock_reservado = 1 WHERE id_orden_venta = ?',
+          params: [id]
+        });
       }
 
       queriesReversion.push({
-        sql: `UPDATE detalle_orden_venta 
-              SET cantidad_despachada = GREATEST(0, cantidad_despachada - ?)
+        sql: `UPDATE detalle_orden_venta SET cantidad_despachada = GREATEST(0, cantidad_despachada - ?)
               WHERE id_orden_venta = ? AND id_producto = ?`,
         params: [item.cantidad, id, item.id_producto]
       });
@@ -1590,20 +1566,13 @@ export async function anularOrdenVenta(req, res) {
       [id]
     );
 
-    // PASO 1: Devolver stock reservado pendiente de despacho
     for (const item of detalleOrden.data) {
       const reservada = parseFloat(item.cantidad_reservada || 0);
       if (reservada > 0) {
-        const productoInfo = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-          [item.id_producto]
-        );
-        if (productoInfo.success && productoInfo.data.length > 0 && productoInfo.data[0].requiere_receta === 0) {
-          queriesAnulacion.push({
-            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-            params: [reservada, item.id_producto]
-          });
-        }
+        queriesAnulacion.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          params: [reservada, item.id_producto]
+        });
         queriesAnulacion.push({
           sql: 'UPDATE detalle_orden_venta SET stock_reservado = 0, cantidad_reservada = 0 WHERE id_orden_venta = ? AND id_producto = ?',
           params: [id, item.id_producto]
@@ -1611,8 +1580,6 @@ export async function anularOrdenVenta(req, res) {
       }
     }
 
-    // PASO 2: Anular salidas activas
-    // Usar fue_reservado de detalle_salidas para saber si devolver o no el stock
     const salidasResult = await executeQuery(
       'SELECT * FROM salidas WHERE observaciones LIKE ? AND estado = ?',
       [`%${orden.numero_orden}%`, 'Activo']
@@ -1625,20 +1592,11 @@ export async function anularOrdenVenta(req, res) {
       );
 
       for (const item of detalleSalida.data) {
-        const productoInfo = await executeQuery(
-          'SELECT requiere_receta FROM productos WHERE id_producto = ?',
-          [item.id_producto]
-        );
-
-        if (productoInfo.success && productoInfo.data.length > 0 && productoInfo.data[0].requiere_receta === 0) {
-          // Solo devolver stock si el despacho fue SIN reserva previa.
-          // Si fue con reserva, el stock ya se devolvió en el PASO 1 (cantidad_reservada).
-          if (!item.fue_reservado) {
-            queriesAnulacion.push({
-              sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
-              params: [item.cantidad, item.id_producto]
-            });
-          }
+        if (!item.fue_reservado) {
+          queriesAnulacion.push({
+            sql: 'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+            params: [item.cantidad, item.id_producto]
+          });
         }
       }
 

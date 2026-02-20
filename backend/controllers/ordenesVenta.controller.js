@@ -1323,8 +1323,7 @@ export async function registrarDespacho(req, res) {
 
       const infoProducto = productoStock.data[0];
       // stock_reservado === 1 significa reserva completa, === 2 parcial
-      const estabaReservado = itemDb.stock_reservado === 1 || itemDb.stock_reservado === 2;
-
+const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemDb.stock_reservado) === 2;
       // Solo validar stock disponible si NO estaba reservado
       if (!estabaReservado) {
         if (parseFloat(infoProducto.stock_actual) < cantidadADespachar) {
@@ -1379,7 +1378,7 @@ export async function registrarDespacho(req, res) {
 
       // CORRECCIÓN CLAVE: Solo descontar stock si NO estaba reservado
       // Si estaba reservado, el stock ya fue descontado al momento de reservar
-      if (!item.estaba_reservado && item.requiere_receta === 0) {
+      if (!item.estaba_reservado && parseInt(item.requiere_receta) === 0) {
         queriesDetalle.push({
           sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
           params: [item.cantidad, item.id_producto]

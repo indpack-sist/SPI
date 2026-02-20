@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
@@ -37,6 +37,8 @@ function NuevaOrdenVenta() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const submitCooldown = useRef(false);
+  const [cooldownActivo, setCooldownActivo] = useState(false);
   
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -459,16 +461,13 @@ function NuevaOrdenVenta() {
     const newDetalle = [...detalle];
     const precioBase = parseFloat(valor) || 0;
     newDetalle[index].precio_base = precioBase;
-    
     const precioVenta = parseFloat(newDetalle[index].precio_venta) || 0;
-    
     if (precioBase > 0) {
       const margen = ((precioVenta - precioBase) / precioBase) * 100;
       newDetalle[index].descuento_porcentaje = margen;
     } else {
       newDetalle[index].descuento_porcentaje = 0;
     }
-    
     setDetalle(newDetalle);
   };
 
@@ -476,16 +475,13 @@ function NuevaOrdenVenta() {
     const newDetalle = [...detalle];
     const precioVenta = parseFloat(valor) || 0;
     newDetalle[index].precio_venta = precioVenta;
-    
     const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
-    
     if (precioBase > 0) {
       const margen = ((precioVenta - precioBase) / precioBase) * 100;
       newDetalle[index].descuento_porcentaje = margen;
     } else {
       newDetalle[index].descuento_porcentaje = 0;
     }
-    
     setDetalle(newDetalle);
   };
 
@@ -499,14 +495,11 @@ function NuevaOrdenVenta() {
     const newDetalle = [...detalle];
     const porcentaje = parseFloat(valor) || 0;
     newDetalle[index].descuento_porcentaje = porcentaje;
-    
     const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
-    
     if (precioBase > 0) {
       const nuevoPrecioVenta = precioBase * (1 + (porcentaje / 100));
       newDetalle[index].precio_venta = parseFloat(nuevoPrecioVenta.toFixed(4));
     }
-    
     setDetalle(newDetalle);
   };
 
@@ -517,17 +510,13 @@ function NuevaOrdenVenta() {
 
   const calcularTotales = () => {
     let subtotal = 0;
-    
     detalle.forEach(item => {
       const precioVenta = parseFloat(item.precio_venta) || 0;
-      const valorVenta = item.cantidad * precioVenta; 
-      subtotal += valorVenta;
+      subtotal += item.cantidad * precioVenta;
     });
-    
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
-    
     setTotales({ subtotal, impuesto, total });
   };
 
@@ -575,30 +564,27 @@ function NuevaOrdenVenta() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
-    
+    if (submitCooldown.current) return;
+
     setError(null);
     
     if (!clienteSeleccionado) {
       setError('Debe seleccionar un cliente');
       return;
     }
-    
     if (detalle.length === 0) {
       setError('Debe agregar al menos un producto');
       return;
     }
-
     const productosSinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
     if (productosSinPrecio) {
       setError('Todos los productos deben tener un precio de venta válido');
       return;
     }
-
     if (tieneOC && (!formCabecera.orden_compra_cliente || (!archivos.orden_compra && !archivosPrevios.orden_compra_url))) {
-        setError('Si seleccionó "Con Orden de Compra", debe ingresar el correlativo y subir el archivo.');
-        return;
+      setError('Si seleccionó "Con Orden de Compra", debe ingresar el correlativo y subir el archivo.');
+      return;
     }
-
     if (estadoCredito?.usar_limite_credito && formCabecera.tipo_venta === 'Crédito') {
       const disponible = formCabecera.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible;
       if (totales.total > disponible) {
@@ -606,17 +592,23 @@ function NuevaOrdenVenta() {
         return;
       }
     }
+
+    submitCooldown.current = true;
+    setCooldownActivo(true);
+    setTimeout(() => {
+      submitCooldown.current = false;
+      setCooldownActivo(false);
+    }, 5000);
     
     try {
       setLoading(true);
       
       const formData = new FormData();
-
       Object.keys(formCabecera).forEach(key => {
         if (!tieneOC && key === 'orden_compra_cliente') {
-            formData.append(key, '');
+          formData.append(key, '');
         } else {
-            formData.append(key, formCabecera[key]);
+          formData.append(key, formCabecera[key]);
         }
       });
 
@@ -633,7 +625,6 @@ function NuevaOrdenVenta() {
       if (tieneOC && archivos.orden_compra) {
         formData.append('orden_compra', archivos.orden_compra);
       }
-
       if (archivos.comprobante) {
         formData.append('comprobante', archivos.comprobante);
       }
@@ -656,6 +647,8 @@ function NuevaOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al guardar la orden de venta');
+      submitCooldown.current = false;
+      setCooldownActivo(false);
     } finally {
       setLoading(false);
     }
@@ -871,11 +864,7 @@ function NuevaOrdenVenta() {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     type="button"
-                    className={`btn py-6 text-lg ${
-                      formCabecera.tipo_comprobante === 'Factura' 
-                        ? 'btn-success text-white shadow-lg' 
-                        : 'btn-outline hover:bg-green-50'
-                    }`}
+                    className={`btn py-6 text-lg ${formCabecera.tipo_comprobante === 'Factura' ? 'btn-success text-white shadow-lg' : 'btn-outline hover:bg-green-50'}`}
                     onClick={() => setFormCabecera({...formCabecera, tipo_comprobante: 'Factura'})}
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -889,11 +878,7 @@ function NuevaOrdenVenta() {
                   
                   <button
                     type="button"
-                    className={`btn py-6 text-lg ${
-                      formCabecera.tipo_comprobante === 'Nota de Venta' 
-                        ? 'btn-info text-white shadow-lg' 
-                        : 'btn-outline hover:bg-blue-50'
-                    }`}
+                    className={`btn py-6 text-lg ${formCabecera.tipo_comprobante === 'Nota de Venta' ? 'btn-info text-white shadow-lg' : 'btn-outline hover:bg-blue-50'}`}
                     onClick={() => setFormCabecera({...formCabecera, tipo_comprobante: 'Nota de Venta'})}
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -941,7 +926,7 @@ function NuevaOrdenVenta() {
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
-                        const valorVenta = item.cantidad * precioVenta; 
+                        const valorVenta = item.cantidad * precioVenta;
                         const margen = parseFloat(item.descuento_porcentaje || 0);
                         const margenColor = margen < 0 ? 'text-red-600 font-bold' : '';
                         
@@ -1110,7 +1095,6 @@ function NuevaOrdenVenta() {
                 <h2 className="card-title text-indigo-900"><Truck size={20} /> Logística y Transporte</h2>
               </div>
               <div className="card-body space-y-4">
-                
                 <div>
                   <label className="form-label">Tipo de Entrega</label>
                   <select 
@@ -1229,7 +1213,6 @@ function NuevaOrdenVenta() {
                         El cliente recogerá los productos en las instalaciones de la empresa.
                     </div>
                 )}
-
               </div>
             </div>
 
@@ -1238,7 +1221,6 @@ function NuevaOrdenVenta() {
                 <h2 className="card-title"><CreditCard size={20} /> Pago y Crédito</h2>
               </div>
               <div className="card-body space-y-4">
-                
                 <div>
                   <label className="form-label">Condición de Pago</label>
                   <div className="flex gap-2">
@@ -1312,7 +1294,7 @@ function NuevaOrdenVenta() {
                           <select
                             className="form-select pl-10"
                             value={formCabecera.direccion_entrega}
-                            onChange={(e) => setFormCabecera({...formCabecera,direccion_entrega: e.target.value})}
+                            onChange={(e) => setFormCabecera({...formCabecera, direccion_entrega: e.target.value})}
                           >
                             <option value="">Seleccione una dirección...</option>
                             {direccionesCliente.map((dir, idx) => (
@@ -1433,9 +1415,10 @@ function NuevaOrdenVenta() {
                 <button 
                   type="submit" 
                   className="btn btn-primary w-full py-3 mt-4 text-lg shadow-lg shadow-primary/20"
-                  disabled={loading || !clienteSeleccionado || detalle.length === 0}
+                  disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
                 >
-                  <Save size={20} /> {modoEdicion ? 'Actualizar Orden' : 'Guardar Orden'}
+                  <Save size={20} />
+                  {loading ? 'Guardando...' : cooldownActivo ? 'Espere...' : modoEdicion ? 'Actualizar Orden' : 'Guardar Orden'}
                 </button>
               </div>
             </div>

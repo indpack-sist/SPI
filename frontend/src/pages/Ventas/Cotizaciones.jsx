@@ -23,7 +23,7 @@ function Cotizaciones() {
   
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
-  const [ordenAscendente, setOrdenAscendente] = useState(false); // ← NUEVO
+  const [ordenAscendente, setOrdenAscendente] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -32,16 +32,21 @@ function Cotizaciones() {
   }, [filtroEstado]);
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [filtroEstado, busqueda, ordenAscendente]); // ← ordenAscendente resetea página
+    const params = new URLSearchParams(location.search);
+    if (!params.get('pagina')) {
+      setCurrentPage(1);
+    }
+  }, [filtroEstado, busqueda, ordenAscendente]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const estado = params.get('estado');
     const search = params.get('busqueda');
+    const pagina = params.get('pagina');
     
     if (estado) setFiltroEstado(estado);
     if (search) setBusqueda(search);
+    if (pagina) setCurrentPage(parseInt(pagina));
   }, [location.search]);
 
   const cargarDatos = async (silencioso = false) => {
@@ -68,7 +73,6 @@ function Cotizaciones() {
     }
   };
 
-  // ← APLICAR ORDEN ANTES DE PAGINAR
   const cotizacionesFiltradas = (() => {
     const filtradas = cotizaciones.filter(item => {
       if (!busqueda) return true;
@@ -218,6 +222,7 @@ function Cotizaciones() {
     const params = new URLSearchParams();
     if (filtroEstado) params.set('estado', filtroEstado);
     if (busqueda) params.set('busqueda', busqueda);
+    if (currentPage > 1) params.set('pagina', currentPage);
     
     const queryString = params.toString();
     navigate(`/ventas/cotizaciones/${id}${queryString ? `?${queryString}` : ''}`);
@@ -476,7 +481,6 @@ function Cotizaciones() {
                   Convertida
                 </button>
 
-                {/* ← BOTÓN DE ORDEN */}
                 <div className="border-l h-6 self-center mx-1"></div>
                 <button
                   className={`btn btn-sm ${ordenAscendente ? 'btn-secondary' : 'btn-outline'}`}

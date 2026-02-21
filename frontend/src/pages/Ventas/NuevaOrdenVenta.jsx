@@ -68,7 +68,6 @@ function NuevaOrdenVenta() {
   const [tieneOC, setTieneOC] = useState(false);
 
   const [formCabecera, setFormCabecera] = useState({
-    tipo_comprobante: 'Factura',
     id_cliente: '',
     id_cotizacion: '',
     id_comercial: user?.id_empleado || '',
@@ -135,9 +134,7 @@ function NuevaOrdenVenta() {
   };
 
   useEffect(() => { cargarCatalogos(); }, []);
-
   useEffect(() => { if (modoEdicion) { cargarOrden(); } }, [id]);
-
   useEffect(() => { calcularTotales(); }, [detalle, formCabecera.porcentaje_impuesto]);
 
   useEffect(() => {
@@ -218,7 +215,6 @@ function NuevaOrdenVenta() {
         const configImpuesto = obtenerConfiguracionImpuesto(orden.tipo_impuesto);
 
         setFormCabecera({
-          tipo_comprobante: orden.tipo_comprobante || 'Factura',
           id_cliente: orden.id_cliente,
           id_cotizacion: orden.id_cotizacion || '',
           id_comercial: orden.id_comercial || '',
@@ -852,52 +848,6 @@ function NuevaOrdenVenta() {
                     </div>
                   </div>
               )}
-            </div>
-
-            <div className="card">
-              <div className="card-header bg-gradient-to-r from-green-50 to-white">
-                <h2 className="card-title text-green-900">
-                  <FileText size={20} /> Tipo de Comprobante
-                </h2>
-              </div>
-              <div className="card-body">
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    className={`btn py-6 text-lg ${formCabecera.tipo_comprobante === 'Factura' ? 'btn-success text-white shadow-lg' : 'btn-outline hover:bg-green-50'}`}
-                    onClick={() => setFormCabecera({...formCabecera, tipo_comprobante: 'Factura'})}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <FileText size={32} />
-                      <div>
-                        <div className="font-bold">FACTURA</div>
-                        <div className="text-xs opacity-80">F001-00000001</div>
-                      </div>
-                    </div>
-                  </button>
-                  
-                  <button
-                    type="button"
-                    className={`btn py-6 text-lg ${formCabecera.tipo_comprobante === 'Nota de Venta' ? 'btn-info text-white shadow-lg' : 'btn-outline hover:bg-blue-50'}`}
-                    onClick={() => setFormCabecera({...formCabecera, tipo_comprobante: 'Nota de Venta'})}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <FileText size={32} />
-                      <div>
-                        <div className="font-bold">NOTA DE VENTA</div>
-                        <div className="text-xs opacity-80">NV001-00000001</div>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-                
-                <div className="mt-3 text-sm text-muted bg-blue-50 border border-blue-200 rounded p-3">
-                  <Info size={14} className="inline mr-1" />
-                  {formCabecera.tipo_comprobante === 'Factura' 
-                    ? 'Comprobante fiscal para clientes con RUC. Válido para sustentar gastos.'
-                    : 'Comprobante simple para ventas menores. No válido para sustentar gastos.'}
-                </div>
-              </div>
             </div>
 
             <div className="card">

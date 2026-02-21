@@ -48,6 +48,7 @@ function DetalleOrdenVenta() {
   const [modalCrearOP, setModalCrearOP] = useState(false);
   const [modalDespacho, setModalDespacho] = useState(false);
   const [modalAnularOrden, setModalAnularOrden] = useState(false);
+  const [modalAsignarComprobante, setModalAsignarComprobante] = useState(false);
   const [modalEditarComprobante, setModalEditarComprobante] = useState(false);
   const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
@@ -468,9 +469,16 @@ function DetalleOrdenVenta() {
     }
   };
 
-  const handleCambiarTipoComprobante = async () => {
-    if (!nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante) {
-      setError('Debe seleccionar un tipo de comprobante diferente');
+  const handleAsignarOCambiarComprobante = async (tipoSeleccionado) => {
+    const tipo = tipoSeleccionado || nuevoTipoComprobante;
+
+    if (!tipo || !['Factura', 'Nota de Venta'].includes(tipo)) {
+      setError('Debe seleccionar un tipo de comprobante válido');
+      return;
+    }
+
+    if (orden.numero_comprobante && tipo === orden.tipo_comprobante) {
+      setError('Debe seleccionar un tipo de comprobante diferente al actual');
       return;
     }
 
@@ -479,11 +487,12 @@ function DetalleOrdenVenta() {
       setError(null);
 
       const response = await ordenesVentaAPI.actualizarTipoComprobante(id, {
-        tipo_comprobante: nuevoTipoComprobante
+        tipo_comprobante: tipo
       });
 
       if (response.data.success) {
-        setSuccess(`Tipo de comprobante actualizado exitosamente a ${nuevoTipoComprobante}`);
+        setSuccess(`Comprobante asignado: ${response.data.data.numero_comprobante}`);
+        setModalAsignarComprobante(false);
         setModalEditarComprobante(false);
         setNuevoTipoComprobante('');
         await cargarDatos();
@@ -491,7 +500,7 @@ function DetalleOrdenVenta() {
 
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || 'Error al cambiar tipo de comprobante');
+      setError(err.response?.data?.error || 'Error al asignar tipo de comprobante');
     } finally {
       setProcesando(false);
     }
@@ -960,17 +969,10 @@ function DetalleOrdenVenta() {
 
   const getTipoImpuestoNombre = (valor) => {
     const codigo = String(valor || '').toUpperCase().trim();
-    
-    const tipos = {
-      'IGV': 'IGV 18%',
-      'EXO': 'Exonerado 0%',
-      'INA': 'Inafecto 0%'
-    };
-    
+    const tipos = { 'IGV': 'IGV 18%', 'EXO': 'Exonerado 0%', 'INA': 'Inafecto 0%' };
     if (tipos[codigo]) return tipos[codigo];
     if (codigo === 'EXONERADO') return tipos['EXO'];
     if (codigo === 'INAFECTO') return tipos['INA'];
-    
     return tipos['IGV'];
   };
 
@@ -1067,6 +1069,8 @@ function DetalleOrdenVenta() {
 
   const estadoVerifConfig = getEstadoVerificacionConfig(orden.estado_verificacion);
   const IconoVerificacion = estadoVerifConfig.icono;
+
+  const sinComprobanteAsignado = !orden.numero_comprobante;
   
   const columns = [
     {
@@ -1371,13 +1375,14 @@ function DetalleOrdenVenta() {
            orden.estado !== 'Entregada' &&
            orden.estado !== 'Despachada';
   });
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button className="btn btn-outline" onClick={() => navigate(-1)}>
-  <ArrowLeft size={20} />
-</button>
+            <ArrowLeft size={20} />
+          </button>
           
           <div className="flex items-center bg-white rounded-lg border border-gray-200 px-1 py-0.5">
             <button 
@@ -1426,13 +1431,38 @@ function DetalleOrdenVenta() {
                 Emitida el {formatearFecha(orden.fecha_emision)}
               </p>
               
-              {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+              {sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 px-3 py-2 rounded-lg">
+                  <AlertTriangle size={16} className="text-amber-600" />
+                  <span className="text-sm font-semibold text-amber-700">Sin comprobante asignado</span>
+                  <button
+                    className="btn btn-xs btn-warning ml-1"
+                    onClick={() => {
+                      setNuevoTipoComprobante('');
+                      setModalAsignarComprobante(true);
+                    }}
+                  >
+                    Asignar ahora
+                  </button>
+                </div>
+              )}
+
+              {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
                 <div className="flex items-center gap-2">
                   <span className="badge badge-info">
                     {orden.tipo_comprobante}
                   </span>
                   <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
-                    {orden.numero_comprobante || 'Pendiente'}
+                    {orden.numero_comprobante}
+                  </span>
+                </div>
+              )}
+
+              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Factura' && orden.numero_comprobante && (
+                <div className="flex items-center gap-2">
+                  <span className="badge badge-success">Factura</span>
+                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
+                    {orden.numero_comprobante}
                   </span>
                 </div>
               )}
@@ -1441,11 +1471,11 @@ function DetalleOrdenVenta() {
         </div>
         
         <div className="flex gap-2">
-          {orden.tipo_comprobante === 'Nota de Venta' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
+          {orden.tipo_comprobante === 'Nota de Venta' && !sinComprobanteAsignado && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
             <button
               className="btn btn-outline border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
               onClick={handleGenerarGuiaInterna}
-              disabled={procesando}
+              disabled={procesando || descargandoPDF === 'guia-interna'}
               title={orden.numero_guia_interna ? "Descargar Guía Interna generada" : "Generar Guía Interna"}
             >
               <ClipboardList size={20} /> 
@@ -1456,8 +1486,8 @@ function DetalleOrdenVenta() {
           {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
             orden.facturado_sunat === 1 ? (
               <button
-className="btn btn-success"               
- onClick={handleDesmarcarFacturadoSunat}
+                className="btn btn-success"               
+                onClick={handleDesmarcarFacturadoSunat}
                 disabled={procesando}
                 title="Desmarcar facturación SUNAT"
               >
@@ -1509,7 +1539,7 @@ className="btn btn-success"
             <FileText size={20} /> PDF Orden
           </button>
 
-          {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+          {!sinComprobanteAsignado && orden.tipo_comprobante && (
             <button 
               className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
               onClick={() => handleDescargarPDF('comprobante')} 
@@ -1556,6 +1586,24 @@ className="btn btn-success"
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
+        <div className="alert alert-warning mb-4">
+          <AlertTriangle size={20} />
+          <div className="flex-1">
+            <strong>Comprobante pendiente de asignación.</strong> Esta orden fue creada sin comprobante. Debe asignar Factura o Nota de Venta para poder descargar su PDF y generar la Guía Interna.
+          </div>
+          <button
+            className="btn btn-sm btn-warning ml-4"
+            onClick={() => {
+              setNuevoTipoComprobante('');
+              setModalAsignarComprobante(true);
+            }}
+          >
+            <FileText size={16} /> Asignar Comprobante
+          </button>
+        </div>
+      )}
 
       {orden.estado_verificacion !== 'Aprobada' && (
         <div className={`alert mb-4 ${orden.estado_verificacion === 'Pendiente' ? 'alert-warning' : 'alert-danger'}`}>
@@ -1824,9 +1872,29 @@ className="btn btn-success"
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
                             <label className="text-sm font-medium text-muted">Tipo Documento:</label>
-                            <div className="flex items-center gap-2">
-                                <p className="font-semibold text-primary">{orden.tipo_comprobante || 'Orden Venta'}</p>
-                                {!orden.comprobante_editado && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {sinComprobanteAsignado ? (
+                                    <span className="text-amber-600 font-semibold text-sm flex items-center gap-1">
+                                        <AlertTriangle size={14} /> Sin asignar
+                                    </span>
+                                ) : (
+                                    <p className="font-semibold text-primary">{orden.tipo_comprobante}</p>
+                                )}
+
+                                {sinComprobanteAsignado && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
+                                    <button
+                                        className="btn btn-xs btn-warning text-xs"
+                                        onClick={() => {
+                                            setNuevoTipoComprobante('');
+                                            setModalAsignarComprobante(true);
+                                        }}
+                                        title="Asignar tipo de comprobante"
+                                    >
+                                        <FileText size={12} /> Asignar
+                                    </button>
+                                )}
+
+                                {!sinComprobanteAsignado && !orden.comprobante_editado && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
                                     <button
                                         className="btn btn-xs btn-outline text-xs"
                                         onClick={() => {
@@ -1838,17 +1906,17 @@ className="btn btn-success"
                                         <Edit size={12} /> Editar
                                     </button>
                                 )}
-                                {orden.comprobante_editado && (
+                                {!sinComprobanteAsignado && orden.comprobante_editado && (
                                     <span className="badge badge-sm badge-secondary" title="Ya se editó el tipo de comprobante">
                                         <Lock size={10} /> Editado
                                     </span>
                                 )}
                             </div>
                         </div>
-                        {orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+                        {!sinComprobanteAsignado && orden.numero_comprobante && (
                             <div>
                                 <label className="text-sm font-medium text-muted">N° Serie:</label>
-                                <p className="font-mono">{orden.numero_comprobante || '-'}</p>
+                                <p className="font-mono">{orden.numero_comprobante}</p>
                             </div>
                         )}
                     </div>
@@ -2241,12 +2309,13 @@ className="btn btn-success"
           )}
         </div>
       )}
+
       <Modal isOpen={modalPrioridadOpen} onClose={() => setModalPrioridadOpen(false)} title="Cambiar Prioridad">
         <div className="space-y-2">
           {['Baja', 'Media', 'Alta', 'Urgente'].map(prioridad => (
             <button 
               key={prioridad} 
-              className="btn btn-outline w-full justify-start" 
+              className="btn btn-outline w-full justify-start"
               onClick={() => handleCambiarPrioridad(prioridad)} 
               disabled={orden.prioridad === prioridad || procesando}
             >
@@ -2629,35 +2698,27 @@ className="btn btn-success"
       </Modal>
 
       <Modal
-        isOpen={modalEditarComprobante}
+        isOpen={modalAsignarComprobante}
         onClose={() => {
-          setModalEditarComprobante(false);
+          setModalAsignarComprobante(false);
           setNuevoTipoComprobante('');
         }}
-        title="Cambiar Tipo de Comprobante"
+        title="Asignar Tipo de Comprobante"
         size="md"
       >
         <div className="space-y-4">
-          <div className="alert alert-warning">
-            <AlertTriangle size={20} />
-            <div>
-              <strong>¡Importante!</strong> Debe consultar antes de realizar este cambio.
-              <ul className="list-disc list-inside mt-2 text-sm">
-                <li>Solo puede cambiar el tipo de comprobante una vez</li>
-                <li>Este cambio puede afectar aspectos contables y tributarios</li>
-                <li>Consulte con el área correspondiente antes de continuar</li>
-              </ul>
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded">
+            <div className="flex gap-2 items-start">
+              <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+              <div className="text-sm text-amber-800">
+                <p className="font-bold mb-1">Asignación inicial de comprobante</p>
+                <p>Seleccione el tipo de documento que se emitirá para esta orden. Se generará el correlativo automáticamente. Esta acción solo puede realizarse una vez.</p>
+              </div>
             </div>
           </div>
 
-          <div className="bg-blue-50 p-3 rounded border border-blue-200">
-            <p className="text-sm text-blue-700">
-              <strong>Tipo actual:</strong> {orden.tipo_comprobante || 'Orden Venta'}
-            </p>
-          </div>
-
           <div className="space-y-3">
-            <p className="text-sm font-medium text-muted">Seleccione el nuevo tipo de comprobante:</p>
+            <p className="text-sm font-medium text-muted">Seleccione el tipo de comprobante:</p>
             
             <div className="grid grid-cols-1 gap-3">
               <button
@@ -2694,6 +2755,93 @@ className="btn btn-success"
             <button
               className="btn btn-outline"
               onClick={() => {
+                setModalAsignarComprobante(false);
+                setNuevoTipoComprobante('');
+              }}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => handleAsignarOCambiarComprobante(nuevoTipoComprobante)}
+              disabled={procesando || !nuevoTipoComprobante}
+            >
+              <FileText size={20} />
+              {procesando ? 'Asignando...' : 'Confirmar Asignación'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalEditarComprobante}
+        onClose={() => {
+          setModalEditarComprobante(false);
+          setNuevoTipoComprobante('');
+        }}
+        title="Cambiar Tipo de Comprobante"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="alert alert-warning">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>¡Importante!</strong> Debe consultar antes de realizar este cambio.
+              <ul className="list-disc list-inside mt-2 text-sm">
+                <li>Solo puede cambiar el tipo de comprobante una vez</li>
+                <li>Este cambio puede afectar aspectos contables y tributarios</li>
+                <li>Consulte con el área correspondiente antes de continuar</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-3 rounded border border-blue-200">
+            <p className="text-sm text-blue-700">
+              <strong>Tipo actual:</strong> {orden.tipo_comprobante} — <strong>N°:</strong> {orden.numero_comprobante}
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-muted">Seleccione el nuevo tipo de comprobante:</p>
+            
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Factura' ? 'btn-success text-white shadow-md' : 'btn-outline hover:bg-green-50'}`}
+                onClick={() => setNuevoTipoComprobante('Factura')}
+                disabled={orden.tipo_comprobante === 'Factura'}
+              >
+                <div className="flex items-center gap-3">
+                  <FileText size={24} />
+                  <div>
+                    <div className="font-bold">FACTURA</div>
+                    <div className="text-xs opacity-80">Comprobante fiscal para clientes con RUC</div>
+                  </div>
+                </div>
+              </button>
+              
+              <button
+                type="button"
+                className={`btn py-4 text-left ${nuevoTipoComprobante === 'Nota de Venta' ? 'btn-info text-white shadow-md' : 'btn-outline hover:bg-blue-50'}`}
+                onClick={() => setNuevoTipoComprobante('Nota de Venta')}
+                disabled={orden.tipo_comprobante === 'Nota de Venta'}
+              >
+                <div className="flex items-center gap-3">
+                  <FileText size={24} />
+                  <div>
+                    <div className="font-bold">NOTA DE VENTA</div>
+                    <div className="text-xs opacity-80">Comprobante simple para ventas menores</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-3 border-t">
+            <button
+              className="btn btn-outline"
+              onClick={() => {
                 setModalEditarComprobante(false);
                 setNuevoTipoComprobante('');
               }}
@@ -2703,7 +2851,7 @@ className="btn btn-success"
             </button>
             <button
               className="btn btn-primary"
-              onClick={handleCambiarTipoComprobante}
+              onClick={() => handleAsignarOCambiarComprobante(nuevoTipoComprobante)}
               disabled={procesando || !nuevoTipoComprobante || nuevoTipoComprobante === orden.tipo_comprobante}
             >
               <Edit size={20} />

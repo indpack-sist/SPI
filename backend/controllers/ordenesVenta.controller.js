@@ -500,17 +500,11 @@ export async function createOrdenVenta(req, res) {
     }
 
     if (!id_cliente || !detalle || detalle.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Cliente y detalle son obligatorios'
-      });
+      return res.status(400).json({ success: false, error: 'Cliente y detalle son obligatorios' });
     }
 
     if (!id_registrado_por) {
-      return res.status(400).json({
-        success: false,
-        error: 'Usuario no autenticado'
-      });
+      return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     }
 
     let idVehiculoFinal = null;
@@ -529,12 +523,8 @@ export async function createOrdenVenta(req, res) {
           'SELECT * FROM flota WHERE id_vehiculo = ? AND estado IN ("Disponible", "En Uso")',
           [idVehiculoFinal]
         );
-
         if (!vehiculoResult.success || vehiculoResult.data.length === 0) {
-          return res.status(404).json({
-            success: false,
-            error: 'Vehículo no encontrado o no disponible'
-          });
+          return res.status(404).json({ success: false, error: 'Vehículo no encontrado o no disponible' });
         }
       }
 
@@ -543,12 +533,8 @@ export async function createOrdenVenta(req, res) {
           'SELECT * FROM empleados WHERE id_empleado = ? AND rol = "Conductor" AND estado = "Activo"',
           [idConductorFinal]
         );
-
         if (!conductorResult.success || conductorResult.data.length === 0) {
-          return res.status(404).json({
-            success: false,
-            error: 'Conductor no encontrado o no activo'
-          });
+          return res.status(404).json({ success: false, error: 'Conductor no encontrado o no activo' });
         }
       }
     } else if (tipo_entrega === 'Transporte Privado') {
@@ -559,21 +545,15 @@ export async function createOrdenVenta(req, res) {
     }
 
     let subtotal = 0;
-
     for (const item of detalle) {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
-      
       const valorVenta = cantidad * precioVenta;
-      
-      if (!isNaN(valorVenta)) {
-        subtotal += valorVenta;
-      }
+      if (!isNaN(valorVenta)) subtotal += valorVenta;
     }
 
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
-
     if (['EXO', 'INA', 'INAFECTO', 'EXONERADO', '0'].includes(tipoImpuestoFinal)) {
       porcentaje = 0.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
@@ -588,24 +568,17 @@ export async function createOrdenVenta(req, res) {
         'SELECT usar_limite_credito, COALESCE(limite_credito_pen, 0) as limite_pen, COALESCE(limite_credito_usd, 0) as limite_usd FROM clientes WHERE id_cliente = ?',
         [id_cliente]
       );
-
       if (clienteInfo.success && clienteInfo.data.length > 0) {
         const cliente = clienteInfo.data[0];
-
         if (cliente.usar_limite_credito == 1) {
           const deudaResult = await executeQuery(`
             SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_actual
             FROM ordenes_venta
-            WHERE id_cliente = ? 
-            AND moneda = ? 
-            AND estado != 'Cancelada' 
-            AND estado_pago != 'Pagado'
+            WHERE id_cliente = ? AND moneda = ? AND estado != 'Cancelada' AND estado_pago != 'Pagado'
           `, [id_cliente, moneda]);
-
           const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
           const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
           const nuevaDeudaTotal = deudaActual + total;
-
           if (nuevaDeudaTotal > limiteAsignado) {
             return res.status(400).json({
               success: false,
@@ -617,65 +590,16 @@ export async function createOrdenVenta(req, res) {
     }
 
     const ultimaResult = await executeQuery(`
-      SELECT numero_orden 
-      FROM ordenes_venta 
-      ORDER BY id_orden_venta DESC 
-      LIMIT 1
+      SELECT numero_orden FROM ordenes_venta ORDER BY id_orden_venta DESC LIMIT 1
     `);
 
     let numeroSecuencia = 1;
     if (ultimaResult.success && ultimaResult.data.length > 0) {
       const match = ultimaResult.data[0].numero_orden.match(/(\d+)$/);
-      if (match) {
-        numeroSecuencia = parseInt(match[1]) + 1;
-      }
+      if (match) numeroSecuencia = parseInt(match[1]) + 1;
     }
 
     const numeroOrden = `OV-${getFechaPeru().getFullYear()}-${String(numeroSecuencia).padStart(4, '0')}`;
-
-    const tipoComp = tipo_comprobante || 'Factura';
-    let numeroComprobante = null;
-
-    if (tipoComp === 'Factura') {
-      const ultimaFactura = await executeQuery(`
-        SELECT numero_comprobante 
-        FROM ordenes_venta 
-        WHERE tipo_comprobante = 'Factura'
-        AND numero_comprobante IS NOT NULL
-        ORDER BY id_orden_venta DESC 
-        LIMIT 1
-      `);
-
-      let numeroSecuenciaFactura = 1;
-      if (ultimaFactura.success && ultimaFactura.data.length > 0 && ultimaFactura.data[0].numero_comprobante) {
-        const match = ultimaFactura.data[0].numero_comprobante.match(/F\d{3}-(\d+)$/);
-        if (match) {
-          numeroSecuenciaFactura = parseInt(match[1]) + 1;
-        }
-      }
-
-      numeroComprobante = `F001-${String(numeroSecuenciaFactura).padStart(8, '0')}`;
-
-    } else if (tipoComp === 'Nota de Venta') {
-      const ultimaNota = await executeQuery(`
-        SELECT numero_comprobante 
-        FROM ordenes_venta 
-        WHERE tipo_comprobante = 'Nota de Venta'
-        AND numero_comprobante IS NOT NULL
-        ORDER BY id_orden_venta DESC 
-        LIMIT 1
-      `);
-
-      let numeroSecuenciaNota = 1;
-      if (ultimaNota.success && ultimaNota.data.length > 0 && ultimaNota.data[0].numero_comprobante) {
-        const match = ultimaNota.data[0].numero_comprobante.match(/NV\d{3}-(\d+)$/);
-        if (match) {
-          numeroSecuenciaNota = parseInt(match[1]) + 1;
-        }
-      }
-
-      numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
-    }
 
     let fechaVencimientoFinal = fecha_vencimiento;
     if (!fechaVencimientoFinal && fecha_emision) {
@@ -694,9 +618,9 @@ export async function createOrdenVenta(req, res) {
         transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
         contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
         subtotal, igv, total, estado, estado_verificacion, stock_reservado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
+      ) VALUES (?, 'Factura', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
     `, [
-      numeroOrden, tipoComp, numeroComprobante, id_cliente, id_cotizacion || null,
+      numeroOrden, id_cliente, id_cotizacion || null,
       fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
       parseFloat(tipo_cambio || 1.0000), tipoImpuestoFinal, porcentaje, tipo_venta || 'Contado', parseInt(dias_credito || 0),
       plazo_pago, forma_pago, orden_compra_cliente || null, ordenCompraUrl, comprobanteUrl,
@@ -707,14 +631,10 @@ export async function createOrdenVenta(req, res) {
     ]);
 
     if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        error: result.error
-      });
+      return res.status(500).json({ success: false, error: result.error });
     }
 
     const idOrden = result.data.insertId;
-
     const queriesDetalle = [];
 
     for (let i = 0; i < detalle.length; i++) {
@@ -722,26 +642,13 @@ export async function createOrdenVenta(req, res) {
       const cantidad = parseFloat(item.cantidad || 0);
       const precioVenta = parseFloat(item.precio_venta || item.precio_unitario || 0);
       const precioBase = parseFloat(item.precio_base || 0);
-      
-      // Calculamos margen solo para referencia, o lo ignoramos si no lo guardas en otra columna
-      let porcentajeCalculado = 0;
-      if (precioBase !== 0) {
-        porcentajeCalculado = ((precioVenta - precioBase) / precioBase) * 100;
-      }
 
       queriesDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
           id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
           descuento_porcentaje, stock_reservado
         ) VALUES (?, ?, ?, ?, ?, ?, 0)`,
-        params: [
-          idOrden,
-          item.id_producto,
-          cantidad,
-          precioVenta,
-          precioBase,
-          0, // CORREGIDO: Se envía 0 en lugar del margen
-        ]
+        params: [idOrden, item.id_producto, cantidad, precioVenta, precioBase, 0]
       });
     }
 
@@ -749,17 +656,10 @@ export async function createOrdenVenta(req, res) {
 
     if (id_cotizacion) {
       await executeQuery(`
-        UPDATE cotizaciones 
-        SET estado = 'Convertida', convertida_venta = 1, id_orden_venta = ?
+        UPDATE cotizaciones SET estado = 'Convertida', convertida_venta = 1, id_orden_venta = ?
         WHERE id_cotizacion = ?
       `, [idOrden, id_cotizacion]);
     }
-
-    const clienteResult = await executeQuery(
-      'SELECT razon_social FROM clientes WHERE id_cliente = ?',
-      [id_cliente]
-    );
-    const clienteNombre = clienteResult.data[0]?.razon_social || 'Cliente';
 
     await notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombre_registrador, getIO(req));
 
@@ -768,8 +668,8 @@ export async function createOrdenVenta(req, res) {
       data: {
         id_orden_venta: idOrden,
         numero_orden: numeroOrden,
-        tipo_comprobante: tipoComp,
-        numero_comprobante: numeroComprobante,
+        tipo_comprobante: 'Factura',
+        numero_comprobante: null,
         orden_compra_url: ordenCompraUrl,
         comprobante_url: comprobanteUrl,
         estado_verificacion: 'Pendiente',
@@ -780,10 +680,7 @@ export async function createOrdenVenta(req, res) {
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 export async function updateOrdenVenta(req, res) {
@@ -2528,7 +2425,7 @@ export async function actualizarTipoComprobante(req, res) {
     }
 
     const ordenResult = await executeQuery(
-      'SELECT comprobante_editado, estado, tipo_comprobante FROM ordenes_venta WHERE id_orden_venta = ?',
+      'SELECT comprobante_editado, estado, tipo_comprobante, numero_comprobante FROM ordenes_venta WHERE id_orden_venta = ?',
       [id]
     );
 
@@ -2556,48 +2453,46 @@ export async function actualizarTipoComprobante(req, res) {
 
     if (tipo_comprobante === 'Factura') {
       const ultimaFactura = await executeQuery(`
-        SELECT numero_comprobante 
-        FROM ordenes_venta 
+        SELECT numero_comprobante
+        FROM ordenes_venta
         WHERE tipo_comprobante = 'Factura'
-        AND numero_comprobante IS NOT NULL
-        ORDER BY id_orden_venta DESC 
+          AND numero_comprobante IS NOT NULL
+          AND numero_comprobante REGEXP '^F[0-9]{3}-[0-9]+$'
+        ORDER BY CAST(SUBSTRING_INDEX(numero_comprobante, '-', -1) AS UNSIGNED) DESC
         LIMIT 1
       `);
 
       let numeroSecuenciaFactura = 1;
       if (ultimaFactura.success && ultimaFactura.data.length > 0 && ultimaFactura.data[0].numero_comprobante) {
         const match = ultimaFactura.data[0].numero_comprobante.match(/F\d{3}-(\d+)$/);
-        if (match) {
-          numeroSecuenciaFactura = parseInt(match[1]) + 1;
-        }
+        if (match) numeroSecuenciaFactura = parseInt(match[1]) + 1;
       }
 
       numeroComprobante = `F001-${String(numeroSecuenciaFactura).padStart(8, '0')}`;
 
     } else if (tipo_comprobante === 'Nota de Venta') {
       const ultimaNota = await executeQuery(`
-        SELECT numero_comprobante 
-        FROM ordenes_venta 
+        SELECT numero_comprobante
+        FROM ordenes_venta
         WHERE tipo_comprobante = 'Nota de Venta'
-        AND numero_comprobante IS NOT NULL
-        ORDER BY id_orden_venta DESC 
+          AND numero_comprobante IS NOT NULL
+          AND numero_comprobante REGEXP '^NV[0-9]{3}-[0-9]+$'
+        ORDER BY CAST(SUBSTRING_INDEX(numero_comprobante, '-', -1) AS UNSIGNED) DESC
         LIMIT 1
       `);
 
       let numeroSecuenciaNota = 1;
       if (ultimaNota.success && ultimaNota.data.length > 0 && ultimaNota.data[0].numero_comprobante) {
         const match = ultimaNota.data[0].numero_comprobante.match(/NV\d{3}-(\d+)$/);
-        if (match) {
-          numeroSecuenciaNota = parseInt(match[1]) + 1;
-        }
+        if (match) numeroSecuenciaNota = parseInt(match[1]) + 1;
       }
 
       numeroComprobante = `NV001-${String(numeroSecuenciaNota).padStart(8, '0')}`;
     }
 
     const updateResult = await executeQuery(
-      `UPDATE ordenes_venta 
-       SET tipo_comprobante = ?, 
+      `UPDATE ordenes_venta
+       SET tipo_comprobante = ?,
            numero_comprobante = ?,
            comprobante_editado = 1,
            fecha_actualizacion = NOW()
@@ -2606,10 +2501,7 @@ export async function actualizarTipoComprobante(req, res) {
     );
 
     if (!updateResult.success) {
-      return res.status(500).json({
-        success: false,
-        error: updateResult.error
-      });
+      return res.status(500).json({ success: false, error: updateResult.error });
     }
 
     res.json({
@@ -2617,16 +2509,13 @@ export async function actualizarTipoComprobante(req, res) {
       message: 'Tipo de comprobante actualizado exitosamente',
       data: {
         tipo_comprobante,
-        numero_comprobante
+        numero_comprobante: numeroComprobante
       }
     });
 
   } catch (error) {
     console.error('Error al actualizar tipo de comprobante:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 

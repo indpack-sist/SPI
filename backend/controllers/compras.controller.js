@@ -1259,16 +1259,21 @@ export async function registrarReembolsoComprador(req, res) {
       id_registrado_por
     ]);
 
-    const nuevoMontoReembolsado = parseFloat(compra.monto_reembolsado) + parseFloat(monto_reembolso);
+   const nuevoMontoReembolsado = parseFloat(compra.monto_reembolsado) + parseFloat(monto_reembolso);
     const nuevoEstadoReembolso = (nuevoMontoReembolsado >= parseFloat(compra.monto_reembolsar) - 0.01)
       ? 'Completado'
       : 'Parcial';
 
+    const nuevoMontoPagado = parseFloat(compra.monto_pagado) + parseFloat(monto_reembolso);
+    const nuevoSaldo = parseFloat(compra.saldo_pendiente) - parseFloat(monto_reembolso);
+    const nuevoEstadoPago = nuevoSaldo <= 0.01 ? 'Pagado' : 'Parcial';
+
     await connection.query(`
       UPDATE ordenes_compra 
-      SET monto_reembolsado = ?, estado_reembolso = ? 
+      SET monto_reembolsado = ?, estado_reembolso = ?,
+          monto_pagado = ?, saldo_pendiente = ?, estado_pago = ?
       WHERE id_orden_compra = ?
-    `, [nuevoMontoReembolsado, nuevoEstadoReembolso, id]);
+    `, [nuevoMontoReembolsado, nuevoEstadoReembolso, nuevoMontoPagado, nuevoSaldo, nuevoEstadoPago, id]);
 
     await connection.query(`
       INSERT INTO movimientos_cuentas (

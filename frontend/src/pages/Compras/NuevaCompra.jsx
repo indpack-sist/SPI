@@ -108,7 +108,7 @@ function NuevaCompra() {
   }, [totales.total, formData.forma_pago_detalle, formData.usa_fondos_propios, accionPago]);
 
   useEffect(() => {
-    if ((formData.tipo_compra === 'Credito' || (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro)) && totales.total > 0) {
+    if ((formData.tipo_compra === 'Credito' || formData.tipo_compra === 'Letras') && totales.total > 0) {
       calcularCronograma();
     }
   }, [formData.tipo_compra, formData.letras_pendientes_registro, formData.numero_cuotas, formData.dias_entre_cuotas, formData.fecha_primera_cuota, totales.total, formData.monto_pagado_inicial]);
@@ -142,17 +142,17 @@ function NuevaCompra() {
       if (resEmpleados.data.success) setEmpleados(resEmpleados.data.data || []);
     } catch (err) {
       console.error(err);
-      setError('Error al cargar catálogos');
+      setError('Error al cargar catalogos');
     } finally { setLoading(false); }
   };
 
   const handleBuscarRUC = async () => {
-    if (formNuevoProveedor.ruc.length !== 11) { setError('El RUC debe tener 11 dígitos'); return; }
+    if (formNuevoProveedor.ruc.length !== 11) { setError('El RUC debe tener 11 digitos'); return; }
     try {
       setBuscandoRuc(true); setError(null);
       const response = await proveedoresAPI.validarRUC(formNuevoProveedor.ruc);
       if (response.data.success) {
-        if (response.data.ya_registrado) setError('ATENCIÓN: Este RUC ya está registrado.');
+        if (response.data.ya_registrado) setError('ATENCION: Este RUC ya esta registrado.');
         const datos = response.data.datos;
         setFormNuevoProveedor(prev => ({ ...prev, razon_social: datos.razon_social || '', direccion: datos.direccion || prev.direccion }));
         if (!response.data.ya_registrado) setSuccess('Datos encontrados en SUNAT');
@@ -163,30 +163,30 @@ function NuevaCompra() {
   const handleGuardarNuevoProveedor = async (e) => {
     e.preventDefault();
     try {
-        setLoading(true);
-        const response = await proveedoresAPI.create(formNuevoProveedor);
-        if (response.data.success) {
-            const nuevoProv = { id_proveedor: response.data.data.id_proveedor, ...formNuevoProveedor };
-            setProveedores([...proveedores, nuevoProv]);
-            handleSelectProveedor(nuevoProv);
-            setModalCrearProveedorOpen(false);
-            setSuccess('Proveedor creado');
-        }
+      setLoading(true);
+      const response = await proveedoresAPI.create(formNuevoProveedor);
+      if (response.data.success) {
+        const nuevoProv = { id_proveedor: response.data.data.id_proveedor, ...formNuevoProveedor };
+        setProveedores([...proveedores, nuevoProv]);
+        handleSelectProveedor(nuevoProv);
+        setModalCrearProveedorOpen(false);
+        setSuccess('Proveedor creado');
+      }
     } catch (err) { setError('Error al crear proveedor'); } finally { setLoading(false); }
   };
 
   const handleGuardarNuevoProducto = async (e) => {
     e.preventDefault();
     try {
-        setLoading(true);
-        const response = await productosAPI.create(formNuevoProducto);
-        if (response.data.success) {
-            const nuevoProd = { id_producto: response.data.data.id_producto, stock_actual: 0, ...formNuevoProducto };
-            setProductos([...productos, nuevoProd]);
-            handleSelectProducto(nuevoProd);
-            setModalCrearProductoOpen(false);
-            setSuccess('Producto creado');
-        }
+      setLoading(true);
+      const response = await productosAPI.create(formNuevoProducto);
+      if (response.data.success) {
+        const nuevoProd = { id_producto: response.data.data.id_producto, stock_actual: 0, ...formNuevoProducto };
+        setProductos([...productos, nuevoProd]);
+        handleSelectProducto(nuevoProd);
+        setModalCrearProductoOpen(false);
+        setSuccess('Producto creado');
+      }
     } catch (err) { setError('Error al crear producto'); } finally { setLoading(false); }
   };
 
@@ -208,26 +208,26 @@ function NuevaCompra() {
 
   const handleCantidadChange = (index, val) => { 
     const newD = [...detalle]; 
-    newD[index].cantidad = parseFloat(val)||0; 
-    newD[index].cantidad_a_recibir = parseFloat(val)||0; 
+    newD[index].cantidad = parseFloat(val) || 0; 
+    newD[index].cantidad_a_recibir = parseFloat(val) || 0; 
     setDetalle(newD); 
   };
   
   const handleCantidadRecibirChange = (index, val) => { 
     const newD = [...detalle]; 
-    newD[index].cantidad_a_recibir = parseFloat(val)||0; 
+    newD[index].cantidad_a_recibir = parseFloat(val) || 0; 
     setDetalle(newD); 
   };
   
   const handlePrecioChange = (index, val) => { 
     const newD = [...detalle]; 
-    newD[index].precio_unitario = parseFloat(val)||0; 
+    newD[index].precio_unitario = parseFloat(val) || 0; 
     setDetalle(newD); 
   };
   
   const handleDescuentoChange = (index, val) => { 
     const newD = [...detalle]; 
-    newD[index].descuento_porcentaje = parseFloat(val)||0; 
+    newD[index].descuento_porcentaje = parseFloat(val) || 0; 
     setDetalle(newD); 
   };
   
@@ -250,49 +250,52 @@ function NuevaCompra() {
   };
 
   const calcularCronograma = () => {
-  if (totales.total <= 0) return;
-  
-  const numCuotas = parseInt(formData.numero_cuotas) || 1;
-  const diasEntre = parseInt(formData.dias_entre_cuotas) || 30;
-  const saldoCredito = parseFloat((totales.total - parseFloat(formData.monto_pagado_inicial || 0)).toFixed(3));
-  
-  if (saldoCredito <= 0) {
-    setCronograma([]);
-    return;
-  }
+    if (totales.total <= 0) return;
+    
+    const numCuotas = parseInt(formData.numero_cuotas) || 1;
+    const diasEntre = parseInt(formData.dias_entre_cuotas) || 30;
+    const saldoCredito = parseFloat((totales.total - parseFloat(formData.monto_pagado_inicial || 0)).toFixed(3));
+    
+    if (saldoCredito <= 0) {
+      setCronograma([]);
+      return;
+    }
 
-  const montoPorCuota = parseFloat((saldoCredito / numCuotas).toFixed(3));
-  const diferencia = parseFloat((saldoCredito - montoPorCuota * numCuotas).toFixed(3));
+    const montoPorCuota = parseFloat((saldoCredito / numCuotas).toFixed(3));
+    const diferencia = parseFloat((saldoCredito - montoPorCuota * numCuotas).toFixed(3));
+    const prefijo = formData.forma_pago_detalle === 'Letras' ? 'L' : 'C';
+    const anio = new Date().getFullYear();
 
-  let fechaBase = new Date(formData.fecha_primera_cuota);
-  if (isNaN(fechaBase.getTime())) {
-    fechaBase = new Date(formData.fecha_emision);
-    fechaBase.setDate(fechaBase.getDate() + diasEntre);
-  }
+    let fechaBase = new Date(formData.fecha_primera_cuota);
+    if (isNaN(fechaBase.getTime())) {
+      fechaBase = new Date(formData.fecha_emision);
+      fechaBase.setDate(fechaBase.getDate() + diasEntre);
+    }
 
-  const nuevoCronograma = [];
-  let ultimaFecha = new Date(fechaBase);
+    const nuevoCronograma = [];
+    let ultimaFecha = new Date(fechaBase);
 
-  for (let i = 1; i <= numCuotas; i++) {
-    const esUltima = i === numCuotas;
-    nuevoCronograma.push({ 
-      numero: i, 
-      fecha: new Date(ultimaFecha), 
-      monto: esUltima ? parseFloat((montoPorCuota + diferencia).toFixed(3)) : montoPorCuota
-    });
-    ultimaFecha.setDate(ultimaFecha.getDate() + diasEntre);
-  }
+    for (let i = 1; i <= numCuotas; i++) {
+      const esUltima = i === numCuotas;
+      nuevoCronograma.push({ 
+        numero: i,
+        codigo_letra: `${prefijo}-${anio}-${String(i).padStart(2, '0')}`,
+        fecha: new Date(ultimaFecha), 
+        monto: esUltima ? parseFloat((montoPorCuota + diferencia).toFixed(3)) : montoPorCuota
+      });
+      ultimaFecha.setDate(ultimaFecha.getDate() + diasEntre);
+    }
 
-  setCronograma(nuevoCronograma);
+    setCronograma(nuevoCronograma);
 
-  if (nuevoCronograma.length > 0) {
-    const fechaFinal = nuevoCronograma[nuevoCronograma.length - 1].fecha;
-    setFormData(prev => ({ 
-      ...prev, 
-      fecha_vencimiento: fechaFinal.toISOString().split('T')[0] 
-    }));
-  }
-};
+    if (nuevoCronograma.length > 0) {
+      const fechaFinal = nuevoCronograma[nuevoCronograma.length - 1].fecha;
+      setFormData(prev => ({ 
+        ...prev, 
+        fecha_vencimiento: fechaFinal.toISOString().split('T')[0] 
+      }));
+    }
+  };
 
   const handleFormaPagoChange = (forma) => {
     const esContado = forma === 'Contado';
@@ -346,73 +349,74 @@ function NuevaCompra() {
     }
     
     if ((formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro) && parseInt(formData.numero_cuotas) < 1) {
-        setError('Debe indicar al menos 1 cuota/letra.'); 
-        return;
+      setError('Debe indicar al menos 1 cuota/letra.'); 
+      return;
     }
 
     try {
       setLoading(true);
 
       const debeEnviarCronograma = (
-  formData.tipo_compra === 'Credito' ||
-  (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro)
-) && cronograma.length > 0;
+        formData.tipo_compra === 'Credito' ||
+        (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro)
+      ) && cronograma.length > 0;
 
-const cronogramaPayload = debeEnviarCronograma
-  ? cronograma.map(c => ({
-      numero: c.numero,
-      monto: parseFloat(c.monto.toFixed(3)),
-      fecha_vencimiento: c.fecha.toISOString().split('T')[0]
-  }))
-  : [];
+      const cronogramaPayload = debeEnviarCronograma
+        ? cronograma.map(c => ({
+            numero: c.numero,
+            codigo_letra: c.codigo_letra || null,
+            monto: parseFloat(c.monto.toFixed(3)),
+            fecha_vencimiento: c.fecha.toISOString().split('T')[0]
+          }))
+        : [];
 
-     const payload = {
-  ...formData,
-  id_proveedor: parseInt(formData.id_proveedor),
-  id_cuenta_pago: formData.usa_fondos_propios
-    ? null
-    : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
-  id_comprador: formData.usa_fondos_propios ? parseInt(formData.id_comprador) : null,
-  monto_reembolsar: formData.usa_fondos_propios ? totales.total : 0,
-  numero_cuotas: parseInt(formData.numero_cuotas),
-  dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
-  dias_credito: parseInt(formData.dias_credito),
-  porcentaje_impuesto: parseFloat(formData.porcentaje_impuesto),
-  tipo_cambio: parseFloat(formData.tipo_cambio || 1.0),
-  monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
-  usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
-  accion_pago: formData.forma_pago_detalle === 'Contado' ? accionPago : 'adelanto',
-  monto_adelanto: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
-  cronograma: cronogramaPayload,
-  detalle: detalle.map(item => ({
-    id_producto: item.id_producto,
-    cantidad: parseFloat(item.cantidad),
-    cantidad_a_recibir: formData.tipo_recepcion === 'Parcial' ? parseFloat(item.cantidad_a_recibir) : parseFloat(item.cantidad),
-    precio_unitario: parseFloat(item.precio_unitario),
-    descuento_porcentaje: parseFloat(item.descuento_porcentaje)
-  }))
-};
+      const payload = {
+        ...formData,
+        id_proveedor: parseInt(formData.id_proveedor),
+        id_cuenta_pago: formData.usa_fondos_propios
+          ? null
+          : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
+        id_comprador: formData.usa_fondos_propios ? parseInt(formData.id_comprador) : null,
+        monto_reembolsar: formData.usa_fondos_propios ? totales.total : 0,
+        numero_cuotas: parseInt(formData.numero_cuotas),
+        dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
+        dias_credito: parseInt(formData.dias_credito),
+        porcentaje_impuesto: parseFloat(formData.porcentaje_impuesto),
+        tipo_cambio: parseFloat(formData.tipo_cambio || 1.0),
+        monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
+        usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
+        accion_pago: formData.forma_pago_detalle === 'Contado' ? accionPago : 'adelanto',
+        monto_adelanto: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
+        cronograma: cronogramaPayload,
+        detalle: detalle.map(item => ({
+          id_producto: item.id_producto,
+          cantidad: parseFloat(item.cantidad),
+          cantidad_a_recibir: formData.tipo_recepcion === 'Parcial' ? parseFloat(item.cantidad_a_recibir) : parseFloat(item.cantidad),
+          precio_unitario: parseFloat(item.precio_unitario),
+          descuento_porcentaje: parseFloat(item.descuento_porcentaje)
+        }))
+      };
 
-const response = await comprasAPI.create(payload);
-if (response.data.success) {
-  setSuccess(`Compra ${response.data.data.numero} registrada`);
-  setTimeout(() => navigate('/compras'), 1500);
-} else {
-  setError(response.data.error || 'Error al crear compra');
-}
-} catch (err) {
-  setError(err.response?.data?.error || 'Error al crear compra');
-} finally {
-  setLoading(false);
-}
-};
+      const response = await comprasAPI.create(payload);
+      if (response.data.success) {
+        setSuccess(`Compra ${response.data.data.numero} registrada`);
+        setTimeout(() => navigate('/compras'), 1500);
+      } else {
+        setError(response.data.error || 'Error al crear compra');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al crear compra');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatearMoneda = (val, moneda = null) => {
     const m = moneda || formData.moneda;
     return `${m === 'USD' ? '$' : 'S/'} ${parseFloat(val).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
   };
 
-  if (loading && proveedores.length === 0) return <Loading message="Cargando configuración..." />;
+  if (loading && proveedores.length === 0) return <Loading message="Cargando configuracion..." />;
 
   return (
     <div className="container py-6">
@@ -425,7 +429,7 @@ if (response.data.success) {
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShoppingCart size={28} className="text-primary" /> Nueva Compra
             </h1>
-            <p className="text-sm text-muted">Ingreso de mercadería y provisión de gastos</p>
+            <p className="text-sm text-muted">Ingreso de mercaderia y provision de gastos</p>
           </div>
         </div>
       </div>
@@ -474,7 +478,7 @@ if (response.data.success) {
                 {proveedorSeleccionado && (
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="form-group">
-                      <label className="form-label text-xs uppercase text-muted">Fecha Emisión</label>
+                      <label className="form-label text-xs uppercase text-muted">Fecha Emision</label>
                       <input 
                         type="date" 
                         className="form-input" 
@@ -501,7 +505,7 @@ if (response.data.success) {
             <div className="card">
               <div className="card-header bg-gray-50">
                 <h2 className="card-title text-base">
-                  <FileText size={18} className="text-primary"/> Documento Físico
+                  <FileText size={18} className="text-primary"/> Documento Fisico
                 </h2>
               </div>
               <div className="card-body grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -514,7 +518,7 @@ if (response.data.success) {
                   >
                     <option value="Factura">Factura</option>
                     <option value="Boleta">Boleta</option>
-                    <option value="Guia">Guía Remisión</option>
+                    <option value="Guia">Guia Remision</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -528,7 +532,7 @@ if (response.data.success) {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label text-xs uppercase text-muted">Número</label>
+                  <label className="form-label text-xs uppercase text-muted">Numero</label>
                   <input 
                     type="text" 
                     className="form-input" 
@@ -566,7 +570,7 @@ if (response.data.success) {
                     onClick={() => setFormData({...formData, moneda: 'USD'})}
                   >
                     <div className="font-bold text-xl">$</div>
-                    <span className="text-xs font-bold uppercase">Dólares</span>
+                    <span className="text-xs font-bold uppercase">Dolares</span>
                   </button>
                 </div>
               </div>
@@ -584,8 +588,8 @@ if (response.data.success) {
                       value={formData.tipo_recepcion} 
                       onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}
                     >
-                      <option value="Total">Recepción Total</option>
-                      <option value="Parcial">Recepción Parcial</option>
+                      <option value="Total">Recepcion Total</option>
+                      <option value="Parcial">Recepcion Parcial</option>
                       <option value="Ninguna">Solo Orden</option>
                     </select>
                     <button 
@@ -720,8 +724,8 @@ if (response.data.success) {
               </div>
             )}
           </div>
+
           <div className="space-y-6">
-            
             {detalle.length > 0 && (
               <>
                 <div className="card">
@@ -746,7 +750,7 @@ if (response.data.success) {
                         onClick={() => handleFormaPagoChange('Credito')}
                       >
                         <CreditCard size={20} />
-                        <span className="text-xs font-bold uppercase">Crédito</span>
+                        <span className="text-xs font-bold uppercase">Credito</span>
                       </button>
                       <button 
                         type="button" 
@@ -798,7 +802,7 @@ if (response.data.success) {
 
                         {accionPago === 'completo' && (
                           <div className="alert alert-success py-2 text-sm">
-                            <CheckCircle size={14} /> Se registrará egreso de <strong>{formatearMoneda(totales.total)}</strong>
+                            <CheckCircle size={14} /> Se registrara egreso de <strong>{formatearMoneda(totales.total)}</strong>
                           </div>
                         )}
                         
@@ -819,7 +823,7 @@ if (response.data.success) {
                         
                         {accionPago === 'registro' && (
                           <div className="alert alert-warning py-2 text-sm">
-                            <AlertCircle size={14} /> Se generará cuenta por pagar. No se registran movimientos ahora.
+                            <AlertCircle size={14} /> Se generara cuenta por pagar. No se registran movimientos ahora.
                           </div>
                         )}
 
@@ -852,7 +856,7 @@ if (response.data.success) {
                             <p className="font-bold">Compra a Letras</p>
                             <p className="text-purple-900/80">
                               {formData.letras_pendientes_registro 
-                                ? "Se registrará la deuda total. Podrás canjear las letras y definir fechas más adelante." 
+                                ? "Se registrara la deuda total. Podras canjear las letras y definir fechas mas adelante." 
                                 : "Define el cronograma de cuotas ahora mismo."}
                             </p>
                           </div>
@@ -864,14 +868,13 @@ if (response.data.success) {
                             checked={formData.letras_pendientes_registro} 
                             onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} 
                           />
-                          <span className="font-medium text-sm">Registrar detalle de letras después</span>
+                          <span className="font-medium text-sm">Registrar detalle de letras despues</span>
                         </label>
                       </div>
                     )}
 
-                    {(formData.forma_pago_detalle === 'Credito' || (formData.forma_pago_detalle === 'Letras' && !formData.letras_pendientes_registro)) && (
+                    {(formData.forma_pago_detalle === 'Credito' || formData.forma_pago_detalle === 'Letras') && (
                       <div className="slide-down space-y-4 pt-2 border-t border-dashed">
-                        
                         <div className="grid grid-cols-2 gap-3">
                           <div className="form-group">
                             <label className="form-label text-xs uppercase text-muted">
@@ -886,7 +889,7 @@ if (response.data.success) {
                             />
                           </div>
                           <div className="form-group">
-                            <label className="form-label text-xs uppercase text-muted">Días/Intervalo</label>
+                            <label className="form-label text-xs uppercase text-muted">Dias/Intervalo</label>
                             <input 
                               type="number" 
                               className="form-input text-center" 
@@ -908,34 +911,43 @@ if (response.data.success) {
                           </div>
                         </div>
 
-                        {(formData.forma_pago_detalle === 'Letras' || formData.forma_pago_detalle === 'Credito') && cronograma.length > 0 && (
-  <div className="bg-gray-50 rounded border overflow-hidden">
-    <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
-      <span>Cronograma Preliminar</span>
-      <Calendar size={14}/>
-    </div>
-    <div className="max-h-48 overflow-y-auto">
-      <table className="w-full text-xs">
-        <thead className="text-gray-500 bg-gray-50">
-          <tr>
-            <th className="px-2 py-1 text-left">#</th>
-            <th className="px-2 py-1 text-left">Vence</th>
-            <th className="px-2 py-1 text-right">Monto</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {cronograma.map((cuota) => (
-            <tr key={cuota.numero}>
-              <td className="px-2 py-1 font-medium">{cuota.numero}</td>
-              <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
-              <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
+                        {cronograma.length > 0 && (
+                          <div className="bg-gray-50 rounded border overflow-hidden">
+                            <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
+                              <span>
+                                {formData.letras_pendientes_registro ? 'Cronograma Referencial' : 'Cronograma Preliminar'}
+                              </span>
+                              <Calendar size={14}/>
+                            </div>
+                            {formData.letras_pendientes_registro && (
+                              <div className="px-3 py-1 bg-orange-50 border-b border-orange-200 text-xs text-orange-700">
+                                Solo referencial, las letras se definiran en el detalle de la compra.
+                              </div>
+                            )}
+                            <div className="max-h-48 overflow-y-auto">
+                              <table className="w-full text-xs">
+                                <thead className="text-gray-500 bg-gray-50">
+                                  <tr>
+                                    <th className="px-2 py-1 text-left">#</th>
+                                    <th className="px-2 py-1 text-left">Codigo</th>
+                                    <th className="px-2 py-1 text-left">Vence</th>
+                                    <th className="px-2 py-1 text-right">Monto</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                  {cronograma.map((cuota) => (
+                                    <tr key={cuota.numero}>
+                                      <td className="px-2 py-1 font-medium">{cuota.numero}</td>
+                                      <td className="px-2 py-1 font-mono text-gray-600">{cuota.codigo_letra}</td>
+                                      <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
+                                      <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
 
                         {!formData.usa_fondos_propios && (
                           <div className="bg-gray-50 p-3 rounded border">
@@ -1034,7 +1046,7 @@ if (response.data.success) {
                 <div className="card">
                   <div className="card-body space-y-3">
                     <div className="form-group m-0">
-                      <label className="form-label text-xs uppercase text-muted">Dirección Entrega</label>
+                      <label className="form-label text-xs uppercase text-muted">Direccion Entrega</label>
                       <textarea 
                         className="form-textarea text-sm min-h-[60px]" 
                         value={formData.direccion_entrega} 
@@ -1068,6 +1080,7 @@ if (response.data.success) {
           </div>
         </div>
       </form>
+
       <Modal 
         isOpen={modalProveedorOpen} 
         onClose={() => { setModalProveedorOpen(false); setBusquedaProveedor(''); }} 
@@ -1079,7 +1092,7 @@ if (response.data.success) {
               <input 
                 type="text" 
                 className="form-input pl-10" 
-                placeholder="Buscar por Razón Social o RUC..." 
+                placeholder="Buscar por Razon Social o RUC..." 
                 value={busquedaProveedor} 
                 onChange={(e) => setBusquedaProveedor(e.target.value)} 
                 autoFocus 
@@ -1150,7 +1163,7 @@ if (response.data.success) {
               >
                 <div>
                   <div className="font-bold text-sm text-gray-800">{prod.nombre}</div>
-                  <div className="text-xs text-muted">Código: {prod.codigo}</div>
+                  <div className="text-xs text-muted">Codigo: {prod.codigo}</div>
                 </div>
                 <div className="text-right text-xs">
                   <span className="block font-medium">
@@ -1177,7 +1190,7 @@ if (response.data.success) {
               <Search size={18} className="icon"/>
               <input 
                 className="form-input" 
-                placeholder="RUC (11 dígitos)" 
+                placeholder="RUC (11 digitos)" 
                 value={formNuevoProveedor.ruc} 
                 onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, ruc: e.target.value})} 
                 maxLength={11} 
@@ -1195,21 +1208,21 @@ if (response.data.success) {
           </div>
           <input 
             className="form-input" 
-            placeholder="Razón Social" 
+            placeholder="Razon Social" 
             value={formNuevoProveedor.razon_social} 
             onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, razon_social: e.target.value})} 
             required 
           />
           <input 
             className="form-input" 
-            placeholder="Dirección Fiscal" 
+            placeholder="Direccion Fiscal" 
             value={formNuevoProveedor.direccion} 
             onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, direccion: e.target.value})} 
           />
           <div className="grid grid-cols-2 gap-3">
             <input 
               className="form-input" 
-              placeholder="Teléfono" 
+              placeholder="Telefono" 
               value={formNuevoProveedor.telefono} 
               onChange={(e) => setFormNuevoProveedor({...formNuevoProveedor, telefono: e.target.value})} 
             />
@@ -1247,7 +1260,7 @@ if (response.data.success) {
             <div>
               <input 
                 className="form-input" 
-                placeholder="Código" 
+                placeholder="Codigo" 
                 value={formNuevoProducto.codigo} 
                 onChange={(e) => setFormNuevoProducto({...formNuevoProducto, codigo: e.target.value})} 
                 required 
@@ -1280,7 +1293,7 @@ if (response.data.success) {
           </div>
           <textarea 
             className="form-textarea h-20" 
-            placeholder="Descripción (Opcional)" 
+            placeholder="Descripcion (Opcional)" 
             value={formNuevoProducto.descripcion} 
             onChange={(e) => setFormNuevoProducto({...formNuevoProducto, descripcion: e.target.value})} 
           />

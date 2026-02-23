@@ -1447,7 +1447,7 @@ function DetalleOrdenVenta() {
                 </div>
               )}
 
-              {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+              {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante.trim().toLowerCase() !== 'factura' && (
             <button 
               className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
               onClick={() => handleDescargarPDF('comprobante')} 

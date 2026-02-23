@@ -376,13 +376,23 @@ function NuevaCotizacion() {
 
       const direccionPrincipal = direcciones.find(d => d.es_principal) || direcciones[0];
 
-      setFormCabecera(prev => ({
-        ...prev,
-        id_cliente: clienteCompleto.id_cliente,
-        lugar_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
-        plazo_pago: 'Contado'
-      }));
+      const condicion = clienteCompleto.condicion_pago || 'Contado';
+const diasCredito = parseInt(clienteCompleto.dias_credito || 0);
 
+let plazoPago = 'Contado';
+if (condicion === 'Credito' && clienteCompleto.usar_limite_credito && diasCredito > 0) {
+  plazoPago = `Credito ${diasCredito} Dias`;
+  if (!PLAZOS_PAGO.includes(plazoPago)) {
+    plazoPago = `Credito ${diasCredito} Dias`;
+  }
+}
+
+setFormCabecera(prev => ({
+  ...prev,
+  id_cliente: clienteCompleto.id_cliente,
+  lugar_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
+  plazo_pago: plazoPago
+}));
       const resCredito = await clientesAPI.getEstadoCredito(clienteCompleto.id_cliente);
       if (resCredito.data.success) {
         setEstadoCredito(resCredito.data.data);
@@ -390,12 +400,18 @@ function NuevaCotizacion() {
     } catch (err) {
       console.error('Error al cargar datos completos del cliente:', err);
       setClienteSeleccionado(cliente);
-      setFormCabecera(prev => ({
-        ...prev,
-        id_cliente: cliente.id_cliente,
-        lugar_entrega: cliente.direccion_despacho || '',
-        plazo_pago: 'Contado'
-      }));
+      const condicionFallback = cliente.condicion_pago || 'Contado';
+const diasFallback = parseInt(cliente.dias_credito || 0);
+const plazoPagoFallback = (condicionFallback === 'Credito' && cliente.usar_limite_credito && diasFallback > 0)
+  ? `Credito ${diasFallback} Dias`
+  : 'Contado';
+
+setFormCabecera(prev => ({
+  ...prev,
+  id_cliente: cliente.id_cliente,
+  lugar_entrega: cliente.direccion_despacho || '',
+  plazo_pago: plazoPagoFallback
+}));
     }
     
     setModalClienteOpen(false);

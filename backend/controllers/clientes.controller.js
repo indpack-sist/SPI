@@ -3,7 +3,7 @@ import { validarRUC, validarDNI } from '../services/api-validation.service.js';
 
 export async function getAllClientes(req, res) {
   try {
-    const { estado, search } = req.query; // ← AGREGAR search
+    const { estado, search } = req.query;
     
     let sql = 'SELECT * FROM clientes WHERE 1=1';
     const params = [];
@@ -13,7 +13,6 @@ export async function getAllClientes(req, res) {
       params.push(estado);
     }
     
-    // ← AGREGAR ESTA BÚSQUEDA
     if (search) {
       sql += ' AND (razon_social LIKE ? OR ruc LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
@@ -186,7 +185,9 @@ export async function createCliente(req, res) {
       usar_limite_credito,
       validar_documento,
       estado,
-      creacion_manual 
+      creacion_manual,
+      condicion_pago,
+      dias_credito
     } = req.body;
 
     if (!ruc || !razon_social) {
@@ -244,6 +245,9 @@ export async function createCliente(req, res) {
       });
     }
 
+    const condicionPagoFinal = condicion_pago || 'Contado';
+    const diasCreditoFinal = condicionPagoFinal === 'Credito' ? parseInt(dias_credito || 0) : 0;
+
     const result = await executeQuery(
       `INSERT INTO clientes (
         ruc, 
@@ -256,8 +260,10 @@ export async function createCliente(req, res) {
         limite_credito_pen, 
         limite_credito_usd, 
         usar_limite_credito,
+        condicion_pago,
+        dias_credito,
         estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ruc,
         tipo_documento || 'RUC',
@@ -269,6 +275,8 @@ export async function createCliente(req, res) {
         0, 
         0,
         usar_limite_credito ? 1 : 0,
+        condicionPagoFinal,
+        diasCreditoFinal,
         estado || 'Activo'
       ]
     );
@@ -315,6 +323,8 @@ export async function updateCliente(req, res) {
       limite_credito_pen,
       limite_credito_usd,
       usar_limite_credito,
+      condicion_pago,
+      dias_credito,
       estado
     } = req.body;
     
@@ -340,6 +350,9 @@ export async function updateCliente(req, res) {
       }
     }
 
+    const condicionPagoFinal = condicion_pago || 'Contado';
+    const diasCreditoFinal = condicionPagoFinal === 'Credito' ? parseInt(dias_credito || 0) : 0;
+
     const result = await executeQuery(
       `UPDATE clientes SET 
         ruc = ?, 
@@ -352,6 +365,8 @@ export async function updateCliente(req, res) {
         limite_credito_pen = ?,
         limite_credito_usd = ?,
         usar_limite_credito = ?,
+        condicion_pago = ?,
+        dias_credito = ?,
         estado = ?
       WHERE id_cliente = ?`,
       [
@@ -365,6 +380,8 @@ export async function updateCliente(req, res) {
         parseFloat(limite_credito_pen || 0),
         parseFloat(limite_credito_usd || 0),
         usar_limite_credito ? 1 : 0,
+        condicionPagoFinal,
+        diasCreditoFinal,
         estado, 
         id
       ]
@@ -561,7 +578,9 @@ export async function getEstadoCreditoCliente(req, res) {
         limite_credito_usd,
         usar_limite_credito,
         credito_utilizado_pen,
-        credito_utilizado_usd
+        credito_utilizado_usd,
+        condicion_pago,
+        dias_credito
       FROM clientes 
       WHERE id_cliente = ?
     `, [id]);
@@ -575,7 +594,6 @@ export async function getEstadoCreditoCliente(req, res) {
     
     const cliente = clienteResult.data[0];
     
-    // CORRECCIÓN: Filtramos por tipo_venta = 'Crédito'
     const deudaPenResult = await executeQuery(`
       SELECT COALESCE(SUM(total - monto_pagado), 0) as deuda_pen
       FROM ordenes_venta
@@ -613,6 +631,8 @@ export async function getEstadoCreditoCliente(req, res) {
         ruc: cliente.ruc,
         tipo_documento: cliente.tipo_documento,
         usar_limite_credito: cliente.usar_limite_credito === 1,
+        condicion_pago: cliente.condicion_pago || 'Contado',
+        dias_credito: parseInt(cliente.dias_credito || 0),
         credito_pen: {
           limite: limitePen,
           utilizado: deudaPen,

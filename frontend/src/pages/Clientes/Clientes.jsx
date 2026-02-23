@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, 
-  Loader, Building2, User, CreditCard, FilePlus, Eye
+  Loader, Building2, User, CreditCard, FilePlus, Eye, Clock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clientesAPI, solicitudesCreditoAPI } from '../../config/api';
@@ -47,6 +47,8 @@ function Clientes() {
     limite_credito_pen: 0,
     limite_credito_usd: 0,
     usar_limite_credito: false,
+    condicion_pago: 'Contado',
+    dias_credito: 0,
     validar_documento: true, 
     estado: 'Activo'
   });
@@ -82,6 +84,8 @@ function Clientes() {
         limite_credito_pen: parseFloat(cliente.limite_credito_pen || 0),
         limite_credito_usd: parseFloat(cliente.limite_credito_usd || 0),
         usar_limite_credito: cliente.usar_limite_credito === 1 || cliente.usar_limite_credito === true,
+        condicion_pago: cliente.condicion_pago || 'Contado',
+        dias_credito: parseInt(cliente.dias_credito || 0),
         validar_documento: false,
         estado: cliente.estado
       });
@@ -101,6 +105,8 @@ function Clientes() {
         limite_credito_pen: 0,
         limite_credito_usd: 0,
         usar_limite_credito: false,
+        condicion_pago: 'Contado',
+        dias_credito: 0,
         validar_documento: true,
         estado: 'Activo'
       });
@@ -250,13 +256,18 @@ function Clientes() {
     setError(null);
     setSuccess(null);
 
-    // CORRECCIÓN CLAVE: Separamos la lógica de creación vs actualización
+    if (formData.condicion_pago === 'Credito' && (!formData.dias_credito || parseInt(formData.dias_credito) <= 0)) {
+      setError('Debe indicar los días de crédito');
+      return;
+    }
+
     const dataToSend = {
       ...formData,
       tipo_documento: formData.tipo_documento || 'RUC',
       usar_limite_credito: formData.usar_limite_credito ? 1 : 0,
       creacion_manual: creacionManual,
-      // Si estamos CREANDO, forzamos límites en 0 para evitar asignación directa
+      condicion_pago: formData.condicion_pago,
+      dias_credito: formData.condicion_pago === 'Credito' ? parseInt(formData.dias_credito || 0) : 0,
       limite_credito_pen: editando ? parseFloat(formData.limite_credito_pen || 0) : 0,
       limite_credito_usd: editando ? parseFloat(formData.limite_credito_usd || 0) : 0
     };
@@ -266,11 +277,9 @@ function Clientes() {
         await clientesAPI.update(editando.id_cliente, dataToSend);
         setSuccess('Cliente actualizado exitosamente');
       } else {
-        // Crear cliente
         const response = await clientesAPI.create(dataToSend);
         const nuevoClienteId = response.data.data.id_cliente;
 
-        // Si se solicitó crédito al crear, generamos la solicitud automáticamente
         if (formData.usar_limite_credito && (parseFloat(formData.limite_credito_pen) > 0 || parseFloat(formData.limite_credito_usd) > 0)) {
             const solicitudFormData = new FormData();
             solicitudFormData.append('id_cliente', nuevoClienteId);
@@ -341,6 +350,22 @@ function Clientes() {
     { header: 'Razón Social / Nombre', accessor: 'razon_social' },
     { header: 'Contacto', accessor: 'contacto' },
     { header: 'Teléfono', accessor: 'telefono' },
+    {
+      header: 'Condición Pago',
+      accessor: 'condicion_pago',
+      width: '130px',
+      align: 'center',
+      render: (value, row) => (
+        <div className="text-sm">
+          <span className={`badge ${value === 'Credito' ? 'badge-warning' : 'badge-success'}`}>
+            {value === 'Credito' ? 'Crédito' : 'Contado'}
+          </span>
+          {value === 'Credito' && row.dias_credito > 0 && (
+            <div className="text-xs text-muted mt-1">{row.dias_credito} días</div>
+          )}
+        </div>
+      )
+    },
     { 
       header: 'Límite Crédito', 
       width: '140px',
@@ -487,12 +512,77 @@ function Clientes() {
           </div>
 
           <div className="card bg-gray-50 border p-4 mb-4">
+            <p className="text-sm font-bold uppercase text-muted mb-3 flex items-center gap-2">
+              <Clock size={15} /> Condición de Pago Predeterminada
+            </p>
+            <div className="flex gap-3 mb-3">
+              <button
+                type="button"
+                className={`btn flex-1 ${formData.condicion_pago === 'Contado' ? 'btn-success' : 'btn-outline'}`}
+                onClick={() => setFormData({ ...formData, condicion_pago: 'Contado', dias_credito: 0 })}
+              >
+                Contado
+              </button>
+              <button
+                type="button"
+                className={`btn flex-1 ${formData.condicion_pago === 'Credito' ? 'btn-warning' : 'btn-outline'} ${!formData.usar_limite_credito ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={() => {
+                  if (!formData.usar_limite_credito) return;
+                  setFormData({ ...formData, condicion_pago: 'Credito' });
+                }}
+                disabled={!formData.usar_limite_credito}
+                title={!formData.usar_limite_credito ? 'El cliente debe tener límite de crédito habilitado' : ''}
+              >
+                Crédito
+              </button>
+            </div>
+
+            {!formData.usar_limite_credito && (
+              <p className="text-xs text-muted mb-2">La opción Crédito solo está disponible para clientes con límite de crédito habilitado.</p>
+            )}
+
+            {formData.condicion_pago === 'Credito' && (
+              <div className="pt-3 border-t border-gray-200">
+                <label className="form-label">Días de Crédito *</label>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {[7, 15, 30, 45, 60, 90].map(dias => (
+                    <button
+                      key={dias}
+                      type="button"
+                      className={`btn btn-xs ${formData.dias_credito === dias ? 'btn-warning' : 'btn-outline'}`}
+                      onClick={() => setFormData({ ...formData, dias_credito: dias })}
+                    >
+                      {dias} días
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  className="form-input"
+                  placeholder="Otro valor en días..."
+                  value={formData.dias_credito || ''}
+                  min="1"
+                  onChange={(e) => setFormData({ ...formData, dias_credito: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="card bg-gray-50 border p-4 mb-4">
             <div className="form-group mb-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input 
                   type="checkbox" 
                   checked={formData.usar_limite_credito} 
-                  onChange={(e) => setFormData({ ...formData, usar_limite_credito: e.target.checked })} 
+                  onChange={(e) => {
+                    const nuevoValor = e.target.checked;
+                    setFormData({
+                      ...formData,
+                      usar_limite_credito: nuevoValor,
+                      condicion_pago: !nuevoValor ? 'Contado' : formData.condicion_pago,
+                      dias_credito: !nuevoValor ? 0 : formData.dias_credito
+                    });
+                  }}
                   className="form-checkbox" 
                   style={{ width: '18px', height: '18px' }}
                   disabled={!!editando} 

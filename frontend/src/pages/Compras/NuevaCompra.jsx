@@ -261,7 +261,8 @@ function NuevaCompra() {
         return;
     }
 
-    const montoPorCuota = saldoCredito / numCuotas;
+    const montoPorCuota = parseFloat((saldoCredito / numCuotas).toFixed(3));
+
     let fechaBase = new Date(formData.fecha_primera_cuota);
     
     if (isNaN(fechaBase.getTime())) {
@@ -358,7 +359,7 @@ function NuevaCompra() {
 const cronogramaPayload = debeEnviarCronograma
   ? cronograma.map(c => ({
       numero: c.numero,
-      monto: parseFloat(c.monto.toFixed(2)),
+      monto: parseFloat(c.monto.toFixed(3)),
       fecha_vencimiento: c.fecha.toISOString().split('T')[0]
   }))
   : [];

@@ -796,18 +796,29 @@ export async function pagarCuota(req, res) {
       id_cuenta_pago, 
       cuota.moneda,
       monto_pagado, 
-      observaciones||`Pago Cuota ${cuota.numero_cuota}`, 
+      observaciones || `Pago Cuota ${cuota.numero_cuota}`, 
       referencia, 
       id, 
       idCuota, 
       id_registrado_por
     ]);
 
-    const nuevoPagadoCuota = parseFloat(cuota.monto_pagado || 0) + parseFloat(monto_pagado);
-    const estadoCuota = nuevoPagadoCuota >= parseFloat(cuota.monto_cuota) - 0.01 ? 'Pagada' : 'Parcial';
+    const nuevoPagadoCuota = parseFloat((parseFloat(cuota.monto_pagado || 0) + parseFloat(monto_pagado)).toFixed(3));
+    const estadoCuota = nuevoPagadoCuota >= parseFloat(cuota.monto_cuota) - 0.001 ? 'Pagada' : 'Parcial';
     await connection.query('UPDATE cuotas_orden_compra SET monto_pagado = ?, estado = ?, fecha_pago = NOW() WHERE id_cuota = ?', [nuevoPagadoCuota, estadoCuota, idCuota]);
 
-    await connection.query('UPDATE ordenes_compra SET monto_pagado = monto_pagado + ?, saldo_pendiente = saldo_pendiente - ? WHERE id_orden_compra = ?', [monto_pagado, monto_pagado, id]);
+    const [ordenActual] = await connection.query(
+      'SELECT total, monto_pagado, saldo_pendiente FROM ordenes_compra WHERE id_orden_compra = ? FOR UPDATE',
+      [id]
+    );
+    const nuevoMontoPagado = parseFloat((parseFloat(ordenActual[0].monto_pagado) + parseFloat(monto_pagado)).toFixed(3));
+    const nuevoSaldo = parseFloat((parseFloat(ordenActual[0].total) - nuevoMontoPagado).toFixed(3));
+    const nuevoEstadoPago = nuevoSaldo <= 0.01 ? 'Pagado' : 'Parcial';
+
+    await connection.query(
+      'UPDATE ordenes_compra SET monto_pagado = ?, saldo_pendiente = ?, estado_pago = ? WHERE id_orden_compra = ?',
+      [nuevoMontoPagado, nuevoSaldo, nuevoEstadoPago, id]
+    );
 
     await connection.commit();
     res.json({ success: true, message: 'Cuota pagada' });

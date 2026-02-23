@@ -363,13 +363,14 @@ const cronogramaPayload = debeEnviarCronograma
   }))
   : [];
 
-      const payload = {
+     const payload = {
         ...formData,
         id_proveedor: parseInt(formData.id_proveedor),
         id_cuenta_pago: (formData.usa_fondos_propios || accionPago === 'registro') 
           ? null 
           : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
         id_comprador: formData.usa_fondos_propios ? parseInt(formData.id_comprador) : null,
+        monto_reembolsar: formData.usa_fondos_propios ? totales.total : 0,
         numero_cuotas: parseInt(formData.numero_cuotas),
         dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
         dias_credito: parseInt(formData.dias_credito),
@@ -378,7 +379,7 @@ const cronogramaPayload = debeEnviarCronograma
         monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
         usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
         accion_pago: accionPago,
-        monto_adelanto: parseFloat(formData.monto_pagado_inicial || 0),
+        monto_adelanto: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
         cronograma: cronogramaPayload,
         detalle: detalle.map(item => ({
           id_producto: item.id_producto,

@@ -39,6 +39,7 @@ export async function getAllCompras(req, res) {
         pr.ruc AS ruc_proveedor,
         e_responsable.nombre_completo AS responsable,
         e_registrado.nombre_completo AS registrado_por,
+        e_comprador.nombre_completo AS comprador,
         cp.nombre AS cuenta_pago,
         cp.tipo AS tipo_cuenta_pago,
         (SELECT COUNT(*) FROM detalle_orden_compra WHERE id_orden_compra = oc.id_orden_compra) AS total_items,
@@ -55,6 +56,7 @@ export async function getAllCompras(req, res) {
       LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
       LEFT JOIN empleados e_responsable ON oc.id_responsable = e_responsable.id_empleado
       LEFT JOIN empleados e_registrado ON oc.id_registrado_por = e_registrado.id_empleado
+      LEFT JOIN empleados e_comprador ON oc.id_comprador = e_comprador.id_empleado
       LEFT JOIN (
           SELECT id_orden_compra, MIN(fecha_vencimiento) as fecha_vencimiento
           FROM letras_compra 
@@ -131,6 +133,7 @@ export async function getCompraById(req, res) {
         pr.contacto AS contacto_proveedor,
         e.nombre_completo AS responsable,
         e_reg.nombre_completo AS registrado_por,
+        e_comprador.nombre_completo AS comprador,
         cp.nombre AS cuenta_pago,
         cp.tipo AS tipo_cuenta,
         cp.banco AS banco_cuenta,
@@ -140,6 +143,7 @@ export async function getCompraById(req, res) {
       LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
       LEFT JOIN empleados e ON oc.id_responsable = e.id_empleado
       LEFT JOIN empleados e_reg ON oc.id_registrado_por = e_reg.id_empleado
+      LEFT JOIN empleados e_comprador ON oc.id_comprador = e_comprador.id_empleado
       LEFT JOIN cuentas_pago cp ON oc.id_cuenta_pago = cp.id_cuenta
       WHERE oc.id_orden_compra = ?
     `, [id]);
@@ -208,19 +212,21 @@ export async function createCompra(req, res) {
   let connection;
   try {
     const {
-  id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
-  prioridad, moneda, tipo_compra, numero_cuotas, dias_entre_cuotas, dias_credito,
-  tipo_impuesto, porcentaje_impuesto, observaciones, id_responsable, contacto_proveedor,
-  direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
-  serie_documento, numero_documento, fecha_emision_documento, url_comprobante, cronograma,
-  accion_pago, monto_adelanto, fecha_primera_cuota
-} = req.body;
+      id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
+      prioridad, moneda, tipo_compra, numero_cuotas, dias_entre_cuotas, dias_credito,
+      tipo_impuesto, porcentaje_impuesto, observaciones, id_responsable, contacto_proveedor,
+      direccion_entrega, tipo_cambio, detalle, tipo_recepcion, tipo_documento,
+      serie_documento, numero_documento, fecha_emision_documento, url_comprobante, cronograma,
+      accion_pago, monto_adelanto, fecha_primera_cuota,
+      usa_fondos_propios, id_comprador, monto_reembolsar
+    } = req.body;
 
     const id_registrado_por = req.user?.id_empleado || null;
 
     if (!id_proveedor || !detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Datos incompletos' });
     if (!id_registrado_por) return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     if (!moneda) return res.status(400).json({ success: false, error: 'Especifique la moneda' });
+    if (usa_fondos_propios && !id_comprador) return res.status(400).json({ success: false, error: 'Debe especificar el empleado comprador' });
 
     let subtotal = 0;
     let subtotalRecepcion = 0;
@@ -259,85 +265,85 @@ export async function createCompra(req, res) {
 
     let montoAPagarAhora = 0;
 
-    if (tipo_compra === 'Contado') {
+    if (!usa_fondos_propios) {
+      if (tipo_compra === 'Contado') {
         if (accion_pago === 'completo') {
-            montoAPagarAhora = total;
+          montoAPagarAhora = total;
         } else if (accion_pago === 'adelanto') {
-            montoAPagarAhora = parseFloat(monto_adelanto || 0);
+          montoAPagarAhora = parseFloat(monto_adelanto || 0);
         } else {
-            montoAPagarAhora = 0;
+          montoAPagarAhora = 0;
         }
-    } else {
+      } else {
         montoAPagarAhora = parseFloat(monto_adelanto || 0);
-    }
+      }
 
-    if (montoAPagarAhora > 0 && !id_cuenta_pago) {
+      if (montoAPagarAhora > 0 && !id_cuenta_pago) {
         return res.status(400).json({ success: false, error: 'Debe seleccionar una cuenta de pago para realizar el pago inicial.' });
+      }
     }
 
     const saldoPendiente = total - montoAPagarAhora;
-    
+
     let estadoPago = 'Pendiente';
     if (saldoPendiente <= 0.01) estadoPago = 'Pagado';
     else if (montoAPagarAhora > 0) estadoPago = 'Parcial';
 
     const esCredito = ['Credito', 'Letra', 'Letras'].includes(tipo_compra);
     if ((tipo_compra === 'Letra' || tipo_compra === 'Letras') && (!numero_cuotas || parseInt(numero_cuotas) < 1)) {
-        return res.status(400).json({ success: false, error: 'Para compras a Letras, debe indicar más de 1 cuota/letra.' });
+      return res.status(400).json({ success: false, error: 'Para compras a Letras, debe indicar más de 1 cuota/letra.' });
     }
 
     let cronogramaDefinido = 0;
-let cronogramaFinal = [];
+    let cronogramaFinal = [];
 
-if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
-    const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
-    if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
-        return res.status(400).json({ 
-            success: false, 
-            error: `La suma de las letras (${totalCronograma.toFixed(2)}) no coincide con el saldo pendiente (${saldoPendiente.toFixed(2)})` 
+    if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
+      const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
+      if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
+        return res.status(400).json({
+          success: false,
+          error: `La suma de las letras (${totalCronograma.toFixed(2)}) no coincide con el saldo pendiente (${saldoPendiente.toFixed(2)})`
         });
-    }
-    cronogramaFinal = cronograma;
-    cronogramaDefinido = 1;
-} else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0) {
-    const numCuotas = parseInt(numero_cuotas);
-    const diasEntreC = parseInt(dias_entre_cuotas || 30);
-    const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(2));
-    const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(2));
+      }
+      cronogramaFinal = cronograma;
+      cronogramaDefinido = 1;
+    } else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0) {
+      const numCuotas = parseInt(numero_cuotas);
+      const diasEntreC = parseInt(dias_entre_cuotas || 30);
+      const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(2));
+      const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(2));
 
-    let fechaBase;
-    if (fecha_primera_cuota) {
+      let fechaBase;
+      if (fecha_primera_cuota) {
         fechaBase = new Date(fecha_primera_cuota);
-    } else {
+      } else {
         fechaBase = new Date(fecha_emision);
         fechaBase.setDate(fechaBase.getDate() + diasEntreC);
-    }
+      }
 
-    for (let i = 1; i <= numCuotas; i++) {
+      for (let i = 1; i <= numCuotas; i++) {
         const fechaCuota = new Date(fechaBase);
         fechaCuota.setDate(fechaCuota.getDate() + diasEntreC * (i - 1));
         const montoEsta = i === numCuotas ? parseFloat((montoPorCuota + diferencia).toFixed(2)) : montoPorCuota;
         cronogramaFinal.push({
-            numero: i,
-            codigo_letra: null,
-            monto: montoEsta,
-            fecha_vencimiento: fechaCuota.toISOString().split('T')[0]
+          numero: i,
+          codigo_letra: null,
+          monto: montoEsta,
+          fecha_vencimiento: fechaCuota.toISOString().split('T')[0]
         });
+      }
+      cronogramaDefinido = 1;
     }
-    cronogramaDefinido = 1;
-}
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
     try {
-      let cuenta = null;
       let tipoCambioFinal = parseFloat(tipo_cambio || 1.0000);
 
       if (id_cuenta_pago) {
         const [cuentas] = await connection.query('SELECT * FROM cuentas_pago WHERE id_cuenta = ? AND estado = "Activo"', [id_cuenta_pago]);
         if (cuentas.length === 0) throw new Error('Cuenta de pago no válida');
-        cuenta = cuentas[0];
       }
 
       const [ultimaResult] = await connection.query('SELECT numero_orden FROM ordenes_compra ORDER BY id_orden_compra DESC LIMIT 1');
@@ -351,10 +357,10 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
       let fechaVencimientoFinal = fecha_vencimiento;
       if (!fechaVencimientoFinal) {
         const fechaBase = new Date(fecha_emision);
-        let diasTotal = 0; 
-        
+        let diasTotal = 0;
+
         if (esCredito) {
-          diasTotal = 30; 
+          diasTotal = 30;
           if (dias_credito) diasTotal = parseInt(dias_credito);
           else if (numero_cuotas && dias_entre_cuotas) diasTotal = parseInt(numero_cuotas) * parseInt(dias_entre_cuotas);
         }
@@ -365,6 +371,9 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
       let estadoOrden = 'Confirmada';
       if (tipo_recepcion === 'Total') estadoOrden = 'Recibida';
 
+      const montoReembolsarFinal = usa_fondos_propios ? parseFloat(monto_reembolsar || total) : 0;
+      const estadoReembolsoFinal = usa_fondos_propios ? 'Pendiente' : 'No Aplica';
+
       const [resultCompra] = await connection.query(`
         INSERT INTO ordenes_compra (
           numero_orden, id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
@@ -372,8 +381,9 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
           numero_cuotas, dias_entre_cuotas, dias_credito, contacto_proveedor, direccion_entrega,
           observaciones, id_responsable, id_registrado_por, subtotal, igv, total,
           estado, estado_pago, saldo_pendiente, monto_pagado, cronograma_definido,
-          tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante, forma_pago_detalle
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante, forma_pago_detalle,
+          usa_fondos_propios, id_comprador, monto_reembolsar, estado_reembolso
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         numeroCompra, id_proveedor, id_cuenta_pago || null, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
         prioridad || 'Media', moneda, tipoCambioFinal, tipoImpuestoFinal, porcentaje, tipo_compra,
@@ -381,44 +391,48 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
         esCredito ? parseInt(dias_entre_cuotas || 30) : 0,
         esCredito ? parseInt(dias_credito || 30) : 0,
         contacto_proveedor || null, direccion_entrega || null, observaciones, id_responsable || null, id_registrado_por,
-        subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, montoAPagarAhora, 
+        subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, montoAPagarAhora,
         cronogramaDefinido,
         tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null,
-        tipo_compra
+        tipo_compra,
+        usa_fondos_propios ? 1 : 0,
+        usa_fondos_propios ? (id_comprador || null) : null,
+        montoReembolsarFinal,
+        estadoReembolsoFinal
       ]);
 
       const idCompra = resultCompra.insertId;
 
       if (montoAPagarAhora > 0 && id_cuenta_pago) {
-          const conceptoMov = (tipo_compra === 'Contado' && Math.abs(montoAPagarAhora - total) < 0.1)
-              ? `Pago Compra Contado ${numeroCompra}` 
-              : `Adelanto Compra ${numeroCompra}`;
-              
-          await connection.query(`
-            INSERT INTO movimientos_cuentas (
-                id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
-                id_orden_compra, id_registrado_por, fecha_movimiento
-            ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, NOW())
-          `, [
-              id_cuenta_pago, 
-              moneda,
-              montoAPagarAhora, 
-              conceptoMov, 
-              numero_documento || 'S/N', 
-              idCompra, 
-              id_registrado_por
-          ]);
-      }
-      
-      if (cronogramaDefinido === 1) {
-    for (const letra of cronogramaFinal) {
+        const conceptoMov = (tipo_compra === 'Contado' && Math.abs(montoAPagarAhora - total) < 0.1)
+          ? `Pago Compra Contado ${numeroCompra}`
+          : `Adelanto Compra ${numeroCompra}`;
+
         await connection.query(`
+          INSERT INTO movimientos_cuentas (
+            id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia,
+            id_orden_compra, id_registrado_por, fecha_movimiento
+          ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+          id_cuenta_pago,
+          moneda,
+          montoAPagarAhora,
+          conceptoMov,
+          numero_documento || 'S/N',
+          idCompra,
+          id_registrado_por
+        ]);
+      }
+
+      if (cronogramaDefinido === 1) {
+        for (const letra of cronogramaFinal) {
+          await connection.query(`
             INSERT INTO cuotas_orden_compra (
-                id_orden_compra, numero_cuota, codigo_letra, monto_cuota, fecha_vencimiento, estado
+              id_orden_compra, numero_cuota, codigo_letra, monto_cuota, fecha_vencimiento, estado
             ) VALUES (?, ?, ?, ?, ?, 'Pendiente')
-        `, [idCompra, letra.numero, letra.codigo_letra || null, letra.monto, letra.fecha_vencimiento]);
-    }
-}
+          `, [idCompra, letra.numero, letra.codigo_letra || null, letra.monto, letra.fecha_vencimiento]);
+        }
+      }
 
       let idEntrada = null;
       if (tieneItemsParaRecepcion) {
@@ -428,11 +442,11 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
 
         const estadoIngresoFinal = (tipo_recepcion === 'Total') ? 'Completo' : 'Parcial';
         const fechaIngresoFinal = (tipo_recepcion === 'Total') ? new Date() : null;
-        const pagadoEntrada = montoAPagarAhora >= totalRecepcion ? totalRecepcion : montoAPagarAhora;
+        const pagadoEntrada = usa_fondos_propios ? 0 : (montoAPagarAhora >= totalRecepcion ? totalRecepcion : montoAPagarAhora);
 
         const [resultEntrada] = await connection.query(`
-          INSERT INTO entradas ( 
-            id_tipo_inventario, tipo_entrada, id_proveedor, documento_soporte, total_costo, subtotal, igv, total, porcentaje_igv, 
+          INSERT INTO entradas (
+            id_tipo_inventario, tipo_entrada, id_proveedor, documento_soporte, total_costo, subtotal, igv, total, porcentaje_igv,
             moneda, tipo_cambio, monto_pagado, estado_pago, id_cuenta_pago, id_registrado_por, observaciones, id_orden_compra,
             cantidad_items_total, cantidad_items_ingresada, estado_ingreso, fecha_ingreso_completo
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -441,7 +455,7 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
           subtotalRecepcion, subtotalRecepcion, impuestoRecepcion, totalRecepcion, porcentaje, moneda, tipoCambioFinal,
           pagadoEntrada,
           pagadoEntrada >= totalRecepcion ? 'Pagado' : 'Pendiente',
-          id_cuenta_pago, id_registrado_por, `Entrada por Compra ${numeroCompra}`, idCompra,
+          id_cuenta_pago || null, id_registrado_por, `Entrada por Compra ${numeroCompra}`, idCompra,
           totalUnidadesRecepcion, totalUnidadesRecepcion, estadoIngresoFinal, fechaIngresoFinal
         ]);
         idEntrada = resultEntrada.insertId;
@@ -452,7 +466,7 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
         const precioUnitario = parseFloat(item.precio_unitario);
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const subtotalItem = (item.cantidad * precioUnitario) * (1 - descuento / 100);
-        
+
         let cantidadRecibida = 0;
         if (tipo_recepcion === 'Total') cantidadRecibida = parseFloat(item.cantidad);
         else if (tipo_recepcion === 'Parcial') cantidadRecibida = parseFloat(item.cantidad_a_recibir || 0);
@@ -463,28 +477,28 @@ if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 
         `, [idCompra, item.id_producto, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
 
         if (idEntrada && cantidadRecibida > 0) {
-           const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
-           let costoPEN = 0, costoUSD = 0;
-           if (moneda === 'PEN') {
-             costoPEN = costoUnitarioNeto; costoUSD = costoUnitarioNeto / tipoCambioFinal;
-           } else {
-             costoUSD = costoUnitarioNeto; costoPEN = costoUnitarioNeto * tipoCambioFinal;
-           }
-           await connection.query(`
-             INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario, costo_unitario_calculado_pen, costo_unitario_calculado_usd)
-             VALUES (?, ?, ?, ?, ?, ?)
-           `, [idEntrada, item.id_producto, cantidadRecibida, costoUnitarioNeto, costoPEN, costoUSD]);
+          const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
+          let costoPEN = 0, costoUSD = 0;
+          if (moneda === 'PEN') {
+            costoPEN = costoUnitarioNeto; costoUSD = costoUnitarioNeto / tipoCambioFinal;
+          } else {
+            costoUSD = costoUnitarioNeto; costoPEN = costoUnitarioNeto * tipoCambioFinal;
+          }
+          await connection.query(`
+            INSERT INTO detalle_entradas (id_entrada, id_producto, cantidad, costo_unitario, costo_unitario_calculado_pen, costo_unitario_calculado_usd)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `, [idEntrada, item.id_producto, cantidadRecibida, costoUnitarioNeto, costoPEN, costoUSD]);
 
-           const [productoInfo] = await connection.query('SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE', [item.id_producto]);
-           const stockActual = parseFloat(productoInfo[0].stock_actual || 0);
-           const cupActualPEN = parseFloat(productoInfo[0].costo_unitario_promedio || 0);
-           const cupActualUSD = parseFloat(productoInfo[0].costo_unitario_promedio_usd || 0);
-           const nuevoStock = stockActual + cantidadRecibida;
-           
-           const nuevoCostoPromedioPEN = nuevoStock > 0 ? ((stockActual * cupActualPEN) + (cantidadRecibida * costoPEN)) / nuevoStock : costoPEN;
-           const nuevoCostoPromedioUSD = nuevoStock > 0 ? ((stockActual * cupActualUSD) + (cantidadRecibida * costoUSD)) / nuevoStock : costoUSD;
+          const [productoInfo] = await connection.query('SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE', [item.id_producto]);
+          const stockActual = parseFloat(productoInfo[0].stock_actual || 0);
+          const cupActualPEN = parseFloat(productoInfo[0].costo_unitario_promedio || 0);
+          const cupActualUSD = parseFloat(productoInfo[0].costo_unitario_promedio_usd || 0);
+          const nuevoStock = stockActual + cantidadRecibida;
 
-           await connection.query(`UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ?, costo_unitario_promedio_usd = ? WHERE id_producto = ?`, [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
+          const nuevoCostoPromedioPEN = nuevoStock > 0 ? ((stockActual * cupActualPEN) + (cantidadRecibida * costoPEN)) / nuevoStock : costoPEN;
+          const nuevoCostoPromedioUSD = nuevoStock > 0 ? ((stockActual * cupActualUSD) + (cantidadRecibida * costoUSD)) / nuevoStock : costoUSD;
+
+          await connection.query('UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ?, costo_unitario_promedio_usd = ? WHERE id_producto = ?', [nuevoStock, nuevoCostoPromedioPEN, nuevoCostoPromedioUSD, item.id_producto]);
         }
       }
 

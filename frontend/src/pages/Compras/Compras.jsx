@@ -191,29 +191,30 @@ function Compras() {
       }
     },
     {
-      header: 'Indicadores',
-      accessor: 'usa_fondos_propios',
-      width: '100px',
-      align: 'center',
-      render: (value, row) => (
-        <div className="flex flex-col items-center gap-1">
-          {value === 1 && (
-            <span className="badge badge-purple text-[10px] flex items-center gap-1">
+      header: 'Comprador',
+      accessor: 'comprador',
+      width: '130px',
+      render: (value, row) => {
+        if (!row.usa_fondos_propios) return <span className="text-xs text-muted">-</span>;
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="badge badge-purple text-[10px] flex items-center gap-1 w-fit">
               <User size={10} /> F.Propios
             </span>
-          )}
-          {row.estado_reembolso === 'Pendiente' && (
-            <span className="badge badge-warning text-[10px] flex items-center gap-1">
-              <RefreshCw size={10} /> Reembolso
-            </span>
-          )}
-          {row.estado_reembolso === 'Parcial' && (
-            <span className="badge badge-info text-[10px] flex items-center gap-1">
-              <RefreshCw size={10} /> Reem.Parcial
-            </span>
-          )}
-        </div>
-      )
+            <span className="text-xs font-medium text-gray-700">{value || 'Sin nombre'}</span>
+            {row.estado_reembolso === 'Pendiente' && (
+              <span className="badge badge-warning text-[10px] flex items-center gap-1 w-fit">
+                <RefreshCw size={10} /> Reembolso pend.
+              </span>
+            )}
+            {row.estado_reembolso === 'Parcial' && (
+              <span className="badge badge-info text-[10px] flex items-center gap-1 w-fit">
+                <RefreshCw size={10} /> Reem. parcial
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Total',

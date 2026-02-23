@@ -746,21 +746,27 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
         </div>
       )}
 
-      {usaFondosPropios && saldoReembolso > 0 && !estaCancelada && (
+        {usaFondosPropios && !estaCancelada && (
         <div className="card mb-6 border-l-4 border-purple-500 bg-purple-50">
           <div className="card-body">
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-purple-900 flex items-center gap-2">
-                  <RefreshCw size={18} /> Reembolso Pendiente
+                  <RefreshCw size={18} /> {saldoReembolso > 0 ? 'Reembolso Pendiente' : 'Reembolso Completado'}
                 </h3>
                 <p className="text-sm text-purple-700 mt-1">
                   Comprador: <span className="font-medium">{compra.comprador || 'No especificado'}</span>
                 </p>
                 <p className="text-sm text-purple-700">
+                  Total a reembolsar: <span className="font-medium">{formatearMoneda(compra.monto_reembolsar)}</span>
+                </p>
+                <p className="text-sm text-purple-700">
+                  Ya reembolsado: <span className="font-medium text-success">{formatearMoneda(compra.monto_reembolsado)}</span>
+                </p>
+                <p className="text-sm text-purple-700 mt-1">
                   Estado: <span className={`badge ${
-                    compra.estado_reembolso === 'Pendiente' ? 'badge-danger' : 
-                    compra.estado_reembolso === 'Parcial' ? 'badge-warning' : 
+                    compra.estado_reembolso === 'Pendiente' ? 'badge-danger' :
+                    compra.estado_reembolso === 'Parcial' ? 'badge-warning' :
                     'badge-success'
                   }`}>
                     {compra.estado_reembolso}
@@ -768,14 +774,19 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-muted">Monto a reembolsar</p>
+                <p className="text-sm text-muted">Saldo por reembolsar</p>
                 <p className="text-2xl font-bold text-purple-900">{formatearMoneda(saldoReembolso)}</p>
-                <button 
-                  className="btn btn-sm btn-purple text-white mt-2" 
-                  onClick={handleAbrirReembolso}
-                >
-                  <DollarSign size={16} /> Reembolsar
-                </button>
+                {saldoReembolso > 0 && (
+                  <button
+                    className="btn btn-sm btn-purple text-white mt-2"
+                    onClick={handleAbrirReembolso}
+                  >
+                    <DollarSign size={16} /> Reembolsar
+                  </button>
+                )}
+                {saldoReembolso <= 0 && (
+                  <span className="badge badge-success mt-2 block">Reembolso Completo</span>
+                )}
               </div>
             </div>
           </div>

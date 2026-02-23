@@ -18,6 +18,7 @@ export async function getAllCompras(req, res) {
         oc.fecha_entrega_real,
         COALESCE(pl.fecha_vencimiento, pc.fecha_vencimiento, oc.fecha_vencimiento) AS fecha_vencimiento,
         oc.tipo_compra,
+        oc.forma_pago_detalle,
         oc.dias_credito,
         oc.estado,
         oc.prioridad,
@@ -31,10 +32,13 @@ export async function getAllCompras(req, res) {
         oc.estado_pago,
         oc.numero_cuotas,
         oc.cronograma_definido,
+        oc.letras_registradas,
         oc.tipo_documento,
         oc.serie_documento,
         oc.numero_documento,
         oc.fecha_emision_documento,
+        oc.usa_fondos_propios,
+        oc.estado_reembolso,
         pr.razon_social AS proveedor,
         pr.ruc AS ruc_proveedor,
         e_responsable.nombre_completo AS responsable,
@@ -1215,9 +1219,7 @@ export async function registrarReembolsoComprador(req, res) {
       [id]
     );
 
-    if (compras.length === 0) {
-      throw new Error('Orden de compra no encontrada');
-    }
+    if (compras.length === 0) throw new Error('Orden de compra no encontrada');
 
     const compra = compras[0];
 
@@ -1227,9 +1229,7 @@ export async function registrarReembolsoComprador(req, res) {
 
     const saldoReembolso = parseFloat(compra.monto_reembolsar) - parseFloat(compra.monto_reembolsado);
 
-    if (saldoReembolso <= 0) {
-      throw new Error('No hay saldo pendiente de reembolso');
-    }
+    if (saldoReembolso <= 0) throw new Error('No hay saldo pendiente de reembolso');
 
     if (parseFloat(monto_reembolso) > saldoReembolso + 0.01) {
       throw new Error(`El monto excede el saldo pendiente de reembolso (${saldoReembolso.toFixed(2)})`);
@@ -1240,30 +1240,28 @@ export async function registrarReembolsoComprador(req, res) {
       [id_cuenta_pago]
     );
 
-    if (cuentas.length === 0) {
-      throw new Error('Cuenta de pago no encontrada');
-    }
+    if (cuentas.length === 0) throw new Error('Cuenta de pago no encontrada');
 
     const [resultPago] = await connection.query(`
       INSERT INTO pagos_ordenes_compra (
-        id_orden_compra, fecha_pago, monto_pagado, metodo_pago, 
+        id_orden_compra, fecha_pago, monto_pagado, metodo_pago,
         numero_operacion, observaciones, id_cuenta_bancaria_origen,
-        tipo_pago, es_reembolso, id_empleado_beneficiario, id_registrado_por
-      ) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, 'Reembolso a Comprador', 1, ?, ?)
+        id_cuenta_destino, tipo_pago, es_reembolso, id_empleado_beneficiario, id_registrado_por
+      ) VALUES (?, CURDATE(), ?, ?, ?, ?, NULL, ?, 'Reembolso a Comprador', 1, ?, ?)
     `, [
       id,
       monto_reembolso,
       'Transferencia',
       referencia || null,
       observaciones || `Reembolso a comprador por OC ${compra.numero_orden}`,
-      id_cuenta_pago,
+      parseInt(id_cuenta_pago),
       compra.id_comprador,
       id_registrado_por
     ]);
 
     const nuevoMontoReembolsado = parseFloat(compra.monto_reembolsado) + parseFloat(monto_reembolso);
-    const nuevoEstadoReembolso = (nuevoMontoReembolsado >= parseFloat(compra.monto_reembolsar) - 0.01) 
-      ? 'Completado' 
+    const nuevoEstadoReembolso = (nuevoMontoReembolsado >= parseFloat(compra.monto_reembolsar) - 0.01)
+      ? 'Completado'
       : 'Parcial';
 
     await connection.query(`
@@ -1274,8 +1272,8 @@ export async function registrarReembolsoComprador(req, res) {
 
     await connection.query(`
       INSERT INTO movimientos_cuentas (
-        id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia, 
-        id_orden_compra, id_pago_orden_compra, es_reembolso, 
+        id_cuenta, tipo_movimiento, moneda, monto, concepto, referencia,
+        id_orden_compra, id_pago_orden_compra, es_reembolso,
         id_empleado_relacionado, id_registrado_por, fecha_movimiento
       ) VALUES (?, 'Egreso', ?, ?, ?, ?, ?, ?, 1, ?, ?, NOW())
     `, [

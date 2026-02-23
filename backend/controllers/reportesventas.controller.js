@@ -33,6 +33,7 @@ export const getReporteVentas = async (req, res) => {
             LEFT JOIN salidas s ON ov.id_salida = s.id_salida
             WHERE DATE(ov.fecha_emision) BETWEEN ? AND ?
             AND ov.estado != 'Cancelada'
+            AND ov.estado_verificacion != 'Rechazada'
         `;
 
         const params = [fechaInicio, fechaFin];

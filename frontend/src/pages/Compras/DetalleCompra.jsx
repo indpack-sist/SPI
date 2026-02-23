@@ -163,7 +163,7 @@ function DetalleCompra() {
     const saldoPendiente = parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0);
     setDatosPago({ 
       ...datosPago, 
-      monto_pagado: saldoPendiente.toFixed(2), 
+      monto_pagado: saldoPendiente.toFixed(3), 
       observaciones: `Pago Cuota ${cuota.numero_cuota}`,
       id_cuenta_pago: compra.id_cuenta_pago || ''
     });
@@ -173,7 +173,7 @@ function DetalleCompra() {
   const handleAbrirPagoDirecto = () => {
     setDatosPago({ 
       ...datosPago, 
-      monto_pagado: parseFloat(compra.saldo_pendiente).toFixed(2), 
+      monto_pagado: parseFloat(compra.saldo_pendiente).toFixed(3), 
       observaciones: 'Amortización / Regularización',
       id_cuenta_pago: compra.id_cuenta_pago || ''
     });
@@ -184,7 +184,7 @@ function DetalleCompra() {
     const montoReembolsoPendiente = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
     setDatosReembolso({ 
       ...datosReembolso, 
-      monto_reembolso: montoReembolsoPendiente.toFixed(2),
+      monto_reembolso: montoReembolsoPendiente.toFixed(3),
       observaciones: `Reembolso a ${compra.comprador || 'empleado'} - OC ${compra.numero_orden}`
     });
     setModalReembolsoOpen(true);
@@ -283,7 +283,7 @@ function DetalleCompra() {
       nuevoCrono.push({
         numero: i,
         fecha_vencimiento: fechaCuota.toISOString().split('T')[0],
-        monto: montoBase.toFixed(2),
+        monto: montoBase.toFixed(3),
         codigo_letra: ''
       });
     }
@@ -338,7 +338,7 @@ function DetalleCompra() {
       
       nuevasLetras.push({
         numero_letra: `L-${compra.numero_orden}-${String(i).padStart(2, '0')}`,
-        monto: montoBase.toFixed(2),
+        monto: montoBase.toFixed(3),
         fecha_emision: new Date().toISOString().split('T')[0],
         fecha_vencimiento: fechaLetra.toISOString().split('T')[0],
         banco: '',
@@ -382,7 +382,7 @@ function DetalleCompra() {
     setLetraSeleccionada(letra);
     setDatosLetra({ 
       ...datosLetra, 
-      monto_pagado: parseFloat(letra.saldo_pendiente || letra.monto).toFixed(2),
+      monto_pagado: parseFloat(letra.saldo_pendiente || letra.monto).toFixed(3),
       observaciones: `Pago Letra ${letra.numero_letra}`,
       id_cuenta_pago: compra.id_cuenta_pago || ''
     });
@@ -534,9 +534,9 @@ function DetalleCompra() {
   const formatearFecha = (f) => f ? new Date(f).toLocaleDateString('es-PE') : '-';
   
   const formatearMoneda = (v, m) => {
-    const mon = m || compra?.moneda || 'PEN';
-    return `${mon === 'USD' ? '$' : 'S/'} ${parseFloat(v||0).toLocaleString('es-PE', {minimumFractionDigits: 2})}`;
-  };
+  const mon = m || compra?.moneda || 'PEN';
+  return `${mon === 'USD' ? '$' : 'S/'} ${parseFloat(v||0).toLocaleString('es-PE', {minimumFractionDigits: 3, maximumFractionDigits: 3})}`;
+};
 
   if (loading && !compra) return <Loading message="Cargando detalles..." />;
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
@@ -1277,9 +1277,9 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                     </td>
                     <td className="text-right font-medium">{formatearMoneda(cuota.monto_cuota)}</td>
                     <td className="text-right text-success">{formatearMoneda(cuota.monto_pagado || 0)}</td>
-                    <td className="text-right font-bold text-danger">
-                      {formatearMoneda(parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0))}
-                    </td>
+<td className="text-right font-bold text-danger">
+  {formatearMoneda(parseFloat((parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0)).toFixed(3)))}
+</td>
                     <td className="text-center">
                       {cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && !estaCancelada && (
                         <button

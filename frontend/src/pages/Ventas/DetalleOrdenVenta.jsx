@@ -1458,14 +1458,11 @@ function DetalleOrdenVenta() {
                 </div>
               )}
 
-              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Factura' && orden.numero_comprobante && (
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-success">Factura</span>
-                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
-                    {orden.numero_comprobante}
-                  </span>
-                </div>
-              )}
+              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Factura' && (
+  <div className="flex items-center gap-2">
+    <span className="badge badge-success">Factura</span>
+  </div>
+)}
             </div>
           </div>
         </div>
@@ -1902,12 +1899,12 @@ function DetalleOrdenVenta() {
                                 )}
                             </div>
                         </div>
-                        {!sinComprobanteAsignado && orden.numero_comprobante && (
-                            <div>
-                                <label className="text-sm font-medium text-muted">N° Serie:</label>
-                                <p className="font-mono">{orden.numero_comprobante}</p>
-                            </div>
-                        )}
+                        {!sinComprobanteAsignado && orden.numero_comprobante && orden.tipo_comprobante !== 'Factura' && (
+  <div>
+    <label className="text-sm font-medium text-muted">N° Serie:</label>
+    <p className="font-mono">{orden.numero_comprobante}</p>
+  </div>
+)}
                     </div>
                 </div>
 

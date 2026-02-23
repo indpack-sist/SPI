@@ -1674,17 +1674,6 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      {orden.estado === 'Despachada' && orden.id_salida && (
-        <div className="alert alert-info mb-4">
-          <PackageOpen size={20} />
-          <div>
-            <strong>Salida de Inventario Generada:</strong> Se ha registrado automáticamente la salida #{orden.id_salida}.
-            <br />
-            <small>Puede descargar el PDF de salida usando el botón "PDF Salida" en la parte superior.</small>
-          </div>
-        </div>
-      )}
-
       {orden.estado_verificacion === 'Aprobada' && (
         <div className="card mb-6 border-l-4 border-primary">
           <div className="card-header">

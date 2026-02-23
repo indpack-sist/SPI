@@ -414,13 +414,19 @@ function NuevaOrdenVenta() {
   
         const direccionPrincipal = direcciones.find(d => d.es_principal) || direcciones[0];
   
-        setFormCabecera(prev => ({
-          ...prev,
-          id_cliente: clienteCompleto.id_cliente,
-          direccion_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
-          tipo_venta: 'Contado'
-        }));
-  
+        const condicion = clienteCompleto.condicion_pago || 'Contado';
+const diasCredito = parseInt(clienteCompleto.dias_credito || 0);
+const tipoVenta = (condicion === 'Credito' && clienteCompleto.usar_limite_credito && diasCredito > 0)
+  ? 'Crédito'
+  : 'Contado';
+
+setFormCabecera(prev => ({
+  ...prev,
+  id_cliente: clienteCompleto.id_cliente,
+  direccion_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
+  tipo_venta: tipoVenta,
+  dias_credito: tipoVenta === 'Crédito' ? diasCredito : 0
+}));
         const resCredito = await clientesAPI.getEstadoCredito(clienteCompleto.id_cliente);
         if (resCredito.data.success) {
           setEstadoCredito(resCredito.data.data);
@@ -428,12 +434,19 @@ function NuevaOrdenVenta() {
       } catch (err) {
         console.error('Error al cargar datos completos del cliente:', err);
         setClienteSeleccionado(cliente);
-        setFormCabecera(prev => ({
-          ...prev,
-          id_cliente: cliente.id_cliente,
-          direccion_entrega: cliente.direccion_despacho || '',
-          tipo_venta: 'Contado'
-        }));
+        const condicionFallback = cliente.condicion_pago || 'Contado';
+const diasFallback = parseInt(cliente.dias_credito || 0);
+const tipoVentaFallback = (condicionFallback === 'Credito' && cliente.usar_limite_credito && diasFallback > 0)
+  ? 'Crédito'
+  : 'Contado';
+
+setFormCabecera(prev => ({
+  ...prev,
+  id_cliente: cliente.id_cliente,
+  direccion_entrega: cliente.direccion_despacho || '',
+  tipo_venta: tipoVentaFallback,
+  dias_credito: tipoVentaFallback === 'Crédito' ? diasFallback : 0
+}));
       }
 
     setModalClienteOpen(false);
@@ -1218,7 +1231,8 @@ function NuevaOrdenVenta() {
                         <button
                           key={dias}
                           type="button"
-className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-transparent text-orange-300 hover:bg-orange-900 border-orange-400'}`}                          onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
+                          className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-white hover:bg-orange-100 border-orange-200'}`}
+                          onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
                         >
                           {dias} días
                         </button>

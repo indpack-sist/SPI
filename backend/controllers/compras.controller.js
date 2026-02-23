@@ -314,8 +314,8 @@ export async function createCompra(req, res) {
     } else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0) {
       const numCuotas = parseInt(numero_cuotas);
       const diasEntreC = parseInt(dias_entre_cuotas || 30);
-      const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(2));
-      const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(2));
+      const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(3));
+      const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(3));
 
       let fechaBase;
       if (fecha_primera_cuota) {
@@ -328,7 +328,7 @@ export async function createCompra(req, res) {
       for (let i = 1; i <= numCuotas; i++) {
         const fechaCuota = new Date(fechaBase);
         fechaCuota.setDate(fechaCuota.getDate() + diasEntreC * (i - 1));
-        const montoEsta = i === numCuotas ? parseFloat((montoPorCuota + diferencia).toFixed(2)) : montoPorCuota;
+        const montoEsta = i === numCuotas ? parseFloat((montoPorCuota + diferencia).toFixed(3)) : montoPorCuota;
         cronogramaFinal.push({
           numero: i,
           codigo_letra: null,

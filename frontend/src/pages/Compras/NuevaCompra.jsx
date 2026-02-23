@@ -364,45 +364,45 @@ const cronogramaPayload = debeEnviarCronograma
   : [];
 
      const payload = {
-        ...formData,
-        id_proveedor: parseInt(formData.id_proveedor),
-        id_cuenta_pago: (formData.usa_fondos_propios || accionPago === 'registro') 
-          ? null 
-          : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
-        id_comprador: formData.usa_fondos_propios ? parseInt(formData.id_comprador) : null,
-        monto_reembolsar: formData.usa_fondos_propios ? totales.total : 0,
-        numero_cuotas: parseInt(formData.numero_cuotas),
-        dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
-        dias_credito: parseInt(formData.dias_credito),
-        porcentaje_impuesto: parseFloat(formData.porcentaje_impuesto),
-        tipo_cambio: parseFloat(formData.tipo_cambio || 1.0),
-        monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
-        usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
-        accion_pago: accionPago,
-        monto_adelanto: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
-        cronograma: cronogramaPayload,
-        detalle: detalle.map(item => ({
-          id_producto: item.id_producto,
-          cantidad: parseFloat(item.cantidad),
-          cantidad_a_recibir: formData.tipo_recepcion === 'Parcial' ? parseFloat(item.cantidad_a_recibir) : parseFloat(item.cantidad),
-          precio_unitario: parseFloat(item.precio_unitario),
-          descuento_porcentaje: parseFloat(item.descuento_porcentaje)
-        }))
-      };
-      
-      const response = await comprasAPI.create(payload);
-      if (response.data.success) {
-        setSuccess(`Compra ${response.data.data.numero} registrada`);
-        setTimeout(() => navigate('/compras'), 1500);
-      } else { 
-        setError(response.data.error || 'Error al crear compra'); 
-      }
-    } catch (err) { 
-      setError(err.response?.data?.error || 'Error al crear compra'); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
+  ...formData,
+  id_proveedor: parseInt(formData.id_proveedor),
+  id_cuenta_pago: formData.usa_fondos_propios
+    ? null
+    : (formData.id_cuenta_pago ? parseInt(formData.id_cuenta_pago) : null),
+  id_comprador: formData.usa_fondos_propios ? parseInt(formData.id_comprador) : null,
+  monto_reembolsar: formData.usa_fondos_propios ? totales.total : 0,
+  numero_cuotas: parseInt(formData.numero_cuotas),
+  dias_entre_cuotas: parseInt(formData.dias_entre_cuotas),
+  dias_credito: parseInt(formData.dias_credito),
+  porcentaje_impuesto: parseFloat(formData.porcentaje_impuesto),
+  tipo_cambio: parseFloat(formData.tipo_cambio || 1.0),
+  monto_pagado_inicial: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
+  usa_fondos_propios: formData.usa_fondos_propios ? 1 : 0,
+  accion_pago: formData.forma_pago_detalle === 'Contado' ? accionPago : 'adelanto',
+  monto_adelanto: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
+  cronograma: cronogramaPayload,
+  detalle: detalle.map(item => ({
+    id_producto: item.id_producto,
+    cantidad: parseFloat(item.cantidad),
+    cantidad_a_recibir: formData.tipo_recepcion === 'Parcial' ? parseFloat(item.cantidad_a_recibir) : parseFloat(item.cantidad),
+    precio_unitario: parseFloat(item.precio_unitario),
+    descuento_porcentaje: parseFloat(item.descuento_porcentaje)
+  }))
+};
+
+const response = await comprasAPI.create(payload);
+if (response.data.success) {
+  setSuccess(`Compra ${response.data.data.numero} registrada`);
+  setTimeout(() => navigate('/compras'), 1500);
+} else {
+  setError(response.data.error || 'Error al crear compra');
+}
+} catch (err) {
+  setError(err.response?.data?.error || 'Error al crear compra');
+} finally {
+  setLoading(false);
+}
+};
 
   const formatearMoneda = (val, moneda = null) => {
     const m = moneda || formData.moneda;

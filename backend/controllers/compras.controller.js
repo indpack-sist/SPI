@@ -1044,10 +1044,10 @@ export async function registrarLetrasCompra(req, res) {
     }
 
     await connection.query(`
-      UPDATE ordenes_compra 
-      SET letras_registradas = 1, fecha_registro_letras = CURDATE() 
-      WHERE id_orden_compra = ?
-    `, [id]);
+  UPDATE ordenes_compra 
+  SET letras_registradas = 1, cronograma_definido = 1, fecha_registro_letras = CURDATE() 
+  WHERE id_orden_compra = ?
+`, [id]);
 
     await connection.commit();
 
@@ -1132,15 +1132,11 @@ export async function pagarLetraCompra(req, res) {
       WHERE lc.id_letra = ? FOR UPDATE
     `, [idLetra]);
 
-    if (letras.length === 0) {
-      throw new Error('Letra no encontrada');
-    }
+    if (letras.length === 0) throw new Error('Letra no encontrada');
 
     const letra = letras[0];
 
-    if (letra.estado === 'Pagada') {
-      throw new Error('La letra ya está pagada');
-    }
+    if (letra.estado === 'Pagada') throw new Error('La letra ya está pagada');
 
     const [pagosAnteriores] = await connection.query(
       'SELECT COALESCE(SUM(monto_pagado), 0) as total_pagado FROM pagos_letras_compra WHERE id_letra = ?',
@@ -1159,9 +1155,7 @@ export async function pagarLetraCompra(req, res) {
       [id_cuenta_pago]
     );
 
-    if (cuentas.length === 0) {
-      throw new Error('Cuenta de pago no encontrada o inactiva');
-    }
+    if (cuentas.length === 0) throw new Error('Cuenta de pago no encontrada o inactiva');
 
     await connection.query(`
       INSERT INTO pagos_letras_compra (
@@ -1179,16 +1173,24 @@ export async function pagarLetraCompra(req, res) {
     ]);
 
     const nuevoTotalPagado = totalPagado + parseFloat(monto_pagado);
-    const nuevoEstadoLetra = (nuevoTotalPagado >= parseFloat(letra.monto) - 0.01) ? 'Pagada' : 'Pendiente';
+    const nuevoEstadoLetra = nuevoTotalPagado >= parseFloat(letra.monto) - 0.001 ? 'Pagada' : 'Pendiente';
 
     await connection.query(
       'UPDATE letras_compra SET estado = ?, fecha_pago = CURDATE() WHERE id_letra = ?',
       [nuevoEstadoLetra, idLetra]
     );
 
+    const [ordenActual] = await connection.query(
+      'SELECT total, monto_pagado FROM ordenes_compra WHERE id_orden_compra = ? FOR UPDATE',
+      [letra.id_orden_compra]
+    );
+    const nuevoMontoPagado = parseFloat((parseFloat(ordenActual[0].monto_pagado) + parseFloat(monto_pagado)).toFixed(3));
+    const nuevoSaldo = parseFloat((parseFloat(ordenActual[0].total) - nuevoMontoPagado).toFixed(3));
+    const nuevoEstadoPago = nuevoSaldo <= 0.01 ? 'Pagado' : 'Parcial';
+
     await connection.query(
-      'UPDATE ordenes_compra SET monto_pagado = monto_pagado + ?, saldo_pendiente = saldo_pendiente - ? WHERE id_orden_compra = ?',
-      [monto_pagado, monto_pagado, letra.id_orden_compra]
+      'UPDATE ordenes_compra SET monto_pagado = ?, saldo_pendiente = ?, estado_pago = ? WHERE id_orden_compra = ?',
+      [nuevoMontoPagado, nuevoSaldo, nuevoEstadoPago, letra.id_orden_compra]
     );
 
     await connection.query(`
@@ -1212,9 +1214,7 @@ export async function pagarLetraCompra(req, res) {
     res.json({ 
       success: true, 
       message: 'Pago de letra registrado exitosamente',
-      data: {
-        estado_letra: nuevoEstadoLetra
-      }
+      data: { estado_letra: nuevoEstadoLetra }
     });
 
   } catch (error) {

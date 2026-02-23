@@ -1454,7 +1454,6 @@ function NuevaOrdenVenta() {
           ))}
         </div>
       </Modal>
-
       <Modal isOpen={modalDireccionOpen} onClose={() => setModalDireccionOpen(false)} title="Nueva Dirección de Entrega" size="md">
         <div className="space-y-4">
           <div className="form-group">

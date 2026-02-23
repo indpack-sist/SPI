@@ -1550,17 +1550,6 @@ function DetalleOrdenVenta() {
             </button>
           )}
           
-          {orden.estado === 'Despachada' && orden.id_salida && (
-            <button 
-              className="btn btn-success" 
-              onClick={handleDescargarPDFSalida}
-              disabled={procesando}
-              title="Descargar PDF de Salida de Inventario"
-            >
-              <PackageOpen size={20} /> PDF Salida
-            </button>
-          )}
-          
           {puedeEditarOrden() && (
             <>
               <button

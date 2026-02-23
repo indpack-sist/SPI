@@ -1448,15 +1448,15 @@ function DetalleOrdenVenta() {
               )}
 
               {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-info">
-                    {orden.tipo_comprobante}
-                  </span>
-                  <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 rounded">
-                    {orden.numero_comprobante}
-                  </span>
-                </div>
-              )}
+            <button 
+              className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
+              onClick={() => handleDescargarPDF('comprobante')} 
+              disabled={procesando}
+              title={`Descargar ${orden.tipo_comprobante}`}
+            >
+              <Download size={20} /> PDF {orden.tipo_comprobante}
+            </button>
+          )}
 
               {!sinComprobanteAsignado && orden.tipo_comprobante === 'Factura' && (
   <div className="flex items-center gap-2">

@@ -1218,8 +1218,7 @@ function NuevaOrdenVenta() {
                         <button
                           key={dias}
                           type="button"
-                          className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-white hover:bg-orange-100 border-orange-200'}`}
-                          onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
+className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-transparent text-orange-300 hover:bg-orange-900 border-orange-400'}`}                          onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
                         >
                           {dias} días
                         </button>

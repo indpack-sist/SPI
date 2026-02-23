@@ -301,21 +301,33 @@ export async function createCompra(req, res) {
     let cronogramaDefinido = 0;
     let cronogramaFinal = [];
 
+    console.log('=== CRONOGRAMA DEBUG ===');
+    console.log('esCredito:', esCredito);
+    console.log('cronograma recibido:', JSON.stringify(cronograma));
+    console.log('cronograma length:', cronograma?.length);
+    console.log('saldoPendiente:', saldoPendiente);
+
     if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
       const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
+      console.log('totalCronograma:', totalCronograma);
+      console.log('diferencia abs:', Math.abs(totalCronograma - saldoPendiente));
+
       if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
         return res.status(400).json({
           success: false,
           error: `La suma de las letras (${totalCronograma.toFixed(2)}) no coincide con el saldo pendiente (${saldoPendiente.toFixed(2)})`
         });
       }
+      console.log('✓ Usando cronograma del frontend');
       cronogramaFinal = cronograma;
       cronogramaDefinido = 1;
     } else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0) {
+      console.log('⚠ Generando cronograma automático en backend');
       const numCuotas = parseInt(numero_cuotas);
       const diasEntreC = parseInt(dias_entre_cuotas || 30);
       const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(3));
       const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(3));
+      console.log('montoPorCuota:', montoPorCuota, 'diferencia:', diferencia);
 
       let fechaBase;
       if (fecha_primera_cuota) {
@@ -337,7 +349,9 @@ export async function createCompra(req, res) {
         });
       }
       cronogramaDefinido = 1;
+      console.log('cronogramaFinal generado:', JSON.stringify(cronogramaFinal));
     }
+    console.log('=== FIN CRONOGRAMA DEBUG ===');
 
     connection = await pool.getConnection();
     await connection.beginTransaction();

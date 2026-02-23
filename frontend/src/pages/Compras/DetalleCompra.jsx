@@ -73,6 +73,7 @@ function DetalleCompra() {
   const [nuevaCuentaId, setNuevaCuentaId] = useState('');
   const [cronogramaForm, setCronogramaForm] = useState([]);
   const [letrasForm, setLetrasForm] = useState([]);
+  const [autoLetras, setAutoLetras] = useState({ cantidad: '', dias: '30' });
   
   const [ingresoForm, setIngresoForm] = useState({
     productos: [],
@@ -174,7 +175,7 @@ function DetalleCompra() {
     setDatosPago({ 
       ...datosPago, 
       monto_pagado: parseFloat(compra.saldo_pendiente).toFixed(3), 
-      observaciones: 'Amortización / Regularización',
+      observaciones: 'Amortizacion / Regularizacion',
       id_cuenta_pago: compra.id_cuenta_pago || ''
     });
     setModalPagoDirectoOpen(true);
@@ -192,12 +193,10 @@ function DetalleCompra() {
 
   const handlePagarCuota = async (e) => {
     e.preventDefault();
-    
     if (!datosPago.id_cuenta_pago) {
       setError('Debe seleccionar una cuenta de pago');
       return;
     }
-
     try {
       setLoading(true);
       const response = await comprasAPI.pagarCuota(id, cuotaSeleccionada.id_cuota, datosPago);
@@ -217,12 +216,10 @@ function DetalleCompra() {
 
   const handlePagoDirecto = async (e) => {
     e.preventDefault();
-    
     if (!datosPago.id_cuenta_pago) {
       setError('Debe seleccionar una cuenta de pago');
       return;
     }
-
     try {
       setLoading(true);
       const response = await comprasAPI.registrarPago(id, datosPago);
@@ -242,12 +239,10 @@ function DetalleCompra() {
 
   const handleRegistrarReembolso = async (e) => {
     e.preventDefault();
-    
     if (!datosReembolso.id_cuenta_pago) {
       setError('Debe seleccionar una cuenta de origen');
       return;
     }
-
     try {
       setLoading(true);
       const response = await comprasAPI.registrarReembolso(id, datosReembolso);
@@ -276,10 +271,9 @@ function DetalleCompra() {
     }
     
     const nuevoCrono = [];
-    for(let i=1; i<=numCuotas; i++) {
+    for (let i = 1; i <= numCuotas; i++) {
       const fechaCuota = new Date(fechaBase);
-      fechaCuota.setDate(fechaCuota.getDate() + ((i-1) * diasEntre));
-      
+      fechaCuota.setDate(fechaCuota.getDate() + ((i - 1) * diasEntre));
       nuevoCrono.push({
         numero: i,
         fecha_vencimiento: fechaCuota.toISOString().split('T')[0],
@@ -293,26 +287,23 @@ function DetalleCompra() {
 
   const handleGuardarCronograma = async (e) => {
     e.preventDefault();
-    
     const totalCronograma = cronogramaForm.reduce((acc, c) => acc + parseFloat(c.monto || 0), 0);
     const saldoPendiente = parseFloat(compra.saldo_pendiente);
-    
     if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
       setError(`La suma de las cuotas (${formatearMoneda(totalCronograma)}) no coincide con el saldo pendiente (${formatearMoneda(saldoPendiente)})`);
       return;
     }
-    
     try {
       setLoading(true);
       const response = await comprasAPI.establecerCronograma(id, { cuotas: cronogramaForm });
-      if(response.data.success) {
+      if (response.data.success) {
         setSuccess('Cronograma establecido correctamente');
         setModalCronogramaOpen(false);
         await cargarDatos();
       } else {
         setError(response.data.error);
       }
-    } catch(err) { 
+    } catch (err) { 
       setError(err.response?.data?.error || 'Error al establecer cronograma'); 
     } finally { 
       setLoading(false); 
@@ -320,46 +311,47 @@ function DetalleCompra() {
   };
 
   const handleAbrirRegistrarLetras = () => {
-    const numLetras = compra.numero_cuotas || 3;
-    const montoBase = parseFloat(compra.saldo_pendiente) / numLetras;
-    const diasEntre = compra.dias_entre_cuotas || 30;
-    
+    setAutoLetras({ cantidad: '', dias: '30' });
+    setLetrasForm([]);
+    setModalRegistrarLetrasOpen(true);
+  };
+
+  const handleGenerarLetrasAuto = () => {
+    const num = parseInt(autoLetras.cantidad);
+    const dias = parseInt(autoLetras.dias) || 30;
+    if (!num || num < 1) return;
+
+    const saldo = parseFloat(compra.saldo_pendiente);
+    const montoPorLetra = parseFloat((saldo / num).toFixed(3));
+    const diferencia = parseFloat((saldo - montoPorLetra * num).toFixed(3));
+
     let fechaBase = new Date();
-    if (compra.fecha_primera_cuota) {
-      fechaBase = new Date(compra.fecha_primera_cuota);
-    } else {
-      fechaBase.setDate(fechaBase.getDate() + diasEntre);
-    }
-    
+    fechaBase.setDate(fechaBase.getDate() + dias);
+
     const nuevasLetras = [];
-    for(let i=1; i<=numLetras; i++) {
-      const fechaLetra = new Date(fechaBase);
-      fechaLetra.setDate(fechaLetra.getDate() + ((i-1) * diasEntre));
-      
+    for (let i = 1; i <= num; i++) {
+      const fecha = new Date(fechaBase);
+      fecha.setDate(fecha.getDate() + dias * (i - 1));
       nuevasLetras.push({
         numero_letra: `L-${compra.numero_orden}-${String(i).padStart(2, '0')}`,
-        monto: montoBase.toFixed(3),
+        monto: i === num ? parseFloat((montoPorLetra + diferencia).toFixed(3)) : montoPorLetra,
         fecha_emision: new Date().toISOString().split('T')[0],
-        fecha_vencimiento: fechaLetra.toISOString().split('T')[0],
+        fecha_vencimiento: fecha.toISOString().split('T')[0],
         banco: '',
         observaciones: ''
       });
     }
     setLetrasForm(nuevasLetras);
-    setModalRegistrarLetrasOpen(true);
   };
 
   const handleGuardarLetras = async (e) => {
     e.preventDefault();
-    
     const totalLetras = letrasForm.reduce((acc, l) => acc + parseFloat(l.monto || 0), 0);
     const saldoPendiente = parseFloat(compra.saldo_pendiente);
-    
-    if (Math.abs(totalLetras - saldoPendiente) > 1.00) {
+    if (Math.abs(totalLetras - saldoPendiente) > 0.01) {
       setError(`La suma de las letras (${formatearMoneda(totalLetras)}) no coincide con el saldo pendiente (${formatearMoneda(saldoPendiente)})`);
       return;
     }
-    
     try {
       setLoading(true);
       const response = await comprasAPI.registrarLetras(id, { letras: letrasForm });
@@ -391,12 +383,10 @@ function DetalleCompra() {
 
   const handlePagarLetra = async (e) => {
     e.preventDefault();
-    
     if (!datosLetra.id_cuenta_pago) {
       setError('Debe seleccionar una cuenta de pago');
       return;
     }
-
     try {
       setLoading(true);
       const response = await comprasAPI.pagarLetra(letraSeleccionada.id_letra, datosLetra);
@@ -429,18 +419,15 @@ function DetalleCompra() {
   const handleRegistrarIngreso = async (e) => {
     e.preventDefault();
     const productosAIngresar = ingresoForm.productos.filter(p => p.cantidad_ingresar > 0);
-    
     if (productosAIngresar.length === 0) {
       setError('Debe ingresar al menos un producto con cantidad mayor a 0'); 
       return;
     }
-    
     const productosExcedidos = productosAIngresar.filter(p => p.cantidad_ingresar > p.cantidad_pendiente);
     if (productosExcedidos.length > 0) {
       setError('Algunas cantidades exceden lo pendiente'); 
       return;
     }
-
     try {
       setLoading(true);
       const payload = {
@@ -450,7 +437,6 @@ function DetalleCompra() {
         })),
         observaciones: ingresoForm.observaciones
       };
-
       const response = await comprasAPI.registrarIngreso(id, payload);
       if (response.data.success) {
         setSuccess('Ingreso registrado correctamente');
@@ -470,10 +456,9 @@ function DetalleCompra() {
 
   const handleCancelarCompra = async () => {
     if (!motivoCancelacion.trim()) { 
-      setError('Indique motivo de la cancelación'); 
+      setError('Indique motivo de la cancelacion'); 
       return; 
     }
-    
     try {
       setLoading(true);
       const response = await comprasAPI.cancelar(id, { motivo_cancelacion: motivoCancelacion });
@@ -496,12 +481,10 @@ function DetalleCompra() {
       setError('Seleccione una cuenta'); 
       return; 
     }
-    
     if (parseInt(nuevaCuentaId) === parseInt(compra.id_cuenta_pago)) {
       setError('La cuenta seleccionada es la misma que la actual');
       return;
     }
-    
     try {
       setLoading(true);
       const response = await comprasAPI.cambiarCuenta(id, { id_nueva_cuenta: nuevaCuentaId });
@@ -534,22 +517,22 @@ function DetalleCompra() {
   const formatearFecha = (f) => f ? new Date(f).toLocaleDateString('es-PE') : '-';
   
   const formatearMoneda = (v, m) => {
-  const mon = m || compra?.moneda || 'PEN';
-  return `${mon === 'USD' ? '$' : 'S/'} ${parseFloat(v||0).toLocaleString('es-PE', {minimumFractionDigits: 3, maximumFractionDigits: 3})}`;
-};
+    const mon = m || compra?.moneda || 'PEN';
+    return `${mon === 'USD' ? '$' : 'S/'} ${parseFloat(v || 0).toLocaleString('es-PE', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
+  };
 
   if (loading && !compra) return <Loading message="Cargando detalles..." />;
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);
   
- const normalizar = (v) => (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const tipoCompra = normalizar(compra.tipo_compra);
-const formaPago = normalizar(compra.forma_pago_detalle);
+  const normalizar = (v) => (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const tipoCompra = normalizar(compra.tipo_compra);
+  const formaPago = normalizar(compra.forma_pago_detalle);
 
-const esCredito = tipoCompra === 'credito' || formaPago === 'credito';
-const esLetras = tipoCompra === 'letras' || formaPago === 'letras';
-const esContado = tipoCompra === 'contado' || formaPago === 'contado';
+  const esCredito = tipoCompra === 'credito' || formaPago === 'credito';
+  const esLetras = tipoCompra === 'letras' || formaPago === 'letras';
+  const esContado = tipoCompra === 'contado' || formaPago === 'contado';
   
   const tieneSaldoPendiente = parseFloat(compra.saldo_pendiente) > 0.01;
   const estaPagado = compra.estado_pago === 'Pagado';
@@ -563,13 +546,17 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
   const esContadoPendienteRegularizar = esContado && tieneSaldoPendiente && parseFloat(compra.monto_pagado) > 0;
   
   const mostrarBotonPagoDirecto = !estaCancelada && !estaPagado && !usaFondosPropios && tieneSaldoPendiente && (
-  esContado ||
-  (esCredito || esLetras)
-);
+    esContado || esCredito || esLetras
+  );
   
   const mostrarBotonCronograma = !estaCancelada && !estaPagado && (esCredito || esLetras) && tieneCronogramaPendiente;
   const mostrarBotonRegistrarLetras = !estaCancelada && !estaPagado && esLetras && !tieneLetrasRegistradas;
   const mostrarBotonCambiarCuenta = !estaCancelada && !estaPagado && !usaFondosPropios && compra.id_cuenta_pago;
+
+  const totalLetrasActual = letrasForm.reduce((acc, l) => acc + parseFloat(l.monto || 0), 0);
+  const saldoCompra = parseFloat(compra.saldo_pendiente);
+  const diffLetras = Math.abs(totalLetrasActual - saldoCompra);
+  const hayErrorLetras = letrasForm.length > 0 && diffLetras > 0.01;
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
@@ -588,7 +575,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               </span>
               <span className={`badge ${
                 compra.estado === 'Recibida' ? 'badge-success' : 
-                compra.estado === 'En Tránsito' ? 'badge-info' : 
+                compra.estado === 'En Transito' ? 'badge-info' : 
                 compra.estado === 'Cancelada' ? 'badge-danger' : 
                 'badge-warning'
               }`}>
@@ -637,19 +624,13 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
           {!estaCancelada && (
             <>
               {mostrarBotonCambiarCuenta && (
-                <button 
-                  className="btn btn-outline" 
-                  onClick={() => setModalCambiarCuentaOpen(true)}
-                >
+                <button className="btn btn-outline" onClick={() => setModalCambiarCuentaOpen(true)}>
                   <ArrowRightLeft size={18} /> Mover Cuenta
                 </button>
               )}
               
               {mostrarBotonPagoDirecto && (
-                <button 
-                  className="btn btn-primary" 
-                  onClick={handleAbrirPagoDirecto}
-                >
+                <button className="btn btn-primary" onClick={handleAbrirPagoDirecto}>
                   <DollarSign size={18} /> 
                   {esContadoSinPago ? 'Regularizar Pago' : 
                    esContadoPendienteRegularizar ? 'Completar Pago' : 
@@ -658,19 +639,13 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               )}
 
               {mostrarBotonCronograma && (
-                <button 
-                  className="btn btn-warning text-white" 
-                  onClick={handleAbrirCronograma}
-                >
+                <button className="btn btn-warning text-white" onClick={handleAbrirCronograma}>
                   <FileText size={18} /> Definir Cronograma
                 </button>
               )}
               
               {mostrarBotonRegistrarLetras && (
-                <button 
-                  className="btn btn-purple text-white" 
-                  onClick={handleAbrirRegistrarLetras}
-                >
+                <button className="btn btn-purple text-white" onClick={handleAbrirRegistrarLetras}>
                   <Receipt size={18} /> Registrar Letras
                 </button>
               )}
@@ -738,7 +713,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               <div className="flex-1">
                 <h3 className="font-bold text-orange-900 mb-1">Compra Registrada Sin Desembolso</h3>
                 <p className="text-sm text-orange-800">
-                  Esta compra fue registrada sin realizar el pago. Usa el botón "Regularizar Pago" para completar el desembolso desde una cuenta.
+                  Esta compra fue registrada sin realizar el pago. Usa el boton "Regularizar Pago" para completar el desembolso desde una cuenta.
                 </p>
               </div>
             </div>
@@ -746,7 +721,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
         </div>
       )}
 
-        {usaFondosPropios && !estaCancelada && (
+      {usaFondosPropios && !estaCancelada && (
         <div className="card mb-6 border-l-4 border-purple-500 bg-purple-50">
           <div className="card-body">
             <div className="flex justify-between items-center">
@@ -836,22 +811,22 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               Pagos
             </button>
             {(esLetras || esCredito) && (
-  <button 
-    className={`px-4 py-2 border-b-2 font-medium transition ${
-      tabActiva === 'letras' 
-        ? 'border-primary text-primary' 
-        : 'border-transparent text-muted hover:text-gray-700'
-    }`} 
-    onClick={() => setTabActiva('letras')}
-  >
-    {esLetras ? 'Letras' : 'Cuotas'}
-    {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
-      <span className="ml-2 badge badge-warning text-xs">
-        {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
-      </span>
-    )}
-  </button>
-)}
+              <button 
+                className={`px-4 py-2 border-b-2 font-medium transition ${
+                  tabActiva === 'letras' 
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-muted hover:text-gray-700'
+                }`} 
+                onClick={() => setTabActiva('letras')}
+              >
+                {esLetras ? 'Letras' : 'Cuotas'}
+                {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
+                  <span className="ml-2 badge badge-warning text-xs">
+                    {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
+                  </span>
+                )}
+              </button>
+            )}
             <button 
               className={`px-4 py-2 border-b-2 font-medium transition ${
                 tabActiva === 'ingresos' 
@@ -906,16 +881,12 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                           </td>
                           <td className="text-right">
                             <div className="flex flex-col items-end gap-1">
-                              <span className={`text-xs font-bold ${
-                                esCompleto ? 'text-success' : 'text-warning'
-                              }`}>
+                              <span className={`text-xs font-bold ${esCompleto ? 'text-success' : 'text-warning'}`}>
                                 {parseFloat(item.cantidad_recibida || 0).toFixed(2)} / {parseFloat(item.cantidad).toFixed(2)}
                               </span>
                               <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                 <div 
-                                  className={`h-full rounded-full ${
-                                    esCompleto ? 'bg-success' : 'bg-warning'
-                                  }`} 
+                                  className={`h-full rounded-full ${esCompleto ? 'bg-success' : 'bg-warning'}`} 
                                   style={{ width: `${Math.min(porcentaje, 100)}%` }}
                                 ></div>
                               </div>
@@ -965,7 +936,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               <div className="card">
                 <div className="card-header bg-gray-50">
                   <h3 className="card-title flex gap-2 text-sm">
-                    <MapPin size={16}/> Dirección de Entrega
+                    <MapPin size={16}/> Direccion de Entrega
                   </h3>
                 </div>
                 <div className="card-body text-sm text-gray-600">
@@ -995,7 +966,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                   </p>
                 )}
                 <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs font-bold text-muted uppercase mb-1">Documento Físico</p>
+                  <p className="text-xs font-bold text-muted uppercase mb-1">Documento Fisico</p>
                   <p className="font-mono text-lg">
                     {compra.serie_documento}-{compra.numero_documento}
                   </p>
@@ -1023,9 +994,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                 </div>
                 <div className="card-body">
                   <p className="font-medium text-lg">{compra.cuenta_pago || 'Cuenta no encontrada'}</p>
-                  <p className="text-sm text-muted">
-                    {compra.tipo_cuenta_pago}
-                  </p>
+                  <p className="text-sm text-muted">{compra.tipo_cuenta_pago}</p>
                   {compra.banco_cuenta && (
                     <p className="text-xs text-muted mt-1">Banco: {compra.banco_cuenta}</p>
                   )}
@@ -1041,14 +1010,15 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                     <div>
                       <p className="font-medium text-sm text-orange-900">Sin Cuenta Asignada</p>
                       <p className="text-xs text-orange-700 mt-1">
-                        Esta compra se registró sin cuenta. Al regularizar el pago, se asignará automáticamente.
+                        Esta compra se registro sin cuenta. Al regularizar el pago, se asignara automaticamente.
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
             )}
-            {(esCredito || esLetras) && (
+
+            {esCredito && (
               <div className="card">
                 <div className="card-header bg-gray-50 flex justify-between items-center">
                   <h3 className="card-title flex gap-2">
@@ -1078,12 +1048,10 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                               Vence: {formatearFecha(cuota.fecha_vencimiento)}
                             </p>
                             {cuota.dias_para_vencer !== undefined && cuota.dias_para_vencer < 7 && cuota.estado !== 'Pagada' && (
-                              <p className={`text-xs ${
-                                cuota.dias_para_vencer < 0 ? 'text-danger' : 'text-warning'
-                              }`}>
+                              <p className={`text-xs ${cuota.dias_para_vencer < 0 ? 'text-danger' : 'text-warning'}`}>
                                 {cuota.dias_para_vencer < 0 
-                                  ? `Vencida hace ${Math.abs(cuota.dias_para_vencer)} días` 
-                                  : `Vence en ${cuota.dias_para_vencer} días`}
+                                  ? `Vencida hace ${Math.abs(cuota.dias_para_vencer)} dias` 
+                                  : `Vence en ${cuota.dias_para_vencer} dias`}
                               </p>
                             )}
                           </div>
@@ -1109,10 +1077,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                     <div className="p-4 text-center">
                       <p className="text-sm text-muted mb-2">No hay cronograma definido.</p>
                       {!estaPagado && !estaCancelada && (
-                        <button 
-                          className="btn btn-sm btn-outline" 
-                          onClick={handleAbrirCronograma}
-                        >
+                        <button className="btn btn-sm btn-outline" onClick={handleAbrirCronograma}>
                           Crear Cronograma
                         </button>
                       )}
@@ -1154,7 +1119,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                       <td>{new Date(pago.fecha_movimiento).toLocaleDateString('es-PE')}</td>
                       <td>
                         {pago.tipo_movimiento === 'Ingreso' ? (
-                          <span className="badge badge-danger">Anulación</span>
+                          <span className="badge badge-danger">Anulacion</span>
                         ) : pago.es_reembolso === 1 ? (
                           <span className="badge badge-purple flex items-center gap-1 w-fit">
                             <RefreshCw size={12} /> Reembolso
@@ -1198,10 +1163,10 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
             ) : (
               <div className="p-8 text-center text-muted">
                 <TrendingUp size={48} className="mx-auto mb-3 opacity-20" />
-                <p>No hay pagos registrados aún.</p>
+                <p>No hay pagos registrados aun.</p>
                 {esContadoSinPago && (
                   <p className="text-sm mt-2 text-orange-600">
-                    Esta compra se registró sin pago. Usa "Regularizar Pago" para completar el desembolso.
+                    Esta compra se registro sin pago. Usa "Regularizar Pago" para completar el desembolso.
                   </p>
                 )}
               </div>
@@ -1211,198 +1176,198 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
       )}
 
       {tabActiva === 'letras' && (
-  <div className="space-y-6">
-    {esCredito && (
-      <div className="card">
-        <div className="card-header bg-gray-50 flex justify-between items-center">
-          <h3 className="card-title flex gap-2">
-            <CreditCard size={18}/> Cronograma de Cuotas
-          </h3>
-          {tieneCronogramaPendiente && !estaCancelada && (
-            <button className="btn btn-sm btn-warning text-white" onClick={handleAbrirCronograma}>
-              <FileText size={14}/> Definir Cronograma
-            </button>
-          )}
-          {compra.cronograma_definido && (
-            <span className="badge badge-success text-[10px]">Cronograma Definido</span>
-          )}
-        </div>
-        <div className="card-body p-0">
-          {compra.cuotas && compra.cuotas.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Cuota</th>
-                  <th>Vencimiento</th>
-                  <th>Estado</th>
-                  <th className="text-right">Monto</th>
-                  <th className="text-right">Pagado</th>
-                  <th className="text-right">Saldo</th>
-                  <th className="text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {compra.cuotas.map((cuota) => (
-                  <tr
-                    key={cuota.id_cuota}
-                    className={
-                      cuota.nivel_alerta === 'danger' ? 'bg-red-50' :
-                      cuota.nivel_alerta === 'warning' ? 'bg-yellow-50' : ''
-                    }
-                  >
-                    <td className="font-bold">
-                      #{cuota.numero_cuota}
-                      {cuota.codigo_letra ? ` (${cuota.codigo_letra})` : ''}
-                    </td>
-                    <td>
-                      <div>{formatearFecha(cuota.fecha_vencimiento)}</div>
-                      {cuota.dias_para_vencer !== undefined && cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && (
-                        <div className={`text-xs ${cuota.dias_para_vencer < 0 ? 'text-danger' : cuota.dias_para_vencer <= 7 ? 'text-warning' : 'text-muted'}`}>
-                          {cuota.dias_para_vencer < 0
-                            ? `Vencida hace ${Math.abs(cuota.dias_para_vencer)}d`
-                            : `Vence en ${cuota.dias_para_vencer}d`}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`badge ${
-                        cuota.estado === 'Pagada' ? 'badge-success' :
-                        cuota.estado === 'Cancelada' ? 'badge-danger' :
-                        cuota.nivel_alerta === 'danger' ? 'badge-danger' :
-                        cuota.nivel_alerta === 'warning' ? 'badge-warning' :
-                        'badge-info'
-                      }`}>
-                        {cuota.estado}
-                      </span>
-                    </td>
-                    <td className="text-right font-medium">{formatearMoneda(cuota.monto_cuota)}</td>
-                    <td className="text-right text-success">{formatearMoneda(cuota.monto_pagado || 0)}</td>
-<td className="text-right font-bold text-danger">
-  {formatearMoneda(parseFloat((parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0)).toFixed(3)))}
-</td>
-                    <td className="text-center">
-                      {cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && !estaCancelada && (
-                        <button
-                          className="btn btn-xs btn-primary"
-                          onClick={() => handleAbrirPagarCuota(cuota)}
+        <div className="space-y-6">
+          {esCredito && (
+            <div className="card">
+              <div className="card-header bg-gray-50 flex justify-between items-center">
+                <h3 className="card-title flex gap-2">
+                  <CreditCard size={18}/> Cronograma de Cuotas
+                </h3>
+                {tieneCronogramaPendiente && !estaCancelada && (
+                  <button className="btn btn-sm btn-warning text-white" onClick={handleAbrirCronograma}>
+                    <FileText size={14}/> Definir Cronograma
+                  </button>
+                )}
+                {compra.cronograma_definido && (
+                  <span className="badge badge-success text-[10px]">Cronograma Definido</span>
+                )}
+              </div>
+              <div className="card-body p-0">
+                {compra.cuotas && compra.cuotas.length > 0 ? (
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Cuota</th>
+                        <th>Vencimiento</th>
+                        <th>Estado</th>
+                        <th className="text-right">Monto</th>
+                        <th className="text-right">Pagado</th>
+                        <th className="text-right">Saldo</th>
+                        <th className="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {compra.cuotas.map((cuota) => (
+                        <tr
+                          key={cuota.id_cuota}
+                          className={
+                            cuota.nivel_alerta === 'danger' ? 'bg-red-50' :
+                            cuota.nivel_alerta === 'warning' ? 'bg-yellow-50' : ''
+                          }
                         >
-                          Pagar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-gray-50">
-                <tr>
-                  <td colSpan="3" className="text-right font-bold">Totales:</td>
-                  <td className="text-right font-bold">{formatearMoneda(compra.total)}</td>
-                  <td className="text-right font-bold text-success">{formatearMoneda(compra.monto_pagado)}</td>
-                  <td className="text-right font-bold text-danger">{formatearMoneda(compra.saldo_pendiente)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          ) : (
-            <div className="p-8 text-center text-muted">
-              <CreditCard size={48} className="mx-auto mb-3 opacity-20"/>
-              <p>No hay cronograma definido aún.</p>
-              {!estaCancelada && (
-                <button className="btn btn-sm btn-outline mt-3" onClick={handleAbrirCronograma}>
-                  Crear Cronograma
-                </button>
-              )}
+                          <td className="font-bold">
+                            #{cuota.numero_cuota}
+                            {cuota.codigo_letra ? ` (${cuota.codigo_letra})` : ''}
+                          </td>
+                          <td>
+                            <div>{formatearFecha(cuota.fecha_vencimiento)}</div>
+                            {cuota.dias_para_vencer !== undefined && cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && (
+                              <div className={`text-xs ${cuota.dias_para_vencer < 0 ? 'text-danger' : cuota.dias_para_vencer <= 7 ? 'text-warning' : 'text-muted'}`}>
+                                {cuota.dias_para_vencer < 0
+                                  ? `Vencida hace ${Math.abs(cuota.dias_para_vencer)}d`
+                                  : `Vence en ${cuota.dias_para_vencer}d`}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`badge ${
+                              cuota.estado === 'Pagada' ? 'badge-success' :
+                              cuota.estado === 'Cancelada' ? 'badge-danger' :
+                              cuota.nivel_alerta === 'danger' ? 'badge-danger' :
+                              cuota.nivel_alerta === 'warning' ? 'badge-warning' :
+                              'badge-info'
+                            }`}>
+                              {cuota.estado}
+                            </span>
+                          </td>
+                          <td className="text-right font-medium">{formatearMoneda(cuota.monto_cuota)}</td>
+                          <td className="text-right text-success">{formatearMoneda(cuota.monto_pagado || 0)}</td>
+                          <td className="text-right font-bold text-danger">
+                            {formatearMoneda(parseFloat((parseFloat(cuota.monto_cuota) - parseFloat(cuota.monto_pagado || 0)).toFixed(3)))}
+                          </td>
+                          <td className="text-center">
+                            {cuota.estado !== 'Pagada' && cuota.estado !== 'Cancelada' && !estaCancelada && (
+                              <button
+                                className="btn btn-xs btn-primary"
+                                onClick={() => handleAbrirPagarCuota(cuota)}
+                              >
+                                Pagar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50">
+                      <tr>
+                        <td colSpan="3" className="text-right font-bold">Totales:</td>
+                        <td className="text-right font-bold">{formatearMoneda(compra.total)}</td>
+                        <td className="text-right font-bold text-success">{formatearMoneda(compra.monto_pagado)}</td>
+                        <td className="text-right font-bold text-danger">{formatearMoneda(compra.saldo_pendiente)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                ) : (
+                  <div className="p-8 text-center text-muted">
+                    <CreditCard size={48} className="mx-auto mb-3 opacity-20"/>
+                    <p>No hay cronograma definido aun.</p>
+                    {!estaCancelada && (
+                      <button className="btn btn-sm btn-outline mt-3" onClick={handleAbrirCronograma}>
+                        Crear Cronograma
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
-        </div>
-      </div>
-    )}
 
-    {esLetras && (
-      <div className="card">
-        <div className="card-header bg-gray-50 flex justify-between items-center">
-          <h3 className="card-title flex gap-2">
-            <Receipt size={18}/> Letras de Cambio
-          </h3>
-          {!tieneLetrasRegistradas && !estaCancelada && (
-            <button className="btn btn-sm btn-primary" onClick={handleAbrirRegistrarLetras}>
-              <Plus size={16}/> Registrar Letras
-            </button>
-          )}
-        </div>
-        <div className="card-body p-0">
-          {letras.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Número Letra</th>
-                  <th>Banco</th>
-                  <th>Emisión</th>
-                  <th>Vencimiento</th>
-                  <th>Estado</th>
-                  <th className="text-right">Monto</th>
-                  <th className="text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {letras.map((letra) => (
-                  <tr
-                    key={letra.id_letra}
-                    className={
-                      letra.nivel_alerta === 'danger' ? 'bg-red-50' :
-                      letra.nivel_alerta === 'warning' ? 'bg-yellow-50' : ''
-                    }
-                  >
-                    <td>
-                      <div className="font-medium">{letra.numero_letra}</div>
-                      {letra.dias_para_vencer !== undefined && letra.dias_para_vencer < 7 && letra.estado === 'Pendiente' && (
-                        <div className={`text-xs ${letra.dias_para_vencer < 0 ? 'text-danger' : 'text-warning'}`}>
-                          {letra.dias_para_vencer < 0
-                            ? `Vencida hace ${Math.abs(letra.dias_para_vencer)} días`
-                            : `Vence en ${letra.dias_para_vencer} días`}
-                        </div>
-                      )}
-                    </td>
-                    <td className="text-sm">{letra.banco || '-'}</td>
-                    <td>{formatearFecha(letra.fecha_emision)}</td>
-                    <td>{formatearFecha(letra.fecha_vencimiento)}</td>
-                    <td>
-                      <span className={`badge ${
-                        letra.estado === 'Pagada' ? 'badge-success' :
-                        letra.estado === 'Vencida' ? 'badge-danger' :
-                        'badge-warning'
-                      }`}>
-                        {letra.estado}
-                      </span>
-                    </td>
-                    <td className="text-right font-bold">{formatearMoneda(letra.monto)}</td>
-                    <td className="text-center">
-                      {letra.estado === 'Pendiente' && (
-                        <button className="btn btn-xs btn-primary" onClick={() => handleAbrirPagarLetra(letra)}>
-                          Pagar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="p-8 text-center text-muted">
-              <Receipt size={48} className="mx-auto mb-3 opacity-20"/>
-              <p>No hay letras registradas</p>
-              {!tieneLetrasRegistradas && !estaCancelada && (
-                <button className="btn btn-sm btn-primary mt-3" onClick={handleAbrirRegistrarLetras}>
-                  Registrar Letras
-                </button>
-              )}
+          {esLetras && (
+            <div className="card">
+              <div className="card-header bg-gray-50 flex justify-between items-center">
+                <h3 className="card-title flex gap-2">
+                  <Receipt size={18}/> Letras de Cambio
+                </h3>
+                {!tieneLetrasRegistradas && !estaCancelada && (
+                  <button className="btn btn-sm btn-primary" onClick={handleAbrirRegistrarLetras}>
+                    <Plus size={16}/> Registrar Letras
+                  </button>
+                )}
+              </div>
+              <div className="card-body p-0">
+                {letras.length > 0 ? (
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Numero Letra</th>
+                        <th>Banco</th>
+                        <th>Emision</th>
+                        <th>Vencimiento</th>
+                        <th>Estado</th>
+                        <th className="text-right">Monto</th>
+                        <th className="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {letras.map((letra) => (
+                        <tr
+                          key={letra.id_letra}
+                          className={
+                            letra.nivel_alerta === 'danger' ? 'bg-red-50' :
+                            letra.nivel_alerta === 'warning' ? 'bg-yellow-50' : ''
+                          }
+                        >
+                          <td>
+                            <div className="font-medium">{letra.numero_letra}</div>
+                            {letra.dias_para_vencer !== undefined && letra.dias_para_vencer < 7 && letra.estado === 'Pendiente' && (
+                              <div className={`text-xs ${letra.dias_para_vencer < 0 ? 'text-danger' : 'text-warning'}`}>
+                                {letra.dias_para_vencer < 0
+                                  ? `Vencida hace ${Math.abs(letra.dias_para_vencer)} dias`
+                                  : `Vence en ${letra.dias_para_vencer} dias`}
+                              </div>
+                            )}
+                          </td>
+                          <td className="text-sm">{letra.banco || '-'}</td>
+                          <td>{formatearFecha(letra.fecha_emision)}</td>
+                          <td>{formatearFecha(letra.fecha_vencimiento)}</td>
+                          <td>
+                            <span className={`badge ${
+                              letra.estado === 'Pagada' ? 'badge-success' :
+                              letra.estado === 'Vencida' ? 'badge-danger' :
+                              'badge-warning'
+                            }`}>
+                              {letra.estado}
+                            </span>
+                          </td>
+                          <td className="text-right font-bold">{formatearMoneda(letra.monto)}</td>
+                          <td className="text-center">
+                            {letra.estado === 'Pendiente' && (
+                              <button className="btn btn-xs btn-primary" onClick={() => handleAbrirPagarLetra(letra)}>
+                                Pagar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="p-8 text-center text-muted">
+                    <Receipt size={48} className="mx-auto mb-3 opacity-20"/>
+                    <p>No hay letras registradas</p>
+                    {!tieneLetrasRegistradas && !estaCancelada && (
+                      <button className="btn btn-sm btn-primary mt-3" onClick={handleAbrirRegistrarLetras}>
+                        Registrar Letras
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
-      </div>
-    )}
-  </div>
-)}
+      )}
   
       {tabActiva === 'ingresos' && (
         <div className="space-y-6">
@@ -1418,10 +1383,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                       Hay {itemsPendientes.length} producto(s) pendiente(s) de ingresar al inventario
                     </p>
                   </div>
-                  <button 
-                    className="btn btn-primary" 
-                    onClick={handleAbrirIngresoInventario}
-                  >
+                  <button className="btn btn-primary" onClick={handleAbrirIngresoInventario}>
                     <PackagePlus size={18} /> Registrar Ingreso
                   </button>
                 </div>
@@ -1537,12 +1499,12 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               className="form-input" 
               value={datosPago.monto_pagado} 
               onChange={e => setDatosPago({...datosPago, monto_pagado: e.target.value})} 
-              step="0.01" 
+              step="0.001" 
               required 
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Referencia / Número de Operación</label>
+            <label className="form-label">Referencia / Numero de Operacion</label>
             <input 
               type="text" 
               className="form-input" 
@@ -1561,15 +1523,12 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               placeholder="Opcional"
             />
           </div>
-          <button 
-            type="submit" 
-            className="btn btn-primary w-full" 
-            disabled={loading}
-          >
+          <button type="submit" className="btn btn-primary w-full" disabled={loading}>
             {loading ? 'Procesando...' : 'Confirmar Pago'}
           </button>
         </form>
       </Modal>
+
       <Modal 
         isOpen={modalPagoDirectoOpen} 
         onClose={() => setModalPagoDirectoOpen(false)} 
@@ -1578,9 +1537,9 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
         <form onSubmit={handlePagoDirecto} className="space-y-4">
           {esContadoSinPago && (
             <div className="bg-orange-50 border border-orange-200 rounded p-3 text-sm text-orange-800">
-              <p className="font-medium mb-1">Regularización de Pago al Contado</p>
+              <p className="font-medium mb-1">Regularizacion de Pago al Contado</p>
               <p>
-                Esta compra fue registrada sin desembolso. Al confirmar, se registrará el egreso en la cuenta seleccionada.
+                Esta compra fue registrada sin desembolso. Al confirmar, se registrara el egreso en la cuenta seleccionada.
               </p>
             </div>
           )}
@@ -1607,7 +1566,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               className="form-input" 
               value={datosPago.monto_pagado} 
               onChange={e => setDatosPago({...datosPago, monto_pagado: e.target.value})} 
-              step="0.01" 
+              step="0.001" 
               max={compra.saldo_pendiente} 
               required 
             />
@@ -1616,7 +1575,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
             </p>
           </div>
           <div className="form-group">
-            <label className="form-label">Referencia / Número de Operación</label>
+            <label className="form-label">Referencia / Numero de Operacion</label>
             <input 
               type="text" 
               className="form-input" 
@@ -1634,11 +1593,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               onChange={e => setDatosPago({...datosPago, observaciones: e.target.value})}
             />
           </div>
-          <button 
-            type="submit" 
-            className="btn btn-primary w-full" 
-            disabled={loading}
-          >
+          <button type="submit" className="btn btn-primary w-full" disabled={loading}>
             {loading ? 'Procesando...' : 'Registrar Pago'}
           </button>
         </form>
@@ -1679,22 +1634,22 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               className="form-input" 
               value={datosReembolso.monto_reembolso} 
               onChange={e => setDatosReembolso({...datosReembolso, monto_reembolso: e.target.value})} 
-              step="0.01" 
+              step="0.001" 
               max={saldoReembolso} 
               required 
             />
             <p className="text-xs text-muted mt-1">
-              Máximo: {formatearMoneda(saldoReembolso)}
+              Maximo: {formatearMoneda(saldoReembolso)}
             </p>
           </div>
           <div className="form-group">
-            <label className="form-label">Referencia / Número de Operación</label>
+            <label className="form-label">Referencia / Numero de Operacion</label>
             <input 
               type="text" 
               className="form-input" 
               value={datosReembolso.referencia} 
               onChange={e => setDatosReembolso({...datosReembolso, referencia: e.target.value})} 
-              placeholder="Nro. operación, etc."
+              placeholder="Nro. operacion, etc."
             />
           </div>
           <div className="form-group">
@@ -1706,11 +1661,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               onChange={e => setDatosReembolso({...datosReembolso, observaciones: e.target.value})} 
             />
           </div>
-          <button 
-            type="submit" 
-            className="btn btn-purple text-white w-full" 
-            disabled={loading}
-          >
+          <button type="submit" className="btn btn-purple text-white w-full" disabled={loading}>
             {loading ? 'Procesando...' : 'Registrar Reembolso'}
           </button>
         </form>
@@ -1725,7 +1676,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
         <form onSubmit={handleGuardarCronograma}>
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
             <p className="font-medium">
-              {esLetras ? 'Definición de Letras' : 'Definición de Cuotas'}
+              {esLetras ? 'Definicion de Letras' : 'Definicion de Cuotas'}
             </p>
             <p className="text-xs mt-1">
               Establece las fechas y montos. La suma debe coincidir con el saldo pendiente.
@@ -1756,14 +1707,14 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
                     newCrono[i].monto = e.target.value; 
                     setCronogramaForm(newCrono); 
                   }} 
-                  step="0.01" 
+                  step="0.001" 
                   required 
                 />
                 {esLetras && (
                   <input 
                     type="text" 
                     className="form-input form-input-sm w-32" 
-                    placeholder="Cód. Letra" 
+                    placeholder="Cod. Letra" 
                     value={c.codigo_letra} 
                     onChange={e => { 
                       const newCrono = [...cronogramaForm]; 
@@ -1778,25 +1729,17 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
           <div className="flex justify-between items-center pt-4 border-t">
             <div className="text-sm">
               <p>
-                Total: <b>{formatearMoneda(cronogramaForm.reduce((acc, c) => acc + parseFloat(c.monto||0), 0))}</b>
+                Total: <b>{formatearMoneda(cronogramaForm.reduce((acc, c) => acc + parseFloat(c.monto || 0), 0))}</b>
               </p>
               <p className="text-muted text-xs mt-1">
                 Debe ser: {formatearMoneda(compra.saldo_pendiente)}
               </p>
             </div>
             <div className="flex gap-2">
-              <button 
-                type="button" 
-                className="btn btn-outline" 
-                onClick={() => setModalCronogramaOpen(false)}
-              >
+              <button type="button" className="btn btn-outline" onClick={() => setModalCronogramaOpen(false)}>
                 Cancelar
               </button>
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                disabled={loading}
-              >
+              <button type="submit" className="btn btn-primary" disabled={loading}>
                 {loading ? 'Guardando...' : 'Guardar Cronograma'}
               </button>
             </div>
@@ -1812,128 +1755,196 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
       >
         <form onSubmit={handleGuardarLetras}>
           <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded text-sm text-purple-800">
-            <p className="font-medium">Registro de Letras Físicas</p>
-            <p className="text-xs mt-1">
-              Registra los detalles de cada letra emitida. La suma debe coincidir con el saldo pendiente.
-            </p>
+            <p className="font-medium">Monto total a cubrir: {formatearMoneda(compra.saldo_pendiente)}</p>
           </div>
-          <div className="space-y-3 mb-4 max-h-[60vh] overflow-y-auto">
-            {letrasForm.map((letra, i) => (
-              <div key={i} className="border rounded p-3 bg-gray-50">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="form-group">
-                    <label className="form-label text-xs">Número Letra</label>
-                    <input 
-                      type="text" 
-                      className="form-input form-input-sm" 
-                      value={letra.numero_letra} 
-                      onChange={e => { 
-                        const nuevasLetras = [...letrasForm]; 
-                        nuevasLetras[i].numero_letra = e.target.value; 
-                        setLetrasForm(nuevasLetras); 
-                      }} 
-                      required 
-                    />
+
+          <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Generacion automatica</p>
+            <div className="flex gap-3 items-end">
+              <div className="form-group mb-0 flex-1">
+                <label className="form-label text-xs">Cantidad de letras</label>
+                <input
+                  type="number"
+                  className="form-input form-input-sm"
+                  placeholder="Ej: 3"
+                  value={autoLetras.cantidad}
+                  onChange={e => setAutoLetras(prev => ({ ...prev, cantidad: e.target.value }))}
+                  min="1"
+                />
+              </div>
+              <div className="form-group mb-0 flex-1">
+                <label className="form-label text-xs">Dias entre letras</label>
+                <input
+                  type="number"
+                  className="form-input form-input-sm"
+                  value={autoLetras.dias}
+                  onChange={e => setAutoLetras(prev => ({ ...prev, dias: e.target.value }))}
+                  min="1"
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={handleGenerarLetrasAuto}
+                disabled={!autoLetras.cantidad || parseInt(autoLetras.cantidad) < 1}
+              >
+                Generar
+              </button>
+            </div>
+          </div>
+
+          {letrasForm.length > 0 ? (
+            <>
+              <div className="space-y-3 mb-4 max-h-[40vh] overflow-y-auto">
+                {letrasForm.map((letra, i) => (
+                  <div key={i} className="border rounded p-3 bg-gray-50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-bold text-gray-600">Letra #{i + 1}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="form-group">
+                        <label className="form-label text-xs">Numero Letra</label>
+                        <input
+                          type="text"
+                          className="form-input form-input-sm"
+                          value={letra.numero_letra}
+                          onChange={e => {
+                            const n = [...letrasForm];
+                            n[i].numero_letra = e.target.value;
+                            setLetrasForm(n);
+                          }}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs">Monto</label>
+                        <input
+                          type="number"
+                          className={`form-input form-input-sm ${hayErrorLetras ? 'border-danger' : ''}`}
+                          value={letra.monto}
+                          onChange={e => {
+                            const n = [...letrasForm];
+                            n[i].monto = e.target.value;
+                            setLetrasForm(n);
+                          }}
+                          step="0.001"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs">Fecha Emision</label>
+                        <input
+                          type="date"
+                          className="form-input form-input-sm"
+                          value={letra.fecha_emision}
+                          onChange={e => {
+                            const n = [...letrasForm];
+                            n[i].fecha_emision = e.target.value;
+                            setLetrasForm(n);
+                          }}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs">Fecha Vencimiento</label>
+                        <input
+                          type="date"
+                          className="form-input form-input-sm"
+                          value={letra.fecha_vencimiento}
+                          onChange={e => {
+                            const n = [...letrasForm];
+                            n[i].fecha_vencimiento = e.target.value;
+                            setLetrasForm(n);
+                          }}
+                          required
+                        />
+                      </div>
+                      <div className="form-group col-span-2">
+                        <label className="form-label text-xs">Banco</label>
+                        <input
+                          type="text"
+                          className="form-input form-input-sm"
+                          value={letra.banco}
+                          onChange={e => {
+                            const n = [...letrasForm];
+                            n[i].banco = e.target.value;
+                            setLetrasForm(n);
+                          }}
+                          placeholder="Opcional"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label text-xs">Monto</label>
-                    <input 
-                      type="number" 
-                      className="form-input form-input-sm" 
-                      value={letra.monto} 
-                      onChange={e => { 
-                        const nuevasLetras = [...letrasForm]; 
-                        nuevasLetras[i].monto = e.target.value; 
-                        setLetrasForm(nuevasLetras); 
-                      }} 
-                      step="0.01" 
-                      required 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label text-xs">Fecha Emisión</label>
-                    <input 
-                      type="date" 
-                      className="form-input form-input-sm" 
-                      value={letra.fecha_emision} 
-                      onChange={e => { 
-                        const nuevasLetras = [...letrasForm]; 
-                        nuevasLetras[i].fecha_emision = e.target.value; 
-                        setLetrasForm(nuevasLetras); 
-                      }} 
-                      required 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label text-xs">Fecha Vencimiento</label>
-                    <input 
-                      type="date" 
-                      className="form-input form-input-sm" 
-                      value={letra.fecha_vencimiento} 
-                      onChange={e => { 
-                        const nuevasLetras = [...letrasForm]; 
-                        nuevasLetras[i].fecha_vencimiento = e.target.value; 
-                        setLetrasForm(nuevasLetras); 
-                      }} 
-                      required 
-                    />
-                  </div>
-                  <div className="form-group col-span-2">
-                    <label className="form-label text-xs">Banco</label>
-                    <input 
-                      type="text" 
-                      className="form-input form-input-sm" 
-                      value={letra.banco} 
-                      onChange={e => { 
-                        const nuevasLetras = [...letrasForm]; 
-                        nuevasLetras[i].banco = e.target.value; 
-                        setLetrasForm(nuevasLetras); 
-                      }} 
-                      placeholder="Opcional" 
-                    />
-                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t">
+                <div className="text-sm">
+                  <p>
+                    Total letras: <b className={hayErrorLetras ? 'text-danger' : 'text-success'}>
+                      {formatearMoneda(totalLetrasActual)}
+                    </b>
+                  </p>
+                  <p className="text-muted text-xs mt-1">Debe ser: {formatearMoneda(saldoCompra)}</p>
+                  {hayErrorLetras && (
+                    <p className="text-danger text-xs mt-1 font-medium">
+                      Diferencia de {formatearMoneda(diffLetras)} — revisa los montos ingresados
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => {
+                      setLetrasForm([
+                        ...letrasForm,
+                        {
+                          numero_letra: `L-${compra.numero_orden}-${String(letrasForm.length + 1).padStart(2, '00')}`,
+                          monto: '0.000',
+                          fecha_emision: new Date().toISOString().split('T')[0],
+                          fecha_vencimiento: new Date().toISOString().split('T')[0],
+                          banco: '',
+                          observaciones: ''
+                        }
+                      ]);
+                    }}
+                  >
+                    <Plus size={16} /> Agregar Letra
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={loading || hayErrorLetras}
+                  >
+                    {loading ? 'Guardando...' : 'Guardar Letras'}
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-          <div className="flex justify-between items-center pt-4 border-t">
-            <div className="text-sm">
-              <p>
-                Total: <b>{formatearMoneda(letrasForm.reduce((acc, l) => acc + parseFloat(l.monto||0), 0))}</b>
-              </p>
-              <p className="text-muted text-xs mt-1">
-                Debe ser: {formatearMoneda(compra.saldo_pendiente)}
-              </p>
+            </>
+          ) : (
+            <div className="text-center py-6 text-muted text-sm">
+              Configura la generacion automatica o agrega letras manualmente.
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={() => {
+                    setLetrasForm([{
+                      numero_letra: `L-${compra.numero_orden}-01`,
+                      monto: parseFloat(compra.saldo_pendiente).toFixed(3),
+                      fecha_emision: new Date().toISOString().split('T')[0],
+                      fecha_vencimiento: new Date().toISOString().split('T')[0],
+                      banco: '',
+                      observaciones: ''
+                    }]);
+                  }}
+                >
+                  <Plus size={16} /> Agregar manualmente
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button 
-                type="button" 
-                className="btn btn-outline" 
-                onClick={() => { 
-                  setLetrasForm([
-                    ...letrasForm, 
-                    { 
-                      numero_letra: `L-${compra.numero_orden}-${String(letrasForm.length + 1).padStart(2, '0')}`, 
-                      monto: '0.00', 
-                      fecha_emision: new Date().toISOString().split('T')[0], 
-                      fecha_vencimiento: new Date().toISOString().split('T')[0], 
-                      banco: '', 
-                      observaciones: '' 
-                    }
-                  ]); 
-                }}
-              >
-                <Plus size={16} /> Agregar Letra
-              </button>
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                disabled={loading}
-              >
-                {loading ? 'Guardando...' : 'Guardar Letras'}
-              </button>
-            </div>
-          </div>
+          )}
         </form>
       </Modal>
 
@@ -1976,12 +1987,12 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               className="form-input" 
               value={datosLetra.monto_pagado} 
               onChange={e => setDatosLetra({...datosLetra, monto_pagado: e.target.value})} 
-              step="0.01" 
+              step="0.001" 
               required 
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Método de Pago</label>
+            <label className="form-label">Metodo de Pago</label>
             <select 
               className="form-select" 
               value={datosLetra.metodo_pago} 
@@ -1993,7 +2004,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Número de Operación</label>
+            <label className="form-label">Numero de Operacion</label>
             <input 
               type="text" 
               className="form-input" 
@@ -2012,15 +2023,12 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               placeholder="Opcional"
             />
           </div>
-          <button 
-            type="submit" 
-            className="btn btn-primary w-full" 
-            disabled={loading}
-          >
+          <button type="submit" className="btn btn-primary w-full" disabled={loading}>
             {loading ? 'Procesando...' : 'Confirmar Pago'}
           </button>
         </form>
       </Modal>
+
       <Modal 
         isOpen={modalIngresoInventarioOpen} 
         onClose={() => setModalIngresoInventarioOpen(false)} 
@@ -2031,7 +2039,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
             <p className="font-medium">Ingreso Parcial de Productos</p>
             <p className="text-xs mt-1">
-              Indica la cantidad que vas a ingresar de cada producto. Solo se ingresarán los que tengan cantidad mayor a 0.
+              Indica la cantidad que vas a ingresar de cada producto. Solo se ingresaran los que tengan cantidad mayor a 0.
             </p>
           </div>
           <div className="space-y-3 mb-4 max-h-[60vh] overflow-y-auto">
@@ -2080,18 +2088,10 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
             />
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalIngresoInventarioOpen(false)}
-            >
+            <button type="button" className="btn btn-outline" onClick={() => setModalIngresoInventarioOpen(false)}>
               Cancelar
             </button>
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              disabled={loading}
-            >
+            <button type="submit" className="btn btn-primary" disabled={loading}>
               <PackagePlus size={18} /> 
               {loading ? 'Registrando...' : 'Registrar Ingreso'}
             </button>
@@ -2109,12 +2109,12 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
             <div className="flex items-start gap-3">
               <AlertTriangle className="text-red-500 shrink-0" size={24} />
               <div className="text-sm text-red-700">
-                <p className="font-bold mb-2">Advertencia: Esta acción es irreversible</p>
+                <p className="font-bold mb-2">Advertencia: Esta accion es irreversible</p>
                 <ul className="list-disc list-inside space-y-1">
-                  <li>Se revertirá el stock de los productos ingresados.</li>
-                  <li>Se registrarán movimientos de reversión (ingresos) en las cuentas de origen.</li>
-                  <li>Se cancelarán todas las cuotas y letras pendientes.</li>
-                  <li>La compra quedará marcada como "Cancelada" permanentemente.</li>
+                  <li>Se revertira el stock de los productos ingresados.</li>
+                  <li>Se registraran movimientos de reversion en las cuentas de origen.</li>
+                  <li>Se cancelaran todas las cuotas y letras pendientes.</li>
+                  <li>La compra quedara marcada como "Cancelada" permanentemente.</li>
                 </ul>
               </div>
             </div>
@@ -2124,16 +2124,16 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
             <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
               <p className="font-medium">Pagos a Revertir:</p>
               <p className="mt-1">
-                Se registrarán ingresos de reversión por <span className="font-bold">{formatearMoneda(compra.monto_pagado)}</span> en las cuentas de origen.
+                Se registraran ingresos de reversion por <span className="font-bold">{formatearMoneda(compra.monto_pagado)}</span> en las cuentas de origen.
               </p>
             </div>
           )}
           
           <div className="form-group">
-            <label className="form-label">Motivo de la cancelación / anulación *</label>
+            <label className="form-label">Motivo de la cancelacion / anulacion *</label>
             <textarea 
               className="form-textarea" 
-              placeholder="Indique la razón detallada de la cancelación..." 
+              placeholder="Indique la razon detallada de la cancelacion..." 
               value={motivoCancelacion} 
               onChange={e => setMotivoCancelacion(e.target.value)} 
               required 
@@ -2142,10 +2142,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
           </div>
           
           <div className="flex justify-end gap-2">
-            <button 
-              className="btn btn-outline" 
-              onClick={() => setModalCancelarOpen(false)}
-            >
+            <button className="btn btn-outline" onClick={() => setModalCancelarOpen(false)}>
               Volver
             </button>
             <button 
@@ -2153,7 +2150,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               onClick={handleCancelarCompra}
               disabled={loading || !motivoCancelacion.trim()}
             >
-              {loading ? 'Procesando...' : 'Confirmar Anulación'}
+              {loading ? 'Procesando...' : 'Confirmar Anulacion'}
             </button>
           </div>
         </div>
@@ -2162,16 +2159,16 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
       <Modal 
         isOpen={modalCambiarCuentaOpen} 
         onClose={() => setModalCambiarCuentaOpen(false)} 
-        title="Cambiar Cuenta de Pago (Migración)"
+        title="Cambiar Cuenta de Pago (Migracion)"
       >
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded p-4">
             <p className="text-sm text-blue-800 mb-2">
-              <span className="font-medium">¿Qué hace esta acción?</span>
+              <span className="font-medium">Que hace esta accion?</span>
             </p>
             <p className="text-sm text-blue-700">
-              Esta operación transferirá todos los pagos y la deuda de esta compra a una nueva cuenta. 
-              Se crearán movimientos de reversión en la cuenta actual y nuevos egresos en la cuenta destino.
+              Esta operacion transferira todos los pagos y la deuda de esta compra a una nueva cuenta. 
+              Se crearan movimientos de reversion en la cuenta actual y nuevos egresos en la cuenta destino.
             </p>
           </div>
           
@@ -2199,7 +2196,7 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
               ))}
             </select>
             <p className="text-xs text-muted mt-1">
-              Se mostrarán cuentas de todas las monedas disponibles
+              Se mostraran cuentas de todas las monedas disponibles
             </p>
           </div>
           
@@ -2207,17 +2204,14 @@ const esContado = tipoCompra === 'contado' || formaPago === 'contado';
             <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
               <p className="font-medium mb-1">Movimientos a Realizar:</p>
               <ul className="list-disc list-inside space-y-1">
-                <li>Cuenta actual: Ingreso de reversión {formatearMoneda(compra.monto_pagado)}</li>
+                <li>Cuenta actual: Ingreso de reversion {formatearMoneda(compra.monto_pagado)}</li>
                 <li>Cuenta nueva: Egreso {formatearMoneda(compra.monto_pagado)}</li>
               </ul>
             </div>
           )}
           
           <div className="flex justify-end gap-2 pt-2">
-            <button 
-              className="btn btn-outline" 
-              onClick={() => setModalCambiarCuentaOpen(false)}
-            >
+            <button className="btn btn-outline" onClick={() => setModalCambiarCuentaOpen(false)}>
               Cancelar
             </button>
             <button 

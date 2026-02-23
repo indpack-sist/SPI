@@ -321,7 +321,7 @@ export async function createCompra(req, res) {
       console.log('✓ Usando cronograma del frontend');
       cronogramaFinal = cronograma;
       cronogramaDefinido = 1;
-    } else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0) {
+    } else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0 && tipo_compra !== 'Letras' && tipo_compra !== 'Letra') {
       console.log('⚠ Generando cronograma automático en backend');
       const numCuotas = parseInt(numero_cuotas);
       const diasEntreC = parseInt(dias_entre_cuotas || 30);

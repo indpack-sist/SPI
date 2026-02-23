@@ -354,9 +354,9 @@ function NuevaCompra() {
       setLoading(true);
 
       const debeEnviarCronograma = (
-  (formData.tipo_compra === 'Credito' || (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro))
-  && cronograma.length > 0
-);
+  formData.tipo_compra === 'Credito' ||
+  (formData.tipo_compra === 'Letras' && !formData.letras_pendientes_registro)
+) && cronograma.length > 0;
 
 const cronogramaPayload = debeEnviarCronograma
   ? cronograma.map(c => ({

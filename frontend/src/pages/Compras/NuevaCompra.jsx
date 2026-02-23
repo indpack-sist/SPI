@@ -250,47 +250,49 @@ function NuevaCompra() {
   };
 
   const calcularCronograma = () => {
-    if (totales.total <= 0) return;
-    
-    const numCuotas = parseInt(formData.numero_cuotas) || 1;
-    const diasEntre = parseInt(formData.dias_entre_cuotas) || 30;
-    const saldoCredito = totales.total - parseFloat(formData.monto_pagado_inicial || 0);
-    
-    if (saldoCredito <= 0) {
-        setCronograma([]);
-        return;
-    }
+  if (totales.total <= 0) return;
+  
+  const numCuotas = parseInt(formData.numero_cuotas) || 1;
+  const diasEntre = parseInt(formData.dias_entre_cuotas) || 30;
+  const saldoCredito = parseFloat((totales.total - parseFloat(formData.monto_pagado_inicial || 0)).toFixed(3));
+  
+  if (saldoCredito <= 0) {
+    setCronograma([]);
+    return;
+  }
 
-    const montoPorCuota = parseFloat((saldoCredito / numCuotas).toFixed(3));
+  const montoPorCuota = parseFloat((saldoCredito / numCuotas).toFixed(3));
+  const diferencia = parseFloat((saldoCredito - montoPorCuota * numCuotas).toFixed(3));
 
-    let fechaBase = new Date(formData.fecha_primera_cuota);
-    
-    if (isNaN(fechaBase.getTime())) {
-       fechaBase = new Date(formData.fecha_emision);
-       fechaBase.setDate(fechaBase.getDate() + diasEntre);
-    }
+  let fechaBase = new Date(formData.fecha_primera_cuota);
+  if (isNaN(fechaBase.getTime())) {
+    fechaBase = new Date(formData.fecha_emision);
+    fechaBase.setDate(fechaBase.getDate() + diasEntre);
+  }
 
-    const nuevoCronograma = [];
-    let ultimaFecha = new Date(fechaBase);
+  const nuevoCronograma = [];
+  let ultimaFecha = new Date(fechaBase);
 
-    for (let i = 1; i <= numCuotas; i++) {
-        nuevoCronograma.push({ 
-          numero: i, 
-          fecha: new Date(ultimaFecha), 
-          monto: montoPorCuota 
-        });
-        ultimaFecha.setDate(ultimaFecha.getDate() + diasEntre);
-    }
-    setCronograma(nuevoCronograma);
+  for (let i = 1; i <= numCuotas; i++) {
+    const esUltima = i === numCuotas;
+    nuevoCronograma.push({ 
+      numero: i, 
+      fecha: new Date(ultimaFecha), 
+      monto: esUltima ? parseFloat((montoPorCuota + diferencia).toFixed(3)) : montoPorCuota
+    });
+    ultimaFecha.setDate(ultimaFecha.getDate() + diasEntre);
+  }
 
-    if (nuevoCronograma.length > 0) {
-        const fechaFinal = nuevoCronograma[nuevoCronograma.length - 1].fecha;
-        setFormData(prev => ({ 
-          ...prev, 
-          fecha_vencimiento: fechaFinal.toISOString().split('T')[0] 
-        }));
-    }
-  };
+  setCronograma(nuevoCronograma);
+
+  if (nuevoCronograma.length > 0) {
+    const fechaFinal = nuevoCronograma[nuevoCronograma.length - 1].fecha;
+    setFormData(prev => ({ 
+      ...prev, 
+      fecha_vencimiento: fechaFinal.toISOString().split('T')[0] 
+    }));
+  }
+};
 
   const handleFormaPagoChange = (forma) => {
     const esContado = forma === 'Contado';

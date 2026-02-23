@@ -56,6 +56,7 @@ function NuevaOrdenVenta() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [direccionesCliente, setDireccionesCliente] = useState([]);
   const [estadoCredito, setEstadoCredito] = useState(null);
+  const [cargandoCredito, setCargandoCredito] = useState(false);
   const [detalle, setDetalle] = useState([]);
   const [totales, setTotales] = useState({ subtotal: 0, impuesto: 0, total: 0 });
 
@@ -256,6 +257,7 @@ function NuevaOrdenVenta() {
             comprobante_url: orden.comprobante_url
         });
 
+        setCargandoCredito(true);
         const resCli = await clientesAPI.getById(orden.id_cliente);
         if (resCli.data.success) {
           const clienteData = resCli.data.data;
@@ -265,6 +267,17 @@ function NuevaOrdenVenta() {
           } else if (clienteData.direccion_despacho) {
             setDireccionesCliente([{ id_direccion: 'principal', direccion: clienteData.direccion_despacho, es_principal: 1 }]);
           }
+        }
+
+        try {
+          const resCredito = await clientesAPI.getEstadoCredito(orden.id_cliente);
+          if (resCredito.data.success) {
+            setEstadoCredito(resCredito.data.data);
+          }
+        } catch (err) {
+          console.error('Error al cargar estado de crédito:', err);
+        } finally {
+          setCargandoCredito(false);
         }
 
         if (orden.detalle && orden.detalle.length > 0) {
@@ -775,7 +788,7 @@ function NuevaOrdenVenta() {
                   <div className="card-body space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div>
                         <label className="form-label text-sm font-semibold text-gray-700">
-                        Nº Orden de Compra (Correlativo) *
+                        N° Orden de Compra (Correlativo) *
                         </label>
                         <input
                         type="text"
@@ -1148,7 +1161,7 @@ function NuevaOrdenVenta() {
                         <input 
                             type="text"
                             className="form-input form-input-sm"
-                            placeholder="Nº Licencia"
+                            placeholder="N° Licencia"
                             maxLength={20}
                             value={formCabecera.transporte_licencia}
                             onChange={(e) => setFormCabecera({...formCabecera, transporte_licencia: e.target.value})}
@@ -1183,11 +1196,16 @@ function NuevaOrdenVenta() {
                     </button>
                     <button
                       type="button"
-                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'} ${!estadoCredito?.usar_limite_credito ? 'opacity-50' : ''}`}
+                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'} ${!cargandoCredito && !estadoCredito?.usar_limite_credito ? 'opacity-50' : ''}`}
                       onClick={() => estadoCredito?.usar_limite_credito && setFormCabecera({...formCabecera, tipo_venta: 'Crédito'})}
-                      disabled={!estadoCredito?.usar_limite_credito}
+                      disabled={cargandoCredito || !estadoCredito?.usar_limite_credito}
                     >
-                      {!estadoCredito?.usar_limite_credito ? <Lock size={18} className="inline mr-1" /> : <Clock size={18} className="inline mr-1" />} Crédito
+                      {cargandoCredito
+                        ? <Clock size={18} className="inline mr-1 animate-spin" />
+                        : !estadoCredito?.usar_limite_credito
+                          ? <Lock size={18} className="inline mr-1" />
+                          : <Clock size={18} className="inline mr-1" />
+                      } Crédito
                     </button>
                   </div>
                 </div>

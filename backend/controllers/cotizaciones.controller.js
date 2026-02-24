@@ -1,4 +1,5 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
+import { obtenerTipoCambioCache } from '../services/tipo-cambio.service.js';
 import pool from '../config/database.js';
 
 function getFechaPeru() {
@@ -226,8 +227,11 @@ export async function createCotizacion(req, res) {
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
 
-    let tipoCambioFinal = parseFloat(tipo_cambio) || 1.0000;
-    if (moneda === 'PEN') tipoCambioFinal = 1.0000;
+let tipoCambioFinal = 1.0000;
+if (moneda !== 'PEN') {
+  const tc = obtenerTipoCambioCache();
+  tipoCambioFinal = tc.promedio || 3.765;
+}
 
     const anioActual = getFechaPeru().getFullYear();
 
@@ -440,8 +444,11 @@ export async function updateCotizacion(req, res) {
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
 
-    let tipoCambioFinal = parseFloat(tipo_cambio) || 1.0000;
-    if (moneda === 'PEN') tipoCambioFinal = 1.0000;
+let tipoCambioFinal = 1.0000;
+if (moneda !== 'PEN') {
+  const tc = obtenerTipoCambioCache();
+  tipoCambioFinal = tc.promedio || 3.765;
+}
 
     let subtotal = 0;
     let totalComision = 0;

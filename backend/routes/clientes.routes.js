@@ -12,7 +12,8 @@ import {
   getHistorialOrdenesVentaCliente,
   getEstadoCreditoCliente,
   addDireccionCliente,
-  deleteDireccionCliente
+  deleteDireccionCliente,
+  getHistorialCondicionCliente
 } from '../controllers/clientes.controller.js';
 
 const router = express.Router();
@@ -27,6 +28,7 @@ router.get('/:id', getClienteById);
 router.get('/:id/cotizaciones', getHistorialCotizacionesCliente);
 router.get('/:id/ordenes-venta', getHistorialOrdenesVentaCliente);
 router.get('/:id/credito', getEstadoCreditoCliente);
+router.get('/:id/historial-condicion', getHistorialCondicionCliente);
 
 router.post('/', createCliente);
 router.put('/:id', updateCliente);

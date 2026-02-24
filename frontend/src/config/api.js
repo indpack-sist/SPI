@@ -115,7 +115,7 @@ export const proveedoresAPI = {
 
 export const clientesAPI = {
   getAll: (params) => api.get('/clientes', { params }),
-  search: (query) => api.get('/clientes', { params: { search: query } }), // cambiar 'busqueda' a 'search'
+  search: (query) => api.get('/clientes', { params: { search: query } }),
   getById: (id) => api.get(`/clientes/${id}`),
   getByRuc: (ruc) => api.get(`/clientes/ruc/${ruc}`),
   validarRUC: (ruc) => api.get(`/clientes/validar-ruc/${ruc}`),
@@ -126,6 +126,7 @@ export const clientesAPI = {
   getHistorialCotizaciones: (id) => api.get(`/clientes/${id}/cotizaciones`),
   getHistorialOrdenesVenta: (id) => api.get(`/clientes/${id}/ordenes-venta`),
   getEstadoCredito: (id) => api.get(`/clientes/${id}/credito`),
+  getHistorialCondicion: (id) => api.get(`/clientes/${id}/historial-condicion`),
   
   addDireccion: (id, data) => api.post(`/clientes/${id}/direcciones`, data),
   deleteDireccion: (idDireccion) => api.delete(`/clientes/direcciones/${idDireccion}`)

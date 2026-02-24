@@ -1450,17 +1450,6 @@ function DetalleOrdenVenta() {
                 </div>
               )}
 
-              {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante.trim().toLowerCase() !== 'factura' && (
-            <button 
-              className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
-              onClick={() => handleDescargarPDF('comprobante')} 
-              disabled={procesando}
-              title={`Descargar ${orden.tipo_comprobante}`}
-            >
-              <Download size={20} /> PDF {orden.tipo_comprobante}
-            </button>
-          )}
-
               {!sinComprobanteAsignado && orden.tipo_comprobante === 'Factura' && (
   <div className="flex items-center gap-2">
     <span className="badge badge-success">Factura</span>
@@ -1510,7 +1499,7 @@ function DetalleOrdenVenta() {
 
           {puedeReservarStock() && (
             <button
-              className="btn btn-warning border-yellow-400 text-yellow-800 hover:bg-yellow-100"
+              className="btn bg-yellow-500 text-white border-yellow-600 hover:bg-yellow-600"
               onClick={handleAbrirReservaStock}
               disabled={procesando}
               title="Reservar/Editar stock físico"

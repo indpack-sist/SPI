@@ -360,6 +360,19 @@ export async function updateCliente(req, res) {
       clienteActual.condicion_pago !== condicionPagoFinal || 
       parseInt(clienteActual.dias_credito || 0) !== diasCreditoFinal;
 
+    console.log('=== HISTORIAL CONDICION DEBUG ===');
+    console.log('id_empleado recibido:', id_empleado, '| tipo:', typeof id_empleado);
+    console.log('observacion_condicion:', observacion_condicion);
+    console.log('condicion_pago recibido:', condicion_pago);
+    console.log('dias_credito recibido:', dias_credito);
+    console.log('condicionPagoFinal:', condicionPagoFinal);
+    console.log('diasCreditoFinal:', diasCreditoFinal);
+    console.log('clienteActual.condicion_pago:', clienteActual.condicion_pago);
+    console.log('clienteActual.dias_credito:', clienteActual.dias_credito);
+    console.log('condicionCambio:', condicionCambio);
+    console.log('Entrará al INSERT:', condicionCambio && !!id_empleado);
+    console.log('=================================');
+
     const result = await executeQuery(
       `UPDATE clientes SET 
         ruc = ?, 
@@ -399,7 +412,8 @@ export async function updateCliente(req, res) {
     }
 
     if (condicionCambio && id_empleado) {
-      await executeQuery(
+      console.log('=== EJECUTANDO INSERT HISTORIAL ===');
+      const insertResult = await executeQuery(
         `INSERT INTO clientes_historial_condicion 
           (id_cliente, id_empleado, condicion_anterior, dias_anterior, condicion_nueva, dias_nuevo, observacion)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -413,6 +427,8 @@ export async function updateCliente(req, res) {
           observacion_condicion || null
         ]
       );
+      console.log('INSERT result:', insertResult.success, insertResult.error || '');
+      console.log('===================================');
     }
     
     res.json({

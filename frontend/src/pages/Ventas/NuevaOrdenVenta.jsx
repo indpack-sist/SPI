@@ -1199,60 +1199,74 @@ setFormCabecera(prev => ({
               <div className="card-body space-y-4">
                 <div>
                   <label className="form-label">Condición de Pago</label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Contado' ? 'btn-success' : 'btn-outline'}`}
-                      onClick={() => setFormCabecera({...formCabecera, tipo_venta: 'Contado'})}
-                    >
-                      <DollarSign size={18} className="inline mr-1" /> Contado
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'} ${!cargandoCredito && !estadoCredito?.usar_limite_credito ? 'opacity-50' : ''}`}
-                      onClick={() => estadoCredito?.usar_limite_credito && setFormCabecera({...formCabecera, tipo_venta: 'Crédito'})}
-                      disabled={cargandoCredito || !estadoCredito?.usar_limite_credito}
-                    >
-                      {cargandoCredito
-                        ? <Clock size={18} className="inline mr-1 animate-spin" />
-                        : !estadoCredito?.usar_limite_credito
-                          ? <Lock size={18} className="inline mr-1" />
-                          : <Clock size={18} className="inline mr-1" />
-                      } Crédito
-                    </button>
-                  </div>
-                </div>
-
-                {formCabecera.tipo_venta === 'Crédito' && (
-                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <label className="form-label text-orange-800">Días de Crédito</label>
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                      {DIAS_CREDITO_OPCIONES.map(dias => (
-                        <button
-                          key={dias}
-                          type="button"
-                          className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-white hover:bg-orange-100 border-orange-200'}`}
-                          onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
-                        >
-                          {dias} días
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-muted">Otro:</span>
-                      <input 
-                        type="number" 
-                        className="form-input form-input-sm w-20 text-center"
-                        value={formCabecera.dias_credito}
-                        onChange={(e) => setFormCabecera({...formCabecera, dias_credito: e.target.value})}
-                        onWheel={handleWheelDisable}
-                      />
-                      <span className="text-xs font-bold text-orange-700 ml-auto">
-                        Vence: {new Date(formCabecera.fecha_vencimiento).toLocaleDateString()}
+                  {clienteSeleccionado?.condicion_pago ? (
+                    <div className="flex items-center gap-2 p-2 bg-gray-100 border rounded-lg">
+                      <Lock size={14} className="text-muted" />
+                      <span className="font-medium">
+                        {clienteSeleccionado.condicion_pago === 'Credito'
+                          ? `Crédito ${clienteSeleccionado.dias_credito} Días`
+                          : 'Contado'}
                       </span>
+                      <span className="text-xs text-muted ml-auto">Definido en ficha del cliente</span>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Contado' ? 'btn-success' : 'btn-outline'}`}
+                          onClick={() => setFormCabecera({...formCabecera, tipo_venta: 'Contado'})}
+                        >
+                          <DollarSign size={18} className="inline mr-1" /> Contado
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn flex-1 py-2 ${formCabecera.tipo_venta === 'Crédito' ? 'btn-warning' : 'btn-outline'} ${!cargandoCredito && !estadoCredito?.usar_limite_credito ? 'opacity-50' : ''}`}
+                          onClick={() => estadoCredito?.usar_limite_credito && setFormCabecera({...formCabecera, tipo_venta: 'Crédito'})}
+                          disabled={cargandoCredito || !estadoCredito?.usar_limite_credito}
+                        >
+                          {cargandoCredito
+                            ? <Clock size={18} className="inline mr-1 animate-spin" />
+                            : !estadoCredito?.usar_limite_credito
+                              ? <Lock size={18} className="inline mr-1" />
+                              : <Clock size={18} className="inline mr-1" />
+                          } Crédito
+                        </button>
+                      </div>
+
+                      {formCabecera.tipo_venta === 'Crédito' && (
+                        <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 animate-in fade-in slide-in-from-top-2 duration-300 mt-3">
+                          <label className="form-label text-orange-800">Días de Crédito</label>
+                          <div className="grid grid-cols-3 gap-2 mb-2">
+                            {DIAS_CREDITO_OPCIONES.map(dias => (
+                              <button
+                                key={dias}
+                                type="button"
+                                className={`btn btn-xs ${parseInt(formCabecera.dias_credito) === dias ? 'btn-warning' : 'bg-white hover:bg-orange-100 border-orange-200'}`}
+                                onClick={() => setFormCabecera({...formCabecera, dias_credito: dias})}
+                              >
+                                {dias} días
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs text-muted">Otro:</span>
+                            <input 
+                              type="number" 
+                              className="form-input form-input-sm w-20 text-center"
+                              value={formCabecera.dias_credito}
+                              onChange={(e) => setFormCabecera({...formCabecera, dias_credito: e.target.value})}
+                              onWheel={handleWheelDisable}
+                            />
+                            <span className="text-xs font-bold text-orange-700 ml-auto">
+                              Vence: {new Date(formCabecera.fecha_vencimiento).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
 
                 <div>
                   <label className="form-label">Medio de Pago</label>

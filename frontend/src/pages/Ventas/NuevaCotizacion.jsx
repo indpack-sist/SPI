@@ -1023,49 +1023,63 @@ setFormCabecera(prev => ({
                 </div>
               )}
               <div className="form-group">
-                <label className="form-label">Condicion de Pago *</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className={`btn flex-1 ${formCabecera.plazo_pago === 'Contado' ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => setFormCabecera(prev => ({ ...prev, plazo_pago: 'Contado' }))}
-                    disabled={cotizacionConvertida}
-                  >
-                    Contado
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn flex-1 ${formCabecera.plazo_pago !== 'Contado' && formCabecera.plazo_pago !== '' ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => {
-                      if (estadoCredito?.usar_limite_credito) {
-                        setFormCabecera(prev => ({ ...prev, plazo_pago: '' }));
-                      }
-                    }}
-                    disabled={cotizacionConvertida || !estadoCredito?.usar_limite_credito}
-                    title={!estadoCredito?.usar_limite_credito ? 'Este cliente no tiene credito habilitado' : ''}
-                  >
-                    {!estadoCredito?.usar_limite_credito && <Lock size={14} className="mr-1" />}
-                    Credito
-                  </button>
-                </div>
+                <label className="form-label">Condicion de Pago</label>
+                {clienteSeleccionado?.condicion_pago ? (
+                  <div className="flex items-center gap-2 p-2 bg-gray-100 border rounded-lg">
+                    <Lock size={14} className="text-muted" />
+                    <span className="font-medium">
+                      {clienteSeleccionado.condicion_pago === 'Credito'
+                        ? `Credito ${clienteSeleccionado.dias_credito} Dias`
+                        : 'Contado'}
+                    </span>
+                    <span className="text-xs text-muted ml-auto">Definido en ficha del cliente</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className={`btn flex-1 ${formCabecera.plazo_pago === 'Contado' ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => setFormCabecera(prev => ({ ...prev, plazo_pago: 'Contado' }))}
+                        disabled={cotizacionConvertida}
+                      >
+                        Contado
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn flex-1 ${formCabecera.plazo_pago !== 'Contado' && formCabecera.plazo_pago !== '' ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => {
+                          if (estadoCredito?.usar_limite_credito) {
+                            setFormCabecera(prev => ({ ...prev, plazo_pago: '' }));
+                          }
+                        }}
+                        disabled={cotizacionConvertida || !estadoCredito?.usar_limite_credito}
+                        title={!estadoCredito?.usar_limite_credito ? 'Este cliente no tiene credito habilitado' : ''}
+                      >
+                        {!estadoCredito?.usar_limite_credito && <Lock size={14} className="mr-1" />}
+                        Credito
+                      </button>
+                    </div>
+                    {formCabecera.plazo_pago !== 'Contado' && (
+                      <div className="form-group animate-fadeIn mt-3">
+                        <label className="form-label">Dias de Credito *</label>
+                        <select
+                          className="form-select border-primary"
+                          value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
+                          onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
+                          disabled={cotizacionConvertida}
+                          required={formCabecera.plazo_pago !== 'Contado'}
+                        >
+                          <option value="">Seleccione los dias...</option>
+                          {PLAZOS_PAGO.filter(p => p !== 'Contado').map(plazo => (
+                            <option key={plazo} value={plazo}>{plazo}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-              {formCabecera.plazo_pago !== 'Contado' && (
-                <div className="form-group animate-fadeIn">
-                  <label className="form-label">Dias de Credito *</label>
-                  <select
-                    className="form-select border-primary"
-                    value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
-                    onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
-                    disabled={cotizacionConvertida}
-                    required={formCabecera.plazo_pago !== 'Contado'}
-                  >
-                    <option value="">Seleccione los dias...</option>
-                    {PLAZOS_PAGO.filter(p => p !== 'Contado').map(plazo => (
-                      <option key={plazo} value={plazo}>{plazo}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div className="form-group">
                 <label className="form-label">Forma de Pago</label>
                 <select

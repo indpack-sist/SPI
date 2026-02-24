@@ -333,30 +333,28 @@ function NuevaCotizacion() {
     }));
   };
 
-  const obtenerTipoCambio = async () => {
-    try {
-      setLoadingTC(true);
-      const response = await dashboard.actualizarTipoCambio({
-        currency: 'USD',
-        date: formCabecera.fecha_emision
-      });
-      if (response.data.success && response.data.data) {
-        const tc = response.data.data;
-        const valorTC = tc.venta || tc.compra || tc.tipo_cambio || 3.80;
-        setTipoCambio(valorTC);
-        setTipoCambioFecha(tc.fecha || formCabecera.fecha_emision);
-        setFormCabecera(prev => ({
-          ...prev,
-          tipo_cambio: parseFloat(valorTC).toFixed(4)
-        }));
-      }
-    } catch (err) {
-      console.error(err);
-      setFormCabecera(prev => ({ ...prev, tipo_cambio: 3.80 }));
-    } finally {
-      setLoadingTC(false);
+ // DESPUÉS
+const obtenerTipoCambio = async () => {
+  try {
+    setLoadingTC(true);
+    const response = await dashboard.getTipoCambio(); // lee el cache, no consume API
+    if (response.data.success && response.data.data) {
+      const tc = response.data.data;
+      const valorTC = tc.promedio || tc.venta || tc.compra || 3.80;
+      setTipoCambio(valorTC);
+      setTipoCambioFecha(tc.fecha);
+      setFormCabecera(prev => ({
+        ...prev,
+        tipo_cambio: parseFloat(valorTC).toFixed(4)
+      }));
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setFormCabecera(prev => ({ ...prev, tipo_cambio: 3.80 }));
+  } finally {
+    setLoadingTC(false);
+  }
+};
 
   const handleSelectCliente = async (cliente) => {
     try {

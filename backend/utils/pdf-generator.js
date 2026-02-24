@@ -366,16 +366,21 @@ export async function generarPDFSalida(datos) {
       doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
       doc.text(`Web: ${EMPRESA.web}`, 50, 184);
 
-      doc.roundedRect(380, 40, 165, 75, 5).stroke('#000000');
+      doc.roundedRect(380, 40, 165, 90, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`R.U.C. ${EMPRESA.ruc}`, 385, 48, { align: 'center', width: 155 });
       doc.fontSize(11).font('Helvetica-Bold');
       
       const tituloDoc = datos.historial_despachos ? 'REPORTE DE ORDEN' : 'CONSTANCIA DE SALIDA';
-      doc.text(tituloDoc, 385, 65, { align: 'center', width: 155 });
+      doc.text(tituloDoc, 385, 63, { align: 'center', width: 155 });
       
-      doc.fontSize(14).fillColor('#cc0000'); 
-      doc.text(`No. ${datos.numero_orden || datos.codigo || datos.id_salida || 'N/A'}`, 385, 90, { align: 'center', width: 155 });
+      const numSalida = datos.numero_salida || datos.id_salida;
+      const textoSalida = numSalida ? `SAL-${String(numSalida).padStart(6, '0')}` : 'N/A';
+      doc.fontSize(13).fillColor('#cc0000'); 
+      doc.text(`No. ${textoSalida}`, 385, 82, { align: 'center', width: 155 });
+
+      doc.fontSize(9).fillColor('#444444'); 
+      doc.text(`Ref. O/V: ${datos.numero_orden || 'N/A'}`, 385, 102, { align: 'center', width: 155 });
 
       const destino = datos.tipo_movimiento === 'Venta' 
         ? (datos.cliente || datos.destinatario_nombre) 
@@ -421,8 +426,6 @@ export async function generarPDFSalida(datos) {
       doc.text('Fecha:', 40, 213);
       doc.font('Helvetica');
       doc.text(formatearFecha(datos.fecha_movimiento || datos.fecha_emision), 100, 213);
-      
-      // --- CAMBIO: Se eliminó el bloque que pintaba la HORA aquí ---
       
       doc.font('Helvetica-Bold');
       doc.text('Tipo:', 40, 243);

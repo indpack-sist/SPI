@@ -838,7 +838,7 @@ function DetalleOrdenVenta() {
     }
   };
 
-  const handleDescargarSalidaEspecificaPDF = async (idSalida) => {
+  const handleDescargarSalidaEspecificaPDF = async (idSalida, numeroSalida) => {
     try {
       setDescargandoPDF(idSalida);
       
@@ -850,7 +850,11 @@ function DetalleOrdenVenta() {
       const link = document.createElement('a');
       link.href = url;
       
-      link.setAttribute('download', `ConstanciaSalida-${orden.numero_orden}-${idSalida}.pdf`);
+      // Formatear el número de salida (ej. SAL-000123) por si viene el dato
+      const numeroSalidaFormat = numeroSalida ? `SAL-${String(numeroSalida).padStart(6, '0')}` : idSalida;
+      
+      // Se asigna el nombre con ambos correlativos
+      link.setAttribute('download', `ConstanciaSalida-${orden.numero_orden}-${numeroSalidaFormat}.pdf`);
       
       document.body.appendChild(link);
       link.click();
@@ -865,7 +869,6 @@ function DetalleOrdenVenta() {
       setDescargandoPDF(null);
     }
   };
-
   const handleRectificarCantidad = async (e) => {
     e.preventDefault();
     if (!productoRectificar) return;
@@ -2188,7 +2191,7 @@ function DetalleOrdenVenta() {
                              <div className="flex gap-2 justify-center">
                                <button 
                                  className="btn btn-sm btn-outline" 
-                                 onClick={() => handleDescargarSalidaEspecificaPDF(val)} 
+                                 onClick={() => handleDescargarSalidaEspecificaPDF(val, row.numero_salida)} 
                                  disabled={descargandoPDF === val}
                                  title="Descargar PDF"
                                >

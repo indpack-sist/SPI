@@ -333,11 +333,11 @@ function NuevaCotizacion() {
     }));
   };
 
- // DESPUÉS
-const obtenerTipoCambio = async () => {
+ const obtenerTipoCambio = async () => {
   try {
     setLoadingTC(true);
-    const response = await dashboard.getTipoCambio(); // lee el cache, no consume API
+    // Sin "date" → el backend busca el día más reciente disponible
+    const response = await dashboard.actualizarTipoCambio({ currency: 'USD' });
     if (response.data.success && response.data.data) {
       const tc = response.data.data;
       const valorTC = tc.promedio || tc.venta || tc.compra || 3.80;

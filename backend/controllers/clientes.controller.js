@@ -325,7 +325,9 @@ export async function updateCliente(req, res) {
       usar_limite_credito,
       condicion_pago,
       dias_credito,
-      estado
+      estado,
+      id_empleado,
+      observacion_condicion
     } = req.body;
     
     const checkResult = await executeQuery(
@@ -350,8 +352,13 @@ export async function updateCliente(req, res) {
       }
     }
 
+    const clienteActual = checkResult.data[0];
     const condicionPagoFinal = condicion_pago || 'Contado';
     const diasCreditoFinal = condicionPagoFinal === 'Credito' ? parseInt(dias_credito || 0) : 0;
+
+    const condicionCambio = 
+      clienteActual.condicion_pago !== condicionPagoFinal || 
+      parseInt(clienteActual.dias_credito || 0) !== diasCreditoFinal;
 
     const result = await executeQuery(
       `UPDATE clientes SET 
@@ -389,6 +396,23 @@ export async function updateCliente(req, res) {
     
     if (!result.success) {
       return res.status(500).json({ error: result.error });
+    }
+
+    if (condicionCambio && id_empleado) {
+      await executeQuery(
+        `INSERT INTO clientes_historial_condicion 
+          (id_cliente, id_empleado, condicion_anterior, dias_anterior, condicion_nueva, dias_nuevo, observacion)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          id_empleado,
+          clienteActual.condicion_pago || 'Contado',
+          parseInt(clienteActual.dias_credito || 0),
+          condicionPagoFinal,
+          diasCreditoFinal,
+          observacion_condicion || null
+        ]
+      );
     }
     
     res.json({
@@ -721,5 +745,37 @@ export async function deleteDireccionCliente(req, res) {
     res.json({ success: true, message: 'Dirección eliminada exitosamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+}
+export async function getHistorialCondicionCliente(req, res) {
+  try {
+    const { id } = req.params;
+
+    const result = await executeQuery(`
+      SELECT 
+        h.id_historial,
+        h.condicion_anterior,
+        h.dias_anterior,
+        h.condicion_nueva,
+        h.dias_nuevo,
+        h.observacion,
+        DATE_FORMAT(h.fecha_cambio, '%Y-%m-%d %H:%i:%s') as fecha_cambio,
+        e.id_empleado,
+        e.nombre_completo,
+        e.cargo,
+        e.rol
+      FROM clientes_historial_condicion h
+      INNER JOIN empleados e ON h.id_empleado = e.id_empleado
+      WHERE h.id_cliente = ?
+      ORDER BY h.fecha_cambio DESC
+    `, [id]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 }

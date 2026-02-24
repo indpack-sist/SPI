@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clientesAPI, solicitudesCreditoAPI } from '../../config/api';
+import { useAuth } from '../../context/AuthContext';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
@@ -12,6 +13,7 @@ import Loading from '../../components/UI/Loading';
 
 function Clientes() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,6 +38,10 @@ function Clientes() {
     justificacion: ''
   });
 
+  const [condicionOriginal, setCondicionOriginal] = useState({ condicion_pago: 'Contado', dias_credito: 0 });
+  const [observacionCambio, setObservacionCambio] = useState('');
+  const [condicionCambioDetectado, setCondicionCambioDetectado] = useState(false);
+
   const [formData, setFormData] = useState({
     tipo_documento: 'RUC', 
     ruc: '',
@@ -56,6 +62,15 @@ function Clientes() {
   useEffect(() => {
     cargarClientes();
   }, []);
+
+  useEffect(() => {
+    if (editando) {
+      const cambio =
+        formData.condicion_pago !== condicionOriginal.condicion_pago ||
+        parseInt(formData.dias_credito || 0) !== parseInt(condicionOriginal.dias_credito || 0);
+      setCondicionCambioDetectado(cambio);
+    }
+  }, [formData.condicion_pago, formData.dias_credito]);
 
   const cargarClientes = async () => {
     try {
@@ -89,6 +104,12 @@ function Clientes() {
         validar_documento: false,
         estado: cliente.estado
       });
+      setCondicionOriginal({
+        condicion_pago: cliente.condicion_pago || 'Contado',
+        dias_credito: parseInt(cliente.dias_credito || 0)
+      });
+      setObservacionCambio('');
+      setCondicionCambioDetectado(false);
       setDocumentoValidado(null);
       setDatosAPI(null);
       setCreacionManual(false);
@@ -110,6 +131,9 @@ function Clientes() {
         validar_documento: true,
         estado: 'Activo'
       });
+      setCondicionOriginal({ condicion_pago: 'Contado', dias_credito: 0 });
+      setObservacionCambio('');
+      setCondicionCambioDetectado(false);
       setDocumentoValidado(null);
       setDatosAPI(null);
       setCreacionManual(false);
@@ -123,6 +147,8 @@ function Clientes() {
     setDocumentoValidado(null);
     setDatosAPI(null);
     setCreacionManual(false);
+    setObservacionCambio('');
+    setCondicionCambioDetectado(false);
   };
 
   const abrirModalSolicitudCredito = (cliente) => {
@@ -130,7 +156,6 @@ function Clientes() {
       setError(`El cliente ${cliente.razon_social} ya tiene una solicitud en proceso.`);
       return;
     }
-
     setClienteParaSolicitud(cliente);
     setArchivoSustento(null);
     setSolicitudData({
@@ -168,11 +193,9 @@ function Clientes() {
       formDataToSend.append('limite_credito_usd_solicitado', solicitudData.limite_credito_usd_solicitado);
       formDataToSend.append('usar_limite_credito', true);
       formDataToSend.append('justificacion', solicitudData.justificacion);
-      
       if (archivoSustento) {
         formDataToSend.append('archivo_sustento', archivoSustento);
       }
-
       await solicitudesCreditoAPI.create(formDataToSend);
       setSuccess('Solicitud de crédito enviada exitosamente. Pendiente de aprobación.');
       setModalSolicitudOpen(false);
@@ -244,10 +267,7 @@ function Clientes() {
 
   const activarModoManual = () => {
     setCreacionManual(true);
-    setFormData({
-      ...formData,
-      validar_documento: false
-    });
+    setFormData({ ...formData, validar_documento: false });
     setDocumentoValidado(null);
   };
 
@@ -272,6 +292,11 @@ function Clientes() {
       limite_credito_usd: editando ? parseFloat(formData.limite_credito_usd || 0) : 0
     };
 
+    if (editando && condicionCambioDetectado) {
+      dataToSend.id_empleado = user?.id_empleado;
+      dataToSend.observacion_condicion = observacionCambio || null;
+    }
+
     try {
       if (editando) {
         await clientesAPI.update(editando.id_cliente, dataToSend);
@@ -279,19 +304,17 @@ function Clientes() {
       } else {
         const response = await clientesAPI.create(dataToSend);
         const nuevoClienteId = response.data.data.id_cliente;
-
         if (formData.usar_limite_credito && (parseFloat(formData.limite_credito_pen) > 0 || parseFloat(formData.limite_credito_usd) > 0)) {
-            const solicitudFormData = new FormData();
-            solicitudFormData.append('id_cliente', nuevoClienteId);
-            solicitudFormData.append('limite_credito_pen_solicitado', parseFloat(formData.limite_credito_pen || 0));
-            solicitudFormData.append('limite_credito_usd_solicitado', parseFloat(formData.limite_credito_usd || 0));
-            solicitudFormData.append('usar_limite_credito', true);
-            solicitudFormData.append('justificacion', 'Solicitud inicial al crear cliente');
-            
-            await solicitudesCreditoAPI.create(solicitudFormData);
-            setSuccess('Cliente creado y solicitud de crédito enviada exitosamente');
+          const solicitudFormData = new FormData();
+          solicitudFormData.append('id_cliente', nuevoClienteId);
+          solicitudFormData.append('limite_credito_pen_solicitado', parseFloat(formData.limite_credito_pen || 0));
+          solicitudFormData.append('limite_credito_usd_solicitado', parseFloat(formData.limite_credito_usd || 0));
+          solicitudFormData.append('usar_limite_credito', true);
+          solicitudFormData.append('justificacion', 'Solicitud inicial al crear cliente');
+          await solicitudesCreditoAPI.create(solicitudFormData);
+          setSuccess('Cliente creado y solicitud de crédito enviada exitosamente');
         } else {
-            setSuccess('Cliente creado exitosamente');
+          setSuccess('Cliente creado exitosamente');
         }
       }
       cerrarModal();
@@ -470,9 +493,9 @@ function Clientes() {
               )}
             </div>
             {!editando && !creacionManual && (
-                <button type="button" className="text-xs text-primary mt-2 hover:underline flex items-center" onClick={activarModoManual}>
-                    <Edit size={12} className="mr-1"/> Ingresar manualmente (Sin validación API)
-                </button>
+              <button type="button" className="text-xs text-primary mt-2 hover:underline flex items-center" onClick={activarModoManual}>
+                <Edit size={12} className="mr-1"/> Ingresar manualmente (Sin validación API)
+              </button>
             )}
             {documentoValidado === true && <div className="mt-2 flex items-center gap-2 text-sm text-success"><CheckCircle size={16} /> Validado correctamente</div>}
             {documentoValidado === false && <div className="mt-2 flex items-center gap-2 text-sm text-danger"><AlertCircle size={16} /> No válido</div>}
@@ -566,6 +589,33 @@ function Clientes() {
                 />
               </div>
             )}
+
+            {editando && condicionCambioDetectado && (
+              <div className="mt-3 pt-3 border-t border-orange-200 bg-orange-50 rounded-lg p-3">
+                <p className="text-xs font-bold text-orange-700 mb-2 flex items-center gap-1">
+                  <AlertCircle size={13} /> Se detectó un cambio en la condición comercial
+                </p>
+                <div className="text-xs text-orange-600 mb-2">
+                  <span className="font-medium">Antes: </span>
+                  {condicionOriginal.condicion_pago === 'Credito'
+                    ? `Crédito ${condicionOriginal.dias_credito} días`
+                    : 'Contado'}
+                  <span className="mx-2">→</span>
+                  <span className="font-medium">Ahora: </span>
+                  {formData.condicion_pago === 'Credito'
+                    ? `Crédito ${formData.dias_credito} días`
+                    : 'Contado'}
+                </div>
+                <label className="form-label text-orange-700">Motivo del cambio (opcional)</label>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  placeholder="Ej. Acuerdo comercial, ampliación de línea, renegociación..."
+                  value={observacionCambio}
+                  onChange={(e) => setObservacionCambio(e.target.value)}
+                />
+              </div>
+            )}
           </div>
 
           <div className="card bg-gray-50 border p-4 mb-4">
@@ -594,58 +644,57 @@ function Clientes() {
             </div>
 
             {editando ? (
-                <div className="pt-3 border-t">
-                    <div className="card bg-blue-50 mb-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertCircle size={16} className="text-info" />
-                        <p className="text-sm font-medium text-info">Límites Actuales (Solo lectura)</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-xs text-muted">Límite en Soles</p>
-                          <p className="text-lg font-bold text-success">S/ {parseFloat(formData.limite_credito_pen || 0).toFixed(2)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted">Límite en Dólares</p>
-                          <p className="text-lg font-bold text-primary">$ {parseFloat(formData.limite_credito_usd || 0).toFixed(2)}</p>
-                        </div>
-                      </div>
+              <div className="pt-3 border-t">
+                <div className="card bg-blue-50 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle size={16} className="text-info" />
+                    <p className="text-sm font-medium text-info">Límites Actuales (Solo lectura)</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-muted">Límite en Soles</p>
+                      <p className="text-lg font-bold text-success">S/ {parseFloat(formData.limite_credito_pen || 0).toFixed(2)}</p>
                     </div>
-                    
-                    <button 
-                        type="button" 
-                        className={`btn btn-block ${editando.tiene_solicitud_pendiente ? 'btn-disabled opacity-50' : 'btn-outline'}`}
-                        onClick={() => abrirModalSolicitudCredito(editando)}
-                        disabled={editando.tiene_solicitud_pendiente}
-                    >
-                        <CreditCard size={16} /> 
-                        {editando.tiene_solicitud_pendiente 
-                            ? 'Solicitud en Proceso' 
-                            : !formData.usar_limite_credito 
-                                ? 'Solicitar Activación de Crédito' 
-                                : 'Solicitar Cambio de Límite'
-                        }
-                    </button>
+                    <div>
+                      <p className="text-xs text-muted">Límite en Dólares</p>
+                      <p className="text-lg font-bold text-primary">$ {parseFloat(formData.limite_credito_usd || 0).toFixed(2)}</p>
+                    </div>
+                  </div>
                 </div>
+                <button 
+                  type="button" 
+                  className={`btn btn-block ${editando.tiene_solicitud_pendiente ? 'btn-disabled opacity-50' : 'btn-outline'}`}
+                  onClick={() => abrirModalSolicitudCredito(editando)}
+                  disabled={editando.tiene_solicitud_pendiente}
+                >
+                  <CreditCard size={16} /> 
+                  {editando.tiene_solicitud_pendiente 
+                    ? 'Solicitud en Proceso' 
+                    : !formData.usar_limite_credito 
+                      ? 'Solicitar Activación de Crédito' 
+                      : 'Solicitar Cambio de Límite'
+                  }
+                </button>
+              </div>
             ) : (
-                formData.usar_limite_credito && (
-                    <div className="pt-3 border-t">
-                        <div className="alert alert-info mb-3">
-                            <AlertCircle size={16} />
-                            <span className="text-xs">Estos límites se enviarán como una solicitud de crédito automática para aprobación.</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group mb-0">
-                            <label className="form-label">Límite en Soles (S/)</label>
-                            <input type="number" className="form-input" value={formData.limite_credito_pen} onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })} min="0" step="0.01" placeholder="0.00" />
-                            </div>
-                            <div className="form-group mb-0">
-                            <label className="form-label">Límite en Dólares ($)</label>
-                            <input type="number" className="form-input" value={formData.limite_credito_usd} onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })} min="0" step="0.01" placeholder="0.00" />
-                            </div>
-                        </div>
+              formData.usar_limite_credito && (
+                <div className="pt-3 border-t">
+                  <div className="alert alert-info mb-3">
+                    <AlertCircle size={16} />
+                    <span className="text-xs">Estos límites se enviarán como una solicitud de crédito automática para aprobación.</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="form-group mb-0">
+                      <label className="form-label">Límite en Soles (S/)</label>
+                      <input type="number" className="form-input" value={formData.limite_credito_pen} onChange={(e) => setFormData({ ...formData, limite_credito_pen: e.target.value })} min="0" step="0.01" placeholder="0.00" />
                     </div>
-                )
+                    <div className="form-group mb-0">
+                      <label className="form-label">Límite en Dólares ($)</label>
+                      <input type="number" className="form-input" value={formData.limite_credito_usd} onChange={(e) => setFormData({ ...formData, limite_credito_usd: e.target.value })} min="0" step="0.01" placeholder="0.00" />
+                    </div>
+                  </div>
+                </div>
+              )
             )}
           </div>
 
@@ -713,7 +762,6 @@ function Clientes() {
             
             <div className="form-group">
               <label className="form-label">Archivo de Sustento (Opcional)</label>
-              
               <div className="flex gap-2">
                 <div 
                   className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 focus:outline-none focus:border-primary transition-all"
@@ -722,17 +770,16 @@ function Clientes() {
                   title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                 >
                   {archivoSustento ? (
-                      <div className="flex items-center justify-center gap-2 text-success text-sm">
-                          <CheckCircle size={16} />
-                          <span className="font-medium truncate max-w-[150px]">{archivoSustento.name}</span>
-                      </div>
+                    <div className="flex items-center justify-center gap-2 text-success text-sm">
+                      <CheckCircle size={16} />
+                      <span className="font-medium truncate max-w-[150px]">{archivoSustento.name}</span>
+                    </div>
                   ) : (
-                      <div className="text-gray-400">
-                          <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-primary font-bold">Ctrl+V</span> para pegar imagen</p>
-                      </div>
+                    <div className="text-gray-400">
+                      <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-primary font-bold">Ctrl+V</span> para pegar imagen</p>
+                    </div>
                   )}
                 </div>
-
                 <button 
                   type="button" 
                   className="btn btn-outline border-dashed px-4 flex flex-col items-center justify-center gap-1"
@@ -742,13 +789,12 @@ function Clientes() {
                   <FilePlus size={20} />
                   <span className="text-[10px] uppercase font-bold">Subir</span>
                 </button>
-
                 <input 
-                    id="file-upload-sustento"
-                    type="file" 
-                    className="hidden" 
-                    onChange={(e) => setArchivoSustento(e.target.files[0])}
-                    accept=".pdf,.jpg,.jpeg,.png"
+                  id="file-upload-sustento"
+                  type="file" 
+                  className="hidden" 
+                  onChange={(e) => setArchivoSustento(e.target.files[0])}
+                  accept=".pdf,.jpg,.jpeg,.png"
                 />
               </div>
             </div>

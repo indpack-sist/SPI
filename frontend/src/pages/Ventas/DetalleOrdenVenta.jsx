@@ -1528,16 +1528,16 @@ function DetalleOrdenVenta() {
             <FileText size={20} /> PDF Orden
           </button>
 
-          {!sinComprobanteAsignado && orden.tipo_comprobante && (
-            <button 
-              className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
-              onClick={() => handleDescargarPDF('comprobante')} 
-              disabled={procesando}
-              title={`Descargar ${orden.tipo_comprobante}`}
-            >
-              <Download size={20} /> PDF {orden.tipo_comprobante}
-            </button>
-          )}
+          {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (
+  <button 
+    className="btn btn-outline border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" 
+    onClick={() => handleDescargarPDF('comprobante')} 
+    disabled={procesando}
+    title={`Descargar ${orden.tipo_comprobante}`}
+  >
+    <Download size={20} /> PDF {orden.tipo_comprobante}
+  </button>
+)}
           
           {puedeEditarOrden() && (
             <>

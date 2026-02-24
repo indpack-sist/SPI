@@ -293,7 +293,7 @@ function Clientes() {
     };
 
     if (editando && condicionCambioDetectado) {
-      dataToSend.id_empleado = user?.id_empleado;
+      dataToSend.id_empleado = user?.id;
       dataToSend.observacion_condicion = observacionCambio || null;
     }
 

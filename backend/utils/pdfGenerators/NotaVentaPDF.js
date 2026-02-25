@@ -239,7 +239,7 @@ export async function generarNotaVentaPDF(orden) {
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const totalLinea = (item.cantidad * item.precio_unitario) * (1 - descuento/100);
         const valorVenta = parseFloat(totalLinea).toFixed(2);
-        const descripcion = `[${item.codigo_producto}] ${item.producto}`;
+        const descripcion = item.producto;
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, 215, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 

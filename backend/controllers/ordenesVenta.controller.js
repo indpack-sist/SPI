@@ -782,6 +782,21 @@ export async function updateOrdenVenta(req, res) {
       }
     }
 
+    const detalleAnteriorDespacho = await executeQuery(
+      'SELECT id_producto, cantidad_despachada, cantidad_reservada FROM detalle_orden_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    const mapaDespachos = {};
+    if (detalleAnteriorDespacho.success) {
+      detalleAnteriorDespacho.data.forEach(row => {
+        mapaDespachos[row.id_producto] = {
+          cantidad_despachada: parseFloat(row.cantidad_despachada || 0),
+          cantidad_reservada: parseFloat(row.cantidad_reservada || 0)
+        };
+      });
+    }
+
     let subtotal = 0;
     let totalComision = 0;
     let sumaComisionPorcentual = 0;
@@ -918,15 +933,19 @@ export async function updateOrdenVenta(req, res) {
       const precioBase = parseFloat(item.precio_base || 0);
       const pctComision = parseFloat(item.porcentaje_comision || 0);
       const montoComision = precioBase * (pctComision / 100);
+      const infoDespacho = mapaDespachos[item.id_producto] || { cantidad_despachada: 0, cantidad_reservada: 0 };
 
       queriesNuevoDetalle.push({
         sql: `INSERT INTO detalle_orden_venta (
           id_orden_venta, id_producto, cantidad, precio_unitario, precio_base,
-          porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          porcentaje_comision, monto_comision, descuento_porcentaje, stock_reservado,
+          cantidad_despachada, cantidad_reservada
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id, item.id_producto, cantidad, precioVenta, precioBase,
-          pctComision, montoComision, 0, stockReservado ? 1 : 0
+          pctComision, montoComision, 0, stockReservado ? 1 : 0,
+          infoDespacho.cantidad_despachada,
+          infoDespacho.cantidad_reservada
         ]
       });
 

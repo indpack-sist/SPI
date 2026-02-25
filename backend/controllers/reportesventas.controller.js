@@ -238,7 +238,9 @@ export const getReporteVentas = async (req, res) => {
                 stock_reservado: orden.stock_reservado,
                 comprobante_editado: orden.comprobante_editado,
                 tipo_impuesto: orden.tipo_impuesto,
-                porcentaje_impuesto: parseFloat(orden.porcentaje_impuesto) || 18,
+                porcentaje_impuesto: orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined 
+    ? parseFloat(orden.porcentaje_impuesto) 
+    : 18,
                 observaciones: orden.observaciones,
                 motivo_rechazo: orden.motivo_rechazo,
                 observaciones_verificador: orden.observaciones_verificador,

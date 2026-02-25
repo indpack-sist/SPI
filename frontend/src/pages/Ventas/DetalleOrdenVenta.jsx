@@ -1472,7 +1472,7 @@ function DetalleOrdenVenta() {
             </button>
           )}
 
-          {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
+          {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && orden.tipo_comprobante === 'Factura' && (
             orden.facturado_sunat === 1 ? (
               <button
                 className="btn btn-success"               

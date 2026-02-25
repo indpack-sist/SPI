@@ -102,12 +102,21 @@ export const getReporteVentas = async (req, res) => {
         const listaDetalle = ordenes.map(orden => {
             const esDolar = orden.moneda === 'USD';
             
-            const totalOriginal = parseFloat(orden.total) || 0;
-            const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
-            const subtotalOriginal = parseFloat(orden.subtotal) || 0;
-            const igvOriginal = parseFloat(orden.igv) || 0;
-            const comisionOriginal = parseFloat(orden.total_comision) || 0;
-            const pendienteOriginal = totalOriginal - pagadoOriginal;
+const subtotalOriginal = parseFloat(orden.subtotal) || 0;
+const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
+const comisionOriginal = parseFloat(orden.total_comision) || 0;
+
+const tipoImpuesto = String(orden.tipo_impuesto || '').toUpperCase().trim();
+const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+const porcentajeImp = esSinImpuesto ? 0 : (
+    orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined
+        ? parseFloat(orden.porcentaje_impuesto)
+        : 18
+);
+
+const igvOriginal = subtotalOriginal * (porcentajeImp / 100);
+const totalOriginal = subtotalOriginal + igvOriginal;
+const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
 
             if (esDolar) {
                 kpis.totalVentasUSD += totalOriginal;

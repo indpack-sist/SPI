@@ -619,8 +619,8 @@ function DetalleOrdenVenta() {
       return;
     }
 
-    if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.1) {
-      setError(`El monto no puede ser mayor al saldo pendiente (${formatearMoneda(resumenPagos.saldo_pendiente)})`);
+if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
+        setError(`El monto no puede ser mayor al saldo pendiente (${formatearMoneda(resumenPagos.saldo_pendiente)})`);
       return;
     }
     
@@ -2334,17 +2334,17 @@ function DetalleOrdenVenta() {
             <div className="form-group">
               <label className="form-label">Monto a Pagar *</label>
               <input
-                type="number"
-                className="form-input"
-                value={pagoForm.monto_pagado}
-                onChange={(e) => setPagoForm({ ...pagoForm, monto_pagado: e.target.value })}
-                required
-                step="0.01"
-                min="0.01"
-                max={saldoCorregido}
-                placeholder="0.00"
-                onWheel={handleWheelDisable}
-              />
+  type="number"
+  className="form-input"
+  value={pagoForm.monto_pagado}
+  onChange={(e) => setPagoForm({ ...pagoForm, monto_pagado: e.target.value })}
+  required
+  step="0.001"
+  min="0.001"
+  max={saldoCorregido}
+  placeholder="0.000"
+  onWheel={handleWheelDisable}
+/>
               {resumenPagos && (
                 <small className="text-muted">
                   Máximo: {formatearMoneda(saldoCorregido)}

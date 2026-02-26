@@ -259,15 +259,27 @@ function NuevaOrdenVenta() {
 
         setCargandoCredito(true);
         const resCli = await clientesAPI.getById(orden.id_cliente);
-        if (resCli.data.success) {
-          const clienteData = resCli.data.data;
-          setClienteSeleccionado(clienteData);
-          if (clienteData.direcciones && clienteData.direcciones.length > 0) {
-            setDireccionesCliente(clienteData.direcciones);
-          } else if (clienteData.direccion_despacho) {
-            setDireccionesCliente([{ id_direccion: 'principal', direccion: clienteData.direccion_despacho, es_principal: 1 }]);
-          }
-        }
+if (resCli.data.success) {
+  const clienteData = resCli.data.data;
+  setClienteSeleccionado(clienteData);
+  if (clienteData.direcciones && clienteData.direcciones.length > 0) {
+    setDireccionesCliente(clienteData.direcciones);
+  } else if (clienteData.direccion_despacho) {
+    setDireccionesCliente([{ id_direccion: 'principal', direccion: clienteData.direccion_despacho, es_principal: 1 }]);
+  }
+
+  const condicion = clienteData.condicion_pago || 'Contado';
+  const diasCredito = parseInt(clienteData.dias_credito || 0);
+  const tipoVentaCliente = (condicion === 'Credito' && clienteData.usar_limite_credito && diasCredito > 0)
+    ? 'Crédito'
+    : 'Contado';
+
+  setFormCabecera(prev => ({
+    ...prev,
+    tipo_venta: tipoVentaCliente,
+    dias_credito: tipoVentaCliente === 'Crédito' ? diasCredito : prev.dias_credito
+  }));
+}
 
         try {
           const resCredito = await clientesAPI.getEstadoCredito(orden.id_cliente);

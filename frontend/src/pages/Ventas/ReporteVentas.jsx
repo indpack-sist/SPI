@@ -546,7 +546,7 @@ const ReporteVentas = () => {
                   <div className="form-group mb-0">
                       <label className="form-label uppercase text-xs text-muted">Estado Orden</label>
                       <select 
-                          className="form-select"
+                          className="form-select"  
                           value={filtros.estadoOrden}
                           onChange={(e) => setFiltros({...filtros, estadoOrden: e.target.value})}
                       >

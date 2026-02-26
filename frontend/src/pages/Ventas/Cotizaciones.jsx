@@ -253,23 +253,27 @@ function Cotizaciones() {
             <button
   className="flex items-center gap-1 mt-1"
   style={{
-    background: 'transparent',
-    border: 'none',
+    background: 'var(--accent-dim)',
+    border: '1px solid var(--accent-border)',
+    borderRadius: '2px',
     cursor: 'pointer',
-    padding: 0,
-    fontSize: '11px',
+    padding: '2px 7px',
+    fontSize: '10px',
     color: 'var(--accent)',
     fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 600,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase'
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px'
   }}
   onClick={(e) => {
     e.stopPropagation();
     navigate(`/ventas/ordenes/${row.id_orden_venta}`);
   }}
 >
-  Ver OV <ExternalLink size={11} />
+  <ExternalLink size={10} /> Ver OV
 </button>
           )}
         </div>

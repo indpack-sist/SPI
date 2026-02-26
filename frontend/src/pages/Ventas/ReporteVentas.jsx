@@ -499,17 +499,16 @@ const ReporteVentas = () => {
                     <div className="search-input-wrapper">
                         <Search className="search-icon" size={16} />
                         <input 
-                            type="text"
-                            placeholder="Buscar cliente por nombre o RUC..."
-                            className="form-input search-input w-full pl-10 !bg-white border border-gray-300 rounded-md text-gray-900 shadow-sm"
-                            style={{ backgroundColor: '#ffffff', opacity: 1 }}
-                            value={busquedaCliente}
-                            onChange={(e) => {
-                                setBusquedaCliente(e.target.value);
-                                if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
-                            }}
-                            onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
-                        />
+    type="text"
+    placeholder="Buscar cliente por nombre o RUC..."
+    className="form-input search-input"
+    value={busquedaCliente}
+    onChange={(e) => {
+        setBusquedaCliente(e.target.value);
+        if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
+    }}
+    onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
+/>
                         {filtros.idCliente && (
                             <button 
                                 type="button"
@@ -522,18 +521,22 @@ const ReporteVentas = () => {
                     </div>
                     
                     {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                        <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-96 overflow-y-auto">
-                            {clientesSugeridos.map(cliente => (
-                                <li 
-                                    key={cliente.id_cliente}
-                                    onClick={() => seleccionarCliente(cliente)}
-                                    className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-800 border-b border-gray-100 last:border-0"
-                                >
-                                    <div className="font-medium">{cliente.razon_social}</div>
-                                    <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
-                                </li>
-                            ))}
-                        </ul>
+                        <ul className="absolute z-50 w-full border border-border rounded-none shadow-lg mt-1 max-h-96 overflow-y-auto"
+    style={{ backgroundColor: 'var(--bg-secondary)' }}>
+    {clientesSugeridos.map(cliente => (
+        <li 
+            key={cliente.id_cliente}
+            onClick={() => seleccionarCliente(cliente)}
+            className="px-4 py-2 cursor-pointer text-sm border-b border-border last:border-0"
+            style={{ color: 'var(--text-primary)' }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--carbon-light)'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+            <div className="font-medium">{cliente.razon_social}</div>
+            <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
+        </li>
+    ))}
+</ul>
                     )}
                 </div>
               </div>

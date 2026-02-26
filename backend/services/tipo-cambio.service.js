@@ -27,7 +27,6 @@ export function obtenerTipoCambioCache() {
     };
   }
   
-  console.log('⚠️ No hay tipo de cambio en cache, usando valor por defecto');
   return {
     valido: true,
     compra: 3.75,
@@ -42,21 +41,15 @@ export function obtenerTipoCambioCache() {
   };
 }
 
-/**
- * Obtener tipo de cambio desde API (CONSUMO MANUAL)
- * Esta función CONSUME un token de la API
- */
-export async function actualizarTipoCambio(currency = 'USD', date = null) {
+export async function actualizarTipoCambio(date = null) {
   try {
-    console.log(`💱 🔴 CONSUMIENDO API: Obteniendo tipo de cambio ${currency} desde Decolecta...`);
-
-    const params = { currency };
+    const params = {};
     if (date) {
       params.date = date; 
     }
 
     const response = await axios.get(
-      `${DECOLECTA_API_URL}/tipo-cambio/sbs/average`,
+      `${DECOLECTA_API_URL}/tipo-cambio/sunat`,
       {
         headers: {
           'Content-Type': 'application/json',
@@ -66,8 +59,6 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
         timeout: API_TIMEOUT
       }
     );
-
-    console.log('✅ Tipo de cambio obtenido desde API:', response.data);
 
     if (response.data) {
       const tipoCambio = {
@@ -84,8 +75,6 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
         timestamp: Date.now()
       };
 
-      console.log('💾 Tipo de cambio guardado en cache por 24 horas');
-
       return {
         valido: true,
         ...tipoCambio,
@@ -100,14 +89,13 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
     };
 
   } catch (error) {
-    console.error('❌ Error al obtener tipo de cambio desde API:', {
+    console.error('Error al obtener tipo de cambio desde API:', {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status
     });
 
     if (tipoCambioCache.data) {
-      console.log('⚠️ Error en API, manteniendo cache antiguo');
       return {
         valido: true,
         ...tipoCambioCache.data,
@@ -117,7 +105,7 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
       };
     }
 
-    const valorDefault = {
+    return {
       valido: true,
       compra: 3.75,
       venta: 3.78,
@@ -129,14 +117,9 @@ export async function actualizarTipoCambio(currency = 'USD', date = null) {
       es_default: true,
       advertencia: 'API no disponible. Usando valor predeterminado.'
     };
-
-    return valorDefault;
   }
 }
 
-/**
- * Conversión de monedas
- */
 export function convertirPENaUSD(montoPEN, tipoCambio) {
   const tc = tipoCambio?.promedio || tipoCambio?.venta || 3.765;
   return montoPEN / tc;
@@ -147,21 +130,14 @@ export function convertirUSDaPEN(montoUSD, tipoCambio) {
   return montoUSD * tc;
 }
 
-/**
- * Limpiar cache manualmente
- */
 export function limpiarCache() {
   tipoCambioCache = {
     data: null,
     timestamp: null,
     ttl: 86400000
   };
-  console.log('🗑️ Cache de tipo de cambio limpiado');
 }
 
-/**
- * Obtener información del cache
- */
 export function obtenerInfoCache() {
   if (!tipoCambioCache.data) {
     return {

@@ -1,5 +1,6 @@
 /* =====================================================
-   PRODUCTO DETALLE - ESTILOS MEJORADOS
+   PRODUCTO DETALLE — INDUSTRIAL DARK THEME
+   Usa variables de index.css
    ===================================================== */
 
 .producto-detalle-container {
@@ -9,14 +10,14 @@
 }
 
 /* =====================================================
-   SECCIÓN INFORMACIÓN DEL PRODUCTO
+   SECCIÓN INFO PRODUCTO
    ===================================================== */
 
 .seccion-info-producto {
-  background: white;
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   padding: 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   margin-bottom: 2rem;
 }
 
@@ -26,58 +27,63 @@
   gap: 1rem;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 2px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .seccion-header h2 {
-  font-size: 1.5rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.25rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--text-primary);
   margin: 0;
 }
 
 .seccion-subtitulo {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   margin-top: 0.25rem;
 }
 
 /* =====================================================
-   GRID DE INFORMACIÓN
+   GRID INFO
    ===================================================== */
 
 .info-producto-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
   margin-bottom: 1.5rem;
 }
 
 .info-card {
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s;
+  transition: border-color 0.2s;
 }
 
 .info-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  border-color: var(--steel);
 }
 
 .info-card-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--carbon-light);
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
 }
 
 .info-card-header h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: white;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.813rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
 }
 
 .info-card-body {
@@ -85,15 +91,15 @@
 }
 
 /* =====================================================
-   FILAS DE INFORMACIÓN
+   FILAS INFO
    ===================================================== */
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .info-row:last-child {
@@ -101,9 +107,11 @@
 }
 
 .info-label {
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .info-value {
@@ -114,29 +122,36 @@
 }
 
 .codigo-badge {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 6px;
+  background: var(--carbon-light);
+  color: var(--accent);
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--accent-border);
+  border-radius: 2px;
   font-family: 'Courier New', monospace;
-  font-size: 0.875rem;
+  font-size: 0.813rem;
+  letter-spacing: 0.05em;
 }
 
+/* =====================================================
+   STOCK CARD
+   ===================================================== */
 
 .stock-principal {
   text-align: center;
   padding: 1.5rem 1rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border-radius: 8px;
+  background: var(--carbon-light);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   margin-bottom: 1rem;
 }
 
 .stock-label {
   display: block;
-  font-size: 0.75rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.688rem;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.15em;
   margin-bottom: 0.5rem;
 }
 
@@ -147,8 +162,9 @@
   gap: 0.5rem;
   font-size: 2.5rem;
   font-weight: 700;
-  color: #0284c7;
+  color: var(--accent);
   line-height: 1;
+  font-family: 'Barlow Condensed', sans-serif;
 }
 
 .stock-unidad {
@@ -158,74 +174,96 @@
 }
 
 .valor-destacado {
-  color: #059669 !important;
-  font-weight: 700 !important;
-}
-
-.valor-exito {
-  color: #10b981 !important;
+  color: var(--success) !important;
   font-weight: 700 !important;
 }
 
 /* =====================================================
-   CUP - CON MANEJO ESPECIAL
+   CUP
    ===================================================== */
 
 .cup-principal {
   text-align: center;
-  padding: 1.5rem 1rem;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border-radius: 8px;
+  padding: 1.25rem 1rem;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: 2px;
   margin-bottom: 1rem;
 }
 
 .cup-label {
   display: block;
-  font-size: 0.75rem;
-  color: #92400e;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.688rem;
+  color: var(--accent);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.15em;
   margin-bottom: 0.5rem;
 }
 
 .cup-valor-grande {
   display: block;
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #92400e;
+  color: var(--accent);
+  font-family: 'Barlow Condensed', sans-serif;
   line-height: 1;
 }
 
-/* CUP SIN VALOR - ALERTA ESPECIAL */
+.cup-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 2px;
+  font-size: 0.813rem;
+}
+
+.cup-info.success {
+  background: rgba(46, 204, 113, 0.08);
+  color: var(--success);
+  border: 1px solid rgba(46, 204, 113, 0.2);
+}
+
+.cup-info.warning {
+  background: rgba(243, 156, 18, 0.08);
+  color: var(--warning);
+  border: 1px solid rgba(243, 156, 18, 0.2);
+}
+
+.cup-sin-valor {
+  color: var(--danger);
+  font-size: 0.813rem;
+  font-style: italic;
+}
+
 .cup-sin-valor-card {
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  border: 2px dashed #f87171;
-  border-radius: 8px;
-  padding: 1.5rem;
+  background: rgba(231, 76, 60, 0.06);
+  border: 1px dashed rgba(231, 76, 60, 0.3);
+  border-radius: 2px;
+  padding: 1.25rem;
   text-align: center;
 }
 
-.cup-sin-valor-icon {
-  color: #dc2626;
-  margin-bottom: 1rem;
+.cup-advertencia {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: rgba(231, 76, 60, 0.06);
+  border: 1px solid rgba(231, 76, 60, 0.2);
+  border-radius: 2px;
+  font-size: 0.813rem;
+  color: var(--danger);
 }
 
-.cup-sin-valor-texto {
-  color: #991b1b;
-}
-
-.cup-sin-valor-texto strong {
-  display: block;
-  font-size: 1.125rem;
-  margin-bottom: 0.5rem;
-}
-
-.cup-sin-valor-texto p {
-  font-size: 0.875rem;
-  margin: 0;
-  line-height: 1.5;
+/* Costos y precios info panel */
+.grid.grid-cols-2.gap-4.mb-4.bg-gray-50 {
+  background: var(--carbon-light) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 2px !important;
 }
 
 /* =====================================================
@@ -233,70 +271,77 @@
    ===================================================== */
 
 .descripcion-producto {
-  background: #f8f9fa;
-  border-left: 4px solid #667eea;
+  background: var(--carbon-light);
+  border-left: 3px solid var(--accent);
   padding: 1.25rem;
-  border-radius: 8px;
+  border-radius: 2px;
   margin-top: 1.5rem;
 }
 
 .descripcion-producto h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
 }
 
 .descripcion-producto p {
   margin: 0;
   color: var(--text-secondary);
   line-height: 1.6;
+  font-size: 0.875rem;
 }
 
 /* =====================================================
-   TABS
+   TABS PRINCIPALES
    ===================================================== */
 
 .seccion-tabs {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .tabs-header {
   display: flex;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-bottom: 2px solid var(--border-color);
+  gap: 0;
+  padding: 0;
+  background: var(--carbon-light);
+  border-bottom: 1px solid var(--border);
 }
 
 .tab-button {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: white;
-  border: 2px solid transparent;
-  border-radius: 8px;
+  padding: 0.875rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.813rem;
   font-weight: 600;
-  font-size: 0.938rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .tab-button:hover {
-  background: #f3f4f6;
+  background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 
 .tab-button.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  box-shadow: none;
 }
 
 .tabs-content {
@@ -304,137 +349,115 @@
 }
 
 /* =====================================================
-   RECETAS - TABS HORIZONTALES
+   RECETAS TABS
    ===================================================== */
 
 .recetas-tabs-container {
-  background: #f8f9fa;
+  background: var(--carbon-light);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   padding: 1rem;
-  border-radius: 10px;
   margin-bottom: 1.5rem;
 }
 
 .recetas-tabs {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
 }
 
 .recetas-tabs::-webkit-scrollbar {
-  height: 6px;
+  height: 4px;
 }
 
 .recetas-tabs::-webkit-scrollbar-track {
-  background: #e5e7eb;
-  border-radius: 3px;
+  background: var(--border);
 }
 
 .recetas-tabs::-webkit-scrollbar-thumb {
-  background: #9ca3af;
-  border-radius: 3px;
+  background: var(--steel);
+  border-radius: 0;
 }
 
 .receta-tab {
-  min-width: 220px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 1rem;
+  min-width: 200px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.875rem 1rem;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
+  text-align: left;
 }
 
 .receta-tab:hover {
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
-  transform: translateY(-2px);
+  border-color: var(--steel);
+  background: var(--bg-secondary);
 }
 
 .receta-tab.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: #667eea;
-  color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  border-left: 3px solid var(--accent);
 }
 
 .receta-tab-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .receta-star {
-  color: #fbbf24;
+  color: var(--accent);
   flex-shrink: 0;
-}
-
-.receta-tab.active .receta-star {
-  color: white;
 }
 
 .receta-tab-nombre {
+  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
   font-size: 0.938rem;
   flex: 1;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.receta-icono-activo {
-  color: #10b981;
-  flex-shrink: 0;
-}
-
-.receta-icono-inactivo {
-  color: #ef4444;
-  flex-shrink: 0;
-}
-
-.receta-tab.active .receta-icono-activo,
-.receta-tab.active .receta-icono-inactivo {
-  color: white;
-}
-
-.receta-tab-info,
-.receta-tab-costo,
-.receta-tab-version {
-  font-size: 0.813rem;
-  margin-top: 0.25rem;
-}
+.receta-icono-activo { color: var(--success); flex-shrink: 0; }
+.receta-icono-inactivo { color: var(--danger); flex-shrink: 0; }
 
 .receta-tab-info {
-  color: #6b7280;
-}
-
-.receta-tab.active .receta-tab-info {
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
 }
 
 .receta-tab-costo {
+  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
-  color: #059669;
+  font-size: 0.875rem;
+  color: var(--success);
+  margin-top: 0.2rem;
 }
 
-.receta-tab.active .receta-tab-costo {
-  color: white;
-}
+.receta-tab.active .receta-tab-costo { color: var(--accent); }
 
 .receta-tab-version {
-  color: #9ca3af;
-}
-
-.receta-tab.active .receta-tab-version {
-  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-family: monospace;
 }
 
 /* =====================================================
-   DETALLE DE RECETA
+   DETALLE RECETA
    ===================================================== */
 
 .receta-detalle-header {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  border-radius: 10px;
+  background: var(--carbon-light);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
   display: flex;
@@ -442,9 +465,7 @@
   gap: 1.5rem;
 }
 
-.receta-detalle-info {
-  flex: 1;
-}
+.receta-detalle-info { flex: 1; }
 
 .receta-titulo-badges {
   display: flex;
@@ -454,8 +475,11 @@
 }
 
 .receta-titulo-badges h3 {
-  font-size: 1.5rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.25rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--text-primary);
   margin: 0;
 }
@@ -469,58 +493,61 @@
   color: var(--text-secondary);
   font-style: italic;
   margin-bottom: 1rem;
-  font-size: 0.938rem;
+  font-size: 0.875rem;
 }
 
 /* =====================================================
-   MÉTRICAS DE RECETA
+   MÉTRICAS
    ===================================================== */
 
 .receta-metricas {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
 }
 
 .metrica-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.875rem;
   text-align: center;
-  transition: all 0.2s;
+  transition: border-color 0.2s;
 }
 
 .metrica-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  border-color: var(--steel);
 }
 
 .metrica-card.destacado {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border-color: #fbbf24;
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
 }
 
 .metrica-label {
-  font-size: 0.75rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.688rem;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.5rem;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.4rem;
 }
 
 .metrica-valor {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  font-size: 1.5rem;
+  gap: 0.4rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 
+.metrica-card.destacado .metrica-valor { color: var(--accent); }
+
 .metrica-unidad {
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -532,12 +559,10 @@
 }
 
 /* =====================================================
-   TABLA DE INSUMOS
+   INSUMOS
    ===================================================== */
 
-.insumos-section {
-  margin-top: 1.5rem;
-}
+.insumos-section { margin-top: 1.5rem; }
 
 .insumos-header {
   display: flex;
@@ -547,51 +572,59 @@
 }
 
 .insumos-header h4 {
-  font-size: 1.25rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   margin: 0 0 0.25rem 0;
+  color: var(--text-primary);
 }
 
 .insumos-header p {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   margin: 0;
 }
 
 .insumos-tabla-container {
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
   overflow: hidden;
   margin-bottom: 1.5rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
-/* Estilos específicos de celdas */
+/* Celdas de tabla */
 .orden-badge {
-  background: #e5e7eb;
-  color: #374151;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-weight: 600;
+  background: var(--carbon-light);
+  color: var(--text-secondary);
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
   font-size: 0.813rem;
 }
 
+.orden-vacio { color: var(--steel); }
+
 .codigo-text {
   font-family: 'Courier New', monospace;
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: 0.813rem;
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
 .insumo-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .insumo-nombre {
   font-weight: 600;
   color: var(--text-primary);
+  font-size: 0.875rem;
 }
 
 .badge-critico {
@@ -601,7 +634,7 @@
 }
 
 .insumo-notas {
-  font-size: 0.813rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   font-style: italic;
 }
@@ -610,63 +643,57 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .cantidad-valor {
+  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
   font-size: 1rem;
   color: var(--text-primary);
 }
 
 .cantidad-unidad {
-  font-size: 0.75rem;
+  font-size: 0.688rem;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .cup-cell {
   text-align: right;
   font-size: 0.875rem;
-}
-
-.cup-sin-valor {
-  color: #dc2626;
-  font-size: 0.813rem;
-  font-style: italic;
+  color: var(--text-primary);
 }
 
 .costo-total-cell {
   text-align: right;
+  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
   font-size: 1rem;
-  color: #059669;
+  color: var(--success);
 }
 
 .stock-cell {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
-.stock-valor {
-  font-weight: 600;
-}
-
-.stock-suficiente {
-  color: #10b981;
-}
-
-.stock-insuficiente {
-  color: #ef4444;
-}
+.stock-valor { font-weight: 600; font-size: 0.875rem; }
+.stock-suficiente { color: var(--success); }
+.stock-insuficiente { color: var(--danger); }
 
 .stock-alerta {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.75rem;
-  color: #dc2626;
+  font-size: 0.688rem;
+  color: var(--danger);
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .acciones-cell {
@@ -676,74 +703,78 @@
 }
 
 /* =====================================================
-   RESUMEN DE COSTOS
+   RESUMEN COSTOS
    ===================================================== */
 
 .costos-resumen {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
 }
 
 .costo-card {
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 1.5rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1.25rem;
   display: flex;
   gap: 1rem;
   align-items: center;
-  transition: all 0.3s;
+  transition: border-color 0.2s;
 }
 
 .costo-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  border-color: var(--steel);
 }
 
 .costo-card.destacado {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border-color: #10b981;
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
 }
 
 .costo-icono {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  background: var(--carbon-light);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--accent);
   flex-shrink: 0;
 }
 
 .costo-card.destacado .costo-icono {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: var(--accent-dim);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
-.costo-info {
-  flex: 1;
-}
+.costo-info { flex: 1; }
 
 .costo-label {
-  font-size: 0.75rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.688rem;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.5rem;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.4rem;
 }
 
 .costo-valor {
-  font-size: 1.75rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;
   margin-bottom: 0.25rem;
 }
 
+.costo-card.destacado .costo-valor { color: var(--accent); }
+
 .costo-descripcion {
-  font-size: 0.813rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -759,14 +790,18 @@
 }
 
 .historial-header h2 {
-  font-size: 1.5rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.25rem;
   font-weight: 700;
-  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.4rem 0;
+  color: var(--text-primary);
 }
 
 .historial-header p {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   margin: 0;
 }
 
@@ -777,26 +812,27 @@
 }
 
 .historial-tabla-container {
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
-/* Estilos de celdas de historial */
+/* Celdas historial */
 .fecha-text {
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   color: var(--text-secondary);
+  font-family: monospace;
 }
 
 .tipo-movimiento-cell {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 0.813rem;
 }
 
 .inventario-text {
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   color: var(--text-primary);
   font-weight: 500;
 }
@@ -804,40 +840,47 @@
 .destino-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .destino-principal {
   font-weight: 600;
   color: var(--text-primary);
+  font-size: 0.875rem;
 }
 
 .destino-documento {
   font-size: 0.75rem;
   color: var(--text-secondary);
+  font-family: monospace;
 }
 
 .cantidad-historial {
+  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
   color: var(--text-primary);
+  font-size: 1rem;
 }
 
 .costo-unitario-text {
-  font-size: 0.875rem;
+  font-size: 0.813rem;
+  color: var(--text-secondary);
 }
 
 .costo-total-historial {
+  font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
-  color: #059669;
+  color: var(--success);
+  font-size: 1rem;
 }
 
 .registrado-text {
-  font-size: 0.875rem;
+  font-size: 0.813rem;
   color: var(--text-secondary);
 }
 
 /* =====================================================
-   ESTADOS VACÍOS
+   EMPTY STATE
    ===================================================== */
 
 .empty-state {
@@ -846,13 +889,17 @@
 }
 
 .empty-icon {
-  color: #d1d5db;
+  color: var(--steel);
   margin: 0 auto 1.5rem;
+  opacity: 0.4;
 }
 
 .empty-state h3 {
-  font-size: 1.25rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.125rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
@@ -860,10 +907,11 @@
 .empty-state p {
   color: var(--text-secondary);
   margin: 0 0 1.5rem 0;
-  max-width: 500px;
+  max-width: 480px;
   margin-left: auto;
   margin-right: auto;
   line-height: 1.6;
+  font-size: 0.875rem;
 }
 
 /* =====================================================
@@ -875,14 +923,13 @@
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
+  color: var(--text-primary);
+  font-size: 0.875rem;
 }
 
 .form-checkbox-label input[type="checkbox"] {
   cursor: pointer;
-}
-
-.form-checkbox-label span {
-  margin-bottom: 0 !important;
+  accent-color: var(--accent);
 }
 
 .modal-actions {
@@ -890,179 +937,52 @@
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1.5rem;
-}
-.cup-advertencia {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding: 0.5rem;
-  background: #fef2f2;
-  border-radius: 6px;
-  font-size: 0.813rem;
-  color: #dc2626;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
 }
 
-.text-warning {
-  color: #f59e0b;
-  font-style: italic;
-}
-
-.mt-3 {
-  margin-top: 1rem;
-}
 /* =====================================================
-   RESPONSIVE
+   EVOLUCIÓN CUP / DESGLOSE
    ===================================================== */
 
-@media (max-width: 768px) {
-  .producto-detalle-container {
-    padding: 1rem;
-  }
-
-  .info-producto-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .receta-detalle-header {
-    flex-direction: column;
-  }
-
-  .receta-detalle-acciones {
-    flex-direction: row;
-    width: 100%;
-  }
-
-  .receta-metricas {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .costos-resumen {
-    grid-template-columns: 1fr;
-  }
-
-  .historial-header {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .historial-filtros {
-    width: 100%;
-  }
-
-  .tabs-header {
-    flex-direction: column;
-  }
-
-  .tab-button {
-    width: 100%;
-    justify-content: center;
-  }
-}
-/* =====================================================
-   AGREGAR AL FINAL DE ProductoDetalle.css
-   ===================================================== */
-
-/* Desglose de producciones */
 .cup-desglose {
   margin-top: 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .cup-desglose summary {
-  padding: 0.75rem 1rem;
-  background: var(--bg-secondary);
+  padding: 0.625rem 1rem;
+  background: var(--carbon-light);
   cursor: pointer;
-  font-weight: 500;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: background 0.2s;
+  transition: color 0.2s;
+  list-style: none;
 }
 
-.cup-desglose summary:hover {
-  background: var(--bg-hover);
-}
+.cup-desglose summary:hover { color: var(--text-primary); }
 
 .cup-desglose summary::before {
   content: '▶';
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   transition: transform 0.2s;
+  color: var(--accent);
 }
 
-.cup-desglose[open] summary::before {
-  transform: rotate(90deg);
-}
+.cup-desglose[open] summary::before { transform: rotate(90deg); }
 
-.producciones-list {
-  padding: 0.5rem;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.produccion-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
-  transition: background 0.2s;
-}
-
-.produccion-item:hover {
-  background: var(--bg-secondary);
-}
-
-.produccion-item:last-child {
-  border-bottom: none;
-}
-
-.produccion-item.mas {
-  justify-content: center;
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
-.produccion-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.produccion-orden {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-family: monospace;
-}
-
-.produccion-receta {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.produccion-valores {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.produccion-cantidad {
-  color: var(--text-secondary);
-}
-
-.produccion-cup {
-  font-weight: 600;
-  color: var(--primary);
-}
-
-/* Tabla de evolución CUP */
 .cup-evolucion-tabla {
-  margin-top: 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  margin-top: 0;
+  border-top: 1px solid var(--border);
   overflow: hidden;
 }
 
@@ -1072,78 +992,73 @@
 }
 
 .cup-evolucion-tabla thead {
-  background: var(--bg-secondary);
+  background: var(--carbon-light);
 }
 
 .cup-evolucion-tabla th {
-  padding: 0.75rem;
+  padding: 0.625rem 0.75rem;
   text-align: left;
-  font-weight: 600;
-  font-size: 0.875rem;
-  border-bottom: 2px solid var(--border-color);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 0.688rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
 }
 
 .cup-evolucion-tabla td {
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 0.875rem;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.813rem;
+  color: var(--text-primary);
 }
 
 .cup-evolucion-tabla tbody tr:hover {
-  background: var(--bg-secondary);
+  background: var(--carbon-light);
 }
 
 .cup-evolucion-tabla tbody tr:last-child td {
   border-bottom: none;
-  font-weight: 600;
-  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .cup-tendencia {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.688rem;
+  font-weight: 600;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .cup-tendencia.sube {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(231, 76, 60, 0.2);
 }
 
 .cup-tendencia.baja {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(46, 204, 113, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(46, 204, 113, 0.2);
 }
 
 .cup-tendencia.igual {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--carbon-light);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .produccion-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  
-  .cup-evolucion-tabla {
-    overflow-x: auto;
-  }
-  
-  .cup-evolucion-tabla table {
-    min-width: 500px;
-  }
-}
-/* Agregar al final de ProductoDetalle.css */
-/* ============================================
-   ESTILOS PARA MÁRGENES Y TOOLTIPS (OPTIMIZADO)
-   ============================================ */
+/* =====================================================
+   TOOLTIP
+   ===================================================== */
 
 .info-tooltip {
   position: relative;
@@ -1151,64 +1066,57 @@
   align-items: center;
   justify-content: center;
   margin-left: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--color-primary, #3b82f6);
+  font-size: 0.75rem;
+  color: var(--accent);
   cursor: help;
-  background: rgba(59, 130, 246, 0.1);
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  transition: all 0.2s ease;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  transition: all 0.15s;
 }
 
-/* El globo del tooltip */
 .info-tooltip::after {
   content: attr(title);
   position: absolute;
-  bottom: 140%; /* Un poco más arriba */
+  bottom: 140%;
   left: 50%;
-  transform: translateX(-50%) translateY(10px);
-  
-  /* Diseño avanzado */
-  background-color: #1f2937;
-  color: #ffffff;
-  padding: 8px 12px;
-  border-radius: 8px;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--carbon-light);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 2px;
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
-  
-  /* Manejo de texto */
-  white-space: pre-wrap; /* Permite saltos de línea si es largo */
+  white-space: pre-wrap;
   width: max-content;
   max-width: 200px;
   text-align: center;
-  
-  /* Efectos */
   z-index: 100;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   opacity: 0;
   visibility: hidden;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s;
   pointer-events: none;
 }
 
-/* La flechita con mejor diseño */
 .info-tooltip::before {
   content: "";
   position: absolute;
   bottom: 115%;
   left: 50%;
-  transform: translateX(-50%) translateY(10px);
-  border: 6px solid transparent;
-  border-top-color: #1f2937;
+  transform: translateX(-50%) translateY(8px);
+  border: 5px solid transparent;
+  border-top-color: var(--border);
   z-index: 100;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s;
 }
 
-/* Estado Hover: Animación de entrada */
 .info-tooltip:hover::after,
 .info-tooltip:hover::before {
   opacity: 1;
@@ -1217,22 +1125,52 @@
 }
 
 .info-tooltip:hover {
-  background: var(--color-primary, #3b82f6);
-  color: white;
-  opacity: 1;
+  background: var(--accent);
+  color: #0f0f0f;
 }
 
-/* Estilos de la tarjeta de costos */
-.valor-destacado {
-  font-weight: 700;
-  color: var(--color-primary, #3b82f6);
-  font-size: 1.1em;
-}
-
+/* info-row resaltada con valor destacado */
 .info-row:has(.valor-destacado) {
-  background-color: rgba(59, 130, 246, 0.08);
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  margin: 0.5rem 0;
-  border: 1px dashed rgba(59, 130, 246, 0.2);
+  background: rgba(46, 204, 113, 0.04);
+  padding: 0.6rem 0.5rem;
+  border-radius: 2px;
+  margin: 0.25rem 0;
+  border: 1px solid rgba(46, 204, 113, 0.12);
+  border-bottom: 1px solid rgba(46, 204, 113, 0.12);
+}
+
+/* =====================================================
+   OVERRIDES para clases Tailwind hardcodeadas en JSX
+   ===================================================== */
+
+/* Panel CUP inventario (bg-gray-50 inline en jsx) */
+.info-card-body .bg-gray-50 {
+  background: var(--carbon-light) !important;
+  border-color: var(--border) !important;
+}
+
+.info-card-body .text-primary { color: var(--accent) !important; }
+.info-card-body .text-success  { color: var(--success) !important; }
+.info-card-body .text-muted    { color: var(--text-secondary) !important; }
+
+/* Texto gris del JSX */
+.text-gray-500 { color: var(--text-secondary) !important; }
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
+@media (max-width: 768px) {
+  .producto-detalle-container { padding: 1rem; }
+  .info-producto-grid { grid-template-columns: 1fr; }
+  .receta-detalle-header { flex-direction: column; }
+  .receta-detalle-acciones { flex-direction: row; width: 100%; }
+  .receta-metricas { grid-template-columns: repeat(2, 1fr); }
+  .costos-resumen { grid-template-columns: 1fr; }
+  .historial-header { flex-direction: column; gap: 1rem; }
+  .historial-filtros { width: 100%; }
+  .tabs-header { flex-direction: column; }
+  .tab-button { width: 100%; justify-content: center; border-right: none; border-bottom: 1px solid var(--border); }
+  .cup-evolucion-tabla { overflow-x: auto; }
+  .cup-evolucion-tabla table { min-width: 480px; }
 }

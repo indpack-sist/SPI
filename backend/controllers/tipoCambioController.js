@@ -1,4 +1,4 @@
-import { actualizarTipoCambio, obtenerTipoCambioCache } from '../services/tipoCambioService.js';
+import { actualizarTipoCambio, obtenerTipoCambioCache } from '../services/tipo-cambio.service.js';
 
 export const obtenerTC = (req, res) => {
   const resultado = obtenerTipoCambioCache();

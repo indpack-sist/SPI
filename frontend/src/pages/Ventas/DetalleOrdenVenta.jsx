@@ -1499,13 +1499,13 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
 
           {puedeReservarStock() && (
             <button
-              className="btn bg-yellow-500 text-white border-yellow-600 hover:bg-yellow-600"
-              onClick={handleAbrirReservaStock}
-              disabled={procesando}
-              title="Reservar/Editar stock físico"
-            >
-              <Lock size={20} /> {orden.stock_reservado > 0 ? 'Editar Reserva' : 'Reservar Stock'}
-            </button>
+  className="btn btn-warning"
+  onClick={handleAbrirReservaStock}
+  disabled={procesando}
+  title="Reservar/Editar stock físico"
+>
+  <Lock size={20} /> {orden.stock_reservado > 0 ? 'Editar Reserva' : 'Reservar Stock'}
+</button>
           )}
 
           {puedeDespachar() && (
@@ -1808,13 +1808,28 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
                 {orden.id_cotizacion && (
                     <div className="pb-2 mb-2 border-b border-gray-100">
                         <label className="text-sm font-medium text-muted">Cotización Origen:</label>
-                        <button 
-                            className="flex items-center gap-2 text-primary font-bold hover:underline"
-                            onClick={() => navigate(`/ventas/cotizaciones/${orden.id_cotizacion}`)}
-                        >
-                            <FileText size={16} />
-                            {orden.numero_cotizacion}
-                        </button>
+                        <button
+  className="flex items-center gap-1 mt-1"
+  style={{
+    background: 'var(--accent-dim)',
+    border: '1px solid var(--accent-border)',
+    borderRadius: '2px',
+    cursor: 'pointer',
+    padding: '2px 7px',
+    fontSize: '11px',
+    color: 'var(--accent)',
+    fontFamily: "'Barlow Condensed', sans-serif",
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px'
+  }}
+  onClick={() => navigate(`/ventas/cotizaciones/${orden.id_cotizacion}`)}
+>
+  <FileText size={10} /> {orden.numero_cotizacion}
+</button>
                     </div>
                 )}
 

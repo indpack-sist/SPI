@@ -10,7 +10,8 @@ import {
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, dashboard, listasPreciosAPI } from '../../config/api';
+import { cotizacionesAPI, clientesAPI, productosAPI, empleadosAPI, tipoCambioAPI, listasPreciosAPI } from '../../config/api';
+
 import { useAuth } from '../../context/AuthContext';
 
 const TIPOS_IMPUESTO = [
@@ -336,17 +337,27 @@ function NuevaCotizacion() {
  const obtenerTipoCambio = async () => {
   try {
     setLoadingTC(true);
-    // Sin "date" → el backend busca el día más reciente disponible
-    const response = await dashboard.actualizarTipoCambio({ currency: 'USD' });
-    if (response.data.success && response.data.data) {
-      const tc = response.data.data;
-      const valorTC = tc.promedio || tc.venta || tc.compra || 3.80;
-      setTipoCambio(valorTC);
+    const cached = sessionStorage.getItem('indpack_tipo_cambio');
+    if (cached) {
+      const tc = JSON.parse(cached);
+      setTipoCambio(tc.venta);
       setTipoCambioFecha(tc.fecha);
-      setFormCabecera(prev => ({
-        ...prev,
-        tipo_cambio: parseFloat(valorTC).toFixed(4)
-      }));
+      setFormCabecera(prev => ({ ...prev, tipo_cambio: parseFloat(tc.venta).toFixed(4) }));
+      return;
+    }
+    const response = await tipoCambioAPI.actualizar();
+    if (response.data.valido) {
+      const tcData = {
+        compra: response.data.compra,
+        venta: response.data.venta,
+        promedio: response.data.promedio,
+        fecha: response.data.fecha,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem('indpack_tipo_cambio', JSON.stringify(tcData));
+      setTipoCambio(tcData.venta);
+      setTipoCambioFecha(tcData.fecha);
+      setFormCabecera(prev => ({ ...prev, tipo_cambio: parseFloat(tcData.venta).toFixed(4) }));
     }
   } catch (err) {
     console.error(err);
@@ -1015,8 +1026,8 @@ setFormCabecera(prev => ({
                   </div>
                   {tipoCambioFecha && (
                     <small className="text-success block mt-1">
-                      API: {new Date(tipoCambioFecha).toLocaleDateString()}
-                    </small>
+  SUNAT: {new Date(tipoCambioFecha + 'T12:00:00').toLocaleDateString('es-PE')}
+</small>
                   )}
                 </div>
               )}

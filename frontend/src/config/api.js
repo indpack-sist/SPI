@@ -776,6 +776,10 @@ export const notificacionesAPI = {
   marcarLeida: (id) => api.put(`/notificaciones/${id}/leida`),
   marcarTodasLeidas: () => api.put('/notificaciones/marcar-todas-leidas')
 };
+export const tipoCambioAPI = {
+  actualizar: () => api.post('/tipo-cambio/actualizar'),
+  obtener: () => api.get('/tipo-cambio')
+};
 export const reportesAPI = {
   getSireVentas: (params) => api.get('/reportes/sire/ventas', { params }),
   getSireCompras: (params) => api.get('/reportes/sire/compras', { params }),

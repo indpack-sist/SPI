@@ -23,12 +23,17 @@ import {
   PlayCircle,
   Factory,
   Shield,
-  BadgeCheck
+  BadgeCheck,
+  RefreshCcw,
+  Calendar,
+  ArrowRightLeft
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
-import { ordenesVentaAPI } from '../../config/api';
+import { ordenesVentaAPI, tipoCambioAPI } from '../../config/api';
+
+const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
 function OrdenesVenta() {
   const navigate = useNavigate();
@@ -49,8 +54,13 @@ function OrdenesVenta() {
   const itemsPerPage = 20;
   const tablaRef = useRef(null);
 
+  const [tipoCambio, setTipoCambio] = useState(null);
+  const [loadingTC, setLoadingTC] = useState(false);
+  const [mostrarConversion, setMostrarConversion] = useState(false);
+
   useEffect(() => {
     cargarDatos();
+    cargarTCDesdeSession();
   }, [filtroEstado, filtroPrioridad, filtroVerificacion]);
 
   useEffect(() => {
@@ -67,6 +77,60 @@ function OrdenesVenta() {
       }, 150);
     }
   }, [ordenes]);
+
+  const cargarTCDesdeSession = () => {
+    try {
+      const cached = sessionStorage.getItem(TC_SESSION_KEY);
+      if (cached) {
+        setTipoCambio(JSON.parse(cached));
+      }
+    } catch (e) {
+      console.error('Error leyendo TC de sesión:', e);
+    }
+  };
+
+  const actualizarTipoCambio = async () => {
+    setLoadingTC(true);
+    setError(null);
+    try {
+      const response = await tipoCambioAPI.actualizar();
+      if (response.data.valido) {
+        const tcData = {
+          compra: response.data.compra,
+          venta: response.data.venta,
+          promedio: response.data.promedio,
+          fecha: response.data.fecha,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(TC_SESSION_KEY, JSON.stringify(tcData));
+        setTipoCambio(tcData);
+        setSuccess(`TC actualizado: S/ ${tcData.venta} (venta) — Fecha SBS: ${formatearFechaVisual(tcData.fecha)}`);
+        setTimeout(() => setSuccess(null), 4000);
+      } else {
+        setError(response.data.error || 'No se pudo obtener el tipo de cambio');
+      }
+    } catch (err) {
+      console.error('Error actualizando TC:', err);
+      setError('Error al consultar tipo de cambio. Intente más tarde.');
+    } finally {
+      setLoadingTC(false);
+    }
+  };
+
+  const convertirUSDaPEN = (montoUSD) => {
+    if (!tipoCambio || !montoUSD) return null;
+    return parseFloat(montoUSD) * tipoCambio.venta;
+  };
+
+  const obtenerEdadTC = () => {
+    if (!tipoCambio?.timestamp) return null;
+    const minutos = Math.floor((Date.now() - tipoCambio.timestamp) / 60000);
+    if (minutos < 1) return 'Hace un momento';
+    if (minutos < 60) return `Hace ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    if (horas < 24) return `Hace ${horas}h ${minutos % 60}min`;
+    return `Hace más de 24h`;
+  };
 
   const cargarDatos = async () => {
     try {
@@ -113,6 +177,14 @@ function OrdenesVenta() {
       orden.registrado_por?.toLowerCase().includes(term)
     );
   });
+
+  const montoTotalUSD = ordenes.reduce((sum, o) => {
+    if (o.moneda === 'USD') {
+      const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(o.tipo_impuesto || '').toUpperCase());
+      return sum + (esSinImpuesto ? parseFloat(o.subtotal || 0) : parseFloat(o.total || 0));
+    }
+    return sum;
+  }, 0);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -350,12 +422,15 @@ function OrdenesVenta() {
       header: 'Total / Pagado',
       accessor: 'total',
       align: 'right',
-      width: '140px',
+      width: '170px',
       render: (value, row) => {
         const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(row.tipo_impuesto || '').toUpperCase());
         const total = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
         const pagado = parseFloat(row.monto_pagado || 0);
         const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
+        const esUSD = row.moneda === 'USD';
+        const conversionPEN = esUSD && mostrarConversion && tipoCambio ? convertirUSDaPEN(total) : null;
+
         return (
           <div>
             <div className="font-bold text-gray-800">{formatearMoneda(total, row.moneda)}</div>
@@ -366,6 +441,17 @@ function OrdenesVenta() {
                 style={{ width: `${porcentaje}%` }}
               ></div>
             </div>
+            {conversionPEN !== null && (
+              <div className="mt-1 px-2 py-0.5 rounded text-xs font-semibold inline-block"
+                style={{ 
+                  background: 'var(--accent-dim, rgba(234,179,8,0.1))', 
+                  color: 'var(--accent, #ca8a04)',
+                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
+                }}>
+                <ArrowRightLeft size={10} className="inline mr-1" />
+                S/ {formatearNumero(conversionPEN)}
+              </div>
+            )}
           </div>
         );
       }
@@ -513,6 +599,85 @@ function OrdenesVenta() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      <div className="card mb-4 shadow-sm" style={{ 
+        borderLeft: tipoCambio ? '4px solid var(--accent, #ca8a04)' : '4px solid var(--border-color, #374151)'
+      }}>
+        <div className="card-body p-3">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg" style={{ 
+                background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.1))' : 'var(--bg-tertiary, #1f2937)'
+              }}>
+                <DollarSign size={20} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-muted)' }} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Tipo de Cambio SBS (USD → PEN)
+                </p>
+                {tipoCambio ? (
+                  <div className="flex items-center gap-4 mt-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Compra: <strong className="text-base" style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
+                      </span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Venta: <strong className="text-base" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
+                      </span>
+                    </div>
+                    <div className="hidden md:flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <Calendar size={12} />
+                      <span>SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
+                      <span className="mx-1">·</span>
+                      <Clock size={12} />
+                      <span>{obtenerEdadTC()}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    <AlertTriangle size={14} />
+                    <span>No disponible — Presione "Actualizar TC" para consultar</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {tipoCambio && (
+                <button
+                  className={`btn btn-sm ${mostrarConversion ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setMostrarConversion(!mostrarConversion)}
+                  title={mostrarConversion ? 'Ocultar conversiones USD → PEN' : 'Mostrar conversiones USD → PEN'}
+                >
+                  <ArrowRightLeft size={14} />
+                  {mostrarConversion ? 'Ocultar PEN' : 'Ver en PEN'}
+                </button>
+              )}
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={actualizarTipoCambio}
+                disabled={loadingTC}
+                title="Consulta el TC actual desde la SBS (consume 1 token)"
+              >
+                {loadingTC ? (
+                  <RefreshCcw size={14} className="animate-spin" />
+                ) : (
+                  <RefreshCcw size={14} />
+                )}
+                {loadingTC ? 'Consultando...' : 'Actualizar TC'}
+              </button>
+            </div>
+          </div>
+          {tipoCambio && (
+            <div className="flex md:hidden items-center gap-2 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+              <Calendar size={12} />
+              <span>SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
+              <span className="mx-1">·</span>
+              <Clock size={12} />
+              <span>{obtenerEdadTC()}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {estadisticas && (
         <div className="stats-grid">
           <div className="stat-card">
@@ -554,12 +719,31 @@ function OrdenesVenta() {
           </div>
           <div className="stat-card border-l-4 border-success">
             <div className="stat-content">
-              <p className="stat-label">Monto Total</p>
+              <p className="stat-label">Monto Total PEN</p>
               <p className="stat-value text-success">{formatearMoneda(estadisticas.monto_total || 0, 'PEN')}</p>
               <p className="stat-sublabel">{estadisticas.entregadas || 0} entregadas</p>
             </div>
             <div className="stat-icon"><TrendingUp size={24} className="text-success" /></div>
           </div>
+          {montoTotalUSD > 0 && (
+            <div className="stat-card border-l-4" style={{ borderColor: 'var(--accent, #ca8a04)' }}>
+              <div className="stat-content">
+                <p className="stat-label">Monto Total USD</p>
+                <p className="stat-value" style={{ color: 'var(--accent, #ca8a04)' }}>
+                  $ {formatearNumero(montoTotalUSD)}
+                </p>
+                {tipoCambio && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    <ArrowRightLeft size={10} className="inline mr-1" />
+                    Equiv: S/ {formatearNumero(montoTotalUSD * tipoCambio.venta)}
+                  </p>
+                )}
+              </div>
+              <div className="stat-icon" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.1))', color: 'var(--accent, #ca8a04)' }}>
+                <DollarSign size={24} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

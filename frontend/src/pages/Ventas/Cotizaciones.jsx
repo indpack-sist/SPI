@@ -4,12 +4,14 @@ import {
   Plus, Eye, Download, Filter, FileText, Search,
   ChevronLeft, ChevronRight, RefreshCw, Calendar,
   TrendingUp, DollarSign, Edit, Copy, ExternalLink, CheckCircle2,
-  ArrowUpDown
+  ArrowUpDown, RefreshCcw, AlertTriangle, Clock, ArrowRightLeft
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
-import { cotizacionesAPI } from '../../config/api';
+import { cotizacionesAPI, tipoCambioAPI } from '../../config/api';
+
+const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
 function Cotizaciones() {
   const navigate = useNavigate();
@@ -28,6 +30,10 @@ function Cotizaciones() {
   const itemsPerPage = 20;
   const tablaRef = useRef(null);
 
+  const [tipoCambio, setTipoCambio] = useState(null);
+  const [loadingTC, setLoadingTC] = useState(false);
+  const [mostrarConversion, setMostrarConversion] = useState(false);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const estado = params.get('estado');
@@ -38,6 +44,7 @@ function Cotizaciones() {
 
   useEffect(() => {
     cargarDatos();
+    cargarTCDesdeSession();
   }, [filtroEstado]);
 
   useEffect(() => {
@@ -54,6 +61,50 @@ function Cotizaciones() {
       }, 150);
     }
   }, [cotizaciones]);
+
+  const cargarTCDesdeSession = () => {
+    try {
+      const cached = sessionStorage.getItem(TC_SESSION_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setTipoCambio(parsed);
+      }
+    } catch (e) {
+      console.error('Error leyendo TC de sesión:', e);
+    }
+  };
+
+  const actualizarTipoCambio = async () => {
+    setLoadingTC(true);
+    setError(null);
+    try {
+      const response = await tipoCambioAPI.actualizar();
+      if (response.data.valido) {
+        const tcData = {
+          compra: response.data.compra,
+          venta: response.data.venta,
+          promedio: response.data.promedio,
+          fecha: response.data.fecha,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(TC_SESSION_KEY, JSON.stringify(tcData));
+        setTipoCambio(tcData);
+        setSuccessMessage(`Tipo de cambio actualizado: S/ ${tcData.venta} (venta) — Fecha SBS: ${formatearFechaVisual(tcData.fecha)}`);
+      } else {
+        setError(response.data.error || 'No se pudo obtener el tipo de cambio');
+      }
+    } catch (err) {
+      console.error('Error actualizando TC:', err);
+      setError('Error al consultar tipo de cambio. Intente más tarde.');
+    } finally {
+      setLoadingTC(false);
+    }
+  };
+
+  const convertirUSDaPEN = (montoUSD) => {
+    if (!tipoCambio || !montoUSD) return null;
+    return parseFloat(montoUSD) * tipoCambio.venta;
+  };
 
   const cargarDatos = async (silencioso = false) => {
     try {
@@ -105,16 +156,31 @@ function Cotizaciones() {
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
-  const estadisticas = {
-    total: cotizaciones.length,
-    pendientes: cotizaciones.filter(c => c.estado === 'Pendiente').length,
-    aprobadas: cotizaciones.filter(c => c.estado === 'Aprobada').length,
-    convertidas: cotizaciones.filter(c => c.estado === 'Convertida').length,
-    montoTotal: cotizaciones.reduce((sum, c) => {
-      const monto = c.moneda === 'PEN' ? parseFloat(c.total || 0) : 0;
-      return sum + monto;
-    }, 0)
-  };
+  const estadisticas = (() => {
+    const base = {
+      total: cotizaciones.length,
+      pendientes: cotizaciones.filter(c => c.estado === 'Pendiente').length,
+      aprobadas: cotizaciones.filter(c => c.estado === 'Aprobada').length,
+      convertidas: cotizaciones.filter(c => c.estado === 'Convertida').length,
+      montoTotalPEN: 0,
+      montoTotalUSD: 0,
+      montoUSDenPEN: 0
+    };
+
+    cotizaciones.forEach(c => {
+      const total = parseFloat(c.total || 0);
+      if (c.moneda === 'USD') {
+        base.montoTotalUSD += total;
+        if (tipoCambio) {
+          base.montoUSDenPEN += total * tipoCambio.venta;
+        }
+      } else {
+        base.montoTotalPEN += total;
+      }
+    });
+
+    return base;
+  })();
 
   const formatearNumero = (valor) => {
     return new Intl.NumberFormat('en-US', { 
@@ -145,6 +211,16 @@ function Cotizaciones() {
     const partes = fechaStr.split('T')[0].split('-');
     if (partes.length !== 3) return fechaStr;
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  };
+
+  const obtenerEdadTC = () => {
+    if (!tipoCambio?.timestamp) return null;
+    const minutos = Math.floor((Date.now() - tipoCambio.timestamp) / 60000);
+    if (minutos < 1) return 'Hace un momento';
+    if (minutos < 60) return `Hace ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    if (horas < 24) return `Hace ${horas}h ${minutos % 60}min`;
+    return `Hace más de 24h`;
   };
 
   const handleDescargarPDF = async (id_cotizacion, numero, cliente, estadoActual) => {
@@ -251,30 +327,30 @@ function Cotizaciones() {
           </div>
           {!!row.convertida_venta && !!row.id_orden_venta && (
             <button
-  className="flex items-center gap-1 mt-1"
-  style={{
-    background: 'var(--accent-dim)',
-    border: '1px solid var(--accent-border)',
-    borderRadius: '2px',
-    cursor: 'pointer',
-    padding: '2px 7px',
-    fontSize: '10px',
-    color: 'var(--accent)',
-    fontFamily: "'Barlow Condensed', sans-serif",
-    fontWeight: 700,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px'
-  }}
-  onClick={(e) => {
-    e.stopPropagation();
-    navigate(`/ventas/ordenes/${row.id_orden_venta}`);
-  }}
->
-  <ExternalLink size={10} /> Ver OV
-</button>
+              className="flex items-center gap-1 mt-1"
+              style={{
+                background: 'var(--accent-dim)',
+                border: '1px solid var(--accent-border)',
+                borderRadius: '2px',
+                cursor: 'pointer',
+                padding: '2px 7px',
+                fontSize: '10px',
+                color: 'var(--accent)',
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/ventas/ordenes/${row.id_orden_venta}`);
+              }}
+            >
+              <ExternalLink size={10} /> Ver OV
+            </button>
           )}
         </div>
       )
@@ -293,17 +369,37 @@ function Cotizaciones() {
       header: 'Total',
       accessor: 'total',
       align: 'right',
-      width: '140px',
-      render: (value, row) => (
-        <div className="text-right">
-          <div className="font-bold text-lg text-gray-800">{formatearMoneda(value, row.moneda)}</div>
-          {row.moneda === 'USD' && parseFloat(row.tipo_cambio || 0) > 1 && (
-            <div className="text-xs text-muted">
-              TC: S/ {formatearNumero(parseFloat(row.tipo_cambio))}
+      width: '170px',
+      render: (value, row) => {
+        const esUSD = row.moneda === 'USD';
+        const conversionPEN = esUSD && mostrarConversion && tipoCambio
+          ? convertirUSDaPEN(value)
+          : null;
+
+        return (
+          <div className="text-right">
+            <div className="font-bold text-lg text-gray-800">
+              {formatearMoneda(value, row.moneda)}
             </div>
-          )}
-        </div>
-      )
+            {esUSD && parseFloat(row.tipo_cambio || 0) > 1 && (
+              <div className="text-xs text-muted">
+                TC Cot: S/ {formatearNumero(parseFloat(row.tipo_cambio))}
+              </div>
+            )}
+            {conversionPEN !== null && (
+              <div className="mt-1 px-2 py-0.5 rounded text-xs font-semibold inline-block"
+                style={{ 
+                  background: 'var(--accent-dim, rgba(234,179,8,0.1))', 
+                  color: 'var(--accent, #ca8a04)',
+                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
+                }}>
+                <ArrowRightLeft size={10} className="inline mr-1" />
+                S/ {formatearNumero(conversionPEN)}
+              </div>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Estado',
@@ -407,6 +503,85 @@ function Cotizaciones() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
 
+      <div className="card mb-4 shadow-sm" style={{ 
+        borderLeft: tipoCambio ? '4px solid var(--accent, #ca8a04)' : '4px solid var(--border-color, #374151)'
+      }}>
+        <div className="card-body p-3">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg" style={{ 
+                background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.1))' : 'var(--bg-tertiary, #1f2937)'
+              }}>
+                <DollarSign size={20} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-muted)' }} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Tipo de Cambio SBS (USD → PEN)
+                </p>
+                {tipoCambio ? (
+                  <div className="flex items-center gap-4 mt-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Compra: <strong className="text-base" style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
+                      </span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Venta: <strong className="text-base" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
+                      </span>
+                    </div>
+                    <div className="hidden md:flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <Calendar size={12} />
+                      <span>Fecha SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
+                      <span className="mx-1">·</span>
+                      <Clock size={12} />
+                      <span>{obtenerEdadTC()}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    <AlertTriangle size={14} />
+                    <span>No disponible — Presione "Actualizar TC" para consultar</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {tipoCambio && (
+                <button
+                  className={`btn btn-sm ${mostrarConversion ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={() => setMostrarConversion(!mostrarConversion)}
+                  title={mostrarConversion ? 'Ocultar conversiones USD → PEN' : 'Mostrar conversiones USD → PEN'}
+                >
+                  <ArrowRightLeft size={14} />
+                  {mostrarConversion ? 'Ocultar PEN' : 'Ver en PEN'}
+                </button>
+              )}
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={actualizarTipoCambio}
+                disabled={loadingTC}
+                title="Consulta el TC actual desde la SBS (consume 1 token)"
+              >
+                {loadingTC ? (
+                  <RefreshCcw size={14} className="animate-spin" />
+                ) : (
+                  <RefreshCcw size={14} />
+                )}
+                {loadingTC ? 'Consultando...' : 'Actualizar TC'}
+              </button>
+            </div>
+          </div>
+          {tipoCambio && (
+            <div className="flex md:hidden items-center gap-2 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+              <Calendar size={12} />
+              <span>SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
+              <span className="mx-1">·</span>
+              <Clock size={12} />
+              <span>{obtenerEdadTC()}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-content">
@@ -451,12 +626,32 @@ function Cotizaciones() {
         <div className="stat-card bg-gradient-to-br from-primary to-blue-600 text-white">
           <div className="stat-content">
             <p className="stat-label text-white/90">Monto Total (PEN)</p>
-            <p className="stat-value text-white">S/ {formatearNumero(estadisticas.montoTotal)}</p>
+            <p className="stat-value text-white">S/ {formatearNumero(estadisticas.montoTotalPEN)}</p>
           </div>
           <div className="stat-icon bg-white/20 text-white">
             <DollarSign size={24} />
           </div>
         </div>
+
+        {estadisticas.montoTotalUSD > 0 && (
+          <div className="stat-card border-l-4" style={{ borderColor: 'var(--accent, #ca8a04)' }}>
+            <div className="stat-content">
+              <p className="stat-label">Monto Total (USD)</p>
+              <p className="stat-value" style={{ color: 'var(--accent, #ca8a04)' }}>
+                $ {formatearNumero(estadisticas.montoTotalUSD)}
+              </p>
+              {tipoCambio && estadisticas.montoUSDenPEN > 0 && (
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  <ArrowRightLeft size={10} className="inline mr-1" />
+                  Equiv: S/ {formatearNumero(estadisticas.montoUSDenPEN)}
+                </p>
+              )}
+            </div>
+            <div className="stat-icon" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.1))', color: 'var(--accent, #ca8a04)' }}>
+              <DollarSign size={24} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card mb-4 shadow-sm">

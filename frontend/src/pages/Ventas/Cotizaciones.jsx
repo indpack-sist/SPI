@@ -251,14 +251,26 @@ function Cotizaciones() {
           </div>
           {!!row.convertida_venta && !!row.id_orden_venta && (
             <button
-              className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/ventas/ordenes/${row.id_orden_venta}`);
-              }}
-            >
-              Ver Orden de Venta <ExternalLink size={12} />
-            </button>
+  className="flex items-center gap-1 mt-1"
+  style={{
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+    fontSize: '11px',
+    color: 'var(--accent)',
+    fontFamily: "'Barlow Condensed', sans-serif",
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase'
+  }}
+  onClick={(e) => {
+    e.stopPropagation();
+    navigate(`/ventas/ordenes/${row.id_orden_venta}`);
+  }}
+>
+  Ver OV <ExternalLink size={11} />
+</button>
           )}
         </div>
       )

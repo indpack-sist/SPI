@@ -37,7 +37,7 @@ import pagosCobranzasRoutes from './routes/pagos-cobranzas.routes.js';
 import notificacionesRoutes from './routes/notificaciones.routes.js';
 import archivosRoutes from './routes/archivos.routes.js';
 import reportesRoutes from './routes/reportesventas.routes.js';
-
+import tipoCambioRoutes from './routes/tipoCambio.routes.js';
 dotenv.config();
 
 const app = express();
@@ -154,6 +154,7 @@ app.use('/api/compras', verificarToken, verificarPermiso('compras'), comprasRout
 
 app.use('/api/dashboard', verificarToken, verificarPermiso('dashboard'), dashboardRoutes);
 app.use('/api/reportes', verificarToken, verificarPermiso('reportes'), reportesRoutes);
+app.use('/api/tipo-cambio', verificarToken, tipoCambioRoutes);
 
 app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cuentasPagoRoutes);
 app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);

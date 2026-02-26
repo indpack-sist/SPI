@@ -6,13 +6,15 @@ import {
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
   ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw, Eye,
-  BadgeCheck
+    BadgeCheck, ArrowRightLeft, RefreshCcw
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI } from '../../config/api';
+
+const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
 function DetalleOrdenVenta() {
   const { id } = useParams();
@@ -73,6 +75,8 @@ function DetalleOrdenVenta() {
 
   const [infoReservaStock, setInfoReservaStock] = useState(null);
   const [productosReservaSeleccionados, setProductosReservaSeleccionados] = useState([]);
+  const [tipoCambio, setTipoCambio] = useState(null);
+  const [loadingTC, setLoadingTC] = useState(false);
 
   const [pagoForm, setPagoForm] = useState({
     id_cuenta_destino: '',
@@ -145,10 +149,59 @@ function DetalleOrdenVenta() {
     setVisorArchivo({ open: false, url: '', tipo: '', titulo: '' });
   };
 
+  const cargarTCDesdeSession = () => {
+    try {
+      const cached = sessionStorage.getItem(TC_SESSION_KEY);
+      if (cached) {
+        setTipoCambio(JSON.parse(cached));
+      }
+    } catch (e) {
+      console.error('Error leyendo TC de sesión:', e);
+    }
+  };
+
+  const actualizarTipoCambio = async () => {
+    setLoadingTC(true);
+    setError(null);
+    try {
+      const response = await tipoCambioAPI.actualizar();
+      if (response.data.valido) {
+        const tcData = {
+          compra: response.data.compra,
+          venta: response.data.venta,
+          promedio: response.data.promedio,
+          fecha: response.data.fecha,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(TC_SESSION_KEY, JSON.stringify(tcData));
+        setTipoCambio(tcData);
+        setSuccess(`TC actualizado: S/ ${tcData.venta} (venta) — SUNAT: ${formatearFecha(tcData.fecha)}`);
+      } else {
+        setError(response.data.error || 'No se pudo obtener el tipo de cambio');
+      }
+    } catch (err) {
+      console.error('Error actualizando TC:', err);
+      setError('Error al consultar tipo de cambio. Intente más tarde.');
+    } finally {
+      setLoadingTC(false);
+    }
+  };
+
+  const obtenerEdadTC = () => {
+    if (!tipoCambio?.timestamp) return null;
+    const minutos = Math.floor((Date.now() - tipoCambio.timestamp) / 60000);
+    if (minutos < 1) return 'Hace un momento';
+    if (minutos < 60) return `Hace ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    if (horas < 24) return `Hace ${horas}h ${minutos % 60}min`;
+    return `Hace más de 24h`;
+  };
+
   useEffect(() => {
     cargarDatos();
     cargarNavegacion();
     cargarCatalogosTransporte();
+    cargarTCDesdeSession();
   }, [id]);
 
   const cargarNavegacion = async () => {
@@ -1054,7 +1107,8 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
       </div>
     );
   }
-
+  const esUSD = orden.moneda === 'USD';
+  const tcVenta = tipoCambio?.venta || null;
   const subtotalReal = orden.detalle.reduce((acc, item) => {
       const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
       return acc + (isNaN(val) ? 0 : val);
@@ -1136,10 +1190,17 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
     {
       header: 'P. Final',
       accessor: 'precio_unitario',
-      width: '100px',
+      width: '110px',
       align: 'right',
       render: (value) => (
-        <span className="font-medium text-primary">{formatearMoneda(value)}</span>
+        <div className="text-right">
+          <span className="font-medium text-primary">{formatearMoneda(value)}</span>
+          {esUSD && tcVenta && (
+            <div className="text-[10px] mt-0.5" style={{ color: 'var(--accent, #ca8a04)' }}>
+              S/ {formatearNumero(parseFloat(value) * tcVenta)}
+            </div>
+          )}
+        </div>
       )
     },
     {
@@ -1292,11 +1353,26 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
     {
       header: 'Subtotal',
       accessor: 'valor_venta',
-      width: '120px',
+      width: '140px',
       align: 'right',
       render: (value, row) => {
         const subtotalCalc = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
-        return <span className="font-bold text-primary">{formatearMoneda(subtotalCalc)}</span>
+        return (
+          <div className="text-right">
+            <span className="font-bold text-primary">{formatearMoneda(subtotalCalc)}</span>
+            {esUSD && tcVenta && (
+              <div className="mt-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold inline-block"
+                style={{ 
+                  background: 'var(--accent-dim, rgba(234,179,8,0.1))', 
+                  color: 'var(--accent, #ca8a04)',
+                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
+                }}>
+                <ArrowRightLeft size={9} className="inline mr-0.5" />
+                S/ {formatearNumero(subtotalCalc * tcVenta)}
+              </div>
+            )}
+          </div>
+        );
       }
     }
   ];
@@ -1565,7 +1641,59 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && (
+      {esUSD && (
+        <div className="rounded-lg mb-4 p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
+          style={{ 
+            background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.08))' : 'var(--bg-tertiary, #f9fafb)',
+            border: tipoCambio ? '1px solid var(--accent-border, rgba(234,179,8,0.3))' : '1px solid #e2e8f0'
+          }}>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg" style={{ 
+              background: tipoCambio ? 'rgba(234,179,8,0.15)' : '#f3f4f6'
+            }}>
+              <DollarSign size={18} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : '#9ca3af' }} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6b7280' }}>
+                Tipo de Cambio SUNAT — Conversión referencial
+              </p>
+              {tipoCambio ? (
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-sm">
+                    Compra: <strong style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
+                  </span>
+                  <span className="text-sm">
+                    Venta: <strong style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
+                  </span>
+                  <span className="text-xs" style={{ color: '#9ca3af' }}>
+                    <Calendar size={11} className="inline mr-1" />
+                    SUNAT: {formatearFecha(tipoCambio.fecha)}
+                    <span className="mx-1">·</span>
+                    <Clock size={11} className="inline mr-1" />
+                    {obtenerEdadTC()}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-0.5 text-sm" style={{ color: '#9ca3af' }}>
+                  <AlertTriangle size={13} />
+                  <span>No disponible — Presione "Actualizar TC" para ver conversión a soles</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            className="btn btn-sm btn-outline shrink-0"
+            onClick={actualizarTipoCambio}
+            disabled={loadingTC}
+            title="Consultar TC actual desde SUNAT"
+          >
+            {loadingTC ? <RefreshCcw size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
+            {loadingTC ? 'Consultando...' : 'Actualizar TC'}
+          </button>
+        </div>
+      )}
+
+      {sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
           <div className="flex-1">
@@ -1911,7 +2039,7 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
                     </div>
                     {orden.moneda === 'USD' && (
                         <div>
-                            <label className="text-sm font-medium text-muted">T.C.:</label>
+                            <label className="text-sm font-medium text-muted">T.C. Orden:</label>
                             <p>{parseFloat(orden.tipo_cambio).toFixed(4)}</p>
                         </div>
                     )}
@@ -2149,10 +2277,40 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
               <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
             </div>
             
-            {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio || 0) > 1 && (
+            {esUSD && tcVenta && (
+              <div className="rounded-lg p-3 text-sm" style={{
+                background: 'var(--accent-dim, rgba(234,179,8,0.08))',
+                border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
+              }}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-medium flex items-center gap-1" style={{ color: 'var(--accent, #ca8a04)' }}>
+                    <ArrowRightLeft size={14} />
+                    Equivalente en Soles (TC SUNAT):
+                  </span>
+                  <span className="font-bold text-lg" style={{ color: 'var(--accent, #ca8a04)' }}>
+                    S/ {formatearNumero(totalCorregido * tcVenta)}
+                  </span>
+                </div>
+                <p className="text-xs" style={{ color: '#9ca3af' }}>
+                  TC Venta: S/ {tcVenta.toFixed(3)} — SUNAT: {formatearFecha(tipoCambio.fecha)}
+                </p>
+                {parseFloat(orden.tipo_cambio || 0) > 1 && (
+                  <div className="mt-2 pt-2 flex justify-between items-center" style={{ borderTop: '1px solid var(--accent-border, rgba(234,179,8,0.2))' }}>
+                    <span className="text-xs" style={{ color: '#9ca3af' }}>
+                      Equiv. con TC de orden (S/ {parseFloat(orden.tipo_cambio).toFixed(4)}):
+                    </span>
+                    <span className="font-semibold text-sm" style={{ color: '#6b7280' }}>
+                      S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio))}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {esUSD && !tcVenta && parseFloat(orden.tipo_cambio || 0) > 1 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
                 <div className="flex justify-between items-center text-blue-900">
-                  <span className="font-medium">Equivalente en Soles:</span>
+                  <span className="font-medium">Equiv. con TC de orden:</span>
                   <span className="font-bold">
                     S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio))}
                   </span>

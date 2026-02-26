@@ -183,7 +183,7 @@ const ReporteVentas = () => {
   
       const datosResumen = dataFiltrada.map(item => ({
         'Orden': item.numero,
-        'Tipo Comprobante': item.tipo_comprobante || '',   // ← AÑADIR
+        'Tipo Comprobante': item.tipo_comprobante || '',
         'Comprobante': item.numero_comprobante || '',
         'Cliente': item.cliente,
         'RUC': item.ruc,
@@ -211,7 +211,71 @@ const ReporteVentas = () => {
         { wch: 15 }
       ];
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
-  
+
+      const productosAgrupados = {};
+      dataFiltrada.forEach((orden) => {
+        if (orden.detalles && orden.detalles.length > 0) {
+          orden.detalles.forEach(det => {
+            const key = `${det.codigo_producto}_${orden.moneda}`;
+            if (!productosAgrupados[key]) {
+              productosAgrupados[key] = {
+                codigo: det.codigo_producto,
+                nombre: det.producto_nombre,
+                unidad_medida: det.unidad_medida,
+                moneda: orden.moneda,
+                cantidad_total: 0,
+                cantidad_despachada_total: 0,
+                cantidad_pendiente_total: 0,
+                subtotal: 0,
+                descuento_total: 0,
+                ordenes: []
+              };
+            }
+            productosAgrupados[key].cantidad_total += parseFloat(det.cantidad);
+            productosAgrupados[key].cantidad_despachada_total += parseFloat(det.cantidad_despachada || 0);
+            productosAgrupados[key].cantidad_pendiente_total += parseFloat(det.cantidad) - parseFloat(det.cantidad_despachada || 0);
+            productosAgrupados[key].subtotal += parseFloat(det.subtotal);
+            productosAgrupados[key].descuento_total += parseFloat(det.descuento || 0);
+            productosAgrupados[key].ordenes.push({
+              numero: orden.numero,
+              cliente: orden.cliente,
+              cantidad: parseFloat(det.cantidad),
+              precio_unitario: parseFloat(det.precio_unitario),
+              subtotal: parseFloat(det.subtotal)
+            });
+          });
+        }
+      });
+
+      const datosProductos = [];
+      Object.values(productosAgrupados)
+        .sort((a, b) => b.subtotal - a.subtotal)
+        .forEach(prod => {
+          datosProductos.push({
+            'Código': prod.codigo,
+            'Producto': prod.nombre,
+            'Unidad': prod.unidad_medida,
+            'Moneda': prod.moneda,
+            'Cant. Total': parseFloat(prod.cantidad_total.toFixed(2)),
+            'Cant. Despachada': parseFloat(prod.cantidad_despachada_total.toFixed(2)),
+            'Cant. Pendiente': parseFloat(prod.cantidad_pendiente_total.toFixed(2)),
+            'Descuento Total': parseFloat(prod.descuento_total.toFixed(2)),
+            'Subtotal': parseFloat(prod.subtotal.toFixed(2)),
+            'N° Órdenes': prod.ordenes.length,
+            'Órdenes': prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad})`).join(' | ')
+          });
+        });
+
+      if (datosProductos.length > 0) {
+        const wsProductos = XLSX.utils.json_to_sheet(datosProductos);
+        wsProductos['!cols'] = [
+          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 8 },
+          { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+          { wch: 14 }, { wch: 10 }, { wch: 80 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsProductos, 'Resumen Productos');
+      }
+
       if (incluirDetalleExcel) {
         dataFiltrada.forEach((orden) => {
           const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
@@ -499,16 +563,16 @@ const ReporteVentas = () => {
                     <div className="search-input-wrapper">
                         <Search className="search-icon" size={16} />
                         <input 
-    type="text"
-    placeholder="Buscar cliente por nombre o RUC..."
-    className="form-input search-input"
-    value={busquedaCliente}
-    onChange={(e) => {
-        setBusquedaCliente(e.target.value);
-        if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
-    }}
-    onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
-/>
+                            type="text"
+                            placeholder="Buscar cliente por nombre o RUC..."
+                            className="form-input search-input"
+                            value={busquedaCliente}
+                            onChange={(e) => {
+                                setBusquedaCliente(e.target.value);
+                                if(filtros.idCliente) setFiltros({...filtros, idCliente: ''});
+                            }}
+                            onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
+                        />
                         {filtros.idCliente && (
                             <button 
                                 type="button"
@@ -522,21 +586,21 @@ const ReporteVentas = () => {
                     
                     {mostrarSugerencias && clientesSugeridos.length > 0 && (
                         <ul className="absolute z-50 w-full border border-border rounded-none shadow-lg mt-1 max-h-96 overflow-y-auto"
-    style={{ backgroundColor: 'var(--bg-secondary)' }}>
-    {clientesSugeridos.map(cliente => (
-        <li 
-            key={cliente.id_cliente}
-            onClick={() => seleccionarCliente(cliente)}
-            className="px-4 py-2 cursor-pointer text-sm border-b border-border last:border-0"
-            style={{ color: 'var(--text-primary)' }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--carbon-light)'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-        >
-            <div className="font-medium">{cliente.razon_social}</div>
-            <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
-        </li>
-    ))}
-</ul>
+                            style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                            {clientesSugeridos.map(cliente => (
+                                <li 
+                                    key={cliente.id_cliente}
+                                    onClick={() => seleccionarCliente(cliente)}
+                                    className="px-4 py-2 cursor-pointer text-sm border-b border-border last:border-0"
+                                    style={{ color: 'var(--text-primary)' }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--carbon-light)'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                    <div className="font-medium">{cliente.razon_social}</div>
+                                    <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
+                                </li>
+                            ))}
+                        </ul>
                     )}
                 </div>
               </div>

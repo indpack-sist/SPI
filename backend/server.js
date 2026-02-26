@@ -37,7 +37,7 @@ import pagosCobranzasRoutes from './routes/pagos-cobranzas.routes.js';
 import notificacionesRoutes from './routes/notificaciones.routes.js';
 import archivosRoutes from './routes/archivos.routes.js';
 import reportesRoutes from './routes/reportesventas.routes.js';
-import tipoCambioRoutes from './routes/tipoCambio.routes.js';
+import tipoCambioRoutes from './routes/tipoCambioRoutes.js';
 dotenv.config();
 
 const app = express();

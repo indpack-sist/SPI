@@ -184,7 +184,13 @@ const ReporteVentas = () => {
       const datosResumen = dataFiltrada.map(item => ({
         'Orden': item.numero,
         'Tipo Comprobante': item.tipo_comprobante || '',
-        'Comprobante': item.numero_comprobante || '',
+        'Comprobante': (item.tipo_comprobante === 'Factura' && item.facturado_sunat && item.numero_comprobante_sunat)
+            ? item.numero_comprobante_sunat
+            : (item.numero_comprobante || ''),
+        'Facturado SUNAT': item.facturado_sunat ? 'Sí' : 'No',
+        'Fecha Fact. SUNAT': (item.facturado_sunat && item.fecha_facturacion_sunat)
+            ? formatearFecha(item.fecha_facturacion_sunat)
+            : '',
         'Cliente': item.cliente,
         'RUC': item.ruc,
         'Vendedor': item.vendedor,
@@ -292,7 +298,13 @@ const ReporteVentas = () => {
             ['INFORMACIÓN DE LA ORDEN'],
             ['Número de Orden', orden.numero],
             ['Tipo Comprobante', orden.tipo_comprobante],
-            ['Número Comprobante', orden.numero_comprobante || ''],
+            ['Número Comprobante', (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat)
+                ? `${orden.numero_comprobante_sunat} (SUNAT)`
+                : (orden.numero_comprobante || '')],
+            ...( orden.facturado_sunat ? [
+                ['Comprobante SUNAT', orden.numero_comprobante_sunat || ''],
+                ['Fecha Facturación SUNAT', formatearFecha(orden.fecha_facturacion_sunat)]
+            ] : []),
             ['Estado', orden.estado],
             ['Estado Verificación', orden.estado_verificacion],
             ['Estado Pago', orden.estado_pago],
@@ -809,9 +821,13 @@ const ReporteVentas = () => {
                                     <div className="font-mono font-medium text-primary">
                                         {item.numero}
                                     </div>
-                                    {item.numero_comprobante && (
-                                        <div className="text-xs text-muted">{item.tipo_comprobante}: {item.numero_comprobante}</div>
-                                    )}
+                                    {(item.numero_comprobante || item.numero_comprobante_sunat) && (
+                                    <div className="text-xs text-muted">
+                                        {item.tipo_comprobante}: {(item.tipo_comprobante === 'Factura' && item.facturado_sunat && item.numero_comprobante_sunat)
+                                            ? <span className="text-green-600 font-medium">{item.numero_comprobante_sunat}</span>
+                                            : item.numero_comprobante}
+                                    </div>
+                                )}
                                 </td>
                                 <td className="px-4 py-3 text-gray-800">
                                     <div className="font-medium truncate w-32" title={item.cliente}>{item.cliente}</div>

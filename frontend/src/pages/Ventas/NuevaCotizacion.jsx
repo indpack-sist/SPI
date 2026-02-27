@@ -1438,16 +1438,17 @@ setFormCabecera(prev => ({
                           </td>
                           <td>
                             <input
-                              type="number"
-                              className="form-input text-right"
-                              value={item.cantidad}
-                              onChange={(e) => handleCantidadChange(index, e.target.value)}
-                              min="0.001"
-                              step="0.001"
-                              disabled={cotizacionConvertida}
-                              required
-                              onWheel={handleWheelDisable}
-                            />
+  type="text"
+  inputMode="decimal"
+  className="form-input text-right"
+  value={item.cantidad}
+  onChange={(e) => {
+    const val = e.target.value;
+    if (val === '' || /^\d*\.?\d*$/.test(val)) handleCantidadChange(index, val);
+  }}
+  disabled={cotizacionConvertida}
+  required
+/>
                           </td>
                           <td className="text-sm text-muted">
                             {item.es_producto_libre ? (
@@ -1507,14 +1508,13 @@ setFormCabecera(prev => ({
                           </td>
                           <td>
                             <input
-                              type="number"
-                              className="form-input text-right"
-                              value={parseFloat(item.descuento_porcentaje).toFixed(2)}
-                              onChange={(e) => handleDescuentoChange(index, e.target.value)}
-                              step="0.01"
-                              disabled={cotizacionConvertida}
-                              onWheel={handleWheelDisable}
-                            />
+  type="text"
+  className="form-input text-right bg-gray-100"
+  value={parseFloat(item.descuento_porcentaje).toFixed(2)}
+  readOnly
+  tabIndex={-1}
+  style={{ cursor: 'default' }}
+/>
                           </td>
                           <td className="text-right font-bold">{formatearMonedaGral(valorVenta)}</td>
                           <td>

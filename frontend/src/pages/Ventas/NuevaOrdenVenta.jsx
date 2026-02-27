@@ -943,13 +943,15 @@ useEffect(() => {
                             </td>
                             <td>
                               <input 
-                                type="number" 
-                                className="form-input text-right p-1 h-8"
-                                value={item.cantidad}
-                                onChange={(e) => handleCantidadChange(index, e.target.value)}
-                                min="0.01" step="0.01"
-                                onWheel={handleWheelDisable}
-                              />
+  type="text"
+  inputMode="decimal"
+  className="form-input text-right p-1 h-8"
+  value={item.cantidad}
+  onChange={(e) => {
+    const val = e.target.value;
+    if (val === '' || /^\d*\.?\d*$/.test(val)) handleCantidadChange(index, val);
+  }}
+/>
                             </td>
                             <td className="text-right text-sm">
   {(() => {
@@ -966,34 +968,36 @@ useEffect(() => {
 </td>
                             <td>
                               <input
-                                type="number"
-                                className="form-input text-right p-1 h-8 bg-gray-100"
-                                value={item.precio_base}
-                                onChange={(e) => handlePrecioBaseChange(index, e.target.value)}
-                                min="0" step="0.001"
-                                onWheel={handleWheelDisable}
-                              />
+  type="text"
+  className="form-input text-right p-1 h-8 bg-gray-100"
+  value={item.precio_base}
+  readOnly
+  tabIndex={-1}
+  style={{ cursor: 'default' }}
+/>
                             </td>
                             <td>
                               <input 
-                                type="number" 
-                                className="form-input text-right p-1 h-8 bg-blue-50"
-                                value={item.precio_venta}
-                                onChange={(e) => handlePrecioVentaChange(index, e.target.value)}
-                                min="0" step="0.001"
-                                placeholder="0.000"
-                                onWheel={handleWheelDisable}
-                              />
+  type="text"
+  inputMode="decimal"
+  className="form-input text-right p-1 h-8 bg-blue-50"
+  value={item.precio_venta}
+  onChange={(e) => {
+    const val = e.target.value;
+    if (val === '' || /^\d*\.?\d*$/.test(val)) handlePrecioVentaChange(index, val);
+  }}
+  placeholder="0.000"
+/>
                             </td>
                             <td>
                               <input 
-                                type="number" 
-                                className={`form-input text-center p-1 h-8 ${margenColor}`}
-                                value={parseFloat(item.descuento_porcentaje).toFixed(2)}
-                                onChange={(e) => handleDescuentoChange(index, e.target.value)}
-                                step="0.01"
-                                onWheel={handleWheelDisable}
-                              />
+  type="text"
+  className={`form-input text-center p-1 h-8 bg-gray-100 ${margenColor}`}
+  value={parseFloat(item.descuento_porcentaje).toFixed(2)}
+  readOnly
+  tabIndex={-1}
+  style={{ cursor: 'default' }}
+/>
                             </td>
                             <td className="text-right font-bold">{formatearMoneda(valorVenta)}</td>
                             <td>

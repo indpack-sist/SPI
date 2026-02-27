@@ -159,10 +159,19 @@ export async function generarReporteVentasPDF(data, incluirDetalle = true) {
               colY += 12;
               doc.text(`Vendedor: ${orden.vendedor || 'N/A'}`, 40, colY);
               colY += 12;
-              if (orden.tipo_comprobante && orden.numero_comprobante) {
-                doc.text(`${orden.tipo_comprobante}: ${orden.numero_comprobante}`, 40, colY);
-                colY += 12;
-              }
+              if (orden.tipo_comprobante) {
+                const comprobanteDisplay = (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat)
+                    ? orden.numero_comprobante_sunat
+                    : orden.numero_comprobante;
+                if (comprobanteDisplay) {
+                    doc.text(`${orden.tipo_comprobante}: ${comprobanteDisplay}`, 40, colY);
+                    colY += 12;
+                }
+                if (orden.facturado_sunat && orden.fecha_facturacion_sunat) {
+                    doc.text(`Facturado SUNAT: ${fmtFecha(orden.fecha_facturacion_sunat)}`, 40, colY);
+                    colY += 12;
+                }
+            }
               doc.text(`Estado: ${orden.estado}`, 40, colY);
               
               colY = startY;

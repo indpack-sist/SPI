@@ -321,6 +321,12 @@ export async function generarPDFEntrada(datos) {
 export async function generarPDFSalida(datos) {
   const logoBuffer = await cargarLogoURL();
 
+  const fmtPeso = (pesoKg) => {
+    if (!pesoKg || pesoKg === 0) return '-';
+    if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
+    return `${pesoKg.toFixed(3)} kg`;
+  };
+
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ 
@@ -585,14 +591,16 @@ export async function generarPDFSalida(datos) {
       if (mostrarDetalleExtendido) {
         doc.text('CÓDIGO', 40, yPos + 6);
         doc.text('DESCRIPCIÓN', 110, yPos + 6);
-        doc.text('UND', 315, yPos + 6, { width: 30, align: 'center' });
-        doc.text('TOTAL', 350, yPos + 6, { width: 60, align: 'center' });
-        doc.text('DESPACHADO', 415, yPos + 6, { width: 70, align: 'center' });
-        doc.text('PENDIENTE', 490, yPos + 6, { width: 60, align: 'center' });
+        doc.text('UND', 280, yPos + 6, { width: 25, align: 'center' });
+        doc.text('TOTAL', 305, yPos + 6, { width: 50, align: 'center' });
+        doc.text('PESO', 355, yPos + 6, { width: 50, align: 'center' });
+        doc.text('DESPACHADO', 410, yPos + 6, { width: 65, align: 'center' });
+        doc.text('PENDIENTE', 480, yPos + 6, { width: 60, align: 'center' });
       } else {
         doc.text('CÓDIGO', 40, yPos + 6);
         doc.text('DESCRIPCIÓN', 140, yPos + 6);
-        doc.text('CANTIDAD', 420, yPos + 6, { width: 60, align: 'center' });
+        doc.text('CANTIDAD', 370, yPos + 6, { width: 55, align: 'center' });
+        doc.text('PESO', 425, yPos + 6, { width: 55, align: 'center' });
         doc.text('UNIDAD', 485, yPos + 6, { width: 50, align: 'center' });
       }
 
@@ -601,7 +609,8 @@ export async function generarPDFSalida(datos) {
 
       itemsAMostrar.forEach((item, idx) => {
         const descripcion = item.producto || item.nombre;
-        const alturaDescripcion = calcularAlturaTexto(doc, descripcion, mostrarDetalleExtendido ? 200 : 270, 8);
+        const anchoDesc = mostrarDetalleExtendido ? 165 : 220;
+        const alturaDescripcion = calcularAlturaTexto(doc, descripcion, anchoDesc, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
         if (yPos + alturaFila > 700) {
@@ -617,20 +626,30 @@ export async function generarPDFSalida(datos) {
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         
         if (mostrarDetalleExtendido) {
+          const cantidadItem = parseFloat(item.cantidad_total || item.cantidad);
+          const pesoUE = parseFloat(item.peso_unitario || 0);
+          const pesoTE = pesoUE > 0 ? cantidadItem * pesoUE : 0;
+
           doc.text(item.codigo_producto, 40, yPos + 5);
-          doc.text(descripcion, 110, yPos + 5, { width: 200, lineGap: 2 });
-          doc.text(item.unidad_medida, 315, yPos + 5, { width: 30, align: 'center' });
-          doc.text(parseFloat(item.cantidad_total || item.cantidad).toFixed(2), 350, yPos + 5, { width: 60, align: 'center' });
+          doc.text(descripcion, 110, yPos + 5, { width: 165, lineGap: 2 });
+          doc.text(item.unidad_medida, 280, yPos + 5, { width: 25, align: 'center' });
+          doc.text(cantidadItem.toFixed(2), 305, yPos + 5, { width: 50, align: 'center' });
+          doc.text(pesoTE > 0 ? fmtPeso(pesoTE) : '-', 355, yPos + 5, { width: 50, align: 'center' });
           const despachado = parseFloat(item.cantidad_despachada || 0).toFixed(2);
-          doc.text(despachado, 415, yPos + 5, { width: 70, align: 'center' });
+          doc.text(despachado, 410, yPos + 5, { width: 65, align: 'center' });
           const pendiente = parseFloat(item.cantidad_pendiente || 0).toFixed(2);
           if(parseFloat(pendiente) > 0) doc.fillColor('#cc0000');
-          doc.text(pendiente, 490, yPos + 5, { width: 60, align: 'center' });
+          doc.text(pendiente, 480, yPos + 5, { width: 60, align: 'center' });
           doc.fillColor('#000000');
         } else {
+          const cantidadItem = parseFloat(item.cantidad);
+          const pesoU = parseFloat(item.peso_unitario || 0);
+          const pesoT = pesoU > 0 ? cantidadItem * pesoU : 0;
+
           doc.text(item.codigo_producto, 40, yPos + 5);
-          doc.text(descripcion, 140, yPos + 5, { width: 270, lineGap: 2 });
-          doc.text(parseFloat(item.cantidad).toFixed(2), 420, yPos + 5, { width: 60, align: 'center' });
+          doc.text(descripcion, 140, yPos + 5, { width: 220, lineGap: 2 });
+          doc.text(cantidadItem.toFixed(2), 370, yPos + 5, { width: 55, align: 'center' });
+          doc.text(pesoT > 0 ? fmtPeso(pesoT) : '-', 425, yPos + 5, { width: 55, align: 'center' });
           doc.text(item.unidad_medida, 485, yPos + 5, { width: 50, align: 'center' });
         }
 
@@ -677,6 +696,22 @@ export async function generarPDFSalida(datos) {
       }
 
       if (!mostrarDetalleExtendido) {
+          const pesoTotalSalida = detalles.reduce((acc, item) => {
+            const p = parseFloat(item.peso_unitario || 0);
+            if (p > 0) acc += parseFloat(item.cantidad) * p;
+            return acc;
+          }, 0);
+
+          if (pesoTotalSalida > 0) {
+            doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+            doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+            doc.text('PESO TOTAL', 390, yPos + 4);
+            doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+            doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+            doc.text(fmtPeso(pesoTotalSalida), 475, yPos + 4, { align: 'right', width: 80 });
+            yPos += 20;
+          }
+
           doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
           doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
           doc.text('TOTAL ITEMS', 390, yPos + 4);

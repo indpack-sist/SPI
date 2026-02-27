@@ -19,6 +19,12 @@ const fmtNum = (num) => {
   });
 };
 
+const fmtPeso = (pesoKg) => {
+  if (!pesoKg || pesoKg === 0) return '-';
+  if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
+  return `${pesoKg.toFixed(3)} kg`;
+};
+
 function descargarImagen(url) {
   return new Promise((resolve, reject) => {
     const request = https.get(url, {
@@ -160,13 +166,14 @@ export async function generarOrdenVentaPDF(orden) {
       doc.rect(30, yTable, 535, 20).fillAndStroke('#e0e0e0', '#000000');
       doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
       
-      doc.text('ITEM', 35, yTable + 6, { width: 30, align: 'center' });
-      doc.text('CÓDIGO', 70, yTable + 6, { width: 60 });
-      doc.text('DESCRIPCIÓN', 130, yTable + 6, { width: 220 });
-      doc.text('UND', 350, yTable + 6, { width: 30, align: 'center' });
-      doc.text('CANT.', 380, yTable + 6, { width: 50, align: 'center' });
-      doc.text('P.UNIT', 435, yTable + 6, { width: 50, align: 'right' });
-      doc.text('TOTAL', 490, yTable + 6, { width: 70, align: 'right' });
+      doc.text('ITEM', 35, yTable + 6, { width: 25, align: 'center' });
+      doc.text('CÓDIGO', 63, yTable + 6, { width: 55 });
+      doc.text('DESCRIPCIÓN', 120, yTable + 6, { width: 175 });
+      doc.text('UND', 295, yTable + 6, { width: 25, align: 'center' });
+      doc.text('CANT.', 320, yTable + 6, { width: 45, align: 'center' });
+      doc.text('PESO', 365, yTable + 6, { width: 45, align: 'center' });
+      doc.text('P.UNIT', 415, yTable + 6, { width: 50, align: 'right' });
+      doc.text('TOTAL', 470, yTable + 6, { width: 90, align: 'right' });
 
       yTable += 20;
 
@@ -189,13 +196,17 @@ export async function generarOrdenVentaPDF(orden) {
 
           doc.fillColor('#000000').fontSize(7).font('Helvetica');
           
-          doc.text(String(i + 1), 35, yTable, { width: 30, align: 'center' });
-          doc.text(String(item.codigo_producto || '-'), 70, yTable);
-          doc.text(String(item.producto || 'SIN NOMBRE'), 130, yTable, { width: 220, ellipsis: true });
-          doc.text(String(item.unidad_medida || 'UND'), 350, yTable, { width: 30, align: 'center' });
-          doc.text(fmtNum(cantidad), 380, yTable, { width: 50, align: 'center' });
-          doc.text(fmtNum(precioFinal), 435, yTable, { width: 50, align: 'right' });
-          doc.text(fmtNum(totalLinea), 490, yTable, { width: 70, align: 'right' });
+          const pesoUnit = parseFloat(item.peso_unitario || 0);
+          const pesoTotal = pesoUnit > 0 ? cantidad * pesoUnit : 0;
+
+          doc.text(String(i + 1), 35, yTable, { width: 25, align: 'center' });
+          doc.text(String(item.codigo_producto || '-'), 63, yTable, { width: 55 });
+          doc.text(String(item.producto || 'SIN NOMBRE'), 120, yTable, { width: 175, ellipsis: true });
+          doc.text(String(item.unidad_medida || 'UND'), 295, yTable, { width: 25, align: 'center' });
+          doc.text(fmtNum(cantidad), 320, yTable, { width: 45, align: 'center' });
+          doc.text(pesoTotal > 0 ? fmtPeso(pesoTotal) : '-', 365, yTable, { width: 45, align: 'center' });
+          doc.text(fmtNum(precioFinal), 415, yTable, { width: 50, align: 'right' });
+          doc.text(fmtNum(totalLinea), 470, yTable, { width: 90, align: 'right' });
 
           yTable += 14;
         });
@@ -226,8 +237,21 @@ export async function generarOrdenVentaPDF(orden) {
       const simbolo = orden.moneda === 'USD' ? '$' : 'S/';
       const etiquetaImp = ETIQUETAS_IMPUESTO[orden.tipo_impuesto] || 'IGV (18%)';
 
+      const pesoTotalOrden = (orden.detalle || []).reduce((acc, item) => {
+        const peso = parseFloat(item.peso_unitario || 0);
+        if (peso > 0) acc += parseFloat(item.cantidad) * peso;
+        return acc;
+      }, 0);
+
       const xTotales = 380;
       let yTotales = yFooter;
+
+      if (pesoTotalOrden > 0) {
+        doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
+        doc.text('PESO TOTAL:', xTotales, yTotales);
+        doc.font('Helvetica').text(fmtPeso(pesoTotalOrden), xTotales + 80, yTotales, { width: 100, align: 'right' });
+        yTotales += 15;
+      }
 
       doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
       

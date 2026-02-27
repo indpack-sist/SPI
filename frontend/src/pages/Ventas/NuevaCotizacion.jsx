@@ -1492,17 +1492,18 @@ setFormCabecera(prev => ({
                           </td>
                           <td>
                             <input
-                              type="number"
-                              className="form-input text-right bg-blue-50"
-                              value={item.precio_venta}
-                              onChange={(e) => handlePrecioVentaChange(index, e.target.value)}
-                              min="0"
-                              step="0.001"
-                              placeholder="0.000"
-                              disabled={cotizacionConvertida}
-                              required={!esMuestra}
-                              onWheel={handleWheelDisable}
-                            />
+  type="text"
+  inputMode="decimal"
+  className="form-input text-right bg-blue-50"
+  value={item.precio_venta}
+  onChange={(e) => {
+    const val = e.target.value;
+    if (val === '' || /^\d*\.?\d*$/.test(val)) handlePrecioVentaChange(index, val);
+  }}
+  placeholder="0.000"
+  disabled={cotizacionConvertida}
+  required={!esMuestra}
+/>
                           </td>
                           <td>
                             <input

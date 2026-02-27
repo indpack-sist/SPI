@@ -303,6 +303,7 @@ function NuevaCotizacion() {
     };
   }));
 }
+      }
     } catch (err) {
       console.error(err);
       setError('Error al cargar la cotizacion');
@@ -310,7 +311,6 @@ function NuevaCotizacion() {
       setLoading(false);
     }
   };
-
   const cargarListasPrecios = async (idCliente) => {
     try {
       setLoadingListas(true);

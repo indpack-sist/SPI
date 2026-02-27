@@ -263,27 +263,27 @@ function NuevaOrdenVenta() {
 
         setCargandoCredito(true);
         const resCli = await clientesAPI.getById(orden.id_cliente);
-if (resCli.data.success) {
-  const clienteData = resCli.data.data;
-  setClienteSeleccionado(clienteData);
-  if (clienteData.direcciones && clienteData.direcciones.length > 0) {
-    setDireccionesCliente(clienteData.direcciones);
-  } else if (clienteData.direccion_despacho) {
-    setDireccionesCliente([{ id_direccion: 'principal', direccion: clienteData.direccion_despacho, es_principal: 1 }]);
-  }
+        if (resCli.data.success) {
+          const clienteData = resCli.data.data;
+          setClienteSeleccionado(clienteData);
+          if (clienteData.direcciones && clienteData.direcciones.length > 0) {
+            setDireccionesCliente(clienteData.direcciones);
+          } else if (clienteData.direccion_despacho) {
+            setDireccionesCliente([{ id_direccion: 'principal', direccion: clienteData.direccion_despacho, es_principal: 1 }]);
+          }
 
-  const condicion = clienteData.condicion_pago || 'Contado';
-  const diasCredito = parseInt(clienteData.dias_credito || 0);
-  const tipoVentaCliente = (condicion === 'Credito' && clienteData.usar_limite_credito && diasCredito > 0)
-    ? 'Crédito'
-    : 'Contado';
+          const condicion = clienteData.condicion_pago || 'Contado';
+          const diasCredito = parseInt(clienteData.dias_credito || 0);
+          const tipoVentaCliente = (condicion === 'Credito' && clienteData.usar_limite_credito && diasCredito > 0)
+            ? 'Crédito'
+            : 'Contado';
 
-  setFormCabecera(prev => ({
-    ...prev,
-    tipo_venta: tipoVentaCliente,
-    dias_credito: tipoVentaCliente === 'Crédito' ? diasCredito : prev.dias_credito
-  }));
-}
+          setFormCabecera(prev => ({
+            ...prev,
+            tipo_venta: tipoVentaCliente,
+            dias_credito: tipoVentaCliente === 'Crédito' ? diasCredito : prev.dias_credito
+          }));
+        }
 
         try {
           const resCredito = await clientesAPI.getEstadoCredito(orden.id_cliente);
@@ -439,18 +439,18 @@ if (resCli.data.success) {
         const direccionPrincipal = direcciones.find(d => d.es_principal) || direcciones[0];
   
         const condicion = clienteCompleto.condicion_pago || 'Contado';
-const diasCredito = parseInt(clienteCompleto.dias_credito || 0);
-const tipoVenta = (condicion === 'Credito' && clienteCompleto.usar_limite_credito && diasCredito > 0)
-  ? 'Crédito'
-  : 'Contado';
+        const diasCredito = parseInt(clienteCompleto.dias_credito || 0);
+        const tipoVenta = (condicion === 'Credito' && clienteCompleto.usar_limite_credito && diasCredito > 0)
+          ? 'Crédito'
+          : 'Contado';
 
-setFormCabecera(prev => ({
-  ...prev,
-  id_cliente: clienteCompleto.id_cliente,
-  direccion_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
-  tipo_venta: tipoVenta,
-  dias_credito: tipoVenta === 'Crédito' ? diasCredito : 0
-}));
+        setFormCabecera(prev => ({
+          ...prev,
+          id_cliente: clienteCompleto.id_cliente,
+          direccion_entrega: direccionPrincipal ? direccionPrincipal.direccion : '',
+          tipo_venta: tipoVenta,
+          dias_credito: tipoVenta === 'Crédito' ? diasCredito : 0
+        }));
         const resCredito = await clientesAPI.getEstadoCredito(clienteCompleto.id_cliente);
         if (resCredito.data.success) {
           setEstadoCredito(resCredito.data.data);
@@ -459,18 +459,18 @@ setFormCabecera(prev => ({
         console.error('Error al cargar datos completos del cliente:', err);
         setClienteSeleccionado(cliente);
         const condicionFallback = cliente.condicion_pago || 'Contado';
-const diasFallback = parseInt(cliente.dias_credito || 0);
-const tipoVentaFallback = (condicionFallback === 'Credito' && cliente.usar_limite_credito && diasFallback > 0)
-  ? 'Crédito'
-  : 'Contado';
+        const diasFallback = parseInt(cliente.dias_credito || 0);
+        const tipoVentaFallback = (condicionFallback === 'Credito' && cliente.usar_limite_credito && diasFallback > 0)
+          ? 'Crédito'
+          : 'Contado';
 
-setFormCabecera(prev => ({
-  ...prev,
-  id_cliente: cliente.id_cliente,
-  direccion_entrega: cliente.direccion_despacho || '',
-  tipo_venta: tipoVentaFallback,
-  dias_credito: tipoVentaFallback === 'Crédito' ? diasFallback : 0
-}));
+        setFormCabecera(prev => ({
+          ...prev,
+          id_cliente: cliente.id_cliente,
+          direccion_entrega: cliente.direccion_despacho || '',
+          tipo_venta: tipoVentaFallback,
+          dias_credito: tipoVentaFallback === 'Crédito' ? diasFallback : 0
+        }));
       }
 
     setModalClienteOpen(false);
@@ -1367,7 +1367,6 @@ setFormCabecera(prev => ({
             </div>
 
             <div className="card bg-gray-50 border-t-4 border-primary">
-             <div className="card bg-gray-50 border-t-4 border-primary">
               <div className="card-body space-y-2">
                 {totales.pesoTotal > 0 && (
                   <div className="flex justify-between text-sm items-center pb-2 border-b mb-2">
@@ -1380,8 +1379,6 @@ setFormCabecera(prev => ({
                   <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
                 </div>
                 
-                {/* Las dos líneas problemáticas fueron eliminadas aquí */}
-
                 <div className="flex justify-between text-sm">
                   <span>
                     <div>

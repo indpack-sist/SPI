@@ -163,11 +163,11 @@ function NuevaOrdenVenta() {
     }
   }, [formCabecera.tipo_venta, formCabecera.dias_credito, formCabecera.fecha_emision]);
 
-  useEffect(() => {
-    if (idCotizacionParam && !modoEdicion && clientes.length > 0) {
+useEffect(() => {
+    if (idCotizacionParam && !modoEdicion && clientes.length > 0 && productos.length > 0) {
       handleImportarCotizacion(idCotizacionParam);
     }
-  }, [idCotizacionParam, clientes.length]);
+  }, [idCotizacionParam, clientes.length, productos.length]);
 
   const obtenerConfiguracionImpuesto = (codigoOTexto) => {
     let config = TIPOS_IMPUESTO.find(t => t.codigo === codigoOTexto);

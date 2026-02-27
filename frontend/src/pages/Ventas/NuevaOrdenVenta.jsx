@@ -313,6 +313,7 @@ if (resCli.data.success) {
             };
           }));
         }
+      }
     } catch (err) {
       console.error(err);
       setError('Error al cargar los datos de la orden para editar');

@@ -1367,19 +1367,21 @@ setFormCabecera(prev => ({
             </div>
 
             <div className="card bg-gray-50 border-t-4 border-primary">
+             <div className="card bg-gray-50 border-t-4 border-primary">
               <div className="card-body space-y-2">
                 {totales.pesoTotal > 0 && (
-  <div className="flex justify-between text-sm items-center pb-2 border-b mb-2">
-    <span className="flex items-center gap-1"><Package size={14} /> Peso Total:</span>
-    <span className="font-bold text-primary">{formatearPeso(totales.pesoTotal)}</span>
-  </div>
-)}
-<div className="flex justify-between text-sm">
-  <span>Sub Total:</span>
-  <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
-</div>
+                  <div className="flex justify-between text-sm items-center pb-2 border-b mb-2">
+                    <span className="flex items-center gap-1"><Package size={14} /> Peso Total:</span>
+                    <span className="font-bold text-primary">{formatearPeso(totales.pesoTotal)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span>Sub Total:</span>
                   <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
                 </div>
+                
+                {/* Las dos líneas problemáticas fueron eliminadas aquí */}
+
                 <div className="flex justify-between text-sm">
                   <span>
                     <div>

@@ -412,6 +412,7 @@ if (resCli.data.success) {
             };
           }));
         }
+      }
     } catch (err) {
       console.error(err);
       setError('Error al importar la cotización');

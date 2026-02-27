@@ -214,6 +214,7 @@ export async function getOrdenVentaById(req, res) {
         p.unidad_medida,
         p.requiere_receta,
         p.stock_actual AS stock_disponible,
+        p.peso_unitario,
         ti.nombre AS tipo_inventario_nombre,
         (SELECT COUNT(*) FROM ordenes_produccion WHERE id_orden_venta_origen = ? AND id_producto_terminado = dov.id_producto AND estado != 'Cancelada') AS tiene_op
       FROM detalle_orden_venta dov

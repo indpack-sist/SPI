@@ -34,6 +34,8 @@ function Productos() {
     id_tipo_inventario: '',
     unidad_medida: 'unidad',
     precio_venta: '0',
+    peso_unitario: '',
+    peso_unidad_display: 'kg',
     stock_minimo: '0',
     stock_maximo: '0',
     requiere_receta: false,
@@ -67,6 +69,15 @@ function Productos() {
 
   const abrirModal = (producto = null) => {
     if (producto) {
+      const pesoKg = parseFloat(producto.peso_unitario || 0);
+      let pesoDisplay = pesoKg;
+      let unidadDisplay = 'kg';
+      
+      if (pesoKg > 0 && pesoKg < 1) {
+        pesoDisplay = pesoKg * 1000;
+        unidadDisplay = 'g';
+      }
+
       setEditando(producto);
       setFormData({
         codigo: producto.codigo,
@@ -76,6 +87,8 @@ function Productos() {
         id_tipo_inventario: producto.id_tipo_inventario,
         unidad_medida: producto.unidad_medida,
         precio_venta: producto.precio_venta || '0',
+        peso_unitario: pesoKg > 0 ? String(pesoDisplay) : '',
+        peso_unidad_display: unidadDisplay,
         stock_minimo: producto.stock_minimo,
         stock_maximo: producto.stock_maximo,
         requiere_receta: producto.requiere_receta,
@@ -91,6 +104,8 @@ function Productos() {
         id_tipo_inventario: '',
         unidad_medida: 'unidad',
         precio_venta: '0',
+        peso_unitario: '',
+        peso_unidad_display: 'kg',
         stock_minimo: '0',
         stock_maximo: '0',
         requiere_receta: false,
@@ -123,12 +138,26 @@ function Productos() {
     setError(null);
     setSuccess(null);
 
+    const dataToSend = { ...formData };
+    
+    if (dataToSend.peso_unitario && parseFloat(dataToSend.peso_unitario) > 0) {
+      if (dataToSend.peso_unidad_display === 'g') {
+        dataToSend.peso_unitario = parseFloat(dataToSend.peso_unitario) / 1000;
+      } else {
+        dataToSend.peso_unitario = parseFloat(dataToSend.peso_unitario);
+      }
+    } else {
+      dataToSend.peso_unitario = null;
+    }
+    
+    delete dataToSend.peso_unidad_display;
+
     try {
       if (editando) {
-        await productosAPI.update(editando.id_producto, formData);
+        await productosAPI.update(editando.id_producto, dataToSend);
         setSuccess('Producto actualizado exitosamente');
       } else {
-        await productosAPI.create(formData);
+        await productosAPI.create(dataToSend);
         setSuccess('Producto creado exitosamente');
       }
       cerrarModal();
@@ -158,6 +187,13 @@ function Productos() {
     }).format(valor || 0);
   };
 
+  const formatearPeso = (pesoKg) => {
+    const peso = parseFloat(pesoKg || 0);
+    if (peso === 0) return '—';
+    if (peso < 1) return `${(peso * 1000).toFixed(0)} g`;
+    return `${peso.toFixed(3)} kg`;
+  };
+
   const productosFiltrados = productos.filter(p => {
     const matchTexto = p.nombre.toLowerCase().includes(filtro.toLowerCase()) ||
                        p.codigo.toLowerCase().includes(filtro.toLowerCase());
@@ -182,6 +218,12 @@ function Productos() {
       accessor: 'stock_actual',
       align: 'right',
       render: (value, row) => `${parseFloat(value).toFixed(2)} ${row.unidad_medida}`
+    },
+    {
+      header: 'Peso Unit.',
+      accessor: 'peso_unitario',
+      align: 'right',
+      render: (value) => formatearPeso(value)
     },
     {
       header: 'CUP (S/)',
@@ -470,22 +512,46 @@ function Productos() {
             </div>
           </div>
 
-          {mostrarPrecioVenta && (
+          <div className="grid grid-cols-2 gap-4">
+            {mostrarPrecioVenta && (
+              <div className="form-group">
+                <label className="form-label">Precio de Venta (PEN)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="form-input"
+                  value={formData.precio_venta}
+                  onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+
             <div className="form-group">
-              <label className="form-label">Precio de Venta (PEN)</label>
-              <input
-                type="number"
-                step="0.01"
-                className="form-input"
-                value={formData.precio_venta}
-                onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
-                placeholder="0.00"
-              />
-              <small className="text-muted">
-                Precio al que se vende el producto al cliente final
-              </small>
+              <label className="form-label">Peso por Unidad</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  className="form-input flex-1"
+                  value={formData.peso_unitario}
+                  onChange={(e) => setFormData({ ...formData, peso_unitario: e.target.value })}
+                  placeholder="0.000"
+                />
+                <select
+                  className="form-select"
+                  style={{ width: '90px' }}
+                  value={formData.peso_unidad_display}
+                  onChange={(e) => setFormData({ ...formData, peso_unidad_display: e.target.value })}
+                >
+                  <option value="kg">kg</option>
+                  <option value="g">g</option>
+                </select>
+              </div>
+              <small className="text-muted">Opcional — se usará en cotizaciones y órdenes de venta</small>
             </div>
-          )}
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">

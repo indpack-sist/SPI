@@ -122,7 +122,11 @@ function DetalleOrdenVenta() {
     const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
-
+  const formatearPeso = (pesoKg) => {
+    if (!pesoKg || pesoKg === 0) return '—';
+    if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
+    return `${pesoKg.toFixed(3)} kg`;
+  };
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
     return new Date(fecha).toLocaleDateString('es-PE', {
@@ -1113,7 +1117,11 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
       const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
       return acc + (isNaN(val) ? 0 : val);
   }, 0);
-
+  const pesoTotal = orden.detalle.reduce((acc, item) => {
+    const peso = parseFloat(item.peso_unitario || 0);
+    if (peso > 0) acc += parseFloat(item.cantidad) * peso;
+    return acc;
+  }, 0);
   const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase());
   const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
   const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (porcentajeImpuesto / 100);
@@ -1161,6 +1169,23 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
           <div className="text-[10px] text-muted">{row.unidad_medida}</div>
         </div>
       )
+    },
+    {
+      header: 'Peso',
+      accessor: 'peso_unitario',
+      width: '100px',
+      align: 'right',
+      render: (value, row) => {
+        const peso = parseFloat(value || 0);
+        if (peso === 0) return <span className="text-muted">—</span>;
+        const pesoTotalItem = parseFloat(row.cantidad) * peso;
+        return (
+          <div className="text-right">
+            <span className="font-bold text-sm">{formatearPeso(pesoTotalItem)}</span>
+            <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
+          </div>
+        );
+      }
     },
     {
       header: 'Despachado',
@@ -2259,6 +2284,12 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
             <h3 className="card-title"><Calculator size={20} /> Totales</h3>
           </div>
           <div className="card-body space-y-3">
+            {pesoTotal > 0 && (
+              <div className="flex justify-between py-2 border-b items-center">
+                <span className="flex items-center gap-1"><Package size={14} /> Peso Total:</span>
+                <span className="font-bold text-primary">{formatearPeso(pesoTotal)}</span>
+              </div>
+            )}
             <div className="flex justify-between py-2 border-b">
               <span>Sub Total:</span>
               <span className="font-bold">{formatearMoneda(subtotalReal)}</span>

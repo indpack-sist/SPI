@@ -141,7 +141,11 @@ function NuevaCotizacion() {
     const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
-
+  const formatearPeso = (pesoKg) => {
+    if (!pesoKg || pesoKg === 0) return '—';
+    if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
+    return `${pesoKg.toFixed(3)} kg`;
+  };
   useEffect(() => {
     cargarCatalogos();
   }, []);
@@ -280,22 +284,25 @@ function NuevaCotizacion() {
         }
 
         if (cotizacion.detalle && cotizacion.detalle.length > 0) {
-          setDetalle(cotizacion.detalle.map(item => ({
-            id_producto: item.id_producto || null,
-            codigo_producto: item.codigo_producto || item.codigo_producto_libre || '',
-            producto: item.producto || item.nombre_producto_libre || '',
-            unidad_medida: item.unidad_medida || '',
-            cantidad: parseFloat(item.cantidad),
-            precio_base: parseFloat(item.precio_base || item.precio_unitario || 0),
-            precio_venta: parseFloat(item.precio_unitario || 0),
-            descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-            stock_actual: item.stock_disponible || null,
-            es_producto_libre: item.es_producto_libre === 1,
-            codigo_producto_libre: item.codigo_producto_libre || '',
-            nombre_producto_libre: item.nombre_producto_libre || ''
-          })));
-        }
-      }
+  setDetalle(cotizacion.detalle.map(item => {
+    const prodCatalogo = productos.find(p => p.id_producto === item.id_producto);
+    return {
+      id_producto: item.id_producto || null,
+      codigo_producto: item.codigo_producto || item.codigo_producto_libre || '',
+      producto: item.producto || item.nombre_producto_libre || '',
+      unidad_medida: item.unidad_medida || '',
+      cantidad: parseFloat(item.cantidad),
+      precio_base: parseFloat(item.precio_base || item.precio_unitario || 0),
+      precio_venta: parseFloat(item.precio_unitario || 0),
+      descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+      stock_actual: item.stock_disponible || null,
+      peso_unitario: parseFloat(prodCatalogo?.peso_unitario || 0),
+      es_producto_libre: item.es_producto_libre === 1,
+      codigo_producto_libre: item.codigo_producto_libre || '',
+      nombre_producto_libre: item.nombre_producto_libre || ''
+    };
+  }));
+}
     } catch (err) {
       console.error(err);
       setError('Error al cargar la cotizacion');
@@ -519,6 +526,7 @@ setFormCabecera(prev => ({
       precio_venta: precioVenta,
       descuento_porcentaje: 0,
       stock_actual: producto.stock_actual,
+      peso_unitario: parseFloat(producto.peso_unitario || 0),
       es_producto_libre: false,
       codigo_producto_libre: null,
       nombre_producto_libre: null
@@ -539,6 +547,7 @@ setFormCabecera(prev => ({
       precio_venta: 0,
       descuento_porcentaje: 0,
       stock_actual: null,
+      peso_unitario: 0,
       es_producto_libre: true,
       codigo_producto_libre: '',
       nombre_producto_libre: ''
@@ -562,6 +571,7 @@ setFormCabecera(prev => ({
       setDetalle(newDetalle);
     } else {
       const precioLista = parseFloat(prod.precio_especial);
+      const productoCompleto = productos.find(p => p.id_producto === prod.id_producto);
       const nuevoItem = {
         id_producto: prod.id_producto,
         codigo_producto: prod.codigo,
@@ -572,6 +582,7 @@ setFormCabecera(prev => ({
         precio_venta: precioLista,
         descuento_porcentaje: 0,
         stock_actual: 0,
+        peso_unitario: parseFloat(productoCompleto?.peso_unitario || 0),
         es_producto_libre: false,
         codigo_producto_libre: null,
         nombre_producto_libre: null
@@ -625,15 +636,20 @@ setFormCabecera(prev => ({
 
   const calcularTotales = () => {
     let subtotal = 0;
+    let pesoTotal = 0;
     detalle.forEach(item => {
       const precioVenta = parseFloat(item.precio_venta) || 0;
       const valorVenta = item.cantidad * precioVenta;
       subtotal += valorVenta;
+      const peso = parseFloat(item.peso_unitario || 0);
+      if (peso > 0) {
+        pesoTotal += item.cantidad * peso;
+      }
     });
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
-    setTotales({ subtotal, impuesto, total });
+    setTotales({ subtotal, impuesto, total, pesoTotal });
   };
 
   const handleTipoImpuestoChange = (codigo) => {
@@ -1369,18 +1385,19 @@ setFormCabecera(prev => ({
               <div className="overflow-x-auto">
                 <table className="table">
                   <thead>
-                    <tr>
-                      <th>Codigo</th>
-                      <th>Descripcion</th>
-                      <th className="text-right">Cantidad</th>
-                      <th>UM</th>
-                      <th className="text-right">P. Base</th>
-                      <th className="text-right">P. Venta</th>
-                      <th className="text-right">Margen %</th>
-                      <th className="text-right">Subtotal</th>
-                      <th></th>
-                    </tr>
-                  </thead>
+  <tr>
+    <th>Codigo</th>
+    <th>Descripcion</th>
+    <th className="text-right">Cantidad</th>
+    <th>UM</th>
+    <th className="text-right">Peso Total</th>
+    <th className="text-right">P. Base</th>
+    <th className="text-right">P. Venta</th>
+    <th className="text-right">Margen %</th>
+    <th className="text-right">Subtotal</th>
+    <th></th>
+  </tr>
+</thead>
                   <tbody>
                     {detalle.map((item, index) => {
                       const precioVenta = parseFloat(item.precio_venta) || 0;
@@ -1447,6 +1464,19 @@ setFormCabecera(prev => ({
                               item.unidad_medida
                             )}
                           </td>
+                          <td className="text-right text-sm">
+  {(() => {
+    const peso = parseFloat(item.peso_unitario || 0);
+    if (peso === 0) return <span className="text-muted">—</span>;
+    const pesoTotal = item.cantidad * peso;
+    return (
+      <div>
+        <span className="font-bold">{formatearPeso(pesoTotal)}</span>
+        <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
+      </div>
+    );
+  })()}
+</td>
                           <td>
                             <input
                               type="number"
@@ -1548,21 +1578,29 @@ setFormCabecera(prev => ({
             <div className="card-body">
               <div className="flex justify-end">
                 <div className="w-80">
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="font-medium">Sub Total:</span>
-                    <span className="font-bold">{formatearMonedaGral(totales.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="font-medium">
-                      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:
-                    </span>
-                    <span className="font-bold">{formatearMonedaGral(totales.impuesto)}</span>
-                  </div>
-                  <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg mt-2 shadow-sm border border-gray-200">
-                    <span className="font-bold text-lg">TOTAL:</span>
-                    <span className="font-bold text-2xl text-primary">{formatearMonedaGral(totales.total)}</span>
-                  </div>
-                </div>
+  {totales.pesoTotal > 0 && (
+    <div className="flex justify-between py-2 border-b items-center">
+      <span className="font-medium flex items-center gap-1">
+        <Package size={14} /> Peso Total:
+      </span>
+      <span className="font-bold text-primary">{formatearPeso(totales.pesoTotal)}</span>
+    </div>
+  )}
+  <div className="flex justify-between py-2 border-b">
+    <span className="font-medium">Sub Total:</span>
+    <span className="font-bold">{formatearMonedaGral(totales.subtotal)}</span>
+  </div>
+  <div className="flex justify-between py-2 border-b">
+    <span className="font-medium">
+      {TIPOS_IMPUESTO.find(t => t.codigo === formCabecera.tipo_impuesto)?.nombre}:
+    </span>
+    <span className="font-bold">{formatearMonedaGral(totales.impuesto)}</span>
+  </div>
+  <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg mt-2 shadow-sm border border-gray-200">
+    <span className="font-bold text-lg">TOTAL:</span>
+    <span className="font-bold text-2xl text-primary">{formatearMonedaGral(totales.total)}</span>
+  </div>
+</div>
               </div>
             </div>
           </div>
@@ -1745,6 +1783,11 @@ setFormCabecera(prev => ({
                   <div className="text-right">
                     <div className="font-bold text-primary text-lg">{formatearMonedaGral(producto.precio_venta)}</div>
                     <div className="text-xs text-muted font-bold uppercase">{producto.unidad_medida}</div>
+                    {parseFloat(producto.peso_unitario || 0) > 0 && (
+                      <div className="text-xs text-muted mt-1">
+                        ⚖ {formatearPeso(parseFloat(producto.peso_unitario))} /u
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

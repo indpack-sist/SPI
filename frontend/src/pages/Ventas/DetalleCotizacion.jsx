@@ -345,7 +345,11 @@ function DetalleCotizacion() {
     const simbolo = cotizacion?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
-
+  const formatearPeso = (pesoKg) => {
+    if (!pesoKg || pesoKg === 0) return '—';
+    if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
+    return `${pesoKg.toFixed(3)} kg`;
+  };
   const getTipoImpuestoNombre = (valor) => {
     if (!valor) return 'IGV 18%';
 
@@ -438,6 +442,23 @@ function DetalleCotizacion() {
           <div className="text-xs text-muted">{row.unidad_medida}</div>
         </div>
       )
+    },
+    {
+      header: 'Peso',
+      accessor: 'peso_unitario',
+      width: '100px',
+      align: 'right',
+      render: (value, row) => {
+        const peso = parseFloat(value || 0);
+        if (peso === 0) return <span className="text-muted">—</span>;
+        const pesoTotal = parseFloat(row.cantidad) * peso;
+        return (
+          <div className="text-right">
+            <span className="font-bold text-sm">{formatearPeso(pesoTotal)}</span>
+            <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
+          </div>
+        );
+      }
     },
     {
       header: 'P. Base',
@@ -553,10 +574,13 @@ function DetalleCotizacion() {
   }
 
   const calcularTotalesReales = () => {
-    if (!cotizacion.detalle) return { sub: 0, tax: 0, tot: 0 };
+    if (!cotizacion.detalle) return { sub: 0, tax: 0, tot: 0, pesoTotal: 0 };
 
+    let pesoTotal = 0;
     const sub = cotizacion.detalle.reduce((acc, item) => {
       const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+      const peso = parseFloat(item.peso_unitario || 0);
+      if (peso > 0) pesoTotal += parseFloat(item.cantidad) * peso;
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
 
@@ -565,10 +589,10 @@ function DetalleCotizacion() {
     const pct = parseFloat(cotizacion.porcentaje_impuesto || 18);
 
     const tax = esExonerado ? 0 : sub * (pct / 100);
-    return { sub, tax, tot: sub + tax };
+    return { sub, tax, tot: sub + tax, pesoTotal };
   };
 
-  const { sub: subtotalReal, tax: igvReal, tot: totalReal } = calcularTotalesReales();
+  const { sub: subtotalReal, tax: igvReal, tot: totalReal, pesoTotal } = calcularTotalesReales();
 
   const estadoConfig = getEstadoConfig(cotizacion.estado);
   const IconoEstado = estadoConfig.icono;
@@ -1055,15 +1079,17 @@ function DetalleCotizacion() {
           </div>
           <div className="card-body">
             <div className="space-y-3">
+              {pesoTotal > 0 && (
+                <div className="flex justify-between py-2 border-b items-center" style={{ borderBottomColor: '#e2e8f0' }}>
+                  <span className="text-muted flex items-center gap-1">
+                    <Package size={14} /> Peso Total:
+                  </span>
+                  <span className="font-bold text-lg text-primary">{formatearPeso(pesoTotal)}</span>
+                </div>
+              )}
               <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: '#e2e8f0' }}>
                 <span className="text-muted">Sub Total:</span>
                 <span className="font-bold text-lg">{formatearMoneda(subtotalReal)}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: '#e2e8f0' }}>
-                <span className="text-muted">
-                  {getTipoImpuestoNombre(cotizacion.tipo_impuesto)}:
-                </span>
-                <span className="font-bold text-lg">{formatearMoneda(igvReal)}</span>
               </div>
               <div className="flex justify-between py-4 bg-gray-100 text-black px-4 rounded-xl shadow-none">
                 <span className="font-bold text-xl">TOTAL:</span>

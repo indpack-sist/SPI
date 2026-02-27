@@ -179,6 +179,7 @@ export async function createProducto(req, res) {
       costo_unitario_promedio,
       costo_unitario_promedio_usd,
       precio_venta,
+      peso_unitario,
       stock_actual,
       stock_minimo,
       stock_maximo,
@@ -204,9 +205,9 @@ export async function createProducto(req, res) {
     const result = await executeQuery(
       `INSERT INTO productos (
         codigo, nombre, descripcion, id_categoria, id_tipo_inventario,
-        unidad_medida, costo_unitario_promedio, costo_unitario_promedio_usd, precio_venta, stock_actual, stock_minimo,
-        stock_maximo, requiere_receta, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        unidad_medida, costo_unitario_promedio, costo_unitario_promedio_usd, precio_venta,
+        peso_unitario, stock_actual, stock_minimo, stock_maximo, requiere_receta, estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         codigo,
         nombre,
@@ -217,6 +218,7 @@ export async function createProducto(req, res) {
         costo_unitario_promedio || 0,
         costo_unitario_promedio_usd || 0,
         precio_venta || 0,
+        peso_unitario || null,
         stock_actual || 0,
         stock_minimo || 0,
         stock_maximo || 0,
@@ -254,6 +256,7 @@ export async function updateProducto(req, res) {
       id_tipo_inventario,
       unidad_medida,
       precio_venta,
+      peso_unitario,
       stock_minimo,
       stock_maximo,
       requiere_receta,
@@ -283,8 +286,8 @@ export async function updateProducto(req, res) {
     const result = await executeQuery(
       `UPDATE productos SET 
         codigo = ?, nombre = ?, descripcion = ?, id_categoria = ?,
-        id_tipo_inventario = ?, unidad_medida = ?, precio_venta = ?, stock_minimo = ?,
-        stock_maximo = ?, requiere_receta = ?, estado = ?
+        id_tipo_inventario = ?, unidad_medida = ?, precio_venta = ?, peso_unitario = ?,
+        stock_minimo = ?, stock_maximo = ?, requiere_receta = ?, estado = ?
       WHERE id_producto = ?`,
       [
         codigo,
@@ -294,6 +297,7 @@ export async function updateProducto(req, res) {
         id_tipo_inventario,
         unidad_medida,
         precio_venta || 0,
+        peso_unitario || null,
         stock_minimo,
         stock_maximo,
         requiere_receta,

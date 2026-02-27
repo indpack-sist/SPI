@@ -111,7 +111,11 @@ function NuevaOrdenVenta() {
     const simbolo = formCabecera.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
-
+  const formatearPeso = (pesoKg) => {
+    if (!pesoKg || pesoKg === 0) return '—';
+    if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
+    return `${pesoKg.toFixed(3)} kg`;
+  };
   const verArchivo = (url) => {
     if (!url) return;
     const proxyUrl = archivosAPI.getProxyUrl(url);
@@ -293,19 +297,22 @@ if (resCli.data.success) {
         }
 
         if (orden.detalle && orden.detalle.length > 0) {
-          setDetalle(orden.detalle.map(item => ({
-            id_producto: item.id_producto,
-            codigo_producto: item.codigo_producto,
-            producto: item.producto,
-            unidad_medida: item.unidad_medida,
-            cantidad: parseFloat(item.cantidad),
-            precio_base: parseFloat(item.precio_base || item.precio_unitario), 
-            precio_venta: parseFloat(item.precio_unitario),
-            descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-            stock_actual: item.stock_disponible
-          })));
+          setDetalle(orden.detalle.map(item => {
+            const prodCatalogo = productos.find(p => p.id_producto === item.id_producto);
+            return {
+              id_producto: item.id_producto,
+              codigo_producto: item.codigo_producto,
+              producto: item.producto,
+              unidad_medida: item.unidad_medida,
+              cantidad: parseFloat(item.cantidad),
+              precio_base: parseFloat(item.precio_base || item.precio_unitario),
+              precio_venta: parseFloat(item.precio_unitario),
+              descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+              stock_actual: item.stock_disponible,
+              peso_unitario: parseFloat(prodCatalogo?.peso_unitario || 0)
+            };
+          }));
         }
-      }
     } catch (err) {
       console.error(err);
       setError('Error al cargar los datos de la orden para editar');
@@ -388,19 +395,22 @@ if (resCli.data.success) {
         }));
 
         if (cot.detalle) {
-          setDetalle(cot.detalle.map(item => ({
-            id_producto: item.id_producto,
-            codigo_producto: item.codigo_producto,
-            producto: item.producto,
-            unidad_medida: item.unidad_medida,
-            cantidad: parseFloat(item.cantidad),
-            precio_base: parseFloat(item.precio_base || item.precio_unitario),
-            precio_venta: parseFloat(item.precio_unitario),
-            descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
-            stock_actual: item.stock_disponible
-          })));
+          setDetalle(cot.detalle.map(item => {
+            const prodCatalogo = productos.find(p => p.id_producto === item.id_producto);
+            return {
+              id_producto: item.id_producto,
+              codigo_producto: item.codigo_producto,
+              producto: item.producto,
+              unidad_medida: item.unidad_medida,
+              cantidad: parseFloat(item.cantidad),
+              precio_base: parseFloat(item.precio_base || item.precio_unitario),
+              precio_venta: parseFloat(item.precio_unitario),
+              descuento_porcentaje: parseFloat(item.descuento_porcentaje || 0),
+              stock_actual: item.stock_disponible,
+              peso_unitario: parseFloat(prodCatalogo?.peso_unitario || 0)
+            };
+          }));
         }
-      }
     } catch (err) {
       console.error(err);
       setError('Error al importar la cotización');
@@ -483,7 +493,8 @@ setFormCabecera(prev => ({
       precio_base: precioVenta,
       precio_venta: precioVenta,
       descuento_porcentaje: 0,
-      stock_actual: producto.stock_actual
+      stock_actual: producto.stock_actual,
+      peso_unitario: parseFloat(producto.peso_unitario || 0)
     };
     
     setDetalle([...detalle, nuevoItem]);
@@ -544,14 +555,17 @@ setFormCabecera(prev => ({
 
   const calcularTotales = () => {
     let subtotal = 0;
+    let pesoTotal = 0;
     detalle.forEach(item => {
       const precioVenta = parseFloat(item.precio_venta) || 0;
       subtotal += item.cantidad * precioVenta;
+      const peso = parseFloat(item.peso_unitario || 0);
+      if (peso > 0) pesoTotal += item.cantidad * peso;
     });
     const porcentaje = parseFloat(formCabecera.porcentaje_impuesto) || 0;
     const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
-    setTotales({ subtotal, impuesto, total });
+    setTotales({ subtotal, impuesto, total, pesoTotal });
   };
 
   const handleTipoImpuestoChange = (codigo) => {
@@ -898,19 +912,20 @@ setFormCabecera(prev => ({
               <div className="card-body p-0 overflow-x-auto">
                 <table className="table">
                   <thead>
-                    <tr>
-                      <th>Producto</th>
-                      <th className="text-right w-24">Cant.</th>
-                      <th className="text-right w-28">P. Base</th>
-                      <th className="text-right w-28">P. Venta</th>
-                      <th className="text-center w-20">Margen %</th>
-                      <th className="text-right w-28">Subtotal</th>
-                      <th className="w-10"></th>
-                    </tr>
-                  </thead>
+  <tr>
+    <th>Producto</th>
+    <th className="text-right w-24">Cant.</th>
+    <th className="text-right w-24">Peso</th>
+    <th className="text-right w-28">P. Base</th>
+    <th className="text-right w-28">P. Venta</th>
+    <th className="text-center w-20">Margen %</th>
+    <th className="text-right w-28">Subtotal</th>
+    <th className="w-10"></th>
+  </tr>
+</thead>
                   <tbody>
                     {detalle.length === 0 ? (
-                      <tr><td colSpan="7" className="text-center py-8 text-muted">No hay productos agregados</td></tr>
+                      <tr><td colSpan="8" className="text-center py-8 text-muted">No hay productos agregados</td></tr>
                     ) : (
                       detalle.map((item, index) => {
                         const precioVenta = parseFloat(item.precio_venta) || 0;
@@ -934,6 +949,19 @@ setFormCabecera(prev => ({
                                 onWheel={handleWheelDisable}
                               />
                             </td>
+                            <td className="text-right text-sm">
+  {(() => {
+    const peso = parseFloat(item.peso_unitario || 0);
+    if (peso === 0) return <span className="text-muted">—</span>;
+    const pesoTotalItem = item.cantidad * peso;
+    return (
+      <div>
+        <span className="font-bold">{formatearPeso(pesoTotalItem)}</span>
+        <div className="text-[10px] text-muted">{formatearPeso(peso)}/u</div>
+      </div>
+    );
+  })()}
+</td>
                             <td>
                               <input
                                 type="number"
@@ -1338,8 +1366,16 @@ setFormCabecera(prev => ({
 
             <div className="card bg-gray-50 border-t-4 border-primary">
               <div className="card-body space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Sub Total:</span>
+                {totales.pesoTotal > 0 && (
+  <div className="flex justify-between text-sm items-center pb-2 border-b mb-2">
+    <span className="flex items-center gap-1"><Package size={14} /> Peso Total:</span>
+    <span className="font-bold text-primary">{formatearPeso(totales.pesoTotal)}</span>
+  </div>
+)}
+<div className="flex justify-between text-sm">
+  <span>Sub Total:</span>
+  <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
+</div>
                   <span className="font-bold">{formatearMoneda(totales.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm">

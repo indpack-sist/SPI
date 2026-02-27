@@ -146,7 +146,8 @@ export async function getCotizacionById(req, res) {
         COALESCE(p.nombre, dc.nombre_producto_libre)      AS producto,
         COALESCE(p.unidad_medida, dc.unidad_medida_libre) AS unidad_medida,
         p.stock_actual AS stock_disponible,
-        p.requiere_receta
+         p.requiere_receta,
+        p.peso_unitario
       FROM detalle_cotizacion dc
       LEFT JOIN productos p ON dc.id_producto = p.id_producto
       WHERE dc.id_cotizacion = ?

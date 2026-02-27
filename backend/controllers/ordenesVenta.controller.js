@@ -1782,6 +1782,7 @@ export async function descargarPDFOrdenVenta(req, res) {
         p.codigo AS codigo_producto, 
         p.nombre AS producto, 
         p.unidad_medida
+        p.peso_unitario
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto
       WHERE dov.id_orden_venta = ?
@@ -1894,7 +1895,8 @@ export async function descargarPDFDespacho(req, res) {
         ds.precio_unitario,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
-        p.unidad_medida
+        p.unidad_medida,
+        p.peso_unitario
       FROM detalle_salidas ds
       INNER JOIN productos p ON ds.id_producto = p.id_producto
       WHERE ds.id_salida = ?

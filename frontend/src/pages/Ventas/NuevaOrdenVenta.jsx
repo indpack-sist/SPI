@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle, Truck, User, Box, Eye, FilePlus
+  FileText, Lock, CheckCircle, Truck, User, Box, Eye, FilePlus, Package
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';

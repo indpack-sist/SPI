@@ -1781,7 +1781,7 @@ export async function descargarPDFOrdenVenta(req, res) {
         dov.descuento_porcentaje,
         p.codigo AS codigo_producto, 
         p.nombre AS producto, 
-        p.unidad_medida
+        p.unidad_medida,
         p.peso_unitario
       FROM detalle_orden_venta dov
       INNER JOIN productos p ON dov.id_producto = p.id_producto

@@ -51,7 +51,8 @@ const ReporteVentas = () => {
     fechaFin: fechaHoy.toISOString().split('T')[0],
     idCliente: '',
     estadoOrden: '',
-    estadoPago: ''
+    estadoPago: '',
+    filtroFecha: 'fecha_emision'
   });
 
   const [dataReporte, setDataReporte] = useState({
@@ -150,7 +151,8 @@ const ReporteVentas = () => {
       const response = await reportesAPI.getVentas({
         fechaInicio: filtros.fechaInicio,
         fechaFin: filtros.fechaFin,
-        idCliente: filtros.idCliente
+        idCliente: filtros.idCliente,
+        filtro_fecha: filtros.filtroFecha
       });
       if (response.data.success) {
         setDataReporte(response.data.data);
@@ -544,7 +546,18 @@ const ReporteVentas = () => {
       <div className="card mb-6">
         <div className="card-body">
             <form onSubmit={generarReporte} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="form-group mb-0">
+                    <label className="form-label uppercase text-xs text-muted">Filtrar por</label>
+                    <select
+                      className="form-select"
+                      value={filtros.filtroFecha}
+                      onChange={(e) => setFiltros({...filtros, filtroFecha: e.target.value})}
+                    >
+                      <option value="fecha_emision">Fecha Emisión</option>
+                      <option value="fecha_sunat">Fecha Facturado SUNAT</option>
+                    </select>
+                </div>
                 <div className="form-group mb-0">
                     <label className="form-label uppercase text-xs text-muted">Desde</label>
                     <div className="input-with-icon">
@@ -679,7 +692,7 @@ const ReporteVentas = () => {
                   <button 
                     type="button"
                     onClick={() => {
-                      setFiltros({...filtros, estadoOrden: '', estadoPago: ''});
+                      setFiltros({...filtros, estadoOrden: '', estadoPago: '', filtroFecha: 'fecha_emision'});
                     }}
                     className="btn btn-ghost"
                     title="Limpiar filtros"

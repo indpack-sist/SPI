@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell, Area, AreaChart
@@ -318,6 +318,25 @@ const ReporteVentas = () => {
         colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 });
       }
       wsResumen['!cols'] = colsBase;
+
+      if (hayConversion && hayUSD) {
+        const totalRows = datosResumen.length + 1;
+        const startCol = 20;
+        const endCol = 25;
+        for (let R = 0; R < totalRows; R++) {
+          for (let C = startCol; C <= endCol; C++) {
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+            if (wsResumen[cellRef]) {
+              wsResumen[cellRef].s = {
+                fill: { fgColor: { rgb: "FFF9E6" } },
+                font: { bold: R === 0, color: { rgb: R === 0 ? "8B6914" : "333333" } },
+                numFmt: '#,##0.000'
+              };
+            }
+          }
+        }
+      }
+
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
 
       if (hayConversion && hayUSD) {

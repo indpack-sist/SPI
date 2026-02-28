@@ -64,10 +64,20 @@ function Cotizaciones() {
 
   const cargarTCDesdeSession = () => {
     try {
-      const cached = sessionStorage.getItem(TC_SESSION_KEY);
+      const cached = localStorage.getItem(TC_SESSION_KEY);
       if (cached) {
-        const parsed = JSON.parse(cached);
-        setTipoCambio(parsed);
+        const data = JSON.parse(cached);
+        const ahora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
+        const fechaCache = new Date(new Date(data.timestamp).toLocaleString('en-US', { timeZone: 'America/Lima' }));
+        if (
+          ahora.getFullYear() === fechaCache.getFullYear() &&
+          ahora.getMonth() === fechaCache.getMonth() &&
+          ahora.getDate() === fechaCache.getDate()
+        ) {
+          setTipoCambio(data);
+        } else {
+          localStorage.removeItem(TC_SESSION_KEY);
+        }
       }
     } catch (e) {
       console.error('Error leyendo TC de sesión:', e);
@@ -87,7 +97,7 @@ function Cotizaciones() {
           fecha: response.data.fecha,
           timestamp: Date.now()
         };
-        sessionStorage.setItem(TC_SESSION_KEY, JSON.stringify(tcData));
+        localStorage.setItem(TC_SESSION_KEY, JSON.stringify(tcData));
         setTipoCambio(tcData);
         setSuccessMessage(`Tipo de cambio actualizado: S/ ${tcData.venta} (venta) — Fecha SBS: ${formatearFechaVisual(tcData.fecha)}`);
       } else {
@@ -215,12 +225,14 @@ function Cotizaciones() {
 
   const obtenerEdadTC = () => {
     if (!tipoCambio?.timestamp) return null;
-    const minutos = Math.floor((Date.now() - tipoCambio.timestamp) / 60000);
-    if (minutos < 1) return 'Hace un momento';
-    if (minutos < 60) return `Hace ${minutos} min`;
-    const horas = Math.floor(minutos / 60);
-    if (horas < 24) return `Hace ${horas}h ${minutos % 60}min`;
-    return `Hace más de 24h`;
+    const ahora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
+    const finDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59);
+    const restanteMs = finDia - ahora;
+    const horasRestantes = Math.floor(restanteMs / 3600000);
+    const minutosRestantes = Math.floor((restanteMs % 3600000) / 60000);
+    if (horasRestantes > 0) return `Válido por ${horasRestantes}h ${minutosRestantes}min`;
+    if (minutosRestantes > 0) return `Válido por ${minutosRestantes} min`;
+    return 'Expira pronto';
   };
 
   const handleDescargarPDF = async (id_cotizacion, numero, cliente, estadoActual) => {

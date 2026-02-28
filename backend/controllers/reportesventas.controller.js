@@ -2,7 +2,9 @@ import db from '../config/database.js';
 
 export const getReporteVentas = async (req, res) => {
     try {
-        const { fechaInicio, fechaFin, idCliente, idVendedor } = req.query;
+        const { fechaInicio, fechaFin, idCliente, idVendedor, filtro_fecha } = req.query;
+
+        const campoFecha = filtro_fecha === 'fecha_sunat' ? 'ov.fecha_facturacion_sunat' : 'ov.fecha_emision';
 
         let sql = `
             SELECT 
@@ -31,7 +33,7 @@ export const getReporteVentas = async (req, res) => {
             LEFT JOIN empleados ec ON ov.id_conductor = ec.id_empleado
             LEFT JOIN cotizaciones cot ON ov.id_cotizacion = cot.id_cotizacion
             LEFT JOIN salidas s ON ov.id_salida = s.id_salida
-            WHERE DATE(ov.fecha_emision) BETWEEN ? AND ?
+            WHERE DATE(${campoFecha}) BETWEEN ? AND ?
             AND ov.estado != 'Cancelada'
             AND ov.estado_verificacion != 'Rechazada'
         `;
@@ -102,21 +104,21 @@ export const getReporteVentas = async (req, res) => {
         const listaDetalle = ordenes.map(orden => {
             const esDolar = orden.moneda === 'USD';
             
-const subtotalOriginal = parseFloat(orden.subtotal) || 0;
-const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
-const comisionOriginal = parseFloat(orden.total_comision) || 0;
+            const subtotalOriginal = parseFloat(orden.subtotal) || 0;
+            const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
+            const comisionOriginal = parseFloat(orden.total_comision) || 0;
 
-const tipoImpuesto = String(orden.tipo_impuesto || '').toUpperCase().trim();
-const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
-const porcentajeImp = esSinImpuesto ? 0 : (
-    orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined
-        ? parseFloat(orden.porcentaje_impuesto)
-        : 18
-);
+            const tipoImpuesto = String(orden.tipo_impuesto || '').toUpperCase().trim();
+            const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+            const porcentajeImp = esSinImpuesto ? 0 : (
+                orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined
+                    ? parseFloat(orden.porcentaje_impuesto)
+                    : 18
+            );
 
-const igvOriginal = subtotalOriginal * (porcentajeImp / 100);
-const totalOriginal = subtotalOriginal + igvOriginal;
-const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
+            const igvOriginal = subtotalOriginal * (porcentajeImp / 100);
+            const totalOriginal = subtotalOriginal + igvOriginal;
+            const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
 
             if (esDolar) {
                 kpis.totalVentasUSD += totalOriginal;
@@ -251,8 +253,8 @@ const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
                 comprobante_editado: orden.comprobante_editado,
                 tipo_impuesto: orden.tipo_impuesto,
                 porcentaje_impuesto: orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined 
-    ? parseFloat(orden.porcentaje_impuesto) 
-    : 18,
+                    ? parseFloat(orden.porcentaje_impuesto) 
+                    : 18,
                 observaciones: orden.observaciones,
                 motivo_rechazo: orden.motivo_rechazo,
                 observaciones_verificador: orden.observaciones_verificador,

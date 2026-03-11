@@ -90,6 +90,8 @@ function NuevaCompra() {
     observaciones: '',
     contacto_proveedor: '',
     direccion_entrega: '',
+    lugar_entrega: 'Almacén Principal',
+    plazo_pago: '',
     tipo_recepcion: 'Total',
     tipo_documento: 'Factura',
     serie_documento: '',
@@ -550,7 +552,7 @@ function NuevaCompra() {
                 )}
 
                 {proveedorSeleccionado && (
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="form-group">
                       <label className="form-label text-xs uppercase text-muted">Fecha Emision</label>
                       <input 
@@ -561,7 +563,27 @@ function NuevaCompra() {
                         required 
                       />
                     </div>
-                    <div className="form-group md:col-span-2">
+                    <div className="form-group">
+                      <label className="form-label text-xs uppercase text-muted">Plazo de Pago</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Ej: 30 días, Contra entrega..." 
+                        value={formData.plazo_pago} 
+                        onChange={(e) => setFormData({ ...formData, plazo_pago: e.target.value })} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label text-xs uppercase text-muted">Lugar de Entrega</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Dirección del almacén" 
+                        value={formData.lugar_entrega} 
+                        onChange={(e) => setFormData({ ...formData, lugar_entrega: e.target.value })} 
+                      />
+                    </div>
+                    <div className="form-group">
                       <label className="form-label text-xs uppercase text-muted">Contacto (Opcional)</label>
                       <input 
                         type="text" 

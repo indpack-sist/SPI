@@ -225,3 +225,38 @@ export async function notificarPendienteMarcarSunat(idOrden, numeroOrden, estado
     console.error('Error en notificarPendienteMarcarSunat:', error);
   }
 }
+
+export async function notificarComercialDefinirComprobante(idOrden, numeroOrden, idComercial, io) {
+  try {
+    if (!idComercial) return;
+
+    const insertResult = await executeQuery(
+      `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        idComercial,
+        'Definir Tipo de Comprobante',
+        `Has creado la orden ${numeroOrden}. Por favor, define si será Factura o Nota de Venta.`,
+        'warning',
+        `/ventas/ordenes/${idOrden}`,
+        0
+      ]
+    );
+
+    if (insertResult.success && io) {
+      const notifCompleta = {
+        id_notificacion: insertResult.data.insertId,
+        id_usuario_destino: idComercial,
+        titulo: 'Definir Tipo de Comprobante',
+        mensaje: `Has creado la orden ${numeroOrden}. Por favor, define si será Factura o Nota de Venta.`,
+        tipo: 'warning',
+        ruta_destino: `/ventas/ordenes/${idOrden}`,
+        leido: 0,
+        fecha_creacion: new Date()
+      };
+      await emitirNotificacion(io, idComercial, notifCompleta);
+    }
+  } catch (error) {
+    console.error('Error en notificarComercialDefinirComprobante:', error);
+  }
+}

@@ -13,7 +13,8 @@ import {
   notificarOrdenAprobada,
   notificarOrdenRechazada,
   notificarOrdenReenviada,
-  notificarPendienteMarcarSunat
+  notificarPendienteMarcarSunat,
+  notificarComercialDefinirComprobante
 } from '../utils/notificacionesHelper.js';
 
 const getIO = (req) => req.app.get('socketio');
@@ -2522,6 +2523,11 @@ export async function actualizarTipoComprobante(req, res) {
       return res.status(500).json({ success: false, error: updateResult.error });
     }
 
+    // Notificación SUNAT si el nuevo tipo es Factura y ya está en estados relevantes
+    if (tipo_comprobante === 'Factura' && ['En espera', 'Despacho Parcial', 'Despachada', 'Entregada'].includes(orden.estado)) {
+      await notificarPendienteMarcarSunat(id, orden.numero_orden, orden.estado, getIO(req));
+    }
+
     res.json({
       success: true,
       message: 'Tipo de comprobante actualizado exitosamente',
@@ -3492,6 +3498,7 @@ export async function aprobarOrdenVerificacion(req, res) {
     }
 
     await notificarOrdenAprobada(id, orden.numero_orden, orden.id_registrado_por, nombre_completo, getIO(req));
+    await notificarComercialDefinirComprobante(id, orden.numero_orden, orden.id_comercial, getIO(req));
 
     if (orden.tipo_comprobante === 'Factura') {
       await notificarPendienteMarcarSunat(id, orden.numero_orden, 'Aprobada', getIO(req));

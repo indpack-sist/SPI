@@ -723,28 +723,28 @@ export const comprasAPI = {
   getIngresos: (id) => api.get(`/compras/${id}/ingresos`),
   getItemsPendientes: (id) => api.get(`/compras/${id}/items-pendientes`),
 
-  descargarPDF: async (id) => {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/compras/${id}/pdf`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  descargarPDF: (id) => {
+    return api.get(`/compras/${id}/pdf`, {
+      responseType: 'blob'
+    }).then(response => {
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Intentar obtener el nombre del archivo del header content-disposition
+      const contentDisposition = response.headers['content-disposition'];
+      let fileName = `OC-${id}.pdf`;
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (fileNameMatch && fileNameMatch.length === 2) fileName = fileNameMatch[1];
       }
-    });
-    
-    if (!response.ok) throw new Error('Error al descargar PDF');
-    
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `compra-${id}.pdf`;
-    
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => {
+      
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    }, 100);
+    });
   }
 };
 

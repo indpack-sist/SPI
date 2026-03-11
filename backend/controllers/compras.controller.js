@@ -1034,6 +1034,15 @@ export async function descargarPDFCompra(req, res) {
     });
 
     compra.detalle = detalleProcesado;
+
+    // Obtener cronograma de cuotas para el PDF
+    const cuotasResult = await executeQuery(`
+      SELECT * FROM cuotas_orden_compra 
+      WHERE id_orden_compra = ? 
+      ORDER BY numero_cuota
+    `, [id]);
+    
+    compra.cuotas = cuotasResult.data || [];
     
     // Generamos el PDF
     const pdfBuffer = await generarCompraPDF(compra);

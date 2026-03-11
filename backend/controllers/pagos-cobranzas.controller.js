@@ -111,8 +111,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
         mc.moneda,
         COALESCE(p.razon_social, cl.razon_social, 'General') as tercero,
         emp.nombre_completo as registrado_por,
-        c.nombre as cuenta_destino,
-        mc.fecha_registro
+        c.nombre as cuenta_destino
       FROM movimientos_cuentas mc
       LEFT JOIN ordenes_compra oc ON mc.id_orden_compra = oc.id_orden_compra
       LEFT JOIN proveedores p ON oc.id_proveedor = p.id_proveedor

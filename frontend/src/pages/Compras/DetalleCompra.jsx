@@ -788,61 +788,59 @@ function DetalleCompra() {
       )}
 
       <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="flex gap-4">
+        <div className="bg-gray-100 p-1 rounded-lg inline-flex gap-1">
+          <button 
+            className={`px-6 py-2 rounded-md font-medium transition-all ${
+              tabActiva === 'general' 
+                ? 'bg-primary text-white shadow-sm' 
+                : 'text-gray-600 hover:bg-gray-200'
+            }`} 
+            onClick={() => setTabActiva('general')}
+          >
+            General
+          </button>
+          <button 
+            className={`px-6 py-2 rounded-md font-medium transition-all ${
+              tabActiva === 'pagos' 
+                ? 'bg-primary text-white shadow-sm' 
+                : 'text-gray-600 hover:bg-gray-200'
+            }`} 
+            onClick={() => setTabActiva('pagos')}
+          >
+            Pagos
+          </button>
+          {(esLetras || esCredito) && (
             <button 
-              className={`px-4 py-2 border-b-2 font-medium transition ${
-                tabActiva === 'general' 
-                  ? 'border-primary text-primary' 
-                  : 'border-transparent text-muted hover:text-gray-700'
+              className={`px-6 py-2 rounded-md font-medium transition-all flex items-center gap-2 ${
+                tabActiva === 'letras' 
+                  ? 'bg-primary text-white shadow-sm' 
+                  : 'text-gray-600 hover:bg-gray-200'
               }`} 
-              onClick={() => setTabActiva('general')}
+              onClick={() => setTabActiva('letras')}
             >
-              General
-            </button>
-            <button 
-              className={`px-4 py-2 border-b-2 font-medium transition ${
-                tabActiva === 'pagos' 
-                  ? 'border-primary text-primary' 
-                  : 'border-transparent text-muted hover:text-gray-700'
-              }`} 
-              onClick={() => setTabActiva('pagos')}
-            >
-              Pagos
-            </button>
-            {(esLetras || esCredito) && (
-              <button 
-                className={`px-4 py-2 border-b-2 font-medium transition ${
-                  tabActiva === 'letras' 
-                    ? 'border-primary text-primary' 
-                    : 'border-transparent text-muted hover:text-gray-700'
-                }`} 
-                onClick={() => setTabActiva('letras')}
-              >
-                {esLetras ? 'Letras' : 'Cuotas'}
-                {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
-                  <span className="ml-2 badge badge-warning text-xs">
-                    {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
-                  </span>
-                )}
-              </button>
-            )}
-            <button 
-              className={`px-4 py-2 border-b-2 font-medium transition ${
-                tabActiva === 'ingresos' 
-                  ? 'border-primary text-primary' 
-                  : 'border-transparent text-muted hover:text-gray-700'
-              }`} 
-              onClick={() => setTabActiva('ingresos')}
-            >
-              Ingresos Inventario 
-              {itemsPendientes.length > 0 && (
-                <span className="ml-2 badge badge-info text-xs">
-                  {itemsPendientes.length}
+              {esLetras ? 'Letras' : 'Cuotas'}
+              {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
+                <span className={`badge text-[10px] px-1.5 py-0.5 ${tabActiva === 'letras' ? 'bg-white text-primary' : 'badge-warning'}`}>
+                  {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
                 </span>
               )}
             </button>
-          </nav>
+          )}
+          <button 
+            className={`px-6 py-2 rounded-md font-medium transition-all flex items-center gap-2 ${
+              tabActiva === 'ingresos' 
+                ? 'bg-primary text-white shadow-sm' 
+                : 'text-gray-600 hover:bg-gray-200'
+            }`} 
+            onClick={() => setTabActiva('ingresos')}
+          >
+            Ingresos Inventario 
+            {itemsPendientes.length > 0 && (
+              <span className={`badge text-[10px] px-1.5 py-0.5 ${tabActiva === 'ingresos' ? 'bg-white text-primary' : 'badge-info'}`}>
+                {itemsPendientes.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 

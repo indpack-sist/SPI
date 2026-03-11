@@ -12,7 +12,8 @@ import {
   notificarNuevaOrdenPendiente,
   notificarOrdenAprobada,
   notificarOrdenRechazada,
-  notificarOrdenReenviada
+  notificarOrdenReenviada,
+  notificarPendienteMarcarSunat
 } from '../utils/notificacionesHelper.js';
 
 const getIO = (req) => req.app.get('socketio');
@@ -1315,6 +1316,10 @@ export async function registrarDespacho(req, res) {
 
     await executeQuery('UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?', [nuevoEstado, id]);
 
+    if (orden.tipo_comprobante === 'Factura' && ['En espera', 'Despacho Parcial', 'Despachada', 'Entregada'].includes(nuevoEstado)) {
+      await notificarPendienteMarcarSunat(id, orden.numero_orden, nuevoEstado, getIO(req));
+    }
+
     if (orden.id_cotizacion) {
       const estadoCotizacion = nuevoEstado === 'Despachada' ? 'Despachado desde OV' : 'Despachado parcial desde OV';
       await executeQuery('UPDATE cotizaciones SET estado = ? WHERE id_cotizacion = ?', [estadoCotizacion, orden.id_cotizacion]);
@@ -1418,6 +1423,10 @@ export async function anularDespacho(req, res) {
     }
 
     await executeQuery('UPDATE ordenes_venta SET estado = ? WHERE id_orden_venta = ?', [nuevoEstado, id]);
+
+    if (orden.tipo_comprobante === 'Factura' && ['En espera', 'Despacho Parcial', 'Despachada', 'Entregada'].includes(nuevoEstado)) {
+      await notificarPendienteMarcarSunat(id, orden.numero_orden, nuevoEstado, getIO(req));
+    }
 
     if (orden.id_cotizacion) {
       let estadoCotizacion = 'Convertida';
@@ -3483,6 +3492,10 @@ export async function aprobarOrdenVerificacion(req, res) {
     }
 
     await notificarOrdenAprobada(id, orden.numero_orden, orden.id_registrado_por, nombre_completo, getIO(req));
+
+    if (orden.tipo_comprobante === 'Factura') {
+      await notificarPendienteMarcarSunat(id, orden.numero_orden, 'Aprobada', getIO(req));
+    }
 
 
     res.json({

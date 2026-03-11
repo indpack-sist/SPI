@@ -12,7 +12,7 @@ export async function notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombreC
       SELECT id_empleado 
       FROM empleados 
       WHERE rol IN ('Administrador', 'Gerencia', 'Administrativo') 
-        AND estado = 'Activo'
+        AND estado = 'Active'
     `);
 
     if (!adminResult.success || adminResult.data.length === 0) {
@@ -138,7 +138,7 @@ export async function notificarOrdenReenviada(idOrden, numeroOrden, nombreComerc
       SELECT id_empleado 
       FROM empleados 
       WHERE rol IN ('Administrador', 'Gerencia', 'Administrativo') 
-        AND estado = 'Activo'
+        AND estado = 'Active'
     `);
 
     if (!adminResult.success || adminResult.data.length === 0) {
@@ -177,5 +177,51 @@ export async function notificarOrdenReenviada(idOrden, numeroOrden, nombreComerc
 
   } catch (error) {
     console.error('Error en notificarOrdenReenviada:', error);
+  }
+}
+
+export async function notificarPendienteMarcarSunat(idOrden, numeroOrden, estadoActual, io) {
+  try {
+    const adminResult = await executeQuery(`
+      SELECT id_empleado 
+      FROM empleados 
+      WHERE rol IN ('Administrador', 'Administrativo') 
+        AND estado = 'Activo'
+    `);
+
+    if (!adminResult.success || adminResult.data.length === 0) {
+      return;
+    }
+
+    for (const admin of adminResult.data) {
+      const insertResult = await executeQuery(
+        `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          admin.id_empleado,
+          'Pendiente Registro SUNAT',
+          `La Orden ${numeroOrden} está ${estadoActual}. Pendiente registrar correlativo SUNAT.`,
+          'info',
+          `/ventas/ordenes/${idOrden}`,
+          0
+        ]
+      );
+
+      if (insertResult.success && io) {
+        const notifCompleta = {
+          id_notificacion: insertResult.data.insertId,
+          id_usuario_destino: admin.id_empleado,
+          titulo: 'Pendiente Registro SUNAT',
+          mensaje: `La Orden ${numeroOrden} está ${estadoActual}. Pendiente registrar correlativo SUNAT.`,
+          tipo: 'info',
+          ruta_destino: `/ventas/ordenes/${idOrden}`,
+          leido: 0,
+          fecha_creacion: new Date()
+        };
+        await emitirNotificacion(io, admin.id_empleado, notifCompleta);
+      }
+    }
+  } catch (error) {
+    console.error('Error en notificarPendienteMarcarSunat:', error);
   }
 }

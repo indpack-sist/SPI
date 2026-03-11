@@ -32,7 +32,35 @@ function NuevaCompra() {
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
   const [modalCrearProveedorOpen, setModalCrearProveedorOpen] = useState(false);
   const [modalCrearProductoOpen, setModalCrearProductoOpen] = useState(false);
+  const [modalItemManualOpen, setModalItemManualOpen] = useState(false);
   const [buscandoRuc, setBuscandoRuc] = useState(false);
+
+  const [itemManual, setItemManual] = useState({
+    nombre: '',
+    unidad_medida: 'UND',
+    cantidad: 1,
+    precio_unitario: 0
+  });
+
+  const handleAgregarItemManual = (e) => {
+    e.preventDefault();
+    if (!itemManual.nombre.trim()) return;
+
+    const nuevoItem = {
+      id_producto: null, // Indica que es manual
+      codigo_producto: 'MANUAL',
+      producto: itemManual.nombre.toUpperCase(),
+      unidad_medida: itemManual.unidad_medida,
+      cantidad: parseFloat(itemManual.cantidad),
+      cantidad_a_recibir: 0, // Por lo general ítems manuales no entran a stock físico automáticamente
+      precio_unitario: parseFloat(itemManual.precio_unitario),
+      descuento_porcentaje: 0.00
+    };
+
+    setDetalle([...detalle, nuevoItem]);
+    setModalItemManualOpen(false);
+    setItemManual({ nombre: '', unidad_medida: 'UND', cantidad: 1, precio_unitario: 0 });
+  };
 
   const [busquedaProveedor, setBusquedaProveedor] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
@@ -582,24 +610,31 @@ function NuevaCompra() {
                   <h2 className="card-title text-base">
                     <ShoppingCart size={18} className="text-primary"/> Detalle de Productos
                   </h2>
-                  <div className="flex gap-2">
-                    <select 
-                      className="form-select text-xs w-36" 
-                      value={formData.tipo_recepcion} 
-                      onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}
-                    >
-                      <option value="Total">Recepcion Total</option>
-                      <option value="Parcial">Recepcion Parcial</option>
-                      <option value="Ninguna">Solo Orden</option>
-                    </select>
-                    <button 
-                      type="button" 
-                      className="btn btn-sm btn-primary" 
-                      onClick={() => setModalProductoOpen(true)}
-                    >
-                      <Plus size={16} /> Agregar
-                    </button>
-                  </div>
+                    <div className="flex gap-2">
+                      <select 
+                        className="form-select text-xs w-36" 
+                        value={formData.tipo_recepcion} 
+                        onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}
+                      >
+                        <option value="Total">Recepcion Total</option>
+                        <option value="Parcial">Recepcion Parcial</option>
+                        <option value="Ninguna">Solo Orden</option>
+                      </select>
+                      <button 
+                        type="button" 
+                        className="btn btn-sm btn-outline text-primary border-primary hover:bg-primary hover:text-white" 
+                        onClick={() => setModalItemManualOpen(true)}
+                      >
+                        <Plus size={16} /> Ítem Manual
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn btn-sm btn-primary" 
+                        onClick={() => setModalProductoOpen(true)}
+                      >
+                        <Search size={16} /> Catálogo
+                      </button>
+                    </div>
                 </div>
                 
                 <div className="card-body p-0 overflow-hidden">
@@ -1177,6 +1212,75 @@ function NuevaCompra() {
             )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalItemManualOpen}
+        onClose={() => setModalItemManualOpen(false)}
+        title="Añadir Ítem Manual"
+      >
+        <form onSubmit={handleAgregarItemManual} className="space-y-4">
+          <div className="form-group">
+            <label className="form-label">Nombre del Producto / Servicio</label>
+            <textarea
+              className="form-textarea"
+              rows={2}
+              placeholder="Ej: Servicio de mantenimiento de maquinaria..."
+              value={itemManual.nombre}
+              onChange={(e) => setItemManual({...itemManual, nombre: e.target.value})}
+              required
+              autoFocus
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Unidad de Medida</label>
+              <select
+                className="form-select"
+                value={itemManual.unidad_medida}
+                onChange={(e) => setItemManual({...itemManual, unidad_medida: e.target.value})}
+              >
+                <option value="UND">Unidad (UND)</option>
+                <option value="SER">Servicio (SER)</option>
+                <option value="GLB">Global (GLB)</option>
+                <option value="KG">Kilos (KG)</option>
+                <option value="MTR">Metros (MTR)</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Cantidad</label>
+              <input
+                type="number"
+                className="form-input"
+                min="0.01"
+                step="0.01"
+                value={itemManual.cantidad}
+                onChange={(e) => setItemManual({...itemManual, cantidad: e.target.value})}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Precio Unitario (Sin IGV)</label>
+            <input
+              type="number"
+              className="form-input font-bold text-primary"
+              min="0"
+              step="0.01"
+              value={itemManual.precio_unitario}
+              onChange={(e) => setItemManual({...itemManual, precio_unitario: e.target.value})}
+              required
+            />
+          </div>
+
+          <div className="pt-2">
+            <button type="submit" className="btn btn-primary w-full py-3">
+              <Plus size={18} /> Agregar a la Orden
+            </button>
+          </div>
+        </form>
       </Modal>
 
       <Modal 

@@ -20,6 +20,7 @@ import {
   descargarPDFOrdenVenta,
   descargarPDFDespacho,
   descargarPDFGuiaInterna,
+  descargarPDFGuiaInternaSalida,
   registrarPagoOrden,
   getPagosOrden,
   anularPagoOrden,
@@ -64,6 +65,7 @@ router.post('/', verificarToken, uploadArchivos, createOrdenVenta);
 
 router.get('/:id/pdf', verificarToken, descargarPDFOrdenVenta);
 router.get('/:id/pdf-guia-interna', verificarToken, descargarPDFGuiaInterna);
+router.get('/:id/salidas/:idSalida/pdf-guia-interna', verificarToken, descargarPDFGuiaInternaSalida);
 router.get('/:id/salidas/:idSalida/pdf', verificarToken, descargarPDFDespacho);
 
 router.get('/:id/verificacion/datos', verificarToken, esVerificador, getDatosVerificacionOrden);

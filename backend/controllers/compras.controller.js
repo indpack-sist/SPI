@@ -959,17 +959,59 @@ export async function getHistorialPagosCompra(req, res) {
 export async function descargarPDFCompra(req, res) {
   try {
     const { id } = req.params;
-    const compraResult = await executeQuery('SELECT * FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
-    if (!compraResult.success || !compraResult.data.length) return res.status(404).send('No encontrado');
+    
+    // Obtenemos la cabecera de la compra con datos del proveedor
+    const compraResult = await executeQuery(`
+      SELECT 
+        oc.*,
+        pr.razon_social AS proveedor,
+        pr.ruc AS ruc_proveedor,
+        pr.direccion AS direccion_proveedor,
+        pr.telefono AS telefono_proveedor,
+        pr.email AS email_proveedor,
+        pr.contacto AS contacto_proveedor,
+        e.nombre_completo AS responsable,
+        e_comprador.nombre_completo AS comprador
+      FROM ordenes_compra oc
+      LEFT JOIN proveedores pr ON oc.id_proveedor = pr.id_proveedor
+      LEFT JOIN empleados e ON oc.id_responsable = e.id_empleado
+      LEFT JOIN empleados e_comprador ON oc.id_comprador = e_comprador.id_empleado
+      WHERE oc.id_orden_compra = ?
+    `, [id]);
+    
+    if (!compraResult.success || !compraResult.data.length) {
+      return res.status(404).json({ success: false, error: 'Orden de Compra no encontrada' });
+    }
+    
     const compra = compraResult.data[0];
-    const detalleResult = await executeQuery(`SELECT doc.*, p.nombre as producto, p.unidad_medida FROM detalle_orden_compra doc JOIN productos p ON doc.id_producto=p.id_producto WHERE doc.id_orden_compra=?`, [id]);
-    compra.detalle = detalleResult.data;
+    
+    // Obtenemos el detalle de productos
+    const detalleResult = await executeQuery(`
+      SELECT 
+        doc.*,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida
+      FROM detalle_orden_compra doc
+      LEFT JOIN productos p ON doc.id_producto = p.id_producto
+      WHERE doc.id_orden_compra = ?
+      ORDER BY doc.orden, doc.id_detalle
+    `, [id]);
+    
+    compra.detalle = detalleResult.data || [];
+    
+    // Generamos el PDF
     const pdfBuffer = await generarCompraPDF(compra);
+    
+    // Configuramos headers de descarga
+    const filename = `OC-${compra.numero_orden}-${compra.proveedor?.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="OC-${compra.numero_orden}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
+    
   } catch (error) {
-    res.status(500).send(error.message);
+    console.error('Error al generar PDF de OC:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 

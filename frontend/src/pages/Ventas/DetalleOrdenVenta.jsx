@@ -939,6 +939,47 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
       setDescargandoPDF(null);
     }
   };
+
+  const handleDescargarGuiaInternaSalida = async (idSalida) => {
+    try {
+      setDescargandoPDF(`gi-${idSalida}`);
+      setError(null);
+      
+      const response = await ordenesVentaAPI.descargarPDFGuiaInternaSalida(id, idSalida);
+      
+      if (response.data.type === 'application/json') {
+        const errorText = await response.data.text();
+        const errorJson = JSON.parse(errorText);
+        throw new Error(errorJson.error || "Error generado por el servidor");
+      }
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const clienteSanitizado = (orden.cliente || 'CLIENTE')
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .toUpperCase();
+
+      link.setAttribute('download', `${clienteSanitizado}_GUIA_INTERNA_DESPACHO_${idSalida}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      setSuccess('Guía Interna de despacho descargada exitosamente');
+
+    } catch (err) {
+      console.error("Error al descargar guía interna de salida:", err);
+      setError('Error al descargar la guía interna de este despacho');
+    } finally {
+      setDescargandoPDF(null);
+    }
+  };
   const handleRectificarCantidad = async (e) => {
     e.preventDefault();
     if (!productoRectificar) return;
@@ -2399,7 +2440,7 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
                                  className="btn btn-sm btn-outline" 
                                  onClick={() => handleDescargarSalidaEspecificaPDF(val, row.numero_salida)} 
                                  disabled={descargandoPDF === val}
-                                 title="Descargar PDF"
+                                 title="Descargar Constancia de Salida"
                                >
                                  {descargandoPDF === val ? (
                                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
@@ -2407,6 +2448,22 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
                                    <Download size={14}/>
                                  )}
                                </button>
+
+                               {orden.tipo_comprobante === 'Nota de Venta' && (
+                                 <button 
+                                   className="btn btn-sm btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50" 
+                                   onClick={() => handleDescargarGuiaInternaSalida(val)} 
+                                   disabled={descargandoPDF === `gi-${val}`}
+                                   title="Descargar Guía Interna de este despacho"
+                                 >
+                                   {descargandoPDF === `gi-${val}` ? (
+                                     <div className="animate-spin rounded-full h-3 w-3 border-2 border-indigo-600"></div>
+                                   ) : (
+                                     <ClipboardList size={14}/>
+                                   )}
+                                 </button>
+                               )}
+
                                {row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
                                  <button 
                                    className="btn btn-sm btn-danger" 

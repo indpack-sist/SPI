@@ -1253,6 +1253,26 @@ export async function registrarDespacho(req, res) {
       });
     }
 
+    // Generar correlativo de Guía Interna si es Nota de Venta
+    let numeroGuiaInterna = null;
+    if (orden.tipo_comprobante === 'Nota de Venta') {
+        const year = new Date().getFullYear();
+        const ultimaGuia = await executeQuery(`
+            SELECT observaciones 
+            FROM salidas 
+            WHERE observaciones LIKE ? 
+            ORDER BY id_salida DESC LIMIT 1
+        `, [`GI-${year}-%`]);
+
+        let secuencia = 1;
+        if (ultimaGuia.success && ultimaGuia.data.length > 0) {
+            const obs = ultimaGuia.data[0].observaciones;
+            const match = obs.match(/GI-\d{4}-(\d+)/);
+            if (match) secuencia = parseInt(match[1]) + 1;
+        }
+        numeroGuiaInterna = `GI-${year}-${String(secuencia).padStart(4, '0')}`;
+    }
+
     const resultCabecera = await executeTransaction([{
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, total_costo,
@@ -1261,7 +1281,9 @@ export async function registrarDespacho(req, res) {
       params: [
         3, 'Venta', orden.id_cliente, totalCosto, totalPrecio,
         orden.moneda, id_usuario,
-        `Despacho Orden ${orden.numero_orden}`,
+        numeroGuiaInterna 
+          ? `${numeroGuiaInterna} - Despacho Orden ${orden.numero_orden}`
+          : `Despacho Orden ${orden.numero_orden}`,
         'Activo', fecha_despacho || getFechaPeru()
       ]
     }]);
@@ -1747,6 +1769,92 @@ export async function getEstadisticasOrdenesVenta(req, res) {
       success: false,
       error: error.message
     });
+  }
+}
+
+export async function descargarPDFGuiaInternaSalida(req, res) {
+  try {
+    const { id, idSalida } = req.params;
+
+    const ordenResult = await executeQuery(`
+      SELECT 
+        ov.*,
+        cl.razon_social AS cliente,
+        cl.ruc AS ruc_cliente,
+        cl.direccion_despacho AS direccion_cliente_base,
+        cl.telefono AS telefono_cliente,
+        e.nombre_completo AS comercial,
+        e_conductor.nombre_completo AS conductor_nombre,
+        e_conductor.dni AS conductor_dni,
+        f.placa AS vehiculo_placa,
+        f.marca_modelo AS vehiculo_modelo,
+        c.numero_cotizacion
+      FROM ordenes_venta ov
+      LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
+      LEFT JOIN empleados e ON ov.id_comercial = e.id_empleado
+      LEFT JOIN empleados e_conductor ON ov.id_conductor = e_conductor.id_empleado
+      LEFT JOIN flota f ON ov.id_vehiculo = f.id_vehiculo
+      LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
+      WHERE ov.id_orden_venta = ?
+    `, [id]);
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    const salidaResult = await executeQuery(`
+      SELECT * FROM salidas 
+      WHERE id_salida = ? AND observaciones LIKE ?
+    `, [idSalida, `%${orden.numero_orden}%`]);
+
+    if (!salidaResult.success || salidaResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Despacho no encontrado' });
+    }
+
+    const salida = salidaResult.data[0];
+
+    // Extraer el correlativo GI de las observaciones
+    const matchGI = salida.observaciones.match(/GI-\d{4}-\d+/);
+    const numeroGuiaInterna = matchGI ? matchGI[0] : 'GI-PROV';
+
+    const detalleResult = await executeQuery(`
+      SELECT 
+        ds.cantidad,
+        p.codigo AS codigo_producto,
+        p.nombre AS producto,
+        p.unidad_medida
+      FROM detalle_salidas ds
+      INNER JOIN productos p ON ds.id_producto = p.id_producto
+      WHERE ds.id_salida = ?
+      ORDER BY p.codigo
+    `, [idSalida]);
+
+    if (!detalleResult.success) {
+      return res.status(500).json({ success: false, error: 'Error al obtener detalle del despacho' });
+    }
+
+    // Preparar el objeto orden simulado con los datos de la salida para el generador
+    const datosOrdenParaPDF = {
+      ...orden,
+      fecha_emision: salida.fecha_movimiento, // Usamos la fecha del despacho
+      detalle: detalleResult.data,
+      direccion_entrega: orden.direccion_entrega || orden.direccion_cliente_base,
+      observaciones: salida.observaciones
+    };
+
+    const { generarPDFGuiaInterna } = await import('../utils/pdfGenerators/guiaInternaPDF.js');
+    const pdfBuffer = await generarPDFGuiaInterna(datosOrdenParaPDF, numeroGuiaInterna);
+    
+    const filename = `GuiaInterna-${numeroGuiaInterna}-${orden.numero_orden}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('Error en descargarPDFGuiaInternaSalida:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 

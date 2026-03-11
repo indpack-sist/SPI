@@ -621,7 +621,7 @@ export async function createOrdenVenta(req, res) {
         transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
         contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
         subtotal, igv, total, estado, estado_verificacion, stock_reservado
-      ) VALUES (?, 'Factura', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
+      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
     `, [
       numeroOrden, id_cliente, id_cotizacion || null,
       fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,

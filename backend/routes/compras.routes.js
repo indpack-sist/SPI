@@ -33,10 +33,9 @@ router.get('/alertas', verificarToken, getAlertasCompras);
 router.get('/estadisticas', verificarToken, getEstadisticasCompras);
 router.get('/por-cuenta', verificarToken, getComprasPorCuenta);
 
-router.get('/', verificarToken, getAllCompras);
-router.post('/', verificarToken, createCompra);
-
 router.get('/:id/pdf', verificarToken, descargarPDFCompra);
+
+router.get('/', verificarToken, getAllCompras);
 router.get('/:id/pagos/resumen', verificarToken, getResumenPagosCompra);
 router.get('/:id/pagos/historial', verificarToken, getHistorialPagosCompra);
 router.post('/:id/pagos', verificarToken, registrarPagoCompra);

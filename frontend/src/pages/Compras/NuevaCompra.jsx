@@ -552,46 +552,91 @@ function NuevaCompra() {
                 )}
 
                 {proveedorSeleccionado && (
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="form-group">
-                      <label className="form-label text-xs uppercase text-muted">Fecha Emision</label>
-                      <input 
-                        type="date" 
-                        className="form-input" 
-                        value={formData.fecha_emision} 
-                        onChange={(e) => setFormData({ ...formData, fecha_emision: e.target.value })} 
-                        required 
-                      />
+                  <div className="mt-4 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="form-group">
+                        <label className="form-label text-xs uppercase text-muted">Fecha Emisión</label>
+                        <input 
+                          type="date" 
+                          className="form-input" 
+                          value={formData.fecha_emision} 
+                          onChange={(e) => setFormData({ ...formData, fecha_emision: e.target.value })} 
+                          required 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs uppercase text-muted">Condición de Pago</label>
+                        <div className="tabs-navigation !bg-transparent p-0 border border-gray-200 rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            className={`tab-item !py-2 !text-xs ${formData.forma_pago_detalle === 'Contado' ? 'active' : ''}`}
+                            onClick={() => handleFormaPagoChange('Contado')}
+                          >
+                            CONTADO
+                          </button>
+                          <button
+                            type="button"
+                            className={`tab-item !py-2 !text-xs ${formData.forma_pago_detalle === 'Credito' ? 'active' : ''}`}
+                            onClick={() => handleFormaPagoChange('Credito')}
+                          >
+                            CRÉDITO
+                          </button>
+                          <button
+                            type="button"
+                            className={`tab-item !py-2 !text-xs ${formData.forma_pago_detalle === 'Letras' ? 'active' : ''}`}
+                            onClick={() => handleFormaPagoChange('Letras')}
+                          >
+                            LETRAS
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label className="form-label text-xs uppercase text-muted">Plazo de Pago</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="Ej: 30 días, Contra entrega..." 
-                        value={formData.plazo_pago} 
-                        onChange={(e) => setFormData({ ...formData, plazo_pago: e.target.value })} 
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label text-xs uppercase text-muted">Lugar de Entrega</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="Dirección del almacén" 
-                        value={formData.lugar_entrega} 
-                        onChange={(e) => setFormData({ ...formData, lugar_entrega: e.target.value })} 
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label text-xs uppercase text-muted">Contacto (Opcional)</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="Nombre del vendedor" 
-                        value={formData.contacto_proveedor} 
-                        onChange={(e) => setFormData({ ...formData, contacto_proveedor: e.target.value })} 
-                      />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(formData.tipo_compra === 'Credito' || formData.tipo_compra === 'Letras') && (
+                        <>
+                          <div className="form-group slide-down">
+                            <label className="form-label text-xs uppercase text-muted">Plazo de Pago</label>
+                            <input 
+                              type="text" 
+                              className="form-input border-amber-200" 
+                              placeholder="Ej: 30 días netos..." 
+                              value={formData.plazo_pago} 
+                              onChange={(e) => setFormData({ ...formData, plazo_pago: e.target.value })} 
+                              required
+                            />
+                          </div>
+                          <div className="form-group slide-down">
+                            <label className="form-label text-xs uppercase text-muted">Días Crédito (Numérico)</label>
+                            <input 
+                              type="number" 
+                              className="form-input border-amber-200" 
+                              value={formData.dias_credito} 
+                              onChange={(e) => setFormData({ ...formData, dias_credito: e.target.value })} 
+                            />
+                          </div>
+                        </>
+                      )}
+                      <div className="form-group">
+                        <label className="form-label text-xs uppercase text-muted">Lugar de Entrega</label>
+                        <input 
+                          type="text" 
+                          className="form-input" 
+                          placeholder="Dirección del almacén" 
+                          value={formData.lugar_entrega} 
+                          onChange={(e) => setFormData({ ...formData, lugar_entrega: e.target.value })} 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label text-xs uppercase text-muted">Contacto (Opcional)</label>
+                        <input 
+                          type="text" 
+                          className="form-input" 
+                          placeholder="Nombre del vendedor" 
+                          value={formData.contacto_proveedor} 
+                          onChange={(e) => setFormData({ ...formData, contacto_proveedor: e.target.value })} 
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

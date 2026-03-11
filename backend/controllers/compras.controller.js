@@ -492,7 +492,7 @@ export async function createCompra(req, res) {
         await connection.query(`
           INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, cantidad, cantidad_recibida, precio_unitario, descuento_porcentaje, subtotal, orden)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [idCompra, item.id_producto, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
+        `, [idCompra, item.id_producto || 1, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
 
         if (idEntrada && cantidadRecibida > 0) {
           const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);

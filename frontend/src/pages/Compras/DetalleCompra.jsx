@@ -534,6 +534,7 @@ function DetalleCompra() {
   const esCredito = tipoCompra === 'credito' || formaPago === 'credito';
   const esLetras = tipoCompra === 'letras' || formaPago === 'letras';
   const esContado = tipoCompra === 'contado' || formaPago === 'contado';
+  const esSoloFormato = compra.tipo_documento === 'Orden de Compra';
   
   const tieneSaldoPendiente = parseFloat(compra.saldo_pendiente) > 0.01;
   const estaPagado = compra.estado_pago === 'Pagado';
@@ -796,36 +797,41 @@ function DetalleCompra() {
           >
             General
           </button>
-          <button 
-            className={`tab-item ${tabActiva === 'pagos' ? 'active' : ''}`} 
-            onClick={() => setTabActiva('pagos')}
-          >
-            Pagos
-          </button>
-          {(esLetras || esCredito) && (
-            <button 
-              className={`tab-item ${tabActiva === 'letras' ? 'active' : ''}`} 
-              onClick={() => setTabActiva('letras')}
-            >
-              {esLetras ? 'Letras' : 'Cuotas'}
-              {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
-                <span className={`badge badge-xs ml-2 ${tabActiva === 'letras' ? 'badge-primary' : 'badge-warning'}`}>
-                  {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
-                </span>
+          
+          {!esSoloFormato && (
+            <>
+              <button 
+                className={`tab-item ${tabActiva === 'pagos' ? 'active' : ''}`} 
+                onClick={() => setTabActiva('pagos')}
+              >
+                Pagos
+              </button>
+              {(esLetras || esCredito) && (
+                <button 
+                  className={`tab-item ${tabActiva === 'letras' ? 'active' : ''}`} 
+                  onClick={() => setTabActiva('letras')}
+                >
+                  {esLetras ? 'Letras' : 'Cuotas'}
+                  {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
+                    <span className={`badge badge-xs ml-2 ${tabActiva === 'letras' ? 'badge-primary' : 'badge-warning'}`}>
+                      {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
+                    </span>
+                  )}
+                </button>
               )}
-            </button>
+              <button 
+                className={`tab-item ${tabActiva === 'ingresos' ? 'active' : ''}`} 
+                onClick={() => setTabActiva('ingresos')}
+              >
+                Ingresos Inventario 
+                {itemsPendientes.length > 0 && (
+                  <span className={`badge badge-xs ml-2 ${tabActiva === 'ingresos' ? 'badge-primary' : 'badge-info'}`}>
+                    {itemsPendientes.length}
+                  </span>
+                )}
+              </button>
+            </>
           )}
-          <button 
-            className={`tab-item ${tabActiva === 'ingresos' ? 'active' : ''}`} 
-            onClick={() => setTabActiva('ingresos')}
-          >
-            Ingresos Inventario 
-            {itemsPendientes.length > 0 && (
-              <span className={`badge badge-xs ml-2 ${tabActiva === 'ingresos' ? 'badge-primary' : 'badge-info'}`}>
-                {itemsPendientes.length}
-              </span>
-            )}
-          </button>
         </div>
       </div>
 
@@ -835,7 +841,7 @@ function DetalleCompra() {
             <div className="card">
               <div className="card-header bg-gray-50">
                 <h3 className="card-title flex gap-2">
-                  <PackageCheck size={18}/> Items de la Compra
+                  <PackageCheck size={18}/> {esSoloFormato ? 'Productos Solicitados' : 'Items de la Compra'}
                 </h3>
               </div>
               <div className="card-body p-0">
@@ -844,7 +850,7 @@ function DetalleCompra() {
                     <tr>
                       <th>Producto</th>
                       <th className="text-right">Cant. Solicitada</th>
-                      <th className="text-right">Progreso Entrega</th>
+                      {!esSoloFormato && <th className="text-right">Progreso Entrega</th>}
                       <th className="text-right">Precio</th>
                       <th className="text-right">Total</th>
                     </tr>
@@ -856,25 +862,32 @@ function DetalleCompra() {
                       return (
                         <tr key={i}>
                           <td>
-                            <div className="font-medium">{item.producto}</div>
+                            <div className="font-medium">
+                              {item.id_producto === 1 && item.codigo_producto === 'MANUAL' 
+                                ? <span className="text-indigo-600 font-bold italic">Item de Ingreso Manual</span>
+                                : item.producto
+                              }
+                            </div>
                             <div className="text-xs text-muted">{item.codigo_producto}</div>
                           </td>
                           <td className="text-right">
                             {parseFloat(item.cantidad).toFixed(2)} {item.unidad_medida}
                           </td>
-                          <td className="text-right">
-                            <div className="flex flex-col items-end gap-1">
-                              <span className={`text-xs font-bold ${esCompleto ? 'text-success' : 'text-warning'}`}>
-                                {parseFloat(item.cantidad_recibida || 0).toFixed(2)} / {parseFloat(item.cantidad).toFixed(2)}
-                              </span>
-                              <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full ${esCompleto ? 'bg-success' : 'bg-warning'}`} 
-                                  style={{ width: `${Math.min(porcentaje, 100)}%` }}
-                                ></div>
+                          {!esSoloFormato && (
+                            <td className="text-right">
+                              <div className="flex flex-col items-end gap-1">
+                                <span className={`text-xs font-bold ${esCompleto ? 'text-success' : 'text-warning'}`}>
+                                  {parseFloat(item.cantidad_recibida || 0).toFixed(2)} / {parseFloat(item.cantidad).toFixed(2)}
+                                </span>
+                                <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full ${esCompleto ? 'bg-success' : 'bg-warning'}`} 
+                                    style={{ width: `${Math.min(porcentaje, 100)}%` }}
+                                  ></div>
+                                </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
+                          )}
                           <td className="text-right">{formatearMoneda(item.precio_unitario)}</td>
                           <td className="text-right font-bold">{formatearMoneda(item.subtotal)}</td>
                         </tr>
@@ -883,17 +896,17 @@ function DetalleCompra() {
                   </tbody>
                   <tfoot className="bg-gray-50 font-medium">
                     <tr>
-                      <td colSpan="4" className="text-right">Subtotal</td>
+                      <td colSpan={esSoloFormato ? 3 : 4} className="text-right">Subtotal</td>
                       <td className="text-right">{formatearMoneda(compra.subtotal)}</td>
                     </tr>
                     <tr>
-                      <td colSpan="4" className="text-right">
+                      <td colSpan={esSoloFormato ? 3 : 4} className="text-right">
                         Impuesto ({parseFloat(compra.igv) > 0 ? '18%' : '0%'})
                       </td>
                       <td className="text-right">{formatearMoneda(compra.igv)}</td>
                     </tr>
                     <tr>
-                      <td colSpan="4" className="text-right font-bold text-lg">Total</td>
+                      <td colSpan={esSoloFormato ? 3 : 4} className="text-right font-bold text-lg">Total</td>
                       <td className="text-right font-bold text-lg">{formatearMoneda(compra.total)}</td>
                     </tr>
                   </tfoot>

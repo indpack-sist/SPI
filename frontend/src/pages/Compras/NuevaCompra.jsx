@@ -594,28 +594,47 @@ function NuevaCompra() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {(formData.tipo_compra === 'Credito' || formData.tipo_compra === 'Letras') && (
-                        <>
-                          <div className="form-group slide-down">
-                            <label className="form-label text-xs uppercase text-muted">Plazo de Pago</label>
-                            <input 
-                              type="text" 
-                              className="form-input border-amber-200" 
-                              placeholder="Ej: 30 días netos..." 
-                              value={formData.plazo_pago} 
-                              onChange={(e) => setFormData({ ...formData, plazo_pago: e.target.value })} 
-                              required
-                            />
+                        <div className="col-span-2 card bg-amber-50/30 border-amber-200 p-4 space-y-4">
+                          <h4 className="text-xs font-bold text-amber-800 uppercase flex items-center gap-2">
+                            <Calendar size={14} /> Configuración de Cronograma de Pagos
+                          </h4>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="form-group">
+                              <label className="form-label text-[10px] uppercase text-muted">N° de Cuotas</label>
+                              <input 
+                                type="number" 
+                                className="form-input border-amber-200" 
+                                min="1"
+                                value={formData.numero_cuotas} 
+                                onChange={(e) => setFormData({ ...formData, numero_cuotas: e.target.value })} 
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label text-[10px] uppercase text-muted">Días entre Cuotas</label>
+                              <input 
+                                type="number" 
+                                className="form-input border-amber-200" 
+                                min="1"
+                                value={formData.dias_entre_cuotas} 
+                                onChange={(e) => setFormData({ ...formData, dias_entre_cuotas: e.target.value })} 
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label text-[10px] uppercase text-muted">1° Vencimiento</label>
+                              <input 
+                                type="date" 
+                                className="form-input border-amber-200" 
+                                value={formData.fecha_primera_cuota} 
+                                onChange={(e) => setFormData({ ...formData, fecha_primera_cuota: e.target.value })} 
+                              />
+                            </div>
                           </div>
-                          <div className="form-group slide-down">
-                            <label className="form-label text-xs uppercase text-muted">Días Crédito (Numérico)</label>
-                            <input 
-                              type="number" 
-                              className="form-input border-amber-200" 
-                              value={formData.dias_credito} 
-                              onChange={(e) => setFormData({ ...formData, dias_credito: e.target.value })} 
-                            />
-                          </div>
-                        </>
+                          {cronograma.length > 0 && (
+                            <div className="text-[10px] text-amber-900 bg-white/50 p-2 rounded border border-amber-100 italic">
+                              Se generarán {cronograma.length} cuotas. La última vence el {cronograma[cronograma.length-1].fecha.toLocaleDateString('es-PE')}.
+                            </div>
+                          )}
+                        </div>
                       )}
                       <div className="form-group">
                         <label className="form-label text-xs uppercase text-muted">Lugar de Entrega</label>

@@ -511,23 +511,15 @@ function PagosCobranzas() {
           <p className="text-muted">Gestión de flujo de caja y cuentas por cobrar</p>
         </div>
         
-        <div className="flex bg-gray-100 p-1 rounded-lg">
+        <div className="tabs-navigation">
           <button
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'movimientos' 
-                ? 'bg-white text-primary shadow-sm' 
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
+            className={`tab-item ${activeTab === 'movimientos' ? 'active' : ''}`}
             onClick={() => setActiveTab('movimientos')}
           >
             <LayoutList size={16} /> Movimientos
           </button>
           <button
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === 'cobranzas' 
-                ? 'bg-white text-danger shadow-sm' 
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
+            className={`tab-item ${activeTab === 'cobranzas' ? 'active' : ''}`}
             onClick={() => setActiveTab('cobranzas')}
           >
             <AlertCircle size={16} /> Cuentas por Cobrar

@@ -15,6 +15,23 @@ const EMPRESA = {
   direccion: 'AV. EL SOL LT. 4 B MZ. LL-1 COO. LAS VERTIENTES DE TABLADA, Villa el Salvador, Lima - Lima (PE) - Perú'
 };
 
+function descargarImagen(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        resolve(null);
+        return;
+      }
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => resolve(Buffer.concat(chunks)));
+      response.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
 export const generarCompraPDF = async (orden) => {
   return new Promise(async (resolve, reject) => {
     try {
@@ -23,16 +40,24 @@ export const generarCompraPDF = async (orden) => {
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-      // Logo y Cabecera de Empresa
-      try {
-        // Espacio para logo (si existiera una URL local o remota)
-        doc.fontSize(16).font('Helvetica-Bold').text(EMPRESA.razon_social, 50, 50);
-      } catch (e) {
+      // Descargar e insertar Logo
+      let logoBuffer = await descargarImagen('https://indpackperu.com/images/logohorizontal.png');
+
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, 50, 40, { width: 200, height: 60, fit: [200, 60] });
+        } catch (error) {
+          doc.fontSize(16).font('Helvetica-Bold').text(EMPRESA.razon_social, 50, 50);
+        }
+      } else {
         doc.fontSize(16).font('Helvetica-Bold').text(EMPRESA.razon_social, 50, 50);
       }
 
+      doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
+      doc.text('INDPACK S.A.C.', 50, 110);
+
       doc.fontSize(8).font('Helvetica')
-        .text(EMPRESA.direccion, 50, 70, { width: 250 })
+        .text(EMPRESA.direccion, 50, 123, { width: 250 })
         .text(`Teléfono: ${EMPRESA.telefono}`)
         .text(`E-mail: ${EMPRESA.email}`)
         .text(`Web: ${EMPRESA.web}`);
@@ -44,7 +69,7 @@ export const generarCompraPDF = async (orden) => {
       doc.fontSize(12).text(`No. ${orden.numero_orden}`, 350, 105, { align: 'center', width: 200 });
 
       // Información del Proveedor y Condiciones
-      let y = 150;
+      let y = 185;
       doc.fontSize(10).font('Helvetica-Bold').text('DATOS DEL PROVEEDOR', 50, y);
       doc.fontSize(10).font('Helvetica-Bold').text('CONDICIONES COMERCIALES', 300, y);
       

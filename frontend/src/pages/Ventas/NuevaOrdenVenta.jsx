@@ -520,11 +520,11 @@ useEffect(() => {
 
   const handlePrecioVentaChange = (index, valor) => {
     const newDetalle = [...detalle];
-    const precioVenta = parseFloat(valor) || 0;
-    newDetalle[index].precio_venta = precioVenta;
-    const precioBase = parseFloat(newDetalle[index].precio_base) || 0;
-    if (precioBase > 0) {
-      const margen = ((precioVenta - precioBase) / precioBase) * 100;
+    newDetalle[index].precio_venta = valor;
+    const precioVentaNum = parseFloat(valor) || 0;
+    const precioBaseNum = parseFloat(newDetalle[index].precio_base) || 0;
+    if (precioBaseNum > 0) {
+      const margen = ((precioVentaNum - precioBaseNum) / precioBaseNum) * 100;
       newDetalle[index].descuento_porcentaje = margen;
     } else {
       newDetalle[index].descuento_porcentaje = 0;
@@ -534,7 +534,7 @@ useEffect(() => {
 
   const handleCantidadChange = (index, valor) => {
     const newDetalle = [...detalle];
-    newDetalle[index].cantidad = parseFloat(valor) || 0;
+    newDetalle[index].cantidad = valor;
     setDetalle(newDetalle);
   };
 

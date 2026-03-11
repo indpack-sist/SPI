@@ -173,7 +173,20 @@ export async function getCompraById(req, res) {
     `, [id]);
     
     if (!detalleResult.success) return res.status(500).json({ success: false, error: detalleResult.error });
-    compra.detalle = detalleResult.data;
+    
+    // Procesar nombres manuales desde observaciones
+    const detalleProcesado = detalleResult.data.map(item => {
+      if (item.id_producto === 1 && item.codigo_producto === 'MANUAL') {
+        const regex = new RegExp(`\\[ITEM_MANUAL_ID_${item.orden}\\]: (.*?)(?=\\n|$)`, 'i');
+        const match = compra.observaciones?.match(regex);
+        if (match) {
+          return { ...item, producto: match[1].trim() };
+        }
+      }
+      return item;
+    });
+
+    compra.detalle = detalleProcesado;
     
     const cuotasResult = await executeQuery(`
       SELECT 
@@ -493,6 +506,15 @@ export async function createCompra(req, res) {
           INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, cantidad, cantidad_recibida, precio_unitario, descuento_porcentaje, subtotal, orden)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [idCompra, item.id_producto || 1, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
+
+        // Si es item manual, guardamos el nombre real en una tabla de apoyo o en las observaciones de la orden
+        if (!item.id_producto) {
+          await connection.query(`
+            UPDATE ordenes_compra 
+            SET observaciones = CONCAT(IFNULL(observaciones, ''), '\n[ITEM_MANUAL_ID_', ?, ']: ', ?)
+            WHERE id_orden_compra = ?
+          `, [i + 1, item.producto, idCompra]);
+        }
 
         if (idEntrada && cantidadRecibida > 0) {
           const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);

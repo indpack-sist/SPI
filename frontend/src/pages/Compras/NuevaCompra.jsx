@@ -69,6 +69,7 @@ function NuevaCompra() {
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
   
   const [accionPago, setAccionPago] = useState('registro');
+  const [modoRegistro, setModoRegistro] = useState('compra'); // 'compra' o 'solicitud'
   const [formData, setFormData] = useState({
     id_proveedor: '',
     id_cuenta_pago: '',
@@ -99,6 +100,26 @@ function NuevaCompra() {
     id_comprador: '',
     letras_pendientes_registro: false
   });
+
+  useEffect(() => {
+    if (modoRegistro === 'solicitud') {
+      setFormData(prev => ({
+        ...prev,
+        tipo_documento: 'Orden de Compra',
+        tipo_recepcion: 'Ninguna',
+        serie_documento: 'OC',
+        numero_documento: 'FORMATO'
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        tipo_documento: 'Factura',
+        tipo_recepcion: 'Total',
+        serie_documento: '',
+        numero_documento: ''
+      }));
+    }
+  }, [modoRegistro]);
 
   const [formNuevoProveedor, setFormNuevoProveedor] = useState({
     ruc: '', razon_social: '', direccion: '', contacto: '', telefono: '', email: '', terminos_pago: 'Contado'
@@ -465,6 +486,31 @@ function NuevaCompra() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      <div className="card mb-6 bg-gradient-to-r from-gray-50 to-white border-primary/20">
+        <div className="card-body py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div>
+            <h3 className="font-bold text-gray-800">¿Qué deseas realizar?</h3>
+            <p className="text-xs text-muted">Selecciona el tipo de operación para este registro</p>
+          </div>
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              type="button"
+              className={`px-6 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${modoRegistro === 'compra' ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setModoRegistro('compra')}
+            >
+              <Receipt size={18} /> Registrar Compra Facturada
+            </button>
+            <button
+              type="button"
+              className={`px-6 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${modoRegistro === 'solicitud' ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setModoRegistro('solicitud')}
+            >
+              <FileClock size={18} /> Generar Formato OC (Solicitud)
+            </button>
+          </div>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -530,56 +576,58 @@ function NuevaCompra() {
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-header bg-gray-50">
-                <h2 className="card-title text-base">
-                  <FileText size={18} className="text-primary"/> Documento Fisico
-                </h2>
+            {modoRegistro === 'compra' && (
+              <div className="card">
+                <div className="card-header bg-gray-50">
+                  <h2 className="card-title text-base">
+                    <FileText size={18} className="text-primary"/> Documento Fisico
+                  </h2>
+                </div>
+                <div className="card-body grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="form-group">
+                    <label className="form-label text-xs uppercase text-muted">Tipo</label>
+                    <select 
+                      className="form-select" 
+                      value={formData.tipo_documento} 
+                      onChange={(e) => setFormData({ ...formData, tipo_documento: e.target.value })}
+                    >
+                      <option value="Factura">Factura</option>
+                      <option value="Boleta">Boleta</option>
+                      <option value="Guia">Guia Remision</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label text-xs uppercase text-muted">Serie</label>
+                    <input 
+                      type="text" 
+                      className="form-input uppercase" 
+                      placeholder="F001" 
+                      value={formData.serie_documento} 
+                      onChange={(e) => setFormData({ ...formData, serie_documento: e.target.value.toUpperCase() })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label text-xs uppercase text-muted">Numero</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="00001234" 
+                      value={formData.numero_documento} 
+                      onChange={(e) => setFormData({ ...formData, numero_documento: e.target.value })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label text-xs uppercase text-muted">Fecha Doc.</label>
+                    <input 
+                      type="date" 
+                      className="form-input" 
+                      value={formData.fecha_emision_documento} 
+                      onChange={(e) => setFormData({ ...formData, fecha_emision_documento: e.target.value })} 
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="card-body grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="form-group">
-                  <label className="form-label text-xs uppercase text-muted">Tipo</label>
-                  <select 
-                    className="form-select" 
-                    value={formData.tipo_documento} 
-                    onChange={(e) => setFormData({ ...formData, tipo_documento: e.target.value })}
-                  >
-                    <option value="Factura">Factura</option>
-                    <option value="Boleta">Boleta</option>
-                    <option value="Guia">Guia Remision</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label text-xs uppercase text-muted">Serie</label>
-                  <input 
-                    type="text" 
-                    className="form-input uppercase" 
-                    placeholder="F001" 
-                    value={formData.serie_documento} 
-                    onChange={(e) => setFormData({ ...formData, serie_documento: e.target.value.toUpperCase() })} 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label text-xs uppercase text-muted">Numero</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="00001234" 
-                    value={formData.numero_documento} 
-                    onChange={(e) => setFormData({ ...formData, numero_documento: e.target.value })} 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label text-xs uppercase text-muted">Fecha Doc.</label>
-                  <input 
-                    type="date" 
-                    className="form-input" 
-                    value={formData.fecha_emision_documento} 
-                    onChange={(e) => setFormData({ ...formData, fecha_emision_documento: e.target.value })} 
-                  />
-                </div>
-              </div>
-            </div>
+            )}
 
             <div className="card">
               <div className="card-body">
@@ -611,15 +659,17 @@ function NuevaCompra() {
                     <ShoppingCart size={18} className="text-primary"/> Detalle de Productos
                   </h2>
                     <div className="flex gap-2">
-                      <select 
-                        className="form-select text-xs w-36" 
-                        value={formData.tipo_recepcion} 
-                        onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}
-                      >
-                        <option value="Total">Recepcion Total</option>
-                        <option value="Parcial">Recepcion Parcial</option>
-                        <option value="Ninguna">Solo Orden</option>
-                      </select>
+                      {modoRegistro === 'compra' && (
+                        <select 
+                          className="form-select text-xs w-36" 
+                          value={formData.tipo_recepcion} 
+                          onChange={(e) => setFormData({...formData, tipo_recepcion: e.target.value})}
+                        >
+                          <option value="Total">Recepcion Total</option>
+                          <option value="Parcial">Recepcion Parcial</option>
+                          <option value="Ninguna">Solo Orden</option>
+                        </select>
+                      )}
                       <button 
                         type="button" 
                         className="btn btn-sm btn-outline text-primary border-primary hover:bg-primary hover:text-white" 
@@ -763,320 +813,324 @@ function NuevaCompra() {
           <div className="space-y-6">
             {detalle.length > 0 && (
               <>
-                <div className="card">
-                  <div className="card-header bg-gray-50">
-                    <h2 className="card-title text-base">
-                      <Wallet size={18} className="text-primary"/> Forma de Pago
-                    </h2>
-                  </div>
-                  <div className="card-body space-y-4">
-                    <div className="grid grid-cols-3 gap-2">
-                      <button 
-                        type="button" 
-                        className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Contado' ? 'active' : ''}`} 
-                        onClick={() => handleFormaPagoChange('Contado')}
-                      >
-                        <Wallet size={20} />
-                        <span className="text-xs font-bold uppercase">Contado</span>
-                      </button>
-                      <button 
-                        type="button" 
-                        className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Credito' ? 'active' : ''}`} 
-                        onClick={() => handleFormaPagoChange('Credito')}
-                      >
-                        <CreditCard size={20} />
-                        <span className="text-xs font-bold uppercase">Credito</span>
-                      </button>
-                      <button 
-                        type="button" 
-                        className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Letras' ? 'active' : ''}`} 
-                        onClick={() => handleFormaPagoChange('Letras')}
-                      >
-                        <Receipt size={20} />
-                        <span className="text-xs font-bold uppercase">Letras</span>
-                      </button>
+                {modoRegistro === 'compra' && (
+                  <div className="card">
+                    <div className="card-header bg-gray-50">
+                      <h2 className="card-title text-base">
+                        <Wallet size={18} className="text-primary"/> Forma de Pago
+                      </h2>
                     </div>
+                    <div className="card-body space-y-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        <button 
+                          type="button" 
+                          className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Contado' ? 'active' : ''}`} 
+                          onClick={() => handleFormaPagoChange('Contado')}
+                        >
+                          <Wallet size={20} />
+                          <span className="text-xs font-bold uppercase">Contado</span>
+                        </button>
+                        <button 
+                          type="button" 
+                          className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Credito' ? 'active' : ''}`} 
+                          onClick={() => handleFormaPagoChange('Credito')}
+                        >
+                          <CreditCard size={20} />
+                          <span className="text-xs font-bold uppercase">Credito</span>
+                        </button>
+                        <button 
+                          type="button" 
+                          className={`selection-card-btn p-2 ${formData.forma_pago_detalle === 'Letras' ? 'active' : ''}`} 
+                          onClick={() => handleFormaPagoChange('Letras')}
+                        >
+                          <Receipt size={20} />
+                          <span className="text-xs font-bold uppercase">Letras</span>
+                        </button>
+                      </div>
 
-                    {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
-                      <div className="slide-down space-y-3 pt-2 border-t border-dashed">
-                        <div className="grid grid-cols-3 gap-2 mb-3">
-                          <button 
-                            type="button" 
-                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
-                              accionPago === 'completo' 
-                                ? 'bg-green-50 border-green-500 text-green-700 font-bold' 
-                                : 'hover:bg-gray-50 text-muted'
-                            }`}
-                            onClick={() => setAccionPago('completo')}
-                          >
-                            <CheckCircle size={16}/> Completo
-                          </button>
-                          <button 
-                            type="button" 
-                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
-                              accionPago === 'adelanto' 
-                                ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' 
-                                : 'hover:bg-gray-50 text-muted'
-                            }`}
-                            onClick={() => setAccionPago('adelanto')}
-                          >
-                            <Banknote size={16}/> Adelanto
-                          </button>
-                          <button 
-                            type="button" 
-                            className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
-                              accionPago === 'registro' 
-                                ? 'bg-orange-50 border-orange-500 text-orange-700 font-bold' 
-                                : 'hover:bg-gray-50 text-muted'
-                            }`}
-                            onClick={() => setAccionPago('registro')}
-                          >
-                            <FileClock size={16}/> Solo Reg.
-                          </button>
-                        </div>
-
-                        {accionPago === 'completo' && (
-                          <div className="alert alert-success py-2 text-sm">
-                            <CheckCircle size={14} /> Se registrara egreso de <strong>{formatearMoneda(totales.total)}</strong>
-                          </div>
-                        )}
-                        
-                        {accionPago === 'adelanto' && (
-                          <div className="form-group">
-                            <label className="form-label text-xs uppercase text-muted">Monto Adelanto</label>
-                            <input 
-                              type="number" 
-                              className="form-input font-bold" 
-                              value={formData.monto_pagado_inicial} 
-                              onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} 
-                              min="0.01" 
-                              max={totales.total} 
-                              step="0.01" 
-                            />
-                          </div>
-                        )}
-                        
-                        {accionPago === 'registro' && (
-                          <div className="alert alert-warning py-2 text-sm">
-                            <AlertCircle size={14} /> Se generara cuenta por pagar. No se registran movimientos ahora.
-                          </div>
-                        )}
-
-                        {accionPago !== 'registro' && (
-                          <div className="form-group">
-                            <label className="form-label text-xs uppercase text-muted">Cuenta de Origen</label>
-                            <select 
-                              className="form-select" 
-                              value={formData.id_cuenta_pago} 
-                              onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} 
-                              required
+                      {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
+                        <div className="slide-down space-y-3 pt-2 border-t border-dashed">
+                          <div className="grid grid-cols-3 gap-2 mb-3">
+                            <button 
+                              type="button" 
+                              className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
+                                accionPago === 'completo' 
+                                  ? 'bg-green-50 border-green-500 text-green-700 font-bold' 
+                                  : 'hover:bg-gray-50 text-muted'
+                              }`}
+                              onClick={() => setAccionPago('completo')}
                             >
-                              <option value="">Seleccionar cuenta...</option>
-                              {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
-                                <option key={c.id_cuenta} value={c.id_cuenta}>
-                                  {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
-                                </option>
-                              ))}
-                            </select>
+                              <CheckCircle size={16}/> Completo
+                            </button>
+                            <button 
+                              type="button" 
+                              className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
+                                accionPago === 'adelanto' 
+                                  ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' 
+                                  : 'hover:bg-gray-50 text-muted'
+                              }`}
+                              onClick={() => setAccionPago('adelanto')}
+                            >
+                              <Banknote size={16}/> Adelanto
+                            </button>
+                            <button 
+                              type="button" 
+                              className={`p-2 border rounded text-xs flex flex-col items-center gap-1 transition-all ${
+                                accionPago === 'registro' 
+                                  ? 'bg-orange-50 border-orange-500 text-orange-700 font-bold' 
+                                  : 'hover:bg-gray-50 text-muted'
+                              }`}
+                              onClick={() => setAccionPago('registro')}
+                            >
+                              <FileClock size={16}/> Solo Reg.
+                            </button>
                           </div>
-                        )}
-                      </div>
-                    )}
 
-                    {formData.forma_pago_detalle === 'Letras' && (
-                      <div className="slide-down">
-                        <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
-                          <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold">Compra a Letras</p>
-                            <p className="text-purple-900/80">
-                              {formData.letras_pendientes_registro 
-                                ? "Se registrara la deuda total. Podras canjear las letras y definir fechas mas adelante." 
-                                : "Define el cronograma de cuotas ahora mismo."}
-                            </p>
-                          </div>
-                        </div>
-                        <label className="flex items-center gap-2 cursor-pointer mb-3 p-3 border rounded hover:bg-gray-50 transition-colors">
-                          <input 
-                            type="checkbox" 
-                            className="form-checkbox h-4 w-4 text-purple-600 rounded" 
-                            checked={formData.letras_pendientes_registro} 
-                            onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} 
-                          />
-                          <span className="font-medium text-sm">Registrar detalle de letras despues</span>
-                        </label>
-                      </div>
-                    )}
-
-                    {(formData.forma_pago_detalle === 'Credito' || formData.forma_pago_detalle === 'Letras') && (
-                      <div className="slide-down space-y-4 pt-2 border-t border-dashed">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="form-group">
-                            <label className="form-label text-xs uppercase text-muted">
-                              {formData.forma_pago_detalle === 'Letras' ? 'N° Letras' : 'Cuotas'}
-                            </label>
-                            <input 
-                              type="number" 
-                              className="form-input text-center font-bold" 
-                              min="1" 
-                              value={formData.numero_cuotas} 
-                              onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} 
-                            />
-                          </div>
-                          <div className="form-group">
-                            <label className="form-label text-xs uppercase text-muted">Dias/Intervalo</label>
-                            <input 
-                              type="number" 
-                              className="form-input text-center" 
-                              min="1" 
-                              value={formData.dias_entre_cuotas} 
-                              onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} 
-                            />
-                          </div>
-                          <div className="form-group col-span-2">
-                            <label className="form-label text-xs uppercase text-muted">
-                              {formData.forma_pago_detalle === 'Letras' ? 'Vencimiento 1° Letra' : '1° Vencimiento'}
-                            </label>
-                            <input 
-                              type="date" 
-                              className="form-input" 
-                              value={formData.fecha_primera_cuota} 
-                              onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} 
-                            />
-                          </div>
-                        </div>
-
-                        {cronograma.length > 0 && (
-                          <div className="bg-gray-50 rounded border overflow-hidden">
-                            <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
-                              <span>
-                                {formData.letras_pendientes_registro ? 'Cronograma Referencial' : 'Cronograma Preliminar'}
-                              </span>
-                              <Calendar size={14}/>
+                          {accionPago === 'completo' && (
+                            <div className="alert alert-success py-2 text-sm">
+                              <CheckCircle size={14} /> Se registrara egreso de <strong>{formatearMoneda(totales.total)}</strong>
                             </div>
-                            {formData.letras_pendientes_registro && (
-                              <div className="px-3 py-1 bg-orange-50 border-b border-orange-200 text-xs text-orange-700">
-                                Solo referencial, las letras se definiran en el detalle de la compra.
-                              </div>
-                            )}
-                            <div className="max-h-48 overflow-y-auto">
-                              <table className="w-full text-xs">
-                                <thead className="text-gray-500 bg-gray-50">
-                                  <tr>
-                                    <th className="px-2 py-1 text-left">#</th>
-                                    <th className="px-2 py-1 text-left">Codigo</th>
-                                    <th className="px-2 py-1 text-left">Vence</th>
-                                    <th className="px-2 py-1 text-right">Monto</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                  {cronograma.map((cuota) => (
-                                    <tr key={cuota.numero}>
-                                      <td className="px-2 py-1 font-medium">{cuota.numero}</td>
-                                      <td className="px-2 py-1 font-mono text-gray-600">{cuota.codigo_letra}</td>
-                                      <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
-                                      <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                          )}
+                          
+                          {accionPago === 'adelanto' && (
+                            <div className="form-group">
+                              <label className="form-label text-xs uppercase text-muted">Monto Adelanto</label>
+                              <input 
+                                type="number" 
+                                className="form-input font-bold" 
+                                value={formData.monto_pagado_inicial} 
+                                onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} 
+                                min="0.01" 
+                                max={totales.total} 
+                                step="0.01" 
+                              />
                             </div>
-                          </div>
-                        )}
+                          )}
+                          
+                          {accionPago === 'registro' && (
+                            <div className="alert alert-warning py-2 text-sm">
+                              <AlertCircle size={14} /> Se generara cuenta por pagar. No se registran movimientos ahora.
+                            </div>
+                          )}
 
-                        {!formData.usa_fondos_propios && (
-                          <div className="bg-gray-50 p-3 rounded border">
-                            <label className="form-label text-xs uppercase text-blue-700 font-bold mb-2">
-                              Adelanto (Opcional)
-                            </label>
-                            <div className="flex gap-2 mb-2">
-                              <div className="relative flex-1">
-                                <span className="absolute left-3 top-2 text-gray-500 text-sm">
-                                  {formData.moneda === 'USD' ? '$' : 'S/'}
-                                </span>
-                                <input 
-                                  type="number" 
-                                  className="form-input pl-8 font-bold" 
-                                  value={formData.monto_pagado_inicial} 
-                                  onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} 
-                                  min="0" 
-                                  max={totales.total} 
-                                  step="0.01" 
-                                />
-                              </div>
-                            </div>
-                            {parseFloat(formData.monto_pagado_inicial) > 0 && (
+                          {accionPago !== 'registro' && (
+                            <div className="form-group">
+                              <label className="form-label text-xs uppercase text-muted">Cuenta de Origen</label>
                               <select 
-                                className="form-select text-xs" 
+                                className="form-select" 
                                 value={formData.id_cuenta_pago} 
-                                onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })} 
+                                required
                               >
-                                <option value="">Cuenta para adelanto...</option>
+                                <option value="">Seleccionar cuenta...</option>
                                 {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
                                   <option key={c.id_cuenta} value={c.id_cuenta}>
                                     {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
                                   </option>
                                 ))}
                               </select>
-                            )}
-                            <div className="text-right mt-1 text-xs text-muted">
-                              Saldo: {formatearMoneda(totales.total - parseFloat(formData.monto_pagado_inicial || 0))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {formData.forma_pago_detalle === 'Letras' && (
+                        <div className="slide-down">
+                          <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
+                            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-bold">Compra a Letras</p>
+                              <p className="text-purple-900/80">
+                                {formData.letras_pendientes_registro 
+                                  ? "Se registrara la deuda total. Podras canjear las letras y definir fechas mas adelante." 
+                                  : "Define el cronograma de cuotas ahora mismo."}
+                              </p>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                          <label className="flex items-center gap-2 cursor-pointer mb-3 p-3 border rounded hover:bg-gray-50 transition-colors">
+                            <input 
+                              type="checkbox" 
+                              className="form-checkbox h-4 w-4 text-purple-600 rounded" 
+                              checked={formData.letras_pendientes_registro} 
+                              onChange={(e) => setFormData({...formData, letras_pendientes_registro: e.target.checked})} 
+                            />
+                            <span className="font-medium text-sm">Registrar detalle de letras despues</span>
+                          </label>
+                        </div>
+                      )}
 
-                <div className="card">
-                  <div className="card-header bg-gray-50">
-                    <h2 className="card-title text-base">
-                      <User size={18} className="text-primary"/> Comprador
-                    </h2>
-                  </div>
-                  <div className="card-body">
-                    <label className="flex items-start gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded transition-colors">
-                      <input 
-                        type="checkbox" 
-                        className="mt-1" 
-                        checked={formData.usa_fondos_propios} 
-                        onChange={(e) => {
-                          const usa = e.target.checked;
-                          setFormData({ 
-                            ...formData, 
-                            usa_fondos_propios: usa, 
-                            id_comprador: usa ? formData.id_comprador : '', 
-                            id_cuenta_pago: usa ? '' : formData.id_cuenta_pago, 
-                            monto_pagado_inicial: usa ? 0 : (formData.forma_pago_detalle === 'Contado' ? totales.total : formData.monto_pagado_inicial) 
-                          });
-                        }} 
-                      />
-                      <div>
-                        <span className="font-medium text-sm block">Usar Fondos Propios</span>
-                        <span className="text-xs text-muted">Empleado paga con su dinero (reembolso pendiente)</span>
-                      </div>
-                    </label>
+                      {(formData.forma_pago_detalle === 'Credito' || formData.forma_pago_detalle === 'Letras') && (
+                        <div className="slide-down space-y-4 pt-2 border-t border-dashed">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="form-group">
+                              <label className="form-label text-xs uppercase text-muted">
+                                {formData.forma_pago_detalle === 'Letras' ? 'N° Letras' : 'Cuotas'}
+                              </label>
+                              <input 
+                                type="number" 
+                                className="form-input text-center font-bold" 
+                                min="1" 
+                                value={formData.numero_cuotas} 
+                                onChange={(e) => setFormData({...formData, numero_cuotas: e.target.value})} 
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label text-xs uppercase text-muted">Dias/Intervalo</label>
+                              <input 
+                                type="number" 
+                                className="form-input text-center" 
+                                min="1" 
+                                value={formData.dias_entre_cuotas} 
+                                onChange={(e) => setFormData({...formData, dias_entre_cuotas: e.target.value})} 
+                              />
+                            </div>
+                            <div className="form-group col-span-2">
+                              <label className="form-label text-xs uppercase text-muted">
+                                {formData.forma_pago_detalle === 'Letras' ? 'Vencimiento 1° Letra' : '1° Vencimiento'}
+                              </label>
+                              <input 
+                                type="date" 
+                                className="form-input" 
+                                value={formData.fecha_primera_cuota} 
+                                onChange={(e) => setFormData({...formData, fecha_primera_cuota: e.target.value})} 
+                              />
+                            </div>
+                          </div>
 
-                    {formData.usa_fondos_propios && (
-                      <div className="mt-3 slide-down">
-                        <select 
-                          className="form-select" 
-                          value={formData.id_comprador} 
-                          onChange={(e) => setFormData({...formData, id_comprador: e.target.value})} 
-                          required
-                        >
-                          <option value="">Seleccione empleado...</option>
-                          {empleados.map(emp => (
-                            <option key={emp.id_empleado} value={emp.id_empleado}>
-                              {emp.nombre_completo}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                          {cronograma.length > 0 && (
+                            <div className="bg-gray-50 rounded border overflow-hidden">
+                              <div className="px-3 py-2 bg-gray-100 text-xs font-bold text-gray-700 border-b flex justify-between items-center">
+                                <span>
+                                  {formData.letras_pendientes_registro ? 'Cronograma Referencial' : 'Cronograma Preliminar'}
+                                </span>
+                                <Calendar size={14}/>
+                              </div>
+                              {formData.letras_pendientes_registro && (
+                                <div className="px-3 py-1 bg-orange-50 border-b border-orange-200 text-xs text-orange-700">
+                                  Solo referencial, las letras se definiran en el detalle de la compra.
+                                </div>
+                              )}
+                              <div className="max-h-48 overflow-y-auto">
+                                <table className="w-full text-xs">
+                                  <thead className="text-gray-500 bg-gray-50">
+                                    <tr>
+                                      <th className="px-2 py-1 text-left">#</th>
+                                      <th className="px-2 py-1 text-left">Codigo</th>
+                                      <th className="px-2 py-1 text-left">Vence</th>
+                                      <th className="px-2 py-1 text-right">Monto</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y">
+                                    {cronograma.map((cuota) => (
+                                      <tr key={cuota.numero}>
+                                        <td className="px-2 py-1 font-medium">{cuota.numero}</td>
+                                        <td className="px-2 py-1 font-mono text-gray-600">{cuota.codigo_letra}</td>
+                                        <td className="px-2 py-1">{cuota.fecha.toLocaleDateString()}</td>
+                                        <td className="px-2 py-1 text-right">{formatearMoneda(cuota.monto)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {!formData.usa_fondos_propios && (
+                            <div className="bg-gray-50 p-3 rounded border">
+                              <label className="form-label text-xs uppercase text-blue-700 font-bold mb-2">
+                                Adelanto (Opcional)
+                              </label>
+                              <div className="flex gap-2 mb-2">
+                                <div className="relative flex-1">
+                                  <span className="absolute left-3 top-2 text-gray-500 text-sm">
+                                    {formData.moneda === 'USD' ? '$' : 'S/'}
+                                  </span>
+                                  <input 
+                                    type="number" 
+                                    className="form-input pl-8 font-bold" 
+                                    value={formData.monto_pagado_inicial} 
+                                    onChange={(e) => setFormData({...formData, monto_pagado_inicial: e.target.value})} 
+                                    min="0" 
+                                    max={totales.total} 
+                                    step="0.01" 
+                                  />
+                                </div>
+                              </div>
+                              {parseFloat(formData.monto_pagado_inicial) > 0 && (
+                                <select 
+                                  className="form-select text-xs" 
+                                  value={formData.id_cuenta_pago} 
+                                  onChange={(e) => setFormData({ ...formData, id_cuenta_pago: e.target.value })}
+                                >
+                                  <option value="">Cuenta para adelanto...</option>
+                                  {cuentasPago.filter(c => c.estado === 'Activo').map(c => (
+                                    <option key={c.id_cuenta} value={c.id_cuenta}>
+                                      {c.nombre} - {c.tipo} (PEN: S/ {parseFloat(c.saldo_pen || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})} | USD: $ {parseFloat(c.saldo_usd || 0).toLocaleString('es-PE', {minimumFractionDigits: 2})})
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                              <div className="text-right mt-1 text-xs text-muted">
+                                Saldo: {formatearMoneda(totales.total - parseFloat(formData.monto_pagado_inicial || 0))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {modoRegistro === 'compra' && (
+                  <div className="card">
+                    <div className="card-header bg-gray-50">
+                      <h2 className="card-title text-base">
+                        <User size={18} className="text-primary"/> Comprador
+                      </h2>
+                    </div>
+                    <div className="card-body">
+                      <label className="flex items-start gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded transition-colors">
+                        <input 
+                          type="checkbox" 
+                          className="mt-1" 
+                          checked={formData.usa_fondos_propios} 
+                          onChange={(e) => {
+                            const usa = e.target.checked;
+                            setFormData({ 
+                              ...formData, 
+                              usa_fondos_propios: usa, 
+                              id_comprador: usa ? formData.id_comprador : '', 
+                              id_cuenta_pago: usa ? '' : formData.id_cuenta_pago, 
+                              monto_pagado_inicial: usa ? 0 : (formData.forma_pago_detalle === 'Contado' ? totales.total : formData.monto_pagado_inicial) 
+                            });
+                          }} 
+                        />
+                        <div>
+                          <span className="font-medium text-sm block">Usar Fondos Propios</span>
+                          <span className="text-xs text-muted">Empleado paga con su dinero (reembolso pendiente)</span>
+                        </div>
+                      </label>
+
+                      {formData.usa_fondos_propios && (
+                        <div className="mt-3 slide-down">
+                          <select 
+                            className="form-select" 
+                            value={formData.id_comprador} 
+                            onChange={(e) => setFormData({...formData, id_comprador: e.target.value})} 
+                            required
+                          >
+                            <option value="">Seleccione empleado...</option>
+                            {empleados.map(emp => (
+                              <option key={emp.id_empleado} value={emp.id_empleado}>
+                                {emp.nombre_completo}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="card">
                   <div className="card-body space-y-3">
@@ -1101,12 +1155,13 @@ function NuevaCompra() {
 
                 <button 
                   type="submit" 
-                  className="btn btn-primary w-full btn-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all" 
+                  className={`btn ${modoRegistro === 'solicitud' ? 'btn-secondary' : 'btn-primary'} w-full btn-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all`} 
                   disabled={loading}
                 >
                   {loading ? 'Procesando...' : (
                     <>
-                      <Save size={20} /> Guardar Compra
+                      {modoRegistro === 'solicitud' ? <FileText size={20} /> : <Save size={20} />} 
+                      {modoRegistro === 'solicitud' ? 'Generar Solicitud OC' : 'Guardar Compra'}
                     </>
                   )}
                 </button>

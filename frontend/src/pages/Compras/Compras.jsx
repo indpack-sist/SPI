@@ -21,6 +21,8 @@ function Compras() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  const [activeTab, setActiveTab] = useState('compras');
+  
   const [filtros, setFiltros] = useState({
     estado: '',
     tipo_compra: '',
@@ -29,6 +31,14 @@ function Compras() {
     fecha_inicio: '',
     fecha_fin: '',
     alertas: ''
+  });
+
+  const comprasFiltradas = compras.filter(c => {
+    if (activeTab === 'compras') {
+      return c.tipo_documento !== 'Orden de Compra';
+    } else {
+      return c.tipo_documento === 'Orden de Compra';
+    }
   });
 
   useEffect(() => {
@@ -319,7 +329,24 @@ function Compras() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
-      {estadisticas && (
+      <div className="tabs-navigation mb-6">
+        <button
+          className={`tab-item ${activeTab === 'compras' ? 'active' : ''}`}
+          onClick={() => setActiveTab('compras')}
+        >
+          <Receipt size={18} />
+          Facturas / Compras
+        </button>
+        <button
+          className={`tab-item ${activeTab === 'solicitudes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('solicitudes')}
+        >
+          <FileText size={18} />
+          Solicitudes OC (Formatos)
+        </button>
+      </div>
+
+      {activeTab === 'compras' && estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <div className="card hover:border-blue-300 transition-colors">
             <div className="card-body">
@@ -561,15 +588,26 @@ function Compras() {
       <div className="card shadow-md">
         <div className="card-header border-b-0 flex justify-between items-center">
           <h2 className="card-title">
-            Listado de Compras
-            <span className="badge badge-primary ml-2">{compras.length}</span>
+            {activeTab === 'compras' ? 'Listado de Compras' : 'Formatos de Solicitud OC'}
+            <span className="badge badge-primary ml-2">{comprasFiltradas.length}</span>
           </h2>
         </div>
         <div className="card-body p-0">
           <Table
-            columns={columns}
-            data={compras}
-            emptyMessage="No se encontraron compras con los filtros aplicados"
+            columns={activeTab === 'compras' ? columns : [
+              columns[0], // N° OC
+              columns[1], // Proveedor
+              {
+                header: 'Tipo Solicitud',
+                accessor: 'tipo_documento',
+                width: '150px',
+                render: () => <span className="badge badge-outline">Formato OC</span>
+              },
+              columns[5], // Total
+              columns[7]  // Acciones
+            ]}
+            data={comprasFiltradas}
+            emptyMessage={activeTab === 'compras' ? "No hay compras registradas" : "No hay formatos de solicitud guardados"}
           />
         </div>
       </div>

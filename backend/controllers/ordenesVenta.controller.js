@@ -440,6 +440,7 @@ export async function ejecutarReservaStock(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+ 
 
 export async function createOrdenVenta(req, res) {
   try {

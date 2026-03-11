@@ -521,7 +521,20 @@ function DetalleCompra() {
     return `${mon === 'USD' ? '$' : 'S/'} ${parseFloat(v || 0).toLocaleString('es-PE', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
   };
 
-  if (loading && !compra) return <Loading message="Cargando detalles..." />;
+  const handleDescargarPDF = async () => {
+    try {
+      setLoading(true);
+      await comprasAPI.descargarPDF(id);
+      setSuccess('Orden de Compra descargada correctamente');
+    } catch (err) {
+      console.error(err);
+      setError('Error al descargar el PDF de la Orden de Compra');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && !compra) return <Loading message="Cargando detalle de compra..." />;
   if (!compra) return <Alert type="error" message="Compra no encontrada" />;
 
   const saldoReembolso = parseFloat(compra.monto_reembolsar || 0) - parseFloat(compra.monto_reembolsado || 0);

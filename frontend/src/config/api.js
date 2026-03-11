@@ -574,6 +574,12 @@ export const ordenesVentaAPI = {
     });
   },
 
+  descargarPDFGuiaInternaSalida: (id, idSalida) => {
+    return api.get(`/ordenes-venta/${id}/salidas/${idSalida}/pdf-guia-interna`, {
+      responseType: 'blob'
+    });
+  },
+
   descargarPDFDespacho: (id, idSalida) => {
     return api.get(`/ordenes-venta/${id}/salidas/${idSalida}/pdf`, {
       responseType: 'blob'

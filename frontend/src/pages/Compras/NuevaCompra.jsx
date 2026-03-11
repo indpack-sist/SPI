@@ -492,17 +492,17 @@ function NuevaCompra() {
             <h3 className="font-bold text-gray-800">¿Qué deseas realizar?</h3>
             <p className="text-xs text-muted">Selecciona el tipo de operación para este registro</p>
           </div>
-          <div className="flex bg-gray-100 p-1 rounded-lg">
+          <div className="tabs-navigation">
             <button
               type="button"
-              className={`px-6 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${modoRegistro === 'compra' ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`tab-item ${modoRegistro === 'compra' ? 'active' : ''}`}
               onClick={() => setModoRegistro('compra')}
             >
               <Receipt size={18} /> Registrar Compra Facturada
             </button>
             <button
               type="button"
-              className={`px-6 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${modoRegistro === 'solicitud' ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`tab-item ${modoRegistro === 'solicitud' ? 'active' : ''}`}
               onClick={() => setModoRegistro('solicitud')}
             >
               <FileClock size={18} /> Generar Formato OC (Solicitud)

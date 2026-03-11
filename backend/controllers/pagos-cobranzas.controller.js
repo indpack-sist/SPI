@@ -86,8 +86,8 @@ export const getAllPagosCobranzas = async (req, res, next) => {
     }
     
     if (metodo_pago) {
-      whereClause += ' AND mc.metodo_pago = ?';
-      params.push(metodo_pago);
+      whereClause += ' AND mc.referencia LIKE ?';
+      params.push(`%${metodo_pago}%`);
     }
     
     if (id_cuenta) {
@@ -102,7 +102,7 @@ export const getAllPagosCobranzas = async (req, res, next) => {
         mc.referencia as numero_pago,
         mc.fecha_movimiento as fecha_pago,
         mc.monto as monto_pagado,
-        mc.metodo_pago,
+        c.nombre as metodo_pago,
         mc.referencia as numero_operacion,
         mc.concepto as observaciones,
         mc.id_orden_compra,

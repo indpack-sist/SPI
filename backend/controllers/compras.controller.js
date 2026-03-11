@@ -405,7 +405,7 @@ export async function createCompra(req, res) {
       const montoReembolsarFinal = usa_fondos_propios ? parseFloat(monto_reembolsar || total) : 0;
       const estadoReembolsoFinal = usa_fondos_propios ? 'Pendiente' : 'No Aplica';
 
-      const [resultCompra] = await connection.query(`
+    const [resultCompra] = await connection.query(`
         INSERT INTO ordenes_compra (
           numero_orden, id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
           prioridad, moneda, tipo_cambio, tipo_impuesto, porcentaje_impuesto, tipo_compra,
@@ -421,7 +421,9 @@ export async function createCompra(req, res) {
         esCredito ? parseInt(numero_cuotas || 0) : 0,
         esCredito ? parseInt(dias_entre_cuotas || 30) : 0,
         esCredito ? parseInt(dias_credito || 30) : 0,
-        contacto_proveedor || null, direccion_entrega || null, observaciones, id_responsable || null, id_registrado_por,
+        contacto_proveedor || null, direccion_entrega || null, 
+        `${observaciones || ''}\n[PLAZO_PAGO]: ${req.body.plazo_pago || '-'}\n[LUGAR_ENTREGA]: ${req.body.lugar_entrega || 'Almacén Principal'}`, 
+        id_responsable || null, id_registrado_por,
         subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, montoAPagarAhora,
         cronogramaDefinido,
         tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null,
@@ -1005,6 +1007,13 @@ export async function descargarPDFCompra(req, res) {
     }
     
     const compra = compraResult.data[0];
+
+    // Extraer condiciones comerciales desde observaciones para el PDF
+    const plazoMatch = compra.observaciones?.match(/\[PLAZO_PAGO\]: (.*?)(?=\n|$)/);
+    const lugarMatch = compra.observaciones?.match(/\[LUGAR_ENTREGA\]: (.*?)(?=\n|$)/);
+    
+    compra.plazo_pago = plazoMatch ? plazoMatch[1].trim() : '-';
+    compra.lugar_entrega = lugarMatch ? lugarMatch[1].trim() : 'Almacén Principal';
     
     // Obtenemos el detalle de productos
     const detalleResult = await executeQuery(`

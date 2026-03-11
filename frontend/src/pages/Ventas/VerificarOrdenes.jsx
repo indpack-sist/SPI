@@ -28,6 +28,8 @@ function VerificarOrdenes() {
   const navigate = useNavigate();
   
   const [ordenesPendientes, setOrdenesPendientes] = useState([]);
+  const [historialReciente, setHistorialReciente] = useState([]);
+  const [activeTab, setActiveTab] = useState('pendientes');
   const [datosVerificacion, setDatosVerificacion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
@@ -53,8 +55,12 @@ function VerificarOrdenes() {
   const [observacionesAprobacion, setObservacionesAprobacion] = useState('');
 
   useEffect(() => {
-    cargarOrdenesPendientes();
-  }, []);
+    if (activeTab === 'pendientes') {
+      cargarOrdenesPendientes();
+    } else {
+      cargarHistorialReciente();
+    }
+  }, [activeTab]);
 
   const cargarOrdenesPendientes = async () => {
     try {
@@ -70,6 +76,29 @@ function VerificarOrdenes() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al cargar órdenes pendientes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cargarHistorialReciente = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Obtenemos órdenes aprobadas o rechazadas recientemente
+      const response = await ordenesVentaAPI.getAll({ 
+        limit: 50,
+        verificadas: true 
+      });
+      
+      if (response.data.success) {
+        setHistorialReciente(response.data.data || []);
+      }
+      
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar historial de verificaciones');
     } finally {
       setLoading(false);
     }
@@ -353,6 +382,23 @@ function VerificarOrdenes() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      <div className="tabs-navigation mb-6">
+        <button
+          className={`tab-item ${activeTab === 'pendientes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pendientes')}
+        >
+          <Clock size={18} />
+          Pendientes ({ordenesPendientes.length})
+        </button>
+        <button
+          className={`tab-item ${activeTab === 'historial' ? 'active' : ''}`}
+          onClick={() => setActiveTab('historial')}
+        >
+          <Calendar size={18} />
+          Historial Reciente ({historialReciente.length})
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="card border-l-4 border-warning">
           <div className="card-body">
@@ -407,7 +453,7 @@ function VerificarOrdenes() {
         </div>
       </div>
 
-      {ordenesPendientes.length === 0 ? (
+      {(activeTab === 'pendientes' && ordenesPendientes.length === 0) ? (
         <div className="card">
           <div className="card-body text-center py-12">
             <CheckCircle size={64} className="text-success mx-auto mb-4" />
@@ -417,28 +463,43 @@ function VerificarOrdenes() {
             <p className="text-muted mb-4">
               Todas las órdenes han sido revisadas y aprobadas
             </p>
-            <button 
-              className="btn btn-primary"
-              onClick={() => navigate('/ventas/ordenes')}
-            >
-              Ver Todas las Órdenes
-            </button>
           </div>
         </div>
       ) : (
         <div className="card shadow-sm">
           <div className="card-header flex justify-between items-center bg-gray-50/50">
             <h2 className="card-title">
-              Órdenes Pendientes de Verificación
-              <span className="badge badge-warning ml-2">{ordenesPendientes.length}</span>
+              {activeTab === 'pendientes' ? 'Órdenes Pendientes de Verificación' : 'Historial de Verificaciones Recientes'}
             </h2>
           </div>
           
           <div className="card-body p-0">
             <Table
-              columns={columns}
-              data={ordenesPendientes}
-              emptyMessage="No hay órdenes pendientes de verificación"
+              columns={activeTab === 'pendientes' ? columns : [
+                ...columns.slice(0, 6),
+                {
+                  header: 'Estado',
+                  accessor: 'estado',
+                  width: '120px',
+                  align: 'center',
+                  render: (value) => (
+                    <span className={`badge ${
+                      ['Aprobada', 'Aprobado', 'En Proceso', 'Despachada', 'Entregada'].includes(value) ? 'badge-success' : 
+                      ['Rechazada', 'Cancelada'].includes(value) ? 'badge-danger' : 'badge-warning'
+                    }`}>
+                      {value}
+                    </span>
+                  )
+                },
+                {
+                  header: 'Fecha',
+                  accessor: 'fecha_emision',
+                  width: '110px',
+                  render: (value) => <div className="text-xs">{formatearFecha(value)}</div>
+                }
+              ]}
+              data={activeTab === 'pendientes' ? ordenesPendientes : historialReciente}
+              emptyMessage={activeTab === 'pendientes' ? "No hay órdenes pendientes" : "No hay historial reciente"}
             />
           </div>
         </div>
@@ -988,24 +1049,25 @@ function VerificarOrdenes() {
         isOpen={visorArchivo.open}
         onClose={cerrarVisor}
         title={visorArchivo.titulo}
-        size="2xl"
+        size="xl"
       >
-        <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
+        <div className="flex justify-center items-center bg-gray-100 p-2 rounded-lg">
           {visorArchivo.tipo === 'pdf' ? (
             <iframe 
               src={visorArchivo.url} 
-              className="w-full h-[70vh] border-0 rounded"
+              className="w-full h-[85vh] border-0 rounded shadow-sm"
               title="Visor de PDF"
             />
           ) : (
             <img 
               src={visorArchivo.url} 
               alt="Visualización de archivo" 
-              className="max-w-full max-h-[70vh] object-contain rounded shadow-lg"
+              className="max-w-full h-[85vh] object-contain rounded shadow-lg"
             />
           )}
         </div>
-        <div className="flex justify-end mt-4">
+        <div className="flex justify-between items-center mt-4">
+          <p className="text-xs text-muted italic">Visualización vertical optimizada para documentos A4</p>
           <button className="btn btn-primary" onClick={cerrarVisor}>
             Cerrar Visor
           </button>

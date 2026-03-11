@@ -36,6 +36,24 @@ api.interceptors.response.use(
     }
 
     const { status, data } = error.response;
+
+    // Si el error es un Blob (común en descargas de PDF), intentamos leerlo
+    if (data instanceof Blob && data.type === 'application/json') {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const jsonData = JSON.parse(reader.result);
+            console.error(`Error ${status}:`, jsonData.error || 'Error en descarga');
+            reject(jsonData);
+          } catch (e) {
+            reject({ error: 'Error al procesar respuesta del servidor' });
+          }
+        };
+        reader.onerror = () => reject({ error: 'Error al leer el error del servidor' });
+        reader.readAsText(data);
+      });
+    }
     
     if (status === 401) {
       console.log('401 Unauthorized - Sesión expirada');

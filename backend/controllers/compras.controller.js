@@ -1020,7 +1020,21 @@ export async function descargarPDFCompra(req, res) {
       ORDER BY doc.orden, doc.id_detalle
     `, [id]);
     
-    compra.detalle = detalleResult.data || [];
+    const detalleOriginal = detalleResult.data || [];
+
+    // Procesar nombres manuales desde observaciones para el PDF
+    const detalleProcesado = detalleOriginal.map(item => {
+      if (item.id_producto === 1 && item.codigo_producto === 'MANUAL') {
+        const regex = new RegExp(`\\[ITEM_MANUAL_ID_${item.orden}\\]: (.*?)(?=\\n|$)`, 'i');
+        const match = compra.observaciones?.match(regex);
+        if (match) {
+          return { ...item, producto: match[1].trim() };
+        }
+      }
+      return item;
+    });
+
+    compra.detalle = detalleProcesado;
     
     // Generamos el PDF
     const pdfBuffer = await generarCompraPDF(compra);

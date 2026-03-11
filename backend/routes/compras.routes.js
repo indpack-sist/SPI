@@ -1,5 +1,4 @@
 import express from 'express';
-import { verificarToken } from '../middleware/auth.js';
 import {
   getAllCompras,
   getCompraById,
@@ -29,35 +28,44 @@ import {
 
 const router = express.Router();
 
-router.get('/alertas', verificarToken, getAlertasCompras);
-router.get('/estadisticas', verificarToken, getEstadisticasCompras);
-router.get('/por-cuenta', verificarToken, getComprasPorCuenta);
+// Rutas de estadísticas y generales (sin parámetros de ID)
+router.get('/alertas', getAlertasCompras);
+router.get('/estadisticas', getEstadisticasCompras);
+router.get('/por-cuenta', getComprasPorCuenta);
 
-router.get('/:id/pdf', verificarToken, descargarPDFCompra);
+// RUTA CRÍTICA: Descarga de PDF (Debe ir antes de /:id para evitar conflictos)
+router.get('/:id/pdf', descargarPDFCompra);
 
-router.get('/', verificarToken, getAllCompras);
-router.get('/:id/pagos/resumen', verificarToken, getResumenPagosCompra);
-router.get('/:id/pagos/historial', verificarToken, getHistorialPagosCompra);
-router.post('/:id/pagos', verificarToken, registrarPagoCompra);
-router.post('/:id/reembolsos', verificarToken, registrarReembolsoComprador);
+// Rutas de listado y creación
+router.get('/', getAllCompras);
+router.post('/', createCompra);
 
-router.post('/:id/cronograma', verificarToken, establecerCronograma);
+// Rutas de gestión de pagos y cronogramas
+router.get('/:id/pagos/resumen', getResumenPagosCompra);
+router.get('/:id/pagos/historial', getHistorialPagosCompra);
+router.post('/:id/pagos', registrarPagoCompra);
+router.post('/:id/reembolsos', registrarReembolsoComprador);
+router.post('/:id/cronograma', establecerCronograma);
 
-router.post('/:id/letras', verificarToken, registrarLetrasCompra);
-router.get('/:id/letras', verificarToken, getLetrasCompra);
-router.post('/letras/:idLetra/pagar', verificarToken, pagarLetraCompra);
+// Rutas de letras
+router.post('/:id/letras', registrarLetrasCompra);
+router.get('/:id/letras', getLetrasCompra);
+router.post('/letras/:idLetra/pagar', pagarLetraCompra);
 
-router.post('/:id/ingresos', verificarToken, registrarIngresoInventario);
-router.get('/:id/ingresos', verificarToken, getIngresosCompra);
-router.get('/:id/items-pendientes', verificarToken, getItemsPendientesIngreso);
+// Rutas de inventario
+router.post('/:id/ingresos', registrarIngresoInventario);
+router.get('/:id/ingresos', getIngresosCompra);
+router.get('/:id/items-pendientes', getItemsPendientesIngreso);
 
-router.get('/:id/cuotas', verificarToken, getCuotasCompra);
-router.get('/:id/cuotas/:idCuota', verificarToken, getCuotaById);
-router.post('/:id/cuotas/:idCuota/pagar', verificarToken, pagarCuota);
+// Rutas de cuotas
+router.get('/:id/cuotas', getCuotasCompra);
+router.get('/:id/cuotas/:idCuota', getCuotaById);
+router.post('/:id/cuotas/:idCuota/pagar', pagarCuota);
 
-router.get('/:id', verificarToken, getCompraById);
-router.put('/:id', verificarToken, updateCompra);
-router.patch('/:id/cancelar', verificarToken, cancelarCompra);
-router.patch('/:id/cambiar-cuenta', verificarToken, cambiarCuentaCompra);
+// Rutas de gestión de la orden (ID al final)
+router.get('/:id', getCompraById);
+router.put('/:id', updateCompra);
+router.patch('/:id/cancelar', cancelarCompra);
+router.patch('/:id/cambiar-cuenta', cambiarCuentaCompra);
 
 export default router;

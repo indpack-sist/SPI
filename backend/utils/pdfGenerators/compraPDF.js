@@ -84,7 +84,7 @@ export const generarCompraPDF = async (orden) => {
 
       currentY += 13;
       doc.font('Helvetica-Bold').text('Contacto:', 60, currentY).font('Helvetica').text(orden.contacto_proveedor || '-', 115, currentY);
-      doc.font('Helvetica-Bold').text('Plazo Pago:', 300, currentY).font('Helvetica').text(orden.plazo_pago || '-', 385, currentY);
+      doc.font('Helvetica-Bold').text('Días entre Cuotas:', 300, currentY).font('Helvetica').text(`${orden.dias_entre_cuotas || 0} días`, 385, currentY);
 
       currentY += 13;
       doc.font('Helvetica-Bold').text('Email:', 60, currentY).font('Helvetica').text(orden.email_proveedor || '-', 115, currentY);

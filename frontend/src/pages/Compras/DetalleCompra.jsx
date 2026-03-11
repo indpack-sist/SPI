@@ -788,55 +788,39 @@ function DetalleCompra() {
       )}
 
       <div className="mb-6">
-        <div className="bg-gray-100 p-1 rounded-lg inline-flex gap-1">
+        <div className="tabs-navigation">
           <button 
-            className={`px-6 py-2 rounded-md font-medium transition-all ${
-              tabActiva === 'general' 
-                ? 'bg-primary text-white shadow-sm' 
-                : 'text-gray-600 hover:bg-gray-200'
-            }`} 
+            className={`tab-item ${tabActiva === 'general' ? 'active' : ''}`} 
             onClick={() => setTabActiva('general')}
           >
             General
           </button>
           <button 
-            className={`px-6 py-2 rounded-md font-medium transition-all ${
-              tabActiva === 'pagos' 
-                ? 'bg-primary text-white shadow-sm' 
-                : 'text-gray-600 hover:bg-gray-200'
-            }`} 
+            className={`tab-item ${tabActiva === 'pagos' ? 'active' : ''}`} 
             onClick={() => setTabActiva('pagos')}
           >
             Pagos
           </button>
           {(esLetras || esCredito) && (
             <button 
-              className={`px-6 py-2 rounded-md font-medium transition-all flex items-center gap-2 ${
-                tabActiva === 'letras' 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-200'
-              }`} 
+              className={`tab-item ${tabActiva === 'letras' ? 'active' : ''}`} 
               onClick={() => setTabActiva('letras')}
             >
               {esLetras ? 'Letras' : 'Cuotas'}
               {compra.cuotas && compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length > 0 && (
-                <span className={`badge text-[10px] px-1.5 py-0.5 ${tabActiva === 'letras' ? 'bg-white text-primary' : 'badge-warning'}`}>
+                <span className={`badge badge-xs ml-2 ${tabActiva === 'letras' ? 'badge-primary' : 'badge-warning'}`}>
                   {compra.cuotas.filter(c => c.estado !== 'Pagada' && c.estado !== 'Cancelada').length}
                 </span>
               )}
             </button>
           )}
           <button 
-            className={`px-6 py-2 rounded-md font-medium transition-all flex items-center gap-2 ${
-              tabActiva === 'ingresos' 
-                ? 'bg-primary text-white shadow-sm' 
-                : 'text-gray-600 hover:bg-gray-200'
-            }`} 
+            className={`tab-item ${tabActiva === 'ingresos' ? 'active' : ''}`} 
             onClick={() => setTabActiva('ingresos')}
           >
             Ingresos Inventario 
             {itemsPendientes.length > 0 && (
-              <span className={`badge text-[10px] px-1.5 py-0.5 ${tabActiva === 'ingresos' ? 'bg-white text-primary' : 'badge-info'}`}>
+              <span className={`badge badge-xs ml-2 ${tabActiva === 'ingresos' ? 'badge-primary' : 'badge-info'}`}>
                 {itemsPendientes.length}
               </span>
             )}

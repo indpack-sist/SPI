@@ -4,7 +4,7 @@ import {
   Plus, Eye, ShoppingCart, Filter, Clock, CheckCircle,
   XCircle, AlertCircle, TrendingUp, Wallet, CreditCard,
   Calendar, PackageCheck, Truck, Package, Receipt, User,
-  RefreshCw
+  RefreshCw, FileText
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';

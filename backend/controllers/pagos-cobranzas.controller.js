@@ -99,14 +99,14 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       SELECT 
         mc.id_movimiento as id,
         CASE WHEN mc.tipo_movimiento = 'Egreso' THEN 'pago' ELSE 'cobranza' END as tipo,
-        mc.referencia as numero_pago,
+        COALESCE(pov.numero_pago, mc.referencia) as numero_pago,
         mc.fecha_movimiento as fecha_pago,
         mc.monto as monto_pagado,
-        c.nombre as metodo_pago,
-        mc.referencia as numero_operacion,
-        mc.concepto as observaciones,
+        COALESCE(pov.metodo_pago, c.nombre) as metodo_pago,
+        COALESCE(pov.numero_operacion, mc.referencia) as numero_operacion,
+        COALESCE(pov.observaciones, mc.concepto) as observaciones,
         mc.id_orden_compra,
-        mc.id_orden_venta as id_orden,
+        pov.id_orden_venta as id_orden,
         COALESCE(oc.numero_orden, ov.numero_orden, mc.referencia) as documento_referencia,
         mc.moneda,
         COALESCE(p.razon_social, cl.razon_social, 'General') as tercero,
@@ -116,7 +116,8 @@ export const getAllPagosCobranzas = async (req, res, next) => {
       FROM movimientos_cuentas mc
       LEFT JOIN ordenes_compra oc ON mc.id_orden_compra = oc.id_orden_compra
       LEFT JOIN proveedores p ON oc.id_proveedor = p.id_proveedor
-      LEFT JOIN ordenes_venta ov ON mc.id_orden_venta = ov.id_orden_venta
+      LEFT JOIN pagos_ordenes_venta pov ON mc.id_pago_orden_venta = pov.id_pago_orden
+      LEFT JOIN ordenes_venta ov ON pov.id_orden_venta = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
       LEFT JOIN empleados emp ON mc.id_registrado_por = emp.id_empleado
       LEFT JOIN cuentas_pago c ON mc.id_cuenta = c.id_cuenta

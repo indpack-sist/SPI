@@ -502,18 +502,6 @@ function DetalleCompra() {
     }
   };
 
-  const handleDescargarPDF = async () => {
-    try {
-      setLoading(true); 
-      await comprasAPI.descargarPDF(id); 
-      setSuccess('PDF descargado correctamente');
-    } catch (err) { 
-      setError('Error al descargar PDF'); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
-
   const formatearFecha = (f) => f ? new Date(f).toLocaleDateString('es-PE') : '-';
   
   const formatearMoneda = (v, m) => {

@@ -1048,6 +1048,19 @@ function NuevaCompra() {
                       {(formData.forma_pago_detalle === 'Credito' || formData.forma_pago_detalle === 'Letras') && (
                         <div className="slide-down space-y-4 pt-2 border-t border-dashed">
                           <div className="grid grid-cols-2 gap-3">
+                            <div className="form-group col-span-2">
+                              <label className="form-label text-xs uppercase text-blue-700 font-bold">Días de Crédito (Vencimiento)</label>
+                              <div className="relative">
+                                <input 
+                                  type="number" 
+                                  className="form-input font-bold border-blue-300 focus:border-blue-500" 
+                                  min="0" 
+                                  value={formData.dias_credito} 
+                                  onChange={(e) => setFormData({...formData, dias_credito: e.target.value})} 
+                                />
+                                <span className="absolute right-3 top-2.5 text-xs text-blue-600 font-medium">DÍAS TOTALES</span>
+                              </div>
+                            </div>
                             <div className="form-group">
                               <label className="form-label text-xs uppercase text-muted">
                                 {formData.forma_pago_detalle === 'Letras' ? 'N° Letras' : 'Cuotas'}

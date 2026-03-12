@@ -62,41 +62,58 @@ export const generarCompraPDF = async (orden) => {
       doc.fontSize(14).text('ORDEN DE COMPRA', 350, 85, { align: 'center', width: 200 });
       doc.fontSize(12).text(`No. ${orden.numero_orden}`, 350, 105, { align: 'center', width: 200 });
 
-      let y = 175;
+      // --- Bloque de Proveedor y Condiciones (DINÁMICO e INTELIGENTE) ---
+      let yBloque = 175;
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text('DATOS DEL PROVEEDOR', 60, yBloque + 10);
+      doc.text('CONDICIONES COMERCIALES', 300, yBloque + 10);
+      doc.moveTo(50, yBloque + 22).lineTo(550, yBloque + 22).strokeColor('#dddddd').stroke();
+
+      let currentYLeft = yBloque + 30;
+      let currentYRight = yBloque + 30;
+
+      // Función auxiliar para dibujar filas que se ajustan al contenido
+      const drawLeft = (label, value) => {
+        doc.font('Helvetica-Bold').fontSize(8).text(label, 60, currentYLeft);
+        doc.font('Helvetica').text(value || '-', 130, currentYLeft, { width: 160 });
+        currentYLeft += Math.max(doc.heightOfString(value || '-', { width: 160 }), 10) + 4;
+      };
+
+      const drawRight = (label, value) => {
+        doc.font('Helvetica-Bold').fontSize(8).text(label, 300, currentYRight);
+        doc.font('Helvetica').text(value || '-', 385, currentYRight, { width: 160 });
+        currentYRight += Math.max(doc.heightOfString(value || '-', { width: 160 }), 10) + 4;
+      };
+
+      // Columna Izquierda
+      drawLeft('Proveedor:', orden.proveedor);
+      drawLeft('RUC:', orden.ruc_proveedor);
+      drawLeft('Contacto:', orden.contacto_proveedor);
+      drawLeft('Email:', orden.email_proveedor);
+      drawLeft('Fecha Emisión:', orden.fecha_emision ? new Date(orden.fecha_emision).toLocaleDateString('es-PE') : '-');
+      drawLeft('Fecha Venc.:', orden.fecha_vencimiento ? new Date(orden.fecha_vencimiento).toLocaleDateString('es-PE') : '-');
+
+      // Columna Derecha
+      const esCredito = ['Credito', 'Letra', 'Letras'].includes(orden.tipo_compra);
+      drawRight('Condición:', orden.forma_pago_detalle || orden.tipo_compra || '-');
+      drawRight('Moneda:', orden.moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES');
       
-      // Bloque de Proveedor y Condiciones
-      doc.rect(50, y, 500, 100).lineWidth(0.5).strokeColor('#dddddd').stroke().strokeColor('#000000');
+      if (esCredito) {
+        drawRight('Crédito:', `${orden.dias_credito || 0} días`);
+        drawRight('Cuotas:', `${orden.numero_cuotas || 0}`);
+        drawRight('Días c/cuota:', `${orden.dias_entre_cuotas || 0} días`);
+      }
+
+      // El lugar de entrega ahora puede ser extenso sin romper el diseño
+      drawRight('Lugar Entr.:', orden.direccion_entrega || orden.lugar_entrega || 'Almacén Principal');
+      drawRight('Entr. Estimada:', orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'POR COORDINAR');
+
+      // Calcular el final real del bloque
+      const yFinBloque = Math.max(currentYLeft, currentYRight) + 5;
+      doc.rect(50, yBloque, 500, yFinBloque - yBloque).lineWidth(0.5).strokeColor('#cccccc').stroke().strokeColor('#000000');
       
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text('DATOS DEL PROVEEDOR', 60, y + 10);
-      doc.text('CONDICIONES COMERCIALES', 300, y + 10);
-      
-      doc.moveTo(50, y + 22).lineTo(550, y + 22).strokeColor('#dddddd').stroke().strokeColor('#000000');
+      y = yFinBloque + 20;
 
-      let currentY = y + 30;
-      // Proveedor
-      doc.fontSize(8).font('Helvetica-Bold').text('Proveedor:', 60, currentY).font('Helvetica').text(orden.proveedor || '-', 115, currentY, { width: 170 });
-      // Condiciones Derecha
-      doc.font('Helvetica-Bold').text('Condición:', 300, currentY).font('Helvetica').text(orden.forma_pago_detalle || orden.tipo_compra || '-', 385, currentY);
-      
-      currentY += 13;
-      doc.font('Helvetica-Bold').text('RUC:', 60, currentY).font('Helvetica').text(orden.ruc_proveedor || '-', 115, currentY);
-      doc.font('Helvetica-Bold').text('Moneda:', 300, currentY).font('Helvetica').text(orden.moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES', 385, currentY);
-
-      currentY += 13;
-      doc.font('Helvetica-Bold').text('Contacto:', 60, currentY).font('Helvetica').text(orden.contacto_proveedor || '-', 115, currentY);
-      doc.font('Helvetica-Bold').text('Días entre Cuotas:', 300, currentY).font('Helvetica').text(`${orden.dias_entre_cuotas || 0} días`, 385, currentY);
-
-      currentY += 13;
-      doc.font('Helvetica-Bold').text('Email:', 60, currentY).font('Helvetica').text(orden.email_proveedor || '-', 115, currentY);
-      doc.font('Helvetica-Bold').text('Lugar Entr.:', 300, currentY).font('Helvetica').text(orden.lugar_entrega || 'Almacén Principal', 385, currentY, { width: 160 });
-
-      currentY += 13;
-      doc.font('Helvetica-Bold').text('Fecha Emisión:', 60, currentY).font('Helvetica').text(new Date(orden.fecha_emision).toLocaleDateString('es-PE'), 130, currentY);
-      doc.font('Helvetica-Bold').text('Entr. Estimada:', 300, currentY).font('Helvetica').text(orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'POR COORDINAR', 385, currentY);
-
-      y += 120;
-
-      // Tabla de Productos
+      // --- Tabla de Productos ---
       doc.rect(50, y, 500, 20).fill('#f5f5f5').stroke('#cccccc');
       doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
       doc.text('CÓDIGO', 55, y + 6, { width: 70 });

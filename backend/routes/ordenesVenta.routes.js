@@ -33,7 +33,6 @@ import {
   ejecutarReservaStock,
   agregarDireccionClienteDesdeOrden,
   rectificarCantidadProducto,
-  generarGuiaInterna,
   getOrdenesPendientesVerificacion,
   getDatosVerificacionOrden,
   aprobarOrdenVerificacion,
@@ -76,7 +75,6 @@ router.post('/:id/verificacion/reenviar', verificarToken, puedeEditarOrdenRechaz
 router.post('/:id/crear-orden-produccion', verificarToken, verificarOrdenAprobada, crearOrdenProduccionDesdeVenta);
 router.post('/:id/reservar', verificarToken, verificarOrdenAprobada, reservarStockOrden);
 router.post('/:id/ejecutar-reserva', verificarToken, verificarOrdenAprobada, ejecutarReservaStock);
-router.post('/:id/guia-interna', verificarToken, verificarOrdenAprobada, generarGuiaInterna);
 
 router.patch('/:id/facturar-sunat', verificarToken, marcarFacturadoSunat);
 router.patch('/:id/desmarcar-sunat', verificarToken, desmarcarFacturadoSunat);

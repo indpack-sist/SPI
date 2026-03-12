@@ -11,8 +11,8 @@ export async function notificarNuevaOrdenPendiente(idOrden, numeroOrden, nombreC
     const adminResult = await executeQuery(`
       SELECT id_empleado 
       FROM empleados 
-      WHERE rol IN ('Administrador', 'Gerencia', 'Administrativo') 
-        AND estado = 'Active'
+      WHERE rol IN ('Administrador', 'Administrativo') 
+        AND estado = 'Activo'
     `);
 
     if (!adminResult.success || adminResult.data.length === 0) {
@@ -137,8 +137,8 @@ export async function notificarOrdenReenviada(idOrden, numeroOrden, nombreComerc
     const adminResult = await executeQuery(`
       SELECT id_empleado 
       FROM empleados 
-      WHERE rol IN ('Administrador', 'Gerencia', 'Administrativo') 
-        AND estado = 'Active'
+      WHERE rol IN ('Administrador', 'Administrativo') 
+        AND estado = 'Activo'
     `);
 
     if (!adminResult.success || adminResult.data.length === 0) {
@@ -258,5 +258,50 @@ export async function notificarComercialDefinirComprobante(idOrden, numeroOrden,
     }
   } catch (error) {
     console.error('Error en notificarComercialDefinirComprobante:', error);
+  }
+}
+
+export async function notificarNuevaOP(idOrden, numeroOP, origenInfo, rolesDestino, io) {
+  try {
+    // Buscar empleados activos con los roles especificados (Supervisor, Jefe de Planta, etc.)
+    const destinatariosResult = await executeQuery(`
+      SELECT id_empleado 
+      FROM empleados 
+      WHERE rol IN (?) 
+        AND estado = 'Activo'
+    `, [rolesDestino]);
+
+    if (!destinatariosResult.success || destinatariosResult.data.length === 0) return;
+
+    for (const dest of destinatariosResult.data) {
+      const insertResult = await executeQuery(
+        `INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino, leido) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          dest.id_empleado,
+          'Nueva OP Generada',
+          `Se ha generado la ${numeroOP}. ${origenInfo}`,
+          'info',
+          `/produccion/ordenes/${idOrden}`,
+          0
+        ]
+      );
+
+      if (insertResult.success && io) {
+        const notifCompleta = {
+          id_notificacion: insertResult.data.insertId,
+          id_usuario_destino: dest.id_empleado,
+          titulo: 'Nueva OP Generada',
+          mensaje: `Se ha generado la ${numeroOP}. ${origenInfo}`,
+          tipo: 'info',
+          ruta_destino: `/produccion/ordenes/${idOrden}`,
+          leido: 0,
+          fecha_creacion: new Date()
+        };
+        await emitirNotificacion(io, dest.id_empleado, notifCompleta);
+      }
+    }
+  } catch (error) {
+    console.error('Error en notificarNuevaOP:', error);
   }
 }

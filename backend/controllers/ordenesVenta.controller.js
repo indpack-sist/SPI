@@ -14,7 +14,8 @@ import {
   notificarOrdenRechazada,
   notificarOrdenReenviada,
   notificarPendienteMarcarSunat,
-  notificarComercialDefinirComprobante
+  notificarComercialDefinirComprobante,
+  notificarNuevaOP
 } from '../utils/notificacionesHelper.js';
 
 const getIO = (req) => req.app.get('socketio');
@@ -1142,24 +1143,10 @@ export async function crearOrdenProduccionDesdeVenta(req, res) {
     }
 
     const nombreProducto = productoResult.data[0].nombre;
+    const rolesProduccion = ['Supervisor', 'Jefe de Planta', 'Jefe de Producción'];
+    const origenInfo = `Origen: Ventas ${ordenVenta.numero_orden}. Producto: ${nombreProducto}. Cant: ${cantidad} Kg`;
 
-    const supervisoresResult = await executeQuery(
-      "SELECT id_empleado FROM empleados WHERE rol IN ('Supervisor', 'Jefe de Planta', 'Jefe de Producción') AND estado = 'Activo'"
-    );
-
-    if (supervisoresResult.success) {
-      for (const sup of supervisoresResult.data) {
-        await executeQuery(`
-          INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
-          VALUES (?, ?, ?, 'warning', ?)
-        `, [
-          sup.id_empleado,
-          `Nueva OP: ${numeroOrdenProduccion}`,
-          `Origen: Ventas ${ordenVenta.numero_orden}. Producto: ${nombreProducto}. Cant: ${cantidad} Kg`,
-          '/produccion/ordenes'
-        ]);
-      }
-    }
+    await notificarNuevaOP(opResult.data.insertId, numeroOrdenProduccion, origenInfo, rolesProduccion, getIO(req));
     
     res.status(201).json({
       success: true,

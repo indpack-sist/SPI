@@ -1,4 +1,7 @@
-import { pool, executeQuery, executeTransaction } from '../config/database.js';
+import { executeQuery, executeTransaction } from '../config/database.js';
+import { notificarNuevaOP } from '../utils/notificacionesHelper.js';
+
+const getIO = (req) => req.app.get('socketio');
 import { generarPDFOrdenProduccion, generarPDFHojaRuta } from '../utils/pdf-generator.js';
 
 const getFechaPeru = () => {
@@ -834,39 +837,9 @@ export async function createOrden(req, res) {
     }
 
     if (id_orden_venta_origen) {
-      let destinatarios = [];
-      if (id_supervisor) {
-        destinatarios.push(id_supervisor);
-      } else {
-        const supervisoresRes = await executeQuery("SELECT id_empleado FROM empleados WHERE rol = 'Supervisor' AND estado = 'Activo'");
-        if (supervisoresRes.success) {
-          destinatarios = supervisoresRes.data.map(s => s.id_empleado);
-        }
-      }
-
-      const titulo = 'Nueva OP Generada';
-      const mensaje = `La OP ${numeroOrdenGenerado} (desde Ventas) ha sido creada.`;
-      const ruta = `/produccion/ordenes/${idOrden}`;
-
-      for (const idDestino of destinatarios) {
-        const insertResult = await executeQuery(`
-          INSERT INTO notificaciones (id_usuario_destino, titulo, mensaje, tipo, ruta_destino)
-          VALUES (?, ?, ?, ?, ?)
-        `, [idDestino, titulo, mensaje, 'info', ruta]);
-
-        const io = req.app.get('socketio');
-        if (io) {
-          io.to(`usuario_${idDestino}`).emit('nueva_notificacion', {
-            id_notificacion: insertResult.data.insertId,
-            titulo,
-            mensaje,
-            tipo: 'info',
-            ruta_destino: ruta,
-            leido: 0,
-            fecha_creacion: new Date().toISOString()
-          });
-        }
-      }
+      const rolesProduccion = ['Supervisor', 'Jefe de Planta', 'Jefe de Producción'];
+      const origenInfo = `Origen: Ventas ${numeroOrdenGenerado} (desde Ventas).`;
+      await notificarNuevaOP(idOrden, numeroOrdenGenerado, origenInfo, rolesProduccion, getIO(req));
     }
     
     res.status(201).json({

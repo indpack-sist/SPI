@@ -63,7 +63,8 @@ export const generarCompraPDF = async (orden) => {
       doc.fontSize(12).text(`No. ${orden.numero_orden}`, 350, 105, { align: 'center', width: 200 });
 
       // --- Bloque de Proveedor y Condiciones (DINÁMICO e INTELIGENTE) ---
-      let yBloque = 175;
+      let y = 175;
+      let yBloque = y;
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text('DATOS DEL PROVEEDOR', 60, yBloque + 10);
       doc.text('CONDICIONES COMERCIALES', 300, yBloque + 10);
       doc.moveTo(50, yBloque + 22).lineTo(550, yBloque + 22).strokeColor('#dddddd').stroke();

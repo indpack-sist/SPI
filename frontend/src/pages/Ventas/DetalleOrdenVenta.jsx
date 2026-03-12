@@ -1615,18 +1615,6 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
         </div>
         
         <div className="flex gap-2">
-          {orden.tipo_comprobante === 'Nota de Venta' && !sinComprobanteAsignado && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
-            <button
-              className="btn btn-outline border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-              onClick={handleGenerarGuiaInterna}
-              disabled={procesando || descargandoPDF === 'guia-interna'}
-              title={orden.numero_guia_interna ? "Descargar Guía Interna generada" : "Generar Guía Interna"}
-            >
-              <ClipboardList size={20} /> 
-              {orden.numero_guia_interna ? `GI: ${orden.numero_guia_interna}` : 'Generar Guía Interna'}
-            </button>
-          )}
-
           {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && orden.tipo_comprobante === 'Factura' && (
             orden.facturado_sunat === 1 ? (
               <button

@@ -3004,138 +3004,6 @@ export async function rectificarCantidadProducto(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
-export async function generarGuiaInterna(req, res) {
-    try {
-        const { id } = req.params; // ID de la Orden de Venta
-        const id_usuario = req.user?.id_empleado || null;
-
-        // 1. Validar Orden
-        const ordenResult = await executeQuery('SELECT * FROM ordenes_venta WHERE id_orden_venta = ?', [id]);
-        if (!ordenResult.success || ordenResult.data.length === 0) {
-            return res.status(404).json({ success: false, error: 'Orden no encontrada' });
-        }
-        const orden = ordenResult.data[0];
-
-        if (orden.tipo_comprobante !== 'Nota de Venta') {
-            return res.status(400).json({ success: false, error: 'La Guía Interna solo está disponible para Notas de Venta' });
-        }
-        if (['Despachada', 'Entregada', 'Cancelada'].includes(orden.estado)) {
-            return res.status(400).json({ success: false, error: `La orden ya está en estado ${orden.estado}` });
-        }
-
-        // 2. Obtener Detalle y Productos
-        const detalleResult = await executeQuery('SELECT * FROM detalle_orden_venta WHERE id_orden_venta = ?', [id]);
-        const detalleOrden = detalleResult.data;
-
-        // 3. Generar Correlativo GI (GI-2026-0001)
-        const year = new Date().getFullYear();
-        const ultimaGuia = await executeQuery(`
-            SELECT observaciones 
-            FROM salidas 
-            WHERE observaciones LIKE ? 
-            ORDER BY id_salida DESC LIMIT 1
-        `, [`GI-${year}-%`]);
-
-        let secuencia = 1;
-        if (ultimaGuia.success && ultimaGuia.data.length > 0) {
-            const obs = ultimaGuia.data[0].observaciones;
-            const match = obs.match(/GI-\d{4}-(\d+)/);
-            if (match) secuencia = parseInt(match[1]) + 1;
-        }
-        const numeroGuia = `GI-${year}-${String(secuencia).padStart(4, '0')}`;
-
-        // 4. Preparar Datos para Salida
-        let totalCosto = 0;
-        const itemsParaSalida = [];
-        
-        for (const item of detalleOrden) {
-             const prodData = await executeQuery('SELECT costo_unitario_promedio, requiere_receta FROM productos WHERE id_producto = ?', [item.id_producto]);
-             const prod = prodData.data[0];
-             const costo = parseFloat(prod?.costo_unitario_promedio || 0);
-             const cantidad = parseFloat(item.cantidad);
-             
-             totalCosto += (costo * cantidad);
-             
-             itemsParaSalida.push({
-                 id_producto: item.id_producto,
-                 cantidad: cantidad,
-                 costo_unitario: costo,
-                 precio_unitario: item.precio_unitario,
-                 requiere_receta: prod?.requiere_receta || 0,
-                 stock_reservado_en_ov: orden.stock_reservado // Si la orden ya reservó stock, no lo descontamos doble
-             });
-        }
-
-        // 5. Transacción de Creación de Guía
-        const queries = [];
-
-        // Insertar Cabecera Salida
-        queries.push({
-            sql: `INSERT INTO salidas (
-                id_tipo_inventario, tipo_movimiento, id_cliente, total_costo, total_precio,
-                moneda, id_registrado_por, observaciones, estado, fecha_movimiento
-            ) VALUES (3, 'Venta', ?, ?, ?, ?, ?, ?, 'Activo', ?)`,
-            params: [
-                orden.id_cliente, totalCosto, orden.total, orden.moneda,
-                id_usuario, `${numeroGuia} - Guía Interna Automática OV ${orden.numero_orden}`, getFechaPeru()
-            ]
-        });
-
-        // Ejecutamos primero la cabecera para tener el ID
-        const resultSalida = await executeTransaction(queries);
-        if (!resultSalida.success) throw new Error(resultSalida.error);
-        
-        const idSalida = resultSalida.data[0].insertId;
-        const queriesDetalles = [];
-
-        // Insertar Detalles y Actualizar Stock/Estado
-        for (const item of itemsParaSalida) {
-            // Detalle Salida
-            queriesDetalles.push({
-                sql: `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, costo_unitario, precio_unitario) VALUES (?, ?, ?, ?, ?)`,
-                params: [idSalida, item.id_producto, item.cantidad, item.costo_unitario, item.precio_unitario]
-            });
-
-            // Descontar Stock si NO es receta y NO estaba ya reservado
-            // OJO: Al ser guía interna, asumimos que sale de almacén. 
-            // Si estaba reservado, el stock físico ya se descontó en createOrdenVenta, así que no hacemos nada.
-            // Si NO estaba reservado, descontamos ahora.
-            if (item.requiere_receta === 0 && (!orden.stock_reservado || orden.stock_reservado == 0)) {
-                 queriesDetalles.push({
-                     sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?',
-                     params: [item.cantidad, item.id_producto]
-                 });
-            }
-
-            // Marcar cantidad despachada en la OV
-            queriesDetalles.push({
-                sql: 'UPDATE detalle_orden_venta SET cantidad_despachada = ? WHERE id_orden_venta = ? AND id_producto = ?',
-                params: [item.cantidad, id, item.id_producto]
-            });
-        }
-
-        // Actualizar estado de la OV a Despachada
-        queriesDetalles.push({
-            sql: 'UPDATE ordenes_venta SET estado = ?, fecha_entrega_real = ? WHERE id_orden_venta = ?',
-            params: ['Despachada', getFechaISOPeru(), id]
-        });
-
-        await executeTransaction(queriesDetalles);
-
-        res.json({
-            success: true,
-            message: `Guía Interna ${numeroGuia} generada correctamente.`,
-            data: {
-                id_salida: idSalida,
-                numero_guia: numeroGuia
-            }
-        });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-}
 export async function descargarPDFGuiaInterna(req, res) {
   try {
     const { id } = req.params;
@@ -3180,6 +3048,29 @@ export async function descargarPDFGuiaInterna(req, res) {
       });
     }
 
+    let numeroGuiaInterna = orden.numero_guia_interna;
+
+    // Si no tiene guía global, buscamos si tiene algún despacho registrado para usar ese correlativo
+    if (!numeroGuiaInterna) {
+        const despachoResult = await executeQuery(`
+            SELECT observaciones FROM salidas 
+            WHERE observaciones LIKE ? AND estado = 'Activo'
+            ORDER BY id_salida DESC LIMIT 1
+        `, [`%${orden.numero_orden}%`]);
+
+        if (despachoResult.success && despachoResult.data.length > 0) {
+            const match = despachoResult.data[0].observaciones.match(/GI-\d{4}-\d+/);
+            if (match) numeroGuiaInterna = match[0];
+        }
+    }
+
+    if (!numeroGuiaInterna) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No se puede descargar la guía global. Por favor, registre un despacho primero para generar el correlativo.' 
+      });
+    }
+
     const detalleResult = await executeQuery(`
       SELECT 
         dov.id_detalle,
@@ -3210,35 +3101,6 @@ export async function descargarPDFGuiaInterna(req, res) {
       : orden.direccion_cliente_base;
 
     orden.direccion_entrega = direccionFinal;
-
-    let numeroGuiaInterna = orden.numero_guia_interna;
-
-    if (!numeroGuiaInterna) {
-      const ultimaGuia = await executeQuery(`
-        SELECT numero_guia_interna 
-        FROM ordenes_venta 
-        WHERE numero_guia_interna IS NOT NULL
-        ORDER BY id_orden_venta DESC 
-        LIMIT 1
-      `);
-
-      let numeroSecuencia = 1;
-      const year = new Date().getFullYear();
-      
-      if (ultimaGuia.success && ultimaGuia.data.length > 0) {
-        const match = ultimaGuia.data[0].numero_guia_interna.match(/GI-\d{4}-(\d+)$/);
-        if (match) {
-          numeroSecuencia = parseInt(match[1]) + 1;
-        }
-      }
-
-      numeroGuiaInterna = `GI-${year}-${String(numeroSecuencia).padStart(4, '0')}`;
-
-      await executeQuery(
-        'UPDATE ordenes_venta SET numero_guia_interna = ? WHERE id_orden_venta = ?',
-        [numeroGuiaInterna, id]
-      );
-    }
 
     const { generarPDFGuiaInterna } = await import('../utils/pdfGenerators/guiaInternaPDF.js');
     const pdfBuffer = await generarPDFGuiaInterna(orden, numeroGuiaInterna);

@@ -1241,24 +1241,45 @@ export async function registrarDespacho(req, res) {
       });
     }
 
-    // Generar correlativo de Guía Interna si es Nota de Venta
+    // Generar correlativo de Guía Interna si es Nota de Venta (Búsqueda inteligente doble)
     let numeroGuiaInterna = null;
     if (orden.tipo_comprobante === 'Nota de Venta') {
         const year = new Date().getFullYear();
-        const ultimaGuia = await executeQuery(`
+        
+        // 1. Buscar en Salidas (Despachos parciales nuevos)
+        const ultimaGuiaSalida = await executeQuery(`
             SELECT observaciones 
             FROM salidas 
             WHERE observaciones LIKE ? 
             ORDER BY id_salida DESC LIMIT 1
         `, [`GI-${year}-%`]);
 
-        let secuencia = 1;
-        if (ultimaGuia.success && ultimaGuia.data.length > 0) {
-            const obs = ultimaGuia.data[0].observaciones;
-            const match = obs.match(/GI-\d{4}-(\d+)/);
-            if (match) secuencia = parseInt(match[1]) + 1;
+        // 2. Buscar en Ordenes de Venta (Histórico global)
+        const ultimaGuiaOV = await executeQuery(`
+            SELECT numero_guia_interna
+            FROM ordenes_venta
+            WHERE numero_guia_interna LIKE ?
+            ORDER BY id_orden_venta DESC LIMIT 1
+        `, [`GI-${year}-%`]);
+
+        let secSalida = 0;
+        let secOV = 0;
+
+        // Extraer secuencia de Salidas
+        if (ultimaGuiaSalida.success && ultimaGuiaSalida.data.length > 0) {
+            const match = ultimaGuiaSalida.data[0].observaciones.match(/GI-\d{4}-(\d+)/);
+            if (match) secSalida = parseInt(match[1]);
         }
-        numeroGuiaInterna = `GI-${year}-${String(secuencia).padStart(4, '0')}`;
+
+        // Extraer secuencia de Ordenes de Venta
+        if (ultimaGuiaOV.success && ultimaGuiaOV.data.length > 0) {
+            const match = ultimaGuiaOV.data[0].numero_guia_interna.match(/GI-\d{4}-(\d+)/);
+            if (match) secOV = parseInt(match[1]);
+        }
+
+        // El siguiente número será el máximo de ambos + 1
+        const secuenciaFinal = Math.max(secSalida, secOV) + 1;
+        numeroGuiaInterna = `GI-${year}-${String(secuenciaFinal).padStart(4, '0')}`;
     }
 
     const resultCabecera = await executeTransaction([{

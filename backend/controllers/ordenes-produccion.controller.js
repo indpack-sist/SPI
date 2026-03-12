@@ -1,8 +1,8 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { notificarNuevaOP } from '../utils/notificacionesHelper.js';
+import { generarPDFOrdenProduccion, generarPDFHojaRuta } from '../utils/pdf-generator.js';
 
 const getIO = (req) => req.app.get('socketio');
-import { generarPDFOrdenProduccion, generarPDFHojaRuta } from '../utils/pdf-generator.js';
 
 const getFechaPeru = () => {
   const now = new Date();

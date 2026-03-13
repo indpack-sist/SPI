@@ -584,10 +584,12 @@ export async function createOrdenVenta(req, res) {
           const limiteAsignado = moneda === 'USD' ? parseFloat(cliente.limite_usd) : parseFloat(cliente.limite_pen);
           const deudaActual = parseFloat(deudaResult.data[0]?.deuda_actual || 0);
           const nuevaDeudaTotal = deudaActual + total;
+          
           if (nuevaDeudaTotal > limiteAsignado) {
+            const disponible = Math.max(0, limiteAsignado - deudaActual);
             return res.status(400).json({
               success: false,
-              error: `Límite de crédito excedido. Disponible: ${moneda} ${(limiteAsignado - deudaActual).toFixed(2)}. Requerido: ${moneda} ${total.toFixed(2)}.`
+              error: `La orden no puede ser procesada por exceso de crédito. El cliente tiene un límite de ${moneda} ${limiteAsignado.toLocaleString('es-PE', {minimumFractionDigits: 2})}, de los cuales ya ha utilizado ${moneda} ${deudaActual.toLocaleString('es-PE', {minimumFractionDigits: 2})}. El crédito disponible actual es de ${moneda} ${disponible.toLocaleString('es-PE', {minimumFractionDigits: 2})}, pero esta orden requiere ${moneda} ${total.toLocaleString('es-PE', {minimumFractionDigits: 2})}.`
             });
           }
         }
@@ -865,9 +867,10 @@ export async function updateOrdenVenta(req, res) {
           const nuevaDeudaTotal = deudaOtrasOrdenes + deudaEstaOrden;
 
           if (nuevaDeudaTotal > limiteAsignado) {
+            const disponibleParaEstaOrden = Math.max(0, limiteAsignado - deudaOtrasOrdenes);
             return res.status(400).json({
               success: false,
-              error: `Límite de crédito excedido. Disponible: ${moneda} ${(limiteAsignado - deudaOtrasOrdenes).toFixed(2)}. Deuda pendiente de esta orden: ${moneda} ${deudaEstaOrden.toFixed(2)}.`
+              error: `Actualización bloqueada por exceso de crédito. El cliente tiene un límite de ${moneda} ${limiteAsignado.toLocaleString('es-PE', {minimumFractionDigits: 2})}. Considerando otras deudas (${moneda} ${deudaOtrasOrdenes.toLocaleString('es-PE', {minimumFractionDigits: 2})}), el crédito disponible para esta orden es de ${moneda} ${disponibleParaEstaOrden.toLocaleString('es-PE', {minimumFractionDigits: 2})}, pero se requieren ${moneda} ${deudaEstaOrden.toLocaleString('es-PE', {minimumFractionDigits: 2})} de saldo pendiente.`
             });
           }
         }
@@ -1197,31 +1200,39 @@ export async function registrarDespacho(req, res) {
     for (const itemDespacho of detalles_despacho) {
       const itemDb = itemsOrden.data.find(i => i.id_producto === itemDespacho.id_producto);
 
-      if (!itemDb) return res.status(400).json({ error: `El producto ID ${itemDespacho.id_producto} no pertenece a esta orden` });
+      if (!itemDb) {
+        return res.status(400).json({ 
+          error: `El producto con ID ${itemDespacho.id_producto} no pertenece a esta orden de venta.` 
+        });
+      }
 
       const pendiente = parseFloat(itemDb.cantidad) - parseFloat(itemDb.cantidad_despachada || 0);
       const cantidadADespachar = parseFloat(itemDespacho.cantidad);
 
-      if (cantidadADespachar > pendiente) {
-        return res.status(400).json({ error: `Exceso de cantidad para el producto ${itemDespacho.id_producto}. Pendiente: ${pendiente}, Solicitado: ${cantidadADespachar}` });
+      if (cantidadADespachar > pendiente + 0.0001) {
+        return res.status(400).json({ 
+          error: `Cantidad excedida para el producto "${itemDespacho.nombre || itemDespacho.id_producto}". El saldo pendiente es de ${pendiente}, pero intentó despachar ${cantidadADespachar}.` 
+        });
       }
 
       const productoStock = await executeQuery(
-        'SELECT stock_actual, costo_unitario_promedio FROM productos WHERE id_producto = ?',
+        'SELECT stock_actual, costo_unitario_promedio, nombre FROM productos WHERE id_producto = ?',
         [itemDespacho.id_producto]
       );
 
       if (productoStock.data.length === 0) {
-        return res.status(404).json({ error: `Producto ID ${itemDespacho.id_producto} no encontrado en inventario` });
+        return res.status(404).json({ 
+          error: `El producto "${itemDespacho.nombre || itemDespacho.id_producto}" no fue encontrado en el inventario.` 
+        });
       }
 
       const infoProducto = productoStock.data[0];
       const estabaReservado = parseInt(itemDb.stock_reservado) === 1 || parseInt(itemDb.stock_reservado) === 2;
 
       if (!estabaReservado) {
-        if (parseFloat(infoProducto.stock_actual) < cantidadADespachar) {
+        if (parseFloat(infoProducto.stock_actual) < cantidadADespachar - 0.0001) {
           return res.status(400).json({
-            error: `Stock insuficiente para el producto ID ${itemDespacho.id_producto}. Stock actual: ${infoProducto.stock_actual}`
+            error: `Stock insuficiente en almacén para "${infoProducto.nombre}". Solo hay ${infoProducto.stock_actual} disponibles y se requiere despachar ${cantidadADespachar}.`
           });
         }
       }

@@ -574,12 +574,12 @@ export async function getConsumoMaterialesOrden(req, res) {
     const { id } = req.params;
     
     const ordenResult = await executeQuery(
-      'SELECT estado, id_receta_producto FROM ordenes_produccion WHERE id_orden = ?',
+      'SELECT estado, id_receta_producto, numero_orden FROM ordenes_produccion WHERE id_orden = ?',
       [id]
     );
     
     if (ordenResult.data.length === 0) {
-      return res.status(404).json({ error: 'Orden no encontrada' });
+      return res.status(404).json({ error: 'La orden de producción solicitada no existe.' });
     }
     
     const orden = ordenResult.data[0];

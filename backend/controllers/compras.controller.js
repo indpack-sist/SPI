@@ -240,10 +240,46 @@ export async function createCompra(req, res) {
 
     const id_registrado_por = req.user?.id_empleado || null;
 
-    if (!id_proveedor || !detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Datos incompletos' });
-    if (!id_registrado_por) return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
-    if (!moneda) return res.status(400).json({ success: false, error: 'Especifique la moneda' });
-    if (usa_fondos_propios && !id_comprador) return res.status(400).json({ success: false, error: 'Debe especificar el empleado comprador' });
+    if (!id_proveedor || !detalle || detalle.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Debe seleccionar un proveedor y agregar al menos un producto a la compra.' 
+      });
+    }
+
+    if (numero_documento && serie_documento && id_proveedor) {
+      const checkDuplicado = await executeQuery(
+        'SELECT id_orden_compra, numero_orden FROM ordenes_compra WHERE id_proveedor = ? AND serie_documento = ? AND numero_documento = ? AND estado != "Cancelada"',
+        [id_proveedor, serie_documento, numero_documento]
+      );
+      if (checkDuplicado.success && checkDuplicado.data.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Ya existe un documento registrado con la serie ${serie_documento} y número ${numero_documento} para este proveedor (Orden: ${checkDuplicado.data[0].numero_orden}).`
+        });
+      }
+    }
+
+    if (!id_registrado_por) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No se pudo identificar al usuario que registra la compra. Por favor, inicie sesión nuevamente.' 
+      });
+    }
+
+    if (!moneda) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Debe especificar el tipo de moneda (PEN/USD) para la compra.' 
+      });
+    }
+
+    if (usa_fondos_propios && !id_comprador) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Si utiliza fondos propios, es obligatorio especificar el empleado que realizó el gasto.' 
+      });
+    }
 
     let subtotal = 0;
     let subtotalRecepcion = 0;

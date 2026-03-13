@@ -151,12 +151,12 @@ export async function createSalidaMultiple(req, res) {
 
         if (!id_tipo_inventario || !tipo_movimiento || !id_registrado_por) {
             return res.status(400).json({ 
-                error: 'id_tipo_inventario, tipo_movimiento e id_registrado_por son requeridos' 
+                error: 'Faltan campos obligatorios (Tipo de Inventario, Tipo de Movimiento o Usuario) para registrar la salida.' 
             });
         }
         if (!detalles || !Array.isArray(detalles) || detalles.length === 0) {
             return res.status(400).json({ 
-                error: 'Se requiere al menos un producto en detalles[]' 
+                error: 'Debe agregar al menos un producto para registrar la salida.' 
             });
         }
 
@@ -172,12 +172,13 @@ export async function createSalidaMultiple(req, res) {
 
             if (!id_producto || cantidadSalida <= 0 || isNaN(cantidadSalida)) {
                 return res.status(400).json({ 
-                    error: `Detalle ${i + 1}: Producto y Cantidad (debe ser > 0) son requeridos.` 
+                    error: `Error en la línea ${i + 1}: El producto y la cantidad (mayor a 0) son obligatorios.` 
                 });
             }
 
             const productoResult = await executeQuery(
                 `SELECT 
+                    p.nombre,
                     p.stock_actual, 
                     p.precio_venta,
                     COALESCE(
@@ -195,7 +196,7 @@ export async function createSalidaMultiple(req, res) {
             );
             
             if (productoResult.data.length === 0) {
-                return res.status(404).json({ error: `Detalle ${i + 1}: Producto no encontrado.` });
+                return res.status(404).json({ error: `El producto en la línea ${i + 1} no fue encontrado en el sistema.` });
             }
 
             const producto = productoResult.data[0];
@@ -203,7 +204,7 @@ export async function createSalidaMultiple(req, res) {
             
             if (stockActual < cantidadSalida) {
                 return res.status(400).json({ 
-                    error: `Detalle ${i + 1}: Stock insuficiente. Disponible: ${stockActual}, Solicitado: ${cantidadSalida}` 
+                    error: `Stock insuficiente para "${producto.nombre}". Solo hay ${stockActual} unidades disponibles y se solicitaron ${cantidadSalida}.` 
                 });
             }
             

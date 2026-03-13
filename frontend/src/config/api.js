@@ -562,6 +562,8 @@ export const ordenesVentaAPI = {
   
   anularDespacho: (id, idSalida) => api.delete(`/ordenes-venta/${id}/salidas/${idSalida}`),
 
+  asignarGuiaInternaASalida: (id, idSalida) => api.post(`/ordenes-venta/${id}/salidas/${idSalida}/asignar-guia-interna`),
+
   anularOrden: (id, motivo_anulacion) => 
     api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),
 

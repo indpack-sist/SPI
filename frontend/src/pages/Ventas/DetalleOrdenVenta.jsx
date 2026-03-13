@@ -56,6 +56,8 @@ function DetalleOrdenVenta() {
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   const [modalReservaStock, setModalReservaStock] = useState(false);
   const [modalFacturarSunatOpen, setModalFacturarSunatOpen] = useState(false);
+  const [modalConfirmarGuiaInterna, setModalConfirmarGuiaInterna] = useState(false);
+  const [salidaSeleccionadaGI, setSalidaSeleccionadaGI] = useState(null);
   
   const [visorArchivo, setVisorArchivo] = useState({
     open: false,
@@ -392,6 +394,35 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al anular despacho');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const extraerGuiaInterna = (observaciones) => {
+    if (!observaciones) return null;
+    const match = observaciones.match(/GI-\d{4}-\d+/);
+    return match ? match[0] : null;
+  };
+
+  const handleAsignarGuiaInterna = async () => {
+    if (!salidaSeleccionadaGI) return;
+    
+    try {
+      setProcesando(true);
+      setError(null);
+      
+      const response = await ordenesVentaAPI.asignarGuiaInternaASalida(id, salidaSeleccionadaGI);
+      
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setModalConfirmarGuiaInterna(false);
+        setSalidaSeleccionadaGI(null);
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al asignar guía interna');
     } finally {
       setProcesando(false);
     }
@@ -2438,18 +2469,32 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
                                </button>
 
                                {orden.tipo_comprobante === 'Nota de Venta' && (
-                                 <button 
-                                   className="btn btn-sm btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50" 
-                                   onClick={() => handleDescargarGuiaInternaSalida(val)} 
-                                   disabled={descargandoPDF === `gi-${val}`}
-                                   title="Descargar Guía Interna de este despacho"
-                                 >
-                                   {descargandoPDF === `gi-${val}` ? (
-                                     <div className="animate-spin rounded-full h-3 w-3 border-2 border-indigo-600"></div>
-                                   ) : (
-                                     <ClipboardList size={14}/>
-                                   )}
-                                 </button>
+                                 extraerGuiaInterna(row.observaciones) ? (
+                                   <button 
+                                     className="btn btn-sm btn-info text-white font-bold" 
+                                     onClick={() => handleDescargarGuiaInternaSalida(val)} 
+                                     disabled={descargandoPDF === `gi-${val}`}
+                                     title="Descargar Guía Interna generada"
+                                   >
+                                     {descargandoPDF === `gi-${val}` ? (
+                                       <div className="animate-spin rounded-full h-3 w-3 border-2 border-white"></div>
+                                     ) : (
+                                       extraerGuiaInterna(row.observaciones)
+                                     )}
+                                   </button>
+                                 ) : (
+                                   <button 
+                                     className="btn btn-sm btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50" 
+                                     onClick={() => {
+                                       setSalidaSeleccionadaGI(val);
+                                       setModalConfirmarGuiaInterna(true);
+                                     }} 
+                                     disabled={procesando}
+                                     title="Generar Guía Interna para este despacho"
+                                   >
+                                     <ClipboardList size={14} className="mr-1"/> Generar GI
+                                   </button>
+                                 )
                                )}
 
                                {row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
@@ -3483,6 +3528,52 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
           <button className="btn btn-primary" onClick={cerrarVisor}>
             Cerrar Visor
           </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalConfirmarGuiaInterna}
+        onClose={() => {
+          setModalConfirmarGuiaInterna(false);
+          setSalidaSeleccionadaGI(null);
+        }}
+        title="Generar Correlativo de Guía Interna"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded">
+            <div className="flex gap-3">
+              <ClipboardList className="text-indigo-600 shrink-0" size={24} />
+              <div className="text-sm text-indigo-900">
+                <p className="font-bold mb-1">¿Desea generar el correlativo para este despacho?</p>
+                <p>Se asignará el siguiente número de Guía Interna (GI) disponible de forma permanente a este despacho específico.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="alert alert-info py-2">
+            <p className="text-xs">Esta acción continuará la numeración correlativa actual de la empresa.</p>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                setModalConfirmarGuiaInterna(false);
+                setSalidaSeleccionadaGI(null);
+              }}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleAsignarGuiaInterna}
+              disabled={procesando}
+            >
+              {procesando ? 'Generando...' : 'Sí, Generar Correlativo'}
+            </button>
+          </div>
         </div>
       </Modal>
 

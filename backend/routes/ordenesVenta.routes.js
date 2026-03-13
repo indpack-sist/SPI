@@ -39,7 +39,8 @@ import {
   rechazarOrdenVerificacion,
   reenviarOrdenVerificacion,
   marcarFacturadoSunat,
-  desmarcarFacturadoSunat
+  desmarcarFacturadoSunat,
+  asignarGuiaInternaASalida
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -88,6 +89,7 @@ router.put('/:id/rectificar', verificarToken, verificarOrdenAprobada, rectificar
 router.delete('/:id/anular', verificarToken, verificarOrdenAprobada, anularOrdenVenta);
 
 router.post('/:id/despacho', verificarToken, verificarOrdenAprobada, registrarDespacho);
+router.post('/:id/salidas/:idSalida/asignar-guia-interna', verificarToken, verificarOrdenAprobada, asignarGuiaInternaASalida);
 router.get('/:id/salidas', verificarToken, getSalidasOrden);
 router.delete('/:id/salidas/:idSalida', verificarToken, verificarOrdenAprobada, anularDespacho);
 

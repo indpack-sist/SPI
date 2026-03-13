@@ -1241,47 +1241,7 @@ export async function registrarDespacho(req, res) {
       });
     }
 
-    // Generar correlativo de Guía Interna si es Nota de Venta (Búsqueda inteligente doble)
-    let numeroGuiaInterna = null;
-    if (orden.tipo_comprobante === 'Nota de Venta') {
-        const year = new Date().getFullYear();
-        
-        // 1. Buscar en Salidas (Despachos parciales nuevos)
-        const ultimaGuiaSalida = await executeQuery(`
-            SELECT observaciones 
-            FROM salidas 
-            WHERE observaciones LIKE ? 
-            ORDER BY id_salida DESC LIMIT 1
-        `, [`GI-${year}-%`]);
-
-        // 2. Buscar en Ordenes de Venta (Histórico global)
-        const ultimaGuiaOV = await executeQuery(`
-            SELECT numero_guia_interna
-            FROM ordenes_venta
-            WHERE numero_guia_interna LIKE ?
-            ORDER BY id_orden_venta DESC LIMIT 1
-        `, [`GI-${year}-%`]);
-
-        let secSalida = 0;
-        let secOV = 0;
-
-        // Extraer secuencia de Salidas
-        if (ultimaGuiaSalida.success && ultimaGuiaSalida.data.length > 0) {
-            const match = ultimaGuiaSalida.data[0].observaciones.match(/GI-\d{4}-(\d+)/);
-            if (match) secSalida = parseInt(match[1]);
-        }
-
-        // Extraer secuencia de Ordenes de Venta
-        if (ultimaGuiaOV.success && ultimaGuiaOV.data.length > 0) {
-            const match = ultimaGuiaOV.data[0].numero_guia_interna.match(/GI-\d{4}-(\d+)/);
-            if (match) secOV = parseInt(match[1]);
-        }
-
-        // El siguiente número será el máximo de ambos + 1
-        const secuenciaFinal = Math.max(secSalida, secOV) + 1;
-        numeroGuiaInterna = `GI-${year}-${String(secuenciaFinal).padStart(4, '0')}`;
-    }
-
+    // Ya no generamos el correlativo aquí, ahora es manual
     const resultCabecera = await executeTransaction([{
       sql: `INSERT INTO salidas (
         id_tipo_inventario, tipo_movimiento, id_cliente, total_costo,
@@ -1290,9 +1250,7 @@ export async function registrarDespacho(req, res) {
       params: [
         3, 'Venta', orden.id_cliente, totalCosto, totalPrecio,
         orden.moneda, id_usuario,
-        numeroGuiaInterna 
-          ? `${numeroGuiaInterna} - Despacho Orden ${orden.numero_orden}`
-          : `Despacho Orden ${orden.numero_orden}`,
+        `Despacho Orden ${orden.numero_orden}`,
         'Activo', fecha_despacho || getFechaPeru()
       ]
     }]);
@@ -3786,6 +3744,120 @@ export async function desmarcarFacturadoSunat(req, res) {
 
   } catch (error) {
     console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function asignarGuiaInternaASalida(req, res) {
+  try {
+    const { id, idSalida } = req.params;
+
+    // 1. Verificar existencia de la orden y que sea Nota de Venta
+    const ordenResult = await executeQuery(
+      'SELECT id_orden_venta, numero_orden, tipo_comprobante, numero_guia_interna FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.tipo_comprobante !== 'Nota de Venta') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'La Guía Interna solo se puede generar para Notas de Venta.' 
+      });
+    }
+
+    // 2. Verificar existencia del despacho
+    const salidaResult = await executeQuery(
+      'SELECT id_salida, observaciones FROM salidas WHERE id_salida = ?',
+      [idSalida]
+    );
+
+    if (!salidaResult.success || salidaResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Despacho no encontrado' });
+    }
+
+    const salida = salidaResult.data[0];
+
+    // 3. Verificar si ya tiene una guía asignada
+    const matchExistente = salida.observaciones.match(/GI-\d{4}-\d+/);
+    if (matchExistente) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Este despacho ya tiene asignada la guía ${matchExistente[0]}` 
+      });
+    }
+
+    // 4. Búsqueda Inteligente Doble del Correlativo (Lógica MAX + 1)
+    const year = new Date().getFullYear();
+    
+    // Buscar en Salidas
+    const ultimaGuiaSalida = await executeQuery(`
+        SELECT observaciones 
+        FROM salidas 
+        WHERE observaciones LIKE ? 
+        ORDER BY id_salida DESC LIMIT 1
+    `, [`GI-${year}-%`]);
+
+    // Buscar en Ordenes de Venta
+    const ultimaGuiaOV = await executeQuery(`
+        SELECT numero_guia_interna
+        FROM ordenes_venta
+        WHERE numero_guia_interna LIKE ?
+        ORDER BY id_orden_venta DESC LIMIT 1
+    `, [`GI-${year}-%`]);
+
+    let secSalida = 0;
+    let secOV = 0;
+
+    if (ultimaGuiaSalida.success && ultimaGuiaSalida.data.length > 0) {
+        const match = ultimaGuiaSalida.data[0].observaciones.match(/GI-\d{4}-(\d+)/);
+        if (match) secSalida = parseInt(match[1]);
+    }
+
+    if (ultimaGuiaOV.success && ultimaGuiaOV.data.length > 0) {
+        const match = ultimaGuiaOV.data[0].numero_guia_interna.match(/GI-\d{4}-(\d+)/);
+        if (match) secOV = parseInt(match[1]);
+    }
+
+    const secuenciaFinal = Math.max(secSalida, secOV) + 1;
+    const numeroGuiaInterna = `GI-${year}-${String(secuenciaFinal).padStart(4, '0')}`;
+
+    // 5. Actualizar despacho y orden
+    // Si la observación original es 'Despacho Orden OV-XXXX', ahora será 'GI-2026-0025 - Despacho Orden OV-XXXX'
+    const nuevaObservacion = `${numeroGuiaInterna} - ${salida.observaciones}`;
+    
+    const queries = [
+      {
+        sql: 'UPDATE salidas SET observaciones = ? WHERE id_salida = ?',
+        params: [nuevaObservacion, idSalida]
+      },
+      {
+        sql: 'UPDATE ordenes_venta SET numero_guia_interna = ? WHERE id_orden_venta = ?',
+        params: [numeroGuiaInterna, id]
+      }
+    ];
+
+    const resultUpdate = await executeTransaction(queries);
+
+    if (!resultUpdate.success) {
+      return res.status(500).json({ success: false, error: resultUpdate.error });
+    }
+
+    res.json({
+      success: true,
+      message: `Guía Interna ${numeroGuiaInterna} generada exitosamente`,
+      data: {
+        numero_guia_interna: numeroGuiaInterna
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en asignarGuiaInternaASalida:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

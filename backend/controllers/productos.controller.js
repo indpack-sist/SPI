@@ -46,7 +46,7 @@ export async function getAllProductos(req, res) {
     const result = await executeQuery(sql, params);
     
     if (!result.success) {
-      return res.status(500).json({ error: result.error });
+      return res.status(500).json({ error: 'No se pudieron obtener los productos. Por favor, intente de nuevo.' });
     }
     
     res.json({
@@ -55,7 +55,7 @@ export async function getAllProductos(req, res) {
       total: result.data.length
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Error al cargar la lista de productos: ' + error.message });
   }
 }
 
@@ -80,11 +80,11 @@ export async function getProductoById(req, res) {
     const result = await executeQuery(sql, [id]);
     
     if (!result.success) {
-      return res.status(500).json({ error: result.error });
+      return res.status(500).json({ error: 'Error al consultar los detalles del producto.' });
     }
     
     if (result.data.length === 0) {
-      return res.status(404).json({ error: 'Producto no encontrado' });
+      return res.status(404).json({ error: 'El producto solicitado no existe o fue eliminado.' });
     }
     
     res.json({
@@ -189,7 +189,7 @@ export async function createProducto(req, res) {
     
     if (!codigo || !nombre || !id_tipo_inventario || !unidad_medida) {
       return res.status(400).json({ 
-        error: 'codigo, nombre, id_tipo_inventario y unidad_medida son requeridos' 
+        error: 'Faltan campos obligatorios (Código, Nombre, Inventario o Unidad) para registrar el producto.' 
       });
     }
     
@@ -199,7 +199,7 @@ export async function createProducto(req, res) {
     );
     
     if (checkCodigo.data.length > 0) {
-      return res.status(400).json({ error: 'El código ya está registrado' });
+      return res.status(400).json({ error: `El código "${codigo}" ya se encuentra registrado para otro producto.` });
     }
     
     const result = await executeQuery(

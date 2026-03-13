@@ -91,7 +91,7 @@ export const crearProductoMultiInventario = async (req, res, next) => {
     );
 
     if (productoOriginal.length === 0) {
-      throw new AppError('Producto original no encontrado', 404);
+      throw new AppError('El producto original que intenta duplicar no fue encontrado.', 404);
     }
 
     const producto = productoOriginal[0];
@@ -103,7 +103,7 @@ export const crearProductoMultiInventario = async (req, res, next) => {
       );
 
       if (existeCodigo.length > 0) {
-        throw new AppError('Ya existe un producto con ese código', 400);
+        throw new AppError(`El código "${codigo_nuevo || `${producto.codigo}-${id_tipo_inventario_destino}`}" ya está en uso por otro producto activo.`, 400);
       }
 
       const [result] = await connection.query(`

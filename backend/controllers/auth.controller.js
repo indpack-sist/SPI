@@ -10,7 +10,7 @@ export const login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Email y contraseña son requeridos'
+        error: 'Por favor, ingrese su correo electrónico y su contraseña.'
       });
     }
 
@@ -23,7 +23,7 @@ export const login = async (req, res) => {
       console.log('❌ Usuario no encontrado:', email);
       return res.status(401).json({
         success: false,
-        error: 'Credenciales inválidas'
+        error: 'Las credenciales ingresadas son incorrectas. Por favor, verifícalas e intenta nuevamente.'
       });
     }
 
@@ -40,15 +40,15 @@ export const login = async (req, res) => {
       console.log('❌ Contraseña incorrecta para:', email);
       return res.status(401).json({
         success: false,
-        error: 'Credenciales inválidas'
+        error: 'La contraseña es incorrecta. Por favor, verifícala e intenta nuevamente.'
       });
     }
 
     if (!empleado.rol) {
       console.error('❌ CRÍTICO: Empleado sin rol en BD:', empleado.id_empleado);
-      return res.status(500).json({
+      return res.status(401).json({
         success: false,
-        error: 'Usuario sin rol asignado. Contacte al administrador.'
+        error: 'Su cuenta no tiene un rol asignado. Por favor, contacte al administrador del sistema.'
       });
     }
 

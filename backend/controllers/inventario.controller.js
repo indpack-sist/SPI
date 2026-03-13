@@ -60,7 +60,7 @@ export async function getResumenStockInventario(_req, res) {
     const result = await executeQuery(sql);
     
     if (!result.success) {
-      return res.status(500).json({ error: result.error });
+      return res.status(500).json({ error: 'No se pudo obtener el resumen de stock del inventario. Por favor, intente de nuevo.' });
     }
     
     const data = result.data.map(row => ({
@@ -75,6 +75,6 @@ export async function getResumenStockInventario(_req, res) {
       data: data
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Error al procesar la información de inventario: ' + error.message });
   }
 }

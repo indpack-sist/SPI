@@ -592,7 +592,11 @@ function DetalleOrdenVenta() {
       });
 
       if (response.data.success) {
-        setSuccess(`Comprobante asignado: ${response.data.data.numero_comprobante}`);
+        const mensajeExito = tipo === 'Factura' 
+          ? 'Factura asignada correctamente' 
+          : `Comprobante asignado: ${response.data.data.numero_comprobante}`;
+          
+        setSuccess(mensajeExito);
         setModalAsignarComprobante(false);
         setModalEditarComprobante(false);
         setNuevoTipoComprobante('');
@@ -2986,7 +2990,7 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
               <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
               <div className="text-sm text-amber-800">
                 <p className="font-bold mb-1">Asignación inicial de comprobante</p>
-                <p>Seleccione el tipo de documento que se emitirá para esta orden. Se generará el correlativo automáticamente. Esta acción solo puede realizarse una vez.</p>
+                <p>Seleccione el tipo de documento que se emitirá para esta orden. Esta acción solo puede realizarse una vez.</p>
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Eye, BookOpen, ClipboardCheck, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { productosAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
@@ -10,6 +11,7 @@ import ModalConteoFisico from '../../components/Productos/ModalConteoFisico';
 
 function Productos() {
   const navigate = useNavigate();
+  const { tienePermiso } = usePermisos();
   const [productos, setProductos] = useState([]);
   const [tiposInventario, setTiposInventario] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -25,6 +27,8 @@ function Productos() {
 
   const [modalConteoOpen, setModalConteoOpen] = useState(false);
   const [productoConteo, setProductoConteo] = useState(null);
+
+  const canSeePrices = tienePermiso('verPrecios');
 
   const [formData, setFormData] = useState({
     codigo: '',
@@ -225,24 +229,26 @@ function Productos() {
       align: 'right',
       render: (value) => formatearPeso(value)
     },
-    {
-      header: 'CUP (S/)',
-      accessor: 'costo_unitario_promedio',
-      align: 'right',
-      render: (value) => formatearMoneda(value, 'PEN')
-    },
-    {
-      header: 'CUP ($)',
-      accessor: 'costo_unitario_promedio_usd',
-      align: 'right',
-      render: (value) => formatearMoneda(value, 'USD')
-    },
-    {
-      header: 'Precio Venta',
-      accessor: 'precio_venta',
-      align: 'right',
-      render: (value) => formatearMoneda(value, 'PEN')
-    },
+    ...(canSeePrices ? [
+      {
+        header: 'CUP (S/)',
+        accessor: 'costo_unitario_promedio',
+        align: 'right',
+        render: (value) => formatearMoneda(value, 'PEN')
+      },
+      {
+        header: 'CUP ($)',
+        accessor: 'costo_unitario_promedio_usd',
+        align: 'right',
+        render: (value) => formatearMoneda(value, 'USD')
+      },
+      {
+        header: 'Precio Venta',
+        accessor: 'precio_venta',
+        align: 'right',
+        render: (value) => formatearMoneda(value, 'PEN')
+      }
+    ] : []),
     {
       header: 'Recetas',
       accessor: 'requiere_receta',
@@ -331,7 +337,7 @@ function Productos() {
     return <Loading message="Cargando productos..." />;
   }
 
-  const mostrarPrecioVenta = esProductoVendible(formData.id_tipo_inventario);
+  const mostrarPrecioVenta = canSeePrices && esProductoVendible(formData.id_tipo_inventario);
 
   return (
     <div>

@@ -12,13 +12,17 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import { entradasAPI, productosAPI, proveedoresAPI, empleadosAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 
 function Entradas() {
+  const { tienePermiso } = usePermisos();
   const [entradas, setEntradas] = useState([]);
+  
+  const canSeePrices = tienePermiso('verPrecios');
   const [productos, setProductos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
   const [empleados, setEmpleados] = useState([]);
@@ -586,36 +590,40 @@ function Entradas() {
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Moneda *</label>
-              <select
-                className="form-select"
-                value={formData.moneda}
-                onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
-                required
-              >
-                <option value="PEN">Soles (S/)</option>
-                <option value="USD">Dólares ($)</option>
-                <option value="EUR">Euros (€)</option>
-              </select>
-            </div>
-
-            {formData.moneda !== 'PEN' && (
-                <div className="form-group animate-in fade-in slide-in-from-top-2">
-                    <label className="form-label text-blue-600 flex items-center gap-1">
-                        <ArrowRightLeft size={14} /> Tipo de Cambio *
-                    </label>
-                    <input
-                        type="number"
-                        className="form-input border-blue-300 bg-blue-50 text-blue-800 font-bold"
-                        value={formData.tipo_cambio}
-                        onChange={(e) => setFormData({ ...formData, tipo_cambio: e.target.value })}
-                        placeholder="Ej: 3.75"
-                        step="0.0001"
-                        min="0.0001"
-                        required
-                    />
+            {canSeePrices && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Moneda *</label>
+                  <select
+                    className="form-select"
+                    value={formData.moneda}
+                    onChange={(e) => setFormData({ ...formData, moneda: e.target.value })}
+                    required
+                  >
+                    <option value="PEN">Soles (S/)</option>
+                    <option value="USD">Dólares ($)</option>
+                    <option value="EUR">Euros (€)</option>
+                  </select>
                 </div>
+
+                {formData.moneda !== 'PEN' && (
+                    <div className="form-group animate-in fade-in slide-in-from-top-2">
+                        <label className="form-label text-blue-600 flex items-center gap-1">
+                            <ArrowRightLeft size={14} /> Tipo de Cambio *
+                        </label>
+                        <input
+                            type="number"
+                            className="form-input border-blue-300 bg-blue-50 text-blue-800 font-bold"
+                            value={formData.tipo_cambio}
+                            onChange={(e) => setFormData({ ...formData, tipo_cambio: e.target.value })}
+                            placeholder="Ej: 3.75"
+                            step="0.0001"
+                            min="0.0001"
+                            required
+                        />
+                    </div>
+                )}
+              </>
             )}
           </div>
 
@@ -691,19 +699,21 @@ function Entradas() {
                         />
                       </div>
 
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label className="form-label">Costo Unitario</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          className="form-input"
-                          value={detalle.costo_unitario}
-                          onChange={(e) => actualizarDetalle(index, 'costo_unitario', e.target.value)}
-                          required
-                          placeholder="0.00"
-                          disabled={editando && editando.num_productos > 1}
-                        />
-                      </div>
+                      {canSeePrices && (
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">Costo Unitario</label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            className="form-input"
+                            value={detalle.costo_unitario}
+                            onChange={(e) => actualizarDetalle(index, 'costo_unitario', e.target.value)}
+                            required
+                            placeholder="0.00"
+                            disabled={editando && editando.num_productos > 1}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {!editando && detalles.length > 1 && (
@@ -724,7 +734,7 @@ function Entradas() {
                     )}
                   </div>
 
-                  {detalle.cantidad && detalle.costo_unitario && (
+                  {canSeePrices && detalle.cantidad && detalle.costo_unitario && (
                     <div className="mt-2 text-sm text-muted">
                       Subtotal: <strong>{formatearMoneda(parseFloat(detalle.cantidad) * parseFloat(detalle.costo_unitario), formData.moneda)}</strong>
                     </div>
@@ -745,7 +755,7 @@ function Entradas() {
             />
           </div>
 
-          {detalles.some(d => d.cantidad && d.costo_unitario) && (
+          {canSeePrices && detalles.some(d => d.cantidad && d.costo_unitario) && (
             <div className="alert alert-info">
               <strong>Costo Total de la Entrada:</strong> {formatearMoneda(calcularCostoTotal(), formData.moneda)}
             </div>

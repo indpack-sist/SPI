@@ -1878,11 +1878,85 @@ export async function cancelarOrden(req, res) {
     await executeTransaction(queriesDetalle);
     
     res.json({ success: true, message: 'Orden cancelada y materiales devueltos al inventario' });
-  } catch (error) {
+    } catch (error) {
     res.status(500).json({ error: error.message });
-  }
-}
-export async function completarAsignacionOP(req, res) {
+    }
+    }
+
+    export async function verificarCalidad(req, res) {
+    try {
+    const { id } = req.params;
+    const { nombre_completo, rol } = req.user;
+
+    if (rol !== 'Calidad' && rol !== 'Administrador') {
+      return res.status(403).json({
+        success: false,
+        error: 'Solo el personal de Calidad puede realizar esta verificación.'
+      });
+    }
+
+    const ordenResult = await executeQuery(
+      'SELECT id_orden, estado, observaciones, numero_orden FROM ordenes_produccion WHERE id_orden = ?',
+      [id]
+    );
+
+    if (ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada.' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.estado !== 'Finalizada') {
+      return res.status(400).json({
+        success: false,
+        error: 'Solo se pueden verificar órdenes en estado Finalizada.'
+      });
+    }
+
+    if (orden.observaciones && orden.observaciones.includes('[VERIFICACIÓN CALIDAD]')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Esta orden ya ha sido verificada por calidad.'
+      });
+    }
+
+    const fechaActual = new Date().toLocaleString('es-PE', { 
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+
+    const marcaVerificacion = `\n\n[VERIFICACIÓN CALIDAD] Verificado por: ${nombre_completo} el ${fechaActual}`;
+    const nuevasObservaciones = (orden.observaciones || '') + marcaVerificacion;
+
+    const updateResult = await executeQuery(
+      'UPDATE ordenes_produccion SET observaciones = ? WHERE id_orden = ?',
+      [nuevasObservaciones, id]
+    );
+
+    if (!updateResult.success) {
+      return res.status(500).json({ success: false, error: updateResult.error });
+    }
+
+    res.json({
+      success: true,
+      message: 'Verificación de calidad registrada exitosamente.',
+      data: {
+        observaciones: nuevasObservaciones
+      }
+    });
+
+    } catch (error) {
+    console.error('Error en verificarCalidad:', error);
+    res.status(500).json({ success: false, error: error.message });
+    }
+    }
+
+    export async function anularOrden(req, res) {
   try {
     const { id } = req.params;
     const {

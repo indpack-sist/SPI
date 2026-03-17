@@ -11,13 +11,17 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { salidasAPI, productosAPI, clientesAPI, flotaAPI, empleadosAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 
 function Salidas() {
+  const { tienePermiso } = usePermisos();
   const [salidas, setSalidas] = useState([]);
+  
+  const canSeePrices = tienePermiso('verPrecios');
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
@@ -415,12 +419,14 @@ function Salidas() {
       accessor: 'destino_final',
       render: (value, row) => value || row.departamento || '-'
     },
-    {
-      header: 'Precio Total',
-      accessor: 'total_precio', 
-      align: 'right',
-      render: (value, row) => value ? formatearMoneda(value, row.moneda) : '-'
-    },
+    ...(canSeePrices ? [
+      {
+        header: 'Precio Total',
+        accessor: 'total_precio', 
+        align: 'right',
+        render: (value, row) => value ? formatearMoneda(value, row.moneda) : '-'
+      }
+    ] : []),
     {
       header: 'Estado',
       accessor: 'estado',
@@ -681,7 +687,7 @@ function Salidas() {
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            {esVenta && (
+            {canSeePrices && esVenta && (
               <div className="form-group">
                 <label className="form-label">Moneda *</label>
                 <select
@@ -786,7 +792,7 @@ function Salidas() {
                         />
                       </div>
 
-                      {esVenta && (
+                      {canSeePrices && esVenta && (
                         <div className="form-group" style={{ marginBottom: 0 }}>
                           <label className="form-label">Precio Unitario</label>
                           <input
@@ -820,7 +826,7 @@ function Salidas() {
                       )}
                   </div>
 
-                  {esVenta && detalle.cantidad && detalle.precio_unitario && (
+                  {canSeePrices && esVenta && detalle.cantidad && detalle.precio_unitario && (
                     <div className="mt-2 text-sm text-muted">
                       Subtotal: <strong>{formatearMoneda(parseFloat(detalle.cantidad) * parseFloat(detalle.precio_unitario), formData.moneda)}</strong>
                     </div>
@@ -841,7 +847,7 @@ function Salidas() {
             />
           </div>
 
-          {esVenta && detalles.some(d => d.cantidad && d.precio_unitario) && (
+          {canSeePrices && esVenta && detalles.some(d => d.cantidad && d.precio_unitario) && (
             <div className="alert alert-info">
               <strong>Precio Total de la Venta:</strong> {formatearMoneda(calcularPrecioTotal(), formData.moneda)}
             </div>

@@ -21,7 +21,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true
+      reportes: true,
+      verPrecios: true
     },
     api: {
       dashboard: true,
@@ -65,7 +66,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false
+      reportes: false,
+      verPrecios: false
     },
     api: {
       dashboard: false,
@@ -241,7 +243,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
-      reportes: false
+      reportes: false,
+      verPrecios: false
     },
     api: {
       dashboard: false,

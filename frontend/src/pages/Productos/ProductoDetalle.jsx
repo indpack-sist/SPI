@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Package, Copy, Star, Clock, CheckCircle, XCircle, History, TrendingUp, TrendingDown, ArrowRightLeft, Factory, AlertTriangle, Info, DollarSign } from 'lucide-react';
 import { productosAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
@@ -11,6 +12,7 @@ import './ProductoDetalle.css';
 function ProductoDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { tienePermiso } = usePermisos();
   
   const [producto, setProducto] = useState(null);
   const [recetas, setRecetas] = useState([]);
@@ -30,6 +32,8 @@ function ProductoDetalle() {
   const [editandoInsumo, setEditandoInsumo] = useState(null);
   const [cupCalculado, setCupCalculado] = useState(null);
   const [evolucionCUP, setEvolucionCUP] = useState(null);
+
+  const canSeePrices = tienePermiso('verPrecios');
   
   const [formReceta, setFormReceta] = useState({
     id_producto_terminado: id,
@@ -416,35 +420,37 @@ function ProductoDetalle() {
         </div>
       )
     },
-    {
-      header: 'CUP',
-      accessor: 'costo_unitario_promedio',
-      align: 'right',
-      width: '110px',
-      render: (value) => {
-        const cup = parseFloat(value || 0);
-        return (
-          <div className="cup-cell">
-            {cup > 0 ? (
-              formatearMoneda(value)
-            ) : (
-              <span className="cup-sin-valor">Sin CUP</span>
-            )}
+    ...(canSeePrices ? [
+      {
+        header: 'CUP',
+        accessor: 'costo_unitario_promedio',
+        align: 'right',
+        width: '110px',
+        render: (value) => {
+          const cup = parseFloat(value || 0);
+          return (
+            <div className="cup-cell">
+              {cup > 0 ? (
+                formatearMoneda(value)
+              ) : (
+                <span className="cup-sin-valor">Sin CUP</span>
+              )}
+            </div>
+          );
+        }
+      },
+      {
+        header: 'Costo Total',
+        accessor: 'costo_total_insumo',
+        align: 'right',
+        width: '120px',
+        render: (value) => (
+          <div className="costo-total-cell">
+            {formatearMoneda(value)}
           </div>
-        );
+        )
       }
-    },
-    {
-      header: 'Costo Total',
-      accessor: 'costo_total_insumo',
-      align: 'right',
-      width: '120px',
-      render: (value) => (
-        <div className="costo-total-cell">
-          {formatearMoneda(value)}
-        </div>
-      )
-    },
+    ] : []),
     {
       header: 'Stock Disponible',
       accessor: 'stock_actual',
@@ -547,38 +553,40 @@ function ProductoDetalle() {
         <div className="cantidad-historial">{parseFloat(value).toFixed(2)}</div>
       )
     },
-    {
-      header: 'Moneda',
-      accessor: 'moneda',
-      align: 'center',
-      width: '90px',
-      render: (value) => {
-        const colores = {
-          'PEN': 'badge-primary',
-          'USD': 'badge-success',
-          'EUR': 'badge-warning'
-        };
-        return <span className={`badge ${colores[value] || 'badge-secondary'}`}>{value}</span>;
+    ...(canSeePrices ? [
+      {
+        header: 'Moneda',
+        accessor: 'moneda',
+        align: 'center',
+        width: '90px',
+        render: (value) => {
+          const colores = {
+            'PEN': 'badge-primary',
+            'USD': 'badge-success',
+            'EUR': 'badge-warning'
+          };
+          return <span className={`badge ${colores[value] || 'badge-secondary'}`}>{value}</span>;
+        }
+      },
+      {
+        header: 'Costo Unit.',
+        accessor: 'costo_unitario',
+        align: 'right',
+        width: '110px',
+        render: (value, row) => (
+          <div className="costo-unitario-text">{formatearMoneda(value, row.moneda)}</div>
+        )
+      },
+      {
+        header: 'Costo Total',
+        accessor: 'costo_total',
+        align: 'right',
+        width: '120px',
+        render: (value, row) => (
+          <div className="costo-total-historial">{formatearMoneda(value, row.moneda)}</div>
+        )
       }
-    },
-    {
-      header: 'Costo Unit.',
-      accessor: 'costo_unitario',
-      align: 'right',
-      width: '110px',
-      render: (value, row) => (
-        <div className="costo-unitario-text">{formatearMoneda(value, row.moneda)}</div>
-      )
-    },
-    {
-      header: 'Costo Total',
-      accessor: 'costo_total',
-      align: 'right',
-      width: '120px',
-      render: (value, row) => (
-        <div className="costo-total-historial">{formatearMoneda(value, row.moneda)}</div>
-      )
-    },
+    ] : []),
     {
       header: 'Registrado Por',
       accessor: 'registrado_por',
@@ -673,114 +681,118 @@ function ProductoDetalle() {
                 <span className="info-label">Stock Máximo:</span>
                 <span className="info-value">{parseFloat(producto.stock_maximo).toFixed(2)}</span>
               </div>
-              <div className="info-row">
-                <span className="info-label">Valor en Stock:</span>
-                <span className="info-value valor-destacado">
-                  {formatearMoneda(
-                    parseFloat(producto.stock_actual) * (cupCalculado?.cup_calculado || parseFloat(producto.costo_unitario_promedio || 0))
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="info-card">
-            <div className="info-card-header">
-              <h3>Costos y Precios</h3>
-            </div>
-            <div className="info-card-body">
-              <div className="grid grid-cols-2 gap-4 mb-4 bg-gray-50 p-3 rounded border border-gray-100">
-                <div>
-                  <span className="text-xs text-muted block mb-1">CUP Inventario (Soles)</span>
-                  <div className="font-bold text-lg text-primary">
-                    {formatearMoneda(producto.costo_unitario_promedio, 'PEN')}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-muted block mb-1">CUP Inventario (Dólares)</span>
-                  <div className="font-bold text-lg text-success flex items-center gap-1">
-                    <DollarSign size={16} />
-                    {parseFloat(producto.costo_unitario_promedio_usd || 0).toFixed(4)}
-                  </div>
-                </div>
-              </div>
-
-              {cupCalculado?.cup_calculado > 0 ? (
-                <div className="cup-principal">
-                  <span className="cup-label">
-                    {cupCalculado?.origen === 'promedio_ponderado' && 'CUP Teórico (Promedio Ponderado)'}
-                    {cupCalculado?.origen === 'receta_teorica' && 'CUP Teórico (Receta)'}
-                    {!cupCalculado?.origen && 'Costo Teórico'}
-                  </span>
-                  <div className="cup-valor-grande text-sm text-gray-500">
-                    {formatearMoneda(cupCalculado.cup_calculado)}
-                  </div>
-                  
-                  {cupCalculado?.origen === 'promedio_ponderado' && (
-                    <>
-                      <div className="cup-info success">
-                        <CheckCircle size={14} />
-                        <span>
-                          Calculado de {cupCalculado.detalle?.total_producciones} producciones
-                        </span>
-                      </div>
-
-                      {evolucionCUP?.evolucion?.length > 0 && (
-                        <details className="cup-desglose" open>
-                          <summary>Histórico de Costos</summary>
-                          <div className="cup-evolucion-tabla">
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>Fecha</th>
-                                  <th>Cant.</th>
-                                  <th>CUP</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {evolucionCUP.evolucion.slice(0, 5).map((item, idx) => (
-                                  <tr key={idx}>
-                                    <td>{new Date(item.fecha).toLocaleDateString('es-PE')}</td>
-                                    <td className="text-right">{item.cantidad}</td>
-                                    <td className="text-right">{formatearMoneda(item.cup_produccion)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </details>
-                      )}
-                    </>
-                  )}
-                  
-                  {cupCalculado?.origen === 'receta_teorica' && (
-                    <div className="cup-info warning">
-                      <Info size={14} />
-                      <span>Basado en receta "{cupCalculado.receta_usada}"</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-sm text-muted text-center py-2">
-                  Sin cálculo teórico disponible
-                </div>
-              )}
-
-              <div className="info-row mt-3 border-t pt-2">
-                <span className="info-label">Precio Venta:</span>
-                <span className="info-value text-lg font-bold">{formatearMoneda(producto.precio_venta)}</span>
-              </div>
-
-              {cupCalculado?.cup_calculado > 0 && producto.precio_venta > 0 && (
+              {canSeePrices && (
                 <div className="info-row">
-                  <span className="info-label">Margen Bruto:</span>
+                  <span className="info-label">Valor en Stock:</span>
                   <span className="info-value valor-destacado">
-                    {(((parseFloat(producto.precio_venta) - cupCalculado.cup_calculado) / parseFloat(producto.precio_venta)) * 100).toFixed(2)}%
+                    {formatearMoneda(
+                      parseFloat(producto.stock_actual) * (cupCalculado?.cup_calculado || parseFloat(producto.costo_unitario_promedio || 0))
+                    )}
                   </span>
                 </div>
               )}
             </div>
           </div>
+
+          {canSeePrices && (
+            <div className="info-card">
+              <div className="info-card-header">
+                <h3>Costos y Precios</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="grid grid-cols-2 gap-4 mb-4 bg-gray-50 p-3 rounded border border-gray-100">
+                  <div>
+                    <span className="text-xs text-muted block mb-1">CUP Inventario (Soles)</span>
+                    <div className="font-bold text-lg text-primary">
+                      {formatearMoneda(producto.costo_unitario_promedio, 'PEN')}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted block mb-1">CUP Inventario (Dólares)</span>
+                    <div className="font-bold text-lg text-success flex items-center gap-1">
+                      <DollarSign size={16} />
+                      {parseFloat(producto.costo_unitario_promedio_usd || 0).toFixed(4)}
+                    </div>
+                  </div>
+                </div>
+
+                {cupCalculado?.cup_calculado > 0 ? (
+                  <div className="cup-principal">
+                    <span className="cup-label">
+                      {cupCalculado?.origen === 'promedio_ponderado' && 'CUP Teórico (Promedio Ponderado)'}
+                      {cupCalculado?.origen === 'receta_teorica' && 'CUP Teórico (Receta)'}
+                      {!cupCalculado?.origen && 'Costo Teórico'}
+                    </span>
+                    <div className="cup-valor-grande text-sm text-gray-500">
+                      {formatearMoneda(cupCalculado.cup_calculado)}
+                    </div>
+                    
+                    {cupCalculado?.origen === 'promedio_ponderado' && (
+                      <>
+                        <div className="cup-info success">
+                          <CheckCircle size={14} />
+                          <span>
+                            Calculado de {cupCalculado.detalle?.total_producciones} producciones
+                          </span>
+                        </div>
+
+                        {evolucionCUP?.evolucion?.length > 0 && (
+                          <details className="cup-desglose" open>
+                            <summary>Histórico de Costos</summary>
+                            <div className="cup-evolucion-tabla">
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>Fecha</th>
+                                    <th>Cant.</th>
+                                    <th>CUP</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {evolucionCUP.evolucion.slice(0, 5).map((item, idx) => (
+                                    <tr key={idx}>
+                                      <td>{new Date(item.fecha).toLocaleDateString('es-PE')}</td>
+                                      <td className="text-right">{item.cantidad}</td>
+                                      <td className="text-right">{formatearMoneda(item.cup_produccion)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </details>
+                        )}
+                      </>
+                    )}
+                    
+                    {cupCalculado?.origen === 'receta_teorica' && (
+                      <div className="cup-info warning">
+                        <Info size={14} />
+                        <span>Basado en receta "{cupCalculado.receta_usada}"</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted text-center py-2">
+                    Sin cálculo teórico disponible
+                  </div>
+                )}
+
+                <div className="info-row mt-3 border-t pt-2">
+                  <span className="info-label">Precio Venta:</span>
+                  <span className="info-value text-lg font-bold">{formatearMoneda(producto.precio_venta)}</span>
+                </div>
+
+                {cupCalculado?.cup_calculado > 0 && producto.precio_venta > 0 && (
+                  <div className="info-row">
+                    <span className="info-label">Margen Bruto:</span>
+                    <span className="info-value valor-destacado">
+                      {(((parseFloat(producto.precio_venta) - cupCalculado.cup_calculado) / parseFloat(producto.precio_venta)) * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {producto.descripcion && (

@@ -1956,7 +1956,7 @@ export async function cancelarOrden(req, res) {
     }
     }
 
-    export async function anularOrden(req, res) {
+    export async function completarAsignacionOP(req, res) {
   try {
     const { id } = req.params;
     const {

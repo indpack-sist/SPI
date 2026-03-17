@@ -1886,7 +1886,8 @@ export async function cancelarOrden(req, res) {
     export async function verificarCalidad(req, res) {
     try {
     const { id } = req.params;
-    const { nombre_completo, rol } = req.user;
+    const nombreVerificador = req.user.nombre_completo || req.user.nombre || 'Personal de Calidad';
+    const { rol } = req.user;
 
     if (rol !== 'Calidad' && rol !== 'Administrador') {
       return res.status(403).json({

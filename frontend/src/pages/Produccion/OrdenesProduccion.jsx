@@ -201,15 +201,21 @@ function OrdenesProduccion() {
     if (!observaciones || !observaciones.includes('[VERIFICACIÓN CALIDAD]')) return null;
     
     try {
-      const parts = observaciones.split('[VERIFICACIÓN CALIDAD]');
-      const info = parts[1].split('\n')[0].trim(); // Tomar la primera línea después del tag
-      // Formato: "Verificado por: Nombre el 17/03/2026, 10:00:00"
-      const nombre = info.split('Verificado por:')[1]?.split(' el ')[0]?.trim();
-      const fecha = info.split(' el ')[1]?.trim();
+      // Regex flexible para capturar Nombre y Fecha
+      const regex = /Verificado por:\s*(.*?)\s*el\s*(.*)/i;
+      const match = observaciones.match(regex);
       
-      return { nombre, fecha };
+      if (match && match[1]) {
+        return { 
+          nombre: match[1].trim(), 
+          fecha: match[2] ? match[2].trim() : '' 
+        };
+      }
+      
+      // Fallback si el regex falla pero el tag existe
+      return { nombre: 'Verificado', fecha: '' };
     } catch (e) {
-      return { verificado: true };
+      return { nombre: 'Verificado', fecha: '' };
     }
   };
 

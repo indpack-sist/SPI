@@ -410,7 +410,7 @@ function OrdenesProduccion() {
     {
       header: 'Calidad',
       accessor: 'observaciones',
-      width: '130px',
+      width: '150px',
       align: 'center',
       render: (value) => {
         const verificacion = parseVerificacionCalidad(value);
@@ -418,12 +418,17 @@ function OrdenesProduccion() {
         
         return (
           <div className="flex flex-col items-center gap-1">
-            <div className="flex items-center gap-1 text-success font-bold text-xs bg-green-50 px-2 py-1 rounded border border-green-100">
-              <ShieldCheck size={14} />
+            <div className="flex items-center gap-1 text-success font-bold text-[10px] bg-green-50 px-2 py-1 rounded border border-green-100">
+              <ShieldCheck size={12} />
               <span>VERIFICADO</span>
             </div>
+            {verificacion.nombre && (
+              <span className="text-[10px] font-bold text-gray-700 uppercase text-center leading-tight">
+                {verificacion.nombre}
+              </span>
+            )}
             {verificacion.fecha && (
-              <span className="text-[10px] text-muted leading-tight text-center">
+              <span className="text-[9px] text-muted leading-tight text-center">
                 {verificacion.fecha.split(',')[0]}<br/>
                 {verificacion.fecha.split(',')[1]}
               </span>

@@ -381,6 +381,7 @@ export const ordenesProduccionAPI = {
   getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
   
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
+  verificarCalidad: (id) => api.post(`/produccion/ordenes/${id}/verificar-calidad`),
   
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   anular: (id) => api.post(`/produccion/ordenes/${id}/anular`),

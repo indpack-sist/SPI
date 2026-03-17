@@ -20,41 +20,47 @@ import {
   getAnalisisConsumoOrden,
   descargarHojaRutaController,
   completarAsignacionOP,
-  editarOrdenCompleta
+  editarOrdenCompleta,
+  verificarCalidad
 } from '../controllers/ordenes-produccion.controller.js';
 
 const router = express.Router();
+import { verificarToken, verificarPermiso } from '../middleware/auth.js';
 
-router.get('/', getAllOrdenes);
-router.post('/', createOrden);
+router.use(verificarToken);
 
-router.get('/auxiliar/productos-merma', getProductosMerma);
+router.get('/', verificarPermiso('ordenesProduccion'), getAllOrdenes);
+router.post('/', verificarPermiso('ordenesProduccion'), createOrden);
 
-router.get('/:id', getOrdenById);
-router.put('/:id', updateOrden);
+router.get('/auxiliar/productos-merma', verificarPermiso('ordenesProduccion'), getProductosMerma);
 
-router.get('/:id/consumo-materiales', getConsumoMaterialesOrden);
-router.get('/:id/mermas', getMermasOrden);
-router.get('/:id/pdf', generarPDFOrdenController);
+router.get('/:id', verificarPermiso('ordenesProduccion'), getOrdenById);
+router.put('/:id', verificarPermiso('ordenesProduccion'), updateOrden);
 
-router.get('/:id/registros-parciales', getRegistrosParcialesOrden);
-router.get('/:id/analisis-consumo', getAnalisisConsumoOrden);
+router.get('/:id/consumo-materiales', verificarPermiso('ordenesProduccion'), getConsumoMaterialesOrden);
+router.get('/:id/mermas', verificarPermiso('ordenesProduccion'), getMermasOrden);
+router.get('/:id/pdf', verificarPermiso('ordenesProduccion'), generarPDFOrdenController);
 
-router.put('/:id/asignar-receta-supervisor', asignarRecetaYSupervisor);
-router.put('/:id/completar-asignacion', completarAsignacionOP);
+router.get('/:id/registros-parciales', verificarPermiso('ordenesProduccion'), getRegistrosParcialesOrden);
+router.get('/:id/analisis-consumo', verificarPermiso('ordenesProduccion'), getAnalisisConsumoOrden);
 
-router.post('/:id/iniciar', iniciarProduccion);
-router.post('/:id/pausar', pausarProduccion);
-router.post('/:id/reanudar', reanudarProduccion);
+router.put('/:id/asignar-receta-supervisor', verificarPermiso('ordenesProduccion'), asignarRecetaYSupervisor);
+router.put('/:id/completar-asignacion', verificarPermiso('ordenesProduccion'), completarAsignacionOP);
 
-router.post('/:id/registrar-parcial', registrarParcial);
+router.post('/:id/iniciar', verificarPermiso('ordenesProduccion'), iniciarProduccion);
+router.post('/:id/pausar', verificarPermiso('ordenesProduccion'), pausarProduccion);
+router.post('/:id/reanudar', verificarPermiso('ordenesProduccion'), reanudarProduccion);
 
-router.post('/:id/finalizar', finalizarProduccion);
+router.post('/:id/registrar-parcial', verificarPermiso('ordenesProduccion'), registrarParcial);
 
-router.post('/:id/cancelar', cancelarOrden);
-router.post('/:id/anular', anularOrden);
+router.post('/:id/finalizar', verificarPermiso('ordenesProduccion'), finalizarProduccion);
 
-router.get('/:id/hoja-ruta', descargarHojaRutaController);
-router.put('/:id/editar-completa', editarOrdenCompleta);
+router.post('/:id/verificar-calidad', verificarPermiso('ordenesProduccion'), verificarCalidad);
+
+router.post('/:id/cancelar', verificarPermiso('ordenesProduccion'), cancelarOrden);
+router.post('/:id/anular', verificarPermiso('ordenesProduccion'), anularOrden);
+
+router.get('/:id/hoja-ruta', verificarPermiso('ordenesProduccion'), descargarHojaRutaController);
+router.put('/:id/editar-completa', verificarPermiso('ordenesProduccion'), editarOrdenCompleta);
 
 export default router;

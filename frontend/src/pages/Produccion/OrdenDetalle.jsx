@@ -6,8 +6,9 @@ import {
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
   UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit, History
+  Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit, History, ShieldCheck
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
@@ -16,6 +17,7 @@ import Loading from '../../components/UI/Loading';
 function OrdenDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [orden, setOrden] = useState(null);
   const [consumoMateriales, setConsumoMateriales] = useState([]);
@@ -856,6 +858,26 @@ function OrdenDetalle() {
     }
   };
 
+  const handleVerificarCalidad = async () => {
+    if (!window.confirm('¿Está seguro de registrar la verificación de calidad para esta orden?')) {
+      return;
+    }
+
+    try {
+      setProcesando(true);
+      setError(null);
+      const response = await ordenesProduccionAPI.verificarCalidad(id);
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setOrden({ ...orden, observaciones: response.data.data.observaciones });
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || err.error || 'Error al registrar la verificación de calidad');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const formatearNumero = (valor) => {
     return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
@@ -1104,6 +1126,19 @@ function OrdenDetalle() {
               <CheckCircle size={18} className="mr-2" /> Finalizar
             </button>
           )}
+
+          {orden.estado === 'Finalizada' && 
+           (user?.rol === 'Calidad' || user?.rol === 'Administrador') && 
+           !(orden.observaciones && orden.observaciones.includes('[VERIFICACIÓN CALIDAD]')) && (
+            <button 
+              className="btn btn-primary" 
+              onClick={handleVerificarCalidad}
+              disabled={procesando}
+            >
+              <ShieldCheck size={18} className="mr-2" /> Verificar Calidad
+            </button>
+          )}
+
           {!['Cancelada', 'Anulada'].includes(orden.estado) && (
             <button 
                 className="btn btn-danger ml-2"

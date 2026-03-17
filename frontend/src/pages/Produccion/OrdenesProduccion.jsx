@@ -26,7 +26,8 @@ import {
   UserCog,
   CalendarCheck,
   Moon,
-  Sun
+  Sun,
+  ShieldCheck
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
@@ -196,6 +197,22 @@ function OrdenesProduccion() {
   const handleNuevaOrden = () => navigate('/produccion/ordenes/nueva');
   const handleVerDetalle = (id) => navigate(`/produccion/ordenes/${id}`);
   
+  const parseVerificacionCalidad = (observaciones) => {
+    if (!observaciones || !observaciones.includes('[VERIFICACIÓN CALIDAD]')) return null;
+    
+    try {
+      const parts = observaciones.split('[VERIFICACIÓN CALIDAD]');
+      const info = parts[1].split('\n')[0].trim(); // Tomar la primera línea después del tag
+      // Formato: "Verificado por: Nombre el 17/03/2026, 10:00:00"
+      const nombre = info.split('Verificado por:')[1]?.split(' el ')[0]?.trim();
+      const fecha = info.split(' el ')[1]?.trim();
+      
+      return { nombre, fecha };
+    } catch (e) {
+      return { verificado: true };
+    }
+  };
+
   const handleDescargarPDF = async (id) => {
     try {
       await ordenesProduccionAPI.generarPDF(id);
@@ -389,6 +406,31 @@ function OrdenesProduccion() {
           )}
         </div>
       )
+    },
+    {
+      header: 'Calidad',
+      accessor: 'observaciones',
+      width: '130px',
+      align: 'center',
+      render: (value) => {
+        const verificacion = parseVerificacionCalidad(value);
+        if (!verificacion) return <span className="text-muted">-</span>;
+        
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex items-center gap-1 text-success font-bold text-xs bg-green-50 px-2 py-1 rounded border border-green-100">
+              <ShieldCheck size={14} />
+              <span>VERIFICADO</span>
+            </div>
+            {verificacion.fecha && (
+              <span className="text-[10px] text-muted leading-tight text-center">
+                {verificacion.fecha.split(',')[0]}<br/>
+                {verificacion.fecha.split(',')[1]}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Estado',

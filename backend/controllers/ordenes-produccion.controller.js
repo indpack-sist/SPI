@@ -1054,8 +1054,8 @@ export async function registrarParcial(req, res) {
     queries.push({
       sql: `INSERT INTO op_registros_produccion 
             (id_orden, cantidad_registrada, cantidad_unidades_registrada, id_registrado_por, fecha_registro, observaciones) 
-            VALUES (?, ?, ?, ?, NOW(), ?)`,
-      params: [id, cantidad_kilos, cantidad_unidades, id_registrado_por, observaciones]
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      params: [id, cantidad_kilos, cantidad_unidades, id_registrado_por, getFechaPeru(), observaciones]
     });
 
     queries.push({
@@ -1134,13 +1134,14 @@ export async function registrarParcial(req, res) {
             sql: `INSERT INTO entradas (
                 id_tipo_inventario, documento_soporte, total_costo, moneda,
                 id_registrado_por, observaciones, tipo_entrada, fecha_movimiento, estado
-            ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', NOW(), 'Activo')`,
+            ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', ?, 'Activo')`,
             params: [
                 orden.id_tipo_inventario,
                 `Parcial O.P. ${orden.numero_orden}`,
                 costoTotalParcial,
                 id_registrado_por,
-                `Ingreso parcial: ${cantidadStock} ${orden.unidad_medida}`
+                `Ingreso parcial: ${cantidadStock} ${orden.unidad_medida}`,
+                getFechaPeru()
             ]
         });
 
@@ -1212,13 +1213,14 @@ export async function registrarParcial(req, res) {
                 sql: `INSERT INTO entradas (
                     id_tipo_inventario, documento_soporte, total_costo, moneda,
                     id_registrado_por, observaciones, tipo_entrada, fecha_movimiento, estado
-                ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', NOW(), 'Activo')`,
+                ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', ?, 'Activo')`,
                 params: [
                     tipoInventarioMerma, 
                     `Merma Parcial O.P. ${orden.numero_orden}`,
                     totalCostoMermas,
                     id_registrado_por,
-                    'Ingreso por merma (Parcial)'
+                    'Ingreso por merma (Parcial)',
+                    getFechaPeru()
                 ]
             });
 
@@ -1516,12 +1518,13 @@ export async function finalizarProduccion(req, res) {
     queries.push({
       sql: `INSERT INTO op_registros_produccion 
             (id_orden, cantidad_registrada, cantidad_unidades_registrada, id_registrado_por, fecha_registro, observaciones) 
-            VALUES (?, ?, ?, ?, NOW(), ?)`,
+            VALUES (?, ?, ?, ?, ?, ?)`,
       params: [
         id, 
         cantidad_kilos_final, 
         cantidad_unidades_final, 
         id_registrado_por, 
+        getFechaPeru(),
         observaciones ? `[CIERRE] ${observaciones}` : '[CIERRE] Producción Finalizada'
       ]
     });
@@ -1590,12 +1593,12 @@ export async function finalizarProduccion(req, res) {
             SET estado = 'Finalizada', 
                 cantidad_producida = cantidad_producida + ?,
                 cantidad_unidades_producida = cantidad_unidades_producida + ?,
-                fecha_fin = NOW(), 
+                fecha_fin = ?, 
                 tiempo_total_minutos = ?, 
                 observaciones = ?,
                 costo_materiales = costo_materiales + ?
             WHERE id_orden = ?`,
-      params: [cantidad_kilos_final, cantidad_unidades_final, tiempoMinutos, observaciones, costoAdicionalCierre, id]
+      params: [cantidad_kilos_final, cantidad_unidades_final, getFechaPeru(), tiempoMinutos, observaciones, costoAdicionalCierre, id]
     });
 
     const esPorUnidad = ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'MILLAR', 'MLL'].includes(orden.unidad_medida?.toUpperCase()) || 
@@ -1617,13 +1620,14 @@ export async function finalizarProduccion(req, res) {
         sql: `INSERT INTO entradas (
           id_tipo_inventario, documento_soporte, total_costo, moneda,
           id_registrado_por, observaciones, tipo_entrada, fecha_movimiento, estado
-        ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', NOW(), 'Activo')`,
+        ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', ?, 'Activo')`,
         params: [
           orden.id_tipo_inventario,
           `Cierre O.P. ${orden.numero_orden}`,
           costoAdicionalCierre,
           id_registrado_por,
-          `Ingreso final de producción: ${cantidadParaStock} ${orden.unidad_medida}`
+          `Ingreso final de producción: ${cantidadParaStock} ${orden.unidad_medida}`,
+          getFechaPeru()
         ]
       });
 
@@ -1689,13 +1693,14 @@ export async function finalizarProduccion(req, res) {
                 sql: `INSERT INTO entradas (
                     id_tipo_inventario, documento_soporte, total_costo, moneda,
                     id_registrado_por, observaciones, tipo_entrada, fecha_movimiento, estado
-                ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', NOW(), 'Activo')`,
+                ) VALUES (?, ?, ?, 'PEN', ?, ?, 'Producción', ?, 'Activo')`,
                 params: [
                     tipoInventarioMerma, 
                     `Recuperación Merma O.P. ${orden.numero_orden}`,
                     totalCostoMermas,
                     id_registrado_por,
-                    'Ingreso por merma de producción'
+                    'Ingreso por merma de producción',
+                    getFechaPeru()
                 ]
             });
 
@@ -1931,7 +1936,7 @@ export async function cancelarOrden(req, res) {
       second: '2-digit'
     });
 
-    const marcaVerificacion = `\n\n[VERIFICACIÓN CALIDAD] Verificado por: ${nombre_completo} el ${fechaActual}`;
+    const marcaVerificacion = `\n\n[VERIFICACIÓN CALIDAD] Verificado por: ${nombreVerificador} el ${fechaActual}`;
     const nuevasObservaciones = (orden.observaciones || '') + marcaVerificacion;
 
     const updateResult = await executeQuery(
@@ -2450,13 +2455,14 @@ export async function anularOrden(req, res) {
           observaciones, 
           fecha_movimiento,
           estado
-        ) VALUES (?, 'Devolucion', ?, ?, 'PEN', ?, ?, NOW(), 'Activo')`,
+        ) VALUES (?, 'Devolucion', ?, ?, 'PEN', ?, ?, ?, 'Activo')`,
         params: [
           consumoResult.data[0].id_tipo_inventario,
           `Anulación O.P. ${orden.numero_orden}`,
           totalCostoInsumos,
           id_usuario, 
-          `Devolución de insumos por anulación de O.P. ${orden.numero_orden}`
+          `Devolución de insumos por anulación de O.P. ${orden.numero_orden}`,
+          getFechaPeru()
         ]
       });
     }
@@ -2490,11 +2496,12 @@ export async function anularOrden(req, res) {
                 observaciones, 
                 fecha_movimiento, 
                 estado
-            ) VALUES (?, 'Anulación Producción', ?, ?, NOW(), 'Activo')`,
+            ) VALUES (?, 'Anulación Producción', ?, ?, ?, 'Activo')`,
             params: [
                 orden.id_tipo_inventario, 
                 id_usuario, 
-                `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`
+                `Reversión de ingreso por anulación de O.P. ${orden.numero_orden}`,
+                getFechaPeru()
             ]
         });
     }

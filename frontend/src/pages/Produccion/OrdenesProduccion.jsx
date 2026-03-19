@@ -166,7 +166,27 @@ function OrdenesProduccion() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    // Si la fecha incluye hora (formato ISO o YYYY-MM-DD HH:mm:ss)
+    if (fecha.includes('T') || (fecha.includes(' ') && fecha.includes(':'))) {
+      return new Date(fecha).toLocaleString('es-PE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+    
+    // Si es solo fecha YYYY-MM-DD
+    const partes = fecha.split(' ')[0].split('-');
+    if (partes.length === 3) {
+      const [year, month, day] = partes;
+      return `${day}/${month}/${year}`;
+    }
+    
+    return fecha;
   };
 
   const formatearMoneda = (valor) => {

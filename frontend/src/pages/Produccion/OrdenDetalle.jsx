@@ -892,14 +892,27 @@ function OrdenDetalle() {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    if (fecha.includes('T')) {
-        return new Date(fecha).toLocaleString('es-PE', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
+    
+    // Si la fecha incluye hora (formato ISO o YYYY-MM-DD HH:mm:ss)
+    if (fecha.includes('T') || (fecha.includes(' ') && fecha.includes(':'))) {
+      return new Date(fecha).toLocaleString('es-PE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
     }
-    const [year, month, day] = fecha.split('-');
-    return `${day}/${month}/${year}`;
+    
+    // Si es solo fecha YYYY-MM-DD
+    const partes = fecha.split(' ')[0].split('-');
+    if (partes.length === 3) {
+      const [year, month, day] = partes;
+      return `${day}/${month}/${year}`;
+    }
+    
+    return fecha;
   };
 
   const formatearTiempo = (minutos) => {

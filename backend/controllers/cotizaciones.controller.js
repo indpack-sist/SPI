@@ -431,6 +431,17 @@ export async function updateCotizacion(req, res) {
     const comercialFinal = id_comercial || req.user?.id_empleado;
     if (!comercialFinal) return res.status(400).json({ success: false, error: 'No se pudo determinar el comercial responsable' });
 
+    // --- RE-FETCH NUEVO CLIENTE INFO (CRITICO PARA CAMBIO DE CLIENTE) ---
+    const clienteInfoResult = await executeQuery(
+      'SELECT usar_limite_credito, limite_credito_pen, limite_credito_usd FROM clientes WHERE id_cliente = ?',
+      [id_cliente]
+    );
+
+    if (!clienteInfoResult.success || clienteInfoResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Información del nuevo cliente no encontrada' });
+    }
+    const clienteInfo = clienteInfoResult.data[0];
+
     let fechaEmisionFinal = fecha_emision;
     if (!fechaEmisionFinal) {
       const peruDate = getFechaPeru();

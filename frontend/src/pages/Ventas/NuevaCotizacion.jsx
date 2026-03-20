@@ -695,42 +695,6 @@ setFormCabecera(prev => ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    if (cotizacionConvertida) {
-      setError('No se puede editar una cotizacion que ya ha sido convertida a Orden de Venta');
-      return;
-    }
-    if (!formCabecera.id_cliente) {
-      setError('Debe seleccionar un cliente');
-      return;
-    }
-    if (detalle.length === 0) {
-      setError('Debe agregar al menos un producto');
-      return;
-    }
-
-    if (esMuestra) {
-      const itemsLibresSinCodigo = detalle.some(item => item.es_producto_libre && !item.codigo_producto_libre?.trim());
-      if (itemsLibresSinCodigo) {
-        setError('Todos los productos muestra deben tener un codigo');
-        return;
-      }
-      const itemsLibresSinNombre = detalle.some(item => item.es_producto_libre && !item.nombre_producto_libre?.trim());
-      if (itemsLibresSinNombre) {
-        setError('Todos los productos muestra deben tener un nombre');
-        return;
-      }
-    } else {
-      const productosSinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
-      if (productosSinPrecio) {
-        setError('Todos los productos deben tener un precio de venta valido');
-        return;
-      }
-    }
-
-    if (!formCabecera.plazo_pago || formCabecera.plazo_pago.trim() === '') {
-      setError('Plazo de pago es obligatorio (define el riesgo de la venta)');
-      return;
-    }
     try {
       setLoading(true);
       const payload = {
@@ -889,7 +853,6 @@ setFormCabecera(prev => ({
                         setListasPreciosCliente([]);
                         setDetallesListas({});
                       }}
-                      disabled={cotizacionConvertida}
                     >
                       Cambiar
                     </button>
@@ -1610,16 +1573,14 @@ setFormCabecera(prev => ({
           <button type="button" className="btn btn-outline" onClick={() => navigate('/ventas/cotizaciones')}>
             Cancelar
           </button>
-          {!cotizacionConvertida && (
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg"
-              disabled={loading || !clienteSeleccionado || detalle.length === 0}
-            >
-              <Save size={20} />
-              {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotizacion' : 'Guardar Cotizacion'}
-            </button>
-          )}
+          <button
+            type="submit"
+            className="btn btn-primary btn-lg"
+            disabled={loading || !clienteSeleccionado || detalle.length === 0}
+          >
+            <Save size={20} />
+            {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotizacion' : 'Guardar Cotizacion'}
+          </button>
         </div>
       </form>
 

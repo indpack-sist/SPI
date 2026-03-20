@@ -897,7 +897,7 @@ setFormCabecera(prev => ({
                   setClienteApiData(null);
                   setErrorApi(null);
                 }}
-                disabled={cotizacionConvertida}
+                
               >
                 <Search size={20} />
                 Seleccionar Cliente
@@ -922,7 +922,7 @@ setFormCabecera(prev => ({
                   className="form-input"
                   value={formCabecera.fecha_emision}
                   onChange={(e) => setFormCabecera({ ...formCabecera, fecha_emision: e.target.value })}
-                  disabled={cotizacionConvertida}
+                  
                   required
                 />
               </div>
@@ -934,7 +934,7 @@ setFormCabecera(prev => ({
                   value={formCabecera.validez_dias}
                   onChange={(e) => setFormCabecera({ ...formCabecera, validez_dias: e.target.value })}
                   min="1"
-                  disabled={cotizacionConvertida}
+                  
                   required
                   onWheel={handleWheelDisable}
                 />
@@ -958,7 +958,7 @@ setFormCabecera(prev => ({
                   className="form-select"
                   value={formCabecera.moneda}
                   onChange={(e) => setFormCabecera({ ...formCabecera, moneda: e.target.value })}
-                  disabled={cotizacionConvertida}
+                  
                   required
                 >
                   <option value="PEN">Soles (PEN)</option>
@@ -971,7 +971,7 @@ setFormCabecera(prev => ({
                   className="form-select"
                   value={formCabecera.tipo_impuesto}
                   onChange={(e) => handleTipoImpuestoChange(e.target.value)}
-                  disabled={cotizacionConvertida}
+                  
                   required
                 >
                   {TIPOS_IMPUESTO.map(tipo => (
@@ -990,7 +990,7 @@ setFormCabecera(prev => ({
                       onChange={(e) => setFormCabecera({ ...formCabecera, tipo_cambio: e.target.value })}
                       step="0.0001"
                       min="0"
-                      disabled={cotizacionConvertida}
+                      
                       onWheel={handleWheelDisable}
                     />
                     <button 
@@ -1028,7 +1028,7 @@ setFormCabecera(prev => ({
                         type="button"
                         className={`btn flex-1 ${formCabecera.plazo_pago === 'Contado' ? 'btn-primary' : 'btn-outline'}`}
                         onClick={() => setFormCabecera(prev => ({ ...prev, plazo_pago: 'Contado' }))}
-                        disabled={cotizacionConvertida}
+                        
                       >
                         Contado
                       </button>
@@ -1054,7 +1054,7 @@ setFormCabecera(prev => ({
                           className="form-select border-primary"
                           value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
                           onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
-                          disabled={cotizacionConvertida}
+                          
                           required={formCabecera.plazo_pago !== 'Contado'}
                         >
                           <option value="">Seleccione los dias...</option>
@@ -1073,7 +1073,7 @@ setFormCabecera(prev => ({
                   className="form-select"
                   value={formCabecera.forma_pago}
                   onChange={(e) => setFormCabecera({ ...formCabecera, forma_pago: e.target.value })}
-                  disabled={cotizacionConvertida}
+                  
                 >
                   <option value="">Seleccione...</option>
                   {FORMAS_PAGO.map(forma => (
@@ -1087,7 +1087,7 @@ setFormCabecera(prev => ({
                   className="form-select"
                   value={formCabecera.plazo_entrega}
                   onChange={(e) => setFormCabecera({ ...formCabecera, plazo_entrega: e.target.value })}
-                  disabled={cotizacionConvertida}
+                  
                 >
                   <option value="">Seleccione...</option>
                   {PLAZOS_ENTREGA.map(plazo => (
@@ -1101,7 +1101,7 @@ setFormCabecera(prev => ({
                   className="form-select"
                   value={formCabecera.id_comercial}
                   onChange={(e) => setFormCabecera({ ...formCabecera, id_comercial: e.target.value })}
-                  disabled={cotizacionConvertida}
+                  
                 >
                   <option value="">Seleccione...</option>
                   {comerciales.map(c => (
@@ -1122,7 +1122,7 @@ setFormCabecera(prev => ({
                         className="form-select pl-10"
                         value={formCabecera.lugar_entrega}
                         onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
-                        disabled={cotizacionConvertida}
+                        
                       >
                         <option value="">Seleccione una direccion...</option>
                         {direccionesCliente.map((dir, idx) => (
@@ -1140,7 +1140,7 @@ setFormCabecera(prev => ({
                       value={formCabecera.lugar_entrega}
                       onChange={(e) => setFormCabecera({ ...formCabecera, lugar_entrega: e.target.value })}
                       placeholder="Direccion de entrega"
-                      disabled={cotizacionConvertida}
+                      
                     />
                   )}
                 </div>
@@ -1164,7 +1164,7 @@ setFormCabecera(prev => ({
                 onChange={(e) => setFormCabecera({ ...formCabecera, observaciones: e.target.value })}
                 rows={3}
                 placeholder="Observaciones adicionales..."
-                disabled={cotizacionConvertida}
+                
               />
             </div>
 
@@ -1185,7 +1185,7 @@ setFormCabecera(prev => ({
                       setEsMuestra(e.target.checked);
                       if (e.target.checked) setDetalle([]);
                     }}
-                    disabled={cotizacionConvertida}
+                    
                   />
                   <div
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
@@ -1316,7 +1316,7 @@ setFormCabecera(prev => ({
                       className="btn btn-outline"
                       style={{ borderColor: '#f59e0b', color: '#b45309' }}
                       onClick={handleAgregarProductoLibre}
-                      disabled={cotizacionConvertida}
+                      
                     >
                       <Plus size={18} /> Producto Muestra
                     </button>
@@ -1324,7 +1324,7 @@ setFormCabecera(prev => ({
                       type="button"
                       className="btn btn-outline"
                       onClick={() => setModalProductoOpen(true)}
-                      disabled={cotizacionConvertida}
+                      
                     >
                       <Plus size={18} /> Desde Inventario
                     </button>
@@ -1334,7 +1334,7 @@ setFormCabecera(prev => ({
                     type="button"
                     className="btn btn-primary"
                     onClick={() => setModalProductoOpen(true)}
-                    disabled={cotizacionConvertida}
+                    
                   >
                     <Plus size={20} /> Agregar Producto
                   </button>
@@ -1375,7 +1375,7 @@ setFormCabecera(prev => ({
                                 value={item.codigo_producto_libre || ''}
                                 onChange={(e) => handleProductoLibreChange(index, 'codigo_producto_libre', e.target.value)}
                                 placeholder="Cod. muestra"
-                                disabled={cotizacionConvertida}
+                                
                                 required
                               />
                             ) : (
@@ -1391,7 +1391,7 @@ setFormCabecera(prev => ({
                                 value={item.nombre_producto_libre || ''}
                                 onChange={(e) => handleProductoLibreChange(index, 'nombre_producto_libre', e.target.value)}
                                 placeholder="Nombre del producto muestra"
-                                disabled={cotizacionConvertida}
+                                
                                 required
                               />
                             ) : (
@@ -1408,7 +1408,7 @@ setFormCabecera(prev => ({
     const val = e.target.value;
     if (val === '' || /^\d*\.?\d*$/.test(val)) handleCantidadChange(index, val);
   }}
-  disabled={cotizacionConvertida}
+  
   required
 />
                           </td>
@@ -1421,7 +1421,7 @@ setFormCabecera(prev => ({
                                 value={item.unidad_medida || ''}
                                 onChange={(e) => handleProductoLibreChange(index, 'unidad_medida', e.target.value)}
                                 placeholder="UM"
-                                disabled={cotizacionConvertida}
+                                
                               />
                             ) : (
                               item.unidad_medida
@@ -1449,7 +1449,7 @@ setFormCabecera(prev => ({
                               onChange={item.es_producto_libre ? (e) => handleProductoLibreChange(index, 'precio_base', parseFloat(e.target.value) || 0) : undefined}
                               min="0"
                               step="0.001"
-                              disabled={cotizacionConvertida}
+                              
                               style={item.es_producto_libre ? { backgroundColor: '#fffbeb', borderColor: '#fcd34d' } : {}}
                             />
                           </td>
@@ -1464,7 +1464,7 @@ setFormCabecera(prev => ({
     if (val === '' || /^\d*\.?\d*$/.test(val)) handlePrecioVentaChange(index, val);
   }}
   placeholder="0.000"
-  disabled={cotizacionConvertida}
+  
   required={!esMuestra}
 />
                           </td>
@@ -1484,7 +1484,7 @@ setFormCabecera(prev => ({
                               type="button"
                               className="btn btn-sm btn-danger"
                               onClick={() => handleEliminarItem(index)}
-                              disabled={cotizacionConvertida}
+                              
                             >
                               <Trash2 size={14} />
                             </button>
@@ -1507,7 +1507,7 @@ setFormCabecera(prev => ({
                         className="btn btn-outline"
                         style={{ borderColor: '#f59e0b', color: '#b45309' }}
                         onClick={handleAgregarProductoLibre}
-                        disabled={cotizacionConvertida}
+                        
                       >
                         <Plus size={20} /> Producto Muestra
                       </button>
@@ -1515,7 +1515,7 @@ setFormCabecera(prev => ({
                         type="button"
                         className="btn btn-outline"
                         onClick={() => setModalProductoOpen(true)}
-                        disabled={cotizacionConvertida}
+                        
                       >
                         <Plus size={20} /> Desde Inventario
                       </button>
@@ -1525,7 +1525,7 @@ setFormCabecera(prev => ({
                       type="button"
                       className="btn btn-primary"
                       onClick={() => setModalProductoOpen(true)}
-                      disabled={cotizacionConvertida}
+                      
                     >
                       <Plus size={20} /> Agregar Primer Producto
                     </button>

@@ -40,6 +40,10 @@
   max-width: 1200px;
 }
 
+.modal-2xl {
+  max-width: 1400px;
+}
+
 .modal-header {
   display: flex;
   align-items: center;

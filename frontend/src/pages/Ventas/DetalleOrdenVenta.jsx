@@ -2384,13 +2384,13 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
             <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
               <span className="font-bold">TOTAL:</span>
               <div className="text-right">
-                <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
-                {esUSD && parseFloat(orden.tipo_cambio || 0) > 1 && (
-                  <div className="text-sm font-semibold text-gray-600 mt-1">
-                    Valor Convertido: S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio))}
-                  </div>
-                )}
-              </div>
+              <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
+              {esUSD && parseFloat(orden.tipo_cambio || 0) > 1 && (
+                <div className="text-sm font-semibold text-gray-600 mt-1">
+                  Valor Convertido: S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio), 3)}
+                </div>
+              )}
+            </div>
             </div>
             
             {esUSD && tcVenta && (

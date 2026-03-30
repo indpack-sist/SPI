@@ -442,7 +442,8 @@ function OrdenesVenta() {
         const pagado = parseFloat(row.monto_pagado || 0);
         const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
         const esUSD = row.moneda === 'USD';
-        const conversionPEN = esUSD && mostrarConversion && tipoCambio ? convertirUSDaPEN(total) : null;
+        const tcOrden = parseFloat(row.tipo_cambio || 1);
+        const conversionPEN = esUSD && mostrarConversion && tcOrden > 1 ? total * tcOrden : null;
 
         return (
           <div>
@@ -455,14 +456,14 @@ function OrdenesVenta() {
               ></div>
             </div>
             {conversionPEN !== null && (
-              <div className="mt-1 px-2 py-0.5 rounded text-xs font-semibold inline-block"
+              <div className="mt-1 px-2 py-0.5 rounded text-xs font-bold inline-block"
                 style={{ 
-                  background: 'var(--accent-dim, rgba(234,179,8,0.1))', 
-                  color: 'var(--accent, #ca8a04)',
-                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
+                  background: 'rgba(59, 130, 246, 0.1)', 
+                  color: '#1e40af',
+                  border: '1px solid rgba(59, 130, 246, 0.3)'
                 }}>
                 <ArrowRightLeft size={10} className="inline mr-1" />
-                S/ {formatearNumero(conversionPEN)}
+                S/ {formatearNumero(conversionPEN, 3)}
               </div>
             )}
           </div>

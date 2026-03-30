@@ -1083,7 +1083,7 @@ useEffect(() => {
                         <div className="relative bg-orange-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-xl animate-warning-blink whitespace-nowrap border border-white/20">
                           <div className="flex items-center gap-1">
                             <Info size={14} className="animate-bounce" />
-                            <span>¡ASIGNAR T.C. ACTUAL!</span>
+                            <span>¡ASIGNAR T.C. UTILIZADO!</span>
                           </div>
                           {/* Triángulo de la nube */}
                           <div className="absolute -bottom-1.5 right-6 w-3 h-3 bg-orange-500 rotate-45 border-r border-b border-white/10"></div>

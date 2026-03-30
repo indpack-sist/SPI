@@ -92,7 +92,11 @@ export const getReporteVentas = async (req, res) => {
             totalCreditoUSD: 0,
             pedidosAtrasados: 0,
             totalComisionesPEN: 0,
-            totalComisionesUSD: 0
+            totalComisionesUSD: 0,
+            // Nuevos KPIs unificados usando TC de cada orden
+            unificadoVentasPEN: 0,
+            unificadoPagadoPEN: 0,
+            unificadoPorCobrarPEN: 0
         };
 
         const conteoEstadoPagoPEN = { 'Pagado': 0, 'Parcial': 0, 'Pendiente': 0 };
@@ -103,6 +107,7 @@ export const getReporteVentas = async (req, res) => {
 
         const listaDetalle = ordenes.map(orden => {
             const esDolar = orden.moneda === 'USD';
+            const tcOrden = parseFloat(orden.tipo_cambio) || 1;
             
             const subtotalOriginal = parseFloat(orden.subtotal) || 0;
             const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
@@ -119,6 +124,18 @@ export const getReporteVentas = async (req, res) => {
             const igvOriginal = subtotalOriginal * (porcentajeImp / 100);
             const totalOriginal = subtotalOriginal + igvOriginal;
             const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
+
+            // Valores convertidos específicos de esta orden
+            const subtotalPEN = esDolar ? subtotalOriginal * tcOrden : subtotalOriginal;
+            const igvPEN = esDolar ? igvOriginal * tcOrden : igvOriginal;
+            const totalPEN = esDolar ? totalOriginal * tcOrden : totalOriginal;
+            const pagadoPEN = esDolar ? pagadoOriginal * tcOrden : pagadoOriginal;
+            const pendientePEN = esDolar ? pendienteOriginal * tcOrden : pendienteOriginal;
+
+            // Acumular unificados (todo a PEN usando TC de la orden)
+            kpis.unificadoVentasPEN += totalPEN;
+            kpis.unificadoPagadoPEN += pagadoPEN;
+            kpis.unificadoPorCobrarPEN += pendientePEN;
 
             if (esDolar) {
                 kpis.totalVentasUSD += totalOriginal;
@@ -233,10 +250,17 @@ export const getReporteVentas = async (req, res) => {
                 contacto_entrega: orden.contacto_entrega,
                 telefono_entrega: orden.telefono_entrega,
                 moneda: orden.moneda,
-                tipo_cambio: parseFloat(orden.tipo_cambio) || 1,
+                tipo_cambio: tcOrden,
                 subtotal: subtotalOriginal.toFixed(2),
                 igv: igvOriginal.toFixed(2),
                 total: totalOriginal.toFixed(2),
+                subtotal_pen: subtotalPEN.toFixed(3),
+                igv_pen: igvPEN.toFixed(3),
+                total_pen: totalPEN.toFixed(3),
+                monto_pagado_pen: pagadoPEN.toFixed(3),
+                pendiente_cobro_pen: pendientePEN.toFixed(3),
+                monto_pagado: pagadoOriginal.toFixed(2),
+                pendiente_cobro: pendienteOriginal.toFixed(2),
                 total_comision: comisionOriginal.toFixed(2),
                 porcentaje_comision_promedio: parseFloat(orden.porcentaje_comision_promedio) || 0,
                 monto_pagado: pagadoOriginal.toFixed(2),

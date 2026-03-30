@@ -263,10 +263,12 @@ const ReporteVentas = () => {
     setLoadingExcel(true);
     try {
       const wb = XLSX.utils.book_new();
-      const hayConversion = convertirUSD && tcVenta;
       const hayUSD = dataFiltrada.some(item => item.moneda === 'USD');
 
       const datosResumen = dataFiltrada.map(item => {
+        const esUSD = item.moneda === 'USD';
+        const tcOrden = parseFloat(item.tipo_cambio || 1);
+        
         const base = {
           'Orden': item.numero,
           'Tipo Comprobante': item.tipo_comprobante || '',
@@ -283,26 +285,22 @@ const ReporteVentas = () => {
           'Fecha Emision': formatearFecha(item.fecha_emision),
           'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
           'Moneda': item.moneda,
-          'Subtotal': parseFloat(parseFloat(item.subtotal).toFixed(3)),
-          'IGV': parseFloat(parseFloat(item.igv).toFixed(3)),
-          'Total': parseFloat(parseFloat(item.total).toFixed(3)),
-          'Pagado': parseFloat(parseFloat(item.monto_pagado).toFixed(3)),
-          'Por Cobrar': parseFloat(parseFloat(item.pendiente_cobro).toFixed(3)),
+          'TC Orden': esUSD ? tcOrden : '-',
+          'Subtotal Orig.': parseFloat(parseFloat(item.subtotal).toFixed(3)),
+          'IGV Orig.': parseFloat(parseFloat(item.igv).toFixed(3)),
+          'Total Orig.': parseFloat(parseFloat(item.total).toFixed(3)),
+          'Pagado Orig.': parseFloat(parseFloat(item.monto_pagado).toFixed(3)),
+          'Por Cobrar Orig.': parseFloat(parseFloat(item.pendiente_cobro).toFixed(3)),
+          'Subtotal (PEN)': parseFloat(parseFloat(item.subtotal_pen || item.subtotal).toFixed(3)),
+          'IGV (PEN)': parseFloat(parseFloat(item.igv_pen || item.igv).toFixed(3)),
+          'Total (PEN)': parseFloat(parseFloat(item.total_pen || item.total).toFixed(3)),
+          'Pagado (PEN)': parseFloat(parseFloat(item.monto_pagado_pen || item.monto_pagado).toFixed(3)),
+          'Por Cobrar (PEN)': parseFloat(parseFloat(item.pendiente_cobro_pen || item.pendiente_cobro).toFixed(3)),
           'Estado Pago': item.estado_pago,
           'Estado': item.estado,
           'Tipo Venta': item.tipo_venta,
           'Estado Logistico': item.estado_logistico
         };
-
-        if (hayConversion && hayUSD) {
-          const esUSD = item.moneda === 'USD';
-          base['Subtotal (PEN)'] = parseFloat((parseFloat(item.subtotal) * (esUSD ? tcVenta : 1)).toFixed(3));
-          base['IGV (PEN)'] = parseFloat((parseFloat(item.igv) * (esUSD ? tcVenta : 1)).toFixed(3));
-          base['Total (PEN)'] = parseFloat((parseFloat(item.total) * (esUSD ? tcVenta : 1)).toFixed(3));
-          base['Pagado (PEN)'] = parseFloat((parseFloat(item.monto_pagado) * (esUSD ? tcVenta : 1)).toFixed(3));
-          base['Por Cobrar (PEN)'] = parseFloat((parseFloat(item.pendiente_cobro) * (esUSD ? tcVenta : 1)).toFixed(3));
-          base['TC Aplicado'] = esUSD ? tcVenta : '-';
-        }
 
         return base;
       });
@@ -311,106 +309,85 @@ const ReporteVentas = () => {
       const colsBase = [
         { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 15 },
         { wch: 30 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 },
-        { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-        { wch: 14 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 15 }
+        { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+        { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+        { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 15 }
       ];
-      if (hayConversion && hayUSD) {
-        colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 });
-      }
       wsResumen['!cols'] = colsBase;
 
-      if (hayConversion && hayUSD) {
-        const totalRows = datosResumen.length + 1;
-        const startCol = 20;
-        const endCol = 25;
-        for (let R = 0; R < totalRows; R++) {
-          for (let C = startCol; C <= endCol; C++) {
-            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-            if (wsResumen[cellRef]) {
-              wsResumen[cellRef].s = {
-                fill: { fgColor: { rgb: "FFF9E6" } },
-                font: { bold: R === 0, color: { rgb: R === 0 ? "8B6914" : "333333" } },
-                numFmt: '#,##0.000'
-              };
-            }
+      // Estilo para las columnas PEN
+      const totalRows = datosResumen.length + 1;
+      const penColsStart = 19; // 'Subtotal (PEN)'
+      const penColsEnd = 23;   // 'Por Cobrar (PEN)'
+      for (let R = 0; R < totalRows; R++) {
+        for (let C = penColsStart; C <= penColsEnd; C++) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+          if (wsResumen[cellRef]) {
+            if (!wsResumen[cellRef].s) wsResumen[cellRef].s = {};
+            wsResumen[cellRef].s = {
+              fill: { fgColor: { rgb: "E6F4EA" } }, // Verde muy claro para PEN
+              font: { bold: R === 0 },
+              numFmt: '#,##0.000'
+            };
           }
         }
       }
 
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
 
-      if (hayConversion && hayUSD) {
-        const r = dataReporte.resumen;
-        const tcInfo = [
-          ['INFORMACION DEL TIPO DE CAMBIO APLICADO'],
-          [''],
-          ['Fuente', 'SUNAT'],
-          ['Fecha TC', formatearFecha(tipoCambio.fecha)],
-          ['TC Compra', tipoCambio.compra],
-          ['TC Venta', tipoCambio.venta],
-          ['TC Promedio', tipoCambio.promedio],
-          [''],
-          ['Fecha de Generacion', formatearFechaHora(new Date().toISOString())],
-          [''],
-          ['NOTA: Los montos en columnas "(PEN)" fueron convertidos usando el TC Venta SUNAT indicado arriba.'],
-          ['Los montos originales en USD se mantienen en las columnas Subtotal, IGV, Total, Pagado y Por Cobrar.'],
-          [''],
-          ['RESUMEN UNIFICADO EN SOLES'],
-          [''],
-          ['Concepto', 'PEN Original', 'USD Original', 'USD Convertido a PEN', 'Total Unificado PEN'],
-          ['Ventas', r.total_ventas_pen, r.total_ventas_usd, parseFloat((r.total_ventas_usd * tcVenta).toFixed(3)), parseFloat((r.total_ventas_pen + r.total_ventas_usd * tcVenta).toFixed(3))],
-          ['Cobrado', r.total_pagado_pen, r.total_pagado_usd, parseFloat((r.total_pagado_usd * tcVenta).toFixed(3)), parseFloat((r.total_pagado_pen + r.total_pagado_usd * tcVenta).toFixed(3))],
-          ['Por Cobrar', r.total_pendiente_pen, r.total_pendiente_usd, parseFloat((r.total_pendiente_usd * tcVenta).toFixed(3)), parseFloat((r.total_pendiente_pen + r.total_pendiente_usd * tcVenta).toFixed(3))],
-          ['Comisiones', r.total_comisiones_pen, r.total_comisiones_usd, parseFloat((r.total_comisiones_usd * tcVenta).toFixed(3)), parseFloat((r.total_comisiones_pen + r.total_comisiones_usd * tcVenta).toFixed(3))]
-        ];
-        const wsTCInfo = XLSX.utils.aoa_to_sheet(tcInfo);
-        wsTCInfo['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 24 }, { wch: 24 }];
-        XLSX.utils.book_append_sheet(wb, wsTCInfo, 'Tipo de Cambio');
-      }
-
       const productosAgrupados = {};
       dataFiltrada.forEach((orden) => {
         if (orden.detalles && orden.detalles.length > 0) {
+          const tcOrden = parseFloat(orden.tipo_cambio || 1);
           orden.detalles.forEach(det => {
-            const key = hayConversion ? det.codigo_producto : `${det.codigo_producto}_${orden.moneda}`;
+            const key = det.codigo_producto;
             if (!productosAgrupados[key]) {
               productosAgrupados[key] = {
                 codigo: det.codigo_producto, nombre: det.producto_nombre,
-                unidad_medida: det.unidad_medida, moneda: hayConversion ? 'PEN (Unif.)' : orden.moneda,
+                unidad_medida: det.unidad_medida, moneda: 'PEN (Unif.)',
                 cantidad_total: 0, cantidad_despachada_total: 0, cantidad_pendiente_total: 0,
-                subtotal: 0, descuento_total: 0, ordenes: []
+                subtotal_pen: 0, descuento_pen: 0, ordenes: []
               };
             }
-            const factor = (hayConversion && orden.moneda === 'USD') ? tcVenta : 1;
+            const factor = (orden.moneda === 'USD') ? tcOrden : 1;
             productosAgrupados[key].cantidad_total += parseFloat(det.cantidad);
             productosAgrupados[key].cantidad_despachada_total += parseFloat(det.cantidad_despachada || 0);
             productosAgrupados[key].cantidad_pendiente_total += parseFloat(det.cantidad) - parseFloat(det.cantidad_despachada || 0);
-            productosAgrupados[key].subtotal += parseFloat(det.subtotal) * factor;
-            productosAgrupados[key].descuento_total += parseFloat(det.descuento || 0) * factor;
-            productosAgrupados[key].ordenes.push({ numero: orden.numero, cliente: orden.cliente, cantidad: parseFloat(det.cantidad), precio_unitario: parseFloat(det.precio_unitario) * factor, subtotal: parseFloat(det.subtotal) * factor });
+            productosAgrupados[key].subtotal_pen += parseFloat(det.subtotal) * factor;
+            productosAgrupados[key].descuento_pen += parseFloat(det.descuento || 0) * factor;
+            productosAgrupados[key].ordenes.push({ 
+              numero: orden.numero, 
+              cliente: orden.cliente, 
+              cantidad: parseFloat(det.cantidad), 
+              precio_unitario_pen: parseFloat(det.precio_unitario) * factor, 
+              subtotal_pen: parseFloat(det.subtotal) * factor,
+              tc: tcOrden,
+              moneda_orig: orden.moneda
+            });
           });
         }
       });
 
       const datosProductos = [];
-      Object.values(productosAgrupados).sort((a, b) => b.subtotal - a.subtotal).forEach(prod => {
+      Object.values(productosAgrupados).sort((a, b) => b.subtotal_pen - a.subtotal_pen).forEach(prod => {
         datosProductos.push({
           'Codigo': prod.codigo, 'Producto': prod.nombre, 'Unidad': prod.unidad_medida, 'Moneda': prod.moneda,
           'Cant. Total': parseFloat(prod.cantidad_total.toFixed(3)), 'Cant. Despachada': parseFloat(prod.cantidad_despachada_total.toFixed(3)),
-          'Cant. Pendiente': parseFloat(prod.cantidad_pendiente_total.toFixed(3)), 'Descuento Total': parseFloat(prod.descuento_total.toFixed(3)),
-          'Subtotal': parseFloat(prod.subtotal.toFixed(3)), 'N Ordenes': prod.ordenes.length,
-          'Ordenes': prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad})`).join(' | ')
+          'Cant. Pendiente': parseFloat(prod.cantidad_pendiente_total.toFixed(3)), 'Descuento Total (PEN)': parseFloat(prod.descuento_pen.toFixed(3)),
+          'Subtotal (PEN)': parseFloat(prod.subtotal_pen.toFixed(3)), 'N Ordenes': prod.ordenes.length,
+          'Ordenes Detalle': prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad} @ TC ${o.tc})`).join(' | ')
         });
       });
 
       if (datosProductos.length > 0) {
         const wsProductos = XLSX.utils.json_to_sheet(datosProductos);
-        wsProductos['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 80 }];
+        wsProductos['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 100 }];
         XLSX.utils.book_append_sheet(wb, wsProductos, 'Resumen Productos');
       }
 
       if (incluirDetalleExcel) {
         dataFiltrada.forEach((orden) => {
+          const tcOrden = parseFloat(orden.tipo_cambio || 1);
           const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
           const formaPagoTexto = orden.tipo_venta === 'Credito' ? `Credito ${orden.dias_credito} Dias` : 'Contado';
           const fechaVencimientoTexto = orden.tipo_venta === 'Credito' ? formatearFecha(orden.fecha_vencimiento) : '-';
@@ -422,6 +399,7 @@ const ReporteVentas = () => {
             ['Numero Comprobante', (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat) ? `${orden.numero_comprobante_sunat} (SUNAT)` : (orden.tipo_comprobante === 'Factura' && !orden.facturado_sunat) ? '' : (orden.numero_comprobante || '')],            ...(orden.facturado_sunat ? [['Comprobante SUNAT', orden.numero_comprobante_sunat || ''], ['Fecha Facturacion SUNAT', formatearFecha(orden.fecha_facturacion_sunat)]] : []),
             ['Estado', orden.estado], ['Estado Verificacion', orden.estado_verificacion], ['Estado Pago', orden.estado_pago],
             ['Tipo de Venta', orden.tipo_venta], ['Forma de Pago', formaPagoTexto], ['Fecha Vencimiento', fechaVencimientoTexto],
+            ['Moneda', orden.moneda], ['Tipo de Cambio Orden', orden.moneda === 'USD' ? tcOrden : '1.000'],
             [''], ['INFORMACION DEL CLIENTE'],
             ['Razon Social', orden.cliente], ['RUC', orden.ruc], ['Direccion', orden.direccion_cliente || ''],
             ['Telefono', orden.telefono_cliente || ''], ['Email', orden.email_cliente || ''],
@@ -448,20 +426,20 @@ const ReporteVentas = () => {
             });
           }
 
-          datosOrden.push([''], ['RESUMEN FINANCIERO'],
+          datosOrden.push([''], ['RESUMEN FINANCIERO (ORIGINAL)'],
             ['Subtotal', `${orden.moneda} ${orden.subtotal}`],
             ['IGV (' + orden.porcentaje_impuesto + '%)', `${orden.moneda} ${orden.igv}`],
             ['Total', `${orden.moneda} ${orden.total}`],
             ['Monto Pagado', `${orden.moneda} ${orden.monto_pagado}`],
             ['Pendiente de Cobro', `${orden.moneda} ${orden.pendiente_cobro}`]);
 
-          if (hayConversion && orden.moneda === 'USD') {
-            datosOrden.push([''], ['CONVERSION A SOLES (TC Venta SUNAT: S/ ' + tcVenta.toFixed(3) + ')'],
-              ['Subtotal (PEN)', `S/ ${(parseFloat(orden.subtotal) * tcVenta).toFixed(3)}`],
-              ['IGV (PEN)', `S/ ${(parseFloat(orden.igv) * tcVenta).toFixed(3)}`],
-              ['Total (PEN)', `S/ ${(parseFloat(orden.total) * tcVenta).toFixed(3)}`],
-              ['Pagado (PEN)', `S/ ${(parseFloat(orden.monto_pagado) * tcVenta).toFixed(3)}`],
-              ['Pendiente (PEN)', `S/ ${(parseFloat(orden.pendiente_cobro) * tcVenta).toFixed(3)}`]);
+          if (orden.moneda === 'USD') {
+            datosOrden.push([''], ['CONVERSION A SOLES (TC Aplicado: S/ ' + tcOrden.toFixed(3) + ')'],
+              ['Subtotal (PEN)', `S/ ${orden.subtotal_pen}`],
+              ['IGV (PEN)', `S/ ${orden.igv_pen}`],
+              ['Total (PEN)', `S/ ${orden.total_pen}`],
+              ['Pagado (PEN)', `S/ ${orden.monto_pagado_pen}`],
+              ['Pendiente (PEN)', `S/ ${orden.pendiente_cobro_pen}`]);
           }
 
           if (parseFloat(orden.total_comision) > 0) {
@@ -471,13 +449,6 @@ const ReporteVentas = () => {
           datosOrden.push([''], ['PERSONAL'], ['Vendedor', orden.vendedor], ['Registrado por', orden.registrador], ['Verificador', orden.verificador]);
           datosOrden.push([''], ['DOCUMENTOS ASOCIADOS'], ['Cotizacion', orden.numero_cotizacion || ''], ['Guia Interna', orden.numero_guia_interna || ''], ['OC Cliente', orden.orden_compra_cliente || '']);
 
-          if (orden.observaciones || orden.observaciones_verificador || orden.motivo_rechazo) {
-            datosOrden.push([''], ['OBSERVACIONES']);
-            if (orden.observaciones) datosOrden.push(['Observaciones Generales', orden.observaciones]);
-            if (orden.observaciones_verificador) datosOrden.push(['Observaciones Verificador', orden.observaciones_verificador]);
-            if (orden.motivo_rechazo) datosOrden.push(['Motivo de Rechazo', orden.motivo_rechazo]);
-          }
-
           const wsOrden = XLSX.utils.aoa_to_sheet(datosOrden);
           wsOrden['!cols'] = [{ wch: 30 }, { wch: 50 }];
           XLSX.utils.book_append_sheet(wb, wsOrden, nombreHoja);
@@ -486,8 +457,7 @@ const ReporteVentas = () => {
 
       const nombreCliente = clienteSeleccionado ? clienteSeleccionado.razon_social.replace(/[^a-zA-Z0-9]/g, '_') : 'Todos';
       const fechaActual = new Date().toISOString().split('T')[0];
-      const sufijo = (hayConversion && hayUSD) ? '_TC_SUNAT' : '';
-      XLSX.writeFile(wb, `Reporte_${nombreCliente}_${fechaActual}${sufijo}.xlsx`);
+      XLSX.writeFile(wb, `Reporte_Ventas_${nombreCliente}_${fechaActual}.xlsx`);
     } catch (err) {
       console.error(err);
       setError('Error al generar el archivo Excel');
@@ -860,9 +830,9 @@ const ReporteVentas = () => {
                       <span className="text-xs text-muted mr-1">{item.moneda}</span>
                       {formatearNumero(item.total)}
                     </td>
-                    {convertirUSD && tcVenta && (
+                    {convertirUSD && (
                       <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--accent, #ca8a04)' }}>
-                        S/ {formatearNumero(item.moneda === 'USD' ? parseFloat(item.total) * tcVenta : parseFloat(item.total))}
+                        S/ {formatearNumero(item.total_pen || (item.moneda === 'USD' ? parseFloat(item.total) * (parseFloat(item.tipo_cambio) || 1) : item.total), 3)}
                       </td>
                     )}
                     <td className="px-4 py-3 text-center">{obtenerBadgeEstadoPago(item.estado_pago)}</td>
@@ -1021,12 +991,12 @@ const ReporteVentas = () => {
                     )}
                   </div>
                 </div>
-                {convertirUSD && tcVenta && ordenSeleccionada.moneda === 'USD' && (
+                {convertirUSD && ordenSeleccionada.moneda === 'USD' && (
                   <div className="mt-4 pt-3 rounded-lg p-3" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.08))', border: '1px solid var(--accent-border, rgba(234,179,8,0.3))' }}>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--accent, #ca8a04)' }}><ArrowRightLeft size={12} className="inline mr-1" />Equivalente en Soles (TC Venta SUNAT: S/ {tcVenta.toFixed(3)})</p>
-                    <div className="flex justify-between text-sm"><span>Total:</span><span className="font-bold" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {formatearNumero(parseFloat(ordenSeleccionada.total) * tcVenta)}</span></div>
-                    <div className="flex justify-between text-sm"><span>Pagado:</span><span className="font-semibold text-green-700">S/ {formatearNumero(parseFloat(ordenSeleccionada.monto_pagado) * tcVenta)}</span></div>
-                    <div className="flex justify-between text-sm"><span>Pendiente:</span><span className="font-semibold text-red-700">S/ {formatearNumero(parseFloat(ordenSeleccionada.pendiente_cobro) * tcVenta)}</span></div>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--accent, #ca8a04)' }}><ArrowRightLeft size={12} className="inline mr-1" />Equivalente en Soles (TC Aplicado: S/ {parseFloat(ordenSeleccionada.tipo_cambio || 1).toFixed(3)})</p>
+                    <div className="flex justify-between text-sm"><span>Total:</span><span className="font-bold" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {formatearNumero(ordenSeleccionada.total_pen)}</span></div>
+                    <div className="flex justify-between text-sm"><span>Pagado:</span><span className="font-semibold text-green-700">S/ {formatearNumero(ordenSeleccionada.monto_pagado_pen)}</span></div>
+                    <div className="flex justify-between text-sm"><span>Pendiente:</span><span className="font-semibold text-red-700">S/ {formatearNumero(ordenSeleccionada.pendiente_cobro_pen)}</span></div>
                   </div>
                 )}
               </div>

@@ -57,6 +57,7 @@ export async function getAllOrdenesVenta(req, res) {
         ov.igv,
         ov.total,
         ov.moneda,
+        ov.tipo_cambio,
         ov.monto_pagado,
         ov.estado_pago,
         ov.id_cotizacion,

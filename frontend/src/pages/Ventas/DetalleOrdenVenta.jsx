@@ -1744,6 +1744,31 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      {/* Alerta de Tipo de Cambio 1 en USD */}
+      {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio) === 1 && (
+        <div className="alert alert-error mb-6 border-2 border-red-500 bg-red-50 animate-pulse shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="bg-red-500 text-white p-2 rounded-full shadow-md animate-bounce">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-red-700 uppercase tracking-tight">¡Posible Error de Tipo de Cambio!</h3>
+              <p className="text-red-600 font-medium">
+                La orden está en <span className="font-bold underline">DÓLARES (USD)</span> pero se ha registrado con un 
+                Tipo de Cambio de <span className="bg-red-200 px-1 rounded font-bold">1.000</span>. 
+                Verifica si el monto total es correcto antes de proceder.
+              </p>
+            </div>
+            <button 
+              className="btn btn-sm btn-danger ml-auto shadow-sm"
+              onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
+            >
+              <Edit size={16} className="mr-1" /> Corregir TC
+            </button>
+          </div>
+        </div>
+      )}
+
       {esUSD && (
         <div className="rounded-lg mb-4 p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
           style={{ 

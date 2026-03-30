@@ -1066,19 +1066,49 @@ useEffect(() => {
                       <option value="USD">Dólares</option>
                     </select>
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className="form-label">Tipo Cambio</label>
                     <input 
                       type="number" 
-                      className="form-input"
+                      className={`form-input transition-all duration-300 ${formCabecera.moneda === 'USD' ? 'border-warning ring-2 ring-warning/20 animate-pulse-border' : ''}`}
                       value={formCabecera.tipo_cambio}
                       onChange={(e) => setFormCabecera({...formCabecera, tipo_cambio: e.target.value})}
                       disabled={formCabecera.moneda === 'PEN'}
                       step="0.001"
                       onWheel={handleWheelDisable}
                     />
+                    
+                    {formCabecera.moneda === 'USD' && (
+                      <div className="absolute -top-14 right-0 z-20 pointer-events-none w-full flex justify-end">
+                        <div className="relative bg-orange-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-xl animate-warning-blink whitespace-nowrap border border-white/20">
+                          <div className="flex items-center gap-1">
+                            <Info size={14} className="animate-bounce" />
+                            <span>¡ASIGNAR T.C. ACTUAL!</span>
+                          </div>
+                          {/* Triángulo de la nube */}
+                          <div className="absolute -bottom-1.5 right-6 w-3 h-3 bg-orange-500 rotate-45 border-r border-b border-white/10"></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                <style dangerouslySetInnerHTML={{ __html: `
+                  @keyframes warning-blink {
+                    0%, 100% { background-color: #f39c12; transform: translateY(0) scale(1); }
+                    50% { background-color: #e74c3c; transform: translateY(-3px) scale(1.03); }
+                  }
+                  @keyframes pulse-border {
+                    0%, 100% { border-color: #f39c12; box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.2); }
+                    50% { border-color: #e74c3c; box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.4); }
+                  }
+                  .animate-warning-blink {
+                    animation: warning-blink 1.5s infinite ease-in-out;
+                  }
+                  .animate-pulse-border {
+                    animation: pulse-border 1.5s infinite ease-in-out;
+                  }
+                `}} />
 
                 <div>
                   <label className="form-label">Comercial</label>

@@ -1309,9 +1309,9 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
       render: (value) => (
         <div className="text-right">
           <span className="font-medium text-primary">{formatearMoneda(value)}</span>
-          {esUSD && tcVenta && (
-            <div className="text-[10px] mt-0.5" style={{ color: 'var(--accent, #ca8a04)' }}>
-              S/ {formatearNumero(parseFloat(value) * tcVenta)}
+          {esUSD && parseFloat(orden.tipo_cambio || 0) > 1 && (
+            <div className="text-[10px] mt-0.5 font-bold text-gray-500">
+              S/ {formatearNumero(parseFloat(value) * parseFloat(orden.tipo_cambio))}
             </div>
           )}
         </div>
@@ -1471,18 +1471,19 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
       align: 'right',
       render: (value, row) => {
         const subtotalCalc = parseFloat(row.cantidad) * parseFloat(row.precio_unitario);
+        const tcOrden = parseFloat(orden.tipo_cambio || 0);
         return (
           <div className="text-right">
             <span className="font-bold text-primary">{formatearMoneda(subtotalCalc)}</span>
-            {esUSD && tcVenta && (
-              <div className="mt-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold inline-block"
+            {esUSD && tcOrden > 1 && (
+              <div className="mt-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold inline-block"
                 style={{ 
-                  background: 'var(--accent-dim, rgba(234,179,8,0.1))', 
-                  color: 'var(--accent, #ca8a04)',
-                  border: '1px solid var(--accent-border, rgba(234,179,8,0.3))'
+                  background: 'rgba(59, 130, 246, 0.1)', 
+                  color: '#1e40af',
+                  border: '1px solid rgba(59, 130, 246, 0.3)'
                 }}>
                 <ArrowRightLeft size={9} className="inline mr-0.5" />
-                S/ {formatearNumero(subtotalCalc * tcVenta)}
+                S/ {formatearNumero(subtotalCalc * tcOrden)}
               </div>
             )}
           </div>
@@ -2382,7 +2383,14 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
             </div>
             <div className="flex justify-between py-3 bg-gray-100 text-black px-4 rounded-lg">
               <span className="font-bold">TOTAL:</span>
-              <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
+              <div className="text-right">
+                <span className="font-bold text-xl">{formatearMoneda(totalCorregido)}</span>
+                {esUSD && parseFloat(orden.tipo_cambio || 0) > 1 && (
+                  <div className="text-sm font-semibold text-gray-600 mt-1">
+                    Valor Convertido: S/ {formatearNumero(totalCorregido * parseFloat(orden.tipo_cambio))}
+                  </div>
+                )}
+              </div>
             </div>
             
             {esUSD && tcVenta && (

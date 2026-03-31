@@ -317,8 +317,8 @@ const ReporteVentas = () => {
 
       // Estilo para las columnas PEN
       const totalRows = datosResumen.length + 1;
-      const penColsStart = 19; // 'Subtotal (PEN)'
-      const penColsEnd = 23;   // 'Por Cobrar (PEN)'
+      const penColsStart = 17; // 'Subtotal (PEN)'
+      const penColsEnd = 21;   // 'Por Cobrar (PEN)'
       for (let R = 0; R < totalRows; R++) {
         for (let C = penColsStart; C <= penColsEnd; C++) {
           const cellRef = XLSX.utils.encode_cell({ r: R, c: C });

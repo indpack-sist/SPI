@@ -135,8 +135,8 @@ export const obtenerResumenGeneral = async (req, res) => {
         c.id_cliente,
         c.razon_social,
         COUNT(ov.id_orden_venta) AS total_ordenes,
-        SUM(CASE WHEN ov.moneda = 'PEN' THEN ov.total_monto ELSE 0 END) AS total_pen,
-        SUM(CASE WHEN ov.moneda = 'USD' THEN ov.total_monto ELSE 0 END) AS total_usd
+        SUM(CASE WHEN ov.moneda = 'PEN' THEN ov.total ELSE 0 END) AS total_pen,
+        SUM(CASE WHEN ov.moneda = 'USD' THEN ov.total ELSE 0 END) AS total_usd
        FROM ordenes_venta ov
        INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
        WHERE ov.estado != 'Anulado' ${whereDateOV}
@@ -200,11 +200,11 @@ export const obtenerResumenGeneral = async (req, res) => {
        ORDER BY ti.nombre ASC`
     );
 
-    const valor_total_produccion_pen = valoracionPorTipoResult.data.reduce((sum, tipo) => {
+    const valor_total_produccion_pen = (valoracionPorTipoResult.data || []).reduce((sum, tipo) => {
       return sum + parseFloat(tipo.valor_produccion || 0);
     }, 0);
 
-    const valor_total_venta_pen = valoracionPorTipoResult.data.reduce((sum, tipo) => {
+    const valor_total_venta_pen = (valoracionPorTipoResult.data || []).reduce((sum, tipo) => {
       return sum + parseFloat(tipo.valor_venta || 0);
     }, 0);
 
@@ -217,39 +217,39 @@ export const obtenerResumenGeneral = async (req, res) => {
       : valor_total_venta_pen / 3.765;
 
     res.json({
-      total_productos: productosActivosResult.data[0].total_productos,
-      productos_con_stock: productosConStockResult.data[0].productos_con_stock,
-      total_empleados: empleadosResult.data[0].total_empleados,
-      total_proveedores: proveedoresResult.data[0].total_proveedores,
-      total_clientes: clientesResult.data[0].total_clientes,
-      ordenes_activas: ordenesResult.data[0].ordenes_activas,
-      productos_stock_bajo: stockBajoResult.data[0].productos_stock_bajo,
+      total_productos: productosActivosResult.data?.[0]?.total_productos || 0,
+      productos_con_stock: productosConStockResult.data?.[0]?.productos_con_stock || 0,
+      total_empleados: empleadosResult.data?.[0]?.total_empleados || 0,
+      total_proveedores: proveedoresResult.data?.[0]?.total_proveedores || 0,
+      total_clientes: clientesResult.data?.[0]?.total_clientes || 0,
+      ordenes_activas: ordenesResult.data?.[0]?.ordenes_activas || 0,
+      productos_stock_bajo: stockBajoResult.data?.[0]?.productos_stock_bajo || 0,
       
-      top_productos: topProductosResult.data.map(p => ({
+      top_productos: (topProductosResult && topProductosResult.data ? topProductosResult.data : []).map(p => ({
         ...p,
-        total_cantidad: parseFloat(p.total_cantidad),
-        total_valor_pen: parseFloat(p.total_valor_pen),
-        total_valor_usd: tipoCambio.valido ? convertirPENaUSD(p.total_valor_pen, tipoCambio) : p.total_valor_pen / 3.80
+        total_cantidad: parseFloat(p.total_cantidad || 0),
+        total_valor_pen: parseFloat(p.total_valor_pen || 0),
+        total_valor_usd: tipoCambio.valido ? convertirPENaUSD(p.total_valor_pen, tipoCambio) : (p.total_valor_pen || 0) / 3.80
       })),
 
-      top_clientes: topClientesResult.data.map(c => ({
+      top_clientes: (topClientesResult && topClientesResult.data ? topClientesResult.data : []).map(c => ({
         ...c,
-        monto_total_pen: parseFloat(c.total_pen) + (tipoCambio.valido ? parseFloat(c.total_usd) * tipoCambio.venta : parseFloat(c.total_usd) * 3.80),
-        monto_total_usd: (tipoCambio.valido ? convertirPENaUSD(parseFloat(c.total_pen), tipoCambio) : parseFloat(c.total_pen) / 3.80) + parseFloat(c.total_usd)
+        monto_total_pen: parseFloat(c.total_pen || 0) + (tipoCambio.valido ? parseFloat(c.total_usd || 0) * tipoCambio.venta : parseFloat(c.total_usd || 0) * 3.80),
+        monto_total_usd: (tipoCambio.valido ? convertirPENaUSD(parseFloat(c.total_pen || 0), tipoCambio) : parseFloat(c.total_pen || 0) / 3.80) + parseFloat(c.total_usd || 0)
       })),
 
-      valoracion_por_tipo: valoracionPorTipoResult.data.map(tipo => ({
+      valoracion_por_tipo: (valoracionPorTipoResult && valoracionPorTipoResult.data ? valoracionPorTipoResult.data : []).map(tipo => ({
         ...tipo,
-        total_productos: parseInt(tipo.total_productos),
-        stock_total: parseFloat(tipo.stock_total),
-        valor_produccion_pen: parseFloat(tipo.valor_produccion),
+        total_productos: parseInt(tipo.total_productos || 0),
+        stock_total: parseFloat(tipo.stock_total || 0),
+        valor_produccion_pen: parseFloat(tipo.valor_produccion || 0),
         valor_produccion_usd: tipoCambio.valido 
-          ? convertirPENaUSD(parseFloat(tipo.valor_produccion), tipoCambio)
-          : parseFloat(tipo.valor_produccion) / 3.765,
-        valor_venta_pen: parseFloat(tipo.valor_venta),
+          ? convertirPENaUSD(parseFloat(tipo.valor_produccion || 0), tipoCambio)
+          : parseFloat(tipo.valor_produccion || 0) / 3.765,
+        valor_venta_pen: parseFloat(tipo.valor_venta || 0),
         valor_venta_usd: tipoCambio.valido 
-          ? convertirPENaUSD(parseFloat(tipo.valor_venta), tipoCambio)
-          : parseFloat(tipo.valor_venta) / 3.765
+          ? convertirPENaUSD(parseFloat(tipo.valor_venta || 0), tipoCambio)
+          : parseFloat(tipo.valor_venta || 0) / 3.765
       })),
       
       valor_total_produccion_pen: parseFloat(valor_total_produccion_pen.toFixed(2)),

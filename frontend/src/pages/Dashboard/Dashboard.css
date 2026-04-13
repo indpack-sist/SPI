@@ -6,21 +6,195 @@
 
 .dashboard-container {
   padding: 1.5rem;
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
+}
+
+/* =====================================================
+   FILTROS DE FECHA
+   ===================================================== */
+
+.date-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem;
+  background: rgba(26, 26, 26, 0.5);
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+}
+
+.filter-btn {
+  padding: 0.4rem 0.8rem;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  color: #888;
+  border-radius: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  border-color: #555;
+  color: #bbb;
+}
+
+.filter-btn.active {
+  background: #e8b84b;
+  border-color: #e8b84b;
+  color: #000;
+}
+
+.custom-date-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.date-input {
+  background: #111;
+  border: 1px solid #333;
+  color: #f5f5f0;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 2px;
+  outline: none;
+}
+
+.date-input:focus {
+  border-color: #e8b84b;
 }
 
 /* =====================================================
    HEADER
    ===================================================== */
+... (mantener el resto de estilos existentes y agregar estos nuevos)
 
-.dashboard-header {
+/* =====================================================
+   PROGRESS BARS (Rankings)
+   ===================================================== */
+
+.progress-container {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #e8b84b;
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rank-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.rank-name {
+  font-weight: 600;
+  color: #f5f5f0;
+  font-size: 0.85rem;
+}
+
+.rank-sub {
+  font-size: 0.7rem;
+  color: #666;
+}
+
+/* =====================================================
+   GRID DE ANALÍTICA
+   ===================================================== */
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.analytics-card {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.analytics-card .card-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #2a2a2a;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
+}
+
+.analytics-card .card-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #e8b84b;
+  margin: 0;
+}
+
+.analytics-card .card-body {
+  padding: 0;
+  flex: 1;
+}
+
+/* KPIs FINANCIEROS EN HEADER */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi-stat {
+  background: #1a1a1a;
+  border-left: 3px solid #e8b84b;
+  padding: 1rem;
+  border-radius: 0 4px 4px 0;
+}
+
+.kpi-stat.success { border-left-color: #2ecc71; }
+.kpi-stat.danger  { border-left-color: #e74c3c; }
+.kpi-stat.info    { border-left-color: #5dade2; }
+
+.kpi-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.kpi-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f5f5f0;
+}
+
+.kpi-trend {
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .dashboard-header h1 {

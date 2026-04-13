@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Package, 
@@ -14,7 +14,11 @@ import {
   ShoppingCart,
   CheckCircle,
   RefreshCw,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Calendar,
+  ChevronRight,
+  BarChart3,
+  UserCheck
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -27,7 +31,9 @@ import {
   CartesianGrid, 
   Tooltip, 
   Legend, 
-  ResponsiveContainer 
+  ResponsiveContainer,
+  AreaChart,
+  Area
 } from 'recharts';
 import { dashboard } from "../../config/api"; 
 import Loading from "../../components/UI/Loading";
@@ -42,13 +48,6 @@ const CHART_COLORS = {
   'Productos de Reventa':  '#9b59b6',
 };
 
-const CHART_STYLE = {
-  background: '#1a1a1a',
-  text: '#888888',
-  grid: '#2a2a2a',
-  tooltip: { bg: '#1a1a1a', border: '#3a3a3a', color: '#f5f5f0' },
-};
-
 function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -58,15 +57,20 @@ function Dashboard() {
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
 
-  useEffect(() => { cargarDatos(); }, []);
+  // Estados de Filtro
+  const [filtroPeriodo, setFiltroPeriodo] = useState('mes'); // 'hoy', 'mes', '30dias', 'anio', 'custom'
+  const [fechas, setFechas] = useState({
+    inicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    fin: new Date().toISOString().split('T')[0]
+  });
 
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async (fInicio = fechas.inicio, fFin = fechas.fin) => {
     try {
       setLoading(true);
       setError(null);
       const [resumenResponse, estadisticasResponse] = await Promise.all([
-        dashboard.getResumen(),
-        dashboard.getEstadisticasMovimientos()
+        dashboard.getResumen({ fecha_inicio: fInicio, fecha_fin: fFin }),
+        dashboard.getEstadisticasMovimientos({ fecha_inicio: fInicio, fecha_fin: fFin })
       ]);
       setResumen(resumenResponse.data);
       setEstadisticas(estadisticasResponse.data);
@@ -78,6 +82,33 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
+  }, [fechas]);
+
+  useEffect(() => { cargarDatos(); }, [cargarDatos]);
+
+  // Manejadores de Filtros
+  const aplicarFiltroPredefinido = (periodo) => {
+    setFiltroPeriodo(periodo);
+    const hoy = new Date();
+    let inicio = new Date();
+    let fin = new Date();
+
+    if (periodo === 'hoy') {
+      inicio = hoy;
+    } else if (periodo === 'mes') {
+      inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    } else if (periodo === '30dias') {
+      inicio = new Date();
+      inicio.setDate(hoy.getDate() - 30);
+    } else if (periodo === 'anio') {
+      inicio = new Date(hoy.getFullYear(), 0, 1);
+    }
+
+    const fInicio = inicio.toISOString().split('T')[0];
+    const fFin = fin.toISOString().split('T')[0];
+    
+    setFechas({ inicio: fInicio, fin: fFin });
+    cargarDatos(fInicio, fFin);
   };
 
   const actualizarTipoCambioManual = async () => {
@@ -119,6 +150,7 @@ function Dashboard() {
     return colores[nombreTipo] || { color: '#888', icon: Layers };
   };
 
+  // Preparación de datos para gráficos
   const prepararDatosPieChart = () => {
     if (!resumen?.valoracion_por_tipo) return [];
     return resumen.valoracion_por_tipo.map(tipo => ({
@@ -151,19 +183,19 @@ function Dashboard() {
     );
   };
 
-  if (loading) return <Loading message="Cargando dashboard..." />;
+  if (loading && !resumen) return <Loading message="Cargando analítica..." />;
 
   return (
     <div className="dashboard-container">
 
-      {/* Header */}
+      {/* Header BI */}
       <div className="dashboard-header">
         <div>
-          <h1>Dashboard de Control</h1>
-          <p className="subtitle">Vista general del sistema de inventario y producción</p>
+          <h1>Centro de Inteligencia SPI</h1>
+          <p className="subtitle">Análisis dinámico de inventario, ventas y producción</p>
         </div>
         <div className="dashboard-actions">
-          <button onClick={toggleMoneda} className="btn btn-currency" title={`Cambiar a ${moneda === 'PEN' ? 'USD' : 'PEN'}`}>
+          <button onClick={toggleMoneda} className="btn-currency" title={`Cambiar a ${moneda === 'PEN' ? 'USD' : 'PEN'}`}>
             <ArrowLeftRight size={16} />
             <span className="currency-label">{moneda}</span>
           </button>
@@ -178,135 +210,171 @@ function Dashboard() {
               {tipoCambio.desde_cache && (
                 <span className="cache-indicator" title="Desde caché"><RefreshCw size={11} /></span>
               )}
-              {tipoCambio.es_default && (
-                <span className="default-indicator" title="Valor predeterminado">⚠️</span>
-              )}
             </div>
           )}
 
-          <button
-            onClick={actualizarTipoCambioManual}
-            className={`btn ${tipoCambio?.es_default ? 'btn-primary' : 'btn-outline'}`}
-            disabled={loadingTC}
-          >
-            {loadingTC ? (
-              <><RefreshCw size={16} className="spinner" /> Actualizando...</>
-            ) : (
-              <><DollarSign size={16} /> {tipoCambio?.es_default ? 'Actualizar TC' : 'Refrescar TC'}</>
-            )}
+          <button onClick={() => cargarDatos()} className="btn btn-outline" disabled={loading}>
+            <RefreshCw size={16} className={loading ? 'spinner' : ''} />
+            Refrescar
           </button>
+        </div>
+      </div>
 
-          <button onClick={cargarDatos} className="btn btn-outline" disabled={loading}>
-            <RefreshCw size={16} />
-            Actualizar
-          </button>
+      {/* Barra de Filtros de Fecha */}
+      <div className="date-filters">
+        <div className="flex gap-2">
+          <button onClick={() => aplicarFiltroPredefinido('hoy')} className={`filter-btn ${filtroPeriodo === 'hoy' ? 'active' : ''}`}>Hoy</button>
+          <button onClick={() => aplicarFiltroPredefinido('mes')} className={`filter-btn ${filtroPeriodo === 'mes' ? 'active' : ''}`}>Este Mes</button>
+          <button onClick={() => aplicarFiltroPredefinido('30dias')} className={`filter-btn ${filtroPeriodo === '30dias' ? 'active' : ''}`}>30 Días</button>
+          <button onClick={() => aplicarFiltroPredefinido('anio')} className={`filter-btn ${filtroPeriodo === 'anio' ? 'active' : ''}`}>Este Año</button>
+        </div>
+        <div className="custom-date-picker">
+          <Calendar size={14} className="text-muted" />
+          <input 
+            type="date" 
+            className="date-input" 
+            value={fechas.inicio} 
+            onChange={(e) => {
+              setFechas({...fechas, inicio: e.target.value});
+              setFiltroPeriodo('custom');
+            }}
+          />
+          <span className="text-muted">al</span>
+          <input 
+            type="date" 
+            className="date-input" 
+            value={fechas.fin} 
+            onChange={(e) => {
+              setFechas({...fechas, fin: e.target.value});
+              setFiltroPeriodo('custom');
+            }}
+          />
+          <button onClick={() => cargarDatos()} className="btn btn-primary btn-sm ml-2">Aplicar</button>
         </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {tipoCambio?.advertencia && <Alert type="warning" message={tipoCambio.advertencia} />}
 
-      {/* Stat cards */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon products"><Package size={26} /></div>
-          <div className="stat-content">
-            <p className="stat-label">Productos Activos</p>
-            <h2 className="stat-value">{resumen?.total_productos || 0}</h2>
-            <p className="stat-sublabel">{resumen?.productos_con_stock || 0} con stock</p>
-          </div>
+      {/* Fila de KPIs Principales */}
+      <div className="kpi-row">
+        <div className="kpi-stat info">
+          <p className="kpi-label">Ventas Totales</p>
+          <h2 className="kpi-value">{formatearMoneda(getValorSegunMoneda(resumen?.valor_total_venta_pen, resumen?.valor_total_venta_usd))}</h2>
+          <div className="kpi-trend text-success"><ArrowUpRight size={12} /> Facturación bruta</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon employees"><Users size={26} /></div>
-          <div className="stat-content">
-            <p className="stat-label">Empleados Activos</p>
-            <h2 className="stat-value">{resumen?.total_empleados || 0}</h2>
-          </div>
+        <div className="kpi-stat danger">
+          <p className="kpi-label">Costo Producción</p>
+          <h2 className="kpi-value">{formatearMoneda(getValorSegunMoneda(resumen?.valor_total_produccion_pen, resumen?.valor_total_produccion_usd))}</h2>
+          <div className="kpi-trend text-danger"><Box size={12} /> Valor en almacén</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon production"><Factory size={26} /></div>
-          <div className="stat-content">
-            <p className="stat-label">Órdenes de Producción</p>
-            <h2 className="stat-value">{resumen?.ordenes_activas || 0}</h2>
-            <p className="stat-sublabel">en proceso</p>
-          </div>
+        <div className="kpi-stat success">
+          <p className="kpi-label">Margen Bruto</p>
+          <h2 className="kpi-value">{formatearMoneda(getValorSegunMoneda(resumen?.valor_total_venta_pen - resumen?.valor_total_produccion_pen, resumen?.valor_total_venta_usd - resumen?.valor_total_produccion_usd))}</h2>
+          <div className="kpi-trend text-success"><TrendingUp size={12} /> Utilidad proyectada</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon warning"><AlertTriangle size={26} /></div>
-          <div className="stat-content">
-            <p className="stat-label">Stock Bajo</p>
-            <h2 className="stat-value text-danger">{resumen?.productos_stock_bajo || 0}</h2>
-            <p className="stat-sublabel">productos críticos</p>
-          </div>
+        <div className="kpi-stat">
+          <p className="kpi-label">Órdenes Activas</p>
+          <h2 className="kpi-value">{resumen?.ordenes_activas || 0}</h2>
+          <div className="kpi-trend"><RefreshCw size={12} /> En flujo de trabajo</div>
         </div>
       </div>
 
-      {/* Movimientos desglose */}
-      <div className="card mb-4">
-        <div className="card-header">
-          <h3 className="card-title">Movimientos — Desglose por Moneda</h3>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2" style={{ color: '#2ecc71', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                <ArrowDownRight size={16} /> Entradas de Inventario
-              </h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center p-3 bg-gray-100 rounded">
-                  <span className="text-sm">En Soles (PEN):</span>
-                  <span className="font-bold">{formatearMoneda(estadisticas?.entradas?.valor_pen || 0, 'PEN')}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-100 rounded">
-                  <span className="text-sm">En Dólares (USD):</span>
-                  <span className="font-bold">{formatearMoneda(estadisticas?.entradas?.valor_usd || 0, 'USD')}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 rounded border-l-4 border-success" style={{ background: 'rgba(46,204,113,0.08)' }}>
-                  <span className="font-semibold text-sm">Total ({moneda}):</span>
-                  <span className="font-bold text-success">
-                    {formatearMoneda(moneda === 'PEN' ? estadisticas?.entradas?.valor_total_pen : estadisticas?.entradas?.valor_total_usd)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2" style={{ color: '#e74c3c', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                <ArrowUpRight size={16} /> Salidas de Inventario
-              </h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center p-3 bg-gray-100 rounded">
-                  <span className="text-sm">En Soles (PEN):</span>
-                  <span className="font-bold">{formatearMoneda(estadisticas?.salidas?.valor_pen || 0, 'PEN')}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-100 rounded">
-                  <span className="text-sm">En Dólares (USD):</span>
-                  <span className="font-bold">{formatearMoneda(estadisticas?.salidas?.valor_usd || 0, 'USD')}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 rounded border-l-4 border-danger" style={{ background: 'rgba(231,76,60,0.08)' }}>
-                  <span className="font-semibold text-sm">Total ({moneda}):</span>
-                  <span className="font-bold text-danger">
-                    {formatearMoneda(moneda === 'PEN' ? estadisticas?.salidas?.valor_total_pen : estadisticas?.salidas?.valor_total_usd)}
-                  </span>
-                </div>
-              </div>
+      {/* Secciones de Análisis Top Rankings */}
+      <div className="analytics-grid">
+        
+        {/* Top Productos */}
+        <div className="analytics-card">
+          <div className="card-header">
+            <h3 className="card-title"><BarChart3 size={18} className="mr-2" /> Top 10 Productos Más Vendidos</h3>
+            <span className="text-xs text-muted">Por volumen de salida</span>
+          </div>
+          <div className="card-body">
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th className="text-right">Cant.</th>
+                    <th className="text-right">Total ({moneda})</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumen?.top_productos?.map((p, i) => {
+                    const maxCant = resumen.top_productos[0].total_cantidad;
+                    const pct = (p.total_cantidad / maxCant) * 100;
+                    return (
+                      <tr key={p.id_producto}>
+                        <td className="rank-cell">
+                          <span className="rank-name">{p.nombre}</span>
+                          <span className="rank-sub">{p.codigo} — {p.tipo_inventario}</span>
+                          <div className="progress-container">
+                            <div className="progress-bar" style={{ width: `${pct}%`, background: '#5dade2' }}></div>
+                          </div>
+                        </td>
+                        <td className="text-right font-bold">{p.total_cantidad}</td>
+                        <td className="text-right">{formatearMoneda(getValorSegunMoneda(p.total_valor_pen, p.total_valor_usd))}</td>
+                      </tr>
+                    );
+                  })}
+                  {(!resumen?.top_productos || resumen.top_productos.length === 0) && (
+                    <tr><td colSpan="3" className="text-center p-4 text-muted">No hay movimientos en este periodo</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
+        </div>
 
-          <div className="mt-2 p-3 rounded" style={{ background: 'rgba(93,173,226,0.06)', border: '1px solid rgba(93,173,226,0.2)', marginTop: '1rem' }}>
-            <p className="text-xs" style={{ color: '#5dade2', margin: 0 }}>
-              <strong>Nota:</strong> Los totales incluyen conversión automática al tipo de cambio actual
-              ({tipoCambio?.venta?.toFixed(3) || '3.800'} PEN/USD).
-            </p>
+        {/* Top Clientes */}
+        <div className="analytics-card">
+          <div className="card-header">
+            <h3 className="card-title"><UserCheck size={18} className="mr-2" /> Clientes con Mayor Facturación</h3>
+            <span className="text-xs text-muted">Basado en Órdenes de Venta</span>
+          </div>
+          <div className="card-body">
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th className="text-right">Órdenes</th>
+                    <th className="text-right">Monto ({moneda})</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumen?.top_clientes?.map((c, i) => {
+                    const maxMonto = getValorSegunMoneda(resumen.top_clientes[0].monto_total_pen, resumen.top_clientes[0].monto_total_usd);
+                    const montoActual = getValorSegunMoneda(c.monto_total_pen, c.monto_total_usd);
+                    const pct = (montoActual / maxMonto) * 100;
+                    return (
+                      <tr key={c.id_cliente}>
+                        <td className="rank-cell">
+                          <span className="rank-name">{c.razon_social}</span>
+                          <div className="progress-container">
+                            <div className="progress-bar" style={{ width: `${pct}%`, background: '#2ecc71' }}></div>
+                          </div>
+                        </td>
+                        <td className="text-right font-bold">{c.total_ordenes}</td>
+                        <td className="text-right">{formatearMoneda(montoActual)}</td>
+                      </tr>
+                    );
+                  })}
+                  {(!resumen?.top_clientes || resumen.top_clientes.length === 0) && (
+                    <tr><td colSpan="3" className="text-center p-4 text-muted">No hay ventas en este periodo</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+
       </div>
 
-      {/* Gráficos */}
+      {/* Gráficos de Tendencia */}
       <div className="charts-grid">
         <div className="card chart-card">
           <div className="card-header">
-            <h3 className="card-title">Distribución por Tipo</h3>
+            <h3 className="card-title">Distribución del Valor del Inventario</h3>
           </div>
           <div className="card-body">
             <ResponsiveContainer width="100%" height={300}>
@@ -315,9 +383,9 @@ function Dashboard() {
                   data={prepararDatosPieChart()}
                   cx="50%"
                   cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name.split(' ')[0]}: ${(percent * 100).toFixed(0)}%`}
+                  innerRadius={60}
                   outerRadius={100}
+                  paddingAngle={5}
                   dataKey="value"
                 >
                   {prepararDatosPieChart().map((entry, index) => (
@@ -325,6 +393,7 @@ function Dashboard() {
                   ))}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -332,7 +401,7 @@ function Dashboard() {
 
         <div className="card chart-card">
           <div className="card-header">
-            <h3 className="card-title">Movimientos Mensuales</h3>
+            <h3 className="card-title">Movimientos Mensuales (Histórico 6 Meses)</h3>
           </div>
           <div className="card-body">
             <ResponsiveContainer width="100%" height={300}>
@@ -350,160 +419,33 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Inventario por tipo */}
-      <div className="inventario-grid">
-        {resumen?.valoracion_por_tipo?.map((tipo) => {
-          const config = getColorTipo(tipo.tipo_inventario);
-          const IconComponent = config.icon;
-          const valorProduccion = getValorSegunMoneda(tipo.valor_produccion_pen, tipo.valor_produccion_usd);
-          const valorVenta = getValorSegunMoneda(tipo.valor_venta_pen, tipo.valor_venta_usd);
-          const margen = valorVenta - valorProduccion;
-
-          return (
-            <div key={tipo.tipo_inventario} className="inventario-card">
-              <div className="inventario-header" style={{ backgroundColor: config.color + '22', borderBottom: `2px solid ${config.color}` }}>
-                <IconComponent size={20} color={config.color} />
-                <h3>{tipo.tipo_inventario}</h3>
-              </div>
-              <div className="inventario-body">
-                <div className="inventario-stat">
-                  <span className="stat-label-small">Productos</span>
-                  <span className="stat-value-medium">{tipo.total_productos}</span>
-                </div>
-                <div className="inventario-stat">
-                  <span className="stat-label-small">Stock Total</span>
-                  <span className="stat-value-medium">{parseFloat(tipo.stock_total || 0).toFixed(0)}</span>
-                </div>
-                <div className="inventario-valores">
-                  <div className="valor-item produccion-item">
-                    <span className="valor-label-tiny">V. Producción</span>
-                    <span className="valor-amount">{formatearMoneda(valorProduccion)}</span>
-                  </div>
-                  {valorVenta > 0 && (
-                    <>
-                      <div className="valor-item venta-item">
-                        <span className="valor-label-tiny">V. Venta</span>
-                        <span className="valor-amount">{formatearMoneda(valorVenta)}</span>
-                      </div>
-                      {margen > 0 && (
-                        <div className="valor-item margen-item">
-                          <span className="valor-label-tiny">Margen</span>
-                          <span className="valor-amount">{formatearMoneda(margen)}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Tabla + Accesos rápidos */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h3 className="card-title">Desglose por Tipo de Inventario</h3>
-              <p className="text-muted">Valores en {moneda}</p>
-            </div>
-          </div>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Tipo</th>
-                  <th className="text-right">Prod.</th>
-                  <th className="text-right">Stock</th>
-                  <th className="text-right">V. Producción</th>
-                  <th className="text-right">V. Venta</th>
-                  <th className="text-right">Margen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resumen?.valoracion_por_tipo?.map((tipo) => {
-                  const config = getColorTipo(tipo.tipo_inventario);
-                  const IconComponent = config.icon;
-                  const valorProd = getValorSegunMoneda(tipo.valor_produccion_pen, tipo.valor_produccion_usd);
-                  const valorVenta = getValorSegunMoneda(tipo.valor_venta_pen, tipo.valor_venta_usd);
-                  const margen = valorVenta - valorProd;
-                  return (
-                    <tr key={tipo.tipo_inventario}>
-                      <td>
-                        <div className="tipo-badge" style={{ borderLeft: `3px solid ${config.color}` }}>
-                          <IconComponent size={14} color={config.color} />
-                          {tipo.tipo_inventario}
-                        </div>
-                      </td>
-                      <td className="text-right font-bold">{tipo.total_productos}</td>
-                      <td className="text-right">{parseFloat(tipo.stock_total || 0).toFixed(0)}</td>
-                      <td className="text-right">{formatearMoneda(valorProd)}</td>
-                      <td className="text-right">{valorVenta > 0 ? formatearMoneda(valorVenta) : '—'}</td>
-                      <td className="text-right text-success">{margen > 0 ? formatearMoneda(margen) : '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td><strong>TOTAL</strong></td>
-                  <td className="text-right"><strong>{resumen?.valoracion_por_tipo?.reduce((s, t) => s + parseInt(t.total_productos || 0), 0) || 0}</strong></td>
-                  <td className="text-right"><strong>{resumen?.valoracion_por_tipo?.reduce((s, t) => s + parseFloat(t.stock_total || 0), 0).toFixed(0) || 0}</strong></td>
-                  <td className="text-right"><strong>{formatearMoneda(getValorSegunMoneda(resumen?.valor_total_produccion_pen, resumen?.valor_total_produccion_usd))}</strong></td>
-                  <td className="text-right"><strong>{formatearMoneda(getValorSegunMoneda(resumen?.valor_total_venta_pen, resumen?.valor_total_venta_usd))}</strong></td>
-                  <td className="text-right text-success"><strong>{formatearMoneda(getValorSegunMoneda((resumen?.valor_total_venta_pen || 0) - (resumen?.valor_total_produccion_pen || 0), (resumen?.valor_total_venta_usd || 0) - (resumen?.valor_total_produccion_usd || 0)))}</strong></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+      {/* Accesos Rápidos */}
+      <div className="card mb-6">
+        <div className="card-header">
+          <h3 className="card-title">Panel de Operaciones Rápidas</h3>
         </div>
-
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h3 className="card-title">Accesos Rápidos</h3>
-              <p className="text-muted">Operaciones frecuentes</p>
-            </div>
-          </div>
-          <div className="card-body">
-            <div className="actions-grid">
-              <Link to="/inventario/entradas"         className="action-btn primary">
-                <div className="action-icon"><ArrowDownRight size={18} /></div>
-                <div className="action-content">
-                  <span className="action-title">Registrar Entrada</span>
-                  <span className="action-subtitle">Ingreso de inventario</span>
-                </div>
-              </Link>
-              <Link to="/inventario/salidas"          className="action-btn danger">
-                <div className="action-icon"><ArrowUpRight size={18} /></div>
-                <div className="action-content">
-                  <span className="action-title">Registrar Salida</span>
-                  <span className="action-subtitle">Venta o consumo</span>
-                </div>
-              </Link>
-              <Link to="/inventario/transferencias"   className="action-btn warning">
-                <div className="action-icon"><TrendingUp size={18} /></div>
-                <div className="action-content">
-                  <span className="action-title">Transferir Inventarios</span>
-                  <span className="action-subtitle">Movimiento interno</span>
-                </div>
-              </Link>
-              <Link to="/produccion/ordenes/nueva"    className="action-btn success">
-                <div className="action-icon"><Factory size={18} /></div>
-                <div className="action-content">
-                  <span className="action-title">Nueva Orden de Producción</span>
-                  <span className="action-subtitle">Fabricar productos</span>
-                </div>
-              </Link>
-              <Link to="/productos"                   className="action-btn info">
-                <div className="action-icon"><Package size={18} /></div>
-                <div className="action-content">
-                  <span className="action-title">Catálogo de Productos</span>
-                  <span className="action-subtitle">Ver y gestionar</span>
-                </div>
-              </Link>
-            </div>
+        <div className="card-body">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <Link to="/inventario/entradas" className="action-btn primary">
+              <div className="action-icon"><ArrowDownRight size={18} /></div>
+              <div className="action-content"><span className="action-title">Entrada</span></div>
+            </Link>
+            <Link to="/inventario/salidas" className="action-btn danger">
+              <div className="action-icon"><ArrowUpRight size={18} /></div>
+              <div className="action-content"><span className="action-title">Salida</span></div>
+            </Link>
+            <Link to="/produccion/ordenes/nueva" className="action-btn success">
+              <div className="action-icon"><Factory size={18} /></div>
+              <div className="action-content"><span className="action-title">Nueva OP</span></div>
+            </Link>
+            <Link to="/ventas/nueva-orden" className="action-btn warning">
+              <div className="action-icon"><DollarSign size={18} /></div>
+              <div className="action-content"><span className="action-title">Venta</span></div>
+            </Link>
+            <Link to="/productos" className="action-btn info">
+              <div className="action-icon"><Package size={18} /></div>
+              <div className="action-content"><span className="action-title">Catálogo</span></div>
+            </Link>
           </div>
         </div>
       </div>

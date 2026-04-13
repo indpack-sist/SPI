@@ -54,8 +54,21 @@ export const actualizarTipoCambioManual = async (req, res) => {
 
 export const obtenerResumenGeneral = async (req, res) => {
   try {
+    const { fecha_inicio, fecha_fin } = req.query;
     const tipoCambio = obtenerTipoCambioCache();
     
+    let whereDateOV = '';
+    let whereDateEntradas = '';
+    let whereDateSalidas = '';
+    let paramsDate = [];
+
+    if (fecha_inicio && fecha_fin) {
+      whereDateOV = ' AND ov.fecha_emision BETWEEN ? AND ?';
+      whereDateEntradas = ' AND fecha_movimiento BETWEEN ? AND ?';
+      whereDateSalidas = ' AND fecha_movimiento BETWEEN ? AND ?';
+      paramsDate = [fecha_inicio, fecha_fin];
+    }
+
     const productosActivosResult = await executeQuery(
       'SELECT COUNT(*) AS total_productos FROM productos WHERE estado = ?',
       ['Activo']
@@ -93,6 +106,44 @@ export const obtenerResumenGeneral = async (req, res) => {
        WHERE estado = 'Activo' 
        AND stock_actual > 0 
        AND stock_actual <= stock_minimo`
+    );
+
+    // TOP 10 PRODUCTOS MAS VENDIDOS/SALIDOS
+    const topProductosResult = await executeQuery(
+      `SELECT 
+        p.id_producto,
+        p.nombre,
+        p.codigo,
+        ti.nombre AS tipo_inventario,
+        SUM(ds.cantidad) AS total_cantidad,
+        SUM(ds.cantidad * ds.precio_unitario) AS total_valor_pen,
+        SUM(CASE WHEN s.moneda = 'USD' THEN ds.cantidad * ds.precio_unitario ELSE 0 END) as valor_usd_directo
+       FROM detalle_salidas ds
+       INNER JOIN salidas s ON ds.id_salida = s.id_salida
+       INNER JOIN productos p ON ds.id_producto = p.id_producto
+       INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+       WHERE s.estado = 'Activo' ${whereDateSalidas}
+       GROUP BY p.id_producto
+       ORDER BY total_cantidad DESC
+       LIMIT 10`,
+      paramsDate
+    );
+
+    // TOP 10 CLIENTES CON MAS ORDENES Y MONTO
+    const topClientesResult = await executeQuery(
+      `SELECT 
+        c.id_cliente,
+        c.razon_social,
+        COUNT(ov.id_orden_venta) AS total_ordenes,
+        SUM(CASE WHEN ov.moneda = 'PEN' THEN ov.total_monto ELSE 0 END) AS total_pen,
+        SUM(CASE WHEN ov.moneda = 'USD' THEN ov.total_monto ELSE 0 END) AS total_usd
+       FROM ordenes_venta ov
+       INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
+       WHERE ov.estado != 'Anulado' ${whereDateOV}
+       GROUP BY c.id_cliente
+       ORDER BY total_pen DESC, total_usd DESC
+       LIMIT 10`,
+      paramsDate
     );
 
     const valoracionPorTipoResult = await executeQuery(
@@ -174,6 +225,19 @@ export const obtenerResumenGeneral = async (req, res) => {
       ordenes_activas: ordenesResult.data[0].ordenes_activas,
       productos_stock_bajo: stockBajoResult.data[0].productos_stock_bajo,
       
+      top_productos: topProductosResult.data.map(p => ({
+        ...p,
+        total_cantidad: parseFloat(p.total_cantidad),
+        total_valor_pen: parseFloat(p.total_valor_pen),
+        total_valor_usd: tipoCambio.valido ? convertirPENaUSD(p.total_valor_pen, tipoCambio) : p.total_valor_pen / 3.80
+      })),
+
+      top_clientes: topClientesResult.data.map(c => ({
+        ...c,
+        monto_total_pen: parseFloat(c.total_pen) + (tipoCambio.valido ? parseFloat(c.total_usd) * tipoCambio.venta : parseFloat(c.total_usd) * 3.80),
+        monto_total_usd: (tipoCambio.valido ? convertirPENaUSD(parseFloat(c.total_pen), tipoCambio) : parseFloat(c.total_pen) / 3.80) + parseFloat(c.total_usd)
+      })),
+
       valoracion_por_tipo: valoracionPorTipoResult.data.map(tipo => ({
         ...tipo,
         total_productos: parseInt(tipo.total_productos),

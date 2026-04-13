@@ -69,28 +69,34 @@ export const obtenerResumenGeneral = async (req, res) => {
       paramsDate = [fecha_inicio, fecha_fin];
     }
 
+    // KPIs DE VENTAS REALES EN EL PERIODO (No valorización de stock)
+    const ventasPeriodoResult = await executeQuery(
+      `SELECT 
+        SUM(CASE WHEN moneda = 'PEN' THEN total ELSE 0 END) AS ventas_pen,
+        SUM(CASE WHEN moneda = 'USD' THEN total ELSE 0 END) AS ventas_usd,
+        COUNT(*) AS total_ordenes
+       FROM ordenes_venta ov
+       WHERE estado != 'Anulado' ${whereDateOV}`,
+      paramsDate
+    );
+
+    // COSTOS DE SALIDAS (COSTO DE VENTAS/CONSUMO) EN EL PERIODO
+    const costosPeriodoResult = await executeQuery(
+      `SELECT 
+        SUM(CASE WHEN moneda = 'PEN' THEN total_precio ELSE 0 END) AS costos_pen,
+        SUM(CASE WHEN moneda = 'USD' THEN total_precio ELSE 0 END) AS costos_usd
+       FROM salidas s
+       WHERE estado = 'Activo' ${whereDateSalidas}`,
+      paramsDate
+    );
+
     const productosActivosResult = await executeQuery(
       'SELECT COUNT(*) AS total_productos FROM productos WHERE estado = ?',
       ['Activo']
     );
 
-    const productosConStockResult = await executeQuery(
-      'SELECT COUNT(*) AS productos_con_stock FROM productos WHERE estado = ? AND stock_actual > 0',
-      ['Activo']
-    );
-
     const empleadosResult = await executeQuery(
       'SELECT COUNT(*) AS total_empleados FROM empleados WHERE estado = ?',
-      ['Activo']
-    );
-
-    const proveedoresResult = await executeQuery(
-      'SELECT COUNT(*) AS total_proveedores FROM proveedores WHERE estado = ?',
-      ['Activo']
-    );
-
-    const clientesResult = await executeQuery(
-      'SELECT COUNT(*) AS total_clientes FROM clientes WHERE estado = ?',
       ['Activo']
     );
 
@@ -116,8 +122,8 @@ export const obtenerResumenGeneral = async (req, res) => {
         p.codigo,
         ti.nombre AS tipo_inventario,
         SUM(ds.cantidad) AS total_cantidad,
-        SUM(ds.cantidad * ds.precio_unitario) AS total_valor_pen,
-        SUM(CASE WHEN s.moneda = 'USD' THEN ds.cantidad * ds.precio_unitario ELSE 0 END) as valor_usd_directo
+        SUM(CASE WHEN s.moneda = 'PEN' THEN ds.cantidad * ds.precio_unitario ELSE 0 END) AS valor_pen,
+        SUM(CASE WHEN s.moneda = 'USD' THEN ds.cantidad * ds.precio_unitario ELSE 0 END) AS valor_usd
        FROM detalle_salidas ds
        INNER JOIN salidas s ON ds.id_salida = s.id_salida
        INNER JOIN productos p ON ds.id_producto = p.id_producto
@@ -129,19 +135,19 @@ export const obtenerResumenGeneral = async (req, res) => {
       paramsDate
     );
 
-    // TOP 10 CLIENTES CON MAS ORDENES Y MONTO
+    // TOP 10 CLIENTES
     const topClientesResult = await executeQuery(
       `SELECT 
         c.id_cliente,
         c.razon_social,
         COUNT(ov.id_orden_venta) AS total_ordenes,
-        SUM(CASE WHEN ov.moneda = 'PEN' THEN ov.total ELSE 0 END) AS total_pen,
-        SUM(CASE WHEN ov.moneda = 'USD' THEN ov.total ELSE 0 END) AS total_usd
+        SUM(CASE WHEN ov.moneda = 'PEN' THEN ov.total ELSE 0 END) AS monto_pen,
+        SUM(CASE WHEN ov.moneda = 'USD' THEN ov.total ELSE 0 END) AS monto_usd
        FROM ordenes_venta ov
        INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
        WHERE ov.estado != 'Anulado' ${whereDateOV}
        GROUP BY c.id_cliente
-       ORDER BY total_pen DESC, total_usd DESC
+       ORDER BY monto_pen DESC, monto_usd DESC
        LIMIT 10`,
       paramsDate
     );
@@ -152,128 +158,62 @@ export const obtenerResumenGeneral = async (req, res) => {
         ti.nombre AS tipo_inventario,
         COUNT(p.id_producto) AS total_productos,
         COALESCE(SUM(p.stock_actual), 0) AS stock_total,
-        
-        COALESCE(
-          SUM(
-            p.stock_actual * COALESCE(
-              (
-                SELECT SUM(op.costo_materiales) / SUM(op.cantidad_producida)
-                FROM ordenes_produccion op
-                WHERE op.id_producto_terminado = p.id_producto 
-                AND op.estado = 'Finalizada' 
-                AND op.cantidad_producida > 0 
-                AND op.costo_materiales > 0
-              ),
-              (
-                SELECT SUM(rd.cantidad_requerida * insumo.costo_unitario_promedio) / NULLIF(MAX(rp.rendimiento_unidades), 0)
-                FROM recetas_productos rp
-                INNER JOIN recetas_detalle rd ON rp.id_receta_producto = rd.id_receta_producto
-                INNER JOIN productos insumo ON rd.id_insumo = insumo.id_producto
-                WHERE rp.id_producto_terminado = p.id_producto 
-                AND rp.es_principal = 1 
-                AND rp.es_activa = 1
-                GROUP BY rp.id_receta_producto
-              ),
-              p.costo_unitario_promedio,
-              0
-            )
-          ), 
-          0
-        ) AS valor_produccion,
-        
-        COALESCE(
-          SUM(
-            CASE 
-              WHEN ti.nombre IN ('Productos Terminados', 'Productos de Reventa') 
-                   AND p.precio_venta > 0 
-              THEN p.stock_actual * p.precio_venta
-              ELSE 0
-            END
-          ),
-          0
-        ) AS valor_venta
+        COALESCE(SUM(p.stock_actual * p.costo_unitario_promedio), 0) AS valor_almacen_pen
        FROM tipos_inventario ti
-       LEFT JOIN productos p ON ti.id_tipo_inventario = p.id_tipo_inventario 
-         AND p.estado = 'Activo'
+       LEFT JOIN productos p ON ti.id_tipo_inventario = p.id_tipo_inventario AND p.estado = 'Activo'
        WHERE ti.estado = 'Activo'
        GROUP BY ti.id_tipo_inventario, ti.nombre
        ORDER BY ti.nombre ASC`
     );
 
-    const valor_total_produccion_pen = (valoracionPorTipoResult.data || []).reduce((sum, tipo) => {
-      return sum + parseFloat(tipo.valor_produccion || 0);
-    }, 0);
-
-    const valor_total_venta_pen = (valoracionPorTipoResult.data || []).reduce((sum, tipo) => {
-      return sum + parseFloat(tipo.valor_venta || 0);
-    }, 0);
-
-    const valor_total_produccion_usd = tipoCambio.valido 
-      ? convertirPENaUSD(valor_total_produccion_pen, tipoCambio)
-      : valor_total_produccion_pen / 3.765;
-
-    const valor_total_venta_usd = tipoCambio.valido 
-      ? convertirPENaUSD(valor_total_venta_pen, tipoCambio)
-      : valor_total_venta_pen / 3.765;
-
     res.json({
+      success: true,
+      periodo: { inicio: fecha_inicio, fin: fecha_fin },
+      
+      // KPIs Resumen Periodo
+      resumen_ventas: {
+        pen: parseFloat(ventasPeriodoResult.data?.[0]?.ventas_pen || 0),
+        usd: parseFloat(ventasPeriodoResult.data?.[0]?.ventas_usd || 0),
+        cantidad: ventasPeriodoResult.data?.[0]?.total_ordenes || 0
+      },
+      resumen_costos: {
+        pen: parseFloat(costosPeriodoResult.data?.[0]?.costos_pen || 0),
+        usd: parseFloat(costosPeriodoResult.data?.[0]?.costos_usd || 0)
+      },
+
+      // Stats Generales
       total_productos: productosActivosResult.data?.[0]?.total_productos || 0,
-      productos_con_stock: productosConStockResult.data?.[0]?.productos_con_stock || 0,
       total_empleados: empleadosResult.data?.[0]?.total_empleados || 0,
-      total_proveedores: proveedoresResult.data?.[0]?.total_proveedores || 0,
-      total_clientes: clientesResult.data?.[0]?.total_clientes || 0,
       ordenes_activas: ordenesResult.data?.[0]?.ordenes_activas || 0,
       productos_stock_bajo: stockBajoResult.data?.[0]?.productos_stock_bajo || 0,
       
-      top_productos: (topProductosResult && topProductosResult.data ? topProductosResult.data : []).map(p => ({
+      // Rankings
+      top_productos: (topProductosResult.data || []).map(p => ({
         ...p,
         total_cantidad: parseFloat(p.total_cantidad || 0),
-        total_valor_pen: parseFloat(p.total_valor_pen || 0),
-        total_valor_usd: tipoCambio.valido ? convertirPENaUSD(p.total_valor_pen, tipoCambio) : (p.total_valor_pen || 0) / 3.80
+        valor_pen: parseFloat(p.valor_pen || 0),
+        valor_usd: parseFloat(p.valor_usd || 0)
       })),
 
-      top_clientes: (topClientesResult && topClientesResult.data ? topClientesResult.data : []).map(c => ({
+      top_clientes: (topClientesResult.data || []).map(c => ({
         ...c,
-        monto_total_pen: parseFloat(c.total_pen || 0) + (tipoCambio.valido ? parseFloat(c.total_usd || 0) * tipoCambio.venta : parseFloat(c.total_usd || 0) * 3.80),
-        monto_total_usd: (tipoCambio.valido ? convertirPENaUSD(parseFloat(c.total_pen || 0), tipoCambio) : parseFloat(c.total_pen || 0) / 3.80) + parseFloat(c.total_usd || 0)
+        monto_pen: parseFloat(c.monto_pen || 0),
+        monto_usd: parseFloat(c.monto_usd || 0)
       })),
 
-      valoracion_por_tipo: (valoracionPorTipoResult && valoracionPorTipoResult.data ? valoracionPorTipoResult.data : []).map(tipo => ({
+      // Valorización Actual (Independiente del periodo de tiempo)
+      valoracion_stock: (valoracionPorTipoResult.data || []).map(tipo => ({
         ...tipo,
-        total_productos: parseInt(tipo.total_productos || 0),
         stock_total: parseFloat(tipo.stock_total || 0),
-        valor_produccion_pen: parseFloat(tipo.valor_produccion || 0),
-        valor_produccion_usd: tipoCambio.valido 
-          ? convertirPENaUSD(parseFloat(tipo.valor_produccion || 0), tipoCambio)
-          : parseFloat(tipo.valor_produccion || 0) / 3.765,
-        valor_venta_pen: parseFloat(tipo.valor_venta || 0),
-        valor_venta_usd: tipoCambio.valido 
-          ? convertirPENaUSD(parseFloat(tipo.valor_venta || 0), tipoCambio)
-          : parseFloat(tipo.valor_venta || 0) / 3.765
+        valor_pen: parseFloat(tipo.valor_almacen_pen || 0)
       })),
       
-      valor_total_produccion_pen: parseFloat(valor_total_produccion_pen.toFixed(2)),
-      valor_total_produccion_usd: parseFloat(valor_total_produccion_usd.toFixed(2)),
-      valor_total_venta_pen: parseFloat(valor_total_venta_pen.toFixed(2)),
-      valor_total_venta_usd: parseFloat(valor_total_venta_usd.toFixed(2)),
-      
-      tipo_cambio: tipoCambio.valido ? {
-        compra: tipoCambio.compra,
-        venta: tipoCambio.venta,
-        promedio: tipoCambio.promedio,
-        fecha: tipoCambio.fecha,
-        desde_cache: tipoCambio.desde_cache || false,
-        es_default: tipoCambio.es_default || false,
-        advertencia: tipoCambio.advertencia || null
-      } : null
+      tipo_cambio: tipoCambio.valido ? tipoCambio : null
     });
 
   } catch (error) {
     console.error('Error al obtener resumen general:', error);
-    res.status(500).json({
-      error: 'Error al obtener resumen del dashboard',
-      details: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 

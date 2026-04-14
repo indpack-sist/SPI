@@ -205,17 +205,46 @@ export async function generarNotaVentaPDF(orden) {
       
       doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
       
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
-      doc.font('Helvetica');
-      const fechaEmision = new Date(orden.fecha_emision).toLocaleDateString('es-PE');
-      doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
+      const esCredito = (orden.forma_pago && orden.forma_pago.toUpperCase().includes('CREDITO')) || 
+                        (orden.plazo_pago && orden.plazo_pago.toUpperCase().includes('DIA'));
+      const tieneVencimientoDiferente = orden.fecha_vencimiento && 
+                                        new Date(orden.fecha_vencimiento).getTime() !== new Date(orden.fecha_emision).getTime();
+      
+      const mostrarVencimiento = orden.fecha_vencimiento && (esCredito || tieneVencimientoDiferente);
 
-      doc.font('Helvetica-Bold');
-      doc.text('Fecha Entrega Estimada:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
-      doc.font('Helvetica');
-      const fechaEntrega = orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'Por coordinar';
-      doc.text(fechaEntrega, 310, yPosRecuadroFechas + 25, { align: 'center', width: 252 });
+      if (mostrarVencimiento) {
+        // Layout de 3 columnas
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('Fecha de Emisión:', 33, yPosRecuadroFechas + 10, { align: 'center', width: 176 });
+        doc.font('Helvetica');
+        const fechaEmision = new Date(orden.fecha_emision).toLocaleDateString('es-PE');
+        doc.text(fechaEmision, 33, yPosRecuadroFechas + 25, { align: 'center', width: 176 });
+
+        doc.font('Helvetica-Bold');
+        doc.text('Fecha de Vencimiento:', 209, yPosRecuadroFechas + 10, { align: 'center', width: 176 });
+        doc.font('Helvetica');
+        const fechaVencimiento = new Date(orden.fecha_vencimiento).toLocaleDateString('es-PE');
+        doc.text(fechaVencimiento, 209, yPosRecuadroFechas + 25, { align: 'center', width: 176 });
+
+        doc.font('Helvetica-Bold');
+        doc.text('Fecha Entrega Estimada:', 385, yPosRecuadroFechas + 10, { align: 'center', width: 177 });
+        doc.font('Helvetica');
+        const fechaEntrega = orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'Por coordinar';
+        doc.text(fechaEntrega, 385, yPosRecuadroFechas + 25, { align: 'center', width: 177 });
+      } else {
+        // Layout original de 2 columnas
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('Fecha de Emisión:', 40, yPosRecuadroFechas + 10, { align: 'center', width: 260 });
+        doc.font('Helvetica');
+        const fechaEmision = new Date(orden.fecha_emision).toLocaleDateString('es-PE');
+        doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 260 });
+
+        doc.font('Helvetica-Bold');
+        doc.text('Fecha Entrega Estimada:', 310, yPosRecuadroFechas + 10, { align: 'center', width: 252 });
+        doc.font('Helvetica');
+        const fechaEntrega = orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'Por coordinar';
+        doc.text(fechaEntrega, 310, yPosRecuadroFechas + 25, { align: 'center', width: 252 });
+      }
 
       let yPos = yPosRecuadroFechas + 52;
 

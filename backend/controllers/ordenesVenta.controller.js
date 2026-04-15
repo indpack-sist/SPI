@@ -3117,6 +3117,8 @@ export async function getOrdenesPendientesVerificacion(req, res) {
         ov.subtotal,
         ov.igv,
         ov.total,
+        ov.tipo_impuesto,
+        ov.porcentaje_impuesto,
         ov.moneda,
         ov.tipo_venta,
         ov.plazo_pago,
@@ -3129,14 +3131,6 @@ export async function getOrdenesPendientesVerificacion(req, res) {
         e_registrado.nombre_completo AS registrado_por,
         ov.id_comercial,
         ov.id_registrado_por,
-        (
-            SELECT COALESCE(SUM(dov.cantidad * dov.precio_unitario * (1 - COALESCE(dov.descuento_porcentaje,0)/100)), 0)
-            FROM detalle_orden_venta dov
-            WHERE dov.id_orden_venta = ov.id_orden_venta
-        ) * CASE 
-            WHEN ov.tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 1
-            ELSE (1 + (COALESCE(ov.porcentaje_impuesto, 18) / 100))
-        END AS total,
         (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items
       FROM ordenes_venta ov
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente

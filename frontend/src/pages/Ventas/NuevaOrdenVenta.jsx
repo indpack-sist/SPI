@@ -806,74 +806,109 @@ useEffect(() => {
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-header bg-gradient-to-r from-orange-50 to-white flex justify-between items-center">
-                <h2 className="card-title text-orange-900 flex items-center gap-2">
-                  <FileText size={20} /> Orden de Compra
-                </h2>
-                <div className="flex items-center gap-2">
-                    <input 
-                        type="checkbox" 
-                        id="checkOC"
-                        className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
-                        checked={tieneOC}
-                        onChange={(e) => setTieneOC(e.target.checked)}
-                    />
-                    <label htmlFor="checkOC" className="text-sm font-medium text-gray-700 cursor-pointer select-none">
-                        Con Orden de Compra
-                    </label>
+            <div className={`card transition-all duration-300 border-l-4 ${tieneOC ? 'border-orange-500 shadow-md' : 'border-gray-300 opacity-80'}`}>
+              <div className="card-header bg-gradient-to-r from-orange-50 to-white flex justify-between items-center py-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${tieneOC ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-gray-200 text-gray-500'}`}>
+                    <FileText size={22} />
+                  </div>
+                  <div>
+                    <h2 className={`card-title m-0 ${tieneOC ? 'text-orange-900' : 'text-gray-500'}`}>Orden de Compra</h2>
+                    <p className="text-[10px] text-muted m-0 uppercase font-bold tracking-wider">Documento del Cliente</p>
+                  </div>
                 </div>
+                
+                <label className="relative inline-flex items-center cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={tieneOC}
+                    onChange={(e) => setTieneOC(e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                  <span className="ml-3 text-sm font-bold text-gray-700 group-hover:text-orange-600 transition-colors">
+                    {tieneOC ? 'CON O.C.' : 'SIN O.C.'}
+                  </span>
+                </label>
               </div>
               
               {tieneOC && (
-                  <div className="card-body space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div>
-                        <label className="form-label text-sm font-semibold text-gray-700">
-                        N° Orden de Compra (Correlativo) *
+                  <div className="card-body space-y-5 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="relative group">
+                        <label className="form-label text-xs font-bold text-orange-800 mb-1.5 flex items-center gap-1">
+                          <Info size={14} /> N° Orden de Compra (Correlativo) *
                         </label>
-                        <input
-                        type="text"
-                        className="form-input text-lg font-mono"
-                        placeholder="Ej: OC-2025-001234"
-                        value={formCabecera.orden_compra_cliente}
-                        onChange={(e) => setFormCabecera({...formCabecera, orden_compra_cliente: e.target.value})}
-                        maxLength={100}
-                        required={tieneOC}
-                        />
+                        <div className="relative">
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500 group-focus-within:scale-110 transition-transform">
+                            <Lock size={18} />
+                          </div>
+                          <input
+                            type="text"
+                            className="form-input text-lg font-mono pl-10 border-orange-200 focus:border-orange-500 focus:ring-orange-500/20 bg-orange-50/30"
+                            placeholder="Ej: OC-2025-001234"
+                            value={formCabecera.orden_compra_cliente}
+                            onChange={(e) => setFormCabecera({...formCabecera, orden_compra_cliente: e.target.value})}
+                            maxLength={100}
+                            required={tieneOC}
+                          />
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="form-label text-sm font-semibold text-gray-700">
-                            Archivo Adjunto (PDF o Imagen) *
+                    <div className="space-y-2">
+                        <label className="form-label text-xs font-bold text-orange-800 mb-1 flex items-center gap-1">
+                            <Box size={14} /> Archivo Adjunto (PDF o Imagen) *
                         </label>
-                        <div className="flex gap-2 items-center">
+                        <div className="flex gap-3 items-stretch">
                             <div 
-                                className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-50 focus:outline-none focus:border-orange-500 transition-all"
+                                className={`flex-1 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all relative overflow-hidden group
+                                  ${archivos.orden_compra 
+                                    ? 'border-green-500 bg-green-50 shadow-inner' 
+                                    : 'border-orange-200 bg-orange-50/50 hover:bg-orange-50 hover:border-orange-400'}`}
                                 tabIndex="0"
                                 onPaste={(e) => handlePaste(e, 'orden_compra')}
                                 title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                             >
                                 {archivos.orden_compra ? (
-                                    <div className="flex items-center justify-center gap-2 text-success text-sm">
-                                        <CheckCircle size={16} />
-                                        <span className="font-medium truncate max-w-[200px]">{archivos.orden_compra.name}</span>
+                                    <div className="flex flex-col items-center justify-center gap-1 animate-in zoom-in duration-300">
+                                        <div className="p-2 bg-green-500 text-white rounded-full shadow-lg">
+                                          <CheckCircle size={20} />
+                                        </div>
+                                        <span className="font-bold text-green-700 text-sm truncate max-w-[180px]">{archivos.orden_compra.name}</span>
+                                        <span className="text-[10px] text-green-600 uppercase font-bold">Archivo listo para enviar</span>
                                     </div>
                                 ) : (
-                                    <div className="text-gray-400">
-                                        <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-orange-600 font-bold">Ctrl+V</span> para pegar imagen</p>
+                                    <div className="flex flex-col items-center justify-center py-1">
+                                        <div className="text-orange-400 mb-2 group-hover:scale-110 transition-transform">
+                                          <FilePlus size={28} />
+                                        </div>
+                                        <p className="text-xs text-orange-800 font-medium">Haz click y pulsa <kbd className="bg-white px-1.5 py-0.5 rounded shadow-sm border border-orange-200 text-orange-600 font-bold">Ctrl+V</kbd></p>
+                                        <p className="text-[10px] text-orange-600 mt-1">para pegar una captura de pantalla</p>
                                     </div>
                                 )}
                             </div>
 
-                            <button 
-                                type="button" 
-                                className="btn btn-outline border-dashed px-4 flex flex-col items-center justify-center gap-1"
-                                onClick={() => document.getElementById('file-upload-oc').click()}
-                                title="Abrir explorador de archivos"
-                            >
-                                <FilePlus size={20} />
-                                <span className="text-[10px] uppercase font-bold">Subir</span>
-                            </button>
+                            <div className="flex flex-col gap-2">
+                              <button 
+                                  type="button" 
+                                  className="btn btn-outline border-2 border-orange-200 hover:border-orange-500 hover:bg-orange-50 px-4 py-0 flex-1 flex flex-col items-center justify-center gap-1 transition-all"
+                                  onClick={() => document.getElementById('file-upload-oc').click()}
+                                  title="Abrir explorador de archivos"
+                              >
+                                  <FileText size={20} className="text-orange-600" />
+                                  <span className="text-[10px] uppercase font-black text-orange-700">Explorar</span>
+                              </button>
+
+                              {archivosPrevios.orden_compra_url && (
+                                  <button
+                                      type="button"
+                                      className="btn btn-primary px-4 py-2 shadow-lg shadow-blue-200"
+                                      onClick={() => verArchivo(archivosPrevios.orden_compra_url)}
+                                      title="Ver archivo actual"
+                                  >
+                                      <Eye size={20} />
+                                  </button>
+                              )}
+                            </div>
 
                             <input 
                                 id="file-upload-oc"
@@ -882,22 +917,14 @@ useEffect(() => {
                                 accept=".pdf,image/*"
                                 onChange={(e) => setArchivos({...archivos, orden_compra: e.target.files[0]})}
                             />
-
-                            {archivosPrevios.orden_compra_url && (
-                                <button
-                                    type="button"
-                                    className="btn btn-outline px-3"
-                                    onClick={() => verArchivo(archivosPrevios.orden_compra_url)}
-                                    title="Ver archivo actual"
-                                >
-                                    <Eye size={20} className="text-blue-600"/>
-                                </button>
-                            )}
                         </div>
                         {archivosPrevios.orden_compra_url && !archivos.orden_compra && (
-                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                                <CheckCircle size={12}/> Archivo cargado previamente. Suba uno nuevo solo si desea reemplazarlo.
-                            </p>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 mt-2">
+                                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight">
+                                  Documento guardado previamente. Sube uno nuevo para reemplazarlo.
+                                </p>
+                            </div>
                         )}
                     </div>
                   </div>
@@ -1437,38 +1464,61 @@ useEffect(() => {
                   <span>{formatearMoneda(totales.total)}</span>
                 </div>
                 
-                <div className="pt-2 border-t mt-2">
-                    <label className="form-label flex items-center gap-1 text-xs">
-                        <FileText size={12}/> Adjuntar Comprobante/Voucher (Opcional)
-                    </label>
-                    <div className="flex gap-2 items-center">
+                <div className="bg-white border-2 border-blue-100 rounded-xl p-4 mt-6 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-blue-500 text-white rounded-lg shadow-sm">
+                        <FileText size={18} />
+                      </div>
+                      <label className="form-label m-0 font-bold text-blue-900 text-sm">
+                        Comprobante / Voucher <span className="text-[10px] text-blue-500 font-normal ml-1">(Opcional)</span>
+                      </label>
+                    </div>
+
+                    <div className="flex gap-3 items-stretch">
                         <div 
-                            className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:bg-gray-50 focus:outline-none focus:border-blue-500 transition-all"
+                            className={`flex-1 border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all group relative
+                              ${archivos.comprobante 
+                                ? 'border-green-500 bg-green-50' 
+                                : 'border-blue-100 bg-blue-50/30 hover:bg-blue-50 hover:border-blue-300'}`}
                             tabIndex="0"
                             onPaste={(e) => handlePaste(e, 'comprobante')}
                             title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                         >
                             {archivos.comprobante ? (
-                                <div className="flex items-center justify-center gap-2 text-success text-sm">
-                                    <CheckCircle size={16} />
-                                    <span className="font-medium truncate max-w-[200px]">{archivos.comprobante.name}</span>
+                                <div className="flex flex-col items-center justify-center animate-in zoom-in duration-300">
+                                    <CheckCircle size={18} className="text-green-500 mb-1" />
+                                    <span className="font-bold text-green-700 text-[11px] truncate max-w-[150px]">{archivos.comprobante.name}</span>
                                 </div>
                             ) : (
-                                <div className="text-gray-400">
-                                    <p className="text-xs font-medium">Haz click aquí y pulsa <span className="text-blue-600 font-bold">Ctrl+V</span> para pegar imagen</p>
+                                <div className="flex flex-col items-center justify-center py-0.5">
+                                    <p className="text-[11px] text-blue-800 font-medium">Click y <kbd className="bg-white px-1 py-0.5 rounded shadow-sm border border-blue-200 text-blue-600 font-bold mx-1">Ctrl+V</kbd></p>
+                                    <p className="text-[9px] text-blue-500 mt-0.5 font-semibold">para pegar voucher</p>
                                 </div>
                             )}
                         </div>
 
-                        <button 
-                            type="button" 
-                            className="btn btn-outline border-dashed px-4 flex flex-col items-center justify-center gap-1"
-                            onClick={() => document.getElementById('file-upload-comp').click()}
-                            title="Abrir explorador de archivos"
-                        >
-                            <FilePlus size={20} />
-                            <span className="text-[10px] uppercase font-bold">Subir</span>
-                        </button>
+                        <div className="flex flex-col gap-1.5">
+                          <button 
+                              type="button" 
+                              className="btn btn-sm btn-outline border-blue-200 hover:border-blue-500 hover:bg-blue-50 px-3 flex-1 flex items-center justify-center gap-2 transition-all"
+                              onClick={() => document.getElementById('file-upload-comp').click()}
+                              title="Subir archivo"
+                          >
+                              <FilePlus size={16} className="text-blue-600" />
+                              <span className="text-[10px] uppercase font-black text-blue-700">Subir</span>
+                          </button>
+
+                          {archivosPrevios.comprobante_url && (
+                              <button
+                                  type="button"
+                                  className="btn btn-sm btn-primary px-3 shadow-md shadow-blue-100"
+                                  onClick={() => verArchivo(archivosPrevios.comprobante_url)}
+                                  title="Ver comprobante actual"
+                              >
+                                  <Eye size={16} />
+                              </button>
+                          )}
+                        </div>
 
                         <input 
                             id="file-upload-comp"
@@ -1477,26 +1527,16 @@ useEffect(() => {
                             accept=".pdf,image/*"
                             onChange={(e) => setArchivos({...archivos, comprobante: e.target.files[0]})}
                         />
-                        {archivosPrevios.comprobante_url && (
-                            <button
-                                type="button"
-                                className="btn btn-outline px-3"
-                                onClick={() => verArchivo(archivosPrevios.comprobante_url)}
-                                title="Ver comprobante actual"
-                            >
-                                <Eye size={20} className="text-blue-600"/>
-                            </button>
-                        )}
                     </div>
                 </div>
 
                 <button 
                   type="submit" 
-                  className="btn btn-primary w-full py-3 mt-4 text-lg shadow-lg shadow-primary/20"
+                  className={`btn btn-primary w-full py-4 mt-6 text-lg font-black tracking-tight shadow-xl transition-all active:scale-95 ${loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo ? 'opacity-70 grayscale' : 'hover:shadow-primary/40'}`}
                   disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
                 >
-                  <Save size={20} />
-                  {loading ? 'Guardando...' : cooldownActivo ? 'Espere...' : modoEdicion ? 'Actualizar Orden' : 'Guardar Orden'}
+                  <Save size={24} className={loading ? 'animate-spin' : ''} />
+                  {loading ? 'PROCESANDO...' : cooldownActivo ? 'ESPERE POR FAVOR...' : modoEdicion ? 'ACTUALIZAR ORDEN DE VENTA' : 'GUARDAR ORDEN DE VENTA'}
                 </button>
               </div>
             </div>

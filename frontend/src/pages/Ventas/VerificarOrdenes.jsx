@@ -308,6 +308,26 @@ function VerificarOrdenes() {
       )
     },
     {
+      header: 'Impuesto',
+      accessor: 'tipo_impuesto',
+      width: '120px',
+      align: 'center',
+      render: (value, row) => (
+        <div className="flex flex-col items-center">
+          <span className={`badge badge-sm ${
+            ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(value).toUpperCase()) 
+            ? 'badge-info' 
+            : 'badge-primary'
+          }`}>
+            {value || 'IGV'}
+          </span>
+          <span className="text-[10px] text-muted">
+            ({row.porcentaje_impuesto || 0}%)
+          </span>
+        </div>
+      )
+    },
+    {
       header: 'Total',
       accessor: 'total',
       width: '120px',
@@ -894,7 +914,23 @@ function VerificarOrdenes() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2">
-                        <td colSpan="4" className="text-right font-bold">TOTAL:</td>
+                        <td colSpan="4" className="text-right font-medium text-muted">Subtotal:</td>
+                        <td className="text-right font-medium">
+                          {formatearMoneda(datosVerificacion.orden.subtotal, datosVerificacion.orden.moneda)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan="4" className="text-right font-medium text-muted">
+                          {['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(datosVerificacion.orden.tipo_impuesto).toUpperCase()) 
+                            ? `${datosVerificacion.orden.tipo_impuesto}:` 
+                            : `IGV (${datosVerificacion.orden.porcentaje_impuesto || 0}%):`}
+                        </td>
+                        <td className="text-right font-medium">
+                          {formatearMoneda(datosVerificacion.orden.igv, datosVerificacion.orden.moneda)}
+                        </td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td colSpan="4" className="text-right font-bold text-lg">TOTAL:</td>
                         <td className="text-right font-bold text-xl text-primary">
                           {formatearMoneda(datosVerificacion.orden.total, datosVerificacion.orden.moneda)}
                         </td>

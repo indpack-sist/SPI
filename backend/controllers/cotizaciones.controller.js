@@ -1201,8 +1201,10 @@ export async function rectificarCantidadCotizacion(req, res) {
         sql: `UPDATE cotizaciones c
               SET 
                 subtotal = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion),
-                igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * (COALESCE(porcentaje_impuesto,18)/100),
-                total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * (1 + COALESCE(porcentaje_impuesto,18)/100),
+                igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * 
+                      (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 0 ELSE (COALESCE(porcentaje_impuesto,18)/100) END),
+                total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * 
+                        (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 1 ELSE (1 + COALESCE(porcentaje_impuesto,18)/100) END),
                 observaciones = CONCAT(COALESCE(observaciones, ""), " [Rect: Prod ", ?, " ", ?, "->", ?, "]")
               WHERE c.id_cotizacion = ?`,
         params: [id_producto, cantidadAnterior, cantidadNueva, id]
@@ -1245,8 +1247,10 @@ export async function rectificarCantidadCotizacion(req, res) {
             sql: `UPDATE ordenes_venta ov
                   SET 
                     subtotal = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta),
-                    igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) * (COALESCE(porcentaje_impuesto,18)/100),
-                    total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) * (1 + COALESCE(porcentaje_impuesto,18)/100)
+                    igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) * 
+                          (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 0 ELSE (COALESCE(porcentaje_impuesto,18)/100) END),
+                    total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) * 
+                            (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 1 ELSE (1 + COALESCE(porcentaje_impuesto,18)/100) END)
                   WHERE ov.id_orden_venta = ?`,
             params: [idOrden]
         });

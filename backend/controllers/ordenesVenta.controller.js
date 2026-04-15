@@ -2898,9 +2898,10 @@ export async function rectificarCantidadProducto(req, res) {
       nuevoSubtotalOrden += (cant * parseFloat(d.precio_unitario)) * (1 - parseFloat(d.descuento_porcentaje || 0) / 100);
     });
 
-    const porcentajeImpuesto = (orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined) 
+    const esSinImpuesto = ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(orden.tipo_impuesto || '').toUpperCase());
+    const porcentajeImpuesto = esSinImpuesto ? 0 : ((orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined) 
       ? parseFloat(orden.porcentaje_impuesto) 
-      : 18;
+      : 18);
     const nuevoImpuesto = nuevoSubtotalOrden * (porcentajeImpuesto / 100);
     const nuevoTotal = nuevoSubtotalOrden + nuevoImpuesto;
 
@@ -2952,8 +2953,10 @@ export async function rectificarCantidadProducto(req, res) {
             sql: `UPDATE cotizaciones c
                   SET 
                     subtotal = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion),
-                    igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * (COALESCE(porcentaje_impuesto,18)/100),
-                    total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * (1 + COALESCE(porcentaje_impuesto,18)/100)
+                    igv = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * 
+                          (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 0 ELSE (COALESCE(porcentaje_impuesto,18)/100) END),
+                    total = (SELECT SUM(cantidad * precio_unitario * (1 - COALESCE(descuento_porcentaje,0)/100)) FROM detalle_cotizacion WHERE id_cotizacion = c.id_cotizacion) * 
+                            (CASE WHEN tipo_impuesto IN ('EXO', 'INA', 'EXONERADO', 'INAFECTO') THEN 1 ELSE (1 + COALESCE(porcentaje_impuesto,18)/100) END)
                   WHERE c.id_cotizacion = ?`,
             params: [orden.id_cotizacion]
         });

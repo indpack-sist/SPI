@@ -2898,7 +2898,9 @@ export async function rectificarCantidadProducto(req, res) {
       nuevoSubtotalOrden += (cant * parseFloat(d.precio_unitario)) * (1 - parseFloat(d.descuento_porcentaje || 0) / 100);
     });
 
-    const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
+    const porcentajeImpuesto = (orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined) 
+      ? parseFloat(orden.porcentaje_impuesto) 
+      : 18;
     const nuevoImpuesto = nuevoSubtotalOrden * (porcentajeImpuesto / 100);
     const nuevoTotal = nuevoSubtotalOrden + nuevoImpuesto;
 

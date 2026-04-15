@@ -560,8 +560,10 @@ export async function createOrdenVenta(req, res) {
 
     const tipoImpuestoFinal = (tipo_impuesto || 'IGV').toUpperCase().trim();
     let porcentaje = 18.00;
-    if (['EXO', 'INA', 'INAFECTO', 'EXONERADO', '0'].includes(tipoImpuestoFinal)) {
+    if (['INAFECTO', 'EXONERADO'].includes(tipoImpuestoFinal)) {
       porcentaje = 0.00;
+    } else if (tipoImpuestoFinal === 'IGV') {
+      porcentaje = 18.00;
     } else if (porcentaje_impuesto !== null && porcentaje_impuesto !== undefined) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }

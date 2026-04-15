@@ -312,31 +312,36 @@ function VerificarOrdenes() {
       accessor: 'tipo_impuesto',
       width: '120px',
       align: 'center',
-      render: (value, row) => (
-        <div className="flex flex-col items-center">
-          <span className={`badge badge-sm ${
-            ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(value).toUpperCase()) 
-            ? 'badge-info' 
-            : 'badge-primary'
-          }`}>
-            {value || 'IGV'}
-          </span>
-          <span className="text-[10px] text-muted">
-            ({row.porcentaje_impuesto || 0}%)
-          </span>
-        </div>
-      )
+      render: (value, row) => {
+        const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(value || '').toUpperCase().trim());
+        return (
+          <div className="flex flex-col items-center">
+            <span className={`badge badge-sm ${
+              esSinImpuesto ? 'badge-info' : 'badge-primary'
+            }`}>
+              {value || 'IGV'}
+            </span>
+            <span className="text-[10px] text-muted">
+              ({esSinImpuesto ? 0 : (row.porcentaje_impuesto || 0)}%)
+            </span>
+          </div>
+        );
+      }
     },
     {
       header: 'Total',
       accessor: 'total',
       width: '120px',
       align: 'right',
-      render: (value, row) => (
-        <div className="font-bold text-primary">
-          {formatearMoneda(value, row.moneda)}
-        </div>
-      )
+      render: (value, row) => {
+        const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(row.tipo_impuesto || '').toUpperCase().trim());
+        const totalAMostrar = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
+        return (
+          <div className="font-bold text-primary">
+            {formatearMoneda(totalAMostrar, row.moneda)}
+          </div>
+        );
+      }
     },
     {
       header: 'Prioridad',
@@ -913,33 +918,44 @@ function VerificarOrdenes() {
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t-2">
-                        <td colSpan="4" className="text-right font-medium text-muted">Subtotal:</td>
-                        <td className="text-right font-medium">
-                          {formatearMoneda(datosVerificacion.orden.subtotal, datosVerificacion.orden.moneda)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan="4" className="text-right font-medium text-muted">
-                          {['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(datosVerificacion.orden.tipo_impuesto).toUpperCase()) 
-                            ? `${datosVerificacion.orden.tipo_impuesto}:` 
-                            : `IGV (${datosVerificacion.orden.porcentaje_impuesto || 0}%):`}
-                        </td>
-                        <td className="text-right font-medium">
-                          {formatearMoneda(
-                            ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(datosVerificacion.orden.tipo_impuesto).toUpperCase()) 
-                            ? 0 
-                            : datosVerificacion.orden.igv, 
-                            datosVerificacion.orden.moneda
-                          )}
-                        </td>
-                      </tr>
-                      <tr className="bg-gray-50">
-                        <td colSpan="4" className="text-right font-bold text-lg">TOTAL:</td>
-                        <td className="text-right font-bold text-xl text-primary">
-                          {formatearMoneda(datosVerificacion.orden.total, datosVerificacion.orden.moneda)}
-                        </td>
-                      </tr>
+                      {(() => {
+                        const subtotalReal = datosVerificacion.orden.detalle?.reduce((acc, item) => {
+                          const val = parseFloat(item.cantidad) * parseFloat(item.precio_unitario);
+                          return acc + (isNaN(val) ? 0 : val);
+                        }, 0) || 0;
+                        
+                        const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(datosVerificacion.orden.tipo_impuesto || '').toUpperCase().trim());
+                        const pctImpuesto = parseFloat(datosVerificacion.orden.porcentaje_impuesto || 0);
+                        const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (pctImpuesto / 100);
+                        const totalReal = subtotalReal + impuestoReal;
+
+                        return (
+                          <>
+                            <tr className="border-t-2">
+                              <td colSpan="4" className="text-right font-medium text-muted">Subtotal:</td>
+                              <td className="text-right font-medium">
+                                {formatearMoneda(subtotalReal, datosVerificacion.orden.moneda)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td colSpan="4" className="text-right font-medium text-muted">
+                                {esSinImpuesto 
+                                  ? `${datosVerificacion.orden.tipo_impuesto || 'Inafecto/Exonerado'}:` 
+                                  : `IGV (${pctImpuesto}%):`}
+                              </td>
+                              <td className="text-right font-medium">
+                                {formatearMoneda(impuestoReal, datosVerificacion.orden.moneda)}
+                              </td>
+                            </tr>
+                            <tr className="bg-gray-50">
+                              <td colSpan="4" className="text-right font-bold text-lg">TOTAL:</td>
+                              <td className="text-right font-bold text-xl text-primary">
+                                {formatearMoneda(totalReal, datosVerificacion.orden.moneda)}
+                              </td>
+                            </tr>
+                          </>
+                        );
+                      })()}
                     </tfoot>
                   </table>
                 </div>

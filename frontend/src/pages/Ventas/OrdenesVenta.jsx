@@ -193,7 +193,7 @@ function OrdenesVenta() {
 
   const montoTotalUSD = ordenes.reduce((sum, o) => {
     if (o.moneda === 'USD') {
-      const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(o.tipo_impuesto || '').toUpperCase());
+      const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(o.tipo_impuesto || '').toUpperCase().trim());
       return sum + (esSinImpuesto ? parseFloat(o.subtotal || 0) : parseFloat(o.total || 0));
     }
     return sum;

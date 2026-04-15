@@ -16,8 +16,8 @@ import { useAuth } from '../../context/AuthContext';
 
 const TIPOS_IMPUESTO = [
   { codigo: 'IGV', nombre: 'IGV 18%', porcentaje: 18.00 },
-  { codigo: 'EXO', nombre: 'Exonerado 0%', porcentaje: 0.00 },
-  { codigo: 'INA', nombre: 'Inafecto 0%', porcentaje: 0.00 }
+  { codigo: 'EXONERADO', nombre: 'Exonerado 0%', porcentaje: 0.00 },
+  { codigo: 'INAFECTO', nombre: 'Inafecto 0%', porcentaje: 0.00 }
 ];
 
 const PLAZOS_PAGO = [

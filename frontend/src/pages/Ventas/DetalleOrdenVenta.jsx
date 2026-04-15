@@ -1211,7 +1211,7 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
     if (peso > 0) acc += parseFloat(item.cantidad) * peso;
     return acc;
   }, 0);
-  const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase());
+  const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
   const porcentajeImpuesto = parseFloat(orden.porcentaje_impuesto || 18);
   const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (porcentajeImpuesto / 100);
   const totalCorregido = subtotalReal + impuestoReal;

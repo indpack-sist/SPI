@@ -926,7 +926,12 @@ function VerificarOrdenes() {
                             : `IGV (${datosVerificacion.orden.porcentaje_impuesto || 0}%):`}
                         </td>
                         <td className="text-right font-medium">
-                          {formatearMoneda(datosVerificacion.orden.igv, datosVerificacion.orden.moneda)}
+                          {formatearMoneda(
+                            ['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(String(datosVerificacion.orden.tipo_impuesto).toUpperCase()) 
+                            ? 0 
+                            : datosVerificacion.orden.igv, 
+                            datosVerificacion.orden.moneda
+                          )}
                         </td>
                       </tr>
                       <tr className="bg-gray-50">

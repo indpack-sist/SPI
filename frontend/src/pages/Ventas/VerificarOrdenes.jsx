@@ -336,9 +336,19 @@ function VerificarOrdenes() {
       render: (value, row) => {
         const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(row.tipo_impuesto || '').toUpperCase().trim());
         const totalAMostrar = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
+        const tc = parseFloat(row.tipo_cambio || 0);
+        const mostrarConversion = row.moneda === 'USD' && tc > 1;
+
         return (
-          <div className="font-bold text-primary">
-            {formatearMoneda(totalAMostrar, row.moneda)}
+          <div className="flex flex-col items-end">
+            <div className="font-bold text-primary">
+              {formatearMoneda(totalAMostrar, row.moneda)}
+            </div>
+            {mostrarConversion && (
+              <div className="text-[10px] text-success font-medium italic">
+                ≈ {formatearMoneda(totalAMostrar * tc, 'PEN')}
+              </div>
+            )}
           </div>
         );
       }
@@ -928,13 +938,23 @@ function VerificarOrdenes() {
                         const pctImpuesto = parseFloat(datosVerificacion.orden.porcentaje_impuesto || 0);
                         const impuestoReal = esSinImpuesto ? 0 : subtotalReal * (pctImpuesto / 100);
                         const totalReal = subtotalReal + impuestoReal;
+                        
+                        const tc = parseFloat(datosVerificacion.orden.tipo_cambio || 1);
+                        const mostrarConversion = datosVerificacion.orden.moneda === 'USD' && tc > 1;
 
                         return (
                           <>
                             <tr className="border-t-2">
                               <td colSpan="4" className="text-right font-medium text-muted">Subtotal:</td>
-                              <td className="text-right font-medium">
-                                {formatearMoneda(subtotalReal, datosVerificacion.orden.moneda)}
+                              <td className="text-right">
+                                <div className="font-medium">
+                                  {formatearMoneda(subtotalReal, datosVerificacion.orden.moneda)}
+                                </div>
+                                {mostrarConversion && (
+                                  <div className="text-[10px] text-success italic">
+                                    ≈ {formatearMoneda(subtotalReal * tc, 'PEN')}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                             <tr>
@@ -943,14 +963,28 @@ function VerificarOrdenes() {
                                   ? `${datosVerificacion.orden.tipo_impuesto || 'Inafecto/Exonerado'}:` 
                                   : `IGV (${pctImpuesto}%):`}
                               </td>
-                              <td className="text-right font-medium">
-                                {formatearMoneda(impuestoReal, datosVerificacion.orden.moneda)}
+                              <td className="text-right">
+                                <div className="font-medium">
+                                  {formatearMoneda(impuestoReal, datosVerificacion.orden.moneda)}
+                                </div>
+                                {mostrarConversion && (
+                                  <div className="text-[10px] text-success italic">
+                                    ≈ {formatearMoneda(impuestoReal * tc, 'PEN')}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                             <tr className="bg-gray-50">
                               <td colSpan="4" className="text-right font-bold text-lg">TOTAL:</td>
-                              <td className="text-right font-bold text-xl text-primary">
-                                {formatearMoneda(totalReal, datosVerificacion.orden.moneda)}
+                              <td className="text-right">
+                                <div className="font-bold text-xl text-primary">
+                                  {formatearMoneda(totalReal, datosVerificacion.orden.moneda)}
+                                </div>
+                                {mostrarConversion && (
+                                  <div className="text-[11px] text-success font-bold italic">
+                                    ≈ {formatearMoneda(totalReal * tc, 'PEN')}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           </>

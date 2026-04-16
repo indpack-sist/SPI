@@ -352,7 +352,7 @@ export const inventarioAPI = {
 };
 
 export const dashboard = {
-  getResumen: () => api.get('/dashboard/resumen'),
+  getResumen: (params) => api.get('/dashboard/resumen', { params }),
   
   getInventarioValorizado: (params) => api.get('/dashboard/inventario-valorizado', { params }),
   getProductosConCosto: () => api.get('/dashboard/productos-costo'),

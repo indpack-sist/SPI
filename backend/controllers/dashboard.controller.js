@@ -562,11 +562,69 @@ export const obtenerTopProductos = async (req, res) => {
       })),
       total: result.data.length
     });
-  } catch (error) {
+    } catch (error) {
     console.error('Error al obtener top productos:', error);
-    res.status(500).json({ 
-      error: 'Error al obtener top productos', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Error al obtener top productos',
+      details: error.message
     });
-  }
-};
+    }
+    };
+
+    export const obtenerProduccionFinalizada = async (req, res) => {
+    try {
+    const { fecha_inicio, fecha_fin, limit = 10 } = req.query;
+
+    let whereDate = '';
+    let params = [];
+
+    if (fecha_inicio && fecha_fin) {
+      whereDate = ' AND op.fecha_inicio BETWEEN ? AND ?';
+      params = [fecha_inicio, fecha_fin];
+    }
+
+    const query = `
+      SELECT 
+          producto,
+          codigo_interno,
+          SUM(ordenes_supervisor) as total_ordenes,
+          SUM(cantidad_supervisor) as cantidad_total,
+          GROUP_CONCAT(CONCAT(ordenes_supervisor, ' ', supervisor) SEPARATOR ' / ') as desglose_supervisores
+      FROM (
+          SELECT 
+              p.nombre as producto,
+              p.codigo_interno,
+              e.nombre_completo as supervisor,
+              COUNT(op.id_orden) as ordenes_supervisor,
+              SUM(op.cantidad_producida) as cantidad_supervisor,
+              p.id_producto
+          FROM ordenes_produccion op
+          JOIN productos p ON op.id_producto_terminado = p.id_producto
+          JOIN empleados e ON op.id_supervisor = e.id_empleado
+          WHERE op.estado = 'Finalizada' ${whereDate}
+          GROUP BY p.id_producto, e.id_empleado
+      ) as sub
+      GROUP BY id_producto
+      ORDER BY total_ordenes DESC
+      LIMIT ?
+    `;
+
+    params.push(parseInt(limit));
+    const result = await executeQuery(query, params);
+
+    res.json({
+      success: true,
+      data: result.data.map(item => ({
+        ...item,
+        total_ordenes: parseInt(item.total_ordenes),
+        cantidad_total: parseFloat(item.cantidad_total)
+      }))
+    });
+    } catch (error) {
+    console.error('Error al obtener producción finalizada:', error);
+    res.status(500).json({
+      error: 'Error al obtener reporte de producción',
+      details: error.message
+    });
+    }
+    };

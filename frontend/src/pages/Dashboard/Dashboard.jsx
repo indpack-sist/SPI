@@ -285,7 +285,7 @@ function Dashboard() {
                     <tr key={idx}>
                       <td>
                         <div className="rank-name">{p.producto}</div>
-                        <div className="rank-sub">{p.codigo_interno}</div>
+                        <div className="rank-sub">{p.codigo}</div>
                       </td>
                       <td className="text-right font-bold">{p.total_ordenes}</td>
                       <td className="text-right">{p.cantidad_total.toLocaleString()}</td>

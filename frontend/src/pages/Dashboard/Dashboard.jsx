@@ -51,6 +51,8 @@ function Dashboard() {
     fin: new Date().toISOString().split('T')[0]
   });
 
+
+  
   const cargarDatos = useCallback(async (fInicio, fFin) => {
     try {
       setLoading(true);

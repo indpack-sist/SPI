@@ -580,8 +580,8 @@ export const obtenerProduccionFinalizada = async (req, res) => {
     let params = [];
 
     if (fecha_inicio && fecha_fin) {
-      whereDate = ' AND op.fecha_inicio BETWEEN ? AND ?';
-      params = [fecha_inicio, fecha_fin];
+      whereDate = ' AND (DATE(op.fecha_fin) BETWEEN ? AND ? OR DATE(op.fecha_inicio) BETWEEN ? AND ?)';
+      params = [fecha_inicio, fecha_fin, fecha_inicio, fecha_fin];
     }
 
     const query = `
@@ -597,7 +597,7 @@ export const obtenerProduccionFinalizada = async (req, res) => {
               p.codigo,
               e.nombre_completo as supervisor,
               COUNT(op.id_orden) as ordenes_supervisor,
-              SUM(op.cantidad_producida) as cantidad_supervisor,
+              SUM(COALESCE(op.cantidad_producida, 0)) as cantidad_supervisor,
               p.id_producto
           FROM ordenes_produccion op
           JOIN productos p ON op.id_producto_terminado = p.id_producto
@@ -613,7 +613,7 @@ export const obtenerProduccionFinalizada = async (req, res) => {
     params.push(limit);
     const result = await executeQuery(query, params);
 
-    if (!result || !result.data) {
+    if (!result || !result.data || result.data.length === 0) {
       return res.json({ success: true, data: [] });
     }
 

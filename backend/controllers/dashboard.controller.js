@@ -586,14 +586,14 @@ export const obtenerTopProductos = async (req, res) => {
     const query = `
       SELECT 
           producto,
-          codigo_interno,
+          codigo,
           SUM(ordenes_supervisor) as total_ordenes,
           SUM(cantidad_supervisor) as cantidad_total,
           GROUP_CONCAT(CONCAT(ordenes_supervisor, ' ', supervisor) SEPARATOR ' / ') as desglose_supervisores
       FROM (
           SELECT 
               p.nombre as producto,
-              p.codigo_interno,
+              p.codigo,
               e.nombre_completo as supervisor,
               COUNT(op.id_orden) as ordenes_supervisor,
               SUM(op.cantidad_producida) as cantidad_supervisor,

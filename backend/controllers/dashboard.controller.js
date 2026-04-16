@@ -571,10 +571,11 @@ export const obtenerTopProductos = async (req, res) => {
     }
     };
 
-    export const obtenerProduccionFinalizada = async (req, res) => {
-    try {
-    const { fecha_inicio, fecha_fin, limit = 10 } = req.query;
-
+export const obtenerProduccionFinalizada = async (req, res) => {
+  try {
+    const { fecha_inicio, fecha_fin } = req.query;
+    const limit = parseInt(req.query.limit) || 10;
+    
     let whereDate = '';
     let params = [];
 
@@ -604,27 +605,32 @@ export const obtenerTopProductos = async (req, res) => {
           WHERE op.estado = 'Finalizada' ${whereDate}
           GROUP BY p.id_producto, e.id_empleado
       ) as sub
-      GROUP BY id_producto
+      GROUP BY producto, codigo, id_producto
       ORDER BY total_ordenes DESC
       LIMIT ?
     `;
 
-    params.push(parseInt(limit));
+    params.push(limit);
     const result = await executeQuery(query, params);
+
+    if (!result || !result.data) {
+      return res.json({ success: true, data: [] });
+    }
 
     res.json({
       success: true,
       data: result.data.map(item => ({
         ...item,
-        total_ordenes: parseInt(item.total_ordenes),
-        cantidad_total: parseFloat(item.cantidad_total)
+        total_ordenes: parseInt(item.total_ordenes) || 0,
+        cantidad_total: parseFloat(item.cantidad_total) || 0
       }))
     });
-    } catch (error) {
+  } catch (error) {
     console.error('Error al obtener producción finalizada:', error);
     res.status(500).json({
+      success: false,
       error: 'Error al obtener reporte de producción',
       details: error.message
     });
-    }
-    };
+  }
+};

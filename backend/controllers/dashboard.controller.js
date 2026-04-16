@@ -584,34 +584,26 @@ export const obtenerProduccionFinalizada = async (req, res) => {
       params = [fecha_inicio, fecha_fin, fecha_inicio, fecha_fin];
     }
 
+    // Query simplificada SIN el JOIN a empleados (que falla por id_supervisor)
     const query = `
       SELECT 
-          producto,
-          codigo,
-          SUM(ordenes_supervisor) as total_ordenes,
-          SUM(cantidad_supervisor) as cantidad_total,
-          GROUP_CONCAT(CONCAT(ordenes_supervisor, ' ', supervisor) SEPARATOR ' / ') as desglose_supervisores
-      FROM (
-          SELECT 
-              p.nombre as producto,
-              p.codigo,
-              e.nombre_completo as supervisor,
-              COUNT(op.id_orden) as ordenes_supervisor,
-              SUM(COALESCE(op.cantidad_producida, 0)) as cantidad_supervisor,
-              p.id_producto
-          FROM ordenes_produccion op
-          JOIN productos p ON op.id_producto_terminado = p.id_producto
-          JOIN empleados e ON op.id_supervisor = e.id_empleado
-          WHERE op.estado = 'Finalizada' ${whereDate}
-          GROUP BY p.id_producto, e.id_empleado
-      ) as sub
-      GROUP BY producto, codigo, id_producto
+        p.nombre as producto,
+        p.codigo,
+        COUNT(op.id_orden) as total_ordenes,
+        SUM(COALESCE(op.cantidad_producida, op.cantidad_unidades_producida, 0)) as cantidad_total,
+        COALESCE(op.maquinista, 'Sin asignar') as desglose_supervisores
+      FROM ordenes_produccion op
+      JOIN productos p ON op.id_producto_terminado = p.id_producto
+      WHERE op.estado = 'Finalizada' ${whereDate}
+      GROUP BY p.id_producto, p.nombre, p.codigo
       ORDER BY total_ordenes DESC
       LIMIT ?
     `;
 
     params.push(limit);
     const result = await executeQuery(query, params);
+
+    console.log('Producción result:', JSON.stringify(result)); // 👈 agrega esto temporalmente
 
     if (!result || !result.data || result.data.length === 0) {
       return res.json({ success: true, data: [] });

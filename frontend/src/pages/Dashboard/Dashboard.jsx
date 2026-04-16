@@ -42,6 +42,7 @@ function Dashboard() {
   const [error, setError] = useState(null);
   const [resumen, setResumen] = useState(null);
   const [estadisticas, setEstadisticas] = useState(null);
+  const [produccionFinalizada, setProduccionFinalizada] = useState([]);
   const [tipoCambio, setTipoCambio] = useState(null);
 
   // Estados de Filtro
@@ -57,12 +58,14 @@ function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      const [resumenResponse, estadisticasResponse] = await Promise.all([
+      const [resumenResponse, estadisticasResponse, produccionResponse] = await Promise.all([
         dashboard.getResumen({ fecha_inicio: fInicio, fecha_fin: fFin }),
-        dashboard.getEstadisticasMovimientos({ fecha_inicio: fInicio, fecha_fin: fFin })
+        dashboard.getEstadisticasMovimientos({ fecha_inicio: fInicio, fecha_fin: fFin }),
+        dashboard.getProduccionFinalizada({ fecha_inicio: fInicio, fecha_fin: fFin })
       ]);
       setResumen(resumenResponse.data);
       setEstadisticas(estadisticasResponse.data);
+      setProduccionFinalizada(produccionResponse.data.data);
       if (resumenResponse.data.tipo_cambio) {
         setTipoCambio(resumenResponse.data.tipo_cambio);
       }
@@ -254,6 +257,50 @@ function Dashboard() {
                     <td className="text-right">{formatearUSD(c.monto_usd)}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Producción Finalizada */}
+      <div className="analytics-grid" style={{ marginTop: '20px', gridTemplateColumns: '1fr' }}>
+        <div className="analytics-card">
+          <div className="card-header">
+            <h3 className="card-title"><Factory size={18} className="mr-2" /> Top Producción Finalizada</h3>
+          </div>
+          <div className="card-body">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th className="text-right">Órd. Finalizadas</th>
+                  <th className="text-right">Cant. Producida</th>
+                  <th>Desglose por Supervisor (Órdenes)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {produccionFinalizada && produccionFinalizada.length > 0 ? (
+                  produccionFinalizada.map((p, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <div className="rank-name">{p.producto}</div>
+                        <div className="rank-sub">{p.codigo_interno}</div>
+                      </td>
+                      <td className="text-right font-bold">{p.total_ordenes}</td>
+                      <td className="text-right">{p.cantidad_total.toLocaleString()}</td>
+                      <td>
+                        <div className="supervisor-breakdown">
+                          {p.desglose_supervisores}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="text-center py-4 text-muted">No hay datos de producción finalizada en este periodo</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -357,6 +357,7 @@ export const dashboard = {
   getInventarioValorizado: (params) => api.get('/dashboard/inventario-valorizado', { params }),
   getProductosConCosto: () => api.get('/dashboard/productos-costo'),
   getEstadisticasMovimientos: (params) => api.get('/dashboard/estadisticas-movimientos', { params }),
+  getProduccionFinalizada: (params) => api.get('/dashboard/produccion-finalizada', { params }),
   getTopProductos: (params) => api.get('/dashboard/top-productos', { params }),
   getTipoCambio: (params) => api.get('/dashboard/tipo-cambio', { params }),
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })

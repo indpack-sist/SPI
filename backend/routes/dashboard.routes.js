@@ -8,6 +8,7 @@ router.get('/inventario-valorizado', dashboardController.obtenerInventarioValori
 router.get('/productos-costo', dashboardController.obtenerProductosConCosto);
 router.get('/estadisticas-movimientos', dashboardController.obtenerEstadisticasMovimientos);
 router.get('/top-productos', dashboardController.obtenerTopProductos);
+router.get('/produccion-finalizada', dashboardController.obtenerProduccionFinalizada);
 router.get('/tipo-cambio', dashboardController.obtenerTipoCambioActual);
 router.get('/tipo-cambio/actualizar', dashboardController.actualizarTipoCambioManual);
 

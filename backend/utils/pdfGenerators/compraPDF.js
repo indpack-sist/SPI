@@ -88,8 +88,8 @@ export const generarCompraPDF = async (orden) => {
       // Columna Izquierda
       drawLeft('Proveedor:', orden.proveedor);
       drawLeft('RUC:', orden.ruc_proveedor);
-      drawLeft('Contacto:', orden.contacto_proveedor);
-      drawLeft('Email:', orden.email_proveedor);
+      if (orden.contacto_proveedor) drawLeft('Contacto:', orden.contacto_proveedor);
+      if (orden.email_proveedor) drawLeft('Email:', orden.email_proveedor);
       drawLeft('Fecha Emisión:', orden.fecha_emision ? new Date(orden.fecha_emision).toLocaleDateString('es-PE') : '-');
       drawLeft('Fecha Venc.:', orden.fecha_vencimiento ? new Date(orden.fecha_vencimiento).toLocaleDateString('es-PE') : '-');
 
@@ -101,11 +101,12 @@ export const generarCompraPDF = async (orden) => {
       if (esCredito) {
         drawRight('Crédito:', `${orden.dias_credito || 0} días`);
         drawRight('Cuotas:', `${orden.numero_cuotas || 0}`);
-        drawRight('Días c/cuota:', `${orden.dias_entre_cuotas || 0} días`);
       }
+      drawRight('Días c/cuota:', `${orden.dias_entre_cuotas || 0} días`);
 
       // El lugar de entrega ahora puede ser extenso sin romper el diseño
-      drawRight('Lugar Entr.:', orden.direccion_entrega || orden.lugar_entrega || 'Almacén Principal');
+      const lugarDefault = 'AV. EL SOL MZ. LL1 LOTE 4 B, Villa EL Salvador';
+      drawRight('Lugar Entr.:', orden.direccion_entrega || orden.lugar_entrega || lugarDefault);
       drawRight('Entr. Estimada:', orden.fecha_entrega_estimada ? new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE') : 'POR COORDINAR');
 
       // Calcular el final real del bloque

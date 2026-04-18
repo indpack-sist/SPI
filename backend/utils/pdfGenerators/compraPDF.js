@@ -174,7 +174,7 @@ export const generarCompraPDF = async (orden) => {
         y += 30;
         if (y > 650) { doc.addPage(); y = 50; }
         
-        doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('CRONOGRAMA DE PAGOS ACORDADO', 50, y);
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('CRONOGRAMA DE PAGOS ESTABLECIDO', 50, y);
         y += 15;
         
         const cronoTop = y;

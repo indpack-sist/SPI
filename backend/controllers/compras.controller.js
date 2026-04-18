@@ -339,8 +339,12 @@ export async function createCompra(req, res) {
     const saldoPendiente = total - montoAPagarAhora;
 
     let estadoPago = 'Pendiente';
-    if (saldoPendiente <= 0.01) estadoPago = 'Pagado';
-    else if (montoAPagarAhora > 0) estadoPago = 'Parcial';
+    if (tipo_documento === 'Orden de Compra') {
+      estadoPago = 'Pendiente de Facturación';
+    } else {
+      if (saldoPendiente <= 0.01) estadoPago = 'Pagado';
+      else if (montoAPagarAhora > 0) estadoPago = 'Parcial';
+    }
 
     const esCredito = ['Credito', 'Letra', 'Letras'].includes(tipo_compra);
     if ((tipo_compra === 'Letra' || tipo_compra === 'Letras') && (!numero_cuotas || parseInt(numero_cuotas) < 1)) {
@@ -646,36 +650,82 @@ export async function updateCompra(req, res) {
     const { id } = req.params;
     const {
       id_proveedor, fecha_emision, fecha_entrega_estimada, prioridad, observaciones,
-      id_responsable, contacto_proveedor, direccion_entrega, detalle
+      id_responsable, contacto_proveedor, direccion_entrega, detalle,
+      tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante
     } = req.body;
 
-    const compraExistente = await executeQuery('SELECT estado FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
-    if (!compraExistente.success || compraExistente.data.length === 0) return res.status(404).json({ success: false, error: 'Compra no encontrada' });
-    if (compraExistente.data[0].estado === 'Recibida') return res.status(400).json({ success: false, error: 'No se pueden editar compras ya recibidas.' });
+    const [compraExistente] = await pool.query('SELECT estado, total, monto_pagado, tipo_documento FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
+    if (!compraExistente || compraExistente.length === 0) return res.status(404).json({ success: false, error: 'Compra no encontrada' });
+    
+    const compra = compraExistente[0];
+    if (compra.estado === 'Recibida' && !tipo_documento) {
+       return res.status(400).json({ success: false, error: 'No se pueden editar compras ya recibidas.' });
+    }
 
     let subtotal = 0;
-    for (const item of detalle) {
-      const precio = parseFloat(item.precio_unitario);
-      const desc = parseFloat(item.descuento_porcentaje || 0);
-      subtotal += (item.cantidad * precio) * (1 - desc / 100);
+    if (detalle && Array.isArray(detalle)) {
+      for (const item of detalle) {
+        const precio = parseFloat(item.precio_unitario);
+        const desc = parseFloat(item.descuento_porcentaje || 0);
+        subtotal += (item.cantidad * precio) * (1 - desc / 100);
+      }
+    } else {
+      // Si no viene detalle, mantenemos los montos actuales (o los recalculamos si es necesario)
+      // En este caso, si solo estamos convirtiendo, no necesitamos el detalle
     }
+    
     const impuesto = subtotal * 0.18;
     const total = subtotal + impuesto;
 
-    await executeQuery(`
-      UPDATE ordenes_compra SET id_proveedor=?, fecha_emision=?, fecha_entrega_estimada=?, prioridad=?, observaciones=?, id_responsable=?, contacto_proveedor=?, direccion_entrega=?, subtotal=?, igv=?, total=? WHERE id_orden_compra=?
-    `, [id_proveedor, fecha_emision, fecha_entrega_estimada||null, prioridad||'Media', observaciones, id_responsable||null, contacto_proveedor||null, direccion_entrega||null, subtotal, impuesto, total, id]);
+    // Campos a actualizar
+    const updates = [];
+    const params = [];
 
-    await executeQuery('DELETE FROM detalle_orden_compra WHERE id_orden_compra = ?', [id]);
+    if (id_proveedor) { updates.push('id_proveedor = ?'); params.push(id_proveedor); }
+    if (fecha_emision) { updates.push('fecha_emision = ?'); params.push(fecha_emision); }
+    if (fecha_entrega_estimada !== undefined) { updates.push('fecha_entrega_estimada = ?'); params.push(fecha_entrega_estimada || null); }
+    if (prioridad) { updates.push('prioridad = ?'); params.push(prioridad); }
+    if (observaciones !== undefined) { updates.push('observaciones = ?'); params.push(observaciones); }
+    if (id_responsable) { updates.push('id_responsable = ?'); params.push(id_responsable); }
+    if (contacto_proveedor !== undefined) { updates.push('contacto_proveedor = ?'); params.push(contacto_proveedor); }
+    if (direccion_entrega !== undefined) { updates.push('direccion_entrega = ?'); params.push(direccion_entrega); }
+    
+    if (detalle) {
+      updates.push('subtotal = ?', 'igv = ?', 'total = ?');
+      params.push(subtotal, impuesto, total);
+      
+      // Si cambia el total, recalculamos saldo y estado_pago
+      const nuevoSaldo = total - parseFloat(compra.monto_pagado);
+      let nuevoEstadoPago = 'Pendiente';
+      if (nuevoSaldo <= 0.01) nuevoEstadoPago = 'Pagado';
+      else if (parseFloat(compra.monto_pagado) > 0) nuevoEstadoPago = 'Parcial';
+      
+      updates.push('saldo_pendiente = ?', 'estado_pago = ?');
+      params.push(nuevoSaldo, nuevoEstadoPago);
+    }
 
-    for (let i = 0; i < detalle.length; i++) {
-      const item = detalle[i];
-      const precio = parseFloat(item.precio_unitario);
-      const desc = parseFloat(item.descuento_porcentaje || 0);
-      const subItem = (item.cantidad * precio) * (1 - desc / 100);
-      await executeQuery(`
-        INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, cantidad, precio_unitario, descuento_porcentaje, subtotal, orden) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [id, item.id_producto, parseFloat(item.cantidad), precio, desc, subItem, i+1]);
+    if (tipo_documento) { updates.push('tipo_documento = ?'); params.push(tipo_documento); }
+    if (serie_documento) { updates.push('serie_documento = ?'); params.push(serie_documento); }
+    if (numero_documento) { updates.push('numero_documento = ?'); params.push(numero_documento); }
+    if (fecha_emision_documento) { updates.push('fecha_emision_documento = ?'); params.push(fecha_emision_documento); }
+    if (url_comprobante !== undefined) { updates.push('url_comprobante = ?'); params.push(url_comprobante); }
+
+    if (updates.length > 0) {
+      params.push(id);
+      await pool.query(`UPDATE ordenes_compra SET ${updates.join(', ')} WHERE id_orden_compra = ?`, params);
+    }
+
+    if (detalle) {
+      await pool.query('DELETE FROM detalle_orden_compra WHERE id_orden_compra = ?', [id]);
+      for (let i = 0; i < detalle.length; i++) {
+        const item = detalle[i];
+        const precio = parseFloat(item.precio_unitario);
+        const desc = parseFloat(item.descuento_porcentaje || 0);
+        const subItem = (item.cantidad * precio) * (1 - desc / 100);
+        await pool.query(`
+          INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, cantidad, precio_unitario, descuento_porcentaje, subtotal, orden) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [id, item.id_producto, parseFloat(item.cantidad), precio, desc, subItem, i+1]);
+      }
     }
 
     res.json({ success: true, message: 'Compra actualizada exitosamente' });

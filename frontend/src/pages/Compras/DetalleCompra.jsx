@@ -40,6 +40,7 @@ function DetalleCompra() {
   const [modalPagarLetraOpen, setModalPagarLetraOpen] = useState(false);
   const [modalIngresoInventarioOpen, setModalIngresoInventarioOpen] = useState(false);
   const [modalCambiarCuentaOpen, setModalCambiarCuentaOpen] = useState(false);
+  const [modalConvertirOpen, setModalConvertirOpen] = useState(false);
 
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState(null);
   const [letraSeleccionada, setLetraSeleccionada] = useState(null);
@@ -51,6 +52,14 @@ function DetalleCompra() {
     metodo_pago: 'Transferencia',
     referencia: '',
     observaciones: ''
+  });
+
+  const [datosConvertir, setDatosConvertir] = useState({
+    tipo_documento: 'Factura',
+    serie_documento: '',
+    numero_documento: '',
+    fecha_emision_documento: new Date().toISOString().split('T')[0],
+    url_comprobante: ''
   });
 
   const [datosReembolso, setDatosReembolso] = useState({
@@ -502,6 +511,33 @@ function DetalleCompra() {
     }
   };
 
+  const handleConvertir = async (e) => {
+    e.preventDefault();
+    if (!datosConvertir.serie_documento || !datosConvertir.numero_documento) {
+      setError('Debe ingresar la serie y numero del comprobante');
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await comprasAPI.update(id, {
+        ...datosConvertir,
+        // Al convertir, aseguramos que ya no sea solo formato
+        tipo_documento: datosConvertir.tipo_documento
+      });
+      if (response.data.success) {
+        setSuccess('Comprobante registrado. Ahora puede gestionar pagos e inventario.');
+        setModalConvertirOpen(false);
+        await cargarDatos();
+      } else {
+        setError(response.data.error);
+      }
+    } catch (err) { 
+      setError(err.response?.data?.error || 'Error al registrar comprobante'); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
   const formatearFecha = (f) => f ? new Date(f).toLocaleDateString('es-PE') : '-';
   
   const formatearMoneda = (v, m) => {
@@ -547,13 +583,13 @@ function DetalleCompra() {
   const esContadoSinPago = esContado && tieneSaldoPendiente && parseFloat(compra.monto_pagado) === 0;
   const esContadoPendienteRegularizar = esContado && tieneSaldoPendiente && parseFloat(compra.monto_pagado) > 0;
   
-  const mostrarBotonPagoDirecto = !estaCancelada && !estaPagado && !usaFondosPropios && tieneSaldoPendiente && (
+  const mostrarBotonPagoDirecto = !estaCancelada && !estaPagado && !usaFondosPropios && tieneSaldoPendiente && !esSoloFormato && (
     esContado || esCredito || esLetras
   );
   
-  const mostrarBotonCronograma = !estaCancelada && !estaPagado && (esCredito || esLetras) && tieneCronogramaPendiente;
-  const mostrarBotonRegistrarLetras = !estaCancelada && !estaPagado && esLetras && !tieneLetrasRegistradas;
-  const mostrarBotonCambiarCuenta = !estaCancelada && !estaPagado && !usaFondosPropios && compra.id_cuenta_pago;
+  const mostrarBotonCronograma = !estaCancelada && !estaPagado && !esSoloFormato && (esCredito || esLetras) && tieneCronogramaPendiente;
+  const mostrarBotonRegistrarLetras = !estaCancelada && !estaPagado && !esSoloFormato && esLetras && !tieneLetrasRegistradas;
+  const mostrarBotonCambiarCuenta = !estaCancelada && !estaPagado && !usaFondosPropios && !esSoloFormato && compra.id_cuenta_pago;
 
   const totalLetrasActual = letrasForm.reduce((acc, l) => acc + parseFloat(l.monto || 0), 0);
   const saldoCompra = parseFloat(compra.saldo_pendiente);
@@ -622,6 +658,12 @@ function DetalleCompra() {
           <button className="btn btn-outline" onClick={handleDescargarPDF}>
             <Download size={18} /> PDF
           </button>
+          
+          {esSoloFormato && !estaCancelada && (
+            <button className="btn btn-success text-white" onClick={() => setModalConvertirOpen(true)}>
+              <FileCheck size={18} /> Registrar Factura / Recibo
+            </button>
+          )}
           
           {!estaCancelada && (
             <>
@@ -1014,7 +1056,7 @@ function DetalleCompra() {
               </div>
             )}
 
-            {esCredito && (
+            {esCredito && !esSoloFormato && (
               <div className="card">
                 <div className="card-header bg-gray-50 flex justify-between items-center">
                   <h3 className="card-title flex gap-2">
@@ -2219,6 +2261,97 @@ function DetalleCompra() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal 
+        isOpen={modalConvertirOpen} 
+        onClose={() => setModalConvertirOpen(false)} 
+        title="Registrar Comprobante (Finalizar OC)"
+      >
+        <form onSubmit={handleConvertir} className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded p-4">
+            <p className="text-sm text-blue-800">
+              Esta accion convertira la <span className="font-bold">Orden de Compra</span> en un documento oficial (Factura/Recibo), permitiendo gestionar sus pagos y deudas en el sistema.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Tipo de Comprobante</label>
+              <select 
+                className="form-select"
+                value={datosConvertir.tipo_documento}
+                onChange={e => setDatosConvertir({...datosConvertir, tipo_documento: e.target.value})}
+                required
+              >
+                <option value="Factura">Factura</option>
+                <option value="Boleta">Boleta</option>
+                <option value="Recibo">Recibo</option>
+                <option value="Nota de Venta">Nota de Venta</option>
+                <option value="Guia de Remision">Guia de Remision</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Fecha de Emision</label>
+              <input 
+                type="date"
+                className="form-input"
+                value={datosConvertir.fecha_emision_documento}
+                onChange={e => setDatosConvertir({...datosConvertir, fecha_emision_documento: e.target.value})}
+                required
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Serie</label>
+              <input 
+                type="text"
+                className="form-input"
+                placeholder="Ej: F001"
+                value={datosConvertir.serie_documento}
+                onChange={e => setDatosConvertir({...datosConvertir, serie_documento: e.target.value.toUpperCase()})}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Numero</label>
+              <input 
+                type="text"
+                className="form-input"
+                placeholder="Ej: 000123"
+                value={datosConvertir.numero_documento}
+                onChange={e => setDatosConvertir({...datosConvertir, numero_documento: e.target.value})}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">URL Comprobante (Opcional)</label>
+            <input 
+              type="text"
+              className="form-input"
+              placeholder="Enlace a archivo o documento"
+              value={datosConvertir.url_comprobante}
+              onChange={e => setDatosConvertir({...datosConvertir, url_comprobante: e.target.value})}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="btn btn-outline" onClick={() => setModalConvertirOpen(false)}>
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-success text-white" 
+              disabled={loading}
+            >
+              {loading ? 'Procesando...' : 'Registrar y Finalizar'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

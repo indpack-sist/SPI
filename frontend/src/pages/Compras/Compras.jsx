@@ -103,7 +103,8 @@ function Compras() {
     const configs = {
       'Pendiente': { clase: 'badge-warning', texto: 'Pendiente' },
       'Parcial': { clase: 'badge-info', texto: 'Parcial' },
-      'Pagado': { clase: 'badge-success', texto: 'Pagado' }
+      'Pagado': { clase: 'badge-success', texto: 'Pagado' },
+      'Pendiente de Facturación': { clase: 'badge-purple', texto: 'Orden de Compra' }
     };
     return configs[estado] || configs['Pendiente'];
   };

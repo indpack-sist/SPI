@@ -29,21 +29,18 @@ const formatearFecha = (fecha) => {
   return `${day}/${month}/${year}`;
 };
 
-function descargarImagen(url) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        resolve(null);
-        return;
-      }
-      const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', () => resolve(null));
-    });
-    req.on('error', () => resolve(null));
-    req.end();
-  });
+async function descargarImagen(url) {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const logoPath = path.join(__dirname, '../../assets/logohorizontal.jpg');
+    return fs.readFileSync(logoPath);
+  } catch (e) {
+    return null;
+  }
 }
 
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {

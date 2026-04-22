@@ -6,22 +6,18 @@ import https from 'https';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function descargarImagen(url) {
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, { timeout: 3000 }, (response) => {
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return reject(new Error(`Status Code: ${response.statusCode}`));
-      }
-      const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => resolve(Buffer.concat(chunks)));
-    });
-    request.on('error', (err) => reject(err));
-    request.on('timeout', () => {
-        request.destroy();
-        reject(new Error("Timeout al descargar imagen"));
-    });
-  });
+async function descargarImagen(url) {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const logoPath = path.join(__dirname, '../../assets/logohorizontal.jpg');
+    return fs.readFileSync(logoPath);
+  } catch (e) {
+    return null;
+  }
 }
 
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {

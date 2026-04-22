@@ -17,12 +17,15 @@ const TIMEZONE = 'America/Lima';
 
 async function cargarLogoURL() {
   try {
-    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-      responseType: 'arraybuffer'
-    });
-    return Buffer.from(response.data);
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const logoPath = path.join(__dirname, '../assets/logohorizontal.jpg');
+    return fs.readFileSync(logoPath);
   } catch (error) {
-    console.warn('No se pudo cargar el logo:', error.message);
+    console.warn('No se pudo cargar el logo local:', error.message);
     return null;
   }
 }
@@ -1211,15 +1214,7 @@ export async function generarPDFCotizacion(cotizacion) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      let logoBuffer;
-      try {
-        const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-          responseType: 'arraybuffer'
-        });
-        logoBuffer = Buffer.from(response.data);
-      } catch (error) {
-        console.error('Error al descargar logo:', error);
-      }
+      let logoBuffer = await cargarLogoURL();
 
       if (logoBuffer) {
         try {
@@ -1447,15 +1442,7 @@ export async function generarPDFOrdenVenta(orden) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      let logoBuffer;
-      try {
-        const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-          responseType: 'arraybuffer'
-        });
-        logoBuffer = Buffer.from(response.data);
-      } catch (error) {
-        console.error('Error al descargar logo:', error);
-      }
+      let logoBuffer = await cargarLogoURL();
 
       if (logoBuffer) {
         try {
@@ -1670,15 +1657,7 @@ export async function generarPDFGuiaRemision(guia) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      let logoBuffer;
-      try {
-        const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-          responseType: 'arraybuffer'
-        });
-        logoBuffer = Buffer.from(response.data);
-      } catch (error) {
-        console.error('Error al descargar logo:', error);
-      }
+      let logoBuffer = await cargarLogoURL();
 
       if (logoBuffer) {
         try {
@@ -1861,15 +1840,7 @@ export async function generarPDFGuiaTransportista(guia) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      let logoBuffer;
-      try {
-        const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-          responseType: 'arraybuffer'
-        });
-        logoBuffer = Buffer.from(response.data);
-      } catch (error) {
-        console.error('Error al descargar logo:', error);
-      }
+      let logoBuffer = await cargarLogoURL();
 
       if (logoBuffer) {
         try {
@@ -2022,15 +1993,7 @@ export async function generarPDFOrdenCompra(orden) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      let logoBuffer;
-      try {
-        const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-          responseType: 'arraybuffer'
-        });
-        logoBuffer = Buffer.from(response.data);
-      } catch (error) {
-        console.error('Error al descargar logo:', error);
-      }
+      let logoBuffer = await cargarLogoURL();
 
       if (logoBuffer) {
         try {

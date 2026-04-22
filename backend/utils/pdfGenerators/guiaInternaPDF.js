@@ -17,10 +17,13 @@ const TIMEZONE = 'America/Lima';
 
 async function cargarLogoURL() {
   try {
-    const response = await axios.get('https://indpackperu.com/images/logohorizontal.png', {
-      responseType: 'arraybuffer'
-    });
-    return Buffer.from(response.data);
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const logoPath = path.join(__dirname, '../../assets/logohorizontal.jpg');
+    return fs.readFileSync(logoPath);
   } catch (error) {
     return null;
   }

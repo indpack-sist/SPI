@@ -42,12 +42,17 @@ function StockInventario() {
         productosAPI.getTiposInventario()
       ]);
       
-      setResumenStock(resumenRes.data.data);
-      setProductos(productosRes.data.data);
-      setTiposInventario(tiposRes.data.data);
+      const resumenData = resumenRes.data.data.filter(item => item.tipo_inventario === 'Productos Terminados');
+      const tiposData = tiposRes.data.data.filter(tipo => tipo.nombre === 'Productos Terminados');
+      const idsPermitidos = tiposData.map(t => t.id_tipo_inventario);
+      const productosData = productosRes.data.data.filter(p => idsPermitidos.includes(p.id_tipo_inventario));
+
+      setResumenStock(resumenData);
+      setProductos(productosData);
+      setTiposInventario(tiposData);
       
       const expandidas = {};
-      resumenRes.data.data.forEach(item => {
+      resumenData.forEach(item => {
         expandidas[item.id_tipo_inventario] = true;
       });
       setSeccionesExpandidas(expandidas);

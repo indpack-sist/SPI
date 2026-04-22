@@ -22,7 +22,12 @@ function ListaProductosSimple() {
       const response = await productosAPI.getAll({ estado: 'Activo' });
       
       if (response.data.success) {
-        setProductos(response.data.data || []);
+        // Filtrar solo los Productos Terminados (id_tipo_inventario 3 o tipo_inventario === 'Productos Terminados')
+        const terminados = (response.data.data || []).filter(p => 
+          Number(p.id_tipo_inventario) === 3 || 
+          p.tipo_inventario === 'Productos Terminados'
+        );
+        setProductos(terminados);
       } else {
         setError('No se pudieron cargar los productos');
       }

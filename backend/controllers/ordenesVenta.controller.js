@@ -2272,7 +2272,7 @@ export async function getPagosOrden(req, res) {
       LEFT JOIN empleados e ON p.id_registrado_por = e.id_empleado
       LEFT JOIN cuentas_pago cp ON p.id_cuenta_destino = cp.id_cuenta
       WHERE p.id_orden_venta = ?
-      ORDER BY p.fecha_pago DESC, p.id_pago_orden DESC
+      ORDER BY p.fecha_registro DESC, p.id_pago_orden DESC
     `, [id]);
     
     if (!result.success) {

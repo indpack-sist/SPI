@@ -487,6 +487,10 @@ function Empleados() {
                     <option value="Administrativo">Administrativo</option>
                   </optgroup>
                   
+                  <optgroup label="Finanzas">
+                    <option value="Cobranzas">Cobranzas</option>
+                  </optgroup>
+
                   <optgroup label="Ventas y Comercial">
                     <option value="Ventas">Ventas</option>
                     <option value="Comercial">Comercial</option>

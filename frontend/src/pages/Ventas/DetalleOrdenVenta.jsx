@@ -1532,7 +1532,15 @@ if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
     {
       header: 'Registrado por',
       accessor: 'registrado_por',
-      width: '150px'
+      width: '180px',
+      render: (value, row) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-sm">{value || '-'}</span>
+          <span className="text-xs text-muted">
+            {formatearFechaHora(row.fecha_registro)}
+          </span>
+        </div>
+      )
     },
     {
       header: 'Acciones',

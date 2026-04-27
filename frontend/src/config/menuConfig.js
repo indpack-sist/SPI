@@ -69,10 +69,10 @@ export const menuConfig = [
       { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias', modulo: 'transferencias', color: '#F39C12' }
     ]
   },
-  {
-    title: 'Reportes', 
-    items: [
-      { path: '/reportes/sire', icon: FileSpreadsheet, label: 'SIRE', modulo: 'reportes', color: '#16A085' }
-    ]
-  }
+  // {
+  //   title: 'Reportes', 
+  //   items: [
+  //     { path: '/reportes/sire', icon: FileSpreadsheet, label: 'SIRE', modulo: 'reportes', color: '#16A085' }
+  //   ]
+  // }
 ];

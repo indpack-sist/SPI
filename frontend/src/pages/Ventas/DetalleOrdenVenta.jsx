@@ -26,9 +26,22 @@ function DetalleOrdenVenta() {
     const fechaLocal = new Date(fecha.getTime() - offset);
     return fechaLocal.toISOString().split('T')[0];
   };
-  
-  const [orden, setOrden] = useState(null);
-  const [pagos, setPagos] = useState([]);
+
+  const formatearFechaHora = (fechaString) => {
+    if (!fechaString) return '-';
+    const fecha = new Date(fechaString);
+    if (isNaN(fecha.getTime())) return '-';
+
+    return fecha.toLocaleString('es-PE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const [orden, setOrden] = useState(null);  const [pagos, setPagos] = useState([]);
   const [salidas, setSalidas] = useState([]);
   const [resumenPagos, setResumenPagos] = useState(null);
   const [estadoCredito, setEstadoCredito] = useState(null);

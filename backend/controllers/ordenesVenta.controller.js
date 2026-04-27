@@ -2111,14 +2111,14 @@ export async function registrarPagoOrden(req, res) {
     }
     
     const orden = ordenResult.data[0];
-    const totalOrden = parseFloat(orden.total);
-    const montoPagadoActual = parseFloat(orden.monto_pagado || 0);
-    const montoNuevoPago = parseFloat(monto_pagado);
+    const totalOrden = Math.round(parseFloat(orden.total) * 100) / 100;
+    const montoPagadoActual = Math.round(parseFloat(orden.monto_pagado || 0) * 100) / 100;
+    const montoNuevoPago = Math.round(parseFloat(monto_pagado) * 100) / 100;
     
-    if (montoPagadoActual + montoNuevoPago > totalOrden + 0.1) {
+    if (Math.round((montoPagadoActual + montoNuevoPago) * 100) / 100 > totalOrden) {
       return res.status(400).json({
         success: false,
-        error: `El monto a pagar (${montoNuevoPago}) excede el saldo pendiente (${totalOrden - montoPagadoActual})`
+        error: `El monto a pagar (${montoNuevoPago.toFixed(2)}) excede el saldo pendiente (${(totalOrden - montoPagadoActual).toFixed(2)})`
       });
     }
     
@@ -2169,10 +2169,10 @@ export async function registrarPagoOrden(req, res) {
       }
     ];
 
-    const nuevoMontoPagado = montoPagadoActual + montoNuevoPago;
+    const nuevoMontoPagado = Math.round((montoPagadoActual + montoNuevoPago) * 100) / 100;
     let estadoPago = 'Parcial';
     
-    if (nuevoMontoPagado >= totalOrden - 0.1) {
+    if (nuevoMontoPagado >= totalOrden) {
       estadoPago = 'Pagado';
     } else if (nuevoMontoPagado === 0) {
       estadoPago = 'Pendiente';
@@ -3880,5 +3880,7 @@ export async function asignarGuiaInternaASalida(req, res) {
   } catch (error) {
     console.error('Error en asignarGuiaInternaASalida:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+}ccess: false, error: error.message });
   }
 }

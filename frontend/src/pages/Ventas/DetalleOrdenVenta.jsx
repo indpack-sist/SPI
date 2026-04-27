@@ -724,7 +724,10 @@ function DetalleOrdenVenta() {
       return;
     }
 
-if (resumenPagos && monto > parseFloat(resumenPagos.saldo_pendiente) + 0.01) {
+    const montoRedondeado = Math.round(monto * 100) / 100;
+    const saldoPendienteFormateado = resumenPagos ? Math.round(parseFloat(resumenPagos.saldo_pendiente) * 100) / 100 : 0;
+
+    if (resumenPagos && montoRedondeado > saldoPendienteFormateado) {
         setError(`El monto no puede ser mayor al saldo pendiente (${formatearMoneda(resumenPagos.saldo_pendiente)})`);
       return;
     }

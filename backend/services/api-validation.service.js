@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_APISPERU_TOKEN = process.env.API_APISPERU_TOKEN || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImphaW1leXh2QGdtYWlsLmNvbSJ9.waHiFXmUg9CCjuWAXsVaG8nFgN-6KIj_k9zgVA6ZJ24';
+const API_APISPERU_TOKEN = process.env.API_APISPERU_TOKEN;
 const API_TIMEOUT = 10000;
 
 export async function validarDNI(dni) {

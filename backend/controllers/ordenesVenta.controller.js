@@ -3881,6 +3881,4 @@ export async function asignarGuiaInternaASalida(req, res) {
     console.error('Error en asignarGuiaInternaASalida:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-}ccess: false, error: error.message });
-  }
 }

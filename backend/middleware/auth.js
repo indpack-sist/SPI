@@ -486,6 +486,51 @@ const PERMISOS_POR_ROL = {
       listasPrecios: false,
       reportes: false
     }
+  },
+  'Cobranzas': {
+    ui: {
+      dashboard: true,
+      empleados: false,
+      flota: false,
+      proveedores: true,
+      clientes: true,
+      solicitudesCredito: false,
+      productos: false,
+      consultarStock: false,
+      entradas: false,
+      salidas: false,
+      transferencias: false,
+      ordenesProduccion: false,
+      cotizaciones: true,
+      ordenesVenta: true,
+      compras: true,
+      cuentasPago: true,
+      pagosCobranzas: true,
+      listasPrecios: false,
+      reportes: false,
+      verPrecios: true
+    },
+    api: {
+      dashboard: true,
+      empleados: false,
+      flota: false,
+      proveedores: true,
+      clientes: true,
+      solicitudesCredito: false,
+      productos: false,
+      consultarStock: false,
+      entradas: false,
+      salidas: false,
+      transferencias: false,
+      ordenesProduccion: false,
+      cotizaciones: true,
+      ordenesVenta: true,
+      compras: true,
+      cuentasPago: true,
+      pagosCobranzas: true,
+      listasPrecios: false,
+      reportes: false
+    }
   }
 };
 

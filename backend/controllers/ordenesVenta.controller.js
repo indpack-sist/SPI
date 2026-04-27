@@ -2152,8 +2152,9 @@ export async function registrarPagoOrden(req, res) {
           banco,
           id_cuenta_destino,
           observaciones,
-          id_registrado_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id_registrado_por,
+          fecha_registro
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_SUB(UTC_TIMESTAMP(), INTERVAL 5 HOUR))`,
         params: [
           id,
           numeroPago,

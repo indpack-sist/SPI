@@ -127,7 +127,7 @@ function DetalleOrdenVenta() {
   const formatearNumero = (valor) => {
     return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 2, 
-      maximumFractionDigits: 3
+      maximumFractionDigits: 2
     }).format(valor);
   };
 

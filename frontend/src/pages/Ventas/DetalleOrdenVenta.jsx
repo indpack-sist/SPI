@@ -1670,6 +1670,15 @@ function DetalleOrdenVenta() {
     <span className="badge badge-success">Factura</span>
   </div>
 )}
+
+              {!sinComprobanteAsignado && orden.tipo_comprobante === 'Nota de Venta' && (
+  <div className="flex items-center gap-2">
+    <span className="badge badge-info">Nota de Venta</span>
+    <span className="font-mono text-sm font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+      {orden.numero_comprobante}
+    </span>
+  </div>
+)}
             </div>
           </div>
         </div>

@@ -17,7 +17,7 @@
 
 .sidebar-header {
   padding: 0 1.25rem;
-  height: 60px;
+  height: 80px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -33,20 +33,21 @@
 }
 
 .sidebar-logo-image-container {
-  width: 36px;
-  height: 36px;
+  width: 52px;
+  height: 52px;
   background: var(--white);
-  border-radius: 2px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 4px;
   flex-shrink: 0;
-  transition: box-shadow 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-logo:hover .sidebar-logo-image-container {
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 15px var(--accent);
+  transform: scale(1.05);
 }
 
 .sidebar-logo-image {

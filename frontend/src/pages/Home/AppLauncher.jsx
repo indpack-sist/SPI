@@ -25,7 +25,7 @@ const AppLauncher = () => {
           <div className="launcher-header-logo">
             <div className="launcher-logo-box">
               <img
-                src="https://indpackperu.com/images/logohorizontal.png"
+                src="https://media.licdn.com/dms/image/v2/D4E0BAQGFtU-bPEr1-Q/company-logo_200_200/company-logo_200_200/0/1713372855760/indpack_sac_logo?e=2147483647&v=beta&t=WvD8X49nh_Fd-mns3ZAVOvXEHzHpgJU4y9bfVkqyQA4"
                 alt="INDPACK"
                 onError={(e) => { e.target.style.display = 'none'; }}
               />

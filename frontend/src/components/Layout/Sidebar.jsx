@@ -15,9 +15,9 @@ function Sidebar({ onToggle }) {
       <div className="sidebar-header">
         <div className="sidebar-logo">
           <div className="sidebar-logo-image-container">
-            <img 
-              src="https://indpackperu.com/images/logohorizontal.png" 
-              alt="INDPACK Logo" 
+            <img
+              src="https://media.licdn.com/dms/image/v2/D4E0BAQGFtU-bPEr1-Q/company-logo_200_200/company-logo_200_200/0/1713372855760/indpack_sac_logo?e=2147483647&v=beta&t=WvD8X49nh_Fd-mns3ZAVOvXEHzHpgJU4y9bfVkqyQA4"
+              alt="INDPACK Logo"
               className="sidebar-logo-image"
               onError={(e) => {
                 e.target.style.display = 'none';

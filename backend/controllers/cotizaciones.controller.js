@@ -192,9 +192,24 @@ export async function createCotizacion(req, res) {
 
     const esMuestra = es_muestra ? 1 : 0;
 
+    // Ajustes automáticos para Muestras para evitar errores de validación
+    let plazoPagoFinal = plazo_pago;
+    let tipoImpuestoFinal = tipo_impuesto || 'IGV';
+    let validezDiasFinal = parseInt(validez_dias) || 7;
+
+    if (esMuestra) {
+      if (!plazoPagoFinal || plazoPagoFinal.trim() === '') {
+        plazoPagoFinal = 'Sin Valor Comercial';
+      }
+    }
+
     if (!id_cliente) return res.status(400).json({ success: false, error: 'Cliente es obligatorio' });
     if (!detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Debe agregar al menos un producto' });
-    if (!plazo_pago || plazo_pago.trim() === '') return res.status(400).json({ success: false, error: 'Plazo de pago es obligatorio' });
+    
+    // Solo validar plazo_pago si NO es muestra o si sigue vacío después del ajuste
+    if (!plazoPagoFinal || plazoPagoFinal.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Plazo de pago es obligatorio' });
+    }
 
     for (const item of detalle) {
       if (item.es_producto_libre) {

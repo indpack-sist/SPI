@@ -136,7 +136,7 @@ export async function generarCotizacionPDF(cotizacion) {
       doc.text('R.U.C. 20550932297', 385, 48, { align: 'center', width: 155 });
       
       doc.fontSize(12).font('Helvetica-Bold');
-      doc.text(cotizacion.es_muestra ? 'MUESTRA' : 'COTIZACION', 385, 65, { align: 'center', width: 155 }); 
+      doc.text(cotizacion.es_muestra ? 'GUÍA DE MUESTRA' : 'COTIZACION', 385, 65, { align: 'center', width: 155 }); 
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${cotizacion.numero_cotizacion}`, 385, 83, { align: 'center', width: 155 });
 
@@ -144,71 +144,94 @@ export async function generarCotizacionPDF(cotizacion) {
       const dirEntrega = cotizacion.lugar_entrega || cotizacion.direccion_entrega || '';
       const mostrarEntrega = dirEntrega && dirEntrega.trim() !== '' && dirEntrega.trim() !== dirFiscal.trim();
 
+      const clienteTexto = cotizacion.cliente || '';
+      const rucTexto = cotizacion.ruc_cliente || cotizacion.ruc || '';
+      const ciudadTexto = cotizacion.ciudad_entrega || 'Lima - Perú';
+
+      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, 230, 8);
+      const alturaRUC = calcularAlturaTexto(doc, rucTexto, 230, 8);
       const alturaFiscal = calcularAlturaTexto(doc, dirFiscal, 230, 8);
       const alturaEntrega = mostrarEntrega ? calcularAlturaTexto(doc, dirEntrega, 230, 8) : 0;
+      const alturaCiudad = calcularAlturaTexto(doc, ciudadTexto, 230, 8);
 
-      let alturaContenido = alturaFiscal + 60;
-      if (mostrarEntrega) {
-        alturaContenido += alturaEntrega + 15;
-      }
+      let leftH = Math.max(15, alturaCliente + 5);
+      leftH += Math.max(15, alturaRUC + 5);
+      leftH += Math.max(15, alturaFiscal + 5);
+      if (mostrarEntrega) leftH += Math.max(15, alturaEntrega + 5);
+      leftH += Math.max(15, alturaCiudad + 5);
 
-      const alturaRecuadroCliente = Math.max(75, alturaContenido);
+      const plazoEntregaTexto = cotizacion.plazo_entrega || '-';
+      const alturaPlazoEntrega = calcularAlturaTexto(doc, plazoEntregaTexto, 100, 8);
+
+      let rightH = 15; 
+      rightH += 15; 
+      if (!cotizacion.es_muestra) rightH += 15; 
+      rightH += Math.max(15, alturaPlazoEntrega + 5); 
+
+      const alturaRecuadroCliente = Math.max(75, Math.max(leftH, rightH) + 16);
       
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
+      let cursorY = 203;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Cliente:', 40, 203);
+      doc.text('Cliente:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(cotizacion.cliente || '', 100, 203, { width: 230 });
+      doc.text(clienteTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      
+      cursorY += Math.max(15, alturaCliente + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('RUC:', 40, 218);
+      doc.text('RUC:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(cotizacion.ruc_cliente || cotizacion.ruc || '', 100, 218);
+      doc.text(rucTexto, 100, cursorY, { width: 230, lineGap: 2 });
       
-      let cursorY = 233;
+      cursorY += Math.max(15, alturaRUC + 5);
 
       doc.font('Helvetica-Bold');
       doc.text('Dir. Fiscal:', 40, cursorY);
       doc.font('Helvetica');
       doc.text(dirFiscal, 100, cursorY, { width: 230, lineGap: 2 });
       
-      cursorY += alturaFiscal + 5;
+      cursorY += Math.max(15, alturaFiscal + 5);
 
       if (mostrarEntrega) {
         doc.font('Helvetica-Bold');
         doc.text('Lugar Entrega:', 40, cursorY);
         doc.font('Helvetica');
         doc.text(dirEntrega, 100, cursorY, { width: 230, lineGap: 2 });
-        cursorY += alturaEntrega + 5;
-      } else {
-        cursorY += 5;
+        cursorY += Math.max(15, alturaEntrega + 5);
       }
       
       doc.font('Helvetica-Bold');
       doc.text('Ciudad:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(cotizacion.ciudad_entrega || 'Lima - Perú', 100, cursorY);
+      doc.text(ciudadTexto, 100, cursorY, { width: 230, lineGap: 2 });
 
+      let rightCursorY = 203;
       doc.font('Helvetica-Bold');
-      doc.text('Moneda:', 360, 203);
+      doc.text('Moneda:', 360, rightCursorY);
       doc.font('Helvetica');
-      doc.text(cotizacion.moneda === 'USD' ? 'USD' : 'PEN', 450, 203);
+      doc.text(cotizacion.moneda === 'USD' ? 'USD' : 'PEN', 450, rightCursorY);
       
+      rightCursorY += 15;
       doc.font('Helvetica-Bold');
-      doc.text('Plazo de pago:', 360, 218);
+      doc.text('Plazo de pago:', 360, rightCursorY);
       doc.font('Helvetica');
-      doc.text(cotizacion.plazo_pago || '', 450, 218);
+      doc.text(cotizacion.es_muestra ? 'Sin Valor Comercial' : (cotizacion.plazo_pago || ''), 450, rightCursorY, { width: 100, lineGap: 2 });
       
-      doc.font('Helvetica-Bold');
-      doc.text('Forma de pago:', 360, 233);
-      doc.font('Helvetica');
-      doc.text(cotizacion.forma_pago || '', 450, 233);
+      if (!cotizacion.es_muestra) {
+        rightCursorY += 15;
+        doc.font('Helvetica-Bold');
+        doc.text('Forma de pago:', 360, rightCursorY);
+        doc.font('Helvetica');
+        doc.text(cotizacion.forma_pago || '', 450, rightCursorY, { width: 100, lineGap: 2 });
+      }
       
+      rightCursorY += 15;
       doc.font('Helvetica-Bold');
-      doc.text('Plazo Entrega:', 360, 248);
+      doc.text('Plazo Entrega:', 360, rightCursorY);
       doc.font('Helvetica');
-      doc.text(cotizacion.plazo_entrega || '-', 450, 248);
+      doc.text(plazoEntregaTexto, 450, rightCursorY, { width: 100, lineGap: 2 });
       
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
       
@@ -221,7 +244,7 @@ export async function generarCotizacionPDF(cotizacion) {
       const fechaEmision = fechaEmisionObj.toLocaleDateString('es-PE');
       doc.text(fechaEmision, 40, yPosRecuadroFechas + 25, { align: 'center', width: 130 });
 
-      if (cotizacion.validez_dias) {
+      if (cotizacion.validez_dias && !cotizacion.es_muestra) {
         const fechaVenc = new Date(fechaEmisionObj);
         fechaVenc.setDate(fechaVenc.getDate() + parseInt(cotizacion.validez_dias));
         const fechaVencimiento = fechaVenc.toLocaleDateString('es-PE');
@@ -323,40 +346,67 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
       
       const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || `IGV (${porcentajeImpuesto}%)`;
 
-      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('SUB TOTAL', 390, yPos + 4);
-      
-      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
-      doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${fmtNum(subtotalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
+      if (cotizacion.es_muestra) {
+        yPos += 15;
+        doc.fontSize(16).font('Helvetica-Bold').fillColor('#b45309');
+        doc.text('MUESTRA SIN VALOR COMERCIAL', 40, yPos, { align: 'center', width: 522 });
+        
+        yPos += 45;
+        
+        if (yPos + 80 > 700) {
+          doc.addPage();
+          yPos = 50;
+        }
 
-      yPos += 20;
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('CONFORMIDAD DE RECEPCIÓN', 40, yPos);
+        yPos += 20;
 
-      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text(etiquetaImpuesto, 390, yPos + 4);
-      
-      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
-      doc.fontSize(8).font('Helvetica').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${fmtNum(montoImpuesto)}`, 475, yPos + 4, { align: 'right', width: 80 });
+        doc.font('Helvetica');
+        doc.text('Recibido por (Nombre y Apellido): ____________________________________________________', 40, yPos);
+        yPos += 25;
+        doc.text('DNI: _______________________      Fecha y Hora: _______________________', 40, yPos);
+        yPos += 25;
+        doc.text('Firma y Sello de la Empresa:', 40, yPos);
+        doc.text('_________________________________', 200, yPos);
+        
+        yPos += 40;
+      } else {
+        doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.text('SUB TOTAL', 390, yPos + 4);
+        
+        doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+        doc.fontSize(8).font('Helvetica').fillColor('#000000');
+        doc.text(`${simboloMoneda} ${fmtNum(subtotalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
 
-      yPos += 20;
+        yPos += 20;
 
-      doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-      doc.text('TOTAL', 390, yPos + 4);
-      
-      doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text(`${simboloMoneda} ${fmtNum(totalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
+        doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.text(etiquetaImpuesto, 390, yPos + 4);
+        
+        doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+        doc.fontSize(8).font('Helvetica').fillColor('#000000');
+        doc.text(`${simboloMoneda} ${fmtNum(montoImpuesto)}`, 475, yPos + 4, { align: 'right', width: 80 });
 
-      yPos += 25;
+        yPos += 20;
 
-      doc.fontSize(8).font('Helvetica');
-      const totalEnLetras = numeroALetras(totalCalculado, cotizacion.moneda);
-      doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
-       yPos += 25;
+        doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.text('TOTAL', 390, yPos + 4);
+        
+        doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+        doc.text(`${simboloMoneda} ${fmtNum(totalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
+
+        yPos += 25;
+
+        doc.fontSize(8).font('Helvetica');
+        const totalEnLetras = numeroALetras(totalCalculado, cotizacion.moneda);
+        doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });
+        yPos += 25;
+      }
 
       // Pie de página
       doc.fontSize(7).font('Helvetica').fillColor('#666666');

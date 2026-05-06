@@ -926,32 +926,36 @@ setFormCabecera(prev => ({
                   required
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">Validez (dias) *</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={formCabecera.validez_dias}
-                  onChange={(e) => setFormCabecera({ ...formCabecera, validez_dias: e.target.value })}
-                  min="1"
-                  
-                  required
-                  onWheel={handleWheelDisable}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Fecha de Vencimiento (calculada)</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={fechaVencimientoCalculada}
-                  readOnly
-                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
-                />
-                <small className="text-muted block mt-1">
-                  <Info size={12} className="inline" /> Se calcula automaticamente
-                </small>
-              </div>
+              {!esMuestra && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Validez (dias) *</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={formCabecera.validez_dias}
+                      onChange={(e) => setFormCabecera({ ...formCabecera, validez_dias: e.target.value })}
+                      min="1"
+                      
+                      required
+                      onWheel={handleWheelDisable}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Fecha de Vencimiento (calculada)</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={fechaVencimientoCalculada}
+                      readOnly
+                      style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                    />
+                    <small className="text-muted block mt-1">
+                      <Info size={12} className="inline" /> Se calcula automaticamente
+                    </small>
+                  </div>
+                </>
+              )}
               <div className="form-group">
                 <label className="form-label">Moneda *</label>
                 <select
@@ -965,20 +969,22 @@ setFormCabecera(prev => ({
                   <option value="USD">Dolares (USD)</option>
                 </select>
               </div>
-              <div className="form-group">
-                <label className="form-label">Tipo de Impuesto *</label>
-                <select
-                  className="form-select"
-                  value={formCabecera.tipo_impuesto}
-                  onChange={(e) => handleTipoImpuestoChange(e.target.value)}
-                  
-                  required
-                >
-                  {TIPOS_IMPUESTO.map(tipo => (
-                    <option key={tipo.codigo} value={tipo.codigo}>{tipo.nombre}</option>
-                  ))}
-                </select>
-              </div>
+              {!esMuestra && (
+                <div className="form-group">
+                  <label className="form-label">Tipo de Impuesto *</label>
+                  <select
+                    className="form-select"
+                    value={formCabecera.tipo_impuesto}
+                    onChange={(e) => handleTipoImpuestoChange(e.target.value)}
+                    
+                    required
+                  >
+                    {TIPOS_IMPUESTO.map(tipo => (
+                      <option key={tipo.codigo} value={tipo.codigo}>{tipo.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {formCabecera.moneda === 'USD' && (
                 <div className="form-group">
                   <label className="form-label">Tipo de Cambio</label>
@@ -1009,78 +1015,82 @@ setFormCabecera(prev => ({
                   )}
                 </div>
               )}
-              <div className="form-group">
-                <label className="form-label">Condicion de Pago</label>
-                {clienteSeleccionado?.condicion_pago ? (
-                  <div className="flex items-center gap-2 p-2 bg-gray-100 border rounded-lg">
-                    <Lock size={14} className="text-muted" />
-                    <span className="font-medium">
-                      {clienteSeleccionado.condicion_pago === 'Credito'
-                        ? `Credito ${clienteSeleccionado.dias_credito} Dias`
-                        : 'Contado'}
-                    </span>
-                    <span className="text-xs text-muted ml-auto">Definido en ficha del cliente</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className={`btn flex-1 ${formCabecera.plazo_pago === 'Contado' ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => setFormCabecera(prev => ({ ...prev, plazo_pago: 'Contado' }))}
-                        
-                      >
-                        Contado
-                      </button>
-                      <button
-                        type="button"
-                        className={`btn flex-1 ${formCabecera.plazo_pago !== 'Contado' && formCabecera.plazo_pago !== '' ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => {
-                          if (estadoCredito?.usar_limite_credito) {
-                            setFormCabecera(prev => ({ ...prev, plazo_pago: '' }));
-                          }
-                        }}
-                        disabled={cotizacionConvertida || !estadoCredito?.usar_limite_credito}
-                        title={!estadoCredito?.usar_limite_credito ? 'Este cliente no tiene credito habilitado' : ''}
-                      >
-                        {!estadoCredito?.usar_limite_credito && <Lock size={14} className="mr-1" />}
-                        Credito
-                      </button>
-                    </div>
-                    {formCabecera.plazo_pago !== 'Contado' && (
-                      <div className="form-group animate-fadeIn mt-3">
-                        <label className="form-label">Dias de Credito *</label>
-                        <select
-                          className="form-select border-primary"
-                          value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
-                          onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
-                          
-                          required={formCabecera.plazo_pago !== 'Contado'}
-                        >
-                          <option value="">Seleccione los dias...</option>
-                          {PLAZOS_PAGO.filter(p => p !== 'Contado').map(plazo => (
-                            <option key={plazo} value={plazo}>{plazo}</option>
-                          ))}
-                        </select>
+              {!esMuestra && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Condicion de Pago</label>
+                    {clienteSeleccionado?.condicion_pago ? (
+                      <div className="flex items-center gap-2 p-2 bg-gray-100 border rounded-lg">
+                        <Lock size={14} className="text-muted" />
+                        <span className="font-medium">
+                          {clienteSeleccionado.condicion_pago === 'Credito'
+                            ? `Credito ${clienteSeleccionado.dias_credito} Dias`
+                            : 'Contado'}
+                        </span>
+                        <span className="text-xs text-muted ml-auto">Definido en ficha del cliente</span>
                       </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className={`btn flex-1 ${formCabecera.plazo_pago === 'Contado' ? 'btn-primary' : 'btn-outline'}`}
+                            onClick={() => setFormCabecera(prev => ({ ...prev, plazo_pago: 'Contado' }))}
+                            
+                          >
+                            Contado
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn flex-1 ${formCabecera.plazo_pago !== 'Contado' && formCabecera.plazo_pago !== '' ? 'btn-primary' : 'btn-outline'}`}
+                            onClick={() => {
+                              if (estadoCredito?.usar_limite_credito) {
+                                setFormCabecera(prev => ({ ...prev, plazo_pago: '' }));
+                              }
+                            }}
+                            disabled={cotizacionConvertida || !estadoCredito?.usar_limite_credito}
+                            title={!estadoCredito?.usar_limite_credito ? 'Este cliente no tiene credito habilitado' : ''}
+                          >
+                            {!estadoCredito?.usar_limite_credito && <Lock size={14} className="mr-1" />}
+                            Credito
+                          </button>
+                        </div>
+                        {formCabecera.plazo_pago !== 'Contado' && (
+                          <div className="form-group animate-fadeIn mt-3">
+                            <label className="form-label">Dias de Credito *</label>
+                            <select
+                              className="form-select border-primary"
+                              value={formCabecera.plazo_pago === 'Contado' ? '' : formCabecera.plazo_pago}
+                              onChange={(e) => setFormCabecera({ ...formCabecera, plazo_pago: e.target.value })}
+                              
+                              required={formCabecera.plazo_pago !== 'Contado'}
+                            >
+                              <option value="">Seleccione los dias...</option>
+                              {PLAZOS_PAGO.filter(p => p !== 'Contado').map(plazo => (
+                                <option key={plazo} value={plazo}>{plazo}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
-              </div>
-              <div className="form-group">
-                <label className="form-label">Forma de Pago</label>
-                <select
-                  className="form-select"
-                  value={formCabecera.forma_pago}
-                  onChange={(e) => setFormCabecera({ ...formCabecera, forma_pago: e.target.value })}
-                  
-                >
-                  <option value="">Seleccione...</option>
-                  {FORMAS_PAGO.map(forma => (
-                    <option key={forma} value={forma}>{forma}</option>
-                  ))}
-                </select>
-              </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Forma de Pago</label>
+                    <select
+                      className="form-select"
+                      value={formCabecera.forma_pago}
+                      onChange={(e) => setFormCabecera({ ...formCabecera, forma_pago: e.target.value })}
+                      
+                    >
+                      <option value="">Seleccione...</option>
+                      {FORMAS_PAGO.map(forma => (
+                        <option key={forma} value={forma}>{forma}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
               <div className="form-group">
                 <label className="form-label">Plazo de Entrega</label>
                 <select

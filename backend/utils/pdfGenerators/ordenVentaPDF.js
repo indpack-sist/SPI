@@ -301,24 +301,6 @@ export async function generarOrdenVentaPDF(orden) {
       doc.fillColor('#000000').font('Helvetica-Bold').text('SON:', 30, yFooter + 50);
       doc.font('Helvetica').text(letras, 55, yFooter + 50, { width: 300 });
 
-      const yBank = 710;
-      doc.rect(30, yBank, 535, 55).fillAndStroke('#f0f0f0', '#cccccc');
-      
-      doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
-      doc.text('CUENTAS BANCARIAS - INDPACK S.A.C.', 30, yBank + 6, { width: 535, align: 'center' });
-      
-      doc.fillColor('#000000').font('Helvetica');
-      const bankY = yBank + 20;
-      
-      doc.text('BCP SOLES: 194-2055093-0-22', 40, bankY);
-      doc.text('CCI: 002-194-002055093022-90', 40, bankY + 12);
-      
-      doc.text('BBVA SOLES: 0011-0175-0100045678', 220, bankY);
-      doc.text('CCI: 011-175-000100045678-99', 220, bankY + 12);
-
-      doc.text('CUENTA DETRACCIÓN BN: 00-000-00000', 400, bankY);
-      doc.text('Facturas sujetas a detracción del 10%', 400, bankY + 12);
-
       doc.end();
       
     } catch (error) {

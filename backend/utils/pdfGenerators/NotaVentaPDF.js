@@ -138,64 +138,86 @@ export async function generarNotaVentaPDF(orden) {
       const numeroCorrelativo = orden.serie_correlativo || orden.numero_comprobante || orden.numero_orden;
       doc.text(`No. ${numeroCorrelativo}`, 385, 83, { align: 'center', width: 155 });
 
-      const direccionCliente = orden.direccion_entrega || 
-                               orden.direccion_cliente || 
-                               '';
-      
+      const clienteTexto = orden.cliente || '';
+      const rucTexto = orden.ruc_cliente || orden.documento_cliente || '';
+      const direccionCliente = (orden.direccion_entrega || orden.direccion_cliente || '').replace(/[\r\n]+/g, " ");
+      const ubicacionTexto = [orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ') || 'Lima - Perú';
+      const contactoTexto = [orden.contacto_entrega, orden.telefono_entrega].filter(Boolean).join(' / ') || '-';
+
+      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, 230, 8);
+      const alturaRUC = calcularAlturaTexto(doc, rucTexto, 230, 8);
       const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
-      const alturaRecuadroCliente = Math.max(90, alturaDireccion + 75);
+      const alturaUbicacion = calcularAlturaTexto(doc, ubicacionTexto, 230, 8);
+      const alturaContacto = calcularAlturaTexto(doc, contactoTexto, 230, 8);
+
+      let leftH = Math.max(15, alturaCliente + 5);
+      leftH += Math.max(15, alturaRUC + 5);
+      leftH += Math.max(15, alturaDireccion + 5);
+      leftH += Math.max(15, alturaUbicacion + 5);
+      leftH += Math.max(15, alturaContacto + 5);
+
+      let rightH = 15; // Moneda
+      rightH += 15; // Plazo
+      rightH += 15; // Forma
+      rightH += 15; // O/C
+
+      const alturaRecuadroCliente = Math.max(90, Math.max(leftH, rightH) + 15);
       
       doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
       
+      let cursorY = 203;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Cliente:', 40, 203);
+      doc.text('Cliente:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.cliente || '', 100, 203, { width: 230 });
+      doc.text(clienteTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      cursorY += Math.max(15, alturaCliente + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('RUC/DNI:', 40, 218);
+      doc.text('RUC/DNI:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.ruc_cliente || orden.documento_cliente || '', 100, 218);
+      doc.text(rucTexto, 100, cursorY);
+      cursorY += Math.max(15, alturaRUC + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('Dirección:', 40, 233);
+      doc.text('Dirección:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(direccionCliente, 100, 233, { width: 230, lineGap: 2 });
-      
-      const yPosicionCiudad = 233 + alturaDireccion + 5;
+      doc.text(direccionCliente, 100, cursorY, { width: 230, lineGap: 2 });
+      cursorY += Math.max(15, alturaDireccion + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('Ciudad/Lugar:', 40, yPosicionCiudad);
+      doc.text('Ciudad/Lugar:', 40, cursorY);
       doc.font('Helvetica');
-      const ubicacion = [orden.ciudad_entrega, orden.lugar_entrega].filter(Boolean).join(' - ');
-      doc.text(ubicacion || 'Lima - Perú', 100, yPosicionCiudad, { width: 230 });
-
-      const yPosicionContacto = yPosicionCiudad + 15;
-      doc.font('Helvetica-Bold');
-      doc.text('Contacto:', 40, yPosicionContacto);
-      doc.font('Helvetica');
-      const contactoInfo = [orden.contacto_entrega, orden.telefono_entrega].filter(Boolean).join(' / ');
-      doc.text(contactoInfo || '-', 100, yPosicionContacto, { width: 230 });
+      doc.text(ubicacionTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      cursorY += Math.max(15, alturaUbicacion + 5);
 
       doc.font('Helvetica-Bold');
-      doc.text('Moneda:', 360, 203);
+      doc.text('Contacto:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', 450, 203);
+      doc.text(contactoTexto, 100, cursorY, { width: 230, lineGap: 2 });
+
+      let rightY = 203;
+      doc.font('Helvetica-Bold');
+      doc.text('Moneda:', 360, rightY);
+      doc.font('Helvetica');
+      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', 450, rightY);
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Plazo de pago:', 360, 218);
+      doc.text('Plazo de pago:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(orden.plazo_pago || '', 450, 218);
+      doc.text(orden.plazo_pago || '', 450, rightY);
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Forma de pago:', 360, 233);
+      doc.text('Forma de pago:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(orden.forma_pago || '', 450, 233);
+      doc.text(orden.forma_pago || '', 450, rightY);
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('O/C Cliente:', 360, 248);
+      doc.text('O/C Cliente:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(orden.orden_compra_cliente || '-', 450, 248);
+      doc.text(orden.orden_compra_cliente || '-', 450, rightY);
 
       const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
       

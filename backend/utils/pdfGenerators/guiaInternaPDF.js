@@ -111,9 +111,9 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       doc.fontSize(14).fillColor('#cc0000'); 
       doc.text(`No. ${numeroGuiaInterna}`, 385, 90, { align: 'center', width: 155 });
 
-      const destino = orden.cliente;
-      const direccionEntrega = orden.direccion_entrega;
-      const rucCliente = orden.ruc_cliente;
+      const clienteTexto = orden.cliente || 'VARIOS';
+      const rucTexto = orden.ruc_cliente || '-';
+      const direccionEntrega = (orden.direccion_entrega || '').replace(/[\r\n]+/g, " ");
 
       const isTransportePrivado = orden.tipo_entrega === 'Transporte Privado';
       const conductorFinal = isTransportePrivado ? orden.transporte_conductor : orden.conductor_nombre;
@@ -122,122 +122,127 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       const modeloFinal = isTransportePrivado ? '' : orden.vehiculo_modelo;
       const licenciaFinal = orden.transporte_licencia;
 
-      doc.fontSize(8).font('Helvetica');
-      const alturaDestino = calcularAlturaTexto(doc, destino || 'N/A', 195, 8);
-      
-      let alturaTransporteCalculada = 0;
-      if (conductorFinal) alturaTransporteCalculada += calcularAlturaTexto(doc, conductorFinal, 180, 8) + 4;
-      if (dniFinal) alturaTransporteCalculada += 12;
-      if (licenciaFinal) alturaTransporteCalculada += 12;
-      if (placaFinal) alturaTransporteCalculada += 12;
+      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, 180, 8);
+      const alturaDireccion = calcularAlturaTexto(doc, direccionEntrega, 180, 8);
+      const alturaConductor = calcularAlturaTexto(doc, conductorFinal || '', 180, 8);
 
-      const alturaBaseDerecha = 70; 
-      const alturaTotalDerecha = alturaBaseDerecha + alturaTransporteCalculada;
+      let leftH = 15; // Fecha
+      leftH += 15; // Hora
+      leftH += 15; // Tipo
+      leftH += Math.max(15, alturaCliente + 5);
+      if (direccionEntrega) leftH += Math.max(15, alturaDireccion + 5);
+      if (rucTexto) leftH += 15;
 
-      const alturaTotalIzquierda = 55 + Math.max(
-        alturaDestino + (rucCliente ? 12 : 0) + (direccionEntrega ? 25 : 0), 
-        0
-      );
+      let rightH = 15; // Estado
+      rightH += 15; // Orden Venta
+      rightH += 15; // OC Cliente
+      rightH += 15; // Cotizacion
+      if (conductorFinal) rightH += Math.max(15, alturaConductor + 5);
+      if (dniFinal) rightH += 12;
+      if (licenciaFinal) rightH += 12;
+      if (placaFinal) rightH += 12;
 
-      const alturaInfoSalida = Math.max(115, Math.max(alturaTotalIzquierda, alturaTotalDerecha)) + 10;
+      const alturaInfoSalida = Math.max(115, Math.max(leftH, rightH) + 15);
       
       doc.roundedRect(33, 205, 529, alturaInfoSalida, 3).stroke('#000000');
       
+      let cursorY = 213;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha:', 40, 213);
+      doc.text('Fecha:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(formatearFecha(orden.fecha_emision), 100, 213);
+      doc.text(formatearFecha(orden.fecha_emision), 100, cursorY);
+      cursorY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Hora:', 40, 228);
+      doc.text('Hora:', 40, cursorY);
       doc.font('Helvetica');
       const horaStr = formatearHora(new Date()); 
-      doc.text(horaStr, 100, 228);
+      doc.text(horaStr, 100, cursorY);
+      cursorY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Tipo:', 40, 243);
+      doc.text('Tipo:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text('Venta', 120, 243, { width: 210 });
+      doc.text('Venta', 120, cursorY, { width: 210 });
+      cursorY += 17;
       
-      const yBloque2 = 260; 
-
       doc.font('Helvetica-Bold');
-      doc.text('Cliente/Destino:', 40, yBloque2);
+      doc.text('Cliente/Destino:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(destino || 'N/A', 120, yBloque2, { width: 180, lineGap: 2 });
-
-      let currentYLeft = yBloque2 + calcularAlturaTexto(doc, destino || 'N/A', 180, 8) + 2;
+      doc.text(clienteTexto, 120, cursorY, { width: 180, lineGap: 2 });
+      cursorY += Math.max(15, alturaCliente + 5);
 
       if (direccionEntrega) {
           doc.fontSize(7).font('Helvetica-Oblique').fillColor('#444444');
-          doc.text(`Dirección: ${direccionEntrega}`, 120, currentYLeft, { width: 180 });
+          doc.text(`Dirección: ${direccionEntrega}`, 120, cursorY, { width: 180, lineGap: 2 });
           doc.fontSize(8).fillColor('#000000');
-          currentYLeft += calcularAlturaTexto(doc, direccionEntrega, 180, 7) + 2;
+          cursorY += Math.max(15, alturaDireccion + 5);
       }
 
-      if (rucCliente) {
+      if (rucTexto) {
           doc.font('Helvetica-Bold');
-          doc.text(`RUC: ${rucCliente}`, 120, currentYLeft + 2);
+          doc.text(`RUC: ${rucTexto}`, 120, cursorY);
       }
 
       const xLabelRight = 310;
-      const xValueRight = 370;
-      const wValueRight = 180;
+      const xValueRight = 375;
+      const wValueRight = 175;
 
+      let rightY = 213;
       doc.font('Helvetica-Bold');
-      doc.text('Estado:', xLabelRight, 213);
+      doc.text('Estado:', xLabelRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.estado || 'N/A', xValueRight, 213);
+      doc.text(orden.estado || 'N/A', xValueRight, rightY);
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Orden de Venta:', xLabelRight, 228);
+      doc.text('Orden de Venta:', xLabelRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.numero_orden || '---', xValueRight, 228);
+      doc.text(orden.numero_orden || '---', xValueRight, rightY);
+      rightY += 15;
 
       doc.font('Helvetica-Bold');
-      doc.text('OC Cliente:', xLabelRight, 243);
+      doc.text('OC Cliente:', xLabelRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.orden_compra_cliente || 'SIN OC', xValueRight, 243);
+      doc.text(orden.orden_compra_cliente || 'SIN OC', xValueRight, rightY);
+      rightY += 15;
 
       doc.font('Helvetica-Bold');
-      doc.text('Cotización:', xLabelRight, 258);
+      doc.text('Cotización:', xLabelRight, rightY);
       doc.font('Helvetica');
-      doc.text(orden.numero_cotizacion || '---', xValueRight, 258);
-
-      let yDerecha = 273;
+      doc.text(orden.numero_cotizacion || '---', xValueRight, rightY);
+      rightY += 15;
 
       if (conductorFinal) {
         doc.font('Helvetica-Bold');
-        doc.text('Conductor:', xLabelRight, yDerecha);
+        doc.text('Conductor:', xLabelRight, rightY);
         doc.font('Helvetica');
-        const conductorTxt = conductorFinal.substring(0, 40); 
-        const heightC = doc.heightOfString(conductorTxt, { width: wValueRight });
-        doc.text(conductorTxt, xValueRight, yDerecha, { width: wValueRight });
-        yDerecha += heightC + 2;
+        doc.text(conductorFinal, xValueRight, rightY, { width: wValueRight, lineGap: 2 });
+        rightY += Math.max(15, alturaConductor + 5);
       }
 
       if (dniFinal) {
         doc.font('Helvetica-Bold');
-        doc.text('DNI:', xLabelRight, yDerecha);
+        doc.text('DNI:', xLabelRight, rightY);
         doc.font('Helvetica');
-        doc.text(dniFinal, xValueRight, yDerecha);
-        yDerecha += 12;
+        doc.text(dniFinal, xValueRight, rightY);
+        rightY += 12;
       }
 
       if (licenciaFinal) {
         doc.font('Helvetica-Bold');
-        doc.text('Licencia:', xLabelRight, yDerecha);
+        doc.text('Licencia:', xLabelRight, rightY);
         doc.font('Helvetica');
-        doc.text(licenciaFinal, xValueRight, yDerecha);
-        yDerecha += 12;
+        doc.text(licenciaFinal, xValueRight, rightY);
+        rightY += 12;
       }
 
       if (placaFinal) {
         doc.font('Helvetica-Bold');
-        doc.text('Vehículo:', xLabelRight, yDerecha);
+        doc.text('Vehículo:', xLabelRight, rightY);
         doc.font('Helvetica');
         const vehiculoTxt = `${placaFinal} ${modeloFinal ? `(${modeloFinal})` : ''}`;
-        doc.text(vehiculoTxt, xValueRight, yDerecha, { width: wValueRight });
+        doc.text(vehiculoTxt, xValueRight, rightY, { width: wValueRight });
       }
 
       let yPos = 205 + alturaInfoSalida + 15;

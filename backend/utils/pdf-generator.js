@@ -500,6 +500,7 @@ export async function generarPDFSalida(datos) {
       doc.font('Helvetica').text(datos.numero_cotizacion || '---', xValueRight, rightY);
 
       let yPos = 205 + hInfoFinal + 25;
+      let yDerecha = rightY + 15;
 
       if (datos.tipo_entrega === 'Vehiculo Empresa') {
         if (datos.conductor) {
@@ -599,7 +600,6 @@ export async function generarPDFSalida(datos) {
         yDerecha += 22;
       }
 
-      let yPos = 205 + alturaInfoSalida + 25;
       const detalles = datos.detalles || datos.detalle || [];
       
       const mostrarDetalleExtendido = detalles.some(d => d.cantidad_pendiente !== undefined);

@@ -426,64 +426,80 @@ export async function generarPDFSalida(datos) {
 
       const alturaInfoSalida = Math.max(115, 65 + Math.max(alturaDestino + (datos.ruc_cliente ? 12 : 0) + (datos.direccion_despacho ? 25 : 0), alturaTransporte)); 
       
-      doc.roundedRect(33, 205, 529, alturaInfoSalida, 3).stroke('#000000');
+      const clienteTexto = destino || 'N/A';
+      const rucTexto = datos.ruc_cliente || '';
+      const direccionTexto = (datos.direccion_despacho || '').replace(/[\r\n]+/g, " ");
+
+      const hCliente = calcularAlturaTexto(doc, clienteTexto, 180, 8);
+      const hDireccion = calcularAlturaTexto(doc, direccionTexto, 180, 8);
+
+      let leftH = 15; // Fecha
+      leftH += 15; // Tipo
+      leftH += Math.max(15, hCliente + 5);
+      if (datos.direccion_despacho) leftH += Math.max(15, hDireccion + 5);
+      if (rucTexto) leftH += 15;
+
+      const xLabelRight = 310;
+      const xValueRight = 375;
+      const wValueRight = 175;
+
+      let rightH = 15; // Estado
+      rightH += 15; // Orden Venta
+      rightH += 15; // OC Cliente
+      rightH += 15; // Cotizacion
+
+      const hInfoFinal = Math.max(115, Math.max(leftH, rightH) + 15);
       
+      doc.roundedRect(33, 205, 529, hInfoFinal, 3).stroke('#000000');
+      
+      let cursorY = 213;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha:', 40, 213);
+      doc.text('Fecha:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(formatearFecha(datos.fecha_movimiento || datos.fecha_emision), 100, 213);
+      doc.text(formatearFecha(datos.fecha_movimiento || datos.fecha_emision), 100, cursorY);
+      cursorY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Tipo:', 40, 243);
+      doc.text('Tipo:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(datos.tipo_inventario || 'Venta', 120, 243, { width: 210 });
+      doc.text(datos.tipo_inventario || 'Venta', 100, cursorY, { width: 210 });
+      cursorY += 17;
       
-      const yBloque2 = 260; 
-
       doc.font('Helvetica-Bold');
-      doc.text('Cliente/Destino:', 40, yBloque2);
+      doc.text('Cliente/Destino:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(destino || 'N/A', 120, yBloque2, { width: 180, lineGap: 2 });
-
-      let currentYLeft = yBloque2 + calcularAlturaTexto(doc, destino || 'N/A', 180, 8) + 2;
+      doc.text(clienteTexto, 120, cursorY, { width: 180, lineGap: 2 });
+      cursorY += Math.max(15, hCliente + 5);
 
       if (datos.direccion_despacho) {
           doc.fontSize(7).font('Helvetica-Oblique').fillColor('#444444');
-          doc.text(`Dirección: ${datos.direccion_despacho}`, 120, currentYLeft, { width: 180 });
+          doc.text(`Dirección: ${direccionTexto}`, 120, cursorY, { width: 180, lineGap: 2 });
           doc.fontSize(8).fillColor('#000000');
-          currentYLeft += calcularAlturaTexto(doc, datos.direccion_despacho, 180, 7) + 2;
+          cursorY += Math.max(15, hDireccion + 5);
       }
 
-      if (datos.ruc_cliente) {
+      if (rucTexto) {
           doc.font('Helvetica-Bold');
-          doc.text(`RUC: ${datos.ruc_cliente}`, 120, currentYLeft + 2);
+          doc.text(`RUC: ${rucTexto}`, 120, cursorY);
       }
 
-      const xLabelRight = 310;
-      const xValueRight = 370;
-      const wValueRight = 180;
-
-      doc.font('Helvetica-Bold');
-      doc.text('Estado:', xLabelRight, 213);
-      doc.font('Helvetica');
-      doc.text(datos.estado || 'N/A', xValueRight, 213);
+      let rightY = 213;
+      doc.font('Helvetica-Bold').text('Estado:', xLabelRight, rightY);
+      doc.font('Helvetica').text(datos.estado || 'N/A', xValueRight, rightY);
+      rightY += 15;
       
-      doc.font('Helvetica-Bold');
-      doc.text('Orden de Venta:', xLabelRight, 228);
-      doc.font('Helvetica');
-      doc.text(datos.numero_orden || '---', xValueRight, 228);
+      doc.font('Helvetica-Bold').text('Orden de Venta:', xLabelRight, rightY);
+      doc.font('Helvetica').text(datos.numero_orden || '---', xValueRight, rightY);
+      rightY += 15;
 
-      doc.font('Helvetica-Bold');
-      doc.text('OC Cliente:', xLabelRight, 243);
-      doc.font('Helvetica');
-      doc.text(datos.oc_cliente || 'SIN OC', xValueRight, 243);
+      doc.font('Helvetica-Bold').text('OC Cliente:', xLabelRight, rightY);
+      doc.font('Helvetica').text(datos.oc_cliente || 'SIN OC', xValueRight, rightY);
+      rightY += 15;
 
-      doc.font('Helvetica-Bold');
-      doc.text('Cotización:', xLabelRight, 258);
-      doc.font('Helvetica');
-      doc.text(datos.numero_cotizacion || '---', xValueRight, 258);
+      doc.font('Helvetica-Bold').text('Cotización:', xLabelRight, rightY);
+      doc.font('Helvetica').text(datos.numero_cotizacion || '---', xValueRight, rightY);
 
-      let yDerecha = 273;
+      let yPos = 205 + hInfoFinal + 25;
 
       if (datos.tipo_entrega === 'Vehiculo Empresa') {
         if (datos.conductor) {
@@ -1474,50 +1490,72 @@ export async function generarPDFOrdenVenta(orden) {
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${orden.numero_orden}`, 385, 83, { align: 'center', width: 155 });
 
-      const direccionCliente = orden.direccion_entrega || orden.direccion_cliente || '';
-      const alturaDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
-      const alturaRecuadroCliente = Math.max(75, alturaDireccion + 60);
-      
-      doc.roundedRect(33, 195, 529, alturaRecuadroCliente, 3).stroke('#000000');
-      
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Cliente:', 40, 203);
-      doc.font('Helvetica');
-      doc.text(orden.cliente || '', 100, 203, { width: 230 });
-      
-      doc.font('Helvetica-Bold');
-      doc.text('RUC:', 40, 218);
-      doc.font('Helvetica');
-      doc.text(orden.ruc_cliente || '', 100, 218);
-      
-      doc.font('Helvetica-Bold');
-      doc.text('Dirección:', 40, 233);
-      doc.font('Helvetica');
-      doc.text(direccionCliente, 100, 233, { width: 230, lineGap: 2 });
+      const clienteTexto = orden.cliente || '';
+      const rucTexto = orden.ruc_cliente || '';
+      const direccionCliente = (orden.direccion_entrega || orden.direccion_cliente || '').replace(/[\r\n]+/g, " ");
 
-      doc.font('Helvetica-Bold');
-      doc.text('Moneda:', 360, 203);
+      const hCliente = calcularAlturaTexto(doc, clienteTexto, 230, 8);
+      const hRuc = 15;
+      const hDireccion = calcularAlturaTexto(doc, direccionCliente, 230, 8);
+
+      let leftH = Math.max(15, hCliente + 5);
+      leftH += hRuc;
+      leftH += Math.max(15, hDireccion + 5);
+
+      let rightH = 15; // Moneda
+      rightH += 15; // Estado
+      rightH += 15; // Prioridad
+      if (orden.orden_compra_cliente) rightH += 15;
+
+      const hRecuadro = Math.max(75, Math.max(leftH, rightH) + 15);
+      
+      doc.roundedRect(33, 195, 529, hRecuadro, 3).stroke('#000000');
+      
+      let cursorY = 203;
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('Cliente:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', 450, 203);
+      doc.text(clienteTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      cursorY += Math.max(15, hCliente + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('Estado:', 360, 218);
+      doc.text('RUC:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.estado || '', 450, 218);
+      doc.text(rucTexto, 100, cursorY);
+      cursorY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Prioridad:', 360, 233);
+      doc.text('Dirección:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.prioridad || '', 450, 233);
+      doc.text(direccionCliente, 100, cursorY, { width: 230, lineGap: 2 });
+
+      let rightY = 203;
+      doc.font('Helvetica-Bold');
+      doc.text('Moneda:', 360, rightY);
+      doc.font('Helvetica');
+      doc.text(orden.moneda === 'USD' ? 'USD' : 'PEN', 450, rightY);
+      rightY += 15;
+      
+      doc.font('Helvetica-Bold');
+      doc.text('Estado:', 360, rightY);
+      doc.font('Helvetica');
+      doc.text(orden.estado || '', 450, rightY);
+      rightY += 15;
+      
+      doc.font('Helvetica-Bold');
+      doc.text('Prioridad:', 360, rightY);
+      doc.font('Helvetica');
+      doc.text(orden.prioridad || '', 450, rightY);
       
       if (orden.orden_compra_cliente) {
+        rightY += 15;
         doc.font('Helvetica-Bold');
-        doc.text('O/C Cliente:', 360, 248);
+        doc.text('O/C Cliente:', 360, rightY);
         doc.font('Helvetica');
-        doc.text(orden.orden_compra_cliente, 450, 248);
+        doc.text(orden.orden_compra_cliente, 450, rightY);
       }
 
-      const yPosRecuadroFechas = 195 + alturaRecuadroCliente + 8;
+      const yPosRecuadroFechas = 195 + hRecuadro + 8;
       
       doc.roundedRect(33, yPosRecuadroFechas, 529, 40, 3).stroke('#000000');
       
@@ -1689,50 +1727,84 @@ export async function generarPDFGuiaRemision(guia) {
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${guia.numero_guia}`, 385, 83, { align: 'center', width: 155 });
 
-      const alturaRecuadroInfo = 105;
+      const clienteTexto = guia.cliente || '';
+      const rucTexto = guia.ruc_cliente || '';
+      const tipoTrasladoTexto = guia.tipo_traslado || '';
+      const motivoTexto = guia.motivo_traslado || '';
+
+      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, 230, 8);
+      const alturaRUC = calcularAlturaTexto(doc, rucTexto, 230, 8);
+      const alturaTipo = calcularAlturaTexto(doc, tipoTrasladoTexto, 230, 8);
+      const alturaMotivo = calcularAlturaTexto(doc, motivoTexto, 135, 8);
+
+      let leftH = 15; // Fecha
+      leftH += Math.max(15, alturaCliente + 5);
+      leftH += Math.max(15, alturaRUC + 5);
+      leftH += Math.max(15, alturaTipo + 5);
+
+      let rightH = Math.max(15, alturaMotivo + 5);
+      rightH += 15; // Modalidad
+      rightH += 15; // Peso
+      rightH += 15; // Bultos
+
+      const alturaRecuadroInfo = Math.max(105, Math.max(leftH, rightH) + 15);
+      
       doc.roundedRect(33, 195, 529, alturaRecuadroInfo, 3).stroke('#000000');
       
+      let cursorY = 203;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Fecha Emisión:', 40, 203);
+      doc.text('Fecha Emisión:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(formatearFecha(guia.fecha_emision), 100, 203);
+      doc.text(formatearFecha(guia.fecha_emision), 100, cursorY);
+      cursorY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Cliente:', 40, 218);
+      doc.text('Cliente:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(guia.cliente || '', 100, 218, { width: 230 });
+      doc.text(clienteTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      cursorY += Math.max(15, alturaCliente + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('RUC:', 40, 233);
+      doc.text('RUC:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(guia.ruc_cliente || '', 100, 233);
+      doc.text(rucTexto, 100, cursorY);
+      cursorY += Math.max(15, alturaRUC + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('Tipo Traslado:', 40, 248);
+      doc.text('Tipo Traslado:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(guia.tipo_traslado || '', 100, 248);
+      doc.text(tipoTrasladoTexto, 100, cursorY, { width: 230, lineGap: 2 });
 
+      let rightY = 203;
       doc.font('Helvetica-Bold');
-      doc.text('Motivo:', 360, 203);
+      doc.text('Motivo:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(guia.motivo_traslado || '', 450, 203, { width: 135 });
+      doc.text(motivoTexto, 450, rightY, { width: 135, lineGap: 2 });
+      rightY += Math.max(15, alturaMotivo + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('Modalidad:', 360, 218);
+      doc.text('Modalidad:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(guia.modalidad_transporte || 'Privado', 450, 218);
+      doc.text(guia.modalidad_transporte || 'Privado', 450, rightY);
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Peso Bruto:', 360, 233);
+      doc.text('Peso Bruto:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(`${parseFloat(guia.peso_bruto_kg).toFixed(2)} kg`, 450, 233);
+      doc.text(`${parseFloat(guia.peso_bruto_kg).toFixed(2)} kg`, 450, rightY);
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('N° Bultos:', 360, 248);
+      doc.text('N° Bultos:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(guia.numero_bultos || '', 450, 248);
+      doc.text(guia.numero_bultos || '', 450, rightY);
 
-      let yPos = 310;
+      let yPosTable = 195 + alturaRecuadroInfo + 10;
+      yPosTable = 310; // Manteniendo el yPos original del Punto de Partida si es posible o ajustando
+      
+      // Ajuste: Si el recuadro creció mucho, el yPos del Punto de Partida debe bajar
+      const yPuntos = Math.max(310, 195 + alturaRecuadroInfo + 10);
+      let yPos = yPuntos;
 
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text('PUNTO DE PARTIDA', 40, yPos);
@@ -2025,43 +2097,63 @@ export async function generarPDFOrdenCompra(orden) {
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(`No. ${orden.numero_orden}`, 385, 83, { align: 'center', width: 155 });
 
-      const direccionProveedor = orden.direccion_proveedor || '';
-      const alturaDireccion = calcularAlturaTexto(doc, direccionProveedor, 230, 8);
-      const alturaRecuadroProveedor = Math.max(75, alturaDireccion + 60);
+      const proveedorTexto = orden.proveedor || '';
+      const rucProveedor = orden.ruc_proveedor || '';
+      const direccionProveedor = (orden.direccion_proveedor || '').replace(/[\r\n]+/g, " ");
+
+      const hProv = calcularAlturaTexto(doc, proveedorTexto, 230, 8);
+      const hRuc = 15;
+      const hDir = calcularAlturaTexto(doc, direccionProveedor, 230, 8);
+
+      let leftH = Math.max(15, hProv + 5);
+      leftH += hRuc;
+      leftH += Math.max(15, hDir + 5);
+
+      let rightH = 15; // Condicion
+      rightH += 15; // Fecha Pedido
+      rightH += 15; // Entrega esperada
+
+      const hRecuadro = Math.max(75, Math.max(leftH, rightH) + 15);
       
-      doc.roundedRect(33, 195, 529, alturaRecuadroProveedor, 3).stroke('#000000');
+      doc.roundedRect(33, 195, 529, hRecuadro, 3).stroke('#000000');
       
+      let cursorY = 203;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Proveedor:', 40, 203);
+      doc.text('Proveedor:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.proveedor || '', 100, 203, { width: 230 });
+      doc.text(proveedorTexto, 100, cursorY, { width: 230, lineGap: 2 });
+      cursorY += Math.max(15, hProv + 5);
       
       doc.font('Helvetica-Bold');
-      doc.text('RUC:', 40, 218);
+      doc.text('RUC:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(orden.ruc_proveedor || '', 100, 218);
+      doc.text(rucProveedor, 100, cursorY);
+      cursorY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Dirección:', 40, 233);
+      doc.text('Dirección:', 40, cursorY);
       doc.font('Helvetica');
-      doc.text(direccionProveedor, 100, 233, { width: 230, lineGap: 2 });
+      doc.text(direccionProveedor, 100, cursorY, { width: 230, lineGap: 2 });
 
+      let rightY = 203;
       doc.font('Helvetica-Bold');
-      doc.text('Condición pago:', 360, 203);
+      doc.text('Condición pago:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(orden.condicion_pago || 'Por definir', 450, 203, { width: 135 });
+      doc.text(orden.condicion_pago || 'Por definir', 450, rightY, { width: 135, lineGap: 2 });
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Fecha Pedido:', 360, 218);
+      doc.text('Fecha Pedido:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(formatearFecha(orden.fecha_pedido), 450, 218);
+      doc.text(formatearFecha(orden.fecha_pedido), 450, rightY);
+      rightY += 15;
       
       doc.font('Helvetica-Bold');
-      doc.text('Entrega esperada:', 360, 233);
+      doc.text('Entrega esperada:', 360, rightY);
       doc.font('Helvetica');
-      doc.text(formatearFecha(orden.entrega_esperada) || '-', 450, 233);
+      doc.text(formatearFecha(orden.entrega_esperada) || '-', 450, rightY);
 
-      const yPosRecuadroInfo = 195 + alturaRecuadroProveedor + 8;
+      const yPosRecuadroInfo = 195 + hRecuadro + 8;
       
       doc.roundedRect(33, yPosRecuadroInfo, 529, 40, 3).stroke('#000000');
       

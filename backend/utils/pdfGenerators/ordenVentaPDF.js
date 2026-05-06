@@ -98,58 +98,91 @@ export async function generarOrdenVentaPDF(orden) {
       doc.fontSize(12).fillColor('#000000');
       doc.text(`No. ${orden.numero_orden}`, xBox, yText, { width: wBox, align: 'center' });
 
+      const clienteTexto = orden.cliente || orden.razon_social || 'VARIOS';
+      const rucTexto = orden.ruc_cliente || orden.ruc || '-';
+      const direccionLimpia = (orden.direccion_entrega || orden.direccion_cliente || orden.direccion || '').replace(/[\r\n]+/g, " ");
+      const comercialTexto = orden.comercial || 'Oficina';
+      
+      const alturaCliente = calcularAlturaTexto(doc, clienteTexto, 250, 8);
+      const alturaRUC = calcularAlturaTexto(doc, rucTexto, 250, 8);
+      const alturaDireccion = calcularAlturaTexto(doc, direccionLimpia, 250, 8);
+      const alturaComercial = calcularAlturaTexto(doc, comercialTexto, 250, 8);
+
+      let leftH = Math.max(14, alturaCliente + 4);
+      leftH += Math.max(14, alturaRUC + 4);
+      leftH += Math.max(14, alturaDireccion + 4);
+      leftH += Math.max(14, alturaComercial + 4);
+
+      const plazoForma = orden.forma_pago || orden.plazo_pago || 'Contado';
+      const alturaPlazoForma = calcularAlturaTexto(doc, plazoForma, 140, 8);
+      const ocCliente = orden.orden_compra_cliente || '-';
+      const alturaOC = calcularAlturaTexto(doc, ocCliente, 140, 8);
+
+      let rightH = 14; // Fecha
+      rightH += 14; // Moneda
+      rightH += 14; // Estado
+      rightH += 14; // Prioridad
+      rightH += Math.max(14, alturaPlazoForma + 4);
+      rightH += Math.max(14, alturaOC + 4);
+      if (orden.fecha_entrega_estimada) rightH += 14;
+
       const yInfo = 145;
-      const hInfo = 95;
+      const hInfo = Math.max(95, Math.max(leftH, rightH) + 20);
       
       doc.roundedRect(30, yInfo, 535, hInfo, 5).lineWidth(0.5).stroke('#000000');
 
       const col1X = 40;
       const col1V = 95;
       const col2X = 350;
-      const col2V = 420;
+      const col2V = 425;
       
       let currentY = yInfo + 10;
-      const gap = 14;
 
       doc.fontSize(8).fillColor('#000000');
 
       doc.font('Helvetica-Bold').text('Cliente:', col1X, currentY);
-      doc.font('Helvetica').text(orden.cliente || orden.razon_social || 'VARIOS', col1V, currentY, { width: 250, ellipsis: true });
-
-      doc.font('Helvetica-Bold').text('Fecha Emisión:', col2X, currentY);
-      doc.font('Helvetica').text(new Date(orden.fecha_emision).toLocaleDateString('es-PE'), col2V, currentY);
-      
-      currentY += gap;
+      doc.font('Helvetica').text(clienteTexto, col1V, currentY, { width: 250, lineGap: 2 });
+      currentY += Math.max(14, alturaCliente + 4);
 
       doc.font('Helvetica-Bold').text('RUC:', col1X, currentY);
-      doc.font('Helvetica').text(orden.ruc_cliente || orden.ruc || '-', col1V, currentY);
-
-      doc.font('Helvetica-Bold').text('Moneda:', col2X, currentY);
-      doc.font('Helvetica').text(orden.moneda === 'USD' ? 'USD' : 'PEN', col2V, currentY);
-
-      currentY += gap;
+      doc.font('Helvetica').text(rucTexto, col1V, currentY);
+      currentY += Math.max(14, alturaRUC + 4);
 
       doc.font('Helvetica-Bold').text('Dirección:', col1X, currentY);
-      const direccionLimpia = (orden.direccion_entrega || orden.direccion_cliente || orden.direccion || '').replace(/[\r\n]+/g, " ");
-      doc.font('Helvetica').text(direccionLimpia, col1V, currentY, { width: 250, height: 26, ellipsis: true });
-
-      doc.font('Helvetica-Bold').text('Plazo/Forma:', col2X, currentY);
-      const plazoForma = orden.forma_pago || orden.plazo_pago || 'Contado';
-      doc.font('Helvetica').text(plazoForma, col2V, currentY);
-
-      currentY += gap + 6;
+      doc.font('Helvetica').text(direccionLimpia, col1V, currentY, { width: 250, lineGap: 2 });
+      currentY += Math.max(14, alturaDireccion + 4);
 
       doc.font('Helvetica-Bold').text('Vendedor:', col1X, currentY);
-      doc.font('Helvetica').text(orden.comercial || 'Oficina', col1V, currentY, { width: 250 });
+      doc.font('Helvetica').text(comercialTexto, col1V, currentY, { width: 250 });
 
-      doc.font('Helvetica-Bold').text('O/C Cliente:', col2X, currentY);
-      doc.font('Helvetica-Bold').text(orden.orden_compra_cliente || '-', col2V, currentY); 
+      let rightY = yInfo + 10;
+      doc.font('Helvetica-Bold').text('Fecha Emisión:', col2X, rightY);
+      doc.font('Helvetica').text(new Date(orden.fecha_emision).toLocaleDateString('es-PE'), col2V, rightY);
+      rightY += 14;
 
-      currentY += gap;
+      doc.font('Helvetica-Bold').text('Moneda:', col2X, rightY);
+      doc.font('Helvetica').text(orden.moneda === 'USD' ? 'USD' : 'PEN', col2V, rightY);
+      rightY += 14;
+
+      doc.font('Helvetica-Bold').text('Estado:', col2X, rightY);
+      doc.font('Helvetica').text(orden.estado || '', col2V, rightY);
+      rightY += 14;
+
+      doc.font('Helvetica-Bold').text('Prioridad:', col2X, rightY);
+      doc.font('Helvetica').text(orden.prioridad || '', col2V, rightY);
+      rightY += 14;
+
+      doc.font('Helvetica-Bold').text('Plazo/Forma:', col2X, rightY);
+      doc.font('Helvetica').text(plazoForma, col2V, rightY, { width: 140, lineGap: 2 });
+      rightY += Math.max(14, alturaPlazoForma + 4);
+
+      doc.font('Helvetica-Bold').text('O/C Cliente:', col2X, rightY);
+      doc.font('Helvetica-Bold').text(ocCliente, col2V, rightY, { width: 140, lineGap: 2 });
+      rightY += Math.max(14, alturaOC + 4);
 
       if (orden.fecha_entrega_estimada) {
-        doc.font('Helvetica-Bold').text('Entrega Est.:', col2X, currentY);
-        doc.font('Helvetica').text(new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE'), col2V, currentY);
+        doc.font('Helvetica-Bold').text('Entrega Est.:', col2X, rightY);
+        doc.font('Helvetica').text(new Date(orden.fecha_entrega_estimada).toLocaleDateString('es-PE'), col2V, rightY);
       }
 
       let yTable = yInfo + hInfo + 15;

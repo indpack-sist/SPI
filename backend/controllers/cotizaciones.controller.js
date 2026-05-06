@@ -238,7 +238,6 @@ export async function createCotizacion(req, res) {
       fechaEmisionFinal = `${year}-${month}-${day}`;
     }
 
-    const validezDiasFinal = parseInt(validez_dias) || 7;
     const fechaEmisionDate = new Date(fechaEmisionFinal + 'T12:00:00');
     fechaEmisionDate.setDate(fechaEmisionDate.getDate() + validezDiasFinal);
     const fechaVencimientoCalculada = fechaEmisionDate.toISOString().split('T')[0];
@@ -293,7 +292,6 @@ if (moneda !== 'PEN') {
       if (!isNaN(valorVenta)) subtotal += valorVenta;
     }
 
-    const tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let porcentaje = 18.00;
     if (['EXO', 'INA', 'EXONERADO', 'INAFECTO'].includes(tipoImpuestoFinal.toUpperCase())) {
       porcentaje = 0.00;
@@ -304,7 +302,7 @@ if (moneda !== 'PEN') {
     const igv = subtotal * (porcentaje / 100);
     const total = subtotal + igv;
 
-    if (plazo_pago !== 'Contado') {
+    if (plazoPagoFinal !== 'Contado') {
       const clienteInfo = await executeQuery(
         `SELECT usar_limite_credito, 
                 COALESCE(limite_credito_pen, 0) as limite_pen, 
@@ -344,7 +342,7 @@ if (moneda !== 'PEN') {
     `, [
       numeroCotizacion, id_cliente, comercialFinal, fechaEmisionFinal, fechaVencimientoCalculada,
       prioridad || 'Media', moneda || 'PEN', tipoImpuestoFinal, porcentaje, tipoCambioFinal,
-      plazo_pago, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,
+      plazoPagoFinal, forma_pago || null, direccion_entrega || null, observaciones || null, validezDiasFinal,
       plazo_entrega || null, lugar_entrega || null,
       subtotal, igv, total,
       comercialFinal,

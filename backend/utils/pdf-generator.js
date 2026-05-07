@@ -175,11 +175,10 @@ export async function generarPDFEntrada(datos) {
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
+      doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 123, { width: 250 });
+      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 148);
+      doc.text(`E-mail: ${EMPRESA.email}`, 50, 160);
+      doc.text(`Web: ${EMPRESA.web}`, 50, 172);
 
       doc.roundedRect(380, 40, 165, 75, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
@@ -369,11 +368,10 @@ export async function generarPDFSalida(datos) {
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
+      doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 123, { width: 250 });
+      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 148);
+      doc.text(`E-mail: ${EMPRESA.email}`, 50, 160);
+      doc.text(`Web: ${EMPRESA.web}`, 50, 172);
 
       doc.roundedRect(380, 40, 165, 75, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
@@ -447,6 +445,11 @@ export async function generarPDFSalida(datos) {
       rightH += 15; // Orden Venta
       rightH += 15; // OC Cliente
       rightH += 15; // Cotizacion
+      
+      if (datos.tipo_entrega) {
+        rightH += 15; // Espacio y Titulo
+        rightH += alturaTransporte;
+      }
 
       const hInfoFinal = Math.max(115, Math.max(leftH, rightH) + 15);
       
@@ -501,6 +504,14 @@ export async function generarPDFSalida(datos) {
 
       let yPos = 205 + hInfoFinal + 25;
       let yDerecha = rightY + 15;
+      
+      if (datos.tipo_entrega) {
+        doc.font('Helvetica-Bold').fillColor('#1e88e5');
+        doc.text('Entrega y Logística', xLabelRight, yDerecha);
+        doc.moveTo(xLabelRight, yDerecha + 10).lineTo(xLabelRight + 200, yDerecha + 10).lineWidth(0.5).stroke('#1e88e5');
+        doc.fillColor('#000000');
+        yDerecha += 15;
+      }
 
       if (datos.tipo_entrega === 'Vehiculo Empresa') {
         if (datos.conductor) {
@@ -799,11 +810,10 @@ export async function generarPDFTransferencia(datos) {
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
+      doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 123, { width: 250 });
+      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 148);
+      doc.text(`E-mail: ${EMPRESA.email}`, 50, 160);
+      doc.text(`Web: ${EMPRESA.web}`, 50, 172);
 
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
@@ -1476,11 +1486,10 @@ export async function generarPDFOrdenVenta(orden) {
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
+      doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 123, { width: 250 });
+      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 148);
+      doc.text(`E-mail: ${EMPRESA.email}`, 50, 160);
+      doc.text(`Web: ${EMPRESA.web}`, 50, 172);
 
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
@@ -1713,11 +1722,10 @@ export async function generarPDFGuiaRemision(guia) {
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
+      doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 123, { width: 250 });
+      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 148);
+      doc.text(`E-mail: ${EMPRESA.email}`, 50, 160);
+      doc.text(`Web: ${EMPRESA.web}`, 50, 172);
 
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
@@ -1930,11 +1938,10 @@ export async function generarPDFGuiaTransportista(guia) {
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
+      doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 123, { width: 250 });
+      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 148);
+      doc.text(`E-mail: ${EMPRESA.email}`, 50, 160);
+      doc.text(`Web: ${EMPRESA.web}`, 50, 172);
 
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
@@ -2083,11 +2090,10 @@ export async function generarPDFOrdenCompra(orden) {
       doc.text('INDPACK S.A.C.', 50, 110);
       
       doc.fontSize(8).font('Helvetica');
-      doc.text(EMPRESA.direccion, 50, 123, { width: 250 });
-      doc.text(`${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 148);
-      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 160);
-      doc.text(`E-mail: ${EMPRESA.email}`, 50, 172);
-      doc.text(`Web: ${EMPRESA.web}`, 50, 184);
+      doc.text(`${EMPRESA.direccion}, ${EMPRESA.distrito}, ${EMPRESA.departamento} - ${EMPRESA.pais}`, 50, 123, { width: 250 });
+      doc.text(`Teléfono: ${EMPRESA.telefono}`, 50, 148);
+      doc.text(`E-mail: ${EMPRESA.email}`, 50, 160);
+      doc.text(`Web: ${EMPRESA.web}`, 50, 172);
 
       doc.roundedRect(380, 40, 165, 65, 5).stroke('#000000');
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');

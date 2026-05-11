@@ -464,6 +464,22 @@ function OrdenesProduccion() {
       }
     },
     {
+      header: 'Observaciones',
+      accessor: 'observaciones',
+      width: '180px',
+      render: (value) => {
+        if (!value) return <span className="text-muted text-xs">-</span>;
+        const textoLimpio = value.replace(/\[VERIFICACIÓN CALIDAD\].*?(?:\n|$)/gi, '').trim();
+        if (!textoLimpio) return <span className="text-muted text-xs">-</span>;
+        
+        return (
+          <div className="text-xs text-gray-700 truncate max-w-[170px]" title={textoLimpio}>
+            {textoLimpio}
+          </div>
+        );
+      }
+    },
+    {
       header: 'Estado',
       accessor: 'estado',
       align: 'center',

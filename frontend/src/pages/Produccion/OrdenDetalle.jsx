@@ -18,6 +18,9 @@ function OrdenDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const userRole = user?.rol || '';
+  const esComercial = ['comercial', 'ventas', 'vendedor'].includes(userRole.toLowerCase());
   
   const [orden, setOrden] = useState(null);
   const [consumoMateriales, setConsumoMateriales] = useState([]);
@@ -961,13 +964,13 @@ function OrdenDetalle() {
     );
   }
 
-  const puedeEditar = orden.estado === 'Pendiente Asignación' || orden.estado === 'Pendiente';
-  const puedeAsignar = orden.estado === 'Pendiente Asignación';
-  const puedeIniciar = orden.estado === 'Pendiente';
-  const puedePausar = orden.estado === 'En Curso';
-  const puedeReanudar = orden.estado === 'En Pausa';
-  const puedeFinalizar = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
-  const puedeRegistrarParcial = orden.estado === 'En Curso' || orden.estado === 'En Pausa';
+  const puedeEditar = (orden.estado === 'Pendiente Asignación' || orden.estado === 'Pendiente') && !esComercial;
+  const puedeAsignar = (orden.estado === 'Pendiente Asignación') && !esComercial;
+  const puedeIniciar = (orden.estado === 'Pendiente') && !esComercial;
+  const puedePausar = (orden.estado === 'En Curso') && !esComercial;
+  const puedeReanudar = (orden.estado === 'En Pausa') && !esComercial;
+  const puedeFinalizar = (orden.estado === 'En Curso' || orden.estado === 'En Pausa') && !esComercial;
+  const puedeRegistrarParcial = (orden.estado === 'En Curso' || orden.estado === 'En Pausa') && !esComercial;
   const desdeOrdenVenta = orden.origen_tipo === 'Orden de Venta';
   const esPendienteAsignacionDesdeVenta = orden.estado === 'Pendiente Asignación' && desdeOrdenVenta;
   
@@ -1152,7 +1155,7 @@ function OrdenDetalle() {
             </button>
           )}
 
-          {!['Cancelada', 'Anulada'].includes(orden.estado) && (
+          {!['Cancelada', 'Anulada'].includes(orden.estado) && !esComercial && (
             <button 
                 className="btn btn-danger ml-2"
                 onClick={() => setModalAnular(true)} 

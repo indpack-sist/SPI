@@ -48,8 +48,8 @@ import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
 const router = express.Router();
 
 const uploadArchivos = uploadMiddleware.fields([
-  { name: 'orden_compra', maxCount: 1 },
-  { name: 'comprobante', maxCount: 1 }
+  { name: 'orden_compra', maxCount: 10 },
+  { name: 'comprobante', maxCount: 10 }
 ]);
 
 router.get('/estadisticas', verificarToken, getEstadisticasOrdenesVenta);

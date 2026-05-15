@@ -128,9 +128,20 @@ function VerificarOrdenes() {
   const abrirVisor = (url, titulo) => {
     if (!url) return;
     
-    const extension = url.split('.').pop().toLowerCase();
+    // Defensa contra arrays u objetos que lleguen a este punto
+    let cleanUrl = url;
+    if (Array.isArray(cleanUrl)) cleanUrl = cleanUrl[0];
+    if (typeof cleanUrl !== 'string') {
+        try {
+            cleanUrl = String(cleanUrl);
+        } catch {
+            return; // No se puede procesar
+        }
+    }
+    
+    const extension = cleanUrl.split('.').pop().toLowerCase();
     const esPdf = extension === 'pdf';
-    const proxyUrl = archivosAPI.getProxyUrl(url);
+    const proxyUrl = archivosAPI.getProxyUrl(cleanUrl);
 
     setVisorArchivo({
       open: true,

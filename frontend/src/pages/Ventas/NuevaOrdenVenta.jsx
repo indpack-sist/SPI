@@ -1477,12 +1477,13 @@ useEffect(() => {
                     <div className="flex gap-3 items-stretch">
                         <div 
                             className={`flex-1 border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all group relative
-                              ${archivos.comprobante 
+                              ${archivos.comprobante && archivos.comprobante.length > 0
                                 ? 'border-green-500 bg-green-50' 
                                 : 'border-blue-100 bg-blue-50/30 hover:bg-blue-50 hover:border-blue-300'}`}
-        der-blue-300'}`}
                             tabIndex="0"
-                            onPaste={(e) => handlePaste(e, 'comproba          title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
+                            onPaste={(e) => handlePaste(e, 'comprobante')}
+                            title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
+                            onClick={() => document.getElementById('file-upload-comp').click()}
                         >
                             {archivos.comprobante && archivos.comprobante.length > 0 ? (
                                 <div className="flex flex-col items-center justify-center animate-in zoom-in duration-300">
@@ -1537,7 +1538,7 @@ useEffect(() => {
                   disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
                 >
                   <Save size={24} className={loading ? 'animate-spin' : ''} />
-                  {loading ? 'PROCESANDO...' : cooIZAR ORDEN DE VENTA' : 'GUARDAR ORDEN DE VENTA'}
+                  {loading ? 'PROCESANDO...' : cooldownActivo ? 'ESPERE POR FAVOR...' : modoEdicion ? 'ACTUALIZAR ORDEN DE VENTA' : 'GUARDAR ORDEN DE VENTA'}
                 </button>
               </div>
             </div>
@@ -1546,13 +1547,13 @@ useEffect(() => {
       </form>
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
-        <div className="mb-4leccionar Cliente" size="lg">
         <div className="mb-4">
           <input
             type="text"
             className="form-input"
             placeholder="Buscar cliente..."
-     > setBusquedaCliente(e.target.value)}
+            value={busquedaCliente}
+            onChange={(e) => setBusquedaCliente(e.target.value)}
             autoFocus
           />
         </div>
@@ -1642,9 +1643,4 @@ useEffect(() => {
   );
 }
 
-export default NuevaOrdenVenta;al>
-    </div>
-  );
-}
-
-export default NuevaOrdenVenta;enta;
+export default NuevaOrdenVenta;

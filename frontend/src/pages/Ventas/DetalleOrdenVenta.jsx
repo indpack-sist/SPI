@@ -2421,10 +2421,16 @@ function DetalleOrdenVenta() {
                         <div className="flex gap-1 flex-wrap">
                             {(() => {
                                 let urls = [];
-                                try {
-                                    urls = JSON.parse(orden.comprobante_url);
-                                    if (!Array.isArray(urls)) urls = [orden.comprobante_url];
-                                } catch {
+                                if (Array.isArray(orden.comprobante_url)) {
+                                    urls = orden.comprobante_url;
+                                } else if (typeof orden.comprobante_url === 'string') {
+                                    try {
+                                        urls = JSON.parse(orden.comprobante_url);
+                                        if (!Array.isArray(urls)) urls = [orden.comprobante_url];
+                                    } catch {
+                                        urls = [orden.comprobante_url];
+                                    }
+                                } else {
                                     urls = [orden.comprobante_url];
                                 }
                                 return urls.map((url, index) => (

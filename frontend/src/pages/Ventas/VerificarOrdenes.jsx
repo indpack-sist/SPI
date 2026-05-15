@@ -621,10 +621,16 @@ function VerificarOrdenes() {
                             })()}
                             {datosVerificacion.orden.comprobante_url && (() => {
                                 let urls = [];
-                                try {
-                                    urls = JSON.parse(datosVerificacion.orden.comprobante_url);
-                                    if (!Array.isArray(urls)) urls = [datosVerificacion.orden.comprobante_url];
-                                } catch {
+                                if (Array.isArray(datosVerificacion.orden.comprobante_url)) {
+                                    urls = datosVerificacion.orden.comprobante_url;
+                                } else if (typeof datosVerificacion.orden.comprobante_url === 'string') {
+                                    try {
+                                        urls = JSON.parse(datosVerificacion.orden.comprobante_url);
+                                        if (!Array.isArray(urls)) urls = [datosVerificacion.orden.comprobante_url];
+                                    } catch {
+                                        urls = [datosVerificacion.orden.comprobante_url];
+                                    }
+                                } else {
                                     urls = [datosVerificacion.orden.comprobante_url];
                                 }
                                 return urls.map((url, i) => (
@@ -1189,4 +1195,4 @@ function VerificarOrdenes() {
   );
 }
 
-export default VerificarOrdenes;
+export default VerificarOrdenes;nes;

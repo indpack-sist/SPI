@@ -1177,25 +1177,24 @@ function VerificarOrdenes() {
         isOpen={visorArchivo.open}
         onClose={cerrarVisor}
         title={visorArchivo.titulo}
-        size="xl"
+        size="2xl"
       >
-        <div className="flex justify-center items-center bg-gray-100 p-2 rounded-lg">
+        <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
           {visorArchivo.tipo === 'pdf' ? (
             <iframe 
               src={visorArchivo.url} 
-              className="w-full h-[85vh] border-0 rounded shadow-sm"
+              className="w-full h-[70vh] border-0 rounded"
               title="Visor de PDF"
             />
           ) : (
             <img 
               src={visorArchivo.url} 
               alt="Visualización de archivo" 
-              className="max-w-full h-[85vh] object-contain rounded shadow-lg"
+              className="max-w-full max-h-[70vh] object-contain rounded shadow-lg"
             />
           )}
         </div>
-        <div className="flex justify-between items-center mt-4">
-          <p className="text-xs text-muted italic">Visualización vertical optimizada para documentos A4</p>
+        <div className="flex justify-end mt-4">
           <button className="btn btn-primary" onClick={cerrarVisor}>
             Cerrar Visor
           </button>

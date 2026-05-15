@@ -600,23 +600,43 @@ function VerificarOrdenes() {
                   {(datosVerificacion.orden.orden_compra_url || datosVerificacion.orden.comprobante_url) && (
                     <div className="pt-3 border-t border-blue-200 mt-2">
                         <p className="text-xs font-bold text-blue-800 mb-2">Documentos Adjuntos</p>
-                        <div className="flex gap-2">
-                            {datosVerificacion.orden.orden_compra_url && (
-                                <button 
-                                    className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                    onClick={() => abrirVisor(datosVerificacion.orden.orden_compra_url, 'Orden de Compra')}
-                                >
-                                    <Eye size={12}/> Ver O/C Cliente
-                                </button>
-                            )}
-                            {datosVerificacion.orden.comprobante_url && (
-                                <button 
-                                    className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                    onClick={() => abrirVisor(datosVerificacion.orden.comprobante_url, 'Comprobante de Pago')}
-                                >
-                                    <Eye size={12}/> Ver Comprobante
-                                </button>
-                            )}
+                        <div className="flex gap-2 flex-wrap">
+                            {datosVerificacion.orden.orden_compra_url && (() => {
+                                let urls = [];
+                                try {
+                                    urls = JSON.parse(datosVerificacion.orden.orden_compra_url);
+                                    if (!Array.isArray(urls)) urls = [datosVerificacion.orden.orden_compra_url];
+                                } catch {
+                                    urls = [datosVerificacion.orden.orden_compra_url];
+                                }
+                                return urls.map((url, i) => (
+                                    <button 
+                                        key={`oc-${i}`}
+                                        className="btn btn-xs btn-outline bg-white flex items-center gap-1"
+                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Orden de Compra ${i + 1}` : 'Orden de Compra')}
+                                    >
+                                        <Eye size={12}/> {urls.length > 1 ? `Ver O/C Cliente ${i + 1}` : 'Ver O/C Cliente'}
+                                    </button>
+                                ));
+                            })()}
+                            {datosVerificacion.orden.comprobante_url && (() => {
+                                let urls = [];
+                                try {
+                                    urls = JSON.parse(datosVerificacion.orden.comprobante_url);
+                                    if (!Array.isArray(urls)) urls = [datosVerificacion.orden.comprobante_url];
+                                } catch {
+                                    urls = [datosVerificacion.orden.comprobante_url];
+                                }
+                                return urls.map((url, i) => (
+                                    <button 
+                                        key={`comp-${i}`}
+                                        className="btn btn-xs btn-outline bg-white flex items-center gap-1"
+                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Comprobante de Pago ${i + 1}` : 'Comprobante de Pago')}
+                                    >
+                                        <Eye size={12}/> {urls.length > 1 ? `Ver Comprobante ${i + 1}` : 'Ver Comprobante'}
+                                    </button>
+                                ));
+                            })()}
                         </div>
                     </div>
                   )}

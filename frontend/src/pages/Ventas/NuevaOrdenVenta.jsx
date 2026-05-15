@@ -64,8 +64,8 @@ function NuevaOrdenVenta() {
   const [nuevaDireccion, setNuevaDireccion] = useState({ direccion: '', referencia: '' });
   const [savingDireccion, setSavingDireccion] = useState(false);
   
-  const [archivos, setArchivos] = useState({ orden_compra: null, comprobante: null });
-  const [archivosPrevios, setArchivosPrevios] = useState({ orden_compra_url: null, comprobante_url: null });
+  const [archivos, setArchivos] = useState({ orden_compra: [], comprobante: [] });
+  const [archivosPrevios, setArchivosPrevios] = useState({ orden_compra_url: [], comprobante_url: [] });
   const [tieneOC, setTieneOC] = useState(false);
 
   const [formCabecera, setFormCabecera] = useState({
@@ -1480,14 +1480,14 @@ useEffect(() => {
                               ${archivos.comprobante 
                                 ? 'border-green-500 bg-green-50' 
                                 : 'border-blue-100 bg-blue-50/30 hover:bg-blue-50 hover:border-blue-300'}`}
+        der-blue-300'}`}
                             tabIndex="0"
-                            onPaste={(e) => handlePaste(e, 'comprobante')}
-                            title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
+                            onPaste={(e) => handlePaste(e, 'comproba          title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                         >
-                            {archivos.comprobante ? (
+                            {archivos.comprobante && archivos.comprobante.length > 0 ? (
                                 <div className="flex flex-col items-center justify-center animate-in zoom-in duration-300">
                                     <CheckCircle size={18} className="text-green-500 mb-1" />
-                                    <span className="font-bold text-green-700 text-[11px] truncate max-w-[150px]">{archivos.comprobante.name}</span>
+                                    <span className="font-bold text-green-700 text-[11px] truncate max-w-[150px]">{archivos.comprobante.length} archivo(s)</span>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-0.5">
@@ -1523,9 +1523,10 @@ useEffect(() => {
                         <input 
                             id="file-upload-comp"
                             type="file" 
+                            multiple
                             className="hidden" 
                             accept=".pdf,image/*"
-                            onChange={(e) => setArchivos({...archivos, comprobante: e.target.files[0]})}
+                            onChange={(e) => setArchivos({...archivos, comprobante: [...(archivos.comprobante || []), ...Array.from(e.target.files)]})}
                         />
                     </div>
                 </div>
@@ -1536,7 +1537,7 @@ useEffect(() => {
                   disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
                 >
                   <Save size={24} className={loading ? 'animate-spin' : ''} />
-                  {loading ? 'PROCESANDO...' : cooldownActivo ? 'ESPERE POR FAVOR...' : modoEdicion ? 'ACTUALIZAR ORDEN DE VENTA' : 'GUARDAR ORDEN DE VENTA'}
+                  {loading ? 'PROCESANDO...' : cooIZAR ORDEN DE VENTA' : 'GUARDAR ORDEN DE VENTA'}
                 </button>
               </div>
             </div>
@@ -1545,13 +1546,13 @@ useEffect(() => {
       </form>
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
+        <div className="mb-4leccionar Cliente" size="lg">
         <div className="mb-4">
           <input
             type="text"
             className="form-input"
             placeholder="Buscar cliente..."
-            value={busquedaCliente}
-            onChange={(e) => setBusquedaCliente(e.target.value)}
+     > setBusquedaCliente(e.target.value)}
             autoFocus
           />
         </div>
@@ -1641,4 +1642,9 @@ useEffect(() => {
   );
 }
 
-export default NuevaOrdenVenta;
+export default NuevaOrdenVenta;al>
+    </div>
+  );
+}
+
+export default NuevaOrdenVenta;enta;

@@ -495,13 +495,21 @@ export async function createOrdenVenta(req, res) {
     let comprobanteUrl = null;
 
     if (req.files) {
-      if (req.files.orden_compra && req.files.orden_compra[0]) {
-        const resultadoOC = await subirArchivoACloudinary(req.files.orden_compra[0], 'indpack_ventas/ordenes_compra');
-        ordenCompraUrl = resultadoOC.secure_url;
+      if (req.files.orden_compra && req.files.orden_compra.length > 0) {
+        const urls = [];
+        for (const file of req.files.orden_compra) {
+          const resultadoOC = await subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra');
+          urls.push(resultadoOC.secure_url);
+        }
+        ordenCompraUrl = JSON.stringify(urls);
       }
-      if (req.files.comprobante && req.files.comprobante[0]) {
-        const resultadoComp = await subirArchivoACloudinary(req.files.comprobante[0], 'indpack_ventas/comprobantes');
-        comprobanteUrl = resultadoComp.secure_url;
+      if (req.files.comprobante && req.files.comprobante.length > 0) {
+        const urls = [];
+        for (const file of req.files.comprobante) {
+          const resultadoComp = await subirArchivoACloudinary(file, 'indpack_ventas/comprobantes');
+          urls.push(resultadoComp.secure_url);
+        }
+        comprobanteUrl = JSON.stringify(urls);
       }
     }
 
@@ -755,13 +763,23 @@ export async function updateOrdenVenta(req, res) {
     let nuevoComprobanteUrl = ordenActual.comprobante_url;
 
     if (req.files) {
-      if (req.files.orden_compra && req.files.orden_compra[0]) {
-        const resultadoOC = await subirArchivoACloudinary(req.files.orden_compra[0], 'indpack_ventas/ordenes_compra');
-        nuevaOrdenCompraUrl = resultadoOC.secure_url;
+      if (req.files.orden_compra && req.files.orden_compra.length > 0) {
+        const urls = [];
+        for (const file of req.files.orden_compra) {
+          const resultadoOC = await subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra');
+          urls.push(resultadoOC.secure_url);
+        }
+        // Si ya hay URLs, podríamos querer agregarlas, pero si el frontend envía nuevos archivos para reemplazar, sobrescribimos.
+        // Asumiendo que el frontend manda nuevos archivos para reemplazar, sobrescribimos.
+        nuevaOrdenCompraUrl = JSON.stringify(urls);
       }
-      if (req.files.comprobante && req.files.comprobante[0]) {
-        const resultadoComp = await subirArchivoACloudinary(req.files.comprobante[0], 'indpack_ventas/comprobantes');
-        nuevoComprobanteUrl = resultadoComp.secure_url;
+      if (req.files.comprobante && req.files.comprobante.length > 0) {
+        const urls = [];
+        for (const file of req.files.comprobante) {
+          const resultadoComp = await subirArchivoACloudinary(file, 'indpack_ventas/comprobantes');
+          urls.push(resultadoComp.secure_url);
+        }
+        nuevoComprobanteUrl = JSON.stringify(urls);
       }
     }
 

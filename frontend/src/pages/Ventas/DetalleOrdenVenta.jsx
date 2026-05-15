@@ -2129,12 +2129,26 @@ function DetalleOrdenVenta() {
                             <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
                         </div>
                         {orden.orden_compra_url && (
-                            <button 
-                                className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                onClick={() => abrirVisor(orden.orden_compra_url, 'Orden de Compra Cliente')}
-                            >
-                                <Eye size={14}/> Ver
-                            </button>
+                            <div className="flex gap-1 flex-wrap justify-end">
+                                {(() => {
+                                    let urls = [];
+                                    try {
+                                        urls = JSON.parse(orden.orden_compra_url);
+                                        if (!Array.isArray(urls)) urls = [orden.orden_compra_url];
+                                    } catch {
+                                        urls = [orden.orden_compra_url];
+                                    }
+                                    return urls.map((url, index) => (
+                                        <button 
+                                            key={index}
+                                            className="btn btn-xs btn-outline bg-white flex items-center gap-1"
+                                            onClick={() => abrirVisor(url, urls.length > 1 ? `Orden de Compra Cliente ${index + 1}` : 'Orden de Compra Cliente')}
+                                        >
+                                            <Eye size={14}/> {urls.length > 1 ? `Ver ${index + 1}` : 'Ver'}
+                                        </button>
+                                    ));
+                                })()}
+                            </div>
                         )}
                     </div>
                 )}
@@ -2399,17 +2413,31 @@ function DetalleOrdenVenta() {
                 <p className="whitespace-pre-wrap mb-4">{orden.observaciones || 'Sin observaciones.'}</p>
                 
                 {orden.comprobante_url && (
-                    <div className="bg-green-50 p-3 rounded border border-green-200 flex justify-between items-center">
+                    <div className="bg-green-50 p-3 rounded border border-green-200 flex justify-between items-center flex-wrap gap-2">
                         <div className="flex items-center gap-2 text-green-800">
                             <FileText size={20}/>
                             <span className="font-medium">Comprobante/Voucher Adjunto</span>
                         </div>
-                        <button 
-                            className="btn btn-sm btn-outline bg-white flex items-center gap-1"
-                            onClick={() => abrirVisor(orden.comprobante_url, 'Comprobante de Pago')}
-                        >
-                            <Eye size={16}/> Ver
-                        </button>
+                        <div className="flex gap-1 flex-wrap">
+                            {(() => {
+                                let urls = [];
+                                try {
+                                    urls = JSON.parse(orden.comprobante_url);
+                                    if (!Array.isArray(urls)) urls = [orden.comprobante_url];
+                                } catch {
+                                    urls = [orden.comprobante_url];
+                                }
+                                return urls.map((url, index) => (
+                                    <button 
+                                        key={index}
+                                        className="btn btn-sm btn-outline bg-white flex items-center gap-1"
+                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Comprobante de Pago ${index + 1}` : 'Comprobante de Pago')}
+                                    >
+                                        <Eye size={16}/> {urls.length > 1 ? `Ver ${index + 1}` : 'Ver'}
+                                    </button>
+                                ));
+                            })()}
+                        </div>
                     </div>
                 )}
             </div>

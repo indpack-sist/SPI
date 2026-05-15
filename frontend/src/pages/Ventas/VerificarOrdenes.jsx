@@ -1195,4 +1195,4 @@ function VerificarOrdenes() {
   );
 }
 
-export default VerificarOrdenes;nes;
+export default VerificarOrdenes;

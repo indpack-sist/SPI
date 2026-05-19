@@ -26,7 +26,9 @@ import {
   BadgeCheck,
   RefreshCcw,
   Calendar,
-  ArrowRightLeft
+  ArrowRightLeft,
+  FileText,
+  X
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -45,12 +47,18 @@ function OrdenesVenta() {
   const [success, setSuccess] = useState(null);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
 
-  const [filtroEstado, setFiltroEstado] = useState('');
-  const [filtroPrioridad, setFiltroPrioridad] = useState('');
-  const [filtroEstadoPago, setFiltroEstadoPago] = useState('');
-  const [filtroVerificacion, setFiltroVerificacion] = useState('');
-  const [busqueda, setBusqueda] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [filtroEstado, setFiltroEstado] = useState(() => sessionStorage.getItem('ordenes_filtro_estado') || '');
+  const [filtroPrioridad, setFiltroPrioridad] = useState(() => sessionStorage.getItem('ordenes_filtro_prioridad') || '');
+  const [filtroEstadoPago, setFiltroEstadoPago] = useState(() => sessionStorage.getItem('ordenes_filtro_estado_pago') || '');
+  const [filtroVerificacion, setFiltroVerificacion] = useState(() => sessionStorage.getItem('ordenes_filtro_verificacion') || '');
+  const [filtroTipoComprobante, setFiltroTipoComprobante] = useState(() => sessionStorage.getItem('ordenes_filtro_tipo_comprobante') || '');
+  const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || '');
+  const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || '');
+  const [busqueda, setBusqueda] = useState(() => sessionStorage.getItem('ordenes_busqueda') || '');
+  
+  const initPage = parseInt(sessionStorage.getItem('ordenes_pagina') || '1');
+  const [currentPage, setCurrentPage] = useState(initPage);
+  const [inputPage, setInputPage] = useState(initPage.toString());
   const itemsPerPage = 20;
   const tablaRef = useRef(null);
 
@@ -58,20 +66,48 @@ function OrdenesVenta() {
   const [loadingTC, setLoadingTC] = useState(false);
   const [mostrarConversion, setMostrarConversion] = useState(false);
 
+  // Guardar en session storage cada que cambian los filtros
+  useEffect(() => {
+    sessionStorage.setItem('ordenes_filtro_estado', filtroEstado);
+    sessionStorage.setItem('ordenes_filtro_prioridad', filtroPrioridad);
+    sessionStorage.setItem('ordenes_filtro_estado_pago', filtroEstadoPago);
+    sessionStorage.setItem('ordenes_filtro_verificacion', filtroVerificacion);
+    sessionStorage.setItem('ordenes_filtro_tipo_comprobante', filtroTipoComprobante);
+    sessionStorage.setItem('ordenes_fecha_inicio', fechaInicio);
+    sessionStorage.setItem('ordenes_fecha_fin', fechaFin);
+    sessionStorage.setItem('ordenes_busqueda', busqueda);
+  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
+
+  useEffect(() => {
+    setInputPage(currentPage.toString());
+    sessionStorage.setItem('ordenes_pagina', currentPage.toString());
+  }, [currentPage]);
+
   useEffect(() => {
     cargarDatos();
     cargarTCDesdeSession();
-  }, [filtroEstado, filtroPrioridad, filtroVerificacion]);
+  }, [filtroEstado, filtroPrioridad, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, fechaInicio, fechaFin]);
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, busqueda]);
+    // Si la página inicial venía de caché, no la reseteamos a 1 en el primer render,
+    // solo la reseteamos cuando el usuario explícitamente cambia un filtro.
+    const isFirstRender = !sessionStorage.getItem('_ordenes_mounted');
+    if (isFirstRender) {
+      sessionStorage.setItem('_ordenes_mounted', 'true');
+    } else {
+      setCurrentPage(1);
+    }
+  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
+
+  // Limpiar bandera en unmount (opcional, pero buena práctica si el usuario cierra pestaña)
+  useEffect(() => {
+    return () => sessionStorage.removeItem('_ordenes_mounted');
+  }, []);
 
   useEffect(() => {
-    const paginaGuardada = sessionStorage.getItem('ordenes_pagina');
-    if (paginaGuardada) {
-      setCurrentPage(parseInt(paginaGuardada));
-      sessionStorage.removeItem('ordenes_pagina');
+    const shouldScroll = sessionStorage.getItem('_ordenes_scroll_pending');
+    if (shouldScroll && ordenes.length > 0) {
+      sessionStorage.removeItem('_ordenes_scroll_pending');
       setTimeout(() => {
         tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 150);
@@ -154,6 +190,9 @@ function OrdenesVenta() {
       if (filtroEstado) filtros.estado = filtroEstado;
       if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
       if (filtroVerificacion) filtros.estado_verificacion = filtroVerificacion;
+      if (filtroTipoComprobante) filtros.tipo_comprobante = filtroTipoComprobante;
+      if (fechaInicio) filtros.fecha_inicio = fechaInicio;
+      if (fechaFin) filtros.fecha_fin = fechaFin;
       
       const [ordenesRes, statsRes] = await Promise.all([
         ordenesVentaAPI.getAll(filtros),
@@ -174,6 +213,18 @@ function OrdenesVenta() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const limpiarFiltros = () => {
+    setFiltroEstado('');
+    setFiltroPrioridad('');
+    setFiltroEstadoPago('');
+    setFiltroVerificacion('');
+    setFiltroTipoComprobante('');
+    setFechaInicio('');
+    setFechaFin('');
+    setBusqueda('');
+    setCurrentPage(1);
   };
 
   const ordenesFiltradas = ordenes.filter(orden => {
@@ -206,6 +257,33 @@ function OrdenesVenta() {
 
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 4) {
+        pages.push(1, 2, 3, 4, 5, '...', totalPages);
+      } else if (currentPage >= totalPages - 3) {
+        pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
+  const handlePageJump = (e) => {
+    if (e.key === 'Enter') {
+      const page = parseInt(inputPage);
+      if (!isNaN(page) && page >= 1 && page <= totalPages) {
+        setCurrentPage(page);
+      } else {
+        setInputPage(currentPage.toString());
+      }
+    }
+  };
 
   const handleNavegaDetalle = (id) => {
     sessionStorage.setItem('ordenes_pagina', currentPage);
@@ -693,77 +771,81 @@ function OrdenesVenta() {
       </div>
 
       {estadisticas && (
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-content">
-              <p className="stat-label">Total Órdenes</p>
-              <p className="stat-value">{estadisticas.total_ordenes || 0}</p>
-              <p className="stat-sublabel">{estadisticas.clientes_unicos || 0} clientes</p>
-            </div>
-            <div className="stat-icon"><ShoppingCart size={24} /></div>
-          </div>
-          <div className="stat-card border-l-4 border-warning">
-            <div className="stat-content">
-              <p className="stat-label">En Espera</p>
-              <p className="stat-value text-warning">{estadisticas.en_espera || 0}</p>
-              <p className="stat-sublabel">Por producir</p>
-            </div>
-            <div className="stat-icon"><Clock size={24} className="text-warning" /></div>
-          </div>
-          <div className="stat-card border-l-4 border-info">
-            <div className="stat-content">
-              <p className="stat-label">En Proceso</p>
-              <p className="stat-value text-info">{estadisticas.en_proceso || 0}</p>
-              {estadisticas.urgentes > 0 && (
-                <p className="text-xs text-danger flex items-center gap-1 font-bold mt-1">
-                  <AlertTriangle size={12} />
-                  {estadisticas.urgentes} urgentes
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* FACTURAS PEN */}
+          <div className="card bg-green-50 border-l-4 border-green-500">
+            <div className="card-body p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-green-800 uppercase tracking-wider mb-1">
+                  Facturas Emitidas (PEN)
                 </p>
-              )}
-            </div>
-            <div className="stat-icon"><PlayCircle size={24} className="text-info" /></div>
-          </div>
-          <div className="stat-card border-l-4 border-orange-400">
-            <div className="stat-content">
-              <p className="stat-label">Desp. Parcial</p>
-              <p className="stat-value text-orange-600">{estadisticas.despacho_parcial || 0}</p>
-              <p className="stat-sublabel">Pendientes</p>
-            </div>
-            <div className="stat-icon"><Truck size={24} className="text-orange-600" /></div>
-          </div>
-          <div className="stat-card border-l-4 border-success">
-            <div className="stat-content">
-              <p className="stat-label">Monto Total PEN</p>
-              <p className="stat-value text-success">{formatearMoneda(estadisticas.monto_total || 0, 'PEN')}</p>
-              <p className="stat-sublabel">{estadisticas.entregadas || 0} entregadas</p>
-            </div>
-            <div className="stat-icon"><TrendingUp size={24} className="text-success" /></div>
-          </div>
-          {montoTotalUSD > 0 && (
-            <div className="stat-card border-l-4" style={{ borderColor: 'var(--accent, #ca8a04)' }}>
-              <div className="stat-content">
-                <p className="stat-label">Monto Total USD</p>
-                <p className="stat-value" style={{ color: 'var(--accent, #ca8a04)' }}>
-                  $ {formatearNumero(montoTotalUSD)}
+                <p className="text-2xl font-bold text-green-900">
+                  {formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}
                 </p>
-                {tipoCambio && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                    <ArrowRightLeft size={10} className="inline mr-1" />
-                    Equiv: S/ {formatearNumero(montoTotalUSD * tipoCambio.venta)}
-                  </p>
-                )}
               </div>
-              <div className="stat-icon" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.1))', color: 'var(--accent, #ca8a04)' }}>
+              <div className="bg-green-100 p-2 rounded-lg text-green-600">
+                <TrendingUp size={24} />
+              </div>
+            </div>
+          </div>
+
+          {/* FACTURAS USD */}
+          <div className="card border-l-4" style={{ backgroundColor: 'var(--accent-dim, rgba(234,179,8,0.05))', borderColor: 'var(--accent, #ca8a04)' }}>
+            <div className="card-body p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--accent, #ca8a04)' }}>
+                  Facturas Emitidas (USD)
+                </p>
+                <p className="text-2xl font-bold" style={{ color: 'var(--accent, #ca8a04)' }}>
+                  {formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--accent-dim, rgba(234,179,8,0.1))', color: 'var(--accent, #ca8a04)' }}>
                 <DollarSign size={24} />
               </div>
             </div>
-          )}
+          </div>
+
+          {/* NOTAS VENTA PEN */}
+          <div className="card bg-blue-50 border-l-4 border-blue-500">
+            <div className="card-body p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider mb-1">
+                  Notas de Venta (PEN)
+                </p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}
+                </p>
+              </div>
+              <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                <FileText size={24} />
+              </div>
+            </div>
+          </div>
+
+          {/* NOTAS VENTA USD */}
+          <div className="card border-l-4" style={{ backgroundColor: 'rgba(59, 130, 246, 0.05)', borderColor: '#3b82f6' }}>
+            <div className="card-body p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#3b82f6' }}>
+                  Notas de Venta (USD)
+                </p>
+                <p className="text-2xl font-bold" style={{ color: '#3b82f6' }}>
+                  {formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+                <DollarSign size={24} />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="card mb-4 shadow-sm">
         <div className="card-body">
-          <div className="flex flex-col md:flex-row gap-4">
+          {/* NIVEL 1: Búsqueda rápida y Fechas */}
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
             <div className="search-input-wrapper flex-1">
               <Search size={20} className="search-icon" />
               <input
@@ -775,63 +857,111 @@ function OrdenesVenta() {
               />
             </div>
 
-            <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-              <Filter size={20} className="text-muted shrink-0" />
-              
-              <div className="flex gap-2">
-                <button className={`btn btn-sm ${!filtroVerificacion ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroVerificacion('')}>Todas</button>
-                <button className={`btn btn-sm ${filtroVerificacion === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroVerificacion('Pendiente')}>
-                  <Clock size={14} /> Pendientes
-                </button>
-                <button className={`btn btn-sm ${filtroVerificacion === 'Rechazada' ? 'btn-danger' : 'btn-outline'}`} onClick={() => setFiltroVerificacion('Rechazada')}>
-                  <XCircle size={14} /> Rechazadas
-                </button>
+            <div className="flex gap-4 items-center">
+              <div className="form-group mb-0 w-36">
+                <input 
+                  type="date" 
+                  className="form-input text-sm h-10" 
+                  value={fechaInicio}
+                  onChange={(e) => setFechaInicio(e.target.value)}
+                  placeholder="Desde"
+                  title="Fecha Emisión (Desde)"
+                />
               </div>
-
-              <div className="border-l h-6 mx-2 hidden md:block"></div>
-
-              <div className="flex gap-2">
-                <button className={`btn btn-sm ${!filtroEstado ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroEstado('')}>Todos</button>
-                <button className={`btn btn-sm ${filtroEstado === 'En Espera' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroEstado('En Espera')}>
-                  <Clock size={14} /> En Espera
-                </button>
-                <button className={`btn btn-sm ${filtroEstado === 'En Proceso' ? 'btn-info' : 'btn-outline'}`} onClick={() => setFiltroEstado('En Proceso')}>
-                  <PlayCircle size={14} /> En Proceso
-                </button>
-                <button className={`btn btn-sm ${filtroEstado === 'Atendido por Producción' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroEstado('Atendido por Producción')}>
-                  <Factory size={14} /> Atendido
-                </button>
-                <button className={`btn btn-sm ${filtroEstado === 'Despacho Parcial' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroEstado('Despacho Parcial')}>
-                  <Truck size={14} /> Desp. Parcial
-                </button>
-                <button className={`btn btn-sm ${filtroEstado === 'Despachada' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFiltroEstado('Despachada')}>
-                  <Truck size={14} /> Despachada
-                </button>
-                <button className={`btn btn-sm ${filtroEstado === 'Entregada' ? 'btn-success' : 'btn-outline'}`} onClick={() => setFiltroEstado('Entregada')}>
-                  <CheckCircle size={14} /> Entregada
-                </button>
+              <div className="form-group mb-0 w-36">
+                <input 
+                  type="date" 
+                  className="form-input text-sm h-10" 
+                  value={fechaFin}
+                  onChange={(e) => setFechaFin(e.target.value)}
+                  placeholder="Hasta"
+                  title="Fecha Emisión (Hasta)"
+                />
               </div>
+              <button 
+                onClick={limpiarFiltros}
+                className="btn btn-outline text-red-500 border-red-200 hover:bg-red-50 hover:text-red-700 h-10 flex items-center gap-1 px-3"
+                title="Limpiar todos los filtros"
+              >
+                <X size={16} />
+                <span className="hidden sm:inline text-sm font-medium">Limpiar</span>
+              </button>
+            </div>
+          </div>
 
-              <div className="border-l h-6 mx-2 hidden md:block"></div>
+          {/* NIVEL 2: Filtros Avanzados (Desplegables) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="form-group mb-0">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Estado Logístico</label>
+              <select 
+                className="form-select text-sm h-9 w-full"
+                value={filtroEstado}
+                onChange={(e) => setFiltroEstado(e.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="En Espera">En Espera</option>
+                <option value="En Proceso">En Proceso</option>
+                <option value="Atendido por Producción">Atendido por Producción</option>
+                <option value="Despacho Parcial">Despacho Parcial</option>
+                <option value="Despachada">Despachada</option>
+                <option value="Entregada">Entregada</option>
+              </select>
+            </div>
 
-              <div className="flex gap-2">
-                <button className={`btn btn-sm ${filtroPrioridad === 'Urgente' ? 'btn-danger' : 'btn-outline'}`} onClick={() => setFiltroPrioridad(filtroPrioridad === 'Urgente' ? '' : 'Urgente')}>Urgente</button>
-                <button className={`btn btn-sm ${filtroPrioridad === 'Alta' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroPrioridad(filtroPrioridad === 'Alta' ? '' : 'Alta')}>Alta</button>
-              </div>
+            <div className="form-group mb-0">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Estado Pago</label>
+              <select 
+                className="form-select text-sm h-9 w-full"
+                value={filtroEstadoPago}
+                onChange={(e) => setFiltroEstadoPago(e.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="Pendiente">Sin Pagar</option>
+                <option value="Parcial">Pago Parcial</option>
+                <option value="Pagado">Pagado</option>
+              </select>
+            </div>
 
-              <div className="border-l h-6 mx-2 hidden md:block"></div>
+            <div className="form-group mb-0">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Verificación</label>
+              <select 
+                className="form-select text-sm h-9 w-full"
+                value={filtroVerificacion}
+                onChange={(e) => setFiltroVerificacion(e.target.value)}
+              >
+                <option value="">Todas</option>
+                <option value="Aprobada">Aprobadas</option>
+                <option value="Pendiente">Pendientes</option>
+                <option value="Rechazada">Rechazadas</option>
+              </select>
+            </div>
 
-              <div className="flex gap-2">
-                <button className={`btn btn-sm ${filtroEstadoPago === 'Pendiente' ? 'btn-warning' : 'btn-outline'}`} onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pendiente' ? '' : 'Pendiente')}>
-                  <DollarSign size={14} /> Sin Pagar
-                </button>
-                <button className={`btn btn-sm ${filtroEstadoPago === 'Parcial' ? 'btn-info' : 'btn-outline'}`} onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Parcial' ? '' : 'Parcial')}>
-                  <CreditCard size={14} /> Pago Parcial
-                </button>
-                <button className={`btn btn-sm ${filtroEstadoPago === 'Pagado' ? 'btn-success' : 'btn-outline'}`} onClick={() => setFiltroEstadoPago(filtroEstadoPago === 'Pagado' ? '' : 'Pagado')}>
-                  <CheckCircle size={14} /> Pagado
-                </button>
-              </div>
+            <div className="form-group mb-0">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Documento</label>
+              <select 
+                className="form-select text-sm h-9 w-full"
+                value={filtroTipoComprobante}
+                onChange={(e) => setFiltroTipoComprobante(e.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="Factura">Solo Facturas</option>
+                <option value="Nota de Venta">Solo Notas de Venta</option>
+              </select>
+            </div>
+
+            <div className="form-group mb-0">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Prioridad</label>
+              <select 
+                className="form-select text-sm h-9 w-full"
+                value={filtroPrioridad}
+                onChange={(e) => setFiltroPrioridad(e.target.value)}
+              >
+                <option value="">Todas</option>
+                <option value="Urgente">Urgente</option>
+                <option value="Alta">Alta</option>
+                <option value="Media">Media</option>
+                <option value="Baja">Baja</option>
+              </select>
             </div>
           </div>
         </div>
@@ -862,24 +992,67 @@ function OrdenesVenta() {
         </div>
 
         {ordenesFiltradas.length > itemsPerPage && (
-          <div className="card-footer flex-wrap gap-2">
-            <button 
-              className="btn btn-sm btn-outline flex items-center gap-1"
-              onClick={goToPrevPage}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
-            </button>
+          <div className="card-footer flex flex-wrap items-center justify-between gap-4 bg-gray-50 border-t border-gray-200">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Página {currentPage} de {totalPages}</span>
+              <button 
+                className="btn btn-sm btn-outline flex items-center gap-1 bg-white hover:bg-gray-50"
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
+              </button>
+              
+              <div className="flex items-center gap-1 mx-2">
+                {getPageNumbers().map((num, idx) => (
+                  num === '...' ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-500 font-medium">...</span>
+                  ) : (
+                    <button
+                      key={`page-${num}`}
+                      onClick={() => setCurrentPage(num)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium transition-colors ${
+                        currentPage === num 
+                          ? 'bg-primary text-white shadow-sm' 
+                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  )
+                ))}
+              </div>
+
+              <button 
+                className="btn btn-sm btn-outline flex items-center gap-1 bg-white hover:bg-gray-50"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+              >
+                <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
+              </button>
             </div>
-            <button 
-              className="btn btn-sm btn-outline flex items-center gap-1"
-              onClick={goToNextPage}
-              disabled={currentPage === totalPages}
-            >
-              <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
-            </button>
+
+            <div className="flex items-center gap-2 text-sm text-gray-600 font-medium bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+              <span>Ir a pág:</span>
+              <input 
+                type="number" 
+                min="1" 
+                max={totalPages}
+                value={inputPage}
+                onChange={(e) => setInputPage(e.target.value)}
+                onKeyDown={handlePageJump}
+                onBlur={() => {
+                   const page = parseInt(inputPage);
+                   if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                     setCurrentPage(page);
+                   } else {
+                     setInputPage(currentPage.toString());
+                   }
+                }}
+                className="w-16 h-7 text-center text-sm border-gray-300 rounded focus:ring-primary focus:border-primary"
+                style={{ padding: '0 4px', border: '1px solid #d1d5db', outline: 'none' }}
+              />
+              <span>de {totalPages}</span>
+            </div>
           </div>
         )}
       </div>

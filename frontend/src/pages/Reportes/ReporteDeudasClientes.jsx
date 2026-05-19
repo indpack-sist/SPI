@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../config/api';
-import './ReportesSIRE.css'; // Usamos los estilos compartidos
 
 const ReporteDeudasClientes = () => {
     const [clientes, setClientes] = useState([]);

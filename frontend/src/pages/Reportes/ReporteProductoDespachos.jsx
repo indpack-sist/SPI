@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../config/api';
-import './ReportesSIRE.css'; // Usamos estilos compartidos si existen o creamos unos básicos
 
 const ReporteProductoDespachos = () => {
     const [productos, setProductos] = useState([]);

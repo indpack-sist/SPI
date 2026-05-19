@@ -45,6 +45,8 @@ export const menuConfig = [
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },
       // NUEVO ITEM AGREGADO AQUÍ:
       { path: '/ventas/reportes', icon: TrendingUp, label: 'Reportes', modulo: 'reportes', color: '#884EA0' },
+      { path: '/ventas/reporte-despachos', icon: TrendingUp, label: 'Despachos por Prod', modulo: 'reportes', color: '#884EA0' },
+      { path: '/ventas/reporte-deudas', icon: TrendingUp, label: 'Cuentas x Cobrar', modulo: 'reportes', color: '#884EA0' },
     ]
   },
   {

@@ -369,3 +369,160 @@ export const getReporteVentas = async (req, res) => {
         res.status(500).json({ success: false, error: 'Error al generar reporte' });
     }
 };
+
+export const getReporteProductoDespachos = async (req, res) => {
+    try {
+        const { idProducto, fechaInicio, fechaFin } = req.query;
+        if (!idProducto || !fechaInicio || !fechaFin) {
+            return res.status(400).json({ success: false, error: 'Faltan parámetros: idProducto, fechaInicio y fechaFin son requeridos' });
+        }
+
+        const sql = `
+            SELECT 
+                ov.numero_orden,
+                ov.fecha_emision,
+                ov.moneda,
+                c.razon_social as cliente,
+                dov.cantidad_despachada,
+                dov.precio_unitario,
+                (dov.cantidad_despachada * dov.precio_unitario) as subtotal_item,
+                s.fecha_movimiento as fecha_despacho_real,
+                ov.estado,
+                ov.estado_pago
+            FROM detalle_orden_venta dov
+            INNER JOIN ordenes_venta ov ON dov.id_orden_venta = ov.id_orden_venta
+            INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
+            LEFT JOIN salidas s ON ov.id_salida = s.id_salida
+            WHERE dov.id_producto = ? 
+              AND dov.cantidad_despachada > 0 
+              AND DATE(ov.fecha_emision) BETWEEN ? AND ?
+              AND ov.estado != 'Cancelada'
+            ORDER BY ov.fecha_emision DESC;
+        `;
+
+        const [resultados] = await db.query(sql, [idProducto, fechaInicio, fechaFin]);
+
+        let totalCantidad = 0;
+        let totalIngresosPEN = 0;
+        let totalIngresosUSD = 0;
+
+        resultados.forEach(row => {
+            totalCantidad += parseFloat(row.cantidad_despachada) || 0;
+            const subtotal = parseFloat(row.subtotal_item) || 0;
+            if (row.moneda === 'USD') {
+                totalIngresosUSD += subtotal;
+            } else {
+                totalIngresosPEN += subtotal;
+            }
+        });
+
+        res.json({
+            success: true,
+            data: {
+                resumen: {
+                    total_cantidad: totalCantidad,
+                    total_ingresos_pen: totalIngresosPEN.toFixed(2),
+                    total_ingresos_usd: totalIngresosUSD.toFixed(2)
+                },
+                detalle: resultados
+            }
+        });
+    } catch (error) {
+        console.error('Error en getReporteProductoDespachos:', error);
+        res.status(500).json({ success: false, error: 'Error al generar reporte de despachos por producto' });
+    }
+};
+
+export const getReporteDeudasClientes = async (req, res) => {
+    try {
+        const { idCliente, soloVencidas, tipoComprobante, estadoSunat } = req.query;
+
+        let sql = `
+            SELECT 
+                ov.id_orden_venta,
+                ov.numero_orden,
+                ov.tipo_comprobante,
+                ov.numero_comprobante_sunat,
+                ov.fecha_emision,
+                ov.fecha_vencimiento,
+                ov.moneda,
+                ov.total,
+                ov.monto_pagado,
+                (ov.total - ov.monto_pagado) as deuda_pendiente,
+                ov.estado_pago,
+                c.id_cliente,
+                c.razon_social as cliente,
+                c.telefono as telefono_cliente,
+                c.contacto as contacto_cliente,
+                DATEDIFF(CURRENT_DATE, ov.fecha_vencimiento) as dias_vencidos
+            FROM ordenes_venta ov
+            INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
+            WHERE ov.estado != 'Cancelada'
+              AND ov.estado_pago IN ('Pendiente', 'Parcial')
+              AND (ov.total - ov.monto_pagado) > 0
+        `;
+        
+        const params = [];
+
+        if (idCliente && idCliente !== '') {
+            sql += ` AND ov.id_cliente = ?`;
+            params.push(idCliente);
+        }
+
+        if (soloVencidas === 'true') {
+            sql += ` AND ov.fecha_vencimiento < CURRENT_DATE`;
+        }
+
+        if (tipoComprobante && tipoComprobante !== '') {
+            sql += ` AND ov.tipo_comprobante = ?`;
+            params.push(tipoComprobante);
+        }
+
+        if (estadoSunat === 'con_correlativo') {
+            sql += ` AND ov.numero_comprobante_sunat IS NOT NULL AND ov.numero_comprobante_sunat != ''`;
+        } else if (estadoSunat === 'sin_correlativo') {
+            sql += ` AND (ov.numero_comprobante_sunat IS NULL OR ov.numero_comprobante_sunat = '')`;
+        }
+
+        sql += ` ORDER BY ov.fecha_vencimiento ASC`;
+
+        const [resultados] = await db.query(sql, params);
+
+        let kpis = {
+            deudaTotalPEN: 0,
+            deudaTotalUSD: 0,
+            deudaVencidaPEN: 0,
+            deudaVencidaUSD: 0
+        };
+
+        resultados.forEach(row => {
+            const deuda = parseFloat(row.deuda_pendiente) || 0;
+            const esVencida = row.dias_vencidos > 0;
+
+            if (row.moneda === 'USD') {
+                kpis.deudaTotalUSD += deuda;
+                if (esVencida) kpis.deudaVencidaUSD += deuda;
+            } else {
+                kpis.deudaTotalPEN += deuda;
+                if (esVencida) kpis.deudaVencidaPEN += deuda;
+            }
+        });
+
+        res.json({
+            success: true,
+            data: {
+                resumen: {
+                    deuda_total_pen: kpis.deudaTotalPEN.toFixed(2),
+                    deuda_total_usd: kpis.deudaTotalUSD.toFixed(2),
+                    deuda_vencida_pen: kpis.deudaVencidaPEN.toFixed(2),
+                    deuda_vencida_usd: kpis.deudaVencidaUSD.toFixed(2)
+                },
+                detalle: resultados
+            }
+        });
+
+    } catch (error) {
+        console.error('Error en getReporteDeudasClientes:', error);
+        res.status(500).json({ success: false, error: 'Error al generar reporte de deudas por cliente' });
+    }
+};

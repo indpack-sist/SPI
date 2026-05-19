@@ -56,6 +56,8 @@ import DetalleCuenta from './pages/Finanzas/DetalleCuenta';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
 
 import ReportesSIRE from './pages/Reportes/ReportesSIRE';
+import ReporteProductoDespachos from './pages/Reportes/ReporteProductoDespachos';
+import ReporteDeudasClientes from './pages/Reportes/ReporteDeudasClientes';
 
 function App() {
   return (
@@ -373,6 +375,22 @@ function App() {
                         element={
                           <ProtectedRouteWithPermiso modulo="reportes">
                             <ReporteVentas />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      <Route 
+                        path="/ventas/reporte-despachos" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="reportes">
+                            <ReporteProductoDespachos />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+                      <Route 
+                        path="/ventas/reporte-deudas" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="reportes">
+                            <ReporteDeudasClientes />
                           </ProtectedRouteWithPermiso>
                         } 
                       />

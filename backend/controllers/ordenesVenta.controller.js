@@ -34,7 +34,7 @@ function getFechaISOPeru() {
 
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, prioridad, fecha_inicio, fecha_fin, estado_verificacion } = req.query;
+    const { estado, prioridad, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante } = req.query;
     
     let sql = `
       SELECT 
@@ -1737,17 +1737,12 @@ export async function getEstadisticasOrdenesVenta(req, res) {
     const result = await executeQuery(`
       SELECT 
         COUNT(*) AS total_ordenes,
-        SUM(CASE WHEN estado = 'En Espera' THEN 1 ELSE 0 END) AS en_espera,
-        SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) AS en_proceso,
-        SUM(CASE WHEN estado = 'Atendido por Producción' THEN 1 ELSE 0 END) AS atendidas,
-        SUM(CASE WHEN estado = 'Despacho Parcial' THEN 1 ELSE 0 END) AS despacho_parcial,
-        SUM(CASE WHEN estado = 'Despachada' THEN 1 ELSE 0 END) AS despachadas,
-        SUM(CASE WHEN estado = 'Entregada' THEN 1 ELSE 0 END) AS entregadas,
-        SUM(CASE WHEN prioridad = 'Urgente' THEN 1 ELSE 0 END) AS urgentes,
-        SUM(total) AS monto_total,
-        COUNT(DISTINCT id_cliente) AS clientes_unicos
+        SUM(CASE WHEN moneda = 'PEN' AND tipo_comprobante = 'Factura' AND numero_comprobante_sunat IS NOT NULL AND numero_comprobante_sunat != '' THEN total ELSE 0 END) AS facturas_pen,
+        SUM(CASE WHEN moneda = 'USD' AND tipo_comprobante = 'Factura' AND numero_comprobante_sunat IS NOT NULL AND numero_comprobante_sunat != '' THEN total ELSE 0 END) AS facturas_usd,
+        SUM(CASE WHEN moneda = 'PEN' AND tipo_comprobante = 'Nota de Venta' THEN total ELSE 0 END) AS notas_venta_pen,
+        SUM(CASE WHEN moneda = 'USD' AND tipo_comprobante = 'Nota de Venta' THEN total ELSE 0 END) AS notas_venta_usd
       FROM ordenes_venta
-      WHERE estado != 'Cancelada'
+      WHERE estado != 'Cancelada' AND estado_verificacion = 'Aprobada'
     `);
     
     if (!result.success) {

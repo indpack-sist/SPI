@@ -251,18 +251,23 @@ function DetalleOrdenVenta() {
 
   const cargarNavegacion = async () => {
     try {
-        const response = await ordenesVentaAPI.getAll();
-        if (response.data.success) {
-            const lista = response.data.data;
-            const currentIndex = lista.findIndex(o => String(o.id_orden_venta) === String(id));
-            if (currentIndex !== -1) {
-                setNavInfo({
-                    prev: currentIndex > 0 ? lista[currentIndex - 1].id_orden_venta : null,
-                    next: currentIndex < lista.length - 1 ? lista[currentIndex + 1].id_orden_venta : null,
-                    current: currentIndex + 1,
-                    total: lista.length
-                });
+        const idsFiltradosRaw = sessionStorage.getItem('ordenes_filtradas_ids');
+        if (idsFiltradosRaw) {
+            const idsFiltrados = JSON.parse(idsFiltradosRaw);
+            const currentIndex = idsFiltrados.findIndex(fid => String(fid) === String(id));
+            if (currentIndex !== -1 && idsFiltrados.length > 0) {
+               setNavInfo({
+                 prev: currentIndex > 0 ? idsFiltrados[currentIndex - 1] : null,
+                 next: currentIndex < idsFiltrados.length - 1 ? idsFiltrados[currentIndex + 1] : null,
+                 current: currentIndex + 1,
+                 total: idsFiltrados.length
+               });
+            } else {
+               // Fallback: Si el ID no está en la lista filtrada, reseteamos la info
+               setNavInfo({ prev: null, next: null, current: 0, total: 0 });
             }
+        } else {
+            setNavInfo({ prev: null, next: null, current: 0, total: 0 });
         }
     } catch (err) {
         console.error('Error cargando navegación', err);

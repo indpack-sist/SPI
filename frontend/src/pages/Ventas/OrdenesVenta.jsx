@@ -357,6 +357,12 @@ function OrdenesVenta() {
   const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
 
+  // Guardar lista de IDs filtrados para la navegación en el detalle
+  useEffect(() => {
+    const idsFiltrados = ordenesFiltradas.map(o => o.id_orden_venta);
+    sessionStorage.setItem('ordenes_filtradas_ids', JSON.stringify(idsFiltrados));
+  }, [ordenesFiltradas]);
+
   useEffect(() => {
     if (totalPages > 0 && currentPage > totalPages) {
       setCurrentPage(1);

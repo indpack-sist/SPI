@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../config/api';
-import { Search, Package, TrendingUp, DollarSign, Box } from 'lucide-react';
+import { Search, Package, TrendingUp, DollarSign, Box, Clock, BadgeCheck, ChevronRight } from 'lucide-react';
 
 const ReporteProductoDespachos = () => {
     const [productos, setProductos] = useState([]);
@@ -163,6 +163,7 @@ const ReporteProductoDespachos = () => {
                 .page-reporte-despachos .dropdown-menu {
                     background-color: var(--carbon-light) !important;
                     border: 1px solid var(--steel) !important;
+                    z-index: 100 !important;
                 }
 
                 .page-reporte-despachos .dropdown-item:hover {
@@ -233,7 +234,7 @@ const ReporteProductoDespachos = () => {
                                 <Search size={18} className="absolute left-3 text-wire z-10" />
                                 <input
                                     type="text"
-                                    className="form-input pl-10 w-full"
+                                    className="form-input pl-10 w-full flex items-center"
                                     placeholder="Buscar por código o nombre..."
                                     value={busquedaProducto}
                                     onChange={(e) => {
@@ -319,7 +320,6 @@ const ReporteProductoDespachos = () => {
 
             {reporteData && estadisticas && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* KPI UNIDADES */}
                     <div className="card bg-carbon-mid border-l-4 border-mist shadow-lg mb-4 h-16 flex items-center px-6">
                         <div className="flex items-center gap-3 w-full">
                             <Box size={20} className="text-wire" />
@@ -419,29 +419,30 @@ const ReporteProductoDespachos = () => {
                                                             </span>
                                                         </td>
                                                         <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
-                                                    <td className="text-right font-black text-white">{formatearNumero(row.cantidad_despachada)}</td>
-                                                    <td className="text-right font-mono">
-                                                        <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>
-                                                        {formatearNumero(row.precio_unitario)}
-                                                    </td>
-                                                    <td className="text-right font-black text-white">
-                                                        <span className="text-wire mr-1 font-mono">{row.moneda === 'USD' ? '$' : 'S/'}</span>
-                                                        {formatearNumero(row.subtotal_item)}
-                                                    </td>
-                                                    <td className="text-center">
-                                                        <span className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-black rounded ${
-                                                            row.estado === 'Entregada' 
-                                                                ? 'bg-success/10 text-success border border-success/20' 
-                                                                : 'bg-warning/10 text-warning border border-warning/20'
-                                                        }`}>
-                                                            {row.estado}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))
+                                                        <td className="text-right font-black text-white">{formatearNumero(row.cantidad_despachada)}</td>
+                                                        <td className="text-right font-mono">
+                                                            <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>
+                                                            {formatearNumero(row.precio_unitario)}
+                                                        </td>
+                                                        <td className="text-right font-black text-white">
+                                                            <span className="text-wire mr-1 font-mono">{row.moneda === 'USD' ? '$' : 'S/'}</span>
+                                                            {formatearNumero(row.subtotal_item)}
+                                                        </td>
+                                                        <td className="text-center">
+                                                            <span className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-black rounded ${
+                                                                row.estado === 'Entregada' 
+                                                                    ? 'bg-success/10 text-success border border-success/20' 
+                                                                    : 'bg-warning/10 text-warning border border-warning/20'
+                                                            }`}>
+                                                                {row.estado}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
                                         ) : (
                                             <tr>
-                                                <td colSpan="8" className="text-center py-12 text-wire text-sm uppercase tracking-widest font-bold">
+                                                <td colSpan="9" className="text-center py-12 text-wire text-sm uppercase tracking-widest font-bold">
                                                     No se encontraron despachos para este producto en el rango de fechas.
                                                 </td>
                                             </tr>

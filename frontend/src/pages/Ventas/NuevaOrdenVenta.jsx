@@ -673,10 +673,18 @@ useEffect(() => {
       }))));
 
       if (tieneOC && archivos.orden_compra) {
-        formData.append('orden_compra', archivos.orden_compra);
+        if (Array.isArray(archivos.orden_compra)) {
+          archivos.orden_compra.forEach(file => formData.append('orden_compra', file));
+        } else {
+          formData.append('orden_compra', archivos.orden_compra);
+        }
       }
       if (archivos.comprobante) {
-        formData.append('comprobante', archivos.comprobante);
+        if (Array.isArray(archivos.comprobante)) {
+          archivos.comprobante.forEach(file => formData.append('comprobante', file));
+        } else {
+          formData.append('comprobante', archivos.comprobante);
+        }
       }
 
       let response;

@@ -166,6 +166,8 @@ function OrdenesVenta() {
   const [filtroEstadoPago, setFiltroEstadoPago] = useState(() => getSessionArray('ordenes_filtros_estado_pago'));
   const [filtroVerificacion, setFiltroVerificacion] = useState(() => getSessionArray('ordenes_filtros_verificacion'));
   const [filtroTipoComprobante, setFiltroTipoComprobante] = useState(() => getSessionArray('ordenes_filtros_tipo_comprobante'));
+  const [filtroEstadoSunat, setFiltroEstadoSunat] = useState(() => getSessionArray('ordenes_filtros_estado_sunat'));
+  const [filtroVendedor, setFiltroVendedor] = useState(() => getSessionArray('ordenes_filtros_vendedor'));
   
   const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || '');
   const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || '');
@@ -327,10 +329,14 @@ function OrdenesVenta() {
     const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
     const monto = esSinImpuesto ? parseFloat(orden.subtotal || 0) : parseFloat(orden.total || 0);
     const tipo = String(orden.tipo_comprobante || '').trim();
+    
+    // Excepciones para Facturas de Exportación (sin IGV válido)
+    const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
     if (tipo.includes('Factura')) {
       // REGLA: Si es Factura pero NO tiene IGV, se considera un error del usuario y se suma como Nota de Venta
-      if (!esSinImpuesto) {
+      // EXCEPCIÓN: Facturas de exportación aprobadas explícitamente
+      if (!esSinImpuesto || facturasExportacion.includes(orden.numero_orden)) {
         if (orden.moneda === 'PEN') acc.facturas_pen += monto;
         if (orden.moneda === 'USD') acc.facturas_usd += monto;
       } else {
@@ -761,7 +767,7 @@ function OrdenesVenta() {
             </div>
 
             {mostrarFiltrosAvanzados && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-steel/20 animate-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mt-4 pt-4 border-t border-steel/20 animate-in slide-in-from-top-2 duration-300">
                 <FilterCheckboxGroup label="Estado Logístico" selectedValues={filtroEstado} onChange={setFiltroEstado} options={[
                   { label: 'En Espera', value: 'En Espera' }, { label: 'En Proceso', value: 'En Proceso' }, { label: 'Atendido por Producción', value: 'Atendido por Producción' }, { label: 'Despacho Parcial', value: 'Despacho Parcial' }, { label: 'Despachada', value: 'Despachada' }, { label: 'Entregada', value: 'Entregada' }, { label: 'Cancelada', value: 'Cancelada' }
                 ]} />
@@ -773,6 +779,12 @@ function OrdenesVenta() {
                 ]} />
                 <FilterCheckboxGroup label="Documento" selectedValues={filtroTipoComprobante} onChange={setFiltroTipoComprobante} options={[
                   { label: 'Facturas', value: 'Factura' }, { label: 'Notas de Venta', value: 'Nota de Venta' }, { label: 'Sin Comprobante', value: 'Sin Comprobante' }
+                ]} />
+                <FilterCheckboxGroup label="Estado SUNAT" selectedValues={filtroEstadoSunat} onChange={setFiltroEstadoSunat} options={[
+                  { label: 'Facturado', value: 'Facturado' }, { label: 'Pendiente', value: 'Pendiente' }, { label: 'No amerita', value: 'No Amerita' }
+                ]} />
+                <FilterCheckboxGroup label="Vendedor" selectedValues={filtroVendedor} onChange={setFiltroVendedor} options={[
+                  { label: 'JOHANNA VALLE TORRES', value: '12' }, { label: 'YESSICA GABY ORDOÑEZ PEREZ', value: '13' }, { label: 'VALESHKA BETSABETH LAZARO COLMENARES', value: '20' }
                 ]} />
               </div>
             )}

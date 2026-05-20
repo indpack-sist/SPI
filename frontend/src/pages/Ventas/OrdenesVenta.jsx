@@ -329,8 +329,14 @@ function OrdenesVenta() {
     const tipo = String(orden.tipo_comprobante || '').trim();
 
     if (tipo.includes('Factura')) {
-      if (orden.moneda === 'PEN') acc.facturas_pen += monto;
-      if (orden.moneda === 'USD') acc.facturas_usd += monto;
+      // REGLA: Si es Factura pero NO tiene IGV, se considera un error del usuario y se suma como Nota de Venta
+      if (!esSinImpuesto) {
+        if (orden.moneda === 'PEN') acc.facturas_pen += monto;
+        if (orden.moneda === 'USD') acc.facturas_usd += monto;
+      } else {
+        if (orden.moneda === 'PEN') acc.notas_venta_pen += monto;
+        if (orden.moneda === 'USD') acc.notas_venta_usd += monto;
+      }
     } else if (tipo.includes('Nota de Venta')) {
       if (orden.moneda === 'PEN') acc.notas_venta_pen += monto;
       if (orden.moneda === 'USD') acc.notas_venta_usd += monto;

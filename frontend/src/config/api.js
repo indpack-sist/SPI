@@ -501,11 +501,22 @@ export const cotizacionesAPI = {
 export const ordenesVentaAPI = {
   getAll: (filtros = {}) => {
     const params = new URLSearchParams();
-    if (filtros.estado) params.append('estado', filtros.estado);
-    if (filtros.prioridad) params.append('prioridad', filtros.prioridad);
-    if (filtros.estado_verificacion) params.append('estado_verificacion', filtros.estado_verificacion);
-    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
-    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+    
+    const appendFilter = (key, value) => {
+      if (Array.isArray(value)) {
+        if (value.length > 0) params.append(key, value.join(','));
+      } else if (value) {
+        params.append(key, value);
+      }
+    };
+
+    appendFilter('estado', filtros.estado);
+    appendFilter('prioridad', filtros.prioridad);
+    appendFilter('estado_pago', filtros.estado_pago);
+    appendFilter('estado_verificacion', filtros.estado_verificacion);
+    appendFilter('tipo_comprobante', filtros.tipo_comprobante);
+    appendFilter('fecha_inicio', filtros.fecha_inicio);
+    appendFilter('fecha_fin', filtros.fecha_fin);
     
     return api.get(`/ordenes-venta?${params.toString()}`);
   },

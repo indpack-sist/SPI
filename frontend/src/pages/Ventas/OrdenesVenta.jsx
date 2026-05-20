@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
@@ -28,7 +28,9 @@ import {
   Calendar,
   ArrowRightLeft,
   FileText,
-  X
+  X,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -36,6 +38,91 @@ import Loading from '../../components/UI/Loading';
 import { ordenesVentaAPI, tipoCambioAPI } from '../../config/api';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
+
+// Componente para el grupo de checkboxes de filtro
+const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleToggle = (value) => {
+    const newValues = selectedValues.includes(value)
+      ? selectedValues.filter(v => v !== value)
+      : [...selectedValues, value];
+    onChange(newValues);
+  };
+
+  const getLabelText = () => {
+    if (selectedValues.length === 0) return 'Todos';
+    if (selectedValues.length === 1) return selectedValues[0];
+    return `${selectedValues.length} seleccionados`;
+  };
+
+  return (
+    <div className="form-group mb-0" ref={dropdownRef}>
+      <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">{label}</label>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className={`flex items-center justify-between w-full h-9 px-3 text-sm bg-white border rounded-md focus:outline-none focus:ring-1 focus:ring-primary ${
+            selectedValues.length > 0 ? 'border-primary text-primary font-medium' : 'border-gray-300 text-gray-700'
+          }`}
+        >
+          <span className="truncate mr-2">{getLabelText()}</span>
+          <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto p-1">
+            {options.map((opt) => {
+              const isSelected = selectedValues.includes(opt.value);
+              return (
+                <label
+                  key={opt.value}
+                  className={`flex items-center px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-50 transition-colors ${
+                    isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                  }`}
+                >
+                  <div className={`w-4 h-4 border rounded mr-2 flex items-center justify-center transition-colors ${
+                    isSelected ? 'bg-primary border-primary' : 'border-gray-300 bg-white'
+                  }`}>
+                    {isSelected && <Check size={12} className="text-white" />}
+                  </div>
+                  <span className="text-sm select-none">{opt.label}</span>
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={isSelected}
+                    onChange={() => handleToggle(opt.value)}
+                  />
+                </label>
+              );
+            })}
+            {selectedValues.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="w-full mt-1 text-center py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-md font-medium border-t border-gray-100"
+              >
+                Limpiar selección
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 function OrdenesVenta() {
   const navigate = useNavigate();
@@ -47,10 +134,20 @@ function OrdenesVenta() {
   const [success, setSuccess] = useState(null);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
 
-  const [filtroEstado, setFiltroEstado] = useState(() => sessionStorage.getItem('ordenes_filtro_estado') || '');
-  const [filtroEstadoPago, setFiltroEstadoPago] = useState(() => sessionStorage.getItem('ordenes_filtro_estado_pago') || '');
-  const [filtroVerificacion, setFiltroVerificacion] = useState(() => sessionStorage.getItem('ordenes_filtro_verificacion') || '');
-  const [filtroTipoComprobante, setFiltroTipoComprobante] = useState(() => sessionStorage.getItem('ordenes_filtro_tipo_comprobante') || '');
+  const getSessionArray = (key) => {
+    try {
+      const val = sessionStorage.getItem(key);
+      return val ? JSON.parse(val) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const [filtroEstado, setFiltroEstado] = useState(() => getSessionArray('ordenes_filtros_estado'));
+  const [filtroEstadoPago, setFiltroEstadoPago] = useState(() => getSessionArray('ordenes_filtros_estado_pago'));
+  const [filtroVerificacion, setFiltroVerificacion] = useState(() => getSessionArray('ordenes_filtros_verificacion'));
+  const [filtroTipoComprobante, setFiltroTipoComprobante] = useState(() => getSessionArray('ordenes_filtros_tipo_comprobante'));
+  
   const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || '');
   const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || '');
   const [busqueda, setBusqueda] = useState(() => sessionStorage.getItem('ordenes_busqueda') || '');
@@ -67,10 +164,10 @@ function OrdenesVenta() {
 
   // Guardar en session storage cada que cambian los filtros
   useEffect(() => {
-    sessionStorage.setItem('ordenes_filtro_estado', filtroEstado);
-    sessionStorage.setItem('ordenes_filtro_estado_pago', filtroEstadoPago);
-    sessionStorage.setItem('ordenes_filtro_verificacion', filtroVerificacion);
-    sessionStorage.setItem('ordenes_filtro_tipo_comprobante', filtroTipoComprobante);
+    sessionStorage.setItem('ordenes_filtros_estado', JSON.stringify(filtroEstado));
+    sessionStorage.setItem('ordenes_filtros_estado_pago', JSON.stringify(filtroEstadoPago));
+    sessionStorage.setItem('ordenes_filtros_verificacion', JSON.stringify(filtroVerificacion));
+    sessionStorage.setItem('ordenes_filtros_tipo_comprobante', JSON.stringify(filtroTipoComprobante));
     sessionStorage.setItem('ordenes_fecha_inicio', fechaInicio);
     sessionStorage.setItem('ordenes_fecha_fin', fechaFin);
     sessionStorage.setItem('ordenes_busqueda', busqueda);
@@ -87,8 +184,6 @@ function OrdenesVenta() {
   }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, fechaInicio, fechaFin]);
 
   useEffect(() => {
-    // Si la página inicial venía de caché, no la reseteamos a 1 en el primer render,
-    // solo la reseteamos cuando el usuario explícitamente cambia un filtro.
     const isFirstRender = !sessionStorage.getItem('_ordenes_mounted');
     if (isFirstRender) {
       sessionStorage.setItem('_ordenes_mounted', 'true');
@@ -97,7 +192,6 @@ function OrdenesVenta() {
     }
   }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
 
-  // Limpiar bandera en unmount (opcional, pero buena práctica si el usuario cierra pestaña)
   useEffect(() => {
     return () => sessionStorage.removeItem('_ordenes_mounted');
   }, []);
@@ -185,9 +279,10 @@ function OrdenesVenta() {
       setError(null);
       
       const filtros = {};
-      if (filtroEstado) filtros.estado = filtroEstado;
-      if (filtroVerificacion) filtros.estado_verificacion = filtroVerificacion;
-      if (filtroTipoComprobante) filtros.tipo_comprobante = filtroTipoComprobante;
+      if (filtroEstado.length > 0) filtros.estado = filtroEstado;
+      if (filtroEstadoPago.length > 0) filtros.estado_pago = filtroEstadoPago;
+      if (filtroVerificacion.length > 0) filtros.estado_verificacion = filtroVerificacion;
+      if (filtroTipoComprobante.length > 0) filtros.tipo_comprobante = filtroTipoComprobante;
       if (fechaInicio) filtros.fecha_inicio = fechaInicio;
       if (fechaFin) filtros.fecha_fin = fechaFin;
       
@@ -213,11 +308,10 @@ function OrdenesVenta() {
   };
 
   const limpiarFiltros = () => {
-    setFiltroEstado('');
-    setFiltroPrioridad('');
-    setFiltroEstadoPago('');
-    setFiltroVerificacion('');
-    setFiltroTipoComprobante('');
+    setFiltroEstado([]);
+    setFiltroEstadoPago([]);
+    setFiltroVerificacion([]);
+    setFiltroTipoComprobante([]);
     setFechaInicio('');
     setFechaFin('');
     setBusqueda('');
@@ -225,7 +319,6 @@ function OrdenesVenta() {
   };
 
   const ordenesFiltradas = ordenes.filter(orden => {
-    if (filtroEstadoPago && orden.estado_pago !== filtroEstadoPago) return false;
     if (!busqueda) return true;
     const term = busqueda.toLowerCase();
     return (
@@ -886,66 +979,55 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          {/* NIVEL 2: Filtros Avanzados (Desplegables) */}
+          {/* NIVEL 2: Filtros Avanzados (Multi-select) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="form-group mb-0">
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Estado Logístico</label>
-              <select 
-                className="form-select text-sm h-9 w-full"
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="En Espera">En Espera</option>
-                <option value="En Proceso">En Proceso</option>
-                <option value="Atendido por Producción">Atendido por Producción</option>
-                <option value="Despacho Parcial">Despacho Parcial</option>
-                <option value="Despachada">Despachada</option>
-                <option value="Entregada">Entregada</option>
-              </select>
-            </div>
+            <FilterCheckboxGroup
+              label="Estado Logístico"
+              selectedValues={filtroEstado}
+              onChange={setFiltroEstado}
+              options={[
+                { label: 'En Espera', value: 'En Espera' },
+                { label: 'En Proceso', value: 'En Proceso' },
+                { label: 'Atendido por Producción', value: 'Atendido por Producción' },
+                { label: 'Despacho Parcial', value: 'Despacho Parcial' },
+                { label: 'Despachada', value: 'Despachada' },
+                { label: 'Entregada', value: 'Entregada' },
+                { label: 'Cancelada', value: 'Cancelada' }
+              ]}
+            />
 
-            <div className="form-group mb-0">
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Estado Pago</label>
-              <select 
-                className="form-select text-sm h-9 w-full"
-                value={filtroEstadoPago}
-                onChange={(e) => setFiltroEstadoPago(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="Pendiente">Sin Pagar</option>
-                <option value="Parcial">Pago Parcial</option>
-                <option value="Pagado">Pagado</option>
-              </select>
-            </div>
+            <FilterCheckboxGroup
+              label="Estado Pago"
+              selectedValues={filtroEstadoPago}
+              onChange={setFiltroEstadoPago}
+              options={[
+                { label: 'Sin Pagar', value: 'Pendiente' },
+                { label: 'Pago Parcial', value: 'Parcial' },
+                { label: 'Pagado', value: 'Pagado' }
+              ]}
+            />
 
-            <div className="form-group mb-0">
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Verificación</label>
-              <select 
-                className="form-select text-sm h-9 w-full"
-                value={filtroVerificacion}
-                onChange={(e) => setFiltroVerificacion(e.target.value)}
-              >
-                <option value="">Todas</option>
-                <option value="Aprobada">Aprobadas</option>
-                <option value="Pendiente">Pendientes</option>
-                <option value="Rechazada">Rechazadas</option>
-              </select>
-            </div>
+            <FilterCheckboxGroup
+              label="Verificación"
+              selectedValues={filtroVerificacion}
+              onChange={setFiltroVerificacion}
+              options={[
+                { label: 'Aprobadas', value: 'Aprobada' },
+                { label: 'Pendientes', value: 'Pendiente' },
+                { label: 'Rechazadas', value: 'Rechazada' }
+              ]}
+            />
 
-            <div className="form-group mb-0">
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Documento</label>
-              <select 
-                className="form-select text-sm h-9 w-full"
-                value={filtroTipoComprobante}
-                onChange={(e) => setFiltroTipoComprobante(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="Factura">Solo Facturas</option>
-                <option value="Nota de Venta">Solo Notas de Venta</option>
-                <option value="Sin Comprobante">Sin Comprobante</option>
-              </select>
-            </div>
+            <FilterCheckboxGroup
+              label="Documento"
+              selectedValues={filtroTipoComprobante}
+              onChange={setFiltroTipoComprobante}
+              options={[
+                { label: 'Facturas', value: 'Factura' },
+                { label: 'Notas de Venta', value: 'Nota de Venta' },
+                { label: 'Sin Comprobante', value: 'Sin Comprobante' }
+              ]}
+            />
           </div>
         </div>
       </div>

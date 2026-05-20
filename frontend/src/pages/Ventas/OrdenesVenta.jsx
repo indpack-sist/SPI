@@ -274,17 +274,10 @@ function OrdenesVenta() {
       if (fechaInicio) filtros.fecha_inicio = fechaInicio;
       if (fechaFin) filtros.fecha_fin = fechaFin;
       
-      const [ordenesRes, statsRes] = await Promise.all([
-        ordenesVentaAPI.getAll(filtros),
-        ordenesVentaAPI.getEstadisticas()
-      ]);
+      const response = await ordenesVentaAPI.getAll(filtros);
       
-      if (ordenesRes.data.success) {
-        setOrdenes(ordenesRes.data.data || []);
-      }
-      
-      if (statsRes.data.success) {
-        setEstadisticas(statsRes.data.data || null);
+      if (response.data.success) {
+        setOrdenes(response.data.data || []);
       }
       
     } catch (err) {
@@ -320,6 +313,22 @@ function OrdenesVenta() {
       orden.registrado_por?.toLowerCase().includes(term)
     );
   });
+
+  // Calcular estadísticas dinámicamente basadas en los filtros actuales
+  const estadisticas = ordenesFiltradas.reduce((acc, orden) => {
+    const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
+    const monto = esSinImpuesto ? parseFloat(orden.subtotal || 0) : parseFloat(orden.total || 0);
+    const tipo = String(orden.tipo_comprobante || '').trim();
+
+    if (tipo === 'Factura' && orden.numero_comprobante_sunat) {
+      if (orden.moneda === 'PEN') acc.facturas_pen += monto;
+      if (orden.moneda === 'USD') acc.facturas_usd += monto;
+    } else if (tipo === 'Nota de Venta') {
+      if (orden.moneda === 'PEN') acc.notas_venta_pen += monto;
+      if (orden.moneda === 'USD') acc.notas_venta_usd += monto;
+    }
+    return acc;
+  }, { facturas_pen: 0, facturas_usd: 0, notas_venta_pen: 0, notas_venta_usd: 0 });
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;

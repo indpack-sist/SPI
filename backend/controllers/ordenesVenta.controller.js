@@ -34,7 +34,7 @@ function getFechaISOPeru() {
 
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante } = req.query;
+    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago } = req.query;
     
     let sql = `
       SELECT 
@@ -104,17 +104,35 @@ export async function getAllOrdenesVenta(req, res) {
     const params = [];
     
     if (estado) {
-      sql += ` AND ov.estado = ?`;
-      params.push(estado);
+      const estados = estado.split(',');
+      sql += ` AND ov.estado IN (${estados.map(() => '?').join(',')})`;
+      params.push(...estados);
+    }
+
+    if (estado_pago) {
+      const estadosPago = estado_pago.split(',');
+      sql += ` AND ov.estado_pago IN (${estadosPago.map(() => '?').join(',')})`;
+      params.push(...estadosPago);
     }
     
     if (tipo_comprobante) {
-      if (tipo_comprobante === 'Sin Comprobante') {
-        sql += ` AND (ov.tipo_comprobante IS NULL OR ov.tipo_comprobante = '')`;
-      } else {
-        sql += ` AND ov.tipo_comprobante = ?`;
-        params.push(tipo_comprobante);
+      const tipos = tipo_comprobante.split(',');
+      const tieneSinComprobante = tipos.includes('Sin Comprobante');
+      const otrosTipos = tipos.filter(t => t !== 'Sin Comprobante');
+      
+      sql += ' AND (';
+      let conditions = [];
+      
+      if (tieneSinComprobante) {
+        conditions.push("(ov.tipo_comprobante IS NULL OR TRIM(ov.tipo_comprobante) = '')");
       }
+      
+      if (otrosTipos.length > 0) {
+        conditions.push(`TRIM(ov.tipo_comprobante) IN (${otrosTipos.map(() => '?').join(',')})`);
+        params.push(...otrosTipos);
+      }
+      
+      sql += conditions.join(' OR ') + ')';
     }
     
     if (fecha_inicio) {
@@ -128,8 +146,9 @@ export async function getAllOrdenesVenta(req, res) {
     }
 
     if (estado_verificacion) {
-      sql += ` AND ov.estado_verificacion = ?`;
-      params.push(estado_verificacion);
+      const estadosVerif = estado_verificacion.split(',');
+      sql += ` AND ov.estado_verificacion IN (${estadosVerif.map(() => '?').join(',')})`;
+      params.push(...estadosVerif);
     }
     
     sql += ` ORDER BY ov.fecha_emision DESC, ov.id_orden_venta DESC`;

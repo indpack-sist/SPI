@@ -1066,29 +1066,29 @@ function OrdenesVenta() {
         </div>
 
         {ordenesFiltradas.length > itemsPerPage && (
-          <div className="px-6 py-4 bg-carbon border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-1.5">
+          <div className="px-6 py-6 bg-carbon-mid border-t border-border flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-2">
               <button 
-                className="btn btn-sm btn-outline h-9 px-3 flex items-center gap-2 font-semibold"
+                className="btn btn-outline h-11 px-4 flex items-center gap-2 font-bold transition-all hover:border-primary hover:text-primary active:scale-95"
                 onClick={goToPrevPage}
                 disabled={currentPage === 1}
               >
-                <ChevronLeft size={16} />
-                <span>Anterior</span>
+                <ChevronLeft size={18} />
+                <span className="hidden sm:inline">ANTERIOR</span>
               </button>
               
-              <div className="flex items-center gap-1 mx-2">
+              <div className="flex items-center gap-2 mx-2">
                 {getPageNumbers().map((num, idx) => (
                   num === '...' ? (
-                    <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-steel-light font-bold">...</span>
+                    <span key={`ellipsis-${idx}`} className="w-10 h-10 flex items-center justify-center text-steel-light font-black">...</span>
                   ) : (
                     <button
                       key={`page-${num}`}
                       onClick={() => setCurrentPage(num)}
-                      className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-all duration-200 ${
+                      className={`w-11 h-11 flex items-center justify-center rounded text-sm font-black transition-all duration-200 border-2 ${
                         currentPage === num 
-                          ? 'bg-primary text-carbon shadow-lg shadow-primary/10' 
-                          : 'bg-transparent border border-steel text-mist hover:border-primary/50 hover:text-primary'
+                          ? 'bg-primary border-primary text-black shadow-[0_0_15px_rgba(232,184,75,0.3)] scale-110 z-10' 
+                          : 'bg-carbon border-steel text-mist hover:border-primary/60 hover:text-primary hover:bg-carbon-light'
                       }`}
                     >
                       {num}
@@ -1098,17 +1098,17 @@ function OrdenesVenta() {
               </div>
 
               <button 
-                className="btn btn-sm btn-outline h-9 px-3 flex items-center gap-2 font-semibold"
+                className="btn btn-outline h-11 px-4 flex items-center gap-2 font-bold transition-all hover:border-primary hover:text-primary active:scale-95"
                 onClick={goToNextPage}
                 disabled={currentPage === totalPages}
               >
-                <span>Siguiente</span>
-                <ChevronRight size={16} />
+                <span className="hidden sm:inline">SIGUIENTE</span>
+                <ChevronRight size={18} />
               </button>
             </div>
 
-            <div className="flex items-center gap-3 px-4 py-1.5 bg-carbon-mid border border-border rounded shadow-inner">
-              <span className="text-[0.65rem] font-bold text-wire uppercase tracking-wider">Ir a página</span>
+            <div className="flex items-center gap-4 px-5 py-2 bg-carbon border border-steel rounded shadow-2xl">
+              <span className="text-[0.7rem] font-black text-wire uppercase tracking-widest">Saltar a</span>
               <div className="relative flex items-center">
                 <input 
                   type="number" 
@@ -1125,18 +1125,11 @@ function OrdenesVenta() {
                       setInputPage(currentPage.toString());
                     }
                   }}
-                  className="w-12 h-7 text-center text-xs font-bold text-primary bg-carbon border border-steel rounded focus:border-primary transition-all appearance-none outline-none"
+                  className="w-16 h-9 text-center text-base font-black text-primary bg-carbon-mid border-2 border-steel rounded focus:border-primary transition-all appearance-none outline-none"
                   style={{ MozAppearance: 'textfield' }}
                 />
-                <style dangerouslySetInnerHTML={{__html: `
-                  input::-webkit-outer-spin-button,
-                  input::-webkit-inner-spin-button {
-                    -webkit-appearance: none;
-                    margin: 0;
-                  }
-                `}} />
               </div>
-              <span className="text-[0.65rem] font-bold text-steel-light uppercase">de {totalPages}</span>
+              <span className="text-[0.7rem] font-black text-steel-light uppercase tracking-widest">de {totalPages} páginas</span>
             </div>
           </div>
         )}

@@ -315,19 +315,36 @@ function OrdenesVenta() {
 
   // Calcular estadísticas dinámicamente basadas en los filtros actuales
   const estadisticas = ordenesFiltradas.reduce((acc, orden) => {
+    // Regla de Exclusión Global: No sumar Canceladas, Pendientes de Verificación ni Rechazadas
+    if (
+      orden.estado === 'Cancelada' || 
+      orden.estado_verificacion === 'Pendiente' || 
+      orden.estado_verificacion === 'Rechazada'
+    ) {
+      return acc;
+    }
+
     const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(String(orden.tipo_impuesto || '').toUpperCase().trim());
     const monto = esSinImpuesto ? parseFloat(orden.subtotal || 0) : parseFloat(orden.total || 0);
     const tipo = String(orden.tipo_comprobante || '').trim();
 
-    if (tipo === 'Factura' && orden.numero_comprobante_sunat) {
+    if (tipo.includes('Factura')) {
       if (orden.moneda === 'PEN') acc.facturas_pen += monto;
       if (orden.moneda === 'USD') acc.facturas_usd += monto;
-    } else if (tipo === 'Nota de Venta') {
+    } else if (tipo.includes('Nota de Venta')) {
       if (orden.moneda === 'PEN') acc.notas_venta_pen += monto;
       if (orden.moneda === 'USD') acc.notas_venta_usd += monto;
+    } else if (tipo === 'Sin Comprobante' || tipo === '') {
+      if (orden.moneda === 'PEN') acc.sin_comprobante_pen += monto;
+      if (orden.moneda === 'USD') acc.sin_comprobante_usd += monto;
     }
+    
     return acc;
-  }, { facturas_pen: 0, facturas_usd: 0, notas_venta_pen: 0, notas_venta_usd: 0 });
+  }, { 
+    facturas_pen: 0, facturas_usd: 0, 
+    notas_venta_pen: 0, notas_venta_usd: 0,
+    sin_comprobante_pen: 0, sin_comprobante_usd: 0 
+  });
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -651,7 +668,7 @@ function OrdenesVenta() {
         {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
         {estadisticas && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
             <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
               <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
@@ -667,6 +684,14 @@ function OrdenesVenta() {
             <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
               <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
+            </div>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
+              <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
+            </div>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
+              <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
             </div>
           </div>
         )}

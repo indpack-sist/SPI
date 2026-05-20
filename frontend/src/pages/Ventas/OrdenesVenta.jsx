@@ -63,59 +63,73 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
 
   const getLabelText = () => {
     if (selectedValues.length === 0) return 'Todos';
-    if (selectedValues.length === 1) return selectedValues[0];
+    if (selectedValues.length === 1) {
+      const option = options.find(o => o.value === selectedValues[0]);
+      return option ? option.label : selectedValues[0];
+    }
     return `${selectedValues.length} seleccionados`;
   };
 
   return (
     <div className="form-group mb-0" ref={dropdownRef}>
-      <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">{label}</label>
+      <label className="text-[10px] font-bold text-gray-500 uppercase mb-1.5 block tracking-wider">{label}</label>
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between w-full h-9 px-3 text-sm bg-white border rounded-md focus:outline-none focus:ring-1 focus:ring-primary ${
-            selectedValues.length > 0 ? 'border-primary text-primary font-medium' : 'border-gray-300 text-gray-700'
+          className={`flex items-center justify-between w-full h-10 px-3 text-sm transition-all duration-200 border rounded-lg focus:outline-none shadow-sm ${
+            selectedValues.length > 0 
+              ? 'border-primary bg-blue-50/30 text-primary font-semibold ring-1 ring-primary/20' 
+              : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50'
           }`}
         >
           <span className="truncate mr-2">{getLabelText()}</span>
-          <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} text-gray-400`} />
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto p-1">
-            {options.map((opt) => {
-              const isSelected = selectedValues.includes(opt.value);
-              return (
-                <label
-                  key={opt.value}
-                  className={`flex items-center px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-50 transition-colors ${
-                    isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                  }`}
-                >
-                  <div className={`w-4 h-4 border rounded mr-2 flex items-center justify-center transition-colors ${
-                    isSelected ? 'bg-primary border-primary' : 'border-gray-300 bg-white'
-                  }`}>
-                    {isSelected && <Check size={12} className="text-white" />}
-                  </div>
-                  <span className="text-sm select-none">{opt.label}</span>
-                  <input
-                    type="checkbox"
-                    className="hidden"
-                    checked={isSelected}
-                    onChange={() => handleToggle(opt.value)}
-                  />
-                </label>
-              );
-            })}
+          <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200 origin-top">
+            <div className="max-h-64 overflow-y-auto p-1.5">
+              {options.map((opt) => {
+                const isSelected = selectedValues.includes(opt.value);
+                return (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center group px-3 py-2.5 mb-0.5 rounded-lg cursor-pointer transition-all ${
+                      isSelected ? 'bg-primary/5 text-primary' : 'hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <div className={`relative flex items-center justify-center w-5 h-5 border-2 rounded-md transition-all duration-200 mr-3 ${
+                      isSelected 
+                        ? 'bg-primary border-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.3)]' 
+                        : 'bg-white border-gray-300 group-hover:border-primary/50'
+                    }`}>
+                      {isSelected && <Check size={14} className="text-white stroke-[3px]" />}
+                    </div>
+                    <span className={`text-sm select-none transition-all ${isSelected ? 'font-semibold' : 'font-medium'}`}>
+                      {opt.label}
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={isSelected}
+                      onChange={() => handleToggle(opt.value)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
             {selectedValues.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                className="w-full mt-1 text-center py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-md font-medium border-t border-gray-100"
-              >
-                Limpiar selección
-              </button>
+              <div className="p-1.5 bg-gray-50/80 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => onChange([])}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-red-500 hover:bg-red-50 rounded-lg font-bold transition-colors"
+                >
+                  <RefreshCcw size={12} />
+                  Limpiar selección
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -1057,28 +1071,29 @@ function OrdenesVenta() {
         </div>
 
         {ordenesFiltradas.length > itemsPerPage && (
-          <div className="card-footer flex flex-wrap items-center justify-between gap-4 bg-gray-50 border-t border-gray-200">
-            <div className="flex items-center gap-2">
+          <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
               <button 
-                className="btn btn-sm btn-outline flex items-center gap-1 bg-white hover:bg-gray-50"
+                className="h-9 px-3 flex items-center gap-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-primary hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-600 disabled:hover:border-gray-300 transition-all duration-200 shadow-sm"
                 onClick={goToPrevPage}
                 disabled={currentPage === 1}
               >
-                <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
+                <ChevronLeft size={16} />
+                <span>Anterior</span>
               </button>
               
               <div className="flex items-center gap-1 mx-2">
                 {getPageNumbers().map((num, idx) => (
                   num === '...' ? (
-                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-500 font-medium">...</span>
+                    <span key={`ellipsis-${idx}`} className="w-9 h-9 flex items-center justify-center text-gray-400 font-bold">...</span>
                   ) : (
                     <button
                       key={`page-${num}`}
                       onClick={() => setCurrentPage(num)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium transition-colors ${
+                      className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
                         currentPage === num 
-                          ? 'bg-primary text-white shadow-sm' 
-                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                          ? 'bg-primary text-white shadow-md shadow-primary/20 scale-105' 
+                          : 'bg-white border border-gray-300 text-gray-600 hover:border-primary/50 hover:text-primary hover:bg-blue-50/30'
                       }`}
                     >
                       {num}
@@ -1088,35 +1103,45 @@ function OrdenesVenta() {
               </div>
 
               <button 
-                className="btn btn-sm btn-outline flex items-center gap-1 bg-white hover:bg-gray-50"
+                className="h-9 px-3 flex items-center gap-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-primary hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-600 disabled:hover:border-gray-300 transition-all duration-200 shadow-sm"
                 onClick={goToNextPage}
                 disabled={currentPage === totalPages}
               >
-                <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
+                <span>Siguiente</span>
+                <ChevronRight size={16} />
               </button>
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-gray-600 font-medium bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-              <span>Ir a pág:</span>
-              <input 
-                type="number" 
-                min="1" 
-                max={totalPages}
-                value={inputPage}
-                onChange={(e) => setInputPage(e.target.value)}
-                onKeyDown={handlePageJump}
-                onBlur={() => {
-                   const page = parseInt(inputPage);
-                   if (!isNaN(page) && page >= 1 && page <= totalPages) {
-                     setCurrentPage(page);
-                   } else {
-                     setInputPage(currentPage.toString());
-                   }
-                }}
-                className="w-16 h-7 text-center text-sm border-gray-300 rounded focus:ring-primary focus:border-primary"
-                style={{ padding: '0 4px', border: '1px solid #d1d5db', outline: 'none' }}
-              />
-              <span>de {totalPages}</span>
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-white border border-gray-200 rounded-xl shadow-sm">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ir a la página</span>
+              <div className="relative flex items-center">
+                <input 
+                  type="number" 
+                  min="1" 
+                  max={totalPages}
+                  value={inputPage}
+                  onChange={(e) => setInputPage(e.target.value)}
+                  onKeyDown={handlePageJump}
+                  onBlur={() => {
+                    const page = parseInt(inputPage);
+                    if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                      setCurrentPage(page);
+                    } else {
+                      setInputPage(currentPage.toString());
+                    }
+                  }}
+                  className="w-14 h-8 pl-2 pr-1 text-center text-sm font-bold text-primary bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all appearance-none"
+                  style={{ MozAppearance: 'textfield' }}
+                />
+                <style dangerouslySetInnerHTML={{__html: `
+                  input::-webkit-outer-spin-button,
+                  input::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                  }
+                `}} />
+              </div>
+              <span className="text-xs font-bold text-gray-400">de {totalPages}</span>
             </div>
           </div>
         )}

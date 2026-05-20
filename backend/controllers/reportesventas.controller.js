@@ -379,6 +379,7 @@ export const getReporteProductoDespachos = async (req, res) => {
 
         const sql = `
             SELECT 
+                ov.id_orden_venta,
                 ov.numero_orden,
                 ov.fecha_emision,
                 ov.moneda,

@@ -186,7 +186,6 @@ function OrdenesVenta() {
       
       const filtros = {};
       if (filtroEstado) filtros.estado = filtroEstado;
-      if (filtroPrioridad) filtros.prioridad = filtroPrioridad;
       if (filtroVerificacion) filtros.estado_verificacion = filtroVerificacion;
       if (filtroTipoComprobante) filtros.tipo_comprobante = filtroTipoComprobante;
       if (fechaInicio) filtros.fecha_inicio = fechaInicio;

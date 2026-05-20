@@ -148,7 +148,8 @@ function OrdenesVenta() {
   const [ordenes, setOrdenes] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isFiltering, setIsFiltering] = useState(false); // Nuevo estado para carga parcial
+  const [isFiltering, setIsFiltering] = useState(false);
+  const [mostrarFiltrosAvanzados, setMostrarFiltrosAvanzados] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
@@ -198,11 +199,10 @@ function OrdenesVenta() {
   }, [currentPage]);
 
   useEffect(() => {
-    cargarDatos(false); // false indica que no es la carga inicial
+    cargarDatos(false);
     cargarTCDesdeSession();
   }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, fechaInicio, fechaFin]);
 
-  // Carga inicial
   useEffect(() => {
     cargarDatos(true);
   }, []);
@@ -321,20 +321,11 @@ function OrdenesVenta() {
     );
   });
 
-  const montoTotalUSD = ordenes.reduce((sum, o) => {
-    if (o.moneda === 'USD') {
-      const esSinImpuesto = ['INAFECTO', 'EXONERADO'].includes(String(o.tipo_impuesto || '').toUpperCase().trim());
-      return sum + (esSinImpuesto ? parseFloat(o.subtotal || 0) : parseFloat(o.total || 0));
-    }
-    return sum;
-  }, 0);
-
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
 
-  // Seguridad: Si al filtrar la página actual queda fuera de rango, resetear a 1
   useEffect(() => {
     if (totalPages > 0 && currentPage > totalPages) {
       setCurrentPage(1);
@@ -380,46 +371,28 @@ function OrdenesVenta() {
     try {
       setDescargandoPDF(idOrden);
       setError(null);
-      
       const response = await ordenesVentaAPI.descargarPDF(idOrden);
-      
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
-      
       const link = document.createElement('a');
       link.href = url;
-      
       const clienteSanitizado = (cliente || 'CLIENTE')
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
         .replace(/[^a-zA-Z0-9]/g, "_")   
         .replace(/_+/g, "_")            
         .toUpperCase();
-
       const nroOrden = numeroOrden || idOrden;
       const nombreArchivo = `${clienteSanitizado}_${nroOrden}.pdf`;
-      
       link.setAttribute('download', nombreArchivo);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
       setSuccess('PDF descargado exitosamente');
       setTimeout(() => setSuccess(null), 3000);
-      
     } catch (err) {
-      console.error("Error original:", err);
-      if (err.response && err.response.data instanceof Blob) {
-        try {
-          const errorText = await err.response.data.text();
-          const errorJson = JSON.parse(errorText);
-          setError(errorJson.error || 'Error al generar el PDF');
-        } catch (e) {
-          setError('Ocurrió un error inesperado al descargar el archivo.');
-        }
-      } else {
-        setError(err.message || 'Error de conexión al descargar el PDF');
-      }
+      console.error(err);
+      setError('Error al descargar el PDF');
     } finally {
       setDescargandoPDF(null);
     }
@@ -433,10 +406,7 @@ function OrdenesVenta() {
   };
 
   const formatearNumero = (valor) => {
-    return new Intl.NumberFormat('en-US', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 3
-    }).format(valor);
+    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(valor);
   };
 
   const formatearMoneda = (valor, moneda) => {
@@ -517,29 +487,19 @@ function OrdenesVenta() {
       render: (value, row) => {
         const tipoRaw = row.tipo_comprobante || '';
         const esFactura = tipoRaw.toLowerCase().includes('factura');
-        const textoMostrar = tipoRaw || 'Sin Tipo';
         return (
           <div>
             <div className="flex items-center gap-1 mb-1.5">
               <span className={`badge badge-xs ${esFactura ? 'badge-success' : 'badge-info'}`}>
-                {textoMostrar}
+                {tipoRaw || 'Sin Tipo'}
               </span>
               {!esFactura && row.numero_comprobante && (
-                <span className="font-mono text-xs text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
+                <span className="font-mono text-xs text-mist bg-carbon-mid px-1.5 py-0.5 rounded border border-steel">
                   {row.numero_comprobante}
                 </span>
               )}
             </div>
-            <div className="flex flex-col gap-0.5">
-              <div className="text-xs text-muted">
-                Ord: <span className="font-mono text-gray-700 font-medium">{value}</span>
-              </div>
-              {row.numero_cotizacion && (
-                <div className="text-[10px] text-muted">
-                  Ref: <span className="font-mono">{row.numero_cotizacion}</span>
-                </div>
-              )}
-            </div>
+            <div className="text-xs text-muted">Ord: <span className="font-mono text-mist font-medium">{value}</span></div>
           </div>
         );
       }
@@ -548,52 +508,23 @@ function OrdenesVenta() {
       header: 'Fecha',
       accessor: 'fecha_emision',
       width: '110px',
-      render: (value, row) => (
-        <div>
-          <div className="font-medium text-gray-800">{formatearFechaVisual(value)}</div>
-          {row.fecha_entrega_estimada && (
-            <div className="text-[10px] text-muted mt-1 uppercase font-semibold">
-              Entrega: {formatearFechaVisual(row.fecha_entrega_estimada)}
-            </div>
-          )}
-        </div>
-      )
+      render: (value) => <div className="font-medium text-mist">{formatearFechaVisual(value)}</div>
     },
     {
       header: 'Cliente',
       accessor: 'cliente',
       render: (value, row) => (
         <div>
-          <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted">RUC: {row.ruc_cliente}</div>
+          <div className="font-medium text-mist">{value}</div>
+          <div className="text-xs text-wire">RUC: {row.ruc_cliente}</div>
         </div>
       )
     },
     {
-      header: 'Vendedores',
+      header: 'Vendedor',
       accessor: 'comercial',
-      width: '180px',
-      render: (value, row) => (
-        <div className="text-xs">
-          {row.comercial && (
-            <div className="flex items-center gap-1 mb-1">
-              <UserCheck size={12} className="text-primary" />
-              <span className="font-medium">Asignado:</span>
-              <span className="text-muted">{row.comercial}</span>
-            </div>
-          )}
-          {row.registrado_por && (
-            <div className="flex items-center gap-1">
-              <User size={12} className="text-muted" />
-              <span className="font-medium">Registró:</span>
-              <span className="text-muted">{row.registrado_por}</span>
-            </div>
-          )}
-          {!row.comercial && !row.registrado_por && (
-            <span className="text-muted">Sin asignar</span>
-          )}
-        </div>
-      )
+      width: '150px',
+      render: (value) => <div className="text-xs text-mist">{value || 'Sin asignar'}</div>
     },
     {
       header: 'Total / Pagado',
@@ -605,199 +536,80 @@ function OrdenesVenta() {
         const total = esSinImpuesto ? parseFloat(row.subtotal || 0) : parseFloat(value || 0);
         const pagado = parseFloat(row.monto_pagado || 0);
         const porcentaje = total > 0 ? (pagado / total) * 100 : 0;
-        const esUSD = row.moneda === 'USD';
-        const tcOrden = parseFloat(row.tipo_cambio || 1);
-        const conversionPEN = esUSD && mostrarConversion && tcOrden > 1 ? total * tcOrden : null;
 
         return (
           <div>
-            <div className="font-bold text-gray-800">{formatearMoneda(total, row.moneda)}</div>
-            <div className="text-xs text-muted">Pagado: {formatearMoneda(pagado, row.moneda)}</div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+            <div className="font-bold text-mist">{formatearMoneda(total, row.moneda)}</div>
+            <div className="text-[10px] text-wire">PAGADO: {formatearMoneda(pagado, row.moneda)}</div>
+            <div className="w-full bg-carbon-mid rounded-full h-1 mt-1 overflow-hidden">
               <div 
-                className={`h-1.5 rounded-full ${porcentaje >= 99.9 ? 'bg-success' : porcentaje > 0 ? 'bg-info' : 'bg-warning'}`}
+                className={`h-full ${porcentaje >= 99 ? 'bg-success' : porcentaje > 0 ? 'bg-primary' : 'bg-steel'}`}
                 style={{ width: `${porcentaje}%` }}
               ></div>
             </div>
-            {conversionPEN !== null && (
-              <div className="mt-1 px-2 py-0.5 rounded text-xs font-bold inline-block"
-                style={{ 
-                  background: 'rgba(59, 130, 246, 0.1)', 
-                  color: '#1e40af',
-                  border: '1px solid rgba(59, 130, 246, 0.3)'
-                }}>
-                <ArrowRightLeft size={10} className="inline mr-1" />
-                S/ {formatearNumero(conversionPEN, 3)}
-              </div>
-            )}
           </div>
         );
       }
     },
     {
-      header: 'Estado Pago',
+      header: 'Pago',
       accessor: 'estado_pago',
-      width: '120px',
-      align: 'center',
-      render: (value) => {
-        const config = getEstadoPagoConfig(value);
-        const Icono = config.icono;
-        return (
-          <span className={`badge ${config.clase}`}>
-            <Icono size={14} />
-            {value}
-          </span>
-        );
-      }
-    },
-    {
-      header: 'SUNAT',
-      accessor: 'facturado_sunat',
-      width: '90px',
-      align: 'center',
-      render: (value, row) => {
-        if (value === 1) {
-          return (
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="flex items-center gap-1 text-emerald-600 font-semibold text-xs">
-                <BadgeCheck size={15} className="text-emerald-600" />
-                Enviado
-              </span>
-              {row.numero_comprobante_sunat && (
-                <span className="font-mono text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                  {row.numero_comprobante_sunat}
-                </span>
-              )}
-            </div>
-          );
-        }
-        return (
-          <span className="flex items-center justify-center gap-1 text-amber-500 text-xs font-medium">
-            <Clock size={13} />
-            Pendiente
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Prioridad',
-      accessor: 'prioridad',
       width: '100px',
       align: 'center',
       render: (value) => {
-        const config = getPrioridadConfig(value);
-        return <span className={`badge ${config.clase}`}>{value}</span>;
+        const config = getEstadoPagoConfig(value);
+        return <span className={`badge ${config.clase} text-[10px]`}>{value}</span>;
       }
     },
     {
-      header: 'Estado',
+      header: 'Logística',
       accessor: 'estado',
-      width: '130px',
+      width: '120px',
       align: 'center',
       render: (value) => {
         const config = getEstadoConfig(value);
-        const Icono = config.icono;
-        return (
-          <span className={`badge ${config.clase}`}>
-            <Icono size={14} />
-            {config.texto}
-          </span>
-        );
+        return <span className={`badge ${config.clase} text-[10px]`}>{config.texto}</span>;
       }
     },
     {
       header: 'Acciones',
       accessor: 'id_orden_venta',
-      width: '140px',
+      width: '120px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-1 justify-center">
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={(e) => { e.stopPropagation(); handleNavegaDetalle(value); }}
-            title="Ver detalle"
-          >
-            <Eye size={14} />
-          </button>
-          <button
-            className="btn btn-sm btn-secondary"
-            onClick={(e) => { e.stopPropagation(); navigate(`/ventas/ordenes/${value}/editar`); }}
-            title="Editar orden"
-            disabled={row.estado_verificacion === 'Pendiente'}
-          >
-            <Edit size={14} />
-          </button>
-          <button
-            className="btn btn-sm btn-outline"
-            onClick={(e) => { e.stopPropagation(); handleDescargarPDF(value, row.numero_orden, row.cliente); }}
-            disabled={descargandoPDF === value}
-            title="Descargar PDF"
-          >
-            {descargandoPDF === value ? (
-              <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-t-transparent"></div>
-            ) : (
-              <Download size={14} />
-            )}
+          <button className="btn btn-xs btn-primary p-1.5" onClick={(e) => { e.stopPropagation(); handleNavegaDetalle(value); }} title="Ver"><Eye size={14} /></button>
+          <button className="btn btn-xs btn-outline p-1.5 border-steel" onClick={(e) => { e.stopPropagation(); navigate(`/ventas/ordenes/${value}/editar`); }} title="Editar" disabled={row.estado_verificacion === 'Pendiente'}><Edit size={14} /></button>
+          <button className="btn btn-xs btn-outline p-1.5 border-steel" onClick={(e) => { e.stopPropagation(); handleDescargarPDF(value, row.numero_orden, row.cliente); }} disabled={descargandoPDF === value} title="PDF">
+            {descargandoPDF === value ? <RefreshCcw size={14} className="animate-spin" /> : <Download size={14} />}
           </button>
         </div>
       )
     }
   ];
 
-  // if (loading) return <Loading message="Cargando órdenes de venta..." />; // <--- ELIMINADO PARA EVITAR F5
-
   return (
     <div className="p-4 md:p-6 page-ordenes-venta">
-      {/* INYECCIÓN DE ESTILOS PARA SOBRESCRIBIR LIBRERÍAS EXTERNAS */}
       <style dangerouslySetInnerHTML={{__html: `
-        .page-ordenes-venta .search-input, 
-        .page-ordenes-venta .form-input,
-        .page-ordenes-venta input {
-          background-color: var(--carbon-mid) !important;
-          border-color: var(--steel) !important;
-          color: var(--mist) !important;
-          font-family: inherit !important;
+        .page-ordenes-venta, .page-ordenes-venta .card { background-color: var(--carbon) !important; color: var(--mist) !important; }
+        .page-ordenes-venta .search-input, .page-ordenes-venta .form-input, .page-ordenes-venta input {
+          background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important;
         }
-        
-        .page-ordenes-venta .search-input:focus, 
-        .page-ordenes-venta input:focus {
-          border-color: var(--primary) !important;
-          box-shadow: 0 0 0 2px rgba(232, 184, 75, 0.1) !important;
+        .page-ordenes-venta button.pagination-btn {
+          background-color: var(--carbon-mid) !important; border: 2px solid var(--steel) !important; color: var(--mist) !important;
+          width: 48px !important; height: 48px !important; min-width: 48px !important; display: flex !important;
+          align-items: center !important; justify-content: center !important; border-radius: 8px !important;
+          font-weight: 800 !important; font-size: 1rem !important; cursor: pointer !important; transition: all 0.2s !important;
         }
-
-        .page-ordenes-venta .table-container {
-          background-color: var(--carbon) !important;
-          border: 1px solid var(--border) !important;
+        .page-ordenes-venta button.pagination-btn-active {
+          background-color: var(--primary) !important; border-color: var(--primary) !important; color: #000 !important;
+          box-shadow: 0 0 20px rgba(232, 184, 75, 0.4) !important; transform: scale(1.1) !important; z-index: 20 !important;
         }
-
-        /* Sobrescritura de la tabla de la librería */
-        .page-ordenes-venta table {
-          background-color: var(--carbon) !important;
+        .page-ordenes-venta button.pagination-btn:hover:not(.pagination-btn-active) {
+          border-color: var(--primary) !important; color: var(--primary) !important; background-color: var(--carbon-light) !important;
         }
-        
-        .page-ordenes-venta th {
-          background-color: var(--carbon-light) !important;
-          color: var(--wire) !important;
-          text-transform: uppercase !important;
-          font-size: 0.7rem !important;
-          letter-spacing: 0.05em !important;
-          border-bottom: 2px solid var(--steel) !important;
-        }
-
-        .page-ordenes-venta td {
-          border-bottom: 1px solid var(--border) !important;
-          color: var(--mist) !important;
-        }
-
-        .page-ordenes-venta tr:hover td {
-          background-color: rgba(255, 255, 255, 0.02) !important;
-        }
-
-        .page-ordenes-venta .badge {
-          font-family: 'Barlow Condensed', sans-serif !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.02em !important;
-        }
+        .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; overflow: hidden !important; }
+        .page-ordenes-venta .stat-card { min-height: 85px !important; padding: 1rem !important; border-radius: 8px !important; }
       `}} />
 
       {loading && <Loading message="Cargando órdenes de venta..." />}
@@ -805,387 +617,118 @@ function OrdenesVenta() {
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ShoppingCart size={32} className="text-primary" />
-              Órdenes de Venta
+            <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
+              <div className="p-2 bg-primary/10 rounded-lg"><ShoppingCart size={28} className="text-primary" /></div>
+              <span className="uppercase font-barlow text-white">Órdenes de Venta</span>
             </h1>
-            <p className="text-muted">Gestión de órdenes de venta y despachos</p>
+            <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            <button 
-              className="btn btn-outline"
-              onClick={() => navigate('/ventas/ordenes/verificacion')}
-            >
-              <Shield size={20} />
-              Verificar Órdenes
-            </button>
-            <button 
-              className="btn btn-primary flex-1 md:flex-none justify-center"
-              onClick={() => navigate('/ventas/ordenes/nueva')}
-            >
-              <Plus size={20} />
-              Nueva Orden
-            </button>
+            <button className="btn btn-outline border-steel text-mist font-bold text-xs tracking-wider" onClick={() => navigate('/ventas/ordenes/verificacion')}><Shield size={16} /> VERIFICACIÓN</button>
+            <button className="btn btn-primary font-black text-xs tracking-wider shadow-lg shadow-primary/20" onClick={() => navigate('/ventas/ordenes/nueva')}><Plus size={18} /> NUEVA ORDEN</button>
           </div>
         </div>
 
-      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="card mb-4 shadow-sm" style={{ 
-        borderLeft: tipoCambio ? '4px solid var(--accent, #ca8a04)' : '4px solid var(--border-color, #374151)'
-      }}>
-        <div className="card-body p-3">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg" style={{ 
-                background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.1))' : 'var(--bg-tertiary, #1f2937)'
-              }}>
-                <DollarSign size={20} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-muted)' }} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  Tipo de Cambio SBS (USD → PEN)
-                </p>
-                {tipoCambio ? (
-                  <div className="flex items-center gap-4 mt-1">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Compra: <strong className="text-base" style={{ color: 'var(--text-primary)' }}>S/ {tipoCambio.compra.toFixed(3)}</strong>
-                      </span>
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Venta: <strong className="text-base" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
-                      </span>
-                    </div>
-                    <div className="hidden md:flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <Calendar size={12} />
-                      <span>SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
-                      <span className="mx-1">·</span>
-                      <Clock size={12} />
-                      <span>{obtenerEdadTC()}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    <AlertTriangle size={14} />
-                    <span>No disponible — Presione "Actualizar TC" para consultar</span>
-                  </div>
-                )}
-              </div>
+        {estadisticas && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg">
+              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (PEN)</p>
+              <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
             </div>
-            <div className="flex items-center gap-2">
-              {tipoCambio && (
-                <button
-                  className={`btn btn-sm ${mostrarConversion ? 'btn-warning' : 'btn-outline'}`}
-                  onClick={() => setMostrarConversion(!mostrarConversion)}
-                  title={mostrarConversion ? 'Ocultar conversiones USD → PEN' : 'Mostrar conversiones USD → PEN'}
-                >
-                  <ArrowRightLeft size={14} />
-                  {mostrarConversion ? 'Ocultar PEN' : 'Ver en PEN'}
-                </button>
-              )}
-              <button
-                className="btn btn-sm btn-outline"
-                onClick={actualizarTipoCambio}
-                disabled={loadingTC}
-                title="Consulta el TC actual desde la SBS (consume 1 token)"
-              >
-                {loadingTC ? (
-                  <RefreshCcw size={14} className="animate-spin" />
-                ) : (
-                  <RefreshCcw size={14} />
-                )}
-                {loadingTC ? 'Consultando...' : 'Actualizar TC'}
-              </button>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg">
+              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (USD)</p>
+              <p className="text-xl font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
             </div>
-          </div>
-          {tipoCambio && (
-            <div className="flex md:hidden items-center gap-2 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-              <Calendar size={12} />
-              <span>SBS: {formatearFechaVisual(tipoCambio.fecha)}</span>
-              <span className="mx-1">·</span>
-              <Clock size={12} />
-              <span>{obtenerEdadTC()}</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
+              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (PEN)</p>
+              <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
             </div>
-          )}
-        </div>
-      </div>
-
-      {estadisticas && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* FACTURAS PEN */}
-          <div className="card bg-green-50 border-l-4 border-green-500">
-            <div className="card-body p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-green-800 uppercase tracking-wider mb-1">
-                  Facturas Emitidas (PEN)
-                </p>
-                <p className="text-2xl font-bold text-green-900">
-                  {formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}
-                </p>
-              </div>
-              <div className="bg-green-100 p-2 rounded-lg text-green-600">
-                <TrendingUp size={24} />
-              </div>
-            </div>
-          </div>
-
-          {/* FACTURAS USD */}
-          <div className="card border-l-4" style={{ backgroundColor: 'var(--accent-dim, rgba(234,179,8,0.05))', borderColor: 'var(--accent, #ca8a04)' }}>
-            <div className="card-body p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--accent, #ca8a04)' }}>
-                  Facturas Emitidas (USD)
-                </p>
-                <p className="text-2xl font-bold" style={{ color: 'var(--accent, #ca8a04)' }}>
-                  {formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--accent-dim, rgba(234,179,8,0.1))', color: 'var(--accent, #ca8a04)' }}>
-                <DollarSign size={24} />
-              </div>
-            </div>
-          </div>
-
-          {/* NOTAS VENTA PEN */}
-          <div className="card bg-blue-50 border-l-4 border-blue-500">
-            <div className="card-body p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider mb-1">
-                  Notas de Venta (PEN)
-                </p>
-                <p className="text-2xl font-bold text-blue-900">
-                  {formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}
-                </p>
-              </div>
-              <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
-                <FileText size={24} />
-              </div>
-            </div>
-          </div>
-
-          {/* NOTAS VENTA USD */}
-          <div className="card border-l-4" style={{ backgroundColor: 'rgba(59, 130, 246, 0.05)', borderColor: '#3b82f6' }}>
-            <div className="card-body p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#3b82f6' }}>
-                  Notas de Venta (USD)
-                </p>
-                <p className="text-2xl font-bold" style={{ color: '#3b82f6' }}>
-                  {formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
-                <DollarSign size={24} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="card mb-4 shadow-sm">
-        <div className="card-body">
-          {/* NIVEL 1: Búsqueda rápida y Fechas */}
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="search-input-wrapper flex-1">
-              <Search size={20} className="search-icon" />
-              <input
-                type="text"
-                className="form-input search-input"
-                placeholder="Buscar por N°, cliente, RUC..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
-            </div>
-
-            <div className="flex gap-4 items-center">
-              <div className="form-group mb-0 w-36">
-                <input 
-                  type="date" 
-                  className="form-input text-sm h-10" 
-                  value={fechaInicio}
-                  onChange={(e) => setFechaInicio(e.target.value)}
-                  placeholder="Desde"
-                  title="Fecha Emisión (Desde)"
-                />
-              </div>
-              <div className="form-group mb-0 w-36">
-                <input 
-                  type="date" 
-                  className="form-input text-sm h-10" 
-                  value={fechaFin}
-                  onChange={(e) => setFechaFin(e.target.value)}
-                  placeholder="Hasta"
-                  title="Fecha Emisión (Hasta)"
-                />
-              </div>
-              <button 
-                onClick={limpiarFiltros}
-                className="btn btn-outline text-red-500 border-red-200 hover:bg-red-50 hover:text-red-700 h-10 flex items-center gap-1 px-3"
-                title="Limpiar todos los filtros"
-              >
-                <X size={16} />
-                <span className="hidden sm:inline text-sm font-medium">Limpiar</span>
-              </button>
-            </div>
-          </div>
-
-          {/* NIVEL 2: Filtros Avanzados (Multi-select) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <FilterCheckboxGroup
-              label="Estado Logístico"
-              selectedValues={filtroEstado}
-              onChange={setFiltroEstado}
-              options={[
-                { label: 'En Espera', value: 'En Espera' },
-                { label: 'En Proceso', value: 'En Proceso' },
-                { label: 'Atendido por Producción', value: 'Atendido por Producción' },
-                { label: 'Despacho Parcial', value: 'Despacho Parcial' },
-                { label: 'Despachada', value: 'Despachada' },
-                { label: 'Entregada', value: 'Entregada' },
-                { label: 'Cancelada', value: 'Cancelada' }
-              ]}
-            />
-
-            <FilterCheckboxGroup
-              label="Estado Pago"
-              selectedValues={filtroEstadoPago}
-              onChange={setFiltroEstadoPago}
-              options={[
-                { label: 'Sin Pagar', value: 'Pendiente' },
-                { label: 'Pago Parcial', value: 'Parcial' },
-                { label: 'Pagado', value: 'Pagado' }
-              ]}
-            />
-
-            <FilterCheckboxGroup
-              label="Verificación"
-              selectedValues={filtroVerificacion}
-              onChange={setFiltroVerificacion}
-              options={[
-                { label: 'Aprobadas', value: 'Aprobada' },
-                { label: 'Pendientes', value: 'Pendiente' },
-                { label: 'Rechazadas', value: 'Rechazada' }
-              ]}
-            />
-
-            <FilterCheckboxGroup
-              label="Documento"
-              selectedValues={filtroTipoComprobante}
-              onChange={setFiltroTipoComprobante}
-              options={[
-                { label: 'Facturas', value: 'Factura' },
-                { label: 'Notas de Venta', value: 'Nota de Venta' },
-                { label: 'Sin Comprobante', value: 'Sin Comprobante' }
-              ]}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="card shadow-sm" ref={tablaRef}>
-        <div className="card-header">
-          <div className="flex items-center gap-2">
-            <h2 className="card-title">
-              Lista de Órdenes de Venta
-              <span className="badge badge-primary ml-2">{ordenesFiltradas.length}</span>
-            </h2>
-          </div>
-          <div className="text-sm text-muted">
-            Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
-          </div>
-        </div>
-        
-        <div className="card-body p-0 relative">
-          {/* Overlay de carga para filtros */}
-          {isFiltering && (
-            <div className="absolute inset-0 z-10 bg-carbon/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-300">
-              <div className="flex flex-col items-center gap-3 p-6 bg-carbon-light shadow-2xl rounded border border-steel">
-                <RefreshCcw size={28} className="animate-spin text-primary" />
-                <span className="text-[0.65rem] font-bold text-wire uppercase tracking-[0.2em]">Actualizando listado</span>
-              </div>
-            </div>
-          )}
-          
-          <div className="table-container">
-            <Table
-              columns={columns}
-              data={currentItems}
-              emptyMessage="No hay órdenes de venta registradas"
-              onRowClick={(row) => handleNavegaDetalle(row.id_orden_venta)}
-            />
-          </div>
-        </div>
-
-        {ordenesFiltradas.length > itemsPerPage && (
-          <div className="px-6 py-6 bg-carbon-mid border-t border-border flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <button 
-                className="btn btn-outline h-11 px-4 flex items-center gap-2 font-bold transition-all hover:border-primary hover:text-primary active:scale-95"
-                onClick={goToPrevPage}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft size={18} />
-                <span className="hidden sm:inline">ANTERIOR</span>
-              </button>
-              
-              <div className="flex items-center gap-2 mx-2">
-                {getPageNumbers().map((num, idx) => (
-                  num === '...' ? (
-                    <span key={`ellipsis-${idx}`} className="w-10 h-10 flex items-center justify-center text-steel-light font-black">...</span>
-                  ) : (
-                    <button
-                      key={`page-${num}`}
-                      onClick={() => setCurrentPage(num)}
-                      className={`w-11 h-11 flex items-center justify-center rounded text-sm font-black transition-all duration-200 border-2 ${
-                        currentPage === num 
-                          ? 'bg-primary border-primary text-black shadow-[0_0_15px_rgba(232,184,75,0.3)] scale-110 z-10' 
-                          : 'bg-carbon border-steel text-mist hover:border-primary/60 hover:text-primary hover:bg-carbon-light'
-                      }`}
-                    >
-                      {num}
-                    </button>
-                  )
-                ))}
-              </div>
-
-              <button 
-                className="btn btn-outline h-11 px-4 flex items-center gap-2 font-bold transition-all hover:border-primary hover:text-primary active:scale-95"
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
-              >
-                <span className="hidden sm:inline">SIGUIENTE</span>
-                <ChevronRight size={18} />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-4 px-5 py-2 bg-carbon border border-steel rounded shadow-2xl">
-              <span className="text-[0.7rem] font-black text-wire uppercase tracking-widest">Saltar a</span>
-              <div className="relative flex items-center">
-                <input 
-                  type="number" 
-                  min="1" 
-                  max={totalPages}
-                  value={inputPage}
-                  onChange={(e) => setInputPage(e.target.value)}
-                  onKeyDown={handlePageJump}
-                  onBlur={() => {
-                    const page = parseInt(inputPage);
-                    if (!isNaN(page) && page >= 1 && page <= totalPages) {
-                      setCurrentPage(page);
-                    } else {
-                      setInputPage(currentPage.toString());
-                    }
-                  }}
-                  className="w-16 h-9 text-center text-base font-black text-primary bg-carbon-mid border-2 border-steel rounded focus:border-primary transition-all appearance-none outline-none"
-                  style={{ MozAppearance: 'textfield' }}
-                />
-              </div>
-              <span className="text-[0.7rem] font-black text-steel-light uppercase tracking-widest">de {totalPages} páginas</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
+              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (USD)</p>
+              <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
             </div>
           </div>
         )}
-      </div>
+
+        <div className="card mb-4 bg-carbon-mid border border-steel/30 shadow-xl">
+          <div className="card-body p-4">
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+                <input type="text" className="form-input w-full pl-10 h-11" placeholder="Buscar por N°, cliente, RUC..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              </div>
+              <div className="flex gap-2">
+                <input type="date" className="form-input text-xs h-11 w-36" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+                <input type="date" className="form-input text-xs h-11 w-36" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+                <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest transition-all ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline border-steel'}`}>
+                  <Filter size={16} /> {mostrarFiltrosAvanzados ? 'CERRAR' : 'MÁS FILTROS'}
+                </button>
+                <button onClick={limpiarFiltros} className="btn btn-outline border-steel text-danger hover:bg-danger/10 h-11 px-3"><X size={18} /></button>
+              </div>
+            </div>
+
+            {mostrarFiltrosAvanzados && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-steel/20 animate-in slide-in-from-top-2 duration-300">
+                <FilterCheckboxGroup label="Estado Logístico" selectedValues={filtroEstado} onChange={setFiltroEstado} options={[
+                  { label: 'En Espera', value: 'En Espera' }, { label: 'En Proceso', value: 'En Proceso' }, { label: 'Atendido por Producción', value: 'Atendido por Producción' }, { label: 'Despacho Parcial', value: 'Despacho Parcial' }, { label: 'Despachada', value: 'Despachada' }, { label: 'Entregada', value: 'Entregada' }, { label: 'Cancelada', value: 'Cancelada' }
+                ]} />
+                <FilterCheckboxGroup label="Estado Pago" selectedValues={filtroEstadoPago} onChange={setFiltroEstadoPago} options={[
+                  { label: 'Sin Pagar', value: 'Pendiente' }, { label: 'Pago Parcial', value: 'Parcial' }, { label: 'Pagado', value: 'Pagado' }
+                ]} />
+                <FilterCheckboxGroup label="Verificación" selectedValues={filtroVerificacion} onChange={setFiltroVerificacion} options={[
+                  { label: 'Aprobadas', value: 'Aprobada' }, { label: 'Pendientes', value: 'Pendiente' }, { label: 'Rechazadas', value: 'Rechazada' }
+                ]} />
+                <FilterCheckboxGroup label="Documento" selectedValues={filtroTipoComprobante} onChange={setFiltroTipoComprobante} options={[
+                  { label: 'Facturas', value: 'Factura' }, { label: 'Notas de Venta', value: 'Nota de Venta' }, { label: 'Sin Comprobante', value: 'Sin Comprobante' }
+                ]} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card shadow-2xl relative" ref={tablaRef}>
+          <div className="card-header flex items-center justify-between border-b border-steel/20">
+            <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{ordenesFiltradas.length}</span></h2>
+            <div className="text-[0.6rem] font-bold text-wire uppercase tracking-widest">Mostrando {currentItems.length} registros</div>
+          </div>
+          
+          <div className="card-body p-0 relative">
+            {isFiltering && (
+              <div className="absolute inset-0 z-30 bg-carbon/80 backdrop-blur-[4px] flex items-center justify-center transition-all duration-300">
+                <div className="flex flex-col items-center gap-3 p-8 bg-carbon-light shadow-2xl rounded-xl border border-steel">
+                  <RefreshCcw size={32} className="animate-spin text-primary" />
+                  <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.3em]">Procesando</span>
+                </div>
+              </div>
+            )}
+            <div className="table-container">
+              <Table columns={columns} data={currentItems} emptyMessage="No hay registros con los filtros aplicados" onRowClick={(row) => handleNavegaDetalle(row.id_orden_venta)} />
+            </div>
+          </div>
+
+          {ordenesFiltradas.length > itemsPerPage && (
+            <div className="px-6 py-6 bg-carbon-mid border-t border-steel/20 flex flex-col lg:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-3">
+                <button className="btn btn-outline border-steel h-12 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all" onClick={goToPrevPage} disabled={currentPage === 1}><ChevronLeft size={20} /> ANTERIOR</button>
+                <div className="flex items-center gap-2 mx-2">
+                  {getPageNumbers().map((num, idx) => (
+                    num === '...' ? <span key={`ell-${idx}`} className="w-10 h-10 flex items-center justify-center text-steel font-black">...</span> :
+                    <button key={`pg-${num}`} onClick={() => setCurrentPage(num)} className={`pagination-btn ${currentPage === num ? 'pagination-btn-active' : ''}`}>{num}</button>
+                  ))}
+                </div>
+                <button className="btn btn-outline border-steel h-12 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all" onClick={goToNextPage} disabled={currentPage === totalPages}>SIGUIENTE <ChevronRight size={20} /></button>
+              </div>
+              <div className="flex items-center gap-4 px-6 py-2.5 bg-carbon border border-steel rounded-lg shadow-inner">
+                <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em]">Página</span>
+                <input type="number" min="1" max={totalPages} value={inputPage} onChange={(e) => setInputPage(e.target.value)} onKeyDown={handlePageJump} onBlur={() => { const p = parseInt(inputPage); if (p >= 1 && p <= totalPages) setCurrentPage(p); else setInputPage(currentPage.toString()); }} className="w-16 h-10 text-center text-base font-black text-primary bg-carbon-mid border-2 border-steel rounded focus:border-primary outline-none transition-all" />
+                <span className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em]">de {totalPages}</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

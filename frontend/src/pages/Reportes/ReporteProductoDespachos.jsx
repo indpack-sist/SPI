@@ -230,11 +230,11 @@ const ReporteProductoDespachos = () => {
                             <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
                                 Producto a consultar
                             </label>
-                            <div className="relative flex items-center">
-                                <Search size={18} className="absolute left-3 text-wire z-10" />
+                            <div className="relative">
+                                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire z-10" />
                                 <input
                                     type="text"
-                                    className="form-input pl-10 w-full flex items-center"
+                                    className="form-input pl-10 w-full"
                                     placeholder="Buscar por código o nombre..."
                                     value={busquedaProducto}
                                     onChange={(e) => {
@@ -247,26 +247,28 @@ const ReporteProductoDespachos = () => {
                                     onFocus={() => setMostrarDropdown(true)}
                                 />
                                 {mostrarDropdown && busquedaProducto && (
-                                    <ul className="absolute z-50 top-full mt-1 w-full dropdown-menu shadow-xl max-h-60 rounded-md py-1 text-base overflow-auto sm:text-sm">
-                                        {productosFiltrados.length > 0 ? (
-                                            productosFiltrados.map((producto) => (
-                                                <li
-                                                    key={producto.id_producto}
-                                                    className="cursor-pointer select-none relative py-2 pl-3 pr-9 dropdown-item transition-colors"
-                                                    onClick={() => handleSelectProducto(producto)}
-                                                >
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-mist">{producto.nombre}</span>
-                                                        <span className="text-xs text-primary font-mono mt-0.5">{producto.codigo}</span>
-                                                    </div>
+                                    <div className="absolute z-50 left-0 right-0 top-full mt-1 dropdown-menu shadow-2xl rounded-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                        <ul className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                                            {productosFiltrados.length > 0 ? (
+                                                productosFiltrados.map((producto) => (
+                                                    <li
+                                                        key={producto.id_producto}
+                                                        className="cursor-pointer select-none relative py-2.5 px-4 dropdown-item rounded-md transition-colors"
+                                                        onClick={() => handleSelectProducto(producto)}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-mist text-sm">{producto.nombre}</span>
+                                                            <span className="text-[10px] text-primary font-black uppercase tracking-widest mt-0.5">{producto.codigo}</span>
+                                                        </div>
+                                                    </li>
+                                                ))
+                                            ) : (
+                                                <li className="cursor-default select-none relative py-4 px-4 text-wire text-[10px] font-black uppercase tracking-[0.2em] text-center bg-carbon/50">
+                                                    No se encontraron productos
                                                 </li>
-                                            ))
-                                        ) : (
-                                            <li className="cursor-default select-none relative py-3 px-4 text-wire text-sm font-bold uppercase tracking-widest">
-                                                No se encontraron productos
-                                            </li>
-                                        )}
-                                    </ul>
+                                            )}
+                                        </ul>
+                                    </div>
                                 )}
                             </div>
                         </div>

@@ -55,7 +55,7 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
   }, []);
 
   const handleToggle = (e, value) => {
-    e.stopPropagation(); // Evitar que el dropdown se cierre o haga cosas raras
+    e.stopPropagation();
     const newValues = selectedValues.includes(value)
       ? selectedValues.filter(v => v !== value)
       : [...selectedValues, value];
@@ -73,44 +73,50 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
 
   return (
     <div className="form-group mb-0" ref={dropdownRef}>
-      <label className="text-[10px] font-bold text-gray-500 uppercase mb-1.5 block tracking-wider">{label}</label>
+      <label className="form-label mb-1.5" style={{ fontSize: '0.65rem', color: 'var(--wire)' }}>{label}</label>
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between w-full h-10 px-3 text-sm transition-all border rounded-lg focus:outline-none ${
+          className={`flex items-center justify-between w-full h-10 px-3 text-sm transition-all border rounded shadow-inner ${
             selectedValues.length > 0 
-              ? 'border-primary bg-blue-50/20 text-primary font-bold shadow-sm' 
-              : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 shadow-sm'
+              ? 'border-primary bg-primary/10 text-primary font-bold' 
+              : 'border-steel bg-carbon-mid text-mist hover:border-wire'
           }`}
+          style={{ 
+            backgroundColor: selectedValues.length > 0 ? 'rgba(232, 184, 75, 0.1)' : 'var(--carbon-mid)',
+            borderColor: selectedValues.length > 0 ? 'var(--primary)' : 'var(--steel)',
+            color: selectedValues.length > 0 ? 'var(--primary)' : 'var(--mist)'
+          }}
         >
-          <span className="truncate mr-2">{getLabelText()}</span>
-          <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${selectedValues.length > 0 ? 'text-primary' : 'text-gray-400'}`} />
+          <span className="truncate mr-2 font-medium">{getLabelText()}</span>
+          <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${selectedValues.length > 0 ? 'text-primary' : 'text-wire'}`} />
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-[200px]">
-            <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+          <div className="absolute z-50 w-full mt-2 bg-carbon-light border border-steel rounded shadow-xl overflow-hidden min-w-[220px]"
+               style={{ backgroundColor: 'var(--carbon-light)', borderColor: 'var(--steel)' }}>
+            <div className="max-h-64 overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
               {options.map((opt) => {
                 const isSelected = selectedValues.includes(opt.value);
                 return (
                   <div
                     key={opt.value}
                     onClick={(e) => handleToggle(e, opt.value)}
-                    className={`flex items-center px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                      isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 text-gray-700'
+                    className={`flex items-center px-3 py-2.5 rounded cursor-pointer transition-colors ${
+                      isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-steel/30 text-mist'
                     }`}
                   >
-                    <div className="relative flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {}} // Manejado por el div superior
-                        className="w-5 h-5 rounded border-2 border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all checked:bg-primary checked:border-primary"
-                        style={{ appearance: 'checkbox', WebkitAppearance: 'checkbox' }}
-                      />
+                    <div className="flex items-center justify-center mr-3">
+                      <div className={`w-5 h-5 border-2 rounded flex items-center justify-center transition-all ${
+                        isSelected 
+                          ? 'bg-primary border-primary shadow-[0_0_10px_rgba(232,184,75,0.3)]' 
+                          : 'bg-carbon border-steel'
+                      }`}>
+                        {isSelected && <Check size={14} className="text-carbon stroke-[4px]" />}
+                      </div>
                     </div>
-                    <span className={`ml-3 text-sm select-none ${isSelected ? 'font-bold' : 'font-medium'}`}>
+                    <span className={`text-sm select-none ${isSelected ? 'font-bold' : 'font-medium'}`}>
                       {opt.label}
                     </span>
                   </div>
@@ -118,13 +124,13 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
               })}
             </div>
             {selectedValues.length > 0 && (
-              <div className="p-2 bg-gray-50 border-t border-gray-100">
+              <div className="p-1 bg-carbon border-t border-steel">
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onChange([]); }}
-                  className="w-full py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 text-[0.7rem] uppercase tracking-wider text-danger hover:bg-danger/10 rounded font-bold transition-colors flex items-center justify-center gap-2"
                 >
-                  <RefreshCcw size={14} />
+                  <RefreshCcw size={12} />
                   Limpiar selección
                 </button>
               </div>
@@ -327,6 +333,13 @@ function OrdenesVenta() {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
+
+  // Seguridad: Si al filtrar la página actual queda fuera de rango, resetear a 1
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
 
   const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
@@ -1034,10 +1047,10 @@ function OrdenesVenta() {
         <div className="card-body p-0 relative">
           {/* Overlay de carga para filtros */}
           {isFiltering && (
-            <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[1px] flex items-center justify-center transition-all duration-300">
-              <div className="flex flex-col items-center gap-3 p-5 bg-white shadow-xl rounded-2xl border border-gray-100">
-                <RefreshCcw size={24} className="animate-spin text-primary" />
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Actualizando lista...</span>
+            <div className="absolute inset-0 z-10 bg-carbon/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-300">
+              <div className="flex flex-col items-center gap-3 p-6 bg-carbon-light shadow-2xl rounded border border-steel">
+                <RefreshCcw size={28} className="animate-spin text-primary" />
+                <span className="text-[0.65rem] font-bold text-wire uppercase tracking-[0.2em]">Actualizando listado</span>
               </div>
             </div>
           )}
@@ -1053,10 +1066,10 @@ function OrdenesVenta() {
         </div>
 
         {ordenesFiltradas.length > itemsPerPage && (
-          <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="px-6 py-4 bg-carbon border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-1.5">
               <button 
-                className="h-9 px-3 flex items-center gap-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-primary hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-600 disabled:hover:border-gray-300 transition-all duration-200 shadow-sm"
+                className="btn btn-sm btn-outline h-9 px-3 flex items-center gap-2 font-semibold"
                 onClick={goToPrevPage}
                 disabled={currentPage === 1}
               >
@@ -1067,15 +1080,15 @@ function OrdenesVenta() {
               <div className="flex items-center gap-1 mx-2">
                 {getPageNumbers().map((num, idx) => (
                   num === '...' ? (
-                    <span key={`ellipsis-${idx}`} className="w-9 h-9 flex items-center justify-center text-gray-400 font-bold">...</span>
+                    <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-steel-light font-bold">...</span>
                   ) : (
                     <button
                       key={`page-${num}`}
                       onClick={() => setCurrentPage(num)}
-                      className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ${
+                      className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-all duration-200 ${
                         currentPage === num 
-                          ? 'bg-primary text-white shadow-md shadow-primary/20 scale-105' 
-                          : 'bg-white border border-gray-300 text-gray-600 hover:border-primary/50 hover:text-primary hover:bg-blue-50/30'
+                          ? 'bg-primary text-carbon shadow-lg shadow-primary/10' 
+                          : 'bg-transparent border border-steel text-mist hover:border-primary/50 hover:text-primary'
                       }`}
                     >
                       {num}
@@ -1085,7 +1098,7 @@ function OrdenesVenta() {
               </div>
 
               <button 
-                className="h-9 px-3 flex items-center gap-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-primary hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-600 disabled:hover:border-gray-300 transition-all duration-200 shadow-sm"
+                className="btn btn-sm btn-outline h-9 px-3 flex items-center gap-2 font-semibold"
                 onClick={goToNextPage}
                 disabled={currentPage === totalPages}
               >
@@ -1094,8 +1107,8 @@ function OrdenesVenta() {
               </button>
             </div>
 
-            <div className="flex items-center gap-3 px-4 py-1.5 bg-white border border-gray-200 rounded-xl shadow-sm">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ir a la página</span>
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-carbon-mid border border-border rounded shadow-inner">
+              <span className="text-[0.65rem] font-bold text-wire uppercase tracking-wider">Ir a página</span>
               <div className="relative flex items-center">
                 <input 
                   type="number" 
@@ -1112,7 +1125,7 @@ function OrdenesVenta() {
                       setInputPage(currentPage.toString());
                     }
                   }}
-                  className="w-14 h-8 pl-2 pr-1 text-center text-sm font-bold text-primary bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all appearance-none"
+                  className="w-12 h-7 text-center text-xs font-bold text-primary bg-carbon border border-steel rounded focus:border-primary transition-all appearance-none outline-none"
                   style={{ MozAppearance: 'textfield' }}
                 />
                 <style dangerouslySetInnerHTML={{__html: `
@@ -1123,7 +1136,7 @@ function OrdenesVenta() {
                   }
                 `}} />
               </div>
-              <span className="text-xs font-bold text-gray-400">de {totalPages}</span>
+              <span className="text-[0.65rem] font-bold text-steel-light uppercase">de {totalPages}</span>
             </div>
           </div>
         )}

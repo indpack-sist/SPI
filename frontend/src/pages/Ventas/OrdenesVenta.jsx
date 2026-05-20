@@ -623,9 +623,19 @@ function OrdenesVenta() {
             </h1>
             <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
           </div>
-          <div className="flex gap-2 w-full md:w-auto">
-            <button className="btn btn-outline border-steel text-mist font-bold text-xs tracking-wider" onClick={() => navigate('/ventas/ordenes/verificacion')}><Shield size={16} /> VERIFICACIÓN</button>
-            <button className="btn btn-primary font-black text-xs tracking-wider shadow-lg shadow-primary/20" onClick={() => navigate('/ventas/ordenes/nueva')}><Plus size={18} /> NUEVA ORDEN</button>
+          <div className="flex gap-3 w-full md:w-auto">
+            <button 
+              className="btn btn-outline border-steel text-mist font-black text-sm tracking-widest h-12 px-6 shadow-xl" 
+              onClick={() => navigate('/ventas/ordenes/verificacion')}
+            >
+              <Shield size={20} /> VERIFICACIÓN
+            </button>
+            <button 
+              className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 active:scale-95 transition-all" 
+              onClick={() => navigate('/ventas/ordenes/nueva')}
+            >
+              <Plus size={22} /> NUEVA ORDEN
+            </button>
           </div>
         </div>
 
@@ -710,7 +720,7 @@ function OrdenesVenta() {
           </div>
 
           {ordenesFiltradas.length > itemsPerPage && (
-            <div className="mt-12 px-6 py-10 bg-carbon-mid border-t border-steel/20 flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="mt-20 px-6 py-10 bg-carbon-mid border-t border-steel/30 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] relative z-20">
               <div className="flex items-center gap-3">
                 <button className="btn btn-outline border-steel h-12 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all" onClick={goToPrevPage} disabled={currentPage === 1}><ChevronLeft size={20} /> ANTERIOR</button>
                 <div className="flex items-center gap-2 mx-2">

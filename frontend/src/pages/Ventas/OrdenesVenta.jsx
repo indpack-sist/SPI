@@ -146,7 +146,6 @@ function OrdenesVenta() {
   const navigate = useNavigate();
   
   const [ordenes, setOrdenes] = useState([]);
-  const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isFiltering, setIsFiltering] = useState(false);
   const [mostrarFiltrosAvanzados, setMostrarFiltrosAvanzados] = useState(false);

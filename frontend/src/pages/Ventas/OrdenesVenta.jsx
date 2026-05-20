@@ -739,31 +739,30 @@ function OrdenesVenta() {
       
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          {/* ... resto del header ... */}
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShoppingCart size={32} className="text-primary" />
-            Órdenes de Venta
-          </h1>
-          <p className="text-muted">Gestión de órdenes de venta y despachos</p>
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ShoppingCart size={32} className="text-primary" />
+              Órdenes de Venta
+            </h1>
+            <p className="text-muted">Gestión de órdenes de venta y despachos</p>
+          </div>
+          <div className="flex gap-2 w-full md:w-auto">
+            <button 
+              className="btn btn-outline"
+              onClick={() => navigate('/ventas/ordenes/verificacion')}
+            >
+              <Shield size={20} />
+              Verificar Órdenes
+            </button>
+            <button 
+              className="btn btn-primary flex-1 md:flex-none justify-center"
+              onClick={() => navigate('/ventas/ordenes/nueva')}
+            >
+              <Plus size={20} />
+              Nueva Orden
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <button 
-            className="btn btn-outline"
-            onClick={() => navigate('/ventas/ordenes/verificacion')}
-          >
-            <Shield size={20} />
-            Verificar Órdenes
-          </button>
-          <button 
-            className="btn btn-primary flex-1 md:flex-none justify-center"
-            onClick={() => navigate('/ventas/ordenes/nueva')}
-          >
-            <Plus size={20} />
-            Nueva Orden
-          </button>
-        </div>
-      </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
@@ -1128,6 +1127,7 @@ function OrdenesVenta() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

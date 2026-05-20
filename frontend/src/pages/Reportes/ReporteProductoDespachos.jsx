@@ -185,16 +185,17 @@ const ReporteProductoDespachos = () => {
                     background-color: var(--carbon-light) !important;
                     color: var(--wire) !important;
                     text-transform: uppercase !important;
-                    font-size: 0.7rem !important;
+                    font-size: 0.65rem !important;
                     letter-spacing: 0.05em !important;
                     border-bottom: 2px solid var(--steel) !important;
-                    padding: 12px 16px !important;
+                    padding: 10px 12px !important;
                 }
 
                 .page-reporte-despachos td {
                     border-bottom: 1px solid var(--border) !important;
                     color: var(--mist) !important;
-                    padding: 12px 16px !important;
+                    padding: 10px 12px !important;
+                    font-size: 0.75rem !important;
                 }
 
                 .page-reporte-despachos tr:hover td {

@@ -57,14 +57,20 @@ const ReporteProductoDespachos = () => {
             ...filtros,
             idProducto: producto.id_producto
         });
-        setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
+        const displayString = `${producto.codigo} - ${producto.nombre}`;
+        setBusquedaProducto(displayString);
         setMostrarDropdown(false);
     };
 
-    const productosFiltrados = productos.filter(p =>
-        p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) ||
-        p.codigo.toLowerCase().includes(busquedaProducto.toLowerCase())
-    );
+    const productosFiltrados = productos.filter(p => {
+        const term = busquedaProducto.toLowerCase();
+        const fullString = `${p.codigo} - ${p.nombre}`.toLowerCase();
+        return (
+            p.nombre.toLowerCase().includes(term) ||
+            p.codigo.toLowerCase().includes(term) ||
+            fullString.includes(term)
+        );
+    });
 
     const generarReporte = async () => {
         if (!filtros.idProducto) {
@@ -367,6 +373,7 @@ const ReporteProductoDespachos = () => {
                                             <th>Emisión (Orden)</th>
                                             <th>Fecha Despacho</th>
                                             <th>N° Orden</th>
+                                            <th>Documento</th>
                                             <th>Cliente</th>
                                             <th className="text-right">Cant. Despachada</th>
                                             <th className="text-right">Precio Unit.</th>
@@ -376,28 +383,42 @@ const ReporteProductoDespachos = () => {
                                     </thead>
                                     <tbody>
                                         {reporteData.detalle.length > 0 ? (
-                                            reporteData.detalle.map((row, idx) => (
-                                                <tr key={idx} className="transition-colors">
-                                                    <td className="font-medium">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</td>
-                                                    <td>
-                                                        {row.fecha_despacho_real ? (
-                                                            <span className="font-medium text-white">{new Date(row.fecha_despacho_real).toLocaleDateString('es-PE')}</span>
-                                                        ) : (
-                                                            <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-1 rounded">Pendiente</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="font-mono font-bold">
-                                                        <a 
-                                                            href={`/ventas/ordenes/${row.id_orden_venta}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-primary hover:text-primary-focus underline decoration-primary/30 hover:decoration-primary transition-colors cursor-pointer"
-                                                            title="Ver detalle de la orden"
-                                                        >
-                                                            {row.numero_orden}
-                                                        </a>
-                                                    </td>
-                                                    <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
+                                            reporteData.detalle.map((row, idx) => {
+                                                const tipoDoc = String(row.tipo_comprobante || '').trim() || 'Sin Comprobante';
+                                                const esFactura = tipoDoc.includes('Factura');
+                                                const esNV = tipoDoc.includes('Nota de Venta');
+
+                                                return (
+                                                    <tr key={idx} className="transition-colors">
+                                                        <td className="font-medium">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</td>
+                                                        <td>
+                                                            {row.fecha_despacho_real ? (
+                                                                <span className="font-medium text-white">{new Date(row.fecha_despacho_real).toLocaleDateString('es-PE')}</span>
+                                                            ) : (
+                                                                <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-1 rounded">Pendiente</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="font-mono font-bold">
+                                                            <a 
+                                                                href={`/ventas/ordenes/${row.id_orden_venta}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-primary hover:text-primary-focus underline decoration-primary/30 hover:decoration-primary transition-colors cursor-pointer"
+                                                                title="Ver detalle de la orden"
+                                                            >
+                                                                {row.numero_orden}
+                                                            </a>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded ${
+                                                                esFactura ? 'bg-success/10 text-success border border-success/20' :
+                                                                esNV ? 'bg-info/10 text-info border border-info/20' :
+                                                                'bg-steel/20 text-wire border border-steel/30'
+                                                            }`}>
+                                                                {tipoDoc}
+                                                            </span>
+                                                        </td>
+                                                        <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
                                                     <td className="text-right font-black text-white">{formatearNumero(row.cantidad_despachada)}</td>
                                                     <td className="text-right font-mono">
                                                         <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>

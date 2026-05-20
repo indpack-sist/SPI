@@ -129,7 +129,15 @@ function NuevaOrdenVenta() {
         const blob = items[i].getAsFile();
         const fecha = new Date().toISOString().replace(/[:.]/g, '-');
         const file = new File([blob], `imagen_pegada_${fecha}.png`, { type: blob.type });
-        setArchivos(prev => ({ ...prev, [campo]: file }));
+        
+        setArchivos(prev => {
+          if (campo === 'comprobante') {
+            return { ...prev, comprobante: [...(prev.comprobante || []), file] };
+          } else {
+            return { ...prev, orden_compra: file }; // OC solo permite 1
+          }
+        });
+        
         e.preventDefault();
         setSuccess(`Imagen pegada correctamente en ${campo === 'orden_compra' ? 'Orden de Compra' : 'Comprobante'}`);
         setTimeout(() => setSuccess(null), 2000);

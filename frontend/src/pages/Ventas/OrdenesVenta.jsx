@@ -54,7 +54,8 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleToggle = (value) => {
+  const handleToggle = (e, value) => {
+    e.stopPropagation(); // Evitar que el dropdown se cierre o haga cosas raras
     const newValues = selectedValues.includes(value)
       ? selectedValues.filter(v => v !== value)
       : [...selectedValues, value];
@@ -77,56 +78,53 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center justify-between w-full h-10 px-3 text-sm transition-all duration-200 border rounded-lg focus:outline-none shadow-sm ${
+          className={`flex items-center justify-between w-full h-10 px-3 text-sm transition-all border rounded-lg focus:outline-none ${
             selectedValues.length > 0 
-              ? 'border-primary bg-blue-50/30 text-primary font-semibold ring-1 ring-primary/20' 
-              : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50'
+              ? 'border-primary bg-blue-50/20 text-primary font-bold shadow-sm' 
+              : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 shadow-sm'
           }`}
         >
           <span className="truncate mr-2">{getLabelText()}</span>
-          <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} text-gray-400`} />
+          <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${selectedValues.length > 0 ? 'text-primary' : 'text-gray-400'}`} />
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200 origin-top">
-            <div className="max-h-64 overflow-y-auto p-1.5">
+          <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-[200px]">
+            <div className="max-h-64 overflow-y-auto p-2 space-y-1">
               {options.map((opt) => {
                 const isSelected = selectedValues.includes(opt.value);
                 return (
-                  <label
+                  <div
                     key={opt.value}
-                    className={`flex items-center group px-3 py-2.5 mb-0.5 rounded-lg cursor-pointer transition-all ${
-                      isSelected ? 'bg-primary/5 text-primary' : 'hover:bg-gray-50 text-gray-700'
+                    onClick={(e) => handleToggle(e, opt.value)}
+                    className={`flex items-center px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
+                      isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 text-gray-700'
                     }`}
                   >
-                    <div className={`relative flex items-center justify-center w-5 h-5 border-2 rounded-md transition-all duration-200 mr-3 ${
-                      isSelected 
-                        ? 'bg-primary border-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.3)]' 
-                        : 'bg-white border-gray-300 group-hover:border-primary/50'
-                    }`}>
-                      {isSelected && <Check size={14} className="text-white stroke-[3px]" />}
+                    <div className="relative flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}} // Manejado por el div superior
+                        className="w-5 h-5 rounded border-2 border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all checked:bg-primary checked:border-primary"
+                        style={{ appearance: 'checkbox', WebkitAppearance: 'checkbox' }}
+                      />
                     </div>
-                    <span className={`text-sm select-none transition-all ${isSelected ? 'font-semibold' : 'font-medium'}`}>
+                    <span className={`ml-3 text-sm select-none ${isSelected ? 'font-bold' : 'font-medium'}`}>
                       {opt.label}
                     </span>
-                    <input
-                      type="checkbox"
-                      className="hidden"
-                      checked={isSelected}
-                      onChange={() => handleToggle(opt.value)}
-                    />
-                  </label>
+                  </div>
                 );
               })}
             </div>
             {selectedValues.length > 0 && (
-              <div className="p-1.5 bg-gray-50/80 border-t border-gray-100">
+              <div className="p-2 bg-gray-50 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => onChange([])}
-                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-red-500 hover:bg-red-50 rounded-lg font-bold transition-colors"
+                  onClick={(e) => { e.stopPropagation(); onChange([]); }}
+                  className="w-full py-2 text-xs text-red-600 hover:bg-red-50 rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
                 >
-                  <RefreshCcw size={12} />
+                  <RefreshCcw size={14} />
                   Limpiar selección
                 </button>
               </div>
@@ -144,6 +142,7 @@ function OrdenesVenta() {
   const [ordenes, setOrdenes] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isFiltering, setIsFiltering] = useState(false); // Nuevo estado para carga parcial
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
@@ -193,32 +192,14 @@ function OrdenesVenta() {
   }, [currentPage]);
 
   useEffect(() => {
-    cargarDatos();
+    cargarDatos(false); // false indica que no es la carga inicial
     cargarTCDesdeSession();
   }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, fechaInicio, fechaFin]);
 
+  // Carga inicial
   useEffect(() => {
-    const isFirstRender = !sessionStorage.getItem('_ordenes_mounted');
-    if (isFirstRender) {
-      sessionStorage.setItem('_ordenes_mounted', 'true');
-    } else {
-      setCurrentPage(1);
-    }
-  }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
-
-  useEffect(() => {
-    return () => sessionStorage.removeItem('_ordenes_mounted');
+    cargarDatos(true);
   }, []);
-
-  useEffect(() => {
-    const shouldScroll = sessionStorage.getItem('_ordenes_scroll_pending');
-    if (shouldScroll && ordenes.length > 0) {
-      sessionStorage.removeItem('_ordenes_scroll_pending');
-      setTimeout(() => {
-        tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 150);
-    }
-  }, [ordenes]);
 
   const cargarTCDesdeSession = () => {
     try {
@@ -270,26 +251,13 @@ function OrdenesVenta() {
     }
   };
 
-  const convertirUSDaPEN = (montoUSD) => {
-    if (!tipoCambio || !montoUSD) return null;
-    return parseFloat(montoUSD) * tipoCambio.venta;
-  };
-
-  const obtenerEdadTC = () => {
-    if (!tipoCambio?.timestamp) return null;
-    const ahora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
-    const finDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59);
-    const restanteMs = finDia - ahora;
-    const horasRestantes = Math.floor(restanteMs / 3600000);
-    const minutosRestantes = Math.floor((restanteMs % 3600000) / 60000);
-    if (horasRestantes > 0) return `Válido por ${horasRestantes}h ${minutosRestantes}min`;
-    if (minutosRestantes > 0) return `Válido por ${minutosRestantes} min`;
-    return 'Expira pronto';
-  };
-
-  const cargarDatos = async () => {
+  const cargarDatos = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) {
+        setLoading(true);
+      } else {
+        setIsFiltering(true);
+      }
       setError(null);
       
       const filtros = {};
@@ -318,6 +286,7 @@ function OrdenesVenta() {
       setError(err.response?.data?.error || 'Error al cargar órdenes de venta');
     } finally {
       setLoading(false);
+      setIsFiltering(false);
     }
   };
 
@@ -762,11 +731,15 @@ function OrdenesVenta() {
     }
   ];
 
-  if (loading) return <Loading message="Cargando órdenes de venta..." />;
+  // if (loading) return <Loading message="Cargando órdenes de venta..." />; // <--- ELIMINADO PARA EVITAR F5
 
   return (
     <div className="p-4 md:p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      {loading && <Loading message="Cargando órdenes de venta..." />}
+      
+      <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          {/* ... resto del header ... */}
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <ShoppingCart size={32} className="text-primary" />
@@ -1059,7 +1032,17 @@ function OrdenesVenta() {
           </div>
         </div>
         
-        <div className="card-body p-0">
+        <div className="card-body p-0 relative">
+          {/* Overlay de carga para filtros */}
+          {isFiltering && (
+            <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[1px] flex items-center justify-center transition-all duration-300">
+              <div className="flex flex-col items-center gap-3 p-5 bg-white shadow-xl rounded-2xl border border-gray-100">
+                <RefreshCcw size={24} className="animate-spin text-primary" />
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Actualizando lista...</span>
+              </div>
+            </div>
+          )}
+          
           <div className="table-container">
             <Table
               columns={columns}

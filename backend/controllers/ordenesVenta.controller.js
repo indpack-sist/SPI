@@ -34,7 +34,7 @@ function getFechaISOPeru() {
 
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, prioridad, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante } = req.query;
+    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante } = req.query;
     
     let sql = `
       SELECT 
@@ -108,9 +108,13 @@ export async function getAllOrdenesVenta(req, res) {
       params.push(estado);
     }
     
-    if (prioridad) {
-      sql += ` AND ov.prioridad = ?`;
-      params.push(prioridad);
+    if (tipo_comprobante) {
+      if (tipo_comprobante === 'Sin Comprobante') {
+        sql += ` AND (ov.tipo_comprobante IS NULL OR ov.tipo_comprobante = '')`;
+      } else {
+        sql += ` AND ov.tipo_comprobante = ?`;
+        params.push(tipo_comprobante);
+      }
     }
     
     if (fecha_inicio) {

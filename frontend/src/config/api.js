@@ -515,6 +515,8 @@ export const ordenesVentaAPI = {
     appendFilter('estado_pago', filtros.estado_pago);
     appendFilter('estado_verificacion', filtros.estado_verificacion);
     appendFilter('tipo_comprobante', filtros.tipo_comprobante);
+    appendFilter('estado_sunat', filtros.estado_sunat);
+    appendFilter('vendedor', filtros.vendedor);
     appendFilter('fecha_inicio', filtros.fecha_inicio);
     appendFilter('fecha_fin', filtros.fecha_fin);
     

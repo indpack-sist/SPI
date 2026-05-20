@@ -599,6 +599,41 @@ function OrdenesVenta() {
       }
     },
     {
+      header: 'SUNAT',
+      accessor: 'facturado_sunat',
+      width: '100px',
+      align: 'center',
+      render: (value, row) => {
+        const tipo = String(row.tipo_comprobante || '').trim();
+        
+        if (tipo === 'Nota de Venta' || tipo === 'Sin Comprobante' || tipo === '') {
+           return <span className="text-[9px] font-black text-carbon-light uppercase tracking-widest bg-steel-light px-2 py-0.5 rounded">No amerita</span>;
+        }
+
+        if (value === 1) {
+          return (
+            <div className="flex flex-col items-center gap-0.5">
+              <span className="flex items-center gap-1 text-success font-black text-[9px] uppercase tracking-widest">
+                <BadgeCheck size={12} className="text-success" />
+                Facturado
+              </span>
+              {row.numero_comprobante_sunat && (
+                <span className="font-mono text-[9px] text-mist">
+                  {row.numero_comprobante_sunat}
+                </span>
+              )}
+            </div>
+          );
+        }
+        return (
+          <span className="flex items-center justify-center gap-1 text-warning text-[9px] font-black uppercase tracking-widest">
+            <Clock size={11} />
+            Pendiente
+          </span>
+        );
+      }
+    },
+    {
       header: 'Logística',
       accessor: 'estado',
       width: '120px',

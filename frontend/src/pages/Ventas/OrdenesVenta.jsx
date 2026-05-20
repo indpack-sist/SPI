@@ -747,7 +747,59 @@ function OrdenesVenta() {
   // if (loading) return <Loading message="Cargando órdenes de venta..." />; // <--- ELIMINADO PARA EVITAR F5
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-4 md:p-6 page-ordenes-venta">
+      {/* INYECCIÓN DE ESTILOS PARA SOBRESCRIBIR LIBRERÍAS EXTERNAS */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .page-ordenes-venta .search-input, 
+        .page-ordenes-venta .form-input,
+        .page-ordenes-venta input {
+          background-color: var(--carbon-mid) !important;
+          border-color: var(--steel) !important;
+          color: var(--mist) !important;
+          font-family: inherit !important;
+        }
+        
+        .page-ordenes-venta .search-input:focus, 
+        .page-ordenes-venta input:focus {
+          border-color: var(--primary) !important;
+          box-shadow: 0 0 0 2px rgba(232, 184, 75, 0.1) !important;
+        }
+
+        .page-ordenes-venta .table-container {
+          background-color: var(--carbon) !important;
+          border: 1px solid var(--border) !important;
+        }
+
+        /* Sobrescritura de la tabla de la librería */
+        .page-ordenes-venta table {
+          background-color: var(--carbon) !important;
+        }
+        
+        .page-ordenes-venta th {
+          background-color: var(--carbon-light) !important;
+          color: var(--wire) !important;
+          text-transform: uppercase !important;
+          font-size: 0.7rem !important;
+          letter-spacing: 0.05em !important;
+          border-bottom: 2px solid var(--steel) !important;
+        }
+
+        .page-ordenes-venta td {
+          border-bottom: 1px solid var(--border) !important;
+          color: var(--mist) !important;
+        }
+
+        .page-ordenes-venta tr:hover td {
+          background-color: rgba(255, 255, 255, 0.02) !important;
+        }
+
+        .page-ordenes-venta .badge {
+          font-family: 'Barlow Condensed', sans-serif !important;
+          font-weight: 700 !important;
+          letter-spacing: 0.02em !important;
+        }
+      `}} />
+
       {loading && <Loading message="Cargando órdenes de venta..." />}
       
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>

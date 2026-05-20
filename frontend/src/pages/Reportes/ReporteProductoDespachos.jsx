@@ -88,6 +88,40 @@ const ReporteProductoDespachos = () => {
         }
     };
 
+    // Calcular estadísticas dinámicamente basadas en las reglas de negocio
+    const estadisticas = reporteData ? reporteData.detalle.reduce((acc, mov) => {
+        const tipoImpuesto = String(mov.tipo_impuesto || '').toUpperCase().trim();
+        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+        const monto = parseFloat(mov.subtotal_item || 0);
+        const tipo = String(mov.tipo_comprobante || '').trim();
+        
+        // Excepciones para Facturas de Exportación (sin IGV válido)
+        const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
+
+        if (tipo.includes('Factura')) {
+            if (!esSinImpuesto || facturasExportacion.includes(mov.numero_orden)) {
+                if (mov.moneda === 'PEN') acc.facturas_pen += monto;
+                if (mov.moneda === 'USD') acc.facturas_usd += monto;
+            } else {
+                if (mov.moneda === 'PEN') acc.notas_venta_pen += monto;
+                if (mov.moneda === 'USD') acc.notas_venta_usd += monto;
+            }
+        } else if (tipo.includes('Nota de Venta')) {
+            if (mov.moneda === 'PEN') acc.notas_venta_pen += monto;
+            if (mov.moneda === 'USD') acc.notas_venta_usd += monto;
+        } else {
+            if (mov.moneda === 'PEN') acc.sin_comprobante_pen += monto;
+            if (mov.moneda === 'USD') acc.sin_comprobante_usd += monto;
+        }
+        acc.total_unidades += parseFloat(mov.cantidad_despachada || 0);
+        return acc;
+    }, { 
+        facturas_pen: 0, facturas_usd: 0, 
+        notas_venta_pen: 0, notas_venta_usd: 0,
+        sin_comprobante_pen: 0, sin_comprobante_usd: 0,
+        total_unidades: 0
+    }) : null;
+
     const formatearNumero = (valor) => {
         return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
     };
@@ -161,11 +195,12 @@ const ReporteProductoDespachos = () => {
                 }
 
                 .page-reporte-despachos .stat-card {
-                    min-height: 90px !important;
+                    min-height: 85px !important;
                     display: flex !important;
                     flex-direction: column !important;
                     justify-content: center !important;
-                    padding: 1rem !important;
+                    padding: 0.75rem 1rem !important;
+                    border-radius: 8px !important;
                 }
             `}} />
 
@@ -188,10 +223,8 @@ const ReporteProductoDespachos = () => {
                             <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
                                 Producto a consultar
                             </label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Search size={18} className="text-wire" />
-                                </div>
+                            <div className="relative flex items-center">
+                                <Search size={18} className="absolute left-3 text-wire z-10" />
                                 <input
                                     type="text"
                                     className="form-input pl-10 w-full"
@@ -207,7 +240,7 @@ const ReporteProductoDespachos = () => {
                                     onFocus={() => setMostrarDropdown(true)}
                                 />
                                 {mostrarDropdown && busquedaProducto && (
-                                    <ul className="absolute z-50 mt-1 w-full dropdown-menu shadow-xl max-h-60 rounded-md py-1 text-base overflow-auto sm:text-sm">
+                                    <ul className="absolute z-50 top-full mt-1 w-full dropdown-menu shadow-xl max-h-60 rounded-md py-1 text-base overflow-auto sm:text-sm">
                                         {productosFiltrados.length > 0 ? (
                                             productosFiltrados.map((producto) => (
                                                 <li
@@ -278,55 +311,41 @@ const ReporteProductoDespachos = () => {
                 </div>
             )}
 
-            {reporteData && (
+            {reporteData && estadisticas && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-info/60 shadow-lg">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1">
-                                        Unidades Despachadas
-                                    </p>
-                                    <p className="text-2xl font-black text-white">
-                                        {formatearNumero(reporteData.resumen.total_cantidad)}
-                                    </p>
-                                </div>
-                                <div className="bg-info/10 p-2.5 rounded text-info hidden sm:block">
-                                    <Box size={24} />
-                                </div>
-                            </div>
+                    {/* KPI UNIDADES */}
+                    <div className="card bg-carbon-mid border-l-4 border-mist shadow-lg mb-4 h-16 flex items-center px-6">
+                        <div className="flex items-center gap-3 w-full">
+                            <Box size={20} className="text-wire" />
+                            <span className="text-[0.7rem] font-black text-wire uppercase tracking-widest">Total Unidades:</span>
+                            <span className="text-xl font-black text-white ml-auto">{formatearNumero(estadisticas.total_unidades)}</span>
                         </div>
+                    </div>
 
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-success/60 shadow-lg">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1">
-                                        Ingresos (PEN)
-                                    </p>
-                                    <p className="text-2xl font-black text-white">
-                                        S/ {formatearNumero(reporteData.resumen.total_ingresos_pen)}
-                                    </p>
-                                </div>
-                                <div className="bg-success/10 p-2.5 rounded text-success hidden sm:block">
-                                    <TrendingUp size={24} />
-                                </div>
-                            </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                        <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg">
+                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
+                            <p className="text-lg font-black text-white">S/ {formatearNumero(estadisticas.facturas_pen)}</p>
                         </div>
-
-                        <div className="card stat-card bg-carbon-mid border-l-4 border-primary/60 shadow-lg">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1">
-                                        Ingresos (USD)
-                                    </p>
-                                    <p className="text-2xl font-black text-primary">
-                                        $ {formatearNumero(reporteData.resumen.total_ingresos_usd)}
-                                    </p>
-                                </div>
-                                <div className="bg-primary/10 p-2.5 rounded text-primary hidden sm:block">
-                                    <DollarSign size={24} />
-                                </div>
-                            </div>
+                        <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg">
+                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
+                            <p className="text-lg font-black text-primary">$ {formatearNumero(estadisticas.facturas_usd)}</p>
+                        </div>
+                        <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
+                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
+                            <p className="text-lg font-black text-white">S/ {formatearNumero(estadisticas.notas_venta_pen)}</p>
+                        </div>
+                        <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
+                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
+                            <p className="text-lg font-black text-white">$ {formatearNumero(estadisticas.notas_venta_usd)}</p>
+                        </div>
+                        <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg">
+                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
+                            <p className="text-lg font-black text-warning">S/ {formatearNumero(estadisticas.sin_comprobante_pen)}</p>
+                        </div>
+                        <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg">
+                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
+                            <p className="text-lg font-black text-warning">$ {formatearNumero(estadisticas.sin_comprobante_usd)}</p>
                         </div>
                     </div>
 

@@ -383,6 +383,10 @@ export const getReporteProductoDespachos = async (req, res) => {
                 ov.numero_orden,
                 ov.fecha_emision,
                 ov.moneda,
+                ov.tipo_comprobante,
+                ov.tipo_impuesto,
+                ov.subtotal AS subtotal_orden,
+                ov.total AS total_orden,
                 c.razon_social as cliente,
                 dov.cantidad_despachada,
                 dov.precio_unitario,
@@ -397,7 +401,9 @@ export const getReporteProductoDespachos = async (req, res) => {
             WHERE dov.id_producto = ? 
               AND dov.cantidad_despachada > 0 
               AND DATE(ov.fecha_emision) BETWEEN ? AND ?
+              -- REGLA: Excluir órdenes canceladas y despachos anulados/cancelados
               AND ov.estado != 'Cancelada'
+              AND (s.id_salida IS NULL OR (s.estado != 'Cancelada' AND s.estado != 'Anulado'))
             ORDER BY ov.fecha_emision DESC;
         `;
 

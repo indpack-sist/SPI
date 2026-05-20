@@ -34,7 +34,7 @@ function getFechaISOPeru() {
 
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago } = req.query;
+    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago, estado_sunat, vendedor } = req.query;
     
     let sql = `
       SELECT 
@@ -133,6 +133,34 @@ export async function getAllOrdenesVenta(req, res) {
       }
       
       sql += conditions.join(' OR ') + ')';
+    }
+
+    if (vendedor) {
+      const vendedores = vendedor.split(',');
+      sql += ` AND ov.id_comercial IN (${vendedores.map(() => '?').join(',')})`;
+      params.push(...vendedores);
+    }
+
+    if (estado_sunat) {
+      const estadosSunat = estado_sunat.split(',');
+      const tieneFacturado = estadosSunat.includes('Facturado');
+      const tienePendiente = estadosSunat.includes('Pendiente');
+      const tieneNoAmerita = estadosSunat.includes('No Amerita');
+
+      sql += ' AND (';
+      let sunatConditions = [];
+
+      if (tieneFacturado) {
+        sunatConditions.push("(ov.facturado_sunat = 1)");
+      }
+      if (tienePendiente) {
+        sunatConditions.push("(TRIM(ov.tipo_comprobante) = 'Factura' AND (ov.facturado_sunat IS NULL OR ov.facturado_sunat = 0))");
+      }
+      if (tieneNoAmerita) {
+        sunatConditions.push("(TRIM(ov.tipo_comprobante) = 'Nota de Venta' OR ov.tipo_comprobante IS NULL OR TRIM(ov.tipo_comprobante) = '')");
+      }
+
+      sql += sunatConditions.join(' OR ') + ')';
     }
     
     if (fecha_inicio) {

@@ -633,21 +633,21 @@ function OrdenesVenta() {
         {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
         {estadisticas && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg">
-              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (PEN)</p>
-              <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
+              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
+              <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg">
-              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (USD)</p>
-              <p className="text-xl font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
+              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
+              <p className="text-lg font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
-              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (PEN)</p>
-              <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
+              <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg">
-              <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (USD)</p>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
               <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
             </div>
           </div>
@@ -710,7 +710,7 @@ function OrdenesVenta() {
           </div>
 
           {ordenesFiltradas.length > itemsPerPage && (
-            <div className="px-6 py-6 bg-carbon-mid border-t border-steel/20 flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="mt-12 px-6 py-10 bg-carbon-mid border-t border-steel/20 flex flex-col lg:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-3">
                 <button className="btn btn-outline border-steel h-12 px-5 flex items-center gap-2 font-black text-[0.7rem] tracking-widest hover:border-primary hover:text-primary transition-all" onClick={goToPrevPage} disabled={currentPage === 1}><ChevronLeft size={20} /> ANTERIOR</button>
                 <div className="flex items-center gap-2 mx-2">

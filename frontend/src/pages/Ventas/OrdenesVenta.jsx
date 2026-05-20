@@ -48,7 +48,6 @@ function OrdenesVenta() {
   const [descargandoPDF, setDescargandoPDF] = useState(null);
 
   const [filtroEstado, setFiltroEstado] = useState(() => sessionStorage.getItem('ordenes_filtro_estado') || '');
-  const [filtroPrioridad, setFiltroPrioridad] = useState(() => sessionStorage.getItem('ordenes_filtro_prioridad') || '');
   const [filtroEstadoPago, setFiltroEstadoPago] = useState(() => sessionStorage.getItem('ordenes_filtro_estado_pago') || '');
   const [filtroVerificacion, setFiltroVerificacion] = useState(() => sessionStorage.getItem('ordenes_filtro_verificacion') || '');
   const [filtroTipoComprobante, setFiltroTipoComprobante] = useState(() => sessionStorage.getItem('ordenes_filtro_tipo_comprobante') || '');
@@ -69,14 +68,13 @@ function OrdenesVenta() {
   // Guardar en session storage cada que cambian los filtros
   useEffect(() => {
     sessionStorage.setItem('ordenes_filtro_estado', filtroEstado);
-    sessionStorage.setItem('ordenes_filtro_prioridad', filtroPrioridad);
     sessionStorage.setItem('ordenes_filtro_estado_pago', filtroEstadoPago);
     sessionStorage.setItem('ordenes_filtro_verificacion', filtroVerificacion);
     sessionStorage.setItem('ordenes_filtro_tipo_comprobante', filtroTipoComprobante);
     sessionStorage.setItem('ordenes_fecha_inicio', fechaInicio);
     sessionStorage.setItem('ordenes_fecha_fin', fechaFin);
     sessionStorage.setItem('ordenes_busqueda', busqueda);
-  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
+  }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
 
   useEffect(() => {
     setInputPage(currentPage.toString());
@@ -86,7 +84,7 @@ function OrdenesVenta() {
   useEffect(() => {
     cargarDatos();
     cargarTCDesdeSession();
-  }, [filtroEstado, filtroPrioridad, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, fechaInicio, fechaFin]);
+  }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, fechaInicio, fechaFin]);
 
   useEffect(() => {
     // Si la página inicial venía de caché, no la reseteamos a 1 en el primer render,
@@ -97,7 +95,7 @@ function OrdenesVenta() {
     } else {
       setCurrentPage(1);
     }
-  }, [filtroEstado, filtroPrioridad, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
+  }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
 
   // Limpiar bandera en unmount (opcional, pero buena práctica si el usuario cierra pestaña)
   useEffect(() => {
@@ -890,7 +888,7 @@ function OrdenesVenta() {
           </div>
 
           {/* NIVEL 2: Filtros Avanzados (Desplegables) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div className="form-group mb-0">
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Estado Logístico</label>
               <select 
@@ -946,21 +944,7 @@ function OrdenesVenta() {
                 <option value="">Todos</option>
                 <option value="Factura">Solo Facturas</option>
                 <option value="Nota de Venta">Solo Notas de Venta</option>
-              </select>
-            </div>
-
-            <div className="form-group mb-0">
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Prioridad</label>
-              <select 
-                className="form-select text-sm h-9 w-full"
-                value={filtroPrioridad}
-                onChange={(e) => setFiltroPrioridad(e.target.value)}
-              >
-                <option value="">Todas</option>
-                <option value="Urgente">Urgente</option>
-                <option value="Alta">Alta</option>
-                <option value="Media">Media</option>
-                <option value="Baja">Baja</option>
+                <option value="Sin Comprobante">Sin Comprobante</option>
               </select>
             </div>
           </div>

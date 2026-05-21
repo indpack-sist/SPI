@@ -139,21 +139,35 @@
 .sunat-form-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #eee;
 }
 
 .sunat-form-actions .btn {
-    padding: 10px 15px;
-    border-radius: 4px;
+    padding: 10px 20px;
+    border-radius: 6px;
     border: none;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .sunat-form-actions .btn-secondary {
-    background-color: #6c757d;
-    color: white;
+    background-color: #f1f3f5;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.sunat-form-actions .btn-secondary:hover:not(:disabled) {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    transform: translateY(-1px);
 }
 
 .sunat-form-actions .btn-primary {
@@ -161,7 +175,18 @@
     color: white;
 }
 
+.sunat-form-actions .btn-primary:hover:not(:disabled) {
+    background-color: #0b5ed7;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+}
+
+.sunat-form-actions .btn:active {
+    transform: translateY(0);
+}
+
 .sunat-form-actions .btn:disabled {
-    opacity: 0.7;
+    opacity: 0.6;
     cursor: not-allowed;
+    box-shadow: none;
 }

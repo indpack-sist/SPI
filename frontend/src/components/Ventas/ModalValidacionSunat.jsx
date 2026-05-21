@@ -17,6 +17,17 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
     const [pdfUrl, setPdfUrl] = useState(null);
 
     useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
         if (!isOpen) return;
 
         if (readOnly && existingData) {
@@ -251,22 +262,9 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
 
                             <div className="sunat-form-actions">
                                 {readOnly ? (
-                                    <>
-                                        {pdfUrl && (
-                                            <a 
-                                                href={pdfUrl} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
-                                                className="btn btn-secondary"
-                                                style={{ textAlign: 'center', textDecoration: 'none' }}
-                                            >
-                                                Descargar PDF
-                                            </a>
-                                        )}
-                                        <button type="button" className="btn btn-primary" onClick={onClose}>
-                                            Cerrar
-                                        </button>
-                                    </>
+                                    <button type="button" className="btn btn-primary" onClick={onClose}>
+                                        Cerrar
+                                    </button>
                                 ) : (
                                     <>
                                         <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>

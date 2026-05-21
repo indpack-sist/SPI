@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../config/api';
 import { Search, Package, Box, User, TrendingUp } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Link } from 'react-router-dom';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 const particionarDatosGrafico = (detalle) => {
     const grupos = {
@@ -128,23 +129,25 @@ const ReporteProductoDespachos = () => {
         setMostrarDropdownCliente(false);
     };
 
-    const productosFiltrados = productos.filter(p => {
+    const productosFiltrados = useMemo(() => {
+        if (!busquedaProducto) return [];
         const term = busquedaProducto.toLowerCase();
-        const fullString = `${p.codigo} - ${p.nombre}`.toLowerCase();
-        return (
-            p.nombre.toLowerCase().includes(term) ||
-            p.codigo.toLowerCase().includes(term) ||
-            fullString.includes(term)
-        );
-    });
+        return productos.filter(p => {
+            const fullString = `${p.codigo} - ${p.nombre}`.toLowerCase();
+            return p.nombre.toLowerCase().includes(term) ||
+                   p.codigo.toLowerCase().includes(term) ||
+                   fullString.includes(term);
+        }).slice(0, 50);
+    }, [productos, busquedaProducto]);
 
-    const clientesFiltrados = clientes.filter(c => {
+    const clientesFiltrados = useMemo(() => {
+        if (!busquedaCliente) return [];
         const term = busquedaCliente.toLowerCase();
-        return (
-            c.razon_social.toLowerCase().includes(term) ||
-            (c.ruc && c.ruc.includes(term))
-        );
-    });
+        return clientes.filter(c => {
+            return c.razon_social.toLowerCase().includes(term) ||
+                   (c.ruc && c.ruc.includes(term));
+        }).slice(0, 50);
+    }, [clientes, busquedaCliente]);
 
     const generarReporte = async () => {
         if (!filtros.idProducto) {
@@ -168,50 +171,55 @@ const ReporteProductoDespachos = () => {
         }
     };
 
-    const estadisticas = reporteData ? reporteData.detalle.reduce((acc, mov) => {
-        const tipoImpuesto = String(mov.tipo_impuesto || '').toUpperCase().trim();
-        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
-        const monto = parseFloat(mov.subtotal_item || 0);
-        const tipo = String(mov.tipo_comprobante || '').trim();
-        
-        const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
+    const estadisticas = useMemo(() => {
+        if (!reporteData) return null;
+        return reporteData.detalle.reduce((acc, mov) => {
+            const tipoImpuesto = String(mov.tipo_impuesto || '').toUpperCase().trim();
+            const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+            const monto = parseFloat(mov.subtotal_item || 0);
+            const tipo = String(mov.tipo_comprobante || '').trim();
+            
+            const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
-        if (tipo.includes('Factura')) {
-            if (!esSinImpuesto || facturasExportacion.includes(mov.numero_orden)) {
-                if (mov.moneda === 'PEN') acc.facturas_pen += monto;
-                if (mov.moneda === 'USD') acc.facturas_usd += monto;
-            } else {
+            if (tipo.includes('Factura')) {
+                if (!esSinImpuesto || facturasExportacion.includes(mov.numero_orden)) {
+                    if (mov.moneda === 'PEN') acc.facturas_pen += monto;
+                    if (mov.moneda === 'USD') acc.facturas_usd += monto;
+                } else {
+                    if (mov.moneda === 'PEN') acc.notas_venta_pen += monto;
+                    if (mov.moneda === 'USD') acc.notas_venta_usd += monto;
+                }
+            } else if (tipo.includes('Nota de Venta')) {
                 if (mov.moneda === 'PEN') acc.notas_venta_pen += monto;
                 if (mov.moneda === 'USD') acc.notas_venta_usd += monto;
+            } else {
+                if (mov.moneda === 'PEN') acc.sin_comprobante_pen += monto;
+                if (mov.moneda === 'USD') acc.sin_comprobante_usd += monto;
             }
-        } else if (tipo.includes('Nota de Venta')) {
-            if (mov.moneda === 'PEN') acc.notas_venta_pen += monto;
-            if (mov.moneda === 'USD') acc.notas_venta_usd += monto;
-        } else {
-            if (mov.moneda === 'PEN') acc.sin_comprobante_pen += monto;
-            if (mov.moneda === 'USD') acc.sin_comprobante_usd += monto;
-        }
-        acc.total_unidades += parseFloat(mov.cantidad_despachada || 0);
-        return acc;
-    }, { 
-        facturas_pen: 0, facturas_usd: 0, 
-        notas_venta_pen: 0, notas_venta_usd: 0,
-        sin_comprobante_pen: 0, sin_comprobante_usd: 0,
-        total_unidades: 0
-    }) : null;
+            acc.total_unidades += parseFloat(mov.cantidad_despachada || 0);
+            return acc;
+        }, { 
+            facturas_pen: 0, facturas_usd: 0, 
+            notas_venta_pen: 0, notas_venta_usd: 0,
+            sin_comprobante_pen: 0, sin_comprobante_usd: 0,
+            total_unidades: 0
+        });
+    }, [reporteData]);
 
     const formatearNumero = (valor) => {
         return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
     };
 
-    const gruposGraficos = reporteData ? particionarDatosGrafico(reporteData.detalle) : null;
+    const gruposGraficos = useMemo(() => {
+        return reporteData ? particionarDatosGrafico(reporteData.detalle) : null;
+    }, [reporteData]);
 
-    const CustomTooltip = ({ active, payload, label }) => {
+    const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
             return (
-                <div className="p-3 rounded shadow-xl" style={{ backgroundColor: '#161616', border: '1px solid #333' }}>
-                    <p className="text-white font-bold text-sm mb-1">{data.fecha}</p>
+                <div className="p-3 rounded shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '1px solid #444', color: '#fff', zIndex: 1000, position: 'relative' }}>
+                    <p className="font-bold text-sm mb-1">{data.fecha}</p>
                     <p className="text-primary text-xs font-bold mb-2">Orden: {data.orden}</p>
                     <p className="text-mist text-xs mb-1"><span className="text-wire font-bold">Cliente:</span> {data.cliente}</p>
                     <p className="text-mist text-xs mb-1"><span className="text-wire font-bold">Cantidad:</span> {data.cantidad}</p>
@@ -225,49 +233,49 @@ const ReporteProductoDespachos = () => {
     const renderGrafico = (datos, titulo, colorLinea) => {
         if (!datos || datos.length === 0) return null;
 
-        const anchoDinamico = Math.max(datos.length * 60, 600);
+        const anchoPunto = 60;
+        const anchoDinamico = Math.max(datos.length * anchoPunto, 600);
 
         return (
-            <div className="card border border-steel/20 shadow-xl bg-carbon-mid">
-                <div className="card-header border-b border-steel/30 px-6 py-4 flex items-center justify-center gap-2">
-                    <TrendingUp size={20} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
-                    <h3 className="text-sm font-black text-white uppercase tracking-widest text-center">{titulo}</h3>
+            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden">
+                <div className="card-header border-b border-steel/30 px-6 py-4 flex flex-col items-center justify-center gap-1">
+                    <TrendingUp size={22} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
+                    <h3 className="text-xs font-black text-white uppercase tracking-[0.2em] text-center">{titulo}</h3>
                 </div>
                 <div className="card-body p-6 overflow-x-auto custom-scrollbar">
-                    <div style={{ width: anchoDinamico, minWidth: '100%', height: 260 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={datos} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                                <XAxis 
-                                    dataKey="idUnico" 
-                                    stroke="#888" 
-                                    tickFormatter={(val) => {
-                                        const found = datos.find(d => d.idUnico === val);
-                                        return found ? found.fecha : val;
-                                    }}
-                                    tick={{ fill: '#888', fontSize: 11 }} 
-                                    tickMargin={10} 
-                                />
-                                <YAxis 
-                                    stroke="#888" 
-                                    tick={{ fill: '#888', fontSize: 11 }}
-                                    tickFormatter={(value) => `${value.toFixed(2)}`}
-                                    domain={['auto', 'auto']}
-                                />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Legend wrapperStyle={{ fontSize: '12px', color: '#ccc', paddingTop: '10px' }} />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="precio" 
-                                    name="Precio Unitario" 
-                                    stroke={colorLinea} 
-                                    strokeWidth={3} 
-                                    dot={{ r: 4, strokeWidth: 2, fill: '#1a1a1a' }} 
-                                    activeDot={{ r: 6, strokeWidth: 0, fill: colorLinea }} 
-                                    isAnimationActive={false}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
+                    <div style={{ width: anchoDinamico, height: 260, position: 'relative' }}>
+                        <LineChart width={anchoDinamico} height={260} data={datos} margin={{ top: 20, right: 40, left: 10, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                            <XAxis 
+                                dataKey="idUnico" 
+                                stroke="#888" 
+                                tickFormatter={(val) => {
+                                    const found = datos.find(d => d.idUnico === val);
+                                    return found ? found.fecha : val;
+                                }}
+                                tick={{ fill: '#888', fontSize: 10, fontWeight: 'bold' }} 
+                                tickMargin={12}
+                                interval={0}
+                            />
+                            <YAxis 
+                                stroke="#888" 
+                                tick={{ fill: '#888', fontSize: 10 }}
+                                tickFormatter={(value) => `${value.toFixed(2)}`}
+                                domain={['auto', 'auto']}
+                            />
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />
+                            <Legend wrapperStyle={{ fontSize: '11px', color: '#ccc', paddingTop: '15px' }} />
+                            <Line 
+                                type="monotone" 
+                                dataKey="precio" 
+                                name="Precio Unitario" 
+                                stroke={colorLinea} 
+                                strokeWidth={3} 
+                                dot={{ r: 5, strokeWidth: 2, fill: '#1a1a1a', stroke: colorLinea }} 
+                                activeDot={{ r: 7, strokeWidth: 0, fill: colorLinea }} 
+                                isAnimationActive={false}
+                            />
+                        </LineChart>
                     </div>
                 </div>
             </div>
@@ -293,6 +301,11 @@ const ReporteProductoDespachos = () => {
                 .page-reporte-despachos td { border-bottom: 1px solid var(--border) !important; color: var(--mist) !important; padding: 10px 12px !important; font-size: 0.75rem !important; }
                 .page-reporte-despachos tr:hover td { background-color: rgba(255, 255, 255, 0.02) !important; }
                 .page-reporte-despachos .stat-card { min-height: 85px !important; display: flex !important; flex-direction: column !important; justify-content: center !important; padding: 0.75rem 1rem !important; border-radius: 8px !important; }
+                
+                .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: var(--carbon-mid); }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--wire); }
             `}} />
 
             <div className="flex flex-col mb-6">
@@ -486,7 +499,16 @@ const ReporteProductoDespachos = () => {
                                                 return (
                                                     <tr key={idx} className="transition-colors">
                                                         <td className="font-medium">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</td>
-                                                        <td className="font-mono font-bold text-primary">{row.numero_orden}</td>
+                                                        <td className="font-mono font-bold">
+                                                            <Link 
+                                                                to={`/ventas/ordenes/${row.id_orden_venta}`} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="text-primary hover:text-primary/80 transition-colors underline decoration-primary/30"
+                                                            >
+                                                                {row.numero_orden}
+                                                            </Link>
+                                                        </td>
                                                         <td>
                                                             <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded ${
                                                                 esFactura ? 'bg-success/10 text-success border border-success/20' :

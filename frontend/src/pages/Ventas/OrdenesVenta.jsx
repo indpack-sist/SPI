@@ -35,6 +35,7 @@ import {
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import Modal from '../../components/UI/Modal';
 import { ordenesVentaAPI, tipoCambioAPI } from '../../config/api';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -152,6 +153,25 @@ function OrdenesVenta() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
+
+  const [visorArchivo, setVisorArchivo] = useState({
+    isOpen: false,
+    url: null,
+    titulo: ''
+  });
+
+  const abrirVisor = (url, titulo) => {
+    try {
+      if (url && typeof url === 'string' && url.startsWith('[')) {
+        const parsed = JSON.parse(url);
+        if (parsed.length > 0) {
+          setVisorArchivo({ isOpen: true, url: parsed[0], titulo });
+          return;
+        }
+      }
+    } catch (e) { }
+    setVisorArchivo({ isOpen: true, url, titulo });
+  };
 
   const getSessionArray = (key) => {
     try {
@@ -628,6 +648,16 @@ function OrdenesVenta() {
                   {row.numero_comprobante_sunat}
                 </span>
               )}
+              {row.comprobante_url && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); abrirVisor(row.comprobante_url, `Factura SUNAT - ${row.numero_comprobante_sunat}`); }}
+                  className="mt-1 flex items-center justify-center bg-carbon-light border border-steel hover:bg-primary/20 hover:text-primary transition-colors text-wire px-2 py-0.5 rounded shadow-inner"
+                  title="Ver Documento"
+                >
+                  <Eye size={12} />
+                </button>
+              )}
             </div>
           );
         }
@@ -832,6 +862,20 @@ function OrdenesVenta() {
           )}
         </div>
       </div>
+
+      <Modal isOpen={visorArchivo.isOpen} onClose={() => setVisorArchivo({ isOpen: false, url: null, titulo: '' })} title={visorArchivo.titulo}>
+        <div className="flex flex-col h-[75vh]">
+          {visorArchivo.url ? (
+            <iframe
+              src={visorArchivo.url}
+              title={visorArchivo.titulo}
+              className="w-full h-full border-0 rounded"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-wire">Documento no disponible</div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

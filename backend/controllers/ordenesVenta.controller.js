@@ -1,4 +1,5 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
+import { parseSunatInvoice } from '../services/sunat-parser.service.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
@@ -66,6 +67,7 @@ export async function getAllOrdenesVenta(req, res) {
         ov.facturado_sunat,
         ov.fecha_facturacion_sunat,
         ov.numero_comprobante_sunat,
+        ov.comprobante_url,
         ov.id_vehiculo,
         ov.id_conductor,
         ov.tipo_entrega,
@@ -3944,6 +3946,73 @@ export async function asignarGuiaInternaASalida(req, res) {
 
   } catch (error) {
     console.error('Error en asignarGuiaInternaASalida:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function parsearFacturaSunat(req, res) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No se subió ningún archivo PDF.' });
+    }
+    
+    // El archivo está en memoria gracias a multer.memoryStorage()
+    const parsedData = await parseSunatInvoice(req.file.buffer);
+    
+    res.json({
+      success: true,
+      message: 'PDF parseado correctamente',
+      data: parsedData
+    });
+  } catch (error) {
+    console.error('Error en parsearFacturaSunat:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function vincularFacturaSunat(req, res) {
+  try {
+    const { id } = req.params;
+    let { numero_comprobante_sunat, fecha_facturacion_sunat, comprobante_url } = req.body;
+
+    if (!req.file && !comprobante_url) {
+        return res.status(400).json({ success: false, error: 'Se requiere el archivo PDF de la factura.' });
+    }
+
+    if (req.file) {
+        const resultCloudinary = await subirArchivoACloudinary(req.file, 'indpack_ventas/facturas_sunat');
+        comprobante_url = resultCloudinary.secure_url;
+    }
+
+    const sql = `
+        UPDATE ordenes_venta 
+        SET 
+            facturado_sunat = 1,
+            numero_comprobante_sunat = ?,
+            fecha_facturacion_sunat = COALESCE(?, NOW()),
+            comprobante_url = ?
+        WHERE id_orden_venta = ?
+    `;
+    
+    const urlJSON = comprobante_url ? JSON.stringify([comprobante_url]) : null;
+    const params = [numero_comprobante_sunat, fecha_facturacion_sunat || null, urlJSON, id];
+
+    const result = await executeQuery(sql, params);
+
+    if (!result.success) {
+        return res.status(500).json({ success: false, error: 'Error al actualizar la base de datos', details: result.error });
+    }
+
+    res.json({
+        success: true,
+        message: 'Factura SUNAT vinculada exitosamente',
+        data: {
+            numero_comprobante_sunat,
+            comprobante_url
+        }
+    });
+  } catch (error) {
+    console.error('Error en vincularFacturaSunat:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

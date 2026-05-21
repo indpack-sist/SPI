@@ -462,10 +462,12 @@ export const getReporteDeudasClientes = async (req, res) => {
                 ov.fecha_facturacion_sunat,
                 ov.fecha_vencimiento,
                 ov.moneda,
+                ov.subtotal,
+                ov.igv,
                 ov.total,
                 ov.monto_pagado,
                 ov.tipo_impuesto,
-                (ov.total - ov.monto_pagado) as deuda_pendiente,
+                ov.porcentaje_impuesto,
                 ov.estado_pago,
                 ov.estado,
                 c.id_cliente,
@@ -477,7 +479,6 @@ export const getReporteDeudasClientes = async (req, res) => {
             INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
             WHERE ov.estado NOT IN ('Cancelada', 'Borrador')
               AND ov.estado_pago IN ('Pendiente', 'Parcial')
-              AND (ov.total - ov.monto_pagado) > 0.01
         `;
         
         const params = [];
@@ -515,9 +516,39 @@ export const getReporteDeudasClientes = async (req, res) => {
 
         sql += ` ORDER BY ov.fecha_vencimiento ASC`;
 
-        const [resultados] = await db.query(sql, params);
-
+        const [resultadosRaw] = await db.query(sql, params);
         const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
+
+        // Sincronizar montos con lógica real de ventas
+        const resultados = resultadosRaw.map(row => {
+            const subtotal = parseFloat(row.subtotal) || 0;
+            const montoPagado = parseFloat(row.monto_pagado) || 0;
+            const tipoImpuesto = String(row.tipo_impuesto || '').toUpperCase().trim();
+            const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+            const tipoDoc = String(row.tipo_comprobante || '').trim();
+
+            let totalReal = 0;
+            if (tipoDoc.includes('Nota de Venta')) {
+                totalReal = subtotal; // Notas de venta NO tienen IGV
+            } else if (tipoDoc.includes('Factura') || tipoDoc.includes('Boleta')) {
+                if (esSinImpuesto && !facturasExportacion.includes(row.numero_orden)) {
+                    totalReal = subtotal;
+                } else {
+                    const pct = row.porcentaje_impuesto !== null ? parseFloat(row.porcentaje_impuesto) : 18;
+                    totalReal = subtotal + (subtotal * (pct / 100));
+                }
+            } else {
+                totalReal = parseFloat(row.total) || subtotal;
+            }
+
+            const deudaPendiente = Math.max(0, totalReal - montoPagado);
+
+            return {
+                ...row,
+                total_real: totalReal.toFixed(2),
+                deuda_pendiente: deudaPendiente.toFixed(2)
+            };
+        }).filter(r => parseFloat(r.deuda_pendiente) > 0.01);
 
         const inicializarGrupo = () => ({
             total: 0,
@@ -543,18 +574,16 @@ export const getReporteDeudasClientes = async (req, res) => {
         };
 
         resultados.forEach(row => {
-            const deuda = parseFloat(row.deuda_pendiente) || 0;
+            const deuda = parseFloat(row.deuda_pendiente);
             const dias = parseInt(row.dias_vencidos) || 0;
             const moneda = row.moneda === 'USD' ? 'USD' : 'PEN';
-            
-            // Determinar Categoría
-            const tipoImpuesto = String(row.tipo_impuesto || '').toUpperCase().trim();
-            const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
             const tipo = String(row.tipo_comprobante || '').trim();
-
+            
+            // Misma segmentación que Reporte Producto
             let key = '';
             if (tipo.includes('Factura')) {
-                key = (!esSinImpuesto || facturasExportacion.includes(row.numero_orden)) ? `facturas${moneda}` : `notasVenta${moneda}`;
+                // Nota: ya calculamos total_real arriba, aquí solo clasificamos
+                key = `facturas${moneda}`;
             } else if (tipo.includes('Nota de Venta')) {
                 key = `notasVenta${moneda}`;
             } else {
@@ -574,14 +603,12 @@ export const getReporteDeudasClientes = async (req, res) => {
                 g.aging[0].monto += deuda;
             }
 
-            // Mapa de deudores por grupo
             if (!g.deudoresMap[row.id_cliente]) {
                 g.deudoresMap[row.id_cliente] = { name: row.cliente, deuda: 0 };
             }
             g.deudoresMap[row.id_cliente].deuda += deuda;
         });
 
-        // Procesar resultados finales por grupo
         const reporteFinal = {};
         Object.keys(grupos).forEach(k => {
             const g = grupos[k];
@@ -609,3 +636,4 @@ export const getReporteDeudasClientes = async (req, res) => {
         res.status(500).json({ success: false, error: 'Error al generar reporte de deudas por cliente' });
     }
 };
+

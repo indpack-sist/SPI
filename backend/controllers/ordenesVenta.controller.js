@@ -630,8 +630,8 @@ export async function createOrdenVenta(req, res) {
     }
 
     const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
-    const impuesto = esNotaVenta ? 0 : subtotal * (porcentaje / 100);
-    const total = esNotaVenta ? subtotal : subtotal + impuesto;
+    const impuesto = esNotaVenta ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
+    const total = esNotaVenta ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -907,8 +907,8 @@ export async function updateOrdenVenta(req, res) {
     }
 
     const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
-    const impuesto = esNotaVenta ? 0 : subtotal * (porcentaje / 100);
-    const total = esNotaVenta ? subtotal : subtotal + impuesto;
+    const impuesto = esNotaVenta ? 0 : Math.round(subtotal * (porcentaje / 100) * 100) / 100;
+    const total = esNotaVenta ? subtotal : Math.round((subtotal + impuesto) * 100) / 100;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(

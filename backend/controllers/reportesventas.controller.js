@@ -450,7 +450,7 @@ export const getReporteProductoDespachos = async (req, res) => {
 
 export const getReporteDeudasClientes = async (req, res) => {
     try {
-        const { idCliente, soloVencidas, tipoComprobante, estadoSunat } = req.query;
+        const { idCliente, soloVencidas, tipoComprobante, estadoSunat, fechaInicio, fechaFin } = req.query;
 
         let sql = `
             SELECT 
@@ -474,12 +474,12 @@ export const getReporteDeudasClientes = async (req, res) => {
             INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
             WHERE ov.estado != 'Cancelada'
               AND ov.estado_pago IN ('Pendiente', 'Parcial')
-              AND (ov.total - ov.monto_pagado) > 0
+              AND (ov.total - ov.monto_pagado) > 0.01
         `;
         
         const params = [];
 
-        if (idCliente && idCliente !== '') {
+        if (idCliente && idCliente !== '' && idCliente !== 'null') {
             sql += ` AND ov.id_cliente = ?`;
             params.push(idCliente);
         }
@@ -493,6 +493,11 @@ export const getReporteDeudasClientes = async (req, res) => {
             params.push(tipoComprobante);
         }
 
+        if (fechaInicio && fechaFin) {
+            sql += ` AND DATE(ov.fecha_emision) BETWEEN ? AND ?`;
+            params.push(fechaInicio, fechaFin);
+        }
+
         if (estadoSunat === 'con_correlativo') {
             sql += ` AND ov.numero_comprobante_sunat IS NOT NULL AND ov.numero_comprobante_sunat != ''`;
         } else if (estadoSunat === 'sin_correlativo') {
@@ -503,35 +508,84 @@ export const getReporteDeudasClientes = async (req, res) => {
 
         const [resultados] = await db.query(sql, params);
 
-        let kpis = {
-            deudaTotalPEN: 0,
-            deudaTotalUSD: 0,
-            deudaVencidaPEN: 0,
-            deudaVencidaUSD: 0
+        // Estructura para KPIs y Gráficos
+        const kpis = {
+            totalPEN: 0,
+            totalUSD: 0,
+            vencidoPEN: 0,
+            vencidoUSD: 0,
+            porVencerPEN: 0,
+            porVencerUSD: 0,
+            aging: {
+                pen: { corriente: 0, m_0_30: 0, m_31_60: 0, m_61_90: 0, m_90_mas: 0 },
+                usd: { corriente: 0, m_0_30: 0, m_31_60: 0, m_61_90: 0, m_90_mas: 0 }
+            }
         };
+
+        const deudoresMap = {};
 
         resultados.forEach(row => {
             const deuda = parseFloat(row.deuda_pendiente) || 0;
-            const esVencida = row.dias_vencidos > 0;
+            const dias = parseInt(row.dias_vencidos) || 0;
+            const moneda = row.moneda === 'USD' ? 'usd' : 'pen';
+            
+            // Totales base
+            kpis[`total${moneda.toUpperCase()}`] += deuda;
 
-            if (row.moneda === 'USD') {
-                kpis.deudaTotalUSD += deuda;
-                if (esVencida) kpis.deudaVencidaUSD += deuda;
+            if (dias > 0) {
+                kpis[`vencido${moneda.toUpperCase()}`] += deuda;
+                // Clasificación Aging
+                if (dias <= 30) kpis.aging[moneda].m_0_30 += deuda;
+                else if (dias <= 60) kpis.aging[moneda].m_31_60 += deuda;
+                else if (dias <= 90) kpis.aging[moneda].m_61_90 += deuda;
+                else kpis.aging[moneda].m_90_mas += deuda;
             } else {
-                kpis.deudaTotalPEN += deuda;
-                if (esVencida) kpis.deudaVencidaPEN += deuda;
+                kpis[`porVencer${moneda.toUpperCase()}`] += deuda;
+                kpis.aging[moneda].corriente += deuda;
+            }
+
+            // Top Deudores (Acumular por cliente)
+            if (!deudoresMap[row.id_cliente]) {
+                deudoresMap[row.id_cliente] = { 
+                    cliente: row.cliente, 
+                    deudaPEN: 0, 
+                    deudaUSD: 0,
+                    totalRelativo: 0 // Para sort (aproximado usando un tipo de cambio base si fuera necesario, o simple suma)
+                };
+            }
+            if (moneda === 'usd') {
+                deudoresMap[row.id_cliente].deudaUSD += deuda;
+                deudoresMap[row.id_cliente].totalRelativo += deuda * 3.7; // TC ref para ranking
+            } else {
+                deudoresMap[row.id_cliente].deudaPEN += deuda;
+                deudoresMap[row.id_cliente].totalRelativo += deuda;
             }
         });
+
+        // Convertir mapa de deudores a array y ordenar
+        const topDeudores = Object.values(deudoresMap)
+            .sort((a, b) => b.totalRelativo - a.totalRelativo)
+            .slice(0, 10);
+
+        // Calcular índices de morosidad
+        const morosidadPEN = kpis.totalPEN > 0 ? (kpis.vencidoPEN / kpis.totalPEN) * 100 : 0;
+        const morosidadUSD = kpis.totalUSD > 0 ? (kpis.vencidoUSD / kpis.totalUSD) * 100 : 0;
 
         res.json({
             success: true,
             data: {
                 resumen: {
-                    deuda_total_pen: kpis.deudaTotalPEN.toFixed(2),
-                    deuda_total_usd: kpis.deudaTotalUSD.toFixed(2),
-                    deuda_vencida_pen: kpis.deudaVencidaPEN.toFixed(2),
-                    deuda_vencida_usd: kpis.deudaVencidaUSD.toFixed(2)
+                    deuda_total_pen: kpis.totalPEN.toFixed(2),
+                    deuda_total_usd: kpis.totalUSD.toFixed(2),
+                    deuda_vencida_pen: kpis.vencidoPEN.toFixed(2),
+                    deuda_vencida_usd: kpis.vencidoUSD.toFixed(2),
+                    deuda_corriente_pen: kpis.porVencerPEN.toFixed(2),
+                    deuda_corriente_usd: kpis.porVencerUSD.toFixed(2),
+                    indice_morosidad_pen: morosidadPEN.toFixed(2),
+                    indice_morosidad_usd: morosidadUSD.toFixed(2)
                 },
+                aging: kpis.aging,
+                topDeudores,
                 detalle: resultados
             }
         });

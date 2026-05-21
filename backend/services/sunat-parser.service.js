@@ -25,27 +25,27 @@ export const parseSunatInvoice = async (pdfBuffer) => {
 
         const result = {
             emisor: {
-                ruc: extract(/R\.U\.C\.\s*(?:N[Nº°]?)?\s*(\d{11})/i),
+                ruc: extract(/R\.?U\.?C\.?\s*(?:N[Nº°]?)?\s*[:\-]?\s*(\d{11})/i),
             },
             comprobante: {
                 tipo: 'FACTURA ELECTRÓNICA',
-                // Busca el patrón típico de factura (Ej: F001-12345)
-                serie_correlativo: extract(/(?:FACTURA ELECTRÓNICA|FACTURA\s+ELECTR[OÓ]NICA)\s*\n*(F[A-Z0-9]{3}\s*-\s*\d+)/i) || extract(/(F[A-Z0-9]{3}\s*-\s*\d+)/i),
+                // Busca el patrón típico de factura (Ej: F001-12345 o E001-1838)
+                serie_correlativo: extract(/(?:FACTURA ELECTRÓNICA|FACTURA\s+ELECTR[OÓ]NICA)\s*\n*([EF][A-Z0-9]{3}\s*-\s*\d+)/i) || extract(/([EF][A-Z0-9]{3}\s*-\s*\d+)/i),
                 fecha_emision: extract(/Fecha\s+de\s+Emisi[oó]n\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i),
                 moneda: extract(/Tipo\s+de\s+Moneda\s*[:\-]?\s*([A-Za-z\s]+)/i) || 'SOLES',
             },
             cliente: {
-                // El RUC del cliente suele estar cerca del texto de RUC de receptor o abajo de Señor(es)
-                ruc: extract(/RUC\s*(?:del Cliente|del Receptor)?\s*[:\-]?\s*(\d{11})(?!\s*FACTURA)/i) || extract(/Señor\(es\)\s*[:\-]?\s*.*?\nRUC\s*[:\-]?\s*(\d{11})/ims),
-                razon_social: extract(/Señor(?:es)?\s*[:\-]?\s*([^\n]+)/i) || extract(/Raz[oó]n\s+Social(?:.*?)\n([^\n]+)/i),
-                direccion: extract(/Direcci[oó]n\s+(?:del\s+Cliente|del\s+Receptor)\s*[:\-]?\s*([^\n]+)/i) || extract(/Dirección\s*[:\-]?\s*([^\n]+)\n(?:RUC|Tipo de Moneda)/im)
+                // RUC del cliente: buscamos RUC explícito de cliente, o el que esté inmediatamente debajo de Señor(es)
+                ruc: extract(/RUC\s+(?:del\s+Cliente|del\s+Receptor)\s*[:\-]?\s*(\d{11})/i) || extract(/Señor\(es\)\s*[:\-]?\s*[^\n]+\s+RUC\s*[:\-]?\s*(\d{11})/i) || extract(/(?:Cliente|Receptor).*?\s+RUC\s*[:\-]?\s*(\d{11})/i),
+                razon_social: extract(/Señor\(es\)\s*[:\-]?\s*([^\n]+)/i) || extract(/Raz[oó]n\s+Social(?:.*?)\n([^\n]+)/i),
+                direccion: extract(/Direcci[oó]n\s+(?:del\s+Cliente|del\s+Receptor)(?:\s+de\s+la\s+factura)?\s*[:\-]?\s*([^\n]+)/i) || extract(/Dirección\s*[:\-]?\s*([^\n]+)\n(?:RUC|Tipo de Moneda)/im)
             },
             totales: {
-                subtotal: extract(/Sub\s*Total\s*Ventas\s*[:\-]?\s*(?:S\/|USD)?\s*([\d,]+\.\d{2})/i),
-                descuentos: extract(/Descuentos\s*[:\-]?\s*(?:S\/|USD)?\s*([\d,]+\.\d{2})/i),
-                valor_venta: extract(/Valor\s*Venta\s*[:\-]?\s*(?:S\/|USD)?\s*([\d,]+\.\d{2})/i),
-                igv: extract(/IGV\s*(?:18%|18\.00%)?\s*[:\-]?\s*(?:S\/|USD)?\s*([\d,]+\.\d{2})/i),
-                importe_total: extract(/Importe\s*Total\s*[:\-]?\s*(?:S\/|USD)?\s*([\d,]+\.\d{2})/i),
+                subtotal: extract(/Sub\s*Total\s*Ventas\s*[:\-]?\s*(?:S\/|USD|\$)?\s*([\d,]+\.\d{2})/i),
+                descuentos: extract(/Descuentos\s*[:\-]?\s*(?:S\/|USD|\$)?\s*([\d,]+\.\d{2})/i),
+                valor_venta: extract(/Valor\s*Venta\s*[:\-]?\s*(?:S\/|USD|\$)?\s*([\d,]+\.\d{2})/i),
+                igv: extract(/IGV\s*(?:18%|18\.00%)?\s*[:\-]?\s*(?:S\/|USD|\$)?\s*([\d,]+\.\d{2})/i),
+                importe_total: extract(/Importe\s*Total\s*[:\-]?\s*(?:S\/|USD|\$)?\s*([\d,]+\.\d{2})/i),
             },
             // raw_text: cleanText // Opcional, para debug
         };

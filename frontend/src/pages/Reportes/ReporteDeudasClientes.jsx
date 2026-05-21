@@ -32,9 +32,8 @@ const ReporteDeudasClientes = () => {
     const [reporteData, setReporteData] = useState(null);
     const [error, setError] = useState(null);
 
-    // Estado para la expansión inline (Drill-down)
     const [detalleExpandido, setDetalleExpandido] = useState({
-        grupoKey: null, // Ej: 'facturasPEN'
+        grupoKey: null, 
         titulo: '',
         data: []
     });
@@ -103,15 +102,15 @@ const ReporteDeudasClientes = () => {
 
         const detalleGrupo = reporteData.detalle.filter(item => {
             const moneda = item.moneda === 'USD' ? 'USD' : 'PEN';
+            const tipo = String(item.tipo_comprobante || '').trim().toLowerCase();
             const tipoImpuesto = String(item.tipo_impuesto || '').toUpperCase().trim();
             const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
-            const tipo = String(item.tipo_comprobante || '').trim();
             const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
             let itemKey = '';
-            if (tipo.toLowerCase().includes('factura')) {
+            if (tipo.includes('factura')) {
                 itemKey = (!esSinImpuesto || facturasExportacion.includes(item.numero_orden)) ? `facturas${moneda}` : `notasVenta${moneda}`;
-            } else if (tipo.toLowerCase().includes('nota de venta')) {
+            } else if (tipo.includes('nota de venta')) {
                 itemKey = `notasVenta${moneda}`;
             } else {
                 itemKey = `sinCompr${moneda}`;

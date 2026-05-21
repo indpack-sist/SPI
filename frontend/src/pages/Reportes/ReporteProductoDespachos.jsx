@@ -438,11 +438,11 @@ const ReporteProductoDespachos = () => {
                                                         <td className="font-medium">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</td>
                                                         <td className="font-mono font-bold text-primary">{row.numero_orden}</td>
                                                         <td>
-                                                            <span className={\`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded \${
+                                                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded ${
                                                                 esFactura ? 'bg-success/10 text-success border border-success/20' :
                                                                 esNV ? 'bg-info/10 text-info border border-info/20' :
                                                                 'bg-steel/20 text-wire border border-steel/30'
-                                                            }\`}>
+                                                            }`}>
                                                                 {tipoDoc}
                                                             </span>
                                                         </td>
@@ -457,11 +457,11 @@ const ReporteProductoDespachos = () => {
                                                             {formatearNumero(row.subtotal_item)}
                                                         </td>
                                                         <td className="text-center">
-                                                            <span className={\`px-2.5 py-1 text-[10px] uppercase tracking-widest font-black rounded \${
+                                                            <span className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-black rounded ${
                                                                 row.estado === 'Entregada' 
                                                                     ? 'bg-success/10 text-success border border-success/20' 
                                                                     : 'bg-warning/10 text-warning border border-warning/20'
-                                                            }\`}>
+                                                            }`}>
                                                                 {row.estado}
                                                             </span>
                                                         </td>

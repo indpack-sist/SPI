@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../config/api';
-import { Search, Package, TrendingUp, DollarSign, Box, Clock, BadgeCheck, ChevronRight } from 'lucide-react';
+import { Search, Package, Box, User, TrendingUp } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const ReporteProductoDespachos = () => {
     const [productos, setProductos] = useState([]);
+    const [clientes, setClientes] = useState([]);
     const [busquedaProducto, setBusquedaProducto] = useState('');
-    const [mostrarDropdown, setMostrarDropdown] = useState(false);
+    const [busquedaCliente, setBusquedaCliente] = useState('');
+    const [mostrarDropdownProducto, setMostrarDropdownProducto] = useState(false);
+    const [mostrarDropdownCliente, setMostrarDropdownCliente] = useState(false);
     
     const [filtros, setFiltros] = useState({
         idProducto: '',
+        idCliente: '',
         fechaInicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
         fechaFin: new Date().toISOString().split('T')[0]
     });
@@ -17,28 +22,34 @@ const ReporteProductoDespachos = () => {
     const [reporteData, setReporteData] = useState(null);
     const [error, setError] = useState(null);
 
-    const dropdownRef = useRef(null);
+    const dropdownProductoRef = useRef(null);
+    const dropdownClienteRef = useRef(null);
 
-    // Cargar lista de productos
+    // Cargar listas
     useEffect(() => {
-        const fetchProductos = async () => {
+        const fetchInitialData = async () => {
             try {
-                const response = await api.get('/productos');
-                if (response.data.success) {
-                    setProductos(response.data.data);
-                }
+                const [resProductos, resClientes] = await Promise.all([
+                    api.get('/productos'),
+                    api.get('/clientes')
+                ]);
+                if (resProductos.data.success) setProductos(resProductos.data.data);
+                if (resClientes.data.success) setClientes(resClientes.data.data);
             } catch (err) {
-                console.error("Error cargando productos", err);
+                console.error("Error cargando datos iniciales", err);
             }
         };
-        fetchProductos();
+        fetchInitialData();
     }, []);
 
-    // Cerrar dropdown al hacer click fuera
+    // Cerrar dropdowns al hacer click fuera
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setMostrarDropdown(false);
+            if (dropdownProductoRef.current && !dropdownProductoRef.current.contains(event.target)) {
+                setMostrarDropdownProducto(false);
+            }
+            if (dropdownClienteRef.current && !dropdownClienteRef.current.contains(event.target)) {
+                setMostrarDropdownCliente(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -57,9 +68,17 @@ const ReporteProductoDespachos = () => {
             ...filtros,
             idProducto: producto.id_producto
         });
-        const displayString = `${producto.codigo} - ${producto.nombre}`;
-        setBusquedaProducto(displayString);
-        setMostrarDropdown(false);
+        setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
+        setMostrarDropdownProducto(false);
+    };
+
+    const handleSelectCliente = (cliente) => {
+        setFiltros({
+            ...filtros,
+            idCliente: cliente.id_cliente
+        });
+        setBusquedaCliente(cliente.razon_social);
+        setMostrarDropdownCliente(false);
     };
 
     const productosFiltrados = productos.filter(p => {
@@ -69,6 +88,14 @@ const ReporteProductoDespachos = () => {
             p.nombre.toLowerCase().includes(term) ||
             p.codigo.toLowerCase().includes(term) ||
             fullString.includes(term)
+        );
+    });
+
+    const clientesFiltrados = clientes.filter(c => {
+        const term = busquedaCliente.toLowerCase();
+        return (
+            c.razon_social.toLowerCase().includes(term) ||
+            (c.ruc && c.ruc.includes(term))
         );
     });
 
@@ -94,14 +121,12 @@ const ReporteProductoDespachos = () => {
         }
     };
 
-    // Calcular estadísticas dinámicamente basadas en las reglas de negocio
     const estadisticas = reporteData ? reporteData.detalle.reduce((acc, mov) => {
         const tipoImpuesto = String(mov.tipo_impuesto || '').toUpperCase().trim();
         const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
         const monto = parseFloat(mov.subtotal_item || 0);
         const tipo = String(mov.tipo_comprobante || '').trim();
         
-        // Excepciones para Facturas de Exportación (sin IGV válido)
         const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
         if (tipo.includes('Factura')) {
@@ -132,84 +157,51 @@ const ReporteProductoDespachos = () => {
         return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
     };
 
+    // Preparar datos para el gráfico (orden cronológico)
+    const datosGrafico = reporteData ? [...reporteData.detalle].reverse().map(item => ({
+        fecha: new Date(item.fecha_emision).toLocaleDateString('es-PE'),
+        precio: parseFloat(item.precio_unitario),
+        cliente: item.cliente,
+        cantidad: parseFloat(item.cantidad_despachada),
+        moneda: item.moneda,
+        orden: item.numero_orden
+    })) : [];
+
+    const CustomTooltip = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <div className="bg-carbon border border-steel p-3 rounded shadow-xl">
+                    <p className="text-white font-bold text-sm mb-1">{data.fecha}</p>
+                    <p className="text-primary text-xs font-bold mb-2">Orden: {data.orden}</p>
+                    <p className="text-mist text-xs mb-1"><span className="text-wire font-bold">Cliente:</span> {data.cliente}</p>
+                    <p className="text-mist text-xs mb-1"><span className="text-wire font-bold">Cantidad:</span> {data.cantidad}</p>
+                    <p className="text-mist text-xs"><span className="text-wire font-bold">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}</p>
+                </div>
+            );
+        }
+        return null;
+    };
+
     return (
         <div className="p-4 md:p-6 page-reporte-despachos">
-            {/* INYECCIÓN DE ESTILOS PARA SOBRESCRIBIR LIBRERÍAS EXTERNAS Y ADAPTAR A CARBON/GOLD */}
             <style dangerouslySetInnerHTML={{__html: `
                 .page-reporte-despachos, 
-                .page-reporte-despachos .card {
-                    background-color: var(--carbon) !important;
-                    color: var(--mist) !important;
+                .page-reporte-despachos .card { background-color: var(--carbon) !important; color: var(--mist) !important; }
+                .page-reporte-despachos .form-input, .page-reporte-despachos input[type="text"], .page-reporte-despachos input[type="date"] {
+                    background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important; height: 48px !important;
                 }
-
-                .page-reporte-despachos .form-input,
-                .page-reporte-despachos input[type="text"],
-                .page-reporte-despachos input[type="date"] {
-                    background-color: var(--carbon-mid) !important;
-                    border: 1px solid var(--steel) !important;
-                    color: var(--white) !important;
-                    font-family: inherit !important;
-                    height: 48px !important;
+                .page-reporte-despachos .form-input:focus, .page-reporte-despachos input:focus {
+                    border-color: var(--primary) !important; outline: none !important; background-color: var(--carbon-light) !important; box-shadow: 0 0 0 2px rgba(232, 184, 75, 0.1) !important;
                 }
-                
-                .page-reporte-despachos .form-input:focus, 
-                .page-reporte-despachos input:focus {
-                    border-color: var(--primary) !important;
-                    outline: none !important;
-                    background-color: var(--carbon-light) !important;
-                    box-shadow: 0 0 0 2px rgba(232, 184, 75, 0.1) !important;
-                }
-
-                .page-reporte-despachos .dropdown-menu {
-                    background-color: var(--carbon-light) !important;
-                    border: 1px solid var(--steel) !important;
-                    z-index: 100 !important;
-                }
-
-                .page-reporte-despachos .dropdown-item:hover {
-                    background-color: var(--steel) !important;
-                }
-
-                .page-reporte-despachos .table-container {
-                    background-color: var(--carbon) !important;
-                    border: 1px solid var(--border) !important;
-                    border-radius: 4px !important;
-                    overflow: hidden !important;
-                }
-
-                .page-reporte-despachos table {
-                    background-color: var(--carbon) !important;
-                }
-                
-                .page-reporte-despachos th {
-                    background-color: var(--carbon-light) !important;
-                    color: var(--wire) !important;
-                    text-transform: uppercase !important;
-                    font-size: 0.65rem !important;
-                    letter-spacing: 0.05em !important;
-                    border-bottom: 2px solid var(--steel) !important;
-                    padding: 10px 12px !important;
-                }
-
-                .page-reporte-despachos td {
-                    border-bottom: 1px solid var(--border) !important;
-                    color: var(--mist) !important;
-                    padding: 10px 12px !important;
-                    font-size: 0.75rem !important;
-                }
-
-                .page-reporte-despachos tr:hover td {
-                    background-color: rgba(255, 255, 255, 0.02) !important;
-                }
-
-                .page-reporte-despachos .stat-card {
-                    min-height: 85px !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    justify-content: center !important;
-                    padding: 0.75rem 1rem !important;
-                    border-radius: 8px !important;
-                }
+                .page-reporte-despachos .dropdown-menu { background-color: var(--carbon-light) !important; border: 1px solid var(--steel) !important; z-index: 100 !important; }
+                .page-reporte-despachos .dropdown-item:hover { background-color: var(--steel) !important; }
+                .page-reporte-despachos .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; overflow: hidden !important; }
+                .page-reporte-despachos table { background-color: var(--carbon) !important; }
+                .page-reporte-despachos th { background-color: var(--carbon-light) !important; color: var(--wire) !important; text-transform: uppercase !important; font-size: 0.65rem !important; letter-spacing: 0.05em !important; border-bottom: 2px solid var(--steel) !important; padding: 10px 12px !important; }
+                .page-reporte-despachos td { border-bottom: 1px solid var(--border) !important; color: var(--mist) !important; padding: 10px 12px !important; font-size: 0.75rem !important; }
+                .page-reporte-despachos tr:hover td { background-color: rgba(255, 255, 255, 0.02) !important; }
+                .page-reporte-despachos .stat-card { min-height: 85px !important; display: flex !important; flex-direction: column !important; justify-content: center !important; padding: 0.75rem 1rem !important; border-radius: 8px !important; }
             `}} />
 
             <div className="flex flex-col mb-6">
@@ -217,19 +209,19 @@ const ReporteProductoDespachos = () => {
                     <div className="p-2 bg-primary/10 rounded-lg">
                         <Package size={28} className="text-primary" />
                     </div>
-                    <span className="uppercase font-barlow text-white">Despachos por Producto</span>
+                    <span className="uppercase font-barlow text-white">Despachos por Producto y Cliente</span>
                 </h1>
                 <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-2">
-                    Análisis histórico y trazabilidad logística
+                    Análisis histórico, trazabilidad logística y variación de precios
                 </p>
             </div>
 
             <div className="card mb-6 bg-carbon-mid border border-steel/30 shadow-xl">
                 <div className="card-body p-4">
                     <div className="flex flex-col lg:flex-row gap-4 items-end">
-                        <div className="form-group flex-1 w-full" ref={dropdownRef}>
+                        <div className="form-group flex-1 w-full" ref={dropdownProductoRef}>
                             <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
-                                Producto a consultar
+                                Producto a consultar *
                             </label>
                             <div className="relative">
                                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire z-10" />
@@ -240,23 +232,17 @@ const ReporteProductoDespachos = () => {
                                     value={busquedaProducto}
                                     onChange={(e) => {
                                         setBusquedaProducto(e.target.value);
-                                        setMostrarDropdown(true);
-                                        if (e.target.value === '') {
-                                            setFiltros({...filtros, idProducto: ''});
-                                        }
+                                        setMostrarDropdownProducto(true);
+                                        if (e.target.value === '') setFiltros({...filtros, idProducto: ''});
                                     }}
-                                    onFocus={() => setMostrarDropdown(true)}
+                                    onFocus={() => setMostrarDropdownProducto(true)}
                                 />
-                                {mostrarDropdown && busquedaProducto && (
+                                {mostrarDropdownProducto && busquedaProducto && (
                                     <div className="absolute z-50 left-0 right-0 top-full mt-1 dropdown-menu shadow-2xl rounded-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                                         <ul className="max-h-64 overflow-y-auto p-1 space-y-0.5">
                                             {productosFiltrados.length > 0 ? (
                                                 productosFiltrados.map((producto) => (
-                                                    <li
-                                                        key={producto.id_producto}
-                                                        className="cursor-pointer select-none relative py-2.5 px-4 dropdown-item rounded-md transition-colors"
-                                                        onClick={() => handleSelectProducto(producto)}
-                                                    >
+                                                    <li key={producto.id_producto} className="cursor-pointer select-none relative py-2.5 px-4 dropdown-item rounded-md transition-colors" onClick={() => handleSelectProducto(producto)}>
                                                         <div className="flex flex-col">
                                                             <span className="font-bold text-mist text-sm">{producto.nombre}</span>
                                                             <span className="text-[10px] text-primary font-black uppercase tracking-widest mt-0.5">{producto.codigo}</span>
@@ -264,9 +250,46 @@ const ReporteProductoDespachos = () => {
                                                     </li>
                                                 ))
                                             ) : (
-                                                <li className="cursor-default select-none relative py-4 px-4 text-wire text-[10px] font-black uppercase tracking-[0.2em] text-center bg-carbon/50">
-                                                    No se encontraron productos
-                                                </li>
+                                                <li className="cursor-default select-none py-4 px-4 text-wire text-[10px] font-black uppercase tracking-[0.2em] text-center">No se encontraron productos</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="form-group flex-1 w-full" ref={dropdownClienteRef}>
+                            <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
+                                Cliente (Opcional)
+                            </label>
+                            <div className="relative">
+                                <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire z-10" />
+                                <input
+                                    type="text"
+                                    className="form-input pl-10 w-full"
+                                    placeholder="Todos los clientes..."
+                                    value={busquedaCliente}
+                                    onChange={(e) => {
+                                        setBusquedaCliente(e.target.value);
+                                        setMostrarDropdownCliente(true);
+                                        if (e.target.value === '') setFiltros({...filtros, idCliente: ''});
+                                    }}
+                                    onFocus={() => setMostrarDropdownCliente(true)}
+                                />
+                                {mostrarDropdownCliente && busquedaCliente && (
+                                    <div className="absolute z-50 left-0 right-0 top-full mt-1 dropdown-menu shadow-2xl rounded-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                        <ul className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                                            {clientesFiltrados.length > 0 ? (
+                                                clientesFiltrados.map((cliente) => (
+                                                    <li key={cliente.id_cliente} className="cursor-pointer select-none relative py-2.5 px-4 dropdown-item rounded-md transition-colors" onClick={() => handleSelectCliente(cliente)}>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-mist text-sm">{cliente.razon_social}</span>
+                                                            <span className="text-[10px] text-wire font-black uppercase tracking-widest mt-0.5">RUC: {cliente.ruc || 'N/A'}</span>
+                                                        </div>
+                                                    </li>
+                                                ))
+                                            ) : (
+                                                <li className="cursor-default select-none py-4 px-4 text-wire text-[10px] font-black uppercase tracking-[0.2em] text-center">No se encontraron clientes</li>
                                             )}
                                         </ul>
                                     </div>
@@ -275,39 +298,18 @@ const ReporteProductoDespachos = () => {
                         </div>
                         
                         <div className="flex flex-row gap-4 w-full lg:w-auto">
-                            <div className="form-group flex-1 lg:w-40">
-                                <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
-                                    Desde
-                                </label>
-                                <input 
-                                    type="date" 
-                                    name="fechaInicio" 
-                                    value={filtros.fechaInicio} 
-                                    onChange={handleChangeFiltro}
-                                    className="form-input w-full text-sm font-bold"
-                                />
+                            <div className="form-group flex-1 lg:w-32">
+                                <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Desde</label>
+                                <input type="date" name="fechaInicio" value={filtros.fechaInicio} onChange={handleChangeFiltro} className="form-input w-full text-sm font-bold" />
                             </div>
-
-                            <div className="form-group flex-1 lg:w-40">
-                                <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
-                                    Hasta
-                                </label>
-                                <input 
-                                    type="date" 
-                                    name="fechaFin" 
-                                    value={filtros.fechaFin} 
-                                    onChange={handleChangeFiltro}
-                                    className="form-input w-full text-sm font-bold"
-                                />
+                            <div className="form-group flex-1 lg:w-32">
+                                <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Hasta</label>
+                                <input type="date" name="fechaFin" value={filtros.fechaFin} onChange={handleChangeFiltro} className="form-input w-full text-sm font-bold" />
                             </div>
                         </div>
 
                         <div className="w-full lg:w-auto mt-4 lg:mt-0">
-                            <button 
-                                onClick={generarReporte} 
-                                className="btn btn-primary w-full lg:w-auto font-black tracking-widest h-12 px-8 shadow-xl shadow-primary/20 active:scale-95 transition-all"
-                                disabled={loading}
-                            >
+                            <button onClick={generarReporte} className="btn btn-primary w-full lg:w-auto font-black tracking-widest h-12 px-8 shadow-xl shadow-primary/20 active:scale-95 transition-all" disabled={loading}>
                                 {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
                             </button>
                         </div>
@@ -358,7 +360,48 @@ const ReporteProductoDespachos = () => {
                         </div>
                     </div>
 
-                    <div className="card shadow-2xl relative border border-steel/20">
+                    {datosGrafico.length > 0 && (
+                        <div className="card mb-6 border border-steel/20 shadow-xl bg-carbon-mid">
+                            <div className="card-header border-b border-steel/30 px-6 py-4 flex items-center gap-2">
+                                <TrendingUp size={20} className="text-primary" />
+                                <h3 className="text-sm font-black text-white uppercase tracking-widest">Variación de Precio Unitario</h3>
+                            </div>
+                            <div className="card-body p-6">
+                                <div className="w-full h-80">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={datosGrafico} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                            <XAxis 
+                                                dataKey="fecha" 
+                                                stroke="#888" 
+                                                tick={{ fill: '#888', fontSize: 11 }} 
+                                                tickMargin={10} 
+                                            />
+                                            <YAxis 
+                                                stroke="#888" 
+                                                tick={{ fill: '#888', fontSize: 11 }}
+                                                tickFormatter={(value) => \`\${value.toFixed(2)}\`}
+                                                domain={['auto', 'auto']}
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ fontSize: '12px', color: '#ccc', paddingTop: '10px' }} />
+                                            <Line 
+                                                type="monotone" 
+                                                dataKey="precio" 
+                                                name="Precio Unitario" 
+                                                stroke="#e8b84b" 
+                                                strokeWidth={3} 
+                                                dot={{ r: 4, strokeWidth: 2, fill: '#1a1a1a' }} 
+                                                activeDot={{ r: 6, strokeWidth: 0, fill: '#e8b84b' }} 
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="card shadow-2xl relative border border-steel/20 bg-carbon">
                         <div className="card-header border-b border-steel/30 px-6 py-4">
                             <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
                                 Registro Detallado
@@ -373,12 +416,11 @@ const ReporteProductoDespachos = () => {
                                 <table className="w-full text-left border-collapse whitespace-nowrap">
                                     <thead>
                                         <tr>
-                                            <th>Emisión (Orden)</th>
-                                            <th>Fecha Despacho</th>
+                                            <th>Emisión</th>
                                             <th>N° Orden</th>
                                             <th>Documento</th>
                                             <th>Cliente</th>
-                                            <th className="text-right">Cant. Despachada</th>
+                                            <th className="text-right">Cant.</th>
                                             <th className="text-right">Precio Unit.</th>
                                             <th className="text-right">Subtotal</th>
                                             <th className="text-center">Estado</th>
@@ -394,36 +436,19 @@ const ReporteProductoDespachos = () => {
                                                 return (
                                                     <tr key={idx} className="transition-colors">
                                                         <td className="font-medium">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</td>
+                                                        <td className="font-mono font-bold text-primary">{row.numero_orden}</td>
                                                         <td>
-                                                            {row.fecha_despacho_real ? (
-                                                                <span className="font-medium text-white">{new Date(row.fecha_despacho_real).toLocaleDateString('es-PE')}</span>
-                                                            ) : (
-                                                                <span className="text-[10px] font-black text-warning uppercase tracking-widest bg-warning/10 px-2 py-1 rounded">Pendiente</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="font-mono font-bold">
-                                                            <a 
-                                                                href={`/ventas/ordenes/${row.id_orden_venta}`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-primary hover:text-primary-focus underline decoration-primary/30 hover:decoration-primary transition-colors cursor-pointer"
-                                                                title="Ver detalle de la orden"
-                                                            >
-                                                                {row.numero_orden}
-                                                            </a>
-                                                        </td>
-                                                        <td>
-                                                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded ${
+                                                            <span className={\`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded \${
                                                                 esFactura ? 'bg-success/10 text-success border border-success/20' :
                                                                 esNV ? 'bg-info/10 text-info border border-info/20' :
                                                                 'bg-steel/20 text-wire border border-steel/30'
-                                                            }`}>
+                                                            }\`}>
                                                                 {tipoDoc}
                                                             </span>
                                                         </td>
-                                                        <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
+                                                        <td className="truncate max-w-[250px] font-medium" title={row.cliente}>{row.cliente}</td>
                                                         <td className="text-right font-black text-white">{formatearNumero(row.cantidad_despachada)}</td>
-                                                        <td className="text-right font-mono">
+                                                        <td className="text-right font-mono text-mist">
                                                             <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>
                                                             {formatearNumero(row.precio_unitario)}
                                                         </td>
@@ -432,11 +457,11 @@ const ReporteProductoDespachos = () => {
                                                             {formatearNumero(row.subtotal_item)}
                                                         </td>
                                                         <td className="text-center">
-                                                            <span className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-black rounded ${
+                                                            <span className={\`px-2.5 py-1 text-[10px] uppercase tracking-widest font-black rounded \${
                                                                 row.estado === 'Entregada' 
                                                                     ? 'bg-success/10 text-success border border-success/20' 
                                                                     : 'bg-warning/10 text-warning border border-warning/20'
-                                                            }`}>
+                                                            }\`}>
                                                                 {row.estado}
                                                             </span>
                                                         </td>
@@ -445,8 +470,8 @@ const ReporteProductoDespachos = () => {
                                             })
                                         ) : (
                                             <tr>
-                                                <td colSpan="9" className="text-center py-12 text-wire text-sm uppercase tracking-widest font-bold">
-                                                    No se encontraron despachos para este producto en el rango de fechas.
+                                                <td colSpan="8" className="text-center py-12 text-wire text-sm uppercase tracking-widest font-bold">
+                                                    No se encontraron despachos.
                                                 </td>
                                             </tr>
                                         )}

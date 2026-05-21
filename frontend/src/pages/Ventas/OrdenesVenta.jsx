@@ -665,7 +665,7 @@ function OrdenesVenta() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); abrirVisorSunat(row); }}
-                  className="mt-1.5 flex items-center justify-center bg-emerald-500/10 border border-emerald-500/50 hover:bg-emerald-500 hover:text-white transition-all text-emerald-500 px-3 py-1 rounded shadow-sm group"
+                  className="mt-1.5 flex items-center justify-center btn-sunat-viewer px-3 py-1 rounded shadow-sm group"
                   title="Ver Detalle Factura SUNAT"
                 >
                   <Eye size={12} className="group-hover:scale-110 transition-transform" />
@@ -732,6 +732,20 @@ function OrdenesVenta() {
         }
         .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; overflow: hidden !important; }
         .page-ordenes-venta .stat-card { min-height: 85px !important; padding: 1rem !important; border-radius: 8px !important; }
+        
+        .btn-sunat-viewer {
+          background-color: rgba(16, 185, 129, 0.1) !important;
+          border: 1px solid rgba(16, 185, 129, 0.4) !important;
+          color: #10b981 !important;
+          transition: all 0.2s ease !important;
+        }
+        .btn-sunat-viewer:hover {
+          background-color: #10b981 !important;
+          color: white !important;
+          border-color: #10b981 !important;
+          transform: translateY(-1px) !important;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+        }
       `}} />
 
       {loading && <Loading message="Cargando órdenes de venta..." />}

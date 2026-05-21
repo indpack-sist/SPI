@@ -372,12 +372,12 @@ export const getReporteVentas = async (req, res) => {
 
 export const getReporteProductoDespachos = async (req, res) => {
     try {
-        const { idProducto, fechaInicio, fechaFin } = req.query;
+        const { idProducto, fechaInicio, fechaFin, idCliente } = req.query;
         if (!idProducto || !fechaInicio || !fechaFin) {
             return res.status(400).json({ success: false, error: 'Faltan parámetros: idProducto, fechaInicio y fechaFin son requeridos' });
         }
 
-        const sql = `
+        let sql = `
             SELECT 
                 ov.id_orden_venta,
                 ov.numero_orden,
@@ -404,10 +404,18 @@ export const getReporteProductoDespachos = async (req, res) => {
               -- REGLA: Excluir órdenes canceladas y despachos anulados/cancelados
               AND ov.estado != 'Cancelada'
               AND (s.id_salida IS NULL OR (s.estado != 'Cancelada' AND s.estado != 'Anulado'))
-            ORDER BY ov.fecha_emision DESC;
         `;
+        
+        const params = [idProducto, fechaInicio, fechaFin];
 
-        const [resultados] = await db.query(sql, [idProducto, fechaInicio, fechaFin]);
+        if (idCliente && idCliente !== 'null' && idCliente !== '') {
+            sql += ` AND ov.id_cliente = ?`;
+            params.push(idCliente);
+        }
+
+        sql += ` ORDER BY ov.fecha_emision DESC;`;
+
+        const [resultados] = await db.query(sql, params);
 
         let totalCantidad = 0;
         let totalIngresosPEN = 0;

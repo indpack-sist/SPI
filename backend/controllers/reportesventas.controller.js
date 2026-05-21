@@ -510,96 +510,89 @@ export const getReporteDeudasClientes = async (req, res) => {
 
         const [resultados] = await db.query(sql, params);
 
-        // Estructura para KPIs y Gráficos
-        const kpis = {
-            totalPEN: 0, totalUSD: 0,
-            vencidoPEN: 0, vencidoUSD: 0,
-            porVencerPEN: 0, porVencerUSD: 0,
-            // Agrupación estilo Reporte Productos
-            facturas_pen: 0, facturas_usd: 0,
-            notas_venta_pen: 0, notas_venta_usd: 0,
-            sin_comprobante_pen: 0, sin_comprobante_usd: 0,
-            aging: {
-                pen: { corriente: 0, m_0_30: 0, m_31_60: 0, m_61_90: 0, m_90_mas: 0 },
-                usd: { corriente: 0, m_0_30: 0, m_31_60: 0, m_61_90: 0, m_90_mas: 0 }
-            }
-        };
-
         const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
-        const deudoresMap = {};
+
+        const inicializarGrupo = () => ({
+            total: 0,
+            vencido: 0,
+            morosidad: 0,
+            aging: [
+                { name: 'Corriente', monto: 0, color: '#10B981' },
+                { name: '0-30 días', monto: 0, color: '#FBBF24' },
+                { name: '31-60 días', monto: 0, color: '#F59E0B' },
+                { name: '61-90 días', monto: 0, color: '#EF4444' },
+                { name: '+90 días', monto: 0, color: '#7F1D1D' }
+            ],
+            deudoresMap: {}
+        });
+
+        const grupos = {
+            facturasPEN: inicializarGrupo(),
+            facturasUSD: inicializarGrupo(),
+            notasVentaPEN: inicializarGrupo(),
+            notasVentaUSD: inicializarGrupo(),
+            sinComprPEN: inicializarGrupo(),
+            sinComprUSD: inicializarGrupo()
+        };
 
         resultados.forEach(row => {
             const deuda = parseFloat(row.deuda_pendiente) || 0;
             const dias = parseInt(row.dias_vencidos) || 0;
-            const moneda = row.moneda === 'USD' ? 'usd' : 'pen';
+            const moneda = row.moneda === 'USD' ? 'USD' : 'PEN';
             
-            // Totales base
-            kpis[`total${moneda.toUpperCase()}`] += deuda;
-
-            if (dias > 0) {
-                kpis[`vencido${moneda.toUpperCase()}`] += deuda;
-                if (dias <= 30) kpis.aging[moneda].m_0_30 += deuda;
-                else if (dias <= 60) kpis.aging[moneda].m_31_60 += deuda;
-                else if (dias <= 90) kpis.aging[moneda].m_61_90 += deuda;
-                else kpis.aging[moneda].m_90_mas += deuda;
-            } else {
-                kpis[`porVencer${moneda.toUpperCase()}`] += deuda;
-                kpis.aging[moneda].corriente += deuda;
-            }
-
-            // Agrupación por tipo (Estilo Reporte Producto)
+            // Determinar Categoría
             const tipoImpuesto = String(row.tipo_impuesto || '').toUpperCase().trim();
             const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
             const tipo = String(row.tipo_comprobante || '').trim();
 
+            let key = '';
             if (tipo.includes('Factura')) {
-                if (!esSinImpuesto || facturasExportacion.includes(row.numero_orden)) {
-                    kpis[`facturas_${moneda}`] += deuda;
-                } else {
-                    kpis[`notas_venta_${moneda}`] += deuda;
-                }
+                key = (!esSinImpuesto || facturasExportacion.includes(row.numero_orden)) ? `facturas${moneda}` : `notasVenta${moneda}`;
             } else if (tipo.includes('Nota de Venta')) {
-                kpis[`notas_venta_${moneda}`] += deuda;
+                key = `notasVenta${moneda}`;
             } else {
-                kpis[`sin_comprobante_${moneda}`] += deuda;
+                key = `sinCompr${moneda}`;
             }
 
-            // Top Deudores
-            if (!deudoresMap[row.id_cliente]) {
-                deudoresMap[row.id_cliente] = { cliente: row.cliente, deudaPEN: 0, deudaUSD: 0, totalRelativo: 0 };
-            }
-            if (moneda === 'usd') {
-                deudoresMap[row.id_cliente].deudaUSD += deuda;
-                deudoresMap[row.id_cliente].totalRelativo += deuda * 3.7;
+            const g = grupos[key];
+            g.total += deuda;
+            
+            if (dias > 0) {
+                g.vencido += deuda;
+                if (dias <= 30) g.aging[1].monto += deuda;
+                else if (dias <= 60) g.aging[2].monto += deuda;
+                else if (dias <= 90) g.aging[3].monto += deuda;
+                else g.aging[4].monto += deuda;
             } else {
-                deudoresMap[row.id_cliente].deudaPEN += deuda;
-                deudoresMap[row.id_cliente].totalRelativo += deuda;
+                g.aging[0].monto += deuda;
             }
+
+            // Mapa de deudores por grupo
+            if (!g.deudoresMap[row.id_cliente]) {
+                g.deudoresMap[row.id_cliente] = { name: row.cliente, deuda: 0 };
+            }
+            g.deudoresMap[row.id_cliente].deuda += deuda;
         });
 
-        const topDeudores = Object.values(deudoresMap).sort((a, b) => b.totalRelativo - a.totalRelativo).slice(0, 10);
-        const morosidadPEN = kpis.totalPEN > 0 ? (kpis.vencidoPEN / kpis.totalPEN) * 100 : 0;
-        const morosidadUSD = kpis.totalUSD > 0 ? (kpis.vencidoUSD / kpis.totalUSD) * 100 : 0;
+        // Procesar resultados finales por grupo
+        const reporteFinal = {};
+        Object.keys(grupos).forEach(k => {
+            const g = grupos[k];
+            reporteFinal[k] = {
+                total: g.total.toFixed(2),
+                vencido: g.vencido.toFixed(2),
+                morosidad: g.total > 0 ? ((g.vencido / g.total) * 100).toFixed(2) : "0.00",
+                aging: g.aging.filter(a => a.monto > 0.01),
+                topDeudores: Object.values(g.deudoresMap)
+                    .sort((a, b) => b.deuda - a.deuda)
+                    .slice(0, 10)
+            };
+        });
 
         res.json({
             success: true,
             data: {
-                resumen: {
-                    deuda_total_pen: kpis.totalPEN.toFixed(2),
-                    deuda_total_usd: kpis.totalUSD.toFixed(2),
-                    deuda_vencida_pen: kpis.vencidoPEN.toFixed(2),
-                    deuda_vencida_usd: kpis.vencidoUSD.toFixed(2),
-                    indice_morosidad_pen: morosidadPEN.toFixed(2),
-                    indice_morosidad_usd: morosidadUSD.toFixed(2),
-                    facturas_pen: kpis.facturas_pen.toFixed(2),
-                    facturas_usd: kpis.facturas_usd.toFixed(2),
-                    notas_venta_pen: kpis.notas_venta_pen.toFixed(2),
-                    notas_venta_usd: kpis.notas_venta_usd.toFixed(2),
-                    sin_comprobante_pen: kpis.sin_comprobante_pen.toFixed(2),
-                    sin_comprobante_usd: kpis.sin_comprobante_usd.toFixed(2)
-                },
-                aging: kpis.aging,
-                topDeudores,
+                resumen: reporteFinal,
                 detalle: resultados
             }
         });

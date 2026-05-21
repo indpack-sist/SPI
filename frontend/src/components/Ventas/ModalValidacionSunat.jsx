@@ -47,7 +47,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
             const formDataParser = new FormData();
             formDataParser.append('pdf', pdfFile);
 
-            const response = await api.post('/api/ordenesVenta/parse-sunat', formDataParser, {
+            const response = await api.post('/ordenesVenta/parse-sunat', formDataParser, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -130,7 +130,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
                 }
             }
 
-            const response = await api.put(`/api/ordenesVenta/${orden.id_orden_venta}/vincular-sunat`, formDataSubmit, {
+            const response = await api.put(`/ordenesVenta/${orden.id_orden_venta}/vincular-sunat`, formDataSubmit, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 

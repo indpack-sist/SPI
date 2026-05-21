@@ -3581,65 +3581,6 @@ function DetalleOrdenVenta() {
       </Modal>
 
       <Modal
-        isOpen={modalFacturarSunatOpen}
-        onClose={() => {
-          setModalFacturarSunatOpen(false);
-          setNumeroComprobanteSunat('');
-        }}
-        title="Marcar como Facturado en SUNAT"
-        size="sm"
-      >
-        <form onSubmit={handleMarcarFacturadoSunat}>
-          <div className="space-y-4">
-            <div className="bg-emerald-50 border-l-4 border-emerald-500 p-3 rounded">
-              <div className="flex gap-2 items-start">
-                <BadgeCheck className="text-emerald-600 shrink-0 mt-0.5" size={20} />
-                <div className="text-sm text-emerald-800">
-                  <p className="font-bold mb-1">Confirmar Facturación SUNAT</p>
-                  <p>Indica que esta orden ya fue enviada y aceptada por SUNAT. Puedes registrar el número de comprobante real de forma opcional.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">N° Comprobante SUNAT (opcional)</label>
-              <input
-                type="text"
-                className="form-input"
-                value={numeroComprobanteSunat}
-                onChange={(e) => setNumeroComprobanteSunat(e.target.value)}
-                placeholder="Ej: F001-00000123"
-                maxLength={50}
-              />
-              <small className="text-muted">El correlativo tal como aparece en SUNAT / OSE.</small>
-            </div>
-
-            <div className="flex gap-2 justify-end pt-2">
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => {
-                  setModalFacturarSunatOpen(false);
-                  setNumeroComprobanteSunat('');
-                }}
-                disabled={procesando}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="btn !bg-emerald-600 !text-white hover:!bg-emerald-700"
-                disabled={procesando}
-              >
-                <BadgeCheck size={18} />
-                {procesando ? 'Guardando...' : 'Confirmar'}
-              </button>
-            </div>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
         isOpen={visorArchivo.open}
         onClose={cerrarVisor}
         title={visorArchivo.titulo}

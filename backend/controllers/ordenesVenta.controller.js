@@ -67,7 +67,7 @@ export async function getAllOrdenesVenta(req, res) {
         ov.facturado_sunat,
         ov.fecha_facturacion_sunat,
         ov.numero_comprobante_sunat,
-        ov.comprobante_url,
+        ov.comprobante_sunat_url,
         ov.id_vehiculo,
         ov.id_conductor,
         ov.tipo_entrega,
@@ -3990,7 +3990,7 @@ export async function vincularFacturaSunat(req, res) {
             facturado_sunat = 1,
             numero_comprobante_sunat = ?,
             fecha_facturacion_sunat = COALESCE(?, NOW()),
-            comprobante_url = ?
+            comprobante_sunat_url = ?
         WHERE id_orden_venta = ?
     `;
     

@@ -208,7 +208,7 @@ const ReporteProductoDespachos = () => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
             return (
-                <div className="bg-carbon border border-steel p-3 rounded shadow-xl">
+                <div className="p-3 rounded shadow-xl" style={{ backgroundColor: '#161616', border: '1px solid #333' }}>
                     <p className="text-white font-bold text-sm mb-1">{data.fecha}</p>
                     <p className="text-primary text-xs font-bold mb-2">Orden: {data.orden}</p>
                     <p className="text-mist text-xs mb-1"><span className="text-wire font-bold">Cliente:</span> {data.cliente}</p>
@@ -222,14 +222,17 @@ const ReporteProductoDespachos = () => {
 
     const renderGrafico = (datos, titulo, colorLinea) => {
         if (!datos || datos.length === 0) return null;
+
+        const anchoDinamico = Math.max(datos.length * 60, 600);
+
         return (
             <div className="card border border-steel/20 shadow-xl bg-carbon-mid">
                 <div className="card-header border-b border-steel/30 px-6 py-4 flex items-center gap-2">
                     <TrendingUp size={20} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
                     <h3 className="text-sm font-black text-white uppercase tracking-widest">{titulo}</h3>
                 </div>
-                <div className="card-body p-6">
-                    <div style={{ width: '100%', height: 260 }}>
+                <div className="card-body p-6 overflow-x-auto custom-scrollbar">
+                    <div style={{ width: anchoDinamico, minWidth: '100%', height: 260 }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={datos} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />

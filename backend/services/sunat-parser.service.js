@@ -1,4 +1,4 @@
-import pdf from 'pdf-parse';
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 /**
  * Parsea un PDF de factura SUNAT y extrae los campos clave usando expresiones regulares.
@@ -8,7 +8,7 @@ import pdf from 'pdf-parse';
  */
 export const parseSunatInvoice = async (pdfBuffer) => {
     try {
-        const data = await pdf(pdfBuffer);
+        const data = await pdfParse(pdfBuffer);
         const text = data.text;
 
         // Limpiar el texto para facilitar búsquedas y estandarizar saltos de línea

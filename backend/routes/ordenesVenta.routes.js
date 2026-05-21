@@ -100,10 +100,10 @@ router.get('/:id/pagos', verificarToken, getPagosOrden);
 router.post('/:id/pagos', verificarToken, verificarOrdenAprobada, registrarPagoOrden);
 router.delete('/:id/pagos/:idPago', verificarToken, verificarOrdenAprobada, anularPagoOrden);
 
-router.put('/:id', verificarToken, puedeEditarOrdenRechazada, uploadArchivos, updateOrdenVenta);
-router.get('/:id', verificarToken, getOrdenVentaById);
-
 router.post('/parse-sunat', verificarToken, uploadMiddleware.single('pdf'), parsearFacturaSunat);
+
+router.get('/:id', verificarToken, getOrdenVentaById);
+router.put('/:id', verificarToken, puedeEditarOrdenRechazada, uploadArchivos, updateOrdenVenta);
 router.put('/:id/vincular-sunat', verificarToken, verificarOrdenAprobada, uploadMiddleware.single('pdf'), vincularFacturaSunat);
 
 export default router;

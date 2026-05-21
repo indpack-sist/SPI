@@ -41,10 +41,19 @@ export const parseSunatInvoice = async (pdfBuffer) => {
         // 3. Fechas (DD/MM/YYYY)
         const allDates = getAllMatches(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})/g, flatText);
         
-        // 4. Importe Total (Montos con decimales cerca de la palabra TOTAL)
-        // Buscamos un monto que siga a la palabra TOTAL (con o sin símbolos de moneda)
-        const totalMatches = flatText.match(/(?:TOTAL|PAGAR).*?(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i);
-        const importe_total = totalMatches ? totalMatches[1] : '';
+        // 4. Importe Total (Buscamos específicamente "Importe Total" para evitar Subtotales)
+        // Probamos primero con una búsqueda más estricta en el texto normalizado
+        const totalStrictRegex = /Importe\s+Total\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i;
+        const strictMatch = flatText.match(totalStrictRegex);
+        
+        let importe_total = '';
+        if (strictMatch) {
+            importe_total = strictMatch[1];
+        } else {
+            // Si falla, buscamos el último monto que aparezca después de la palabra TOTAL
+            const totalMatches = getAllMatches(/(?:TOTAL|PAGAR).*?(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/gi, flatText);
+            importe_total = totalMatches.length > 0 ? totalMatches[totalMatches.length - 1] : '';
+        }
 
         // --- HEURÍSTICA DE SELECCIÓN ---
         

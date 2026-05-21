@@ -3,7 +3,7 @@ import { api } from '../../config/api';
 import Alert from '../UI/Alert';
 import './ModalValidacionSunat.css';
 
-const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
+const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null }) => {
     const [parsedData, setParsedData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [alert, setAlert] = useState(null);
@@ -17,14 +17,38 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
     const [pdfUrl, setPdfUrl] = useState(null);
 
     useEffect(() => {
-        if (isOpen && file) {
+        if (!isOpen) return;
+
+        if (readOnly && existingData) {
+            // Modo Visor: Usamos datos guardados
+            setFormData({
+                numero_comprobante_sunat: orden.numero_comprobante_sunat || '',
+                fecha_emision: orden.fecha_facturacion_sunat ? new Date(orden.fecha_facturacion_sunat).toLocaleDateString('es-PE') : '',
+                ruc_cliente: orden.ruc_cliente || '',
+                razon_social: orden.cliente || '',
+                importe_total: orden.total || ''
+            });
+
+            // Resolver URL de PDF (puede ser string o array JSON)
+            let url = orden.comprobante_sunat_url;
+            if (url && typeof url === 'string' && url.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(url);
+                    url = parsed[0];
+                } catch (e) { }
+            }
+            setPdfUrl(url);
+            return;
+        }
+
+        if (file) {
             const objectUrl = URL.createObjectURL(file);
             setPdfUrl(objectUrl);
             parsearPDF(file);
         }
 
         return () => {
-            if (pdfUrl) {
+            if (pdfUrl && !readOnly) {
                 URL.revokeObjectURL(pdfUrl);
             }
             setParsedData(null);
@@ -36,12 +60,13 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
                 importe_total: ''
             });
             setAlert(null);
+            setPdfUrl(null);
         };
         // eslint-disable-next-line
-    }, [isOpen, file]);
+    }, [isOpen, file, readOnly, existingData]);
 
     useEffect(() => {
-        if (!parsedData) return;
+        if (!parsedData || readOnly) return;
 
         let advertencias = [];
         
@@ -156,14 +181,14 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
         <div className="modal-sunat-overlay">
             <div className="modal-sunat-content">
                 <div className="modal-sunat-header">
-                    <h2>Vincular Factura SUNAT</h2>
+                    <h2>{readOnly ? 'Detalle de Factura SUNAT' : 'Vincular Factura SUNAT'}</h2>
                     <button className="btn-close" onClick={onClose}>&times;</button>
                 </div>
                 
                 <div className="modal-sunat-body">
                     {/* Panel Izquierdo: Formulario de Datos Extraídos */}
                     <div className="sunat-panel-izquierdo">
-                        <h3>Datos Extraídos</h3>
+                        <h3>{readOnly ? 'Datos Registrados' : 'Datos Extraídos'}</h3>
                         {alert && <Alert type={alert.type} message={alert.message} onClose={() => setAlert(null)} />}
                         
                         <form onSubmit={handleSubmit} className="sunat-form">
@@ -176,54 +201,82 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
                                     onChange={handleChange}
                                     placeholder="Ej: F001-000123"
                                     required
-                                    className={!formData.numero_comprobante_sunat && !loading ? 'input-error' : ''}
+                                    readOnly={readOnly}
+                                    className={!formData.numero_comprobante_sunat && !loading && !readOnly ? 'input-error' : (readOnly ? 'input-readonly' : '')}
                                 />
-                                <small>Requerido. Verifique que coincida con el documento.</small>
+                                {!readOnly && <small>Requerido. Verifique que coincida con el documento.</small>}
                             </div>
 
                             <div className="form-group">
-                                <label>Fecha de Emisión (Lectura):</label>
+                                <label>Fecha de Emisión:</label>
                                 <input 
                                     type="text" 
                                     name="fecha_emision" 
                                     value={formData.fecha_emision} 
                                     onChange={handleChange}
                                     placeholder="DD/MM/YYYY"
+                                    readOnly={readOnly}
+                                    className={readOnly ? 'input-readonly' : ''}
                                 />
                             </div>
 
                             <hr className="sunat-divider" />
-                            <h4>Validación del Cliente</h4>
+                            <h4>Datos del Cliente</h4>
                             
                             <div className="form-group">
-                                <label>RUC (Extraído del PDF):</label>
+                                <label>RUC:</label>
                                 <input 
                                     type="text" 
                                     name="ruc_cliente"
                                     value={formData.ruc_cliente} 
                                     onChange={handleChange}
+                                    readOnly={readOnly}
+                                    className={readOnly ? 'input-readonly' : ''}
                                 />
                                 <small>RUC en la Orden: {orden?.ruc_cliente}</small>
                             </div>
 
                             <div className="form-group">
-                                <label>Total (Extraído del PDF):</label>
+                                <label>Total:</label>
                                 <input 
                                     type="text" 
                                     name="importe_total"
                                     value={formData.importe_total} 
                                     onChange={handleChange}
+                                    readOnly={readOnly}
+                                    className={readOnly ? 'input-readonly' : ''}
                                 />
                                 <small>Total en la Orden: {orden?.total}</small>
                             </div>
 
                             <div className="sunat-form-actions">
-                                <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
-                                    Cancelar
-                                </button>
-                                <button type="submit" className="btn btn-primary" disabled={loading}>
-                                    {loading ? 'Guardando...' : 'Confirmar y Vincular'}
-                                </button>
+                                {readOnly ? (
+                                    <>
+                                        {pdfUrl && (
+                                            <a 
+                                                href={pdfUrl} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="btn btn-secondary"
+                                                style={{ textAlign: 'center', textDecoration: 'none' }}
+                                            >
+                                                Descargar PDF
+                                            </a>
+                                        )}
+                                        <button type="button" className="btn btn-primary" onClick={onClose}>
+                                            Cerrar
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+                                            Cancelar
+                                        </button>
+                                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                                            {loading ? 'Guardando...' : 'Confirmar y Vincular'}
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </form>
                     </div>

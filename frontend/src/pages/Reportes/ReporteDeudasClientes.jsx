@@ -3,7 +3,7 @@ import { api } from '../../config/api';
 import { 
     Search, User, DollarSign, AlertCircle, TrendingUp, 
     Calendar, FileText, BarChart3, PieChart,
-    ExternalLink, Filter, Box, X, Coins, Clock, ArrowDownWideZap
+    ExternalLink, Filter, Box, X, Coins, Clock, Zap
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -79,7 +79,7 @@ const ReporteDeudasClientes = () => {
     const generarReporte = async () => {
         setLoading(true);
         setError(null);
-        setDetalleExpandido({ grupoKey: null, titulo: '', data: [] }); // Limpiar expansiones al buscar
+        setDetalleExpandido({ grupoKey: null, titulo: '', data: [] });
         try {
             const response = await api.get('/reportes/deudas-clientes', { params: filtros });
             if (response.data.success) {
@@ -138,11 +138,7 @@ const ReporteDeudasClientes = () => {
         }
 
         if (ordenesFiltradas.length > 0) {
-            setDetalleExpandido({
-                grupoKey: keyGrupo,
-                titulo: subTitulo,
-                data: ordenesFiltradas
-            });
+            setDetalleExpandido({ grupoKey: keyGrupo, titulo: subTitulo, data: ordenesFiltradas });
         }
     };
 
@@ -153,17 +149,16 @@ const ReporteDeudasClientes = () => {
         const isExpanded = detalleExpandido.grupoKey === keyGrupo;
 
         return (
-            <div className="space-y-4 animate-in fade-in zoom-in-95 duration-500 mt-8 pt-8 border-t border-white/5">
+            <div className="space-y-4 mt-8 pt-8 border-t border-white/5" key={keyGrupo}>
                 <div className="flex items-center justify-center gap-3 mb-2">
                     <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/10"></div>
-                    <h2 className="text-xs font-black text-white uppercase tracking-[0.4em] text-center px-6 py-2.5 bg-white/5 rounded-full border border-white/10 shadow-xl">
+                    <h2 className="text-xs font-black text-white uppercase tracking-[0.4em] text-center px-6 py-2.5 bg-white/5 rounded-full border border-white/10">
                         {tituloBase}
                     </h2>
                     <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/10"></div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Aging */}
                     <div className="card border border-white/5 bg-carbon-mid overflow-hidden shadow-2xl">
                         <div className="card-header border-b border-white/5 py-3 px-5 flex flex-col items-center justify-center gap-1 bg-carbon-light/20">
                             <PieChart size={18} style={{ color }} />
@@ -192,8 +187,6 @@ const ReporteDeudasClientes = () => {
                             </div>
                         </div>
                     </div>
-
-                    {/* Top Deudores */}
                     <div className="card border border-white/5 bg-carbon-mid overflow-hidden shadow-2xl">
                         <div className="card-header border-b border-white/5 py-3 px-5 flex flex-col items-center justify-center gap-1 bg-carbon-light/20">
                             <TrendingUp size={18} style={{ color }} />
@@ -222,13 +215,12 @@ const ReporteDeudasClientes = () => {
                     </div>
                 </div>
 
-                {/* --- SECCIÓN DRILL-DOWN INLINE (SOLO SI ESTÁ EXPANDIDO PARA ESTE GRUPO) --- */}
                 {isExpanded && (
-                    <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-6 border border-primary/20 bg-carbon rounded-xl shadow-2xl overflow-hidden">
-                        <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-primary/5">
+                    <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-6 border-2 border-primary/30 bg-carbon-dark rounded-xl shadow-2xl overflow-hidden" style={{ borderColor: 'rgba(232, 184, 75, 0.3)' }}>
+                        <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-carbon-light/40">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-primary/20 rounded-lg shadow-inner">
-                                    <ArrowDownWideZap size={20} className="text-primary" />
+                                    <Zap size={20} className="text-primary" />
                                 </div>
                                 <div>
                                     <h3 className="text-xs font-black text-white uppercase tracking-widest">{detalleExpandido.titulo}</h3>
@@ -237,10 +229,10 @@ const ReporteDeudasClientes = () => {
                             </div>
                             <button 
                                 onClick={() => setDetalleExpandido({ grupoKey: null, titulo: '', data: [] })}
-                                className="p-2 bg-carbon-mid hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 rounded-lg text-wire hover:text-red-500 transition-all group"
-                                title="Cerrar detalle"
+                                className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#2a2a2a] hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 text-wire hover:text-red-500 transition-all"
+                                style={{ cursor: 'pointer' }}
                             >
-                                <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
+                                <X size={18} />
                             </button>
                         </div>
                         
@@ -272,8 +264,8 @@ const ReporteDeudasClientes = () => {
                                                 }`}>{parseInt(item.dias_vencidos) > 0 ? `${item.dias_vencidos} DÍAS MORA` : 'AL DÍA'}</span>
                                             </td>
                                             <td className="text-right pr-6">
-                                                <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-1.5 bg-carbon-mid border border-white/5 hover:border-primary/40 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md shadow-lg group">
-                                                    <ExternalLink size={14} className="group-hover:scale-110" />
+                                                <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-1.5 bg-[#222] border border-white/5 hover:border-primary/40 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md shadow-lg">
+                                                    <ExternalLink size={14} />
                                                 </Link>
                                             </td>
                                         </tr>
@@ -288,9 +280,10 @@ const ReporteDeudasClientes = () => {
                             </span>
                             <button 
                                 onClick={() => setDetalleExpandido({ grupoKey: null, titulo: '', data: [] })}
-                                className="px-6 py-2.5 bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary text-primary text-[10px] font-black rounded-lg uppercase tracking-widest transition-all shadow-xl shadow-primary/5 active:scale-95"
+                                className="px-6 py-2 bg-[#e8b84b] hover:bg-[#d4a33a] text-[#1a1a1a] text-[10px] font-black rounded-md uppercase tracking-widest transition-all shadow-lg border-none cursor-pointer"
+                                style={{ backgroundColor: '#e8b84b', color: '#1a1a1a' }}
                             >
-                                Ocultar Detalle
+                                OCULTAR DETALLE
                             </button>
                         </div>
                     </div>
@@ -508,7 +501,7 @@ const ReporteDeudasClientes = () => {
                                                         </span>
                                                     </td>
                                                     <td className="text-right pr-6">
-                                                        <Link to={`/ventas/ordenes/${row.id_orden_venta}`} target="_blank" className="p-1.5 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md border border-primary/20">
+                                                        <Link to={`/ventas/ordenes/${row.id_orden_venta}`} target="_blank" className="p-1.5 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md border border-white/5">
                                                             <ExternalLink size={14} />
                                                         </Link>
                                                     </td>
@@ -523,7 +516,6 @@ const ReporteDeudasClientes = () => {
                         </div>
                     </div>
 
-                    {/* Gráficos Segmentados con Drill-down INLINE */}
                     <div className="space-y-12 pb-20">
                         {renderGrupoGraficos('facturasPEN', 'Análisis: Facturas (PEN)', '#10B981', 'PEN')}
                         {renderGrupoGraficos('facturasUSD', 'Análisis: Facturas (USD)', '#e8b84b', 'USD')}

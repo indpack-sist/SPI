@@ -13,6 +13,11 @@ export const parseSunatInvoice = async (pdfBuffer) => {
         const parser = new PDFParse({ data: pdfBuffer });
         const data = await parser.getText();
         const text = data.text;
+        
+        // DEBUG: Descomentar para ver qué texto está leyendo realmente el sistema en el log del servidor
+        // console.log('--- TEXTO EXTRAIDO DEL PDF ---');
+        // console.log(text);
+        // console.log('------------------------------');
 
         // Limpiar el texto para facilitar búsquedas y estandarizar saltos de línea
         const cleanText = text.replace(/\r/g, '\n');
@@ -32,13 +37,13 @@ export const parseSunatInvoice = async (pdfBuffer) => {
             },
             comprobante: {
                 tipo: 'FACTURA ELECTRÓNICA',
-                // Busca correlativos F o E. Ej: F001-123 o E001-123
+                // Busca correlativos F o E. Ej: F001-123 o E001-123. Soportamos posibles saltos de linea o basura en medio
                 serie_correlativo: extractMultiple([
-                    /(?:FACTURA|BOLETA).*?\n*([EF][A-Z0-9]{3}\s*-\s*\d+)/i,
+                    /(?:FACTURA|BOLETA)[\s\S]{0,150}([EF][A-Z0-9]{3}\s*-\s*\d+)/i,
                     /([EF][A-Z0-9]{3}\s*-\s*\d+)/i
                 ]),
                 fecha_emision: extractMultiple([
-                    /Fecha\s+de\s+Emisi[oó]n\s*[:\-]?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+                    /Fecha\s+(?:de\s+)?Emisi[oó]n\s*[:\-]?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
                     /Fecha\s*[:\-]?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
                     /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/ // Fallback a la primera fecha del documento
                 ]),
@@ -48,12 +53,12 @@ export const parseSunatInvoice = async (pdfBuffer) => {
                 ]) || 'SOLES',
             },
             cliente: {
-                // RUC del cliente: probamos varios formatos comunes
+                // RUC del cliente: probamos varios formatos comunes, asegurando que no agarre el RUC del emisor (buscando Señor(es) antes)
                 ruc: extractMultiple([
+                    /Señor(?:es)?[\s\S]{0,250}RUC\s*[:\-]?\s*(\d{11})/i,
                     /RUC\s+(?:del\s+Cliente|del\s+Receptor)\s*[:\-]?\s*(\d{11})/i,
-                    /Señor(?:es)?\s*[:\-]?\s*[\s\S]{0,100}RUC\s*[:\-]?\s*(\d{11})/i,
                     /(?:Cliente|Receptor).*?\s+RUC\s*[:\-]?\s*(\d{11})/i,
-                    /RUC\s*[:\-]?\s*(\d{11})(?!\s*FACTURA)/i // Fallback genérico evitando el título principal
+                    /RUC\s*[:\-]?\s*(\d{11})(?!\s*(?:FACTURA|BOLETA))/i 
                 ]),
                 razon_social: extractMultiple([
                     /Señor(?:es)?\s*[:\-]?\s*([^\n]+)/i,
@@ -70,10 +75,10 @@ export const parseSunatInvoice = async (pdfBuffer) => {
                 valor_venta: extractMultiple([/Valor\s*Venta\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i]),
                 igv: extractMultiple([/IGV\s*(?:18%|18\.00%)?\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i]),
                 importe_total: extractMultiple([
-                    /(?:Importe\s+)?Total\s*a\s*Pagar\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i,
-                    /Importe\s+Total\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i,
-                    /TOTAL\s*V[E|E]NTA\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i,
-                    /TOTAL\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i
+                    /(?:Importe\s+)?Total\s*a\s*Pagar\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i,
+                    /Importe\s+Total\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i,
+                    /TOTAL\s*V[E|E]NTA\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i,
+                    /TOTAL\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i
                 ]),
             },
             // raw_text: cleanText // Opcional, para debug

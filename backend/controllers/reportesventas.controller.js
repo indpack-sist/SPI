@@ -463,8 +463,10 @@ export const getReporteDeudasClientes = async (req, res) => {
                 ov.moneda,
                 ov.total,
                 ov.monto_pagado,
+                ov.tipo_impuesto,
                 (ov.total - ov.monto_pagado) as deuda_pendiente,
                 ov.estado_pago,
+                ov.estado,
                 c.id_cliente,
                 c.razon_social as cliente,
                 c.telefono as telefono_cliente,
@@ -472,7 +474,7 @@ export const getReporteDeudasClientes = async (req, res) => {
                 DATEDIFF(CURRENT_DATE, ov.fecha_vencimiento) as dias_vencidos
             FROM ordenes_venta ov
             INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
-            WHERE ov.estado != 'Cancelada'
+            WHERE ov.estado NOT IN ('Cancelada', 'Borrador')
               AND ov.estado_pago IN ('Pendiente', 'Parcial')
               AND (ov.total - ov.monto_pagado) > 0.01
         `;
@@ -493,7 +495,7 @@ export const getReporteDeudasClientes = async (req, res) => {
             params.push(tipoComprobante);
         }
 
-        if (fechaInicio && fechaFin) {
+        if (fechaInicio && fechaInicio !== '' && fechaFin && fechaFin !== '') {
             sql += ` AND DATE(ov.fecha_emision) BETWEEN ? AND ?`;
             params.push(fechaInicio, fechaFin);
         }
@@ -510,18 +512,20 @@ export const getReporteDeudasClientes = async (req, res) => {
 
         // Estructura para KPIs y Gráficos
         const kpis = {
-            totalPEN: 0,
-            totalUSD: 0,
-            vencidoPEN: 0,
-            vencidoUSD: 0,
-            porVencerPEN: 0,
-            porVencerUSD: 0,
+            totalPEN: 0, totalUSD: 0,
+            vencidoPEN: 0, vencidoUSD: 0,
+            porVencerPEN: 0, porVencerUSD: 0,
+            // Agrupación estilo Reporte Productos
+            facturas_pen: 0, facturas_usd: 0,
+            notas_venta_pen: 0, notas_venta_usd: 0,
+            sin_comprobante_pen: 0, sin_comprobante_usd: 0,
             aging: {
                 pen: { corriente: 0, m_0_30: 0, m_31_60: 0, m_61_90: 0, m_90_mas: 0 },
                 usd: { corriente: 0, m_0_30: 0, m_31_60: 0, m_61_90: 0, m_90_mas: 0 }
             }
         };
 
+        const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
         const deudoresMap = {};
 
         resultados.forEach(row => {
@@ -534,7 +538,6 @@ export const getReporteDeudasClientes = async (req, res) => {
 
             if (dias > 0) {
                 kpis[`vencido${moneda.toUpperCase()}`] += deuda;
-                // Clasificación Aging
                 if (dias <= 30) kpis.aging[moneda].m_0_30 += deuda;
                 else if (dias <= 60) kpis.aging[moneda].m_31_60 += deuda;
                 else if (dias <= 90) kpis.aging[moneda].m_61_90 += deuda;
@@ -544,30 +547,37 @@ export const getReporteDeudasClientes = async (req, res) => {
                 kpis.aging[moneda].corriente += deuda;
             }
 
-            // Top Deudores (Acumular por cliente)
+            // Agrupación por tipo (Estilo Reporte Producto)
+            const tipoImpuesto = String(row.tipo_impuesto || '').toUpperCase().trim();
+            const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+            const tipo = String(row.tipo_comprobante || '').trim();
+
+            if (tipo.includes('Factura')) {
+                if (!esSinImpuesto || facturasExportacion.includes(row.numero_orden)) {
+                    kpis[`facturas_${moneda}`] += deuda;
+                } else {
+                    kpis[`notas_venta_${moneda}`] += deuda;
+                }
+            } else if (tipo.includes('Nota de Venta')) {
+                kpis[`notas_venta_${moneda}`] += deuda;
+            } else {
+                kpis[`sin_comprobante_${moneda}`] += deuda;
+            }
+
+            // Top Deudores
             if (!deudoresMap[row.id_cliente]) {
-                deudoresMap[row.id_cliente] = { 
-                    cliente: row.cliente, 
-                    deudaPEN: 0, 
-                    deudaUSD: 0,
-                    totalRelativo: 0 // Para sort (aproximado usando un tipo de cambio base si fuera necesario, o simple suma)
-                };
+                deudoresMap[row.id_cliente] = { cliente: row.cliente, deudaPEN: 0, deudaUSD: 0, totalRelativo: 0 };
             }
             if (moneda === 'usd') {
                 deudoresMap[row.id_cliente].deudaUSD += deuda;
-                deudoresMap[row.id_cliente].totalRelativo += deuda * 3.7; // TC ref para ranking
+                deudoresMap[row.id_cliente].totalRelativo += deuda * 3.7;
             } else {
                 deudoresMap[row.id_cliente].deudaPEN += deuda;
                 deudoresMap[row.id_cliente].totalRelativo += deuda;
             }
         });
 
-        // Convertir mapa de deudores a array y ordenar
-        const topDeudores = Object.values(deudoresMap)
-            .sort((a, b) => b.totalRelativo - a.totalRelativo)
-            .slice(0, 10);
-
-        // Calcular índices de morosidad
+        const topDeudores = Object.values(deudoresMap).sort((a, b) => b.totalRelativo - a.totalRelativo).slice(0, 10);
         const morosidadPEN = kpis.totalPEN > 0 ? (kpis.vencidoPEN / kpis.totalPEN) * 100 : 0;
         const morosidadUSD = kpis.totalUSD > 0 ? (kpis.vencidoUSD / kpis.totalUSD) * 100 : 0;
 
@@ -579,10 +589,14 @@ export const getReporteDeudasClientes = async (req, res) => {
                     deuda_total_usd: kpis.totalUSD.toFixed(2),
                     deuda_vencida_pen: kpis.vencidoPEN.toFixed(2),
                     deuda_vencida_usd: kpis.vencidoUSD.toFixed(2),
-                    deuda_corriente_pen: kpis.porVencerPEN.toFixed(2),
-                    deuda_corriente_usd: kpis.porVencerUSD.toFixed(2),
                     indice_morosidad_pen: morosidadPEN.toFixed(2),
-                    indice_morosidad_usd: morosidadUSD.toFixed(2)
+                    indice_morosidad_usd: morosidadUSD.toFixed(2),
+                    facturas_pen: kpis.facturas_pen.toFixed(2),
+                    facturas_usd: kpis.facturas_usd.toFixed(2),
+                    notas_venta_pen: kpis.notas_venta_pen.toFixed(2),
+                    notas_venta_usd: kpis.notas_venta_usd.toFixed(2),
+                    sin_comprobante_pen: kpis.sin_comprobante_pen.toFixed(2),
+                    sin_comprobante_usd: kpis.sin_comprobante_usd.toFixed(2)
                 },
                 aging: kpis.aging,
                 topDeudores,

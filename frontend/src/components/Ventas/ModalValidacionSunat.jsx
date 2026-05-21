@@ -40,6 +40,35 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
         // eslint-disable-next-line
     }, [isOpen, file]);
 
+    useEffect(() => {
+        if (!parsedData) return;
+
+        let advertencias = [];
+        
+        // Comparar RUC
+        if (formData.ruc_cliente && orden?.ruc_cliente && formData.ruc_cliente !== orden.ruc_cliente) {
+            advertencias.push(`El RUC (${formData.ruc_cliente}) no coincide con el cliente de la Orden (${orden.ruc_cliente}).`);
+        }
+
+        // Comparar Totales (Tolerancia de decimales)
+        if (formData.importe_total && orden?.total) {
+            const totalPdf = parseFloat(String(formData.importe_total).replace(/,/g, ''));
+            const totalOrden = parseFloat(orden.total);
+            if (!isNaN(totalPdf) && Math.abs(totalPdf - totalOrden) > 1) { // 1 sol/dolar de tolerancia
+                advertencias.push(`El Total (${totalPdf}) difiere del total de la Orden (${totalOrden}).`);
+            }
+        }
+
+        if (advertencias.length > 0) {
+            setAlert({ 
+                type: 'warning', 
+                message: 'Verifique los datos:\n' + advertencias.join('\n') 
+            });
+        } else {
+            setAlert({ type: 'success', message: 'Datos correctos y coinciden con la orden.' });
+        }
+    }, [formData.ruc_cliente, formData.importe_total, orden, parsedData]);
+
     const parsearPDF = async (pdfFile) => {
         setLoading(true);
         setAlert(null);
@@ -63,9 +92,6 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
                     razon_social: extraido?.cliente?.razon_social || '',
                     importe_total: extraido?.totales?.importe_total || ''
                 });
-
-                // Comparación de validación automática para avisarle al usuario
-                validarDatos(extraido);
             } else {
                 setAlert({ type: 'error', message: response.data.error || 'Error al leer el PDF' });
             }
@@ -74,33 +100,6 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
             setAlert({ type: 'error', message: 'No se pudo leer el archivo PDF. Intente digitar los datos manualmente o revise el documento.' });
         } finally {
             setLoading(false);
-        }
-    };
-
-    const validarDatos = (extraido) => {
-        let advertencias = [];
-        
-        // Comparar RUC
-        if (extraido?.cliente?.ruc && orden?.ruc_cliente && extraido.cliente.ruc !== orden.ruc_cliente) {
-            advertencias.push(`El RUC del PDF (${extraido.cliente.ruc}) no coincide con el cliente de la Orden (${orden.ruc_cliente}).`);
-        }
-
-        // Comparar Totales (Tolerancia de decimales)
-        if (extraido?.totales?.importe_total && orden?.total) {
-            const totalPdf = parseFloat(extraido.totales.importe_total.replace(/,/g, ''));
-            const totalOrden = parseFloat(orden.total);
-            if (Math.abs(totalPdf - totalOrden) > 1) { // 1 sol/dolar de tolerancia
-                advertencias.push(`El Total del PDF (${totalPdf}) difiere del total de la Orden (${totalOrden}).`);
-            }
-        }
-
-        if (advertencias.length > 0) {
-            setAlert({ 
-                type: 'warning', 
-                message: 'Verifique los datos extraídos:\n' + advertencias.join('\n') 
-            });
-        } else {
-            setAlert({ type: 'success', message: 'Datos extraídos correctamente y coinciden con la orden.' });
         }
     };
 
@@ -193,23 +192,23 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
                             <h4>Validación del Cliente</h4>
                             
                             <div className="form-group">
-                                <label>RUC (Leído del PDF):</label>
+                                <label>RUC (Extraído del PDF):</label>
                                 <input 
                                     type="text" 
+                                    name="ruc_cliente"
                                     value={formData.ruc_cliente} 
-                                    readOnly 
-                                    className="input-readonly"
+                                    onChange={handleChange}
                                 />
                                 <small>RUC en la Orden: {orden?.ruc_cliente}</small>
                             </div>
 
                             <div className="form-group">
-                                <label>Total (Leído del PDF):</label>
+                                <label>Total (Extraído del PDF):</label>
                                 <input 
                                     type="text" 
+                                    name="importe_total"
                                     value={formData.importe_total} 
-                                    readOnly 
-                                    className="input-readonly"
+                                    onChange={handleChange}
                                 />
                                 <small>Total en la Orden: {orden?.total}</small>
                             </div>

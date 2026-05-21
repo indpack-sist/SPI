@@ -3807,15 +3807,15 @@ export async function desmarcarFacturadoSunat(req, res) {
     }
 
     const updateResult = await executeQuery(`
-      UPDATE ordenes_venta 
-      SET 
+      UPDATE ordenes_venta
+      SET
         facturado_sunat = 0,
         fecha_facturacion_sunat = NULL,
         numero_comprobante_sunat = NULL,
+        comprobante_sunat_url = NULL,
         id_facturador = NULL
       WHERE id_orden_venta = ?
     `, [id]);
-
     if (!updateResult.success) {
       return res.status(500).json({ success: false, error: updateResult.error });
     }

@@ -148,35 +148,44 @@ const ReporteDeudasClientes = () => {
         const isExpanded = detalleExpandido.grupoKey === keyGrupo;
 
         return (
-            <div className="space-y-4 mt-8 pt-8 border-t border-white/5" key={keyGrupo}>
-                <div className="flex items-center justify-center gap-3 mb-2">
-                    <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/10"></div>
-                    <h2 className="text-xs font-black text-white uppercase tracking-[0.4em] text-center px-6 py-2.5 bg-white/5 rounded-full border border-white/10">
+            <div className="space-y-6 mt-12 pt-8 border-t border-white/10" key={keyGrupo}>
+                <div className="flex items-center justify-center gap-3 mb-4">
+                    <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/20"></div>
+                    <h2 className="text-sm font-black text-white uppercase tracking-[0.4em] text-center px-8 py-3 bg-white/5 rounded-full border border-white/20 shadow-2xl">
                         {tituloBase}
                     </h2>
-                    <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/10"></div>
+                    <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/20"></div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="card border border-white/5 bg-carbon-mid overflow-hidden shadow-2xl">
-                        <div className="card-header border-b border-white/5 py-3 px-5 flex flex-col items-center justify-center gap-1 bg-carbon-light/20">
-                            <PieChart size={18} style={{ color }} />
-                            <h3 className="text-[0.6rem] font-black text-white uppercase tracking-[0.2em]">Antigüedad de Deuda (Aging)</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Aging */}
+                    <div className="card border border-white/10 bg-carbon-mid overflow-hidden shadow-2xl">
+                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
+                            <PieChart size={20} style={{ color }} />
+                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">Antigüedad de Deuda (Aging)</h3>
                         </div>
-                        <div className="card-body p-5">
-                            <div style={{ width: '100%', height: 240 }}>
+                        <div className="card-body p-6">
+                            <div style={{ width: '100%', height: 320 }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.aging} layout="vertical" margin={{ left: 20, right: 40, top: 10, bottom: 10 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
+                                    <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
                                         <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" stroke="#fff" fontSize={10} width={85} tick={{ fontWeight: 'bold', fill: '#fff' }} />
+                                        <YAxis 
+                                            dataKey="name" 
+                                            type="category" 
+                                            stroke="#fff" 
+                                            fontSize={13} 
+                                            width={100} 
+                                            tick={{ fontWeight: '900', fill: '#fff' }} 
+                                        />
                                         <Tooltip 
-                                            cursor={{ fill: 'rgba(255,255,255,0.05)' }} 
-                                            contentStyle={{ backgroundColor: '#111', border: '1px solid #444', borderRadius: '8px' }} 
-                                            itemStyle={{ color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                                            cursor={{ fill: 'rgba(255,255,255,0.08)' }} 
+                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }} 
+                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
+                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
                                             formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`} 
                                         />
-                                        <Bar dataKey="monto" radius={[0, 4, 4, 0]} cursor="pointer">
+                                        <Bar dataKey="monto" radius={[0, 6, 6, 0]} cursor="pointer">
                                             {data.aging.map((e, i) => (
                                                 <Cell key={`cell-${i}`} fill={e.color} onClick={() => handleDrillDown(e, 'aging', keyGrupo, tituloBase)} />
                                             ))}
@@ -186,23 +195,41 @@ const ReporteDeudasClientes = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="card border border-white/5 bg-carbon-mid overflow-hidden shadow-2xl">
-                        <div className="card-header border-b border-white/5 py-3 px-5 flex flex-col items-center justify-center gap-1 bg-carbon-light/20">
-                            <TrendingUp size={18} style={{ color }} />
-                            <h3 className="text-[0.6rem] font-black text-white uppercase tracking-[0.2em]">{tituloTop}</h3>
+
+                    {/* Top Deudores */}
+                    <div className="card border border-white/10 bg-carbon-mid overflow-hidden shadow-2xl">
+                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
+                            <TrendingUp size={20} style={{ color }} />
+                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">{tituloTop}</h3>
                         </div>
-                        <div className="card-body p-5">
-                            <div style={{ width: '100%', height: 240 }}>
+                        <div className="card-body p-6">
+                            <div style={{ width: '100%', height: 320 }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.topDeudores} margin={{ bottom: 30, top: 10, right: 20 }}>
-                                        <XAxis dataKey="name" stroke="#fff" fontSize={10} angle={-25} textAnchor="end" interval={0} height={60} tick={{ fontWeight: 'bold', fill: '#fff' }} />
-                                        <YAxis stroke="#888" fontSize={8} tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v/1000)}k`} />
+                                    <BarChart data={data.topDeudores} margin={{ bottom: 50, top: 10, right: 30 }}>
+                                        <XAxis 
+                                            dataKey="name" 
+                                            stroke="#fff" 
+                                            fontSize={12} 
+                                            angle={0} 
+                                            textAnchor="middle" 
+                                            interval={0} 
+                                            height={70} 
+                                            tick={{ fontWeight: '900', fill: '#fff' }}
+                                            formatter={(val) => val.length > 15 ? val.substring(0, 12) + '...' : val}
+                                        />
+                                        <YAxis 
+                                            stroke="#aaa" 
+                                            fontSize={11} 
+                                            tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v/1000)}k`} 
+                                            tick={{ fontWeight: 'bold' }}
+                                        />
                                         <Tooltip 
-                                            contentStyle={{ backgroundColor: '#111', border: '1px solid #444', borderRadius: '8px' }} 
-                                            itemStyle={{ color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }} 
+                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
+                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
                                             formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`} 
                                         />
-                                        <Bar dataKey="deuda" fill={color} radius={[4, 4, 0, 0]} cursor="pointer">
+                                        <Bar dataKey="deuda" fill={color} radius={[6, 6, 0, 0]} cursor="pointer">
                                             {data.topDeudores.map((e, i) => (
                                                 <Cell key={`cell-${i}`} fill={color} onClick={() => handleDrillDown(e, 'deudores', keyGrupo, tituloBase)} />
                                             ))}
@@ -215,23 +242,23 @@ const ReporteDeudasClientes = () => {
                 </div>
 
                 {isExpanded && (
-                    <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-6 border-2 border-primary/30 bg-carbon rounded-xl shadow-2xl overflow-hidden" style={{ borderColor: 'rgba(232, 184, 75, 0.3)' }}>
-                        <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-carbon-light/40">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-primary/20 rounded-lg shadow-inner">
-                                    <Zap size={20} className="text-primary" />
+                    <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-8 border-2 border-primary/40 bg-carbon-dark rounded-2xl shadow-2xl overflow-hidden" style={{ borderColor: 'rgba(232, 184, 75, 0.4)' }}>
+                        <div className="px-8 py-5 border-b border-white/10 flex justify-between items-center bg-carbon-light/50">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-primary/20 rounded-xl shadow-inner">
+                                    <Zap size={24} className="text-primary" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xs font-black text-white uppercase tracking-widest">{detalleExpandido.titulo}</h3>
-                                    <p className="text-[9px] text-wire font-bold uppercase tracking-widest">Documentos fuente que alimentan este tramo</p>
+                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">{detalleExpandido.titulo}</h3>
+                                    <p className="text-[10px] text-wire font-bold uppercase tracking-[0.2em]">Auditoría de documentos fuente</p>
                                 </div>
                             </div>
                             <button 
                                 onClick={() => setDetalleExpandido({ grupoKey: null, titulo: '', data: [] })}
-                                className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#2a2a2a] hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 text-wire hover:text-red-500 transition-all"
+                                className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#2a2a2a] hover:bg-red-500/30 border border-white/10 hover:border-red-500/50 text-wire hover:text-red-500 transition-all shadow-lg"
                                 style={{ cursor: 'pointer' }}
                             >
-                                <X size={18} />
+                                <X size={22} />
                             </button>
                         </div>
                         
@@ -239,32 +266,32 @@ const ReporteDeudasClientes = () => {
                             <table className="table-gerencial w-full text-left border-collapse whitespace-nowrap">
                                 <thead>
                                     <tr>
-                                        <th>Orden</th>
+                                        <th className="pl-8">Orden</th>
                                         <th>Emisión</th>
                                         <th>Cliente</th>
                                         <th className="text-right">Saldo Pendiente</th>
                                         <th className="text-center">Mora</th>
-                                        <th className="text-right pr-6">Acción</th>
+                                        <th className="text-right pr-8">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {detalleExpandido.data.map(item => (
-                                        <tr key={item.id_orden_venta} className="hover:bg-white/[0.03] border-b border-white/5 transition-colors">
-                                            <td className="font-mono font-bold text-primary text-xs">{item.numero_orden}</td>
-                                            <td className="text-xs text-white">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</td>
-                                            <td className="text-xs text-mist font-bold truncate max-w-[220px]" title={item.cliente}>{item.cliente}</td>
-                                            <td className="text-right font-mono font-black text-white text-xs">
+                                        <tr key={item.id_orden_venta} className="hover:bg-white/[0.04] border-b border-white/5 transition-colors">
+                                            <td className="pl-8 font-mono font-bold text-primary text-sm">{item.numero_orden}</td>
+                                            <td className="text-sm text-white">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</td>
+                                            <td className="text-sm text-mist font-bold truncate max-w-[250px]" title={item.cliente}>{item.cliente}</td>
+                                            <td className="text-right font-mono font-black text-white text-sm">
                                                 <span className="text-wire mr-1 font-normal">{item.moneda}</span>
                                                 {formatearNum(item.deuda_pendiente)}
                                             </td>
                                             <td className="text-center">
-                                                <span className={`px-2 py-0.5 text-[9px] font-black border rounded ${
-                                                    parseInt(item.dias_vencidos) > 0 ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-green-500/10 text-green-500 border-green-500/20'
+                                                <span className={`px-3 py-1 text-[10px] font-black border rounded-full ${
+                                                    parseInt(item.dias_vencidos) > 0 ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'
                                                 }`}>{parseInt(item.dias_vencidos) > 0 ? `${item.dias_vencidos} DÍAS MORA` : 'AL DÍA'}</span>
                                             </td>
-                                            <td className="text-right pr-6">
-                                                <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-1.5 bg-[#222] border border-white/5 hover:border-primary/40 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md shadow-lg">
-                                                    <ExternalLink size={14} />
+                                            <td className="text-right pr-8">
+                                                <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-2 bg-[#222] border border-white/10 hover:border-primary/50 hover:bg-primary/20 text-primary transition-all inline-flex rounded-xl shadow-xl">
+                                                    <ExternalLink size={18} />
                                                 </Link>
                                             </td>
                                         </tr>
@@ -273,16 +300,17 @@ const ReporteDeudasClientes = () => {
                             </table>
                         </div>
 
-                        <div className="px-6 py-4 bg-carbon-light/30 border-t border-white/5 flex justify-between items-center">
-                            <span className="text-[10px] font-black text-wire uppercase tracking-widest">
-                                TOTAL REGISTROS: {detalleExpandido.data.length}
-                            </span>
+                        <div className="px-8 py-6 bg-carbon-light/40 border-t border-white/10 flex justify-between items-center">
+                            <div className="flex flex-col">
+                                <span className="text-[11px] font-black text-white uppercase tracking-widest">Resumen de Auditoría</span>
+                                <span className="text-[9px] text-wire font-bold uppercase tracking-[0.1em]">{detalleExpandido.data.length} registros encontrados</span>
+                            </div>
                             <button 
                                 onClick={() => setDetalleExpandido({ grupoKey: null, titulo: '', data: [] })}
-                                className="px-6 py-2 bg-[#e8b84b] hover:bg-[#d4a33a] text-[#1a1a1a] text-[10px] font-black rounded-md uppercase tracking-widest transition-all shadow-lg border-none cursor-pointer"
+                                className="px-8 py-3 bg-[#e8b84b] hover:bg-[#d4a33a] text-[#1a1a1a] text-[11px] font-black rounded-xl uppercase tracking-[0.2em] transition-all shadow-2xl border-none cursor-pointer active:scale-95"
                                 style={{ backgroundColor: '#e8b84b', color: '#1a1a1a' }}
                             >
-                                OCULTAR DETALLE
+                                CERRAR AUDITORÍA
                             </button>
                         </div>
                     </div>
@@ -294,38 +322,39 @@ const ReporteDeudasClientes = () => {
     return (
         <div className="p-4 md:p-6 page-reporte-cuentas bg-carbon text-mist min-h-screen">
             <style dangerouslySetInnerHTML={{__html: `
-                .page-reporte-cuentas .card { background-color: var(--carbon-mid); border: 1px solid rgba(255,255,255,0.05); }
+                .page-reporte-cuentas .card { background-color: var(--carbon-mid); border: 1px solid rgba(255,255,255,0.08); }
                 .page-reporte-cuentas .form-input, .page-reporte-cuentas .form-select {
-                    background-color: var(--carbon-light) !important; border: 1px solid var(--steel) !important; color: white !important; height: 42px !important; font-size: 0.75rem !important;
+                    background-color: var(--carbon-light) !important; border: 1px solid var(--steel) !important; color: white !important; height: 46px !important; font-size: 0.85rem !important; font-weight: 700 !important;
                 }
-                .page-reporte-cuentas .stat-card { min-height: 85px !important; display: flex !important; flex-direction: column !important; justify-content: center !important; padding: 0.75rem 1rem !important; border-radius: 8px !important; transition: all 0.3s; border-top: 1px solid rgba(255,255,255,0.05); }
-                .page-reporte-cuentas .stat-card:hover { transform: translateY(-3px); background-color: var(--carbon-light); }
+                .page-reporte-cuentas .stat-card { min-height: 95px !important; display: flex !important; flex-direction: column !important; justify-content: center !important; padding: 0.75rem 1.25rem !important; border-radius: 12px !important; transition: all 0.3s; border-top: 1px solid rgba(255,255,255,0.08); shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
+                .page-reporte-cuentas .stat-card:hover { transform: translateY(-4px); background-color: var(--carbon-light); }
                 .page-reporte-cuentas .table-gerencial th { 
-                    background-color: var(--carbon-light); color: var(--wire); text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.1em; padding: 10px; border-bottom: 2px solid var(--steel);
+                    background-color: var(--carbon-light); color: var(--wire); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.15em; padding: 14px; border-bottom: 2px solid var(--steel); font-weight: 900;
                 }
-                .page-reporte-cuentas .table-gerencial td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.75rem; }
+                .page-reporte-cuentas .table-gerencial td { padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.85rem; font-weight: 600; }
+                .dropdown-menu-solido-absoluto { background-color: #000000 !important; border: 2px solid #444 !important; opacity: 1 !important; visibility: visible !important; z-index: 99999 !important; }
             `}} />
 
-            <div className="mb-6 flex flex-col">
-                <h1 className="text-2xl font-black text-white tracking-tighter uppercase font-barlow flex items-center gap-3">
-                    <div className="p-2 bg-primary/20 rounded-lg shadow-inner">
-                        <BarChart3 size={28} className="text-primary" />
+            <div className="mb-8 flex flex-col">
+                <h1 className="text-3xl font-black text-white tracking-tighter uppercase font-barlow flex items-center gap-4">
+                    <div className="p-3 bg-primary/20 rounded-2xl shadow-inner">
+                        <BarChart3 size={32} className="text-primary" />
                     </div>
                     Reporte Gerencial x Cobrar
                 </h1>
-                <p className="text-wire text-[0.65rem] uppercase tracking-[0.3em] mt-2 font-bold">Inteligencia de Cartera y Auditoría de Mora</p>
+                <p className="text-wire text-[0.75rem] uppercase tracking-[0.4em] mt-3 font-black">Inteligencia de Cartera y Auditoría de Mora</p>
             </div>
 
-            <div className="card mb-6 shadow-2xl border-t-2 border-primary/20">
-                <div className="card-body p-5 space-y-5">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div className="card mb-8 shadow-2xl border-t-2 border-primary/30">
+                <div className="card-body p-6 space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="form-group lg:col-span-1 relative" ref={dropdownClienteRef}>
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 flex items-center gap-1"><User size={10}/> Cliente</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><User size={12}/> Cliente</label>
                             <div className="relative">
-                                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+                                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
                                 <input
                                     type="text"
-                                    className="form-input pl-10 w-full"
+                                    className="form-input pl-11 w-full"
                                     placeholder="RUC o Razón Social..."
                                     value={busquedaCliente}
                                     onChange={(e) => {
@@ -336,23 +365,23 @@ const ReporteDeudasClientes = () => {
                                     onFocus={() => setMostrarDropdownCliente(true)}
                                 />
                                 {mostrarDropdownCliente && busquedaCliente && (
-                                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-[#1a1a1a] border border-steel rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
+                                    <div className="absolute z-[100] left-0 right-0 top-full mt-2 dropdown-menu-solido border-2 border-steel rounded-xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] max-h-72 overflow-y-auto p-2" style={{ backgroundColor: '#111111' }}>
                                         {clientesFiltrados.length > 0 ? (
                                             clientesFiltrados.map(c => (
-                                                <div key={c.id_cliente} onClick={() => handleSelectCliente(c)} className="p-2.5 hover:bg-steel/30 cursor-pointer rounded transition-colors border-b border-white/5 last:border-0">
-                                                    <p className="font-bold text-xs text-white">{c.razon_social}</p>
-                                                    <p className="text-[9px] text-wire uppercase font-black tracking-tighter">RUC: {c.ruc}</p>
+                                                <div key={c.id_cliente} onClick={() => handleSelectCliente(c)} className="p-3.5 hover:bg-steel/40 cursor-pointer rounded-lg transition-all border-b border-white/5 last:border-0 mb-1">
+                                                    <p className="font-black text-sm text-white uppercase tracking-tight">{c.razon_social}</p>
+                                                    <p className="text-[10px] text-primary uppercase font-black tracking-widest mt-1">RUC: {c.ruc}</p>
                                                 </div>
                                             ))
                                         ) : (
-                                            <div className="p-3 text-center text-wire text-[10px]">Sin resultados</div>
+                                            <div className="p-4 text-center text-wire text-xs font-black uppercase tracking-widest">Sin resultados</div>
                                         )}
                                     </div>
                                 )}
                             </div>
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 flex items-center gap-1"><Coins size={10}/> Moneda</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Coins size={12}/> Moneda</label>
                             <select name="moneda" value={filtros.moneda} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="">Todas las Monedas</option>
                                 <option value="PEN">Soles (PEN)</option>
@@ -360,7 +389,7 @@ const ReporteDeudasClientes = () => {
                             </select>
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 flex items-center gap-1"><FileText size={10}/> Comprobante</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><FileText size={12}/> Comprobante</label>
                             <select name="tipoComprobante" value={filtros.tipoComprobante} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="">Todos los Tipos</option>
                                 <option value="Factura">Factura</option>
@@ -369,7 +398,7 @@ const ReporteDeudasClientes = () => {
                             </select>
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 flex items-center gap-1"><Box size={10}/> Estado SUNAT</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Box size={12}/> Estado SUNAT</label>
                             <select name="estadoSunat" value={filtros.estadoSunat} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="">Todos (SUNAT e Internos)</option>
                                 <option value="con_correlativo">Solo con Correlativo SUNAT</option>
@@ -378,36 +407,36 @@ const ReporteDeudasClientes = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="form-group">
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 flex items-center gap-1"><Clock size={10}/> Tipo de Fecha</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Clock size={12}/> Tipo de Fecha</label>
                             <select name="tipoFecha" value={filtros.tipoFecha} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="fecha_emision">Fecha de Emisión (Orden)</option>
                                 <option value="fecha_sunat">Fecha de Facturación SUNAT</option>
                             </select>
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 block">Desde</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Desde</label>
                             <input type="date" name="fechaInicio" value={filtros.fechaInicio} onChange={handleChangeFiltro} className="form-input w-full" />
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 block">Hasta</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Hasta</label>
                             <input type="date" name="fechaFin" value={filtros.fechaFin} onChange={handleChangeFiltro} className="form-input w-full" />
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.6rem] font-black text-wire uppercase tracking-widest mb-1.5 block">Acción</label>
-                            <button onClick={generarReporte} disabled={loading} className="btn btn-primary w-full h-[42px] font-black tracking-widest uppercase text-[10px] shadow-lg shadow-primary/20 flex items-center justify-center gap-2 transition-all active:scale-95">
-                                <TrendingUp size={14}/> {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Acción</label>
+                            <button onClick={generarReporte} disabled={loading} className="btn btn-primary w-full h-[46px] font-black tracking-widest uppercase text-[11px] shadow-2xl shadow-primary/30 flex items-center justify-center gap-2 transition-all active:scale-95 border-none">
+                                <TrendingUp size={16}/> {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
                             </button>
                         </div>
                     </div>
 
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-                        <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+                        <label className="flex items-center gap-4 cursor-pointer group">
                             <div className="relative flex items-center justify-center">
-                                <input type="checkbox" name="soloVencidas" checked={filtros.soloVencidas} onChange={handleChangeFiltro} className="w-5 h-5 rounded border-steel bg-carbon text-primary focus:ring-primary" />
+                                <input type="checkbox" name="soloVencidas" checked={filtros.soloVencidas} onChange={handleChangeFiltro} className="w-6 h-6 rounded-lg border-steel bg-carbon text-primary focus:ring-primary shadow-inner" />
                             </div>
-                            <span className="text-[10px] font-black text-mist uppercase tracking-widest group-hover:text-white transition-colors">
+                            <span className="text-[11px] font-black text-mist uppercase tracking-widest group-hover:text-white transition-colors">
                                 Filtrar exclusivamente documentos con fecha de vencimiento superada (MORA)
                             </span>
                         </label>
@@ -417,47 +446,49 @@ const ReporteDeudasClientes = () => {
 
             {reporteData && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                        <div className="card stat-card border-l-4 border-success/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
-                            <p className="text-lg font-black text-white">S/ {formatearNum(reporteData.resumen.facturasPEN.total)}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+                        <div className="card stat-card border-l-4 border-success/60 shadow-2xl">
+                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (PEN)</p>
+                            <p className="text-xl font-black text-white">S/ {formatearNum(reporteData.resumen.facturasPEN.total)}</p>
                         </div>
-                        <div className="card stat-card border-l-4 border-[#e8b84b]/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
-                            <p className="text-lg font-black text-[#e8b84b]">$ {formatearNum(reporteData.resumen.facturasUSD.total)}</p>
+                        <div className="card stat-card border-l-4 border-primary/60 shadow-2xl">
+                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">FACTURAS (USD)</p>
+                            <p className="text-xl font-black text-primary">$ {formatearNum(reporteData.resumen.facturasUSD.total)}</p>
                         </div>
-                        <div className="card stat-card border-l-4 border-[#3B82F6]/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
-                            <p className="text-lg font-black text-white">S/ {formatearNum(reporteData.resumen.notasVentaPEN.total)}</p>
+                        <div className="card stat-card border-l-4 border-[#3B82F6]/60 shadow-2xl">
+                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (PEN)</p>
+                            <p className="text-xl font-black text-white">S/ {formatearNum(reporteData.resumen.notasVentaPEN.total)}</p>
                         </div>
-                        <div className="card stat-card border-l-4 border-[#60A5FA]/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
-                            <p className="text-lg font-black text-white">$ {formatearNum(reporteData.resumen.notasVentaUSD.total)}</p>
+                        <div className="card stat-card border-l-4 border-[#60A5FA]/60 shadow-2xl">
+                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">N. VENTA (USD)</p>
+                            <p className="text-xl font-black text-white">$ {formatearNum(reporteData.resumen.notasVentaUSD.total)}</p>
                         </div>
-                        <div className="card stat-card border-l-4 border-[#F59E0B]/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
-                            <p className="text-lg font-black text-white">S/ {formatearNum(reporteData.resumen.sinComprPEN.total)}</p>
+                        <div className="card stat-card border-l-4 border-[#F59E0B]/60 shadow-2xl">
+                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">SIN COMPR. (PEN)</p>
+                            <p className="text-xl font-black text-white">S/ {formatearNum(reporteData.resumen.sinComprPEN.total)}</p>
                         </div>
-                        <div className="card stat-card border-l-4 border-[#FCD34D]/50 shadow-lg">
-                            <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
-                            <p className="text-lg font-black text-white">$ {formatearNum(reporteData.resumen.sinComprUSD.total)}</p>
+                        <div className="card stat-card border-l-4 border-[#FCD34D]/60 shadow-2xl">
+                            <p className="text-[0.55rem] font-black text-wire uppercase tracking-[0.2em] mb-1">SIN COMPR. (USD)</p>
+                            <p className="text-xl font-black text-white">$ {formatearNum(reporteData.resumen.sinComprUSD.total)}</p>
                         </div>
                     </div>
 
-                    <div className="card shadow-2xl mb-12 border border-white/5">
-                        <div className="card-header border-b border-white/5 py-3 px-5 flex justify-between items-center bg-carbon-light/20">
-                            <h3 className="text-[0.7rem] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                <FileText size={16} className="text-wire" /> Trazabilidad Detallada de Deuda
+                    <div className="card shadow-2xl mb-16 border border-white/10">
+                        <div className="card-header border-b border-white/10 py-4 px-6 flex justify-between items-center bg-carbon-light/20">
+                            <h3 className="text-[0.85rem] font-black text-white uppercase tracking-widest flex items-center gap-3">
+                                <FileText size={20} className="text-wire" /> Trazabilidad Detallada de Deuda
                             </h3>
-                            <span className="text-[9px] font-black px-3 py-1 bg-primary/10 text-primary rounded-full uppercase border border-primary/20">
-                                {reporteData.detalle.length} movs encontrados
-                            </span>
+                            <div className="flex gap-2">
+                                <span className="text-[10px] font-black px-4 py-1.5 bg-primary/10 text-primary rounded-full uppercase border border-primary/20">
+                                    {reporteData.detalle.length} movimientos
+                                </span>
+                            </div>
                         </div>
                         <div className="card-body p-0 overflow-x-auto">
                             <table className="table-gerencial w-full text-left border-collapse whitespace-nowrap">
                                 <thead>
                                     <tr>
-                                        <th>Emisión / Venc.</th>
+                                        <th className="pl-6">Emisión / Venc.</th>
                                         <th>N° Orden</th>
                                         <th>Cliente</th>
                                         <th className="text-right">Total Real</th>
@@ -471,51 +502,51 @@ const ReporteDeudasClientes = () => {
                                         reporteData.detalle.map((row) => {
                                             const dias = parseInt(row.dias_vencidos);
                                             const esVencido = dias > 0;
-                                            let badge = "bg-green-500/10 text-green-500 border-green-500/20";
-                                            if (dias > 60) badge = "bg-red-600/10 text-red-600 border-red-600/20";
-                                            else if (dias > 30) badge = "bg-orange-500/10 text-orange-500 border-orange-500/20";
-                                            else if (dias > 0) badge = "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+                                            let badge = "bg-green-500/15 text-green-400 border-green-500/30";
+                                            if (dias > 60) badge = "bg-red-600/15 text-red-400 border-red-600/30";
+                                            else if (dias > 30) badge = "bg-orange-500/15 text-orange-400 border-orange-500/30";
+                                            else if (dias > 0) badge = "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
                                             return (
-                                                <tr key={row.id_orden_venta} className="hover:bg-white/[0.02] border-b border-white/[0.02] transition-colors">
-                                                    <td>
-                                                        <div className="font-bold text-white text-[11px]">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</div>
-                                                        <div className={`text-[9px] font-bold ${esVencido ? 'text-red-400' : 'text-wire'}`}>Vence: {new Date(row.fecha_vencimiento).toLocaleDateString('es-PE')}</div>
+                                                <tr key={row.id_orden_venta} className="hover:bg-white/[0.05] border-b border-white/5 transition-all">
+                                                    <td className="pl-6">
+                                                        <div className="font-black text-white text-xs">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</div>
+                                                        <div className={`text-[10px] font-black ${esVencido ? 'text-red-400' : 'text-wire'}`}>Vence: {new Date(row.fecha_vencimiento).toLocaleDateString('es-PE')}</div>
                                                     </td>
                                                     <td>
-                                                        <div className="font-bold text-primary font-mono">{row.numero_orden}</div>
-                                                        <div className="text-[9px] text-wire uppercase font-black tracking-tighter">{row.tipo_comprobante}</div>
+                                                        <div className="font-black text-primary font-mono text-xs">{row.numero_orden}</div>
+                                                        <div className="text-[10px] text-wire uppercase font-black tracking-tight">{row.tipo_comprobante}</div>
                                                     </td>
                                                     <td>
-                                                        <div className="font-bold text-mist text-[11px] truncate max-w-[200px]" title={row.cliente}>{row.cliente}</div>
-                                                        <div className="text-[9px] text-wire uppercase font-bold">{row.estado}</div>
+                                                        <div className="font-black text-mist text-xs truncate max-w-[220px]" title={row.cliente}>{row.cliente}</div>
+                                                        <div className="text-[10px] text-wire uppercase font-bold tracking-tighter">{row.estado}</div>
                                                     </td>
-                                                    <td className="text-right font-mono text-[10px] text-wire">{row.moneda} {formatearNum(row.total_real)}</td>
+                                                    <td className="text-right font-mono text-xs font-bold">{row.moneda} {formatearNum(row.total_real)}</td>
                                                     <td className="text-right font-mono">
-                                                        <div className="font-black text-white text-xs">{row.moneda} {formatearNum(row.deuda_pendiente)}</div>
-                                                        <div className="text-[9px] text-green-500 font-bold">Cobrado: {parseFloat(row.monto_pagado).toFixed(2)}</div>
+                                                        <div className="font-black text-white text-sm">{row.moneda} {formatearNum(row.deuda_pendiente)}</div>
+                                                        <div className="text-[10px] text-green-500 font-black">Pagado: {parseFloat(row.monto_pagado).toFixed(2)}</div>
                                                     </td>
                                                     <td className="text-center">
-                                                        <span className={`px-2 py-0.5 text-[9px] font-black border rounded ${badge}`}>
+                                                        <span className={`px-3 py-1 text-[10px] font-black border rounded-full ${badge}`}>
                                                             {esVencido ? `${dias} DÍAS MORA` : 'AL DÍA'}
                                                         </span>
                                                     </td>
                                                     <td className="text-right pr-6">
-                                                        <Link to={`/ventas/ordenes/${row.id_orden_venta}`} target="_blank" className="p-1.5 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md border border-primary/20">
-                                                            <ExternalLink size={14} />
+                                                        <Link to={`/ventas/ordenes/${row.id_orden_venta}`} target="_blank" className="p-2 bg-carbon-mid border border-white/10 hover:border-primary/50 hover:bg-primary/10 text-primary transition-all inline-flex rounded-xl shadow-lg group">
+                                                            <ExternalLink size={18} className="group-hover:scale-110" />
                                                         </Link>
                                                     </td>
                                                 </tr>
                                             );
                                         })
                                     ) : (
-                                        <tr><td colSpan="7" className="text-center py-12 text-wire text-[10px] uppercase font-black tracking-widest italic">No hay movimientos pendientes de cobro</td></tr>
+                                        <tr><td colSpan="7" className="text-center py-20 text-wire text-sm uppercase font-black tracking-widest italic opacity-50">No hay movimientos pendientes de cobro</td></tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <div className="space-y-12 pb-20">
+                    <div className="space-y-20 pb-32">
                         {renderGrupoGraficos('facturasPEN', 'Análisis: Facturas (PEN)', '#10B981', 'PEN')}
                         {renderGrupoGraficos('facturasUSD', 'Análisis: Facturas (USD)', '#e8b84b', 'USD')}
                         {renderGrupoGraficos('notasVentaPEN', 'Análisis: N. Venta (PEN)', '#3B82F6', 'PEN')}

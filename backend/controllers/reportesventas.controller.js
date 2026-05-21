@@ -585,7 +585,7 @@ export const getReporteDeudasClientes = async (req, res) => {
                 aging: g.aging.filter(a => a.monto > 0.01),
                 topDeudores: Object.values(g.deudoresMap)
                     .sort((a, b) => b.deuda - a.deuda)
-                    .slice(0, 10)
+                    .slice(0, 5)
             };
         });
 

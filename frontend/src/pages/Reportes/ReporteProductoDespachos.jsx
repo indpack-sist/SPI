@@ -229,9 +229,9 @@ const ReporteProductoDespachos = () => {
                     <h3 className="text-sm font-black text-white uppercase tracking-widest">{titulo}</h3>
                 </div>
                 <div className="card-body p-6">
-                    <div className="w-full h-64">
+                    <div style={{ width: '100%', height: 260 }}>
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={datos} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                            <LineChart data={datos} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                                 <XAxis 
                                     dataKey="fecha" 
@@ -255,6 +255,7 @@ const ReporteProductoDespachos = () => {
                                     strokeWidth={3} 
                                     dot={{ r: 4, strokeWidth: 2, fill: '#1a1a1a' }} 
                                     activeDot={{ r: 6, strokeWidth: 0, fill: colorLinea }} 
+                                    isAnimationActive={false}
                                 />
                             </LineChart>
                         </ResponsiveContainer>

@@ -2290,9 +2290,21 @@ function DetalleOrdenVenta() {
                     </p>
                     {orden.facturado_sunat === 1 ? (
                         <div className="bg-emerald-50 border border-emerald-200 rounded p-3 space-y-1">
-                            <div className="flex items-center gap-2">
-                                <BadgeCheck size={16} className="text-emerald-600" />
-                                <span className="font-bold text-emerald-700 text-sm">Facturado en SUNAT</span>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <BadgeCheck size={16} className="text-emerald-600" />
+                                    <span className="font-bold text-emerald-700 text-sm">Facturado en SUNAT</span>
+                                </div>
+                                <button
+                                    className="p-1 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
+                                    onClick={() => {
+                                        setFileSunat(null);
+                                        setModalSunatOpen(true);
+                                    }}
+                                    title="Ver Detalle Factura SUNAT"
+                                >
+                                    <Eye size={20} />
+                                </button>
                             </div>
                             {orden.numero_comprobante_sunat && (
                                 <div>
@@ -3662,6 +3674,8 @@ function DetalleOrdenVenta() {
         }}
         orden={orden}
         file={fileSunat}
+        readOnly={!fileSunat && orden.facturado_sunat === 1}
+        existingData={!fileSunat && orden.facturado_sunat === 1 ? orden : null}
         onConfirm={(data) => {
             setModalSunatOpen(false);
             setFileSunat(null);

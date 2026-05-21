@@ -36,6 +36,7 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { ordenesVentaAPI, tipoCambioAPI } from '../../config/api';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -160,6 +161,11 @@ function OrdenesVenta() {
     titulo: ''
   });
 
+  const [modalSunat, setModalSunat] = useState({
+    isOpen: false,
+    orden: null
+  });
+
   const abrirVisor = (url, titulo) => {
     try {
       if (url && typeof url === 'string' && url.startsWith('[')) {
@@ -171,6 +177,13 @@ function OrdenesVenta() {
       }
     } catch (e) { }
     setVisorArchivo({ isOpen: true, url, titulo });
+  };
+
+  const abrirVisorSunat = (row) => {
+    setModalSunat({
+      isOpen: true,
+      orden: row
+    });
   };
 
   const getSessionArray = (key) => {
@@ -648,12 +661,12 @@ function OrdenesVenta() {
                   {row.numero_comprobante_sunat}
                 </span>
               )}
-              {row.comprobante_url && (
+              {row.comprobante_sunat_url && (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); abrirVisor(row.comprobante_url, `Factura SUNAT - ${row.numero_comprobante_sunat}`); }}
+                  onClick={(e) => { e.stopPropagation(); abrirVisorSunat(row); }}
                   className="mt-1 flex items-center justify-center bg-carbon-light border border-steel hover:bg-primary/20 hover:text-primary transition-colors text-wire px-2 py-0.5 rounded shadow-inner"
-                  title="Ver Documento"
+                  title="Ver Detalle Factura SUNAT"
                 >
                   <Eye size={12} />
                 </button>
@@ -876,6 +889,16 @@ function OrdenesVenta() {
           )}
         </div>
       </Modal>
+
+      <ModalValidacionSunat
+        isOpen={modalSunat.isOpen}
+        onClose={() => setModalSunat({ isOpen: false, orden: null })}
+        orden={modalSunat.orden}
+        file={null}
+        readOnly={true}
+        existingData={modalSunat.orden}
+        onConfirm={() => {}}
+      />
     </div>
   );
 }

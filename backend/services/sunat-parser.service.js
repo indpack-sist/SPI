@@ -1,6 +1,6 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 
 /**
  * Parsea un PDF de factura SUNAT y extrae los campos clave usando expresiones regulares.
@@ -10,7 +10,8 @@ const pdfParse = require('pdf-parse');
  */
 export const parseSunatInvoice = async (pdfBuffer) => {
     try {
-        const data = await pdfParse(pdfBuffer);
+        const parser = new PDFParse({ data: pdfBuffer });
+        const data = await parser.getText();
         const text = data.text;
 
         // Limpiar el texto para facilitar búsquedas y estandarizar saltos de línea
@@ -56,7 +57,7 @@ export const parseSunatInvoice = async (pdfBuffer) => {
 
         return result;
     } catch (error) {
-        console.error('Error parseando PDF de SUNAT:', error);
-        throw new Error('No se pudo procesar el archivo PDF. Asegúrese de que sea un documento legible.');
+        console.error('Error parseando PDF de SUNAT:', error.message || error);
+        throw new Error(`No se pudo procesar el archivo PDF. Detalle: ${error.message || error}`);
     }
 };

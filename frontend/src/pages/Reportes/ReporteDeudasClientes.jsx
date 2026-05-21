@@ -354,7 +354,8 @@ const ReporteDeudasClientes = () => {
                                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
                                 <input
                                     type="text"
-                                    className="form-input pl-11 w-full"
+                                    className="form-input w-full"
+                                    style={{ paddingLeft: '3rem' }}
                                     placeholder="RUC o Razón Social..."
                                     value={busquedaCliente}
                                     onChange={(e) => {

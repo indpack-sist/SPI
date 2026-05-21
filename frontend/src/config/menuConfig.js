@@ -43,10 +43,17 @@ export const menuConfig = [
       { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
       { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },
-      // NUEVO ITEM AGREGADO AQUÍ:
-      { path: '/ventas/reportes', icon: TrendingUp, label: 'Reportes', modulo: 'reportes', color: '#884EA0' },
-      { path: '/ventas/reporte-despachos', icon: TrendingUp, label: 'Despachos por Prod', modulo: 'reportes', color: '#884EA0' },
-      { path: '/ventas/reporte-deudas', icon: TrendingUp, label: 'Cuentas x Cobrar', modulo: 'reportes', color: '#884EA0' },
+      { 
+        label: 'Reportes', 
+        icon: TrendingUp, 
+        modulo: 'reportes', 
+        color: '#884EA0',
+        subItems: [
+          { path: '/ventas/reportes', label: 'Reporte de Ventas', modulo: 'reportes' },
+          { path: '/ventas/reporte-despachos', label: 'Despachos por Prod', modulo: 'reportes' },
+          { path: '/ventas/reporte-deudas', label: 'Cuentas x Cobrar', modulo: 'reportes' },
+        ]
+      },
     ]
   },
   {

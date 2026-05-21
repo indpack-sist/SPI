@@ -15,13 +15,15 @@ const particionarDatosGrafico = (detalle) => {
 
     const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
-    [...detalle].reverse().forEach(item => {
+    [...detalle].reverse().forEach((item, index) => {
         const tipoImpuesto = String(item.tipo_impuesto || '').toUpperCase().trim();
         const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
         const tipo = String(item.tipo_comprobante || '').trim();
         
+        const fechaFormateada = new Date(item.fecha_emision).toLocaleDateString('es-PE');
         const punto = {
-            fecha: new Date(item.fecha_emision).toLocaleDateString('es-PE'),
+            idUnico: `${fechaFormateada}-${item.numero_orden}-${index}`, // ID unico para XAxis
+            fecha: fechaFormateada,
             precio: parseFloat(item.precio_unitario),
             cliente: item.cliente,
             cantidad: parseFloat(item.cantidad_despachada),
@@ -237,8 +239,12 @@ const ReporteProductoDespachos = () => {
                             <LineChart data={datos} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                                 <XAxis 
-                                    dataKey="fecha" 
+                                    dataKey="idUnico" 
                                     stroke="#888" 
+                                    tickFormatter={(val) => {
+                                        const found = datos.find(d => d.idUnico === val);
+                                        return found ? found.fecha : val;
+                                    }}
                                     tick={{ fill: '#888', fontSize: 11 }} 
                                     tickMargin={10} 
                                 />

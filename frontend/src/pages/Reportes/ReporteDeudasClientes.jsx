@@ -109,9 +109,9 @@ const ReporteDeudasClientes = () => {
             const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
             let itemKey = '';
-            if (tipo.includes('Factura')) {
+            if (tipo.toLowerCase().includes('factura')) {
                 itemKey = (!esSinImpuesto || facturasExportacion.includes(item.numero_orden)) ? `facturas${moneda}` : `notasVenta${moneda}`;
-            } else if (tipo.includes('Nota de Venta')) {
+            } else if (tipo.toLowerCase().includes('nota de venta')) {
                 itemKey = `notasVenta${moneda}`;
             } else {
                 itemKey = `sinCompr${moneda}`;
@@ -216,7 +216,7 @@ const ReporteDeudasClientes = () => {
                 </div>
 
                 {isExpanded && (
-                    <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-6 border-2 border-primary/30 bg-carbon-dark rounded-xl shadow-2xl overflow-hidden" style={{ borderColor: 'rgba(232, 184, 75, 0.3)' }}>
+                    <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-6 border-2 border-primary/30 bg-carbon rounded-xl shadow-2xl overflow-hidden" style={{ borderColor: 'rgba(232, 184, 75, 0.3)' }}>
                         <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-carbon-light/40">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-primary/20 rounded-lg shadow-inner">
@@ -337,7 +337,7 @@ const ReporteDeudasClientes = () => {
                                     onFocus={() => setMostrarDropdownCliente(true)}
                                 />
                                 {mostrarDropdownCliente && busquedaCliente && (
-                                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-carbon-light border border-steel rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
+                                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-[#1a1a1a] border border-steel rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
                                         {clientesFiltrados.length > 0 ? (
                                             clientesFiltrados.map(c => (
                                                 <div key={c.id_cliente} onClick={() => handleSelectCliente(c)} className="p-2.5 hover:bg-steel/30 cursor-pointer rounded transition-colors border-b border-white/5 last:border-0">
@@ -501,7 +501,7 @@ const ReporteDeudasClientes = () => {
                                                         </span>
                                                     </td>
                                                     <td className="text-right pr-6">
-                                                        <Link to={`/ventas/ordenes/${row.id_orden_venta}`} target="_blank" className="p-1.5 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md border border-white/5">
+                                                        <Link to={`/ventas/ordenes/${row.id_orden_venta}`} target="_blank" className="p-1.5 hover:bg-primary/10 text-primary transition-all inline-flex rounded-md border border-primary/20">
                                                             <ExternalLink size={14} />
                                                         </Link>
                                                     </td>

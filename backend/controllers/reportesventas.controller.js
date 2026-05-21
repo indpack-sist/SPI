@@ -450,7 +450,7 @@ export const getReporteProductoDespachos = async (req, res) => {
 
 export const getReporteDeudasClientes = async (req, res) => {
     try {
-        const { idCliente, soloVencidas, tipoComprobante, estadoSunat, fechaInicio, fechaFin } = req.query;
+        const { idCliente, soloVencidas, tipoComprobante, estadoSunat, fechaInicio, fechaFin, moneda, tipoFecha } = req.query;
 
         let sql = `
             SELECT 
@@ -459,6 +459,7 @@ export const getReporteDeudasClientes = async (req, res) => {
                 ov.tipo_comprobante,
                 ov.numero_comprobante_sunat,
                 ov.fecha_emision,
+                ov.fecha_facturacion_sunat,
                 ov.fecha_vencimiento,
                 ov.moneda,
                 ov.total,
@@ -486,6 +487,11 @@ export const getReporteDeudasClientes = async (req, res) => {
             params.push(idCliente);
         }
 
+        if (moneda && moneda !== '') {
+            sql += ` AND ov.moneda = ?`;
+            params.push(moneda);
+        }
+
         if (soloVencidas === 'true') {
             sql += ` AND ov.fecha_vencimiento < CURRENT_DATE`;
         }
@@ -495,8 +501,9 @@ export const getReporteDeudasClientes = async (req, res) => {
             params.push(tipoComprobante);
         }
 
+        const campoFecha = tipoFecha === 'fecha_sunat' ? 'ov.fecha_facturacion_sunat' : 'ov.fecha_emision';
         if (fechaInicio && fechaInicio !== '' && fechaFin && fechaFin !== '') {
-            sql += ` AND DATE(ov.fecha_emision) BETWEEN ? AND ?`;
+            sql += ` AND DATE(${campoFecha}) BETWEEN ? AND ?`;
             params.push(fechaInicio, fechaFin);
         }
 

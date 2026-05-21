@@ -229,9 +229,9 @@ const ReporteProductoDespachos = () => {
 
         return (
             <div className="card border border-steel/20 shadow-xl bg-carbon-mid">
-                <div className="card-header border-b border-steel/30 px-6 py-4 flex items-center gap-2">
+                <div className="card-header border-b border-steel/30 px-6 py-4 flex items-center justify-center gap-2">
                     <TrendingUp size={20} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
-                    <h3 className="text-sm font-black text-white uppercase tracking-widest">{titulo}</h3>
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest text-center">{titulo}</h3>
                 </div>
                 <div className="card-body p-6 overflow-x-auto custom-scrollbar">
                     <div style={{ width: anchoDinamico, minWidth: '100%', height: 260 }}>

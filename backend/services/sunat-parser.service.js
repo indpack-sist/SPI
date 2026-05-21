@@ -13,59 +13,57 @@ export const parseSunatInvoice = async (pdfBuffer) => {
         const parser = new PDFParse({ data: pdfBuffer });
         const data = await parser.getText();
         const text = data.text;
-        
-        // DEBUG: Descomentar para ver qué texto está leyendo realmente el sistema en el log del servidor
-        // console.log('--- TEXTO EXTRAIDO DEL PDF ---');
-        // console.log(text);
-        // console.log('------------------------------');
 
         // Limpiar el texto para facilitar búsquedas y estandarizar saltos de línea
         const cleanText = text.replace(/\r/g, '\n');
 
         // Función auxiliar para probar múltiples regex y quedarse con la primera que coincida
-        const extractMultiple = (regexes) => {
+        const extractMultiple = (regexes, scopeText = cleanText) => {
             for (const r of regexes) {
-                const match = cleanText.match(r);
+                const match = scopeText.match(r);
                 if (match && match[1]) return match[1].trim();
             }
             return '';
         };
 
+        // El portal SUNAT pone el Emisor arriba. Limitamos el bloque del emisor para el correlativo.
+        const emisorBlock = cleanText.substring(0, 800);
+        const correlativo = extractMultiple([
+            /(?:FACTURA|BOLETA).*?\n*([EF][A-Z0-9]{3}\s*-\s*\d+)/i,
+            /([EF][A-Z0-9]{3}\s*-\s*\d+)/i
+        ], emisorBlock);
+
         const result = {
             emisor: {
-                ruc: extractMultiple([/R\.?U\.?C\.?\s*(?:N[Nº°]?)?\s*[:\-]?\s*(\d{11})/i]),
+                ruc: extractMultiple([/R\.?U\.?C\.?\s*(?:N[Nº°]?)?\s*[:\-]?\s*(\d{11})/i], emisorBlock),
             },
             comprobante: {
                 tipo: 'FACTURA ELECTRÓNICA',
-                // Busca correlativos F o E. Ej: F001-123 o E001-123. Soportamos posibles saltos de linea o basura en medio
-                serie_correlativo: extractMultiple([
-                    /(?:FACTURA|BOLETA)[\s\S]{0,150}([EF][A-Z0-9]{3}\s*-\s*\d+)/i,
-                    /([EF][A-Z0-9]{3}\s*-\s*\d+)/i
-                ]),
+                serie_correlativo: correlativo,
+                // Fecha: Buscamos ": DD/MM/YYYY" que aparezca después de la etiqueta "Fecha de Emisión"
                 fecha_emision: extractMultiple([
-                    /Fecha\s+(?:de\s+)?Emisi[oó]n\s*[:\-]?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
-                    /Fecha\s*[:\-]?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
-                    /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/ // Fallback a la primera fecha del documento
+                    /Fecha\s+(?:de\s+)?Emisi[oó]n[\s\S]{0,800}:\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+                    /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/
                 ]),
                 moneda: extractMultiple([
-                    /Tipo\s+de\s+Moneda\s*[:\-]?\s*([A-Za-z\s]+)/i,
+                    /Tipo\s+de\s+Moneda[\s\S]{0,800}:\s*([A-Za-z\s]+)/i,
                     /Moneda\s*[:\-]?\s*([A-Za-z\s]+)/i
                 ]) || 'SOLES',
             },
             cliente: {
-                // RUC del cliente: probamos varios formatos comunes, asegurando que no agarre el RUC del emisor (buscando Señor(es) antes)
+                // RUC Cliente: En SUNAT portal, el RUC está en una columna de valores. 
+                // Buscamos 11 dígitos que vengan después de un ":" en el bloque central del PDF
                 ruc: extractMultiple([
-                    /Señor(?:es)?[\s\S]{0,250}RUC\s*[:\-]?\s*(\d{11})/i,
+                    /Señor(?:es)?[\s\S]{0,800}:\s*.*?\s+:\s*(\d{11})/i, // Formato portal SUNAT (Señor : ... RUC : ...)
                     /RUC\s+(?:del\s+Cliente|del\s+Receptor)\s*[:\-]?\s*(\d{11})/i,
-                    /(?:Cliente|Receptor).*?\s+RUC\s*[:\-]?\s*(\d{11})/i,
-                    /RUC\s*[:\-]?\s*(\d{11})(?!\s*(?:FACTURA|BOLETA))/i 
+                    /RUC[\s\S]{0,800}:\s*(\d{11})/i
                 ]),
                 razon_social: extractMultiple([
-                    /Señor(?:es)?\s*[:\-]?\s*([^\n]+)/i,
+                    /Señor(?:es)?[\s\S]{0,800}:\s*([^\n:]+)/i,
                     /Raz[oó]n\s+Social(?:.*?)\n([^\n]+)/i
                 ]),
                 direccion: extractMultiple([
-                    /Direcci[oó]n\s+(?:del\s+Cliente|del\s+Receptor)(?:\s+de\s+la\s+factura)?\s*[:\-]?\s*([^\n]+)/i,
+                    /Direcci[oó]n\s+(?:del\s+Cliente|del\s+Receptor)(?:\s+de\s+la\s+factura)?[\s\S]{0,800}:\s*([^\n]+)/i,
                     /Dirección\s*[:\-]?\s*([^\n]+)\n(?:RUC|Tipo de Moneda)/im
                 ])
             },
@@ -75,7 +73,6 @@ export const parseSunatInvoice = async (pdfBuffer) => {
                 valor_venta: extractMultiple([/Valor\s*Venta\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i]),
                 igv: extractMultiple([/IGV\s*(?:18%|18\.00%)?\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.)?\s*([\d,]+\.\d{2})/i]),
                 importe_total: extractMultiple([
-                    /(?:Importe\s+)?Total\s*a\s*Pagar\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i,
                     /Importe\s+Total\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i,
                     /TOTAL\s*V[E|E]NTA\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i,
                     /TOTAL\s*[:\-]?\s*(?:S\/?|USD|\$|S\/\.|S\/)?\s*([\d,]+\.\d{2})/i

@@ -45,9 +45,12 @@ const AppLauncher = () => {
         <div className="launcher-grid">
           {allowedApps.map((app, index) => {
             const Icon = app.icon;
+            // Si el app tiene subItems, linkeamos al primero
+            const targetPath = app.subItems && app.subItems.length > 0 ? app.subItems[0].path : app.path;
+            
             return (
               <Link
-                to={app.path}
+                to={targetPath}
                 key={index}
                 className="launcher-card"
                 style={{ '--card-color': app.color || '#e8b84b' }}

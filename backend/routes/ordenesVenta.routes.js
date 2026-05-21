@@ -40,7 +40,9 @@ import {
   reenviarOrdenVerificacion,
   marcarFacturadoSunat,
   desmarcarFacturadoSunat,
-  asignarGuiaInternaASalida
+  asignarGuiaInternaASalida,
+  parsearFacturaSunat,
+  vincularFacturaSunat
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -100,5 +102,8 @@ router.delete('/:id/pagos/:idPago', verificarToken, verificarOrdenAprobada, anul
 
 router.put('/:id', verificarToken, puedeEditarOrdenRechazada, uploadArchivos, updateOrdenVenta);
 router.get('/:id', verificarToken, getOrdenVentaById);
+
+router.post('/parse-sunat', verificarToken, uploadMiddleware.single('pdf'), parsearFacturaSunat);
+router.put('/:id/vincular-sunat', verificarToken, verificarOrdenAprobada, uploadMiddleware.single('pdf'), vincularFacturaSunat);
 
 export default router;

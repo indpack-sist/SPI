@@ -12,6 +12,7 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI } from '../../config/api';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -68,7 +69,8 @@ function DetalleOrdenVenta() {
   const [modalTransporteOpen, setModalTransporteOpen] = useState(false);
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   const [modalReservaStock, setModalReservaStock] = useState(false);
-  const [modalFacturarSunatOpen, setModalFacturarSunatOpen] = useState(false);
+  const [modalSunatOpen, setModalSunatOpen] = useState(false);
+  const [fileSunat, setFileSunat] = useState(null);
   const [modalConfirmarGuiaInterna, setModalConfirmarGuiaInterna] = useState(false);
   const [salidaSeleccionadaGI, setSalidaSeleccionadaGI] = useState(null);
   
@@ -1713,17 +1715,29 @@ function DetalleOrdenVenta() {
                 <BadgeCheck size={20} /> Facturado SUNAT
               </button>
             ) : (
-              <button
-                className="btn btn-outline border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100"
-                onClick={() => {
-                  setNumeroComprobanteSunat('');
-                  setModalFacturarSunatOpen(true);
-                }}
-                disabled={procesando}
-                title="Marcar como facturado en SUNAT"
-              >
-                <BadgeCheck size={20} /> Marcar SUNAT
-              </button>
+              <div>
+                <input 
+                  type="file" 
+                  id="facturaSunatInput" 
+                  accept=".pdf" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      setFileSunat(file);
+                      setModalSunatOpen(true);
+                    }
+                    e.target.value = null; // Reset input
+                  }} 
+                />
+                <label
+                  htmlFor="facturaSunatInput"
+                  className="btn btn-outline border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 cursor-pointer inline-flex"
+                  title="Vincular Factura SUNAT"
+                >
+                  <BadgeCheck size={20} className="mr-1"/> Vincular SUNAT
+                </label>
+              </div>
             )
           )}
 
@@ -3699,6 +3713,21 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
+      <ModalValidacionSunat
+        isOpen={modalSunatOpen}
+        onClose={() => {
+            setModalSunatOpen(false);
+            setFileSunat(null);
+        }}
+        orden={orden}
+        file={fileSunat}
+        onConfirm={(data) => {
+            setModalSunatOpen(false);
+            setFileSunat(null);
+            setSuccess(`Factura SUNAT ${data.numero_comprobante_sunat} vinculada correctamente`);
+            cargarDatos();
+        }}
+      />
     </div>
   );
 }

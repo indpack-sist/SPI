@@ -121,8 +121,9 @@ export const getReporteVentas = async (req, res) => {
                     : 18
             );
 
-            const igvOriginal = subtotalOriginal * (porcentajeImp / 100);
-            const totalOriginal = subtotalOriginal + igvOriginal;
+            const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
+            const igvOriginal = esNotaVenta ? 0 : subtotalOriginal * (porcentajeImp / 100);
+            const totalOriginal = esNotaVenta ? subtotalOriginal : subtotalOriginal + igvOriginal;
             const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
 
             // Valores convertidos específicos de esta orden

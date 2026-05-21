@@ -629,8 +629,9 @@ export async function createOrdenVenta(req, res) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
 
-    const impuesto = subtotal * (porcentaje / 100);
-    const total = subtotal + impuesto;
+    const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
+    const impuesto = esNotaVenta ? 0 : subtotal * (porcentaje / 100);
+    const total = esNotaVenta ? subtotal : subtotal + impuesto;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -798,10 +799,9 @@ export async function updateOrdenVenta(req, res) {
     }
 
     const ordenExistente = await executeQuery(`
-      SELECT estado, stock_reservado, id_cotizacion, orden_compra_url, comprobante_url 
+      SELECT estado, stock_reservado, id_cotizacion, orden_compra_url, comprobante_url, tipo_comprobante
       FROM ordenes_venta WHERE id_orden_venta = ?
     `, [id]);
-
     if (!ordenExistente.success || ordenExistente.data.length === 0) {
       return res.status(404).json({ success: false, error: 'Orden de venta no encontrada' });
     }
@@ -906,8 +906,9 @@ export async function updateOrdenVenta(req, res) {
       porcentaje = parseFloat(porcentaje_impuesto);
     }
 
-    const impuesto = subtotal * (porcentaje / 100);
-    const total = subtotal + impuesto;
+    const esNotaVenta = (typeof tipo_comprobante !== 'undefined' ? tipo_comprobante : (typeof ordenActual !== 'undefined' ? ordenActual.tipo_comprobante : '')) === 'Nota de Venta';
+    const impuesto = esNotaVenta ? 0 : subtotal * (porcentaje / 100);
+    const total = esNotaVenta ? subtotal : subtotal + impuesto;
 
     if (plazo_pago !== 'Contado') {
       const clienteInfo = await executeQuery(
@@ -2177,11 +2178,17 @@ export async function registrarPagoOrden(req, res) {
     }
     
     const orden = ordenResult.data[0];
-    const totalOrden = Math.round(parseFloat(orden.total) * 100) / 100;
+    
+    // DETERMINAR MONTO REAL A COBRAR (Subtotal para Nota de Venta, Total para Factura)
+    const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
+    const totalOrden = esNotaVenta 
+        ? Math.round(parseFloat(orden.subtotal) * 100) / 100 
+        : Math.round(parseFloat(orden.total) * 100) / 100;
+
     const montoPagadoActual = Math.round(parseFloat(orden.monto_pagado || 0) * 100) / 100;
     const montoNuevoPago = Math.round(parseFloat(monto_pagado) * 100) / 100;
     
-    if (Math.round((montoPagadoActual + montoNuevoPago) * 100) / 100 > totalOrden) {
+    if (Math.round((montoPagadoActual + montoNuevoPago) * 100) / 100 > totalOrden + 0.01) {
       return res.status(400).json({
         success: false,
         error: `El monto a pagar (${montoNuevoPago.toFixed(2)}) excede el saldo pendiente (${(totalOrden - montoPagadoActual).toFixed(2)})`
@@ -2411,7 +2418,10 @@ export async function anularPagoOrden(req, res) {
     
     const orden = ordenResult.data[0];
     const montoPagadoActual = parseFloat(orden.monto_pagado || 0);
-    const totalOrden = parseFloat(orden.total);
+    
+    // DETERMINAR MONTO REAL A COBRAR (Subtotal para Nota de Venta, Total para Factura)
+    const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
+    const totalOrden = esNotaVenta ? parseFloat(orden.subtotal) : parseFloat(orden.total);
 
     const queries = [];
 
@@ -2515,7 +2525,11 @@ export async function getResumenPagosOrden(req, res) {
     }
     
     const orden = ordenResult.data[0];
-    const totalOrden = parseFloat(orden.total);
+    
+    // DETERMINAR MONTO REAL A COBRAR (Subtotal para Nota de Venta, Total para Factura)
+    const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
+    const totalOrden = esNotaVenta ? parseFloat(orden.subtotal) : parseFloat(orden.total);
+    
     const montoPagado = parseFloat(orden.monto_pagado || 0);
     
     const pagosResult = await executeQuery(`

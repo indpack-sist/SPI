@@ -140,7 +140,7 @@ export const getCuentasPorCobrar = async (req, res, next) => {
     let whereClause = `
       ov.estado != 'Cancelada' 
       AND ov.estado_pago != 'Pagado'
-      AND (ov.total - COALESCE(ov.monto_pagado, 0)) >= 0.01
+      AND (CASE WHEN ov.tipo_comprobante = 'Nota de Venta' THEN ov.subtotal ELSE ov.total END - COALESCE(ov.monto_pagado, 0)) >= 0.01
     `;
     const params = [];
     
@@ -171,9 +171,9 @@ export const getCuentasPorCobrar = async (req, res, next) => {
         ov.tipo_venta,
         ov.estado,
         ov.estado_pago,
-        ov.total,
+        CASE WHEN ov.tipo_comprobante = 'Nota de Venta' THEN ov.subtotal ELSE ov.total END as total,
         COALESCE(ov.monto_pagado, 0) as monto_pagado,
-        (ov.total - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
+        (CASE WHEN ov.tipo_comprobante = 'Nota de Venta' THEN ov.subtotal ELSE ov.total END - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
         cl.razon_social as cliente,
         cl.ruc,
         DATEDIFF(ov.fecha_vencimiento, CURDATE()) as dias_restantes,
@@ -229,7 +229,7 @@ export const descargarReporteDeudas = async (req, res, next) => {
     let whereClause = `
       ov.estado != 'Cancelada' 
       AND ov.estado_pago != 'Pagado'
-      AND (ov.total - COALESCE(ov.monto_pagado, 0)) >= 0.01
+      AND (CASE WHEN ov.tipo_comprobante = 'Nota de Venta' THEN ov.subtotal ELSE ov.total END - COALESCE(ov.monto_pagado, 0)) >= 0.01
     `;
     const params = [];
     
@@ -260,9 +260,9 @@ export const descargarReporteDeudas = async (req, res, next) => {
         ov.tipo_venta,
         ov.estado,
         ov.estado_pago,
-        ov.total,
+        CASE WHEN ov.tipo_comprobante = 'Nota de Venta' THEN ov.subtotal ELSE ov.total END as total,
         COALESCE(ov.monto_pagado, 0) as monto_pagado,
-        (ov.total - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
+        (CASE WHEN ov.tipo_comprobante = 'Nota de Venta' THEN ov.subtotal ELSE ov.total END - COALESCE(ov.monto_pagado, 0)) as saldo_pendiente,
         cl.razon_social as cliente,
         cl.ruc,
         cl.direccion_despacho as direccion,

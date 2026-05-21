@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, X, LayoutGrid } from 'lucide-react';
+import { Package, X, LayoutGrid, ChevronDown } from 'lucide-react';
 import { usePermisos } from '../../context/PermisosContext';
 import { menuConfig } from '../../config/menuConfig';
 import './Sidebar.css';
@@ -7,8 +8,30 @@ import './Sidebar.css';
 function Sidebar({ onToggle }) {
   const location = useLocation();
   const { rol, tienePermiso } = usePermisos();
+  const [openSubmenus, setOpenSubmenus] = useState({});
 
   const isActive = (path) => location.pathname === path;
+
+  const toggleSubmenu = (label) => {
+    setOpenSubmenus(prev => ({
+      ...prev,
+      [label]: !prev[label]
+    }));
+  };
+
+  // Abrir submenú automáticamente si un hijo está activo
+  useEffect(() => {
+    menuConfig.forEach(section => {
+      section.items.forEach(item => {
+        if (item.subItems) {
+          const hasActiveChild = item.subItems.some(sub => isActive(sub.path));
+          if (hasActiveChild) {
+            setOpenSubmenus(prev => ({ ...prev, [item.label]: true }));
+          }
+        }
+      });
+    });
+  }, [location.pathname]);
 
   return (
     <div className="sidebar">
@@ -69,6 +92,38 @@ function Sidebar({ onToggle }) {
               <ul className="sidebar-menu">
                 {itemsVisibles.map((item) => {
                   const Icon = item.icon;
+                  const hasSubItems = item.subItems && item.subItems.length > 0;
+                  const isOpen = openSubmenus[item.label];
+
+                  if (hasSubItems) {
+                    return (
+                      <li key={item.label}>
+                        <button
+                          onClick={() => toggleSubmenu(item.label)}
+                          className={`sidebar-link sidebar-dropdown-toggle ${isOpen ? 'open' : ''}`}
+                        >
+                          <div className="sidebar-icon-container">
+                            <Icon size={20} />
+                          </div>
+                          <span>{item.label}</span>
+                          <ChevronDown size={14} className={`sidebar-chevron ${isOpen ? 'rotate' : ''}`} />
+                        </button>
+                        <ul className={`sidebar-submenu ${isOpen ? 'expanded' : ''}`}>
+                          {item.subItems.filter(sub => tienePermiso(sub.modulo)).map((sub) => (
+                            <li key={sub.path}>
+                              <Link
+                                to={sub.path}
+                                className={`sidebar-sublink ${isActive(sub.path) ? 'active' : ''}`}
+                              >
+                                <span>{sub.label}</span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    );
+                  }
+
                   return (
                     <li key={item.path}>
                       <Link

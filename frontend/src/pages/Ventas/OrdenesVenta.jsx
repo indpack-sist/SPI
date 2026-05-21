@@ -665,10 +665,11 @@ function OrdenesVenta() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); abrirVisorSunat(row); }}
-                  className="mt-1 flex items-center justify-center bg-carbon-light border border-steel hover:bg-primary/20 hover:text-primary transition-colors text-wire px-2 py-0.5 rounded shadow-inner"
+                  className="mt-1.5 flex items-center justify-center bg-emerald-500/10 border border-emerald-500/50 hover:bg-emerald-500 hover:text-white transition-all text-emerald-500 px-3 py-1 rounded shadow-sm group"
                   title="Ver Detalle Factura SUNAT"
                 >
-                  <Eye size={12} />
+                  <Eye size={12} className="group-hover:scale-110 transition-transform" />
+                  <span className="ml-1 text-[8px] font-bold uppercase tracking-tighter">Ver PDF</span>
                 </button>
               )}
             </div>

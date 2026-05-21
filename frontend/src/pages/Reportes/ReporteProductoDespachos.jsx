@@ -380,7 +380,7 @@ const ReporteProductoDespachos = () => {
                                             <YAxis 
                                                 stroke="#888" 
                                                 tick={{ fill: '#888', fontSize: 11 }}
-                                                tickFormatter={(value) => \`\${value.toFixed(2)}\`}
+                                                tickFormatter={(value) => `${value.toFixed(2)}`}
                                                 domain={['auto', 'auto']}
                                             />
                                             <Tooltip content={<CustomTooltip />} />

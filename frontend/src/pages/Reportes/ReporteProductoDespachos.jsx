@@ -3,6 +3,51 @@ import { api } from '../../config/api';
 import { Search, Package, Box, User, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+const particionarDatosGrafico = (detalle) => {
+    const grupos = {
+        facturasPEN: [],
+        facturasUSD: [],
+        notasVentaPEN: [],
+        notasVentaUSD: [],
+        sinComprPEN: [],
+        sinComprUSD: []
+    };
+
+    const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
+
+    [...detalle].reverse().forEach(item => {
+        const tipoImpuesto = String(item.tipo_impuesto || '').toUpperCase().trim();
+        const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+        const tipo = String(item.tipo_comprobante || '').trim();
+        
+        const punto = {
+            fecha: new Date(item.fecha_emision).toLocaleDateString('es-PE'),
+            precio: parseFloat(item.precio_unitario),
+            cliente: item.cliente,
+            cantidad: parseFloat(item.cantidad_despachada),
+            moneda: item.moneda,
+            orden: item.numero_orden
+        };
+
+        let categoria = '';
+        if (tipo.includes('Factura')) {
+            if (!esSinImpuesto || facturasExportacion.includes(item.numero_orden)) {
+                categoria = item.moneda === 'USD' ? 'facturasUSD' : 'facturasPEN';
+            } else {
+                categoria = item.moneda === 'USD' ? 'notasVentaUSD' : 'notasVentaPEN';
+            }
+        } else if (tipo.includes('Nota de Venta')) {
+            categoria = item.moneda === 'USD' ? 'notasVentaUSD' : 'notasVentaPEN';
+        } else {
+            categoria = item.moneda === 'USD' ? 'sinComprUSD' : 'sinComprPEN';
+        }
+
+        grupos[categoria].push(punto);
+    });
+
+    return grupos;
+};
+
 const ReporteProductoDespachos = () => {
     const [productos, setProductos] = useState([]);
     const [clientes, setClientes] = useState([]);
@@ -157,15 +202,7 @@ const ReporteProductoDespachos = () => {
         return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
     };
 
-    // Preparar datos para el gráfico (orden cronológico)
-    const datosGrafico = reporteData ? [...reporteData.detalle].reverse().map(item => ({
-        fecha: new Date(item.fecha_emision).toLocaleDateString('es-PE'),
-        precio: parseFloat(item.precio_unitario),
-        cliente: item.cliente,
-        cantidad: parseFloat(item.cantidad_despachada),
-        moneda: item.moneda,
-        orden: item.numero_orden
-    })) : [];
+    const gruposGraficos = reporteData ? particionarDatosGrafico(reporteData.detalle) : null;
 
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
@@ -181,6 +218,50 @@ const ReporteProductoDespachos = () => {
             );
         }
         return null;
+    };
+
+    const renderGrafico = (datos, titulo, colorLinea) => {
+        if (!datos || datos.length === 0) return null;
+        return (
+            <div className="card border border-steel/20 shadow-xl bg-carbon-mid">
+                <div className="card-header border-b border-steel/30 px-6 py-4 flex items-center gap-2">
+                    <TrendingUp size={20} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest">{titulo}</h3>
+                </div>
+                <div className="card-body p-6">
+                    <div className="w-full h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={datos} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                <XAxis 
+                                    dataKey="fecha" 
+                                    stroke="#888" 
+                                    tick={{ fill: '#888', fontSize: 11 }} 
+                                    tickMargin={10} 
+                                />
+                                <YAxis 
+                                    stroke="#888" 
+                                    tick={{ fill: '#888', fontSize: 11 }}
+                                    tickFormatter={(value) => `${value.toFixed(2)}`}
+                                    domain={['auto', 'auto']}
+                                />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend wrapperStyle={{ fontSize: '12px', color: '#ccc', paddingTop: '10px' }} />
+                                <Line 
+                                    type="monotone" 
+                                    dataKey="precio" 
+                                    name="Precio Unitario" 
+                                    stroke={colorLinea} 
+                                    strokeWidth={3} 
+                                    dot={{ r: 4, strokeWidth: 2, fill: '#1a1a1a' }} 
+                                    activeDot={{ r: 6, strokeWidth: 0, fill: colorLinea }} 
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -360,47 +441,6 @@ const ReporteProductoDespachos = () => {
                         </div>
                     </div>
 
-                    {datosGrafico.length > 0 && (
-                        <div className="card mb-6 border border-steel/20 shadow-xl bg-carbon-mid">
-                            <div className="card-header border-b border-steel/30 px-6 py-4 flex items-center gap-2">
-                                <TrendingUp size={20} className="text-primary" />
-                                <h3 className="text-sm font-black text-white uppercase tracking-widest">Variación de Precio Unitario</h3>
-                            </div>
-                            <div className="card-body p-6">
-                                <div className="w-full h-80">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={datosGrafico} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                                            <XAxis 
-                                                dataKey="fecha" 
-                                                stroke="#888" 
-                                                tick={{ fill: '#888', fontSize: 11 }} 
-                                                tickMargin={10} 
-                                            />
-                                            <YAxis 
-                                                stroke="#888" 
-                                                tick={{ fill: '#888', fontSize: 11 }}
-                                                tickFormatter={(value) => `${value.toFixed(2)}`}
-                                                domain={['auto', 'auto']}
-                                            />
-                                            <Tooltip content={<CustomTooltip />} />
-                                            <Legend wrapperStyle={{ fontSize: '12px', color: '#ccc', paddingTop: '10px' }} />
-                                            <Line 
-                                                type="monotone" 
-                                                dataKey="precio" 
-                                                name="Precio Unitario" 
-                                                stroke="#e8b84b" 
-                                                strokeWidth={3} 
-                                                dot={{ r: 4, strokeWidth: 2, fill: '#1a1a1a' }} 
-                                                activeDot={{ r: 6, strokeWidth: 0, fill: '#e8b84b' }} 
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="card shadow-2xl relative border border-steel/20 bg-carbon">
                         <div className="card-header border-b border-steel/30 px-6 py-4">
                             <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
@@ -480,6 +520,18 @@ const ReporteProductoDespachos = () => {
                             </div>
                         </div>
                     </div>
+
+                    {gruposGraficos && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                            {renderGrafico(gruposGraficos.facturasPEN, 'Evolución: Facturas (PEN)', '#10B981')}
+                            {renderGrafico(gruposGraficos.facturasUSD, 'Evolución: Facturas (USD)', '#e8b84b')}
+                            {renderGrafico(gruposGraficos.notasVentaPEN, 'Evolución: N. Venta (PEN)', '#3B82F6')}
+                            {renderGrafico(gruposGraficos.notasVentaUSD, 'Evolución: N. Venta (USD)', '#60A5FA')}
+                            {renderGrafico(gruposGraficos.sinComprPEN, 'Evolución: Sin Compr. (PEN)', '#F59E0B')}
+                            {renderGrafico(gruposGraficos.sinComprUSD, 'Evolución: Sin Compr. (USD)', '#FCD34D')}
+                        </div>
+                    )}
+
                 </div>
             )}
         </div>

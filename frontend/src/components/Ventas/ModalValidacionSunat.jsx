@@ -45,6 +45,10 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
 
         let advertencias = [];
         
+        if (!formData.ruc_cliente || !formData.importe_total || !formData.numero_comprobante_sunat) {
+            advertencias.push('No se detectaron todos los datos automáticamente. Por favor, complételos o corríjalos manualmente.');
+        }
+
         // Comparar RUC
         if (formData.ruc_cliente && orden?.ruc_cliente && formData.ruc_cliente !== orden.ruc_cliente) {
             advertencias.push(`El RUC (${formData.ruc_cliente}) no coincide con el cliente de la Orden (${orden.ruc_cliente}).`);
@@ -67,7 +71,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm }) => {
         } else {
             setAlert({ type: 'success', message: 'Datos correctos y coinciden con la orden.' });
         }
-    }, [formData.ruc_cliente, formData.importe_total, orden, parsedData]);
+    }, [formData.ruc_cliente, formData.importe_total, formData.numero_comprobante_sunat, orden, parsedData]);
 
     const parsearPDF = async (pdfFile) => {
         setLoading(true);

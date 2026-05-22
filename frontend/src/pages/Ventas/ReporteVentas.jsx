@@ -56,20 +56,20 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
       <label className="form-label uppercase text-[10px] text-muted font-bold tracking-wider mb-1 block">{label}</label>
       <div 
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
-        className={`form-input flex justify-between items-center transition-all ${selectedValues.length > 0 ? 'border-primary shadow-sm bg-primary/5' : 'bg-carbon-light'}`}
-        style={{ cursor: 'pointer' }}
+        className={`form-input flex justify-between items-center transition-all ${selectedValues.length > 0 ? 'border-primary shadow-sm bg-primary/5' : 'bg-carbon-mid'}`}
+        style={{ cursor: 'pointer', borderColor: '#444' }}
       >
-        <span className="text-xs font-medium truncate pr-2" style={{ cursor: 'pointer' }}>
+        <span className="text-xs font-medium truncate pr-2" style={{ color: '#eee' }}>
           {selectedValues.length === 0 ? 'Todos' : 
            selectedValues.length === 1 ? selectedValues[0] : 
            `${selectedValues.length} seleccionados`}
         </span>
-        <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-400'} style={{ cursor: 'pointer' }} />
+        <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-400'} />
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 mt-1 w-64 border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
-             style={{ backgroundColor: '#1a1a1a', zIndex: 1000 }}>
+        <div className="absolute left-0 top-full mt-1 w-64 border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
+             style={{ backgroundColor: '#111', zIndex: 1000 }}>
           <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
             {options.map((opt) => (
               <div 
@@ -726,20 +726,22 @@ const ReporteVentas = () => {
               <div className="form-group mb-0">
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Desde</label>
                 <div className="input-with-icon"><Calendar className="icon text-primary" size={14} />
-                  <input type="date" className="form-input text-xs font-bold" value={filtros.fechaInicio} onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})} />
+                  <input type="date" className="form-input text-xs font-bold bg-carbon-mid" style={{ cursor: 'text', color: '#fff' }} value={filtros.fechaInicio} onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})} />
                 </div>
               </div>
               <div className="form-group mb-0">
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Hasta</label>
                 <div className="input-with-icon"><Calendar className="icon text-primary" size={14} />
-                  <input type="date" className="form-input text-xs font-bold" value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})} />
+                  <input type="date" className="form-input text-xs font-bold bg-carbon-mid" style={{ cursor: 'text', color: '#fff' }} value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})} />
                 </div>
               </div>
               <div className="form-group mb-0 relative md:col-span-2" ref={wrapperRef}>
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Cliente</label>
                 <div className="search-input-wrapper">
                   <Search className="search-icon text-primary" size={14} />
-                  <input type="text" placeholder="Buscar cliente por nombre o RUC..." className="form-input search-input text-xs font-bold" value={busquedaCliente}
+                  <input type="text" placeholder="Buscar cliente por nombre o RUC..." className="form-input search-input text-xs font-bold bg-carbon-mid" 
+                    style={{ cursor: 'text', color: '#fff' }}
+                    value={busquedaCliente}
                     onChange={(e) => { setBusquedaCliente(e.target.value); if(filtros.idCliente) setFiltros({...filtros, idCliente: ''}); }}
                     onFocus={() => busquedaCliente && setMostrarSugerencias(true)} />
                   {filtros.idCliente && (
@@ -747,9 +749,9 @@ const ReporteVentas = () => {
                   )}
                 </div>
                 {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                  <ul className="absolute z-50 w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto bg-carbon-mid">
+                  <ul className="absolute z-[100] w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto" style={{ backgroundColor: '#111', top: '100%' }}>
                     {clientesSugeridos.map(cliente => (
-                      <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-xs border-b border-steel/20 last:border-0 hover:bg-carbon-light transition-colors">
+                      <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-xs border-b border-steel/20 last:border-0 hover:bg-white/5 transition-colors">
                         <div className="font-bold text-mist">{cliente.razon_social}</div>
                         <div className="text-[10px] text-wire font-mono">RUC: {cliente.ruc}</div>
                       </li>

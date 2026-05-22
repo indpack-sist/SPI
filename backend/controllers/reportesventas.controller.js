@@ -400,6 +400,15 @@ export const getReporteVentas = async (req, res) => {
                     contado_usd: parseFloat(kpis.totalContadoUSD.toFixed(2)),
                     credito_pen: parseFloat(kpis.totalCreditoPEN.toFixed(2)),
                     credito_usd: parseFloat(kpis.totalCreditoUSD.toFixed(2)),
+                    
+                    // Nuevos campos para los 6 cards
+                    factura_pen: parseFloat(kpis.facturaPEN.toFixed(2)),
+                    factura_usd: parseFloat(kpis.facturaUSD.toFixed(2)),
+                    nota_venta_pen: parseFloat(kpis.notaVentaPEN.toFixed(2)),
+                    nota_venta_usd: parseFloat(kpis.notaVentaUSD.toFixed(2)),
+                    sin_comprobante_pen: parseFloat(kpis.sinComprobantePEN.toFixed(2)),
+                    sin_comprobante_usd: parseFloat(kpis.sinComprobanteUSD.toFixed(2)),
+
                     pedidos_retrasados: kpis.pedidosAtrasados,
                     cantidad_ordenes: ordenes.length
                 },

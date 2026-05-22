@@ -155,6 +155,14 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
             return;
         }
 
+        // Doble validación: Si hay advertencias (vacíos o discrepancias), pedir confirmación
+        if (alert && alert.type === 'warning') {
+            const confirmar = window.confirm("Cuidado: Hay datos que no coinciden con la orden original o no pudieron ser leídos.\n\n¿Estás seguro de que deseas forzar la vinculación de este documento de todas formas?");
+            if (!confirmar) {
+                return; // Se cancela la vinculación
+            }
+        }
+
         setLoading(true);
         try {
             const formDataSubmit = new FormData();

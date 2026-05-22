@@ -68,7 +68,8 @@ const ReporteProductoDespachos = () => {
         idCliente: '',
         fechaInicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
         fechaFin: new Date().toISOString().split('T')[0],
-        estados: ['Despachada', 'Despacho Parcial', 'Entregada']
+        estados: ['Despachada', 'Despacho Parcial', 'Entregada'],
+        tipoFecha: 'emision' // 'emision' o 'despacho'
     });
 
     const handleToggleEstado = (estado) => {
@@ -231,10 +232,19 @@ const ReporteProductoDespachos = () => {
     const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
+            const fechaPrincipal = filtros.tipoFecha === 'despacho' && data.fechaDespacho 
+                ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') 
+                : data.fecha;
+
             return (
                 <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '2px solid #444', color: '#fff', zIndex: 1000, position: 'relative', minWidth: '280px' }}>
                     <div className="flex justify-between items-start mb-2 border-b border-steel/30 pb-2">
-                        <p className="font-bold text-lg" style={{ color: '#fff' }}>{data.fecha}</p>
+                        <div>
+                            <p className="font-bold text-lg" style={{ color: '#fff' }}>{fechaPrincipal}</p>
+                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">
+                                {filtros.tipoFecha === 'despacho' ? 'Ref: Fecha Despacho' : 'Ref: Fecha Emisión'}
+                            </p>
+                        </div>
                         <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded ${
                             data.estado === 'Entregada' ? 'bg-success/20 text-success border border-success/30' :
                             data.estado === 'Despacho Parcial' ? 'bg-warning/20 text-warning border border-warning/30' :
@@ -245,9 +255,16 @@ const ReporteProductoDespachos = () => {
                     </div>
                     
                     <p className="text-primary text-sm font-black mb-1 uppercase tracking-wider">Orden: {data.orden}</p>
-                    <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
-                        Despacho: {data.fechaDespacho ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') : 'Pendiente'}
-                    </p>
+                    {filtros.tipoFecha === 'emision' && (
+                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
+                            Despacho: {data.fechaDespacho ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') : 'Pendiente'}
+                        </p>
+                    )}
+                    {filtros.tipoFecha === 'despacho' && (
+                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
+                            Emisión: {data.fecha}
+                        </p>
+                    )}
                     
                     <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cliente:</span> {data.cliente}</p>
                     
@@ -457,6 +474,24 @@ const ReporteProductoDespachos = () => {
                             </div>
                         </div>
                         
+                        <div className="flex flex-col gap-2 w-full lg:w-auto">
+                            <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] block">Filtrar por:</label>
+                            <div className="flex bg-carbon/50 p-1 rounded-lg border border-steel/20 h-[48px] items-center">
+                                <button 
+                                    onClick={() => setFiltros({...filtros, tipoFecha: 'emision'})}
+                                    className={`px-4 h-full rounded text-[10px] font-black uppercase tracking-wider transition-all ${filtros.tipoFecha === 'emision' ? 'bg-primary text-carbon shadow-lg' : 'text-wire hover:text-mist'}`}
+                                >
+                                    Emisión
+                                </button>
+                                <button 
+                                    onClick={() => setFiltros({...filtros, tipoFecha: 'despacho'})}
+                                    className={`px-4 h-full rounded text-[10px] font-black uppercase tracking-wider transition-all ${filtros.tipoFecha === 'despacho' ? 'bg-primary text-carbon shadow-lg' : 'text-wire hover:text-mist'}`}
+                                >
+                                    Despacho
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="flex flex-row gap-4 w-full lg:w-auto">
                             <div className="form-group flex-1 lg:w-32">
                                 <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Desde</label>
@@ -565,8 +600,8 @@ const ReporteProductoDespachos = () => {
                                 <table className="w-full text-left border-collapse whitespace-nowrap">
                                     <thead>
                                         <tr>
-                                            <th>Emisión</th>
-                                            <th>Despacho</th>
+                                            <th style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Emisión</th>
+                                            <th style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
                                             <th>N° Orden</th>
                                             <th>Documento</th>
                                             <th>Cliente</th>
@@ -590,8 +625,10 @@ const ReporteProductoDespachos = () => {
 
                                                 return (
                                                     <tr key={idx} className="transition-colors">
-                                                        <td className="font-medium">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</td>
-                                                        <td className="font-medium text-wire">
+                                                        <td className="font-medium" style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
+                                                            {new Date(row.fecha_emision).toLocaleDateString('es-PE')}
+                                                        </td>
+                                                        <td className="font-medium" style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
                                                             {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : '-'}
                                                         </td>
                                                         <td className="font-mono font-bold">

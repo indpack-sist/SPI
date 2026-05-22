@@ -2,9 +2,11 @@ import db from '../config/database.js';
 
 export const getReporteVentas = async (req, res) => {
     try {
-        const { fechaInicio, fechaFin, idCliente, idVendedor, filtro_fecha } = req.query;
+        const { fechaInicio, fechaFin, idCliente, idVendedor, filtro_fecha, estadoOrden, estadoPago, moneda } = req.query;
 
-        const campoFecha = filtro_fecha === 'fecha_sunat' ? 'ov.fecha_facturacion_sunat' : 'ov.fecha_emision';
+        let campoFecha = 'ov.fecha_emision';
+        if (filtro_fecha === 'fecha_sunat') campoFecha = 'ov.fecha_facturacion_sunat';
+        if (filtro_fecha === 'fecha_despacho') campoFecha = 's.fecha_movimiento';
 
         let sql = `
             SELECT 
@@ -50,7 +52,25 @@ export const getReporteVentas = async (req, res) => {
             params.push(idVendedor);
         }
 
-        sql += ` ORDER BY ov.fecha_emision DESC`;
+        if (estadoOrden) {
+            const estados = estadoOrden.split(',');
+            sql += ` AND ov.estado IN (${estados.map(() => '?').join(',')})`;
+            params.push(...estados);
+        }
+
+        if (estadoPago) {
+            const estadosPago = estadoPago.split(',');
+            sql += ` AND ov.estado_pago IN (${estadosPago.map(() => '?').join(',')})`;
+            params.push(...estadosPago);
+        }
+
+        if (moneda) {
+            const monedas = moneda.split(',').map(m => m.trim().toUpperCase());
+            sql += ` AND TRIM(UPPER(ov.moneda)) IN (${monedas.map(() => '?').join(',')})`;
+            params.push(...monedas);
+        }
+
+        sql += ` ORDER BY ${campoFecha} DESC`;
 
         const [ordenes] = await db.query(sql, params);
 

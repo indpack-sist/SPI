@@ -247,12 +247,12 @@ const ReporteProductoDespachos = () => {
         const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 10) : esDenso ? 2 : 0;
 
         return (
-            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden flex flex-col h-[350px]">
+            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden" style={{ display: 'flex', flexDirection: 'column', height: '350px' }}>
                 <div className="card-header border-b border-steel/30 px-6 py-4 flex flex-col items-center justify-center gap-1">
                     <TrendingUp size={22} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
                     <h3 className="text-xs font-black text-white uppercase tracking-[0.2em] text-center">{titulo}</h3>
                 </div>
-                <div className="card-body p-4 flex-1">
+                <div className="card-body p-4" style={{ flex: 1, minHeight: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={datos} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />

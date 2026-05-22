@@ -88,6 +88,128 @@ const ReporteProductoDespachos = () => {
     const dropdownProductoRef = useRef(null);
     const dropdownClienteRef = useRef(null);
 
+    // Funciones de gráficos reinsertadas
+    const CustomTooltip = ({ active, payload }) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            const fechaPrincipal = filtros.tipoFecha === 'despacho' && data.fechaDespacho 
+                ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') 
+                : data.fecha;
+
+            return (
+                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '2px solid #444', color: '#fff', zIndex: 1000, position: 'relative', minWidth: '280px' }}>
+                    <div className="flex justify-between items-start mb-2 border-b border-steel/30 pb-2">
+                        <div>
+                            <p className="font-bold text-lg" style={{ color: '#fff' }}>{fechaPrincipal}</p>
+                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">
+                                {filtros.tipoFecha === 'despacho' ? 'Ref: Fecha Despacho' : 'Ref: Fecha Emisión'}
+                            </p>
+                        </div>
+                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded ${
+                            data.estado === 'Entregada' ? 'bg-success/20 text-success border border-success/30' :
+                            data.estado === 'Despacho Parcial' ? 'bg-warning/20 text-warning border border-warning/30' :
+                            'bg-primary/20 text-primary border border-primary/30'
+                        }`}>
+                            {data.estado}
+                        </span>
+                    </div>
+                    
+                    <p className="text-primary text-sm font-black mb-1 uppercase tracking-wider">Orden: {data.orden}</p>
+                    {filtros.tipoFecha === 'emision' && (
+                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
+                            Despacho: {data.fechaDespacho ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') : 'Pendiente'}
+                        </p>
+                    )}
+                    {filtros.tipoFecha === 'despacho' && (
+                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
+                            Emisión: {data.fecha}
+                        </p>
+                    )}
+                    
+                    <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cliente:</span> {data.cliente}</p>
+                    
+                    <div className="grid grid-cols-2 gap-2 mb-4 bg-carbon/50 p-2 rounded border border-steel/10">
+                        <div>
+                            <p className="text-[10px] text-wire uppercase font-black">Despachado</p>
+                            <p className="text-sm font-black text-white">{data.cantidad}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-wire uppercase font-black">Pendiente</p>
+                            <p className={`text-sm font-black ${data.cantidadPendiente > 0 ? 'text-warning' : 'text-success'}`}>
+                                {data.cantidadPendiente}
+                            </p>
+                        </div>
+                    </div>
+
+                    <p className="text-mist text-base font-bold" style={{ color: '#e8b84b' }}>
+                        <span className="text-wire font-bold mr-1">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}
+                    </p>
+                </div>
+            );
+        }
+        return null;
+    };
+
+    const renderGrafico = (datos, titulo, colorLinea) => {
+        if (!datos || datos.length === 0) return null;
+
+        const cantidadPuntos = datos.length;
+        const esMuyDenso = cantidadPuntos > 30;
+        const esDenso = cantidadPuntos > 15;
+        
+        const fontSizeEjes = esMuyDenso ? 12 : esDenso ? 14 : 16;
+        const radioPunto = esMuyDenso ? 4 : esDenso ? 5 : 7;
+        const strokeLinea = esMuyDenso ? 2.5 : esDenso ? 3.5 : 4.5;
+        
+        const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 8) : esDenso ? 1 : 0;
+
+        return (
+            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden" style={{ display: 'flex', flexDirection: 'column', height: '700px' }}>
+                <div className="card-header border-b border-steel/30 px-6 py-5 flex flex-col items-center justify-center gap-1">
+                    <TrendingUp size={28} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
+                    <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] text-center">{titulo}</h3>
+                </div>
+                <div className="card-body p-6" style={{ flex: 1, minHeight: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={datos} margin={{ top: 20, right: 40, left: 20, bottom: 40 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                            <XAxis 
+                                dataKey="idUnico" 
+                                stroke="#888" 
+                                tickFormatter={(val) => {
+                                    const found = datos.find(d => d.idUnico === val);
+                                    return found ? found.fecha : val;
+                                }}
+                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }} 
+                                tickMargin={20}
+                                interval={intervaloX}
+                            />
+                            <YAxis 
+                                stroke="#888" 
+                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }}
+                                tickFormatter={(value) => `${value.toFixed(2)}`}
+                                domain={['auto', 'auto']}
+                                width={80}
+                            />
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />
+                            <Legend wrapperStyle={{ fontSize: `${fontSizeEjes + 2}px`, color: '#ccc', paddingTop: '30px', fontWeight: 'bold' }} />
+                            <Line 
+                                type="monotone" 
+                                dataKey="precio" 
+                                name="Precio Unitario" 
+                                stroke={colorLinea} 
+                                strokeWidth={strokeLinea} 
+                                dot={{ r: radioPunto, strokeWidth: 2, fill: '#1a1a1a', stroke: colorLinea }} 
+                                activeDot={{ r: radioPunto + 3, strokeWidth: 0, fill: colorLinea }} 
+                                isAnimationActive={false}
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        );
+    };
+
     // Cargar listas
     useEffect(() => {
         const fetchInitialData = async () => {

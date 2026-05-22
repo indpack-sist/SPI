@@ -35,7 +35,7 @@ function getFechaISOPeru() {
 
 export async function getAllOrdenesVenta(req, res) {
   try {
-    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago, estado_sunat, vendedor, moneda } = req.query;
+    const { estado, fecha_inicio, fecha_fin, estado_verificacion, tipo_comprobante, estado_pago, estado_sunat, vendedor, filtro_moneda } = req.query;
     
     let sql = `
       SELECT 
@@ -117,9 +117,9 @@ export async function getAllOrdenesVenta(req, res) {
       params.push(...estadosPago);
     }
 
-    if (moneda) {
-      const monedas = moneda.split(',');
-      sql += ` AND ov.moneda IN (${monedas.map(() => '?').join(',')})`;
+    if (filtro_moneda) {
+      const monedas = filtro_moneda.split(',').map(m => m.trim().toUpperCase());
+      sql += ` AND TRIM(UPPER(ov.moneda)) IN (${monedas.map(() => '?').join(',')})`;
       params.push(...monedas);
     }
     

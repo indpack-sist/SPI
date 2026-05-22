@@ -56,14 +56,15 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
       <label className="form-label uppercase text-[10px] text-muted font-bold tracking-wider mb-1 block">{label}</label>
       <div 
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
-        className={`form-input flex justify-between items-center cursor-pointer min-h-[38px] transition-all ${selectedValues.length > 0 ? 'border-primary shadow-sm bg-primary/5' : 'bg-carbon-light'}`}
+        className={`form-input flex justify-between items-center transition-all ${selectedValues.length > 0 ? 'border-primary shadow-sm bg-primary/5' : 'bg-carbon-light'}`}
+        style={{ cursor: 'pointer' }}
       >
-        <span className="text-xs font-medium truncate pr-2">
+        <span className="text-xs font-medium truncate pr-2" style={{ cursor: 'pointer' }}>
           {selectedValues.length === 0 ? 'Todos' : 
            selectedValues.length === 1 ? selectedValues[0] : 
            `${selectedValues.length} seleccionados`}
         </span>
-        <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-400'} />
+        <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-400'} style={{ cursor: 'pointer' }} />
       </div>
 
       {isOpen && (
@@ -73,7 +74,8 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
             {options.map((opt) => (
               <div 
                 key={opt.value} 
-                className="flex items-center px-3 py-2 hover:bg-white/5 rounded-md cursor-pointer group transition-colors"
+                className="flex items-center px-3 py-2 hover:bg-white/5 rounded-md transition-colors"
+                style={{ cursor: 'pointer' }}
                 onClick={(e) => handleToggle(e, opt.value)}
               >
                 <div className="relative flex items-center pointer-events-none">
@@ -98,6 +100,7 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
               <button 
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange([]); }}
                 className="text-[10px] uppercase font-black text-danger hover:text-danger/80 tracking-widest flex items-center gap-1 w-full"
+                style={{ cursor: 'pointer' }}
               >
                 <X size={10} /> Limpiar Selección
               </button>

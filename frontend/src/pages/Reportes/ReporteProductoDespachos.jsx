@@ -188,7 +188,7 @@ const ReporteProductoDespachos = () => {
                                 stroke="#888" 
                                 tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }}
                                 tickFormatter={(value) => `${value.toFixed(2)}`}
-                                domain={['auto', 'auto']}
+                                domain={[0, 'auto']}
                                 width={80}
                             />
                             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />

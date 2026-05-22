@@ -109,6 +109,7 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 };

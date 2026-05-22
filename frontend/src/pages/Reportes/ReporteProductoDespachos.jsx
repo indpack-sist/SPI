@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../config/api';
-import { Search, Package, Box, User, TrendingUp } from 'lucide-react';
+import { Search, Package, Box, User, TrendingUp, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -20,10 +20,10 @@ const particionarDatosGrafico = (detalle) => {
         const tipoImpuesto = String(item.tipo_impuesto || '').toUpperCase().trim();
         const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
         const tipo = String(item.tipo_comprobante || '').trim();
-        
+
         const fechaFormateada = new Date(item.fecha_emision).toLocaleDateString('es-PE');
         const punto = {
-            idUnico: `${fechaFormateada}-${item.numero_orden}-${index}`, // ID unico para XAxis
+            idUnico: `${fechaFormateada}-${item.numero_orden}-${index}`,
             fecha: fechaFormateada,
             fechaDespacho: item.fecha_despacho_real,
             precio: parseFloat(item.precio_unitario),
@@ -62,15 +62,17 @@ const ReporteProductoDespachos = () => {
     const [busquedaCliente, setBusquedaCliente] = useState('');
     const [mostrarDropdownProducto, setMostrarDropdownProducto] = useState(false);
     const [mostrarDropdownCliente, setMostrarDropdownCliente] = useState(false);
-    
+
     const [filtros, setFiltros] = useState({
         idProducto: '',
         idCliente: '',
         fechaInicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
         fechaFin: new Date().toISOString().split('T')[0],
         estados: ['Despachada', 'Despacho Parcial', 'Entregada'],
-        tipoFecha: 'emision' // 'emision' o 'despacho'
+        tipoFecha: 'emision'
     });
+
+    const [errorFecha, setErrorFecha] = useState('');
 
     const handleToggleEstado = (estado) => {
         setFiltros(prev => {
@@ -80,7 +82,7 @@ const ReporteProductoDespachos = () => {
             return { ...prev, estados: nuevosEstados };
         });
     };
-    
+
     const [loading, setLoading] = useState(false);
     const [reporteData, setReporteData] = useState(null);
     const [error, setError] = useState(null);
@@ -88,12 +90,11 @@ const ReporteProductoDespachos = () => {
     const dropdownProductoRef = useRef(null);
     const dropdownClienteRef = useRef(null);
 
-    // Funciones de gráficos reinsertadas
     const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
-            const fechaPrincipal = filtros.tipoFecha === 'despacho' && data.fechaDespacho 
-                ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') 
+            const fechaPrincipal = filtros.tipoFecha === 'despacho' && data.fechaDespacho
+                ? new Date(data.fechaDespacho).toLocaleDateString('es-PE')
                 : data.fecha;
 
             return (
@@ -113,7 +114,7 @@ const ReporteProductoDespachos = () => {
                             {data.estado}
                         </span>
                     </div>
-                    
+
                     <p className="text-primary text-sm font-black mb-1 uppercase tracking-wider">Orden: {data.orden}</p>
                     {filtros.tipoFecha === 'emision' && (
                         <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
@@ -125,9 +126,9 @@ const ReporteProductoDespachos = () => {
                             Emisión: {data.fecha}
                         </p>
                     )}
-                    
+
                     <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cliente:</span> {data.cliente}</p>
-                    
+
                     <div className="grid grid-cols-2 gap-2 mb-4 bg-carbon/50 p-2 rounded border border-steel/10">
                         <div>
                             <p className="text-[10px] text-wire uppercase font-black">Despachado</p>
@@ -156,11 +157,10 @@ const ReporteProductoDespachos = () => {
         const cantidadPuntos = datos.length;
         const esMuyDenso = cantidadPuntos > 30;
         const esDenso = cantidadPuntos > 15;
-        
+
         const fontSizeEjes = esMuyDenso ? 12 : esDenso ? 14 : 16;
         const radioPunto = esMuyDenso ? 4 : esDenso ? 5 : 7;
         const strokeLinea = esMuyDenso ? 2.5 : esDenso ? 3.5 : 4.5;
-        
         const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 8) : esDenso ? 1 : 0;
 
         return (
@@ -173,19 +173,19 @@ const ReporteProductoDespachos = () => {
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={datos} margin={{ top: 20, right: 40, left: 20, bottom: 40 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                            <XAxis 
-                                dataKey="idUnico" 
-                                stroke="#888" 
+                            <XAxis
+                                dataKey="idUnico"
+                                stroke="#888"
                                 tickFormatter={(val) => {
                                     const found = datos.find(d => d.idUnico === val);
                                     return found ? found.fecha : val;
                                 }}
-                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }} 
+                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }}
                                 tickMargin={20}
                                 interval={intervaloX}
                             />
-                            <YAxis 
-                                stroke="#888" 
+                            <YAxis
+                                stroke="#888"
                                 tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }}
                                 tickFormatter={(value) => `${value.toFixed(2)}`}
                                 domain={[0, 'auto']}
@@ -193,14 +193,14 @@ const ReporteProductoDespachos = () => {
                             />
                             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />
                             <Legend wrapperStyle={{ fontSize: `${fontSizeEjes + 2}px`, color: '#ccc', paddingTop: '30px', fontWeight: 'bold' }} />
-                            <Line 
-                                type="monotone" 
-                                dataKey="precio" 
-                                name="Precio Unitario" 
-                                stroke={colorLinea} 
-                                strokeWidth={strokeLinea} 
-                                dot={{ r: radioPunto, strokeWidth: 2, fill: '#1a1a1a', stroke: colorLinea }} 
-                                activeDot={{ r: radioPunto + 3, strokeWidth: 0, fill: colorLinea }} 
+                            <Line
+                                type="monotone"
+                                dataKey="precio"
+                                name="Precio Unitario"
+                                stroke={colorLinea}
+                                strokeWidth={strokeLinea}
+                                dot={{ r: radioPunto, strokeWidth: 2, fill: '#1a1a1a', stroke: colorLinea }}
+                                activeDot={{ r: radioPunto + 3, strokeWidth: 0, fill: colorLinea }}
                                 isAnimationActive={false}
                             />
                         </LineChart>
@@ -210,7 +210,6 @@ const ReporteProductoDespachos = () => {
         );
     };
 
-    // Cargar listas
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
@@ -227,7 +226,6 @@ const ReporteProductoDespachos = () => {
         fetchInitialData();
     }, []);
 
-    // Cerrar dropdowns al hacer click fuera
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownProductoRef.current && !dropdownProductoRef.current.contains(event.target)) {
@@ -242,26 +240,32 @@ const ReporteProductoDespachos = () => {
     }, []);
 
     const handleChangeFiltro = (e) => {
-        setFiltros({
-            ...filtros,
-            [e.target.name]: e.target.value
-        });
+        const value = e.target.value;
+        const nuevosFiltros = { ...filtros, [e.target.name]: value };
+        setFiltros(nuevosFiltros);
+
+        const inicio = e.target.name === 'fechaInicio' ? value : nuevosFiltros.fechaInicio;
+        const fin = e.target.name === 'fechaFin' ? value : nuevosFiltros.fechaFin;
+
+        if (inicio && fin) {
+            if (inicio > fin) {
+                setErrorFecha('La fecha "Desde" no puede ser posterior a la fecha "Hasta".');
+            } else {
+                setErrorFecha('');
+            }
+        } else {
+            setErrorFecha('');
+        }
     };
 
     const handleSelectProducto = (producto) => {
-        setFiltros({
-            ...filtros,
-            idProducto: producto.id_producto
-        });
+        setFiltros({ ...filtros, idProducto: producto.id_producto });
         setBusquedaProducto(`${producto.codigo} - ${producto.nombre}`);
         setMostrarDropdownProducto(false);
     };
 
     const handleSelectCliente = (cliente) => {
-        setFiltros({
-            ...filtros,
-            idCliente: cliente.id_cliente
-        });
+        setFiltros({ ...filtros, idCliente: cliente.id_cliente });
         setBusquedaCliente(cliente.razon_social);
         setMostrarDropdownCliente(false);
     };
@@ -272,8 +276,8 @@ const ReporteProductoDespachos = () => {
         return productos.filter(p => {
             const fullString = `${p.codigo} - ${p.nombre}`.toLowerCase();
             return p.nombre.toLowerCase().includes(term) ||
-                   p.codigo.toLowerCase().includes(term) ||
-                   fullString.includes(term);
+                p.codigo.toLowerCase().includes(term) ||
+                fullString.includes(term);
         }).slice(0, 50);
     }, [productos, busquedaProducto]);
 
@@ -282,11 +286,12 @@ const ReporteProductoDespachos = () => {
         const term = busquedaCliente.toLowerCase();
         return clientes.filter(c => {
             return c.razon_social.toLowerCase().includes(term) ||
-                   (c.ruc && c.ruc.includes(term));
+                (c.ruc && c.ruc.includes(term));
         }).slice(0, 50);
     }, [clientes, busquedaCliente]);
 
     const generarReporte = async () => {
+        if (errorFecha) return;
         if (!filtros.idProducto && !filtros.idCliente) {
             setError("Debe seleccionar un producto o un cliente.");
             return;
@@ -315,7 +320,6 @@ const ReporteProductoDespachos = () => {
             const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
             const monto = parseFloat(mov.subtotal_item || 0);
             const tipo = String(mov.tipo_comprobante || '').trim();
-            
             const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
             if (tipo.includes('Factura')) {
@@ -335,8 +339,8 @@ const ReporteProductoDespachos = () => {
             }
             acc.total_unidades += parseFloat(mov.cantidad_despachada || 0);
             return acc;
-        }, { 
-            facturas_pen: 0, facturas_usd: 0, 
+        }, {
+            facturas_pen: 0, facturas_usd: 0,
             notas_venta_pen: 0, notas_venta_usd: 0,
             sin_comprobante_pen: 0, sin_comprobante_usd: 0,
             total_unidades: 0
@@ -365,13 +369,13 @@ const ReporteProductoDespachos = () => {
             }
             const solicitada = parseFloat(row.cantidad_total || row.cantidad_despachada);
             const despachada = parseFloat(row.cantidad_despachada);
-            
+
             grupos[key].total_solicitada += solicitada;
             grupos[key].total_despachada += despachada;
             grupos[key].total_pendiente += Math.max(0, solicitada - despachada);
             grupos[key].detalles.push(row);
         });
-        return Object.values(grupos).sort((a,b) => b.total_despachada - a.total_despachada);
+        return Object.values(grupos).sort((a, b) => b.total_despachada - a.total_despachada);
     }, [reporteData]);
 
     const renderTablaDetalles = (detalles) => (
@@ -411,9 +415,9 @@ const ReporteProductoDespachos = () => {
                                         {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : '-'}
                                     </td>
                                     <td className="font-mono font-bold">
-                                        <Link 
-                                            to={`/ventas/ordenes/${row.id_orden_venta}`} 
-                                            target="_blank" 
+                                        <Link
+                                            to={`/ventas/ordenes/${row.id_orden_venta}`}
+                                            target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-primary hover:text-primary/80 transition-colors underline decoration-primary/30"
                                         >
@@ -480,7 +484,6 @@ const ReporteProductoDespachos = () => {
                 .page-reporte-despachos td { border-bottom: 1px solid var(--border) !important; color: var(--mist) !important; padding: 10px 12px !important; font-size: 0.75rem !important; }
                 .page-reporte-despachos tr:hover td { background-color: rgba(255, 255, 255, 0.02) !important; }
                 .page-reporte-despachos .stat-card { min-height: 85px !important; display: flex !important; flex-direction: column !important; justify-content: center !important; padding: 0.75rem 1rem !important; border-radius: 8px !important; }
-                
                 .custom-scrollbar::-webkit-scrollbar { height: 8px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: var(--carbon-mid); }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 4px; }
@@ -517,7 +520,7 @@ const ReporteProductoDespachos = () => {
                                     onChange={(e) => {
                                         setBusquedaProducto(e.target.value);
                                         setMostrarDropdownProducto(true);
-                                        if (e.target.value === '') setFiltros({...filtros, idProducto: ''});
+                                        if (e.target.value === '') setFiltros({ ...filtros, idProducto: '' });
                                     }}
                                     onFocus={() => setMostrarDropdownProducto(true)}
                                 />
@@ -557,7 +560,7 @@ const ReporteProductoDespachos = () => {
                                     onChange={(e) => {
                                         setBusquedaCliente(e.target.value);
                                         setMostrarDropdownCliente(true);
-                                        if (e.target.value === '') setFiltros({...filtros, idCliente: ''});
+                                        if (e.target.value === '') setFiltros({ ...filtros, idCliente: '' });
                                     }}
                                     onFocus={() => setMostrarDropdownCliente(true)}
                                 />
@@ -581,7 +584,7 @@ const ReporteProductoDespachos = () => {
                                 )}
                             </div>
                         </div>
-                        
+
                         <div className="flex flex-col gap-2 w-full lg:w-auto">
                             <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] block">Filtrar por:</label>
                             <div className="flex gap-4 p-2 bg-carbon/50 rounded-lg border border-steel/20 h-[48px] items-center">
@@ -596,12 +599,12 @@ const ReporteProductoDespachos = () => {
                                                 name="tipoFecha"
                                                 className="hidden"
                                                 checked={filtros.tipoFecha === opcion.id}
-                                                onChange={() => setFiltros({...filtros, tipoFecha: opcion.id})}
+                                                onChange={() => setFiltros({ ...filtros, tipoFecha: opcion.id })}
                                             />
                                             <div className={`w-4 h-4 rounded-full border transition-all flex items-center justify-center ${
-                                                filtros.tipoFecha === opcion.id 
-                                                ? 'bg-primary border-primary shadow-lg shadow-primary/20' 
-                                                : 'bg-transparent border-steel group-hover:border-wire'
+                                                filtros.tipoFecha === opcion.id
+                                                    ? 'bg-primary border-primary shadow-lg shadow-primary/20'
+                                                    : 'bg-transparent border-steel group-hover:border-wire'
                                             }`}>
                                                 {filtros.tipoFecha === opcion.id && <div className="w-1.5 h-1.5 bg-carbon rounded-full" />}
                                             </div>
@@ -619,11 +622,25 @@ const ReporteProductoDespachos = () => {
                         <div className="flex flex-row gap-4 w-full lg:w-auto">
                             <div className="form-group flex-1 lg:w-32">
                                 <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Desde</label>
-                                <input type="date" name="fechaInicio" value={filtros.fechaInicio} onChange={handleChangeFiltro} className="form-input w-full text-sm font-bold" />
+                                <input
+                                    type="date"
+                                    name="fechaInicio"
+                                    value={filtros.fechaInicio}
+                                    onChange={handleChangeFiltro}
+                                    max={filtros.fechaFin || undefined}
+                                    className={`form-input w-full text-sm font-bold ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                                />
                             </div>
                             <div className="form-group flex-1 lg:w-32">
                                 <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Hasta</label>
-                                <input type="date" name="fechaFin" value={filtros.fechaFin} onChange={handleChangeFiltro} className="form-input w-full text-sm font-bold" />
+                                <input
+                                    type="date"
+                                    name="fechaFin"
+                                    value={filtros.fechaFin}
+                                    onChange={handleChangeFiltro}
+                                    min={filtros.fechaInicio || undefined}
+                                    className={`form-input w-full text-sm font-bold ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                                />
                             </div>
                         </div>
 
@@ -640,9 +657,9 @@ const ReporteProductoDespachos = () => {
                                                 onChange={() => handleToggleEstado(estado)}
                                             />
                                             <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                                                filtros.estados.includes(estado) 
-                                                ? 'bg-primary border-primary' 
-                                                : 'bg-transparent border-steel group-hover:border-wire'
+                                                filtros.estados.includes(estado)
+                                                    ? 'bg-primary border-primary'
+                                                    : 'bg-transparent border-steel group-hover:border-wire'
                                             }`}>
                                                 {filtros.estados.includes(estado) && <div className="w-2 h-2 bg-carbon rounded-full" />}
                                             </div>
@@ -658,11 +675,22 @@ const ReporteProductoDespachos = () => {
                         </div>
 
                         <div className="w-full lg:w-auto mt-4 lg:mt-0">
-                            <button onClick={generarReporte} className="btn btn-primary w-full lg:w-auto font-black tracking-widest h-12 px-8 shadow-xl shadow-primary/20 active:scale-95 transition-all" disabled={loading}>
+                            <button
+                                onClick={generarReporte}
+                                className="btn btn-primary w-full lg:w-auto font-black tracking-widest h-12 px-8 shadow-xl shadow-primary/20 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                disabled={loading || !!errorFecha}
+                            >
                                 {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
                             </button>
                         </div>
                     </div>
+
+                    {errorFecha && (
+                        <div className="flex items-center gap-2 px-4 py-2.5 mt-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                            <AlertCircle size={14} className="text-red-400 shrink-0" />
+                            <span className="text-[11px] font-black text-red-400 uppercase tracking-widest">{errorFecha}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -711,48 +739,48 @@ const ReporteProductoDespachos = () => {
 
                     {productosAgrupados.map(prod => {
                         const graficosProd = particionarDatosGrafico(prod.detalles);
-                        
-                        return (
-                        <div key={prod.id_producto} className="card shadow-2xl relative border border-steel/20 bg-carbon mb-6">
-                            <div className="card-header border-b border-steel/30 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-                                    {prod.codigo} - {prod.nombre}
-                                    <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">
-                                        {prod.detalles.length} movs
-                                    </span>
-                                </h3>
-                                <div className="flex gap-4 w-full md:w-auto justify-between md:justify-end bg-carbon-mid p-2 rounded-lg border border-steel/30">
-                                    <div className="text-center md:text-right px-2">
-                                        <p className="text-[10px] text-wire uppercase font-black tracking-widest">Solicitado</p>
-                                        <p className="text-sm font-black text-white">{formatearNumero(prod.total_solicitada)}</p>
-                                    </div>
-                                    <div className="text-center md:text-right px-2 border-l border-steel/30">
-                                        <p className="text-[10px] text-wire uppercase font-black tracking-widest">Despachado</p>
-                                        <p className="text-sm font-black text-success">{formatearNumero(prod.total_despachada)}</p>
-                                    </div>
-                                    <div className="text-center md:text-right px-2 border-l border-steel/30">
-                                        <p className="text-[10px] text-wire uppercase font-black tracking-widest">Pendiente</p>
-                                        <p className={`text-sm font-black ${prod.total_pendiente > 0 ? 'text-warning' : 'text-mist'}`}>
-                                            {formatearNumero(prod.total_pendiente)}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            {renderTablaDetalles(prod.detalles)}
-                            
-                            {graficosProd && (
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-t border-steel/20 bg-carbon-mid">
-                                    {renderGrafico(graficosProd.facturasPEN, 'Evolución: Facturas (PEN)', '#10B981')}
-                                    {renderGrafico(graficosProd.facturasUSD, 'Evolución: Facturas (USD)', '#e8b84b')}
-                                    {renderGrafico(graficosProd.notasVentaPEN, 'Evolución: N. Venta (PEN)', '#3B82F6')}
-                                    {renderGrafico(graficosProd.notasVentaUSD, 'Evolución: N. Venta (USD)', '#60A5FA')}
-                                    {renderGrafico(graficosProd.sinComprPEN, 'Evolución: Sin Compr. (PEN)', '#F59E0B')}
-                                    {renderGrafico(graficosProd.sinComprUSD, 'Evolución: Sin Compr. (USD)', '#FCD34D')}
-                                </div>
-                            )}
-                        </div>
-                    )})}
 
+                        return (
+                            <div key={prod.id_producto} className="card shadow-2xl relative border border-steel/20 bg-carbon mb-6">
+                                <div className="card-header border-b border-steel/30 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                        {prod.codigo} - {prod.nombre}
+                                        <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">
+                                            {prod.detalles.length} movs
+                                        </span>
+                                    </h3>
+                                    <div className="flex gap-4 w-full md:w-auto justify-between md:justify-end bg-carbon-mid p-2 rounded-lg border border-steel/30">
+                                        <div className="text-center md:text-right px-2">
+                                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">Solicitado</p>
+                                            <p className="text-sm font-black text-white">{formatearNumero(prod.total_solicitada)}</p>
+                                        </div>
+                                        <div className="text-center md:text-right px-2 border-l border-steel/30">
+                                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">Despachado</p>
+                                            <p className="text-sm font-black text-success">{formatearNumero(prod.total_despachada)}</p>
+                                        </div>
+                                        <div className="text-center md:text-right px-2 border-l border-steel/30">
+                                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">Pendiente</p>
+                                            <p className={`text-sm font-black ${prod.total_pendiente > 0 ? 'text-warning' : 'text-mist'}`}>
+                                                {formatearNumero(prod.total_pendiente)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {renderTablaDetalles(prod.detalles)}
+
+                                {graficosProd && (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-t border-steel/20 bg-carbon-mid">
+                                        {renderGrafico(graficosProd.facturasPEN, 'Evolución: Facturas (PEN)', '#10B981')}
+                                        {renderGrafico(graficosProd.facturasUSD, 'Evolución: Facturas (USD)', '#e8b84b')}
+                                        {renderGrafico(graficosProd.notasVentaPEN, 'Evolución: N. Venta (PEN)', '#3B82F6')}
+                                        {renderGrafico(graficosProd.notasVentaUSD, 'Evolución: N. Venta (USD)', '#60A5FA')}
+                                        {renderGrafico(graficosProd.sinComprPEN, 'Evolución: Sin Compr. (PEN)', '#F59E0B')}
+                                        {renderGrafico(graficosProd.sinComprUSD, 'Evolución: Sin Compr. (USD)', '#FCD34D')}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>

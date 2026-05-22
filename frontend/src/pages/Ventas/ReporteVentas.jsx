@@ -57,7 +57,7 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
       <div className="relative w-full">
         <div 
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
-          className={`form-input flex justify-between items-center transition-all bg-carbon-mid`}
+          className="form-input flex justify-between items-center transition-all bg-carbon-mid"
           style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)', color: '#fff', height: '38px', width: '100%' }}
         >
           <span className="text-xs font-bold truncate pr-2" style={{ color: '#fff' }}>
@@ -72,43 +72,43 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
           <div className="absolute left-0 right-0 w-full border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
                style={{ top: '100%', marginTop: '4px', backgroundColor: '#111', zIndex: 1000 }}>
             <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
-            {options.map((opt) => (
-              <div 
-                key={opt.value} 
-                className="flex items-center px-3 py-2 hover:bg-white/5 rounded-md transition-colors"
-                style={{ cursor: 'pointer' }}
-                onClick={(e) => handleToggle(e, opt.value)}
-              >
-                <div className="relative flex items-center pointer-events-none">
-                  <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
-                    selectedValues.includes(opt.value) 
-                    ? 'bg-primary border-primary' 
-                    : 'bg-transparent border-steel group-hover:border-wire'
-                  }`}>
-                    {selectedValues.includes(opt.value) && <CheckCircle size={10} className="text-carbon font-bold" />}
+              {options.map((opt) => (
+                <div 
+                  key={opt.value} 
+                  className="flex items-center px-3 py-2 hover:bg-white/5 rounded-md transition-colors"
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => handleToggle(e, opt.value)}
+                >
+                  <div className="relative flex items-center pointer-events-none">
+                    <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                      selectedValues.includes(opt.value) 
+                      ? 'bg-primary border-primary' 
+                      : 'bg-transparent border-steel group-hover:border-wire'
+                    }`}>
+                      {selectedValues.includes(opt.value) && <CheckCircle size={10} className="text-carbon font-bold" />}
+                    </div>
                   </div>
+                  <span className={`ml-3 text-xs font-medium transition-colors pointer-events-none ${
+                    selectedValues.includes(opt.value) ? 'text-primary' : 'text-mist'
+                  }`}>
+                    {opt.label}
+                  </span>
                 </div>
-                <span className={`ml-3 text-xs font-medium transition-colors pointer-events-none ${
-                  selectedValues.includes(opt.value) ? 'text-primary' : 'text-mist'
-                }`}>
-                  {opt.label}
-                </span>
-              </div>
-            ))}
-          </div>
-          {selectedValues.length > 0 && (
-            <div className="border-t border-steel/20 mt-2 pt-2 px-3">
-              <button 
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange([]); }}
-                className="text-[10px] uppercase font-black text-danger hover:text-danger/80 tracking-widest flex items-center gap-1 w-full"
-                style={{ cursor: 'pointer' }}
-              >
-                <X size={10} /> Limpiar Selección
-              </button>
+              ))}
             </div>
-          )}
-        </div>
-      )}
+            {selectedValues.length > 0 && (
+              <div className="border-t border-steel/20 mt-2 pt-2 px-3">
+                <button 
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange([]); }}
+                  className="text-[10px] uppercase font-black text-danger hover:text-danger/80 tracking-widest flex items-center gap-1 w-full"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <X size={10} /> Limpiar Selección
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -120,7 +120,8 @@ const ReporteVentas = () => {
   const [loadingExcel, setLoadingExcel] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  
+  const [errorFecha, setErrorFecha] = useState('');
+
   const [incluirDetalleExcel, setIncluirDetalleExcel] = useState(true);
   const [incluirDetallePDF, setIncluirDetallePDF] = useState(true);
 
@@ -168,6 +169,30 @@ const ReporteVentas = () => {
   const [dataFiltrada, setDataFiltrada] = useState([]);
 
   const tcVenta = tipoCambio?.venta || null;
+
+  const validarFechas = (inicio, fin) => {
+    if (inicio && fin) {
+      if (inicio > fin) {
+        setErrorFecha('La fecha "Desde" no puede ser posterior a la fecha "Hasta".');
+      } else {
+        setErrorFecha('');
+      }
+    } else {
+      setErrorFecha('');
+    }
+  };
+
+  const handleChangeFechaInicio = (e) => {
+    const value = e.target.value;
+    setFiltros({ ...filtros, fechaInicio: value });
+    validarFechas(value, filtros.fechaFin);
+  };
+
+  const handleChangeFechaFin = (e) => {
+    const value = e.target.value;
+    setFiltros({ ...filtros, fechaFin: value });
+    validarFechas(filtros.fechaInicio, value);
+  };
 
   const cargarTCDesdeSession = () => {
     try {
@@ -250,6 +275,7 @@ const ReporteVentas = () => {
     if (partes.length !== 3) return fecha;
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
+
   const formatearFechaHora = (fecha) => {
     if (!fecha) return 'N/A';
     return new Date(fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -313,7 +339,8 @@ const ReporteVentas = () => {
   };
 
   const generarReporte = async (e) => {
-    if(e) e.preventDefault();
+    if (e) e.preventDefault();
+    if (errorFecha) return;
     setLoading(true);
     setError(null);
     try {
@@ -353,6 +380,7 @@ const ReporteVentas = () => {
       monedas: [],
       filtroFecha: 'fecha_emision'
     });
+    setErrorFecha('');
     limpiarCliente();
   };
 
@@ -372,7 +400,7 @@ const ReporteVentas = () => {
     setLoadingExcel(true);
     try {
       const wb = XLSX.utils.book_new();
-      
+
       const mapBaseItem = (item, incluirPEN) => {
         const tcOrden = parseFloat(item.tipo_cambio || 1);
         const base = {
@@ -421,9 +449,9 @@ const ReporteVentas = () => {
 
       const crearHojaResumen = (datos, nombreHoja, tieneColumnasPEN) => {
         if (datos.length === 0) return;
-        
+
         const ws = XLSX.utils.json_to_sheet(datos);
-        
+
         const colsBase = [
           { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 15 },
           { wch: 30 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 },
@@ -431,21 +459,20 @@ const ReporteVentas = () => {
         ];
 
         if (tieneColumnasPEN) {
-          colsBase.push({ wch: 10 }); // TC Orden
+          colsBase.push({ wch: 10 });
         }
 
-        colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }); // Subtotal -> Por Cobrar Orig
-        
+        colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 });
+
         if (tieneColumnasPEN) {
-           colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }); // Columnas PEN
+          colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 });
         }
-        colsBase.push({ wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 25 }); // Estado Pago -> Condicion
+        colsBase.push({ wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 25 });
         ws['!cols'] = colsBase;
 
         const totalRows = datos.length + 1;
         const totalCols = Object.keys(datos[0]).length;
 
-        // Estilos para cabeceras (separadores de columna)
         for (let C = 0; C < totalCols; C++) {
           const cellRef = XLSX.utils.encode_cell({ r: 0, c: C });
           if (ws[cellRef]) {
@@ -453,7 +480,7 @@ const ReporteVentas = () => {
             ws[cellRef].s = {
               ...ws[cellRef].s,
               font: { bold: true, color: { rgb: "FFFFFF" } },
-              fill: { fgColor: { rgb: "4B5563" } }, // Gris oscuro para encabezados
+              fill: { fgColor: { rgb: "4B5563" } },
               border: {
                 left: { style: "thin", color: { rgb: "D1D5DB" } },
                 right: { style: "thin", color: { rgb: "D1D5DB" } }
@@ -463,17 +490,16 @@ const ReporteVentas = () => {
         }
 
         if (tieneColumnasPEN) {
-          // El inicio cambia según si está la columna TC Orden (índice 11) o no
-          const penColsStart = 11 + 5; // Empieza después de Por Cobrar Orig
+          const penColsStart = 11 + 5;
           const penColsEnd = penColsStart + 4;
-          for (let R = 1; R < totalRows; R++) { // Omitir R=0 que es la cabecera ya estilizada
+          for (let R = 1; R < totalRows; R++) {
             for (let C = penColsStart; C <= penColsEnd; C++) {
               const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
               if (ws[cellRef]) {
                 if (!ws[cellRef].s) ws[cellRef].s = {};
                 ws[cellRef].s = {
                   ...ws[cellRef].s,
-                  fill: { fgColor: { rgb: "E6F4EA" } }, 
+                  fill: { fgColor: { rgb: "E6F4EA" } },
                   numFmt: '#,##0.000'
                 };
               }
@@ -487,7 +513,7 @@ const ReporteVentas = () => {
         else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 9;
 
         if (colFiltroIndex !== -1) {
-          for (let R = 1; R < totalRows; R++) { // Omitir R=0
+          for (let R = 1; R < totalRows; R++) {
             const cellRef = XLSX.utils.encode_cell({ r: R, c: colFiltroIndex });
             if (ws[cellRef]) {
               if (!ws[cellRef].s) ws[cellRef].s = {};
@@ -528,18 +554,18 @@ const ReporteVentas = () => {
           const tipoImpuesto = String(orden.tipo_impuesto || '').toUpperCase().trim();
           const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
           const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
-          
+
           let categoriaBase = 'Sin Comprobante';
           if (esFactura) {
-              if (!esSinImpuesto || facturasExportacion.includes(orden.numero)) {
-                  categoriaBase = 'Factura';
-              } else {
-                  categoriaBase = 'Nota de Venta';
-              }
-          } else if (esNotaVenta) {
+            if (!esSinImpuesto || facturasExportacion.includes(orden.numero)) {
+              categoriaBase = 'Factura';
+            } else {
               categoriaBase = 'Nota de Venta';
+            }
+          } else if (esNotaVenta) {
+            categoriaBase = 'Nota de Venta';
           }
-          
+
           const grupoKey = `${categoriaBase} ${orden.moneda}`;
 
           orden.detalles.forEach(det => {
@@ -557,11 +583,11 @@ const ReporteVentas = () => {
             productosAgrupados[grupoKey][key].cantidad_pendiente_total += parseFloat(det.cantidad) - parseFloat(det.cantidad_despachada || 0);
             productosAgrupados[grupoKey][key].subtotal += parseFloat(det.subtotal);
             productosAgrupados[grupoKey][key].descuento += parseFloat(det.descuento || 0);
-            productosAgrupados[grupoKey][key].ordenes.push({ 
-              numero: orden.numero, 
-              cliente: orden.cliente, 
-              cantidad: parseFloat(det.cantidad), 
-              precio_unitario: parseFloat(det.precio_unitario), 
+            productosAgrupados[grupoKey][key].ordenes.push({
+              numero: orden.numero,
+              cliente: orden.cliente,
+              cantidad: parseFloat(det.cantidad),
+              precio_unitario: parseFloat(det.precio_unitario),
               subtotal: parseFloat(det.subtotal),
               tc: tcOrden
             });
@@ -583,24 +609,24 @@ const ReporteVentas = () => {
         const productosEnCategoria = Object.values(productosAgrupados[cat.key]);
         if (productosEnCategoria.length > 0) {
           productosEnCategoria.sort((a, b) => b.subtotal - a.subtotal);
-          
+
           datosAOA.push([cat.titulo]);
           datosAOA.push([
-            'Codigo', 'Producto', 'Unidad', 'Moneda', 
-            'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente', 
+            'Codigo', 'Producto', 'Unidad', 'Moneda',
+            'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente',
             'Subtotal', 'N Ordenes', 'Detalle de Ordenes (Origen)'
           ]);
-          
+
           productosEnCategoria.forEach(prod => {
             datosAOA.push([
               prod.codigo, prod.nombre, prod.unidad_medida, prod.moneda,
               parseFloat(prod.cantidad_total.toFixed(3)), parseFloat(prod.cantidad_despachada_total.toFixed(3)),
-              parseFloat(prod.cantidad_pendiente_total.toFixed(3)), 
+              parseFloat(prod.cantidad_pendiente_total.toFixed(3)),
               parseFloat(prod.subtotal.toFixed(3)), prod.ordenes.length,
               prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad} unid. @ ${prod.moneda} ${o.precio_unitario})`).join(' | ')
             ]);
           });
-          datosAOA.push([]); // Fila en blanco para separar
+          datosAOA.push([]);
           datosAOA.push([]);
         }
       });
@@ -608,29 +634,27 @@ const ReporteVentas = () => {
       if (datosAOA.length > 0) {
         const wsProductos = XLSX.utils.aoa_to_sheet(datosAOA);
         wsProductos['!cols'] = [
-          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, 
-          { wch: 12 }, { wch: 16 }, { wch: 16 }, 
+          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 },
+          { wch: 12 }, { wch: 16 }, { wch: 16 },
           { wch: 14 }, { wch: 10 }, { wch: 120 }
         ];
 
-        // Aplicar estilos básicos a los títulos de sección
         for (let R = 0; R < datosAOA.length; R++) {
           if (datosAOA[R].length === 1 && datosAOA[R][0].toString().startsWith('===')) {
             const cellRef = XLSX.utils.encode_cell({ r: R, c: 0 });
             if (wsProductos[cellRef]) {
-               if(!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
-               wsProductos[cellRef].s.font = { bold: true, color: { rgb: "FFFFFF" } };
-               wsProductos[cellRef].s.fill = { fgColor: { rgb: "333333" } };
+              if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
+              wsProductos[cellRef].s.font = { bold: true, color: { rgb: "FFFFFF" } };
+              wsProductos[cellRef].s.fill = { fgColor: { rgb: "333333" } };
             }
           } else if (datosAOA[R].length > 1 && datosAOA[R][0] === 'Codigo') {
-            // Estilo para encabezados de tabla
-            for(let C = 0; C < 10; C++) {
-                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-                if (wsProductos[cellRef]) {
-                   if(!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
-                   wsProductos[cellRef].s.font = { bold: true };
-                   wsProductos[cellRef].s.fill = { fgColor: { rgb: "E0E0E0" } };
-                }
+            for (let C = 0; C < 10; C++) {
+              const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+              if (wsProductos[cellRef]) {
+                if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
+                wsProductos[cellRef].s.font = { bold: true };
+                wsProductos[cellRef].s.fill = { fgColor: { rgb: "E0E0E0" } };
+              }
             }
           }
         }
@@ -649,7 +673,8 @@ const ReporteVentas = () => {
             ['INFORMACION DE LA ORDEN'],
             ['Numero de Orden', orden.numero],
             ['Tipo Comprobante', orden.tipo_comprobante],
-            ['Numero Comprobante', (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat) ? `${orden.numero_comprobante_sunat} (SUNAT)` : (orden.tipo_comprobante === 'Factura' && !orden.facturado_sunat) ? '' : (orden.numero_comprobante || '')],            ...(orden.facturado_sunat ? [['Comprobante SUNAT', orden.numero_comprobante_sunat || ''], ['Fecha Facturacion SUNAT', formatearFecha(orden.fecha_facturacion_sunat)]] : []),
+            ['Numero Comprobante', (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat) ? `${orden.numero_comprobante_sunat} (SUNAT)` : (orden.tipo_comprobante === 'Factura' && !orden.facturado_sunat) ? '' : (orden.numero_comprobante || '')],
+            ...(orden.facturado_sunat ? [['Comprobante SUNAT', orden.numero_comprobante_sunat || ''], ['Fecha Facturacion SUNAT', formatearFecha(orden.fecha_facturacion_sunat)]] : []),
             ['Estado', orden.estado], ['Estado Verificacion', orden.estado_verificacion], ['Estado Pago', orden.estado_pago],
             ['Tipo de Venta', orden.tipo_venta], ['Forma de Pago', formaPagoTexto], ['Fecha Vencimiento', fechaVencimientoTexto],
             ['Moneda', orden.moneda], ['Tipo de Cambio Orden', orden.moneda === 'USD' ? tcOrden : '1.000'],
@@ -703,9 +728,9 @@ const ReporteVentas = () => {
             [''], ['DOCUMENTOS ASOCIADOS'],
             ['Cotizacion', orden.numero_cotizacion || '']
           ];
-          
+
           if (orden.tipo_comprobante && String(orden.tipo_comprobante).includes('Nota de Venta')) {
-              docsAsociados.push(['Guia Interna', orden.numero_guia_interna || '']);
+            docsAsociados.push(['Guia Interna', orden.numero_guia_interna || '']);
           }
           docsAsociados.push(['OC Cliente', orden.orden_compra_cliente || '']);
 
@@ -777,11 +802,11 @@ const ReporteVentas = () => {
         </div>
         <div className="flex gap-2">
           <button onClick={descargarExcel} disabled={loadingExcel || dataFiltrada.length === 0} className="btn btn-success">
-            {loadingExcel ? <Loading size="sm" color="white"/> : <FileSpreadsheet size={18} />}
+            {loadingExcel ? <Loading size="sm" color="white" /> : <FileSpreadsheet size={18} />}
             Excel {convertirUSD && tcVenta ? '(TC)' : ''}
           </button>
           <button onClick={descargarPDF} disabled={loadingPdf} className="btn btn-danger">
-            {loadingPdf ? <Loading size="sm" color="white"/> : <Download size={18} />}
+            {loadingPdf ? <Loading size="sm" color="white" /> : <Download size={18} />}
             PDF
           </button>
         </div>
@@ -859,12 +884,12 @@ const ReporteVentas = () => {
                           type="radio"
                           className="hidden"
                           checked={filtros.filtroFecha === opcion.id}
-                          onChange={() => setFiltros({...filtros, filtroFecha: opcion.id})}
+                          onChange={() => setFiltros({ ...filtros, filtroFecha: opcion.id })}
                         />
                         <div className={`w-3.5 h-3.5 rounded-full border transition-all flex items-center justify-center ${
-                          filtros.filtroFecha === opcion.id 
-                          ? 'bg-primary border-primary shadow-sm shadow-primary/20' 
-                          : 'bg-transparent border-steel group-hover:border-wire'
+                          filtros.filtroFecha === opcion.id
+                            ? 'bg-primary border-primary shadow-sm shadow-primary/20'
+                            : 'bg-transparent border-steel group-hover:border-wire'
                         }`}>
                           {filtros.filtroFecha === opcion.id && <div className="w-1 h-1 bg-carbon rounded-full" />}
                         </div>
@@ -881,25 +906,47 @@ const ReporteVentas = () => {
 
               <div className="form-group mb-0">
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Desde</label>
-                <div className="input-with-icon"><Calendar className="icon text-primary" size={14} />
-                  <input type="date" className="form-input text-xs font-bold bg-carbon-mid" style={{ cursor: 'text', color: '#fff' }} value={filtros.fechaInicio} onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})} />
+                <div className="input-with-icon">
+                  <Calendar className="icon text-primary" size={14} />
+                  <input
+                    type="date"
+                    className={`form-input text-xs font-bold bg-carbon-mid ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                    style={{ cursor: 'text', color: '#fff' }}
+                    value={filtros.fechaInicio}
+                    max={filtros.fechaFin || undefined}
+                    onChange={handleChangeFechaInicio}
+                  />
                 </div>
               </div>
+
               <div className="form-group mb-0">
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Hasta</label>
-                <div className="input-with-icon"><Calendar className="icon text-primary" size={14} />
-                  <input type="date" className="form-input text-xs font-bold bg-carbon-mid" style={{ cursor: 'text', color: '#fff' }} value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})} />
+                <div className="input-with-icon">
+                  <Calendar className="icon text-primary" size={14} />
+                  <input
+                    type="date"
+                    className={`form-input text-xs font-bold bg-carbon-mid ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                    style={{ cursor: 'text', color: '#fff' }}
+                    value={filtros.fechaFin}
+                    min={filtros.fechaInicio || undefined}
+                    onChange={handleChangeFechaFin}
+                  />
                 </div>
               </div>
+
               <div className="form-group mb-0 relative md:col-span-2" ref={wrapperRef} style={{ zIndex: 50 }}>
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Cliente</label>
                 <div className="search-input-wrapper relative">
                   <Search className="search-icon text-primary" size={14} />
-                  <input type="text" placeholder="Buscar cliente por nombre o RUC..." className="form-input search-input text-xs font-bold bg-carbon-mid" 
+                  <input
+                    type="text"
+                    placeholder="Buscar cliente por nombre o RUC..."
+                    className="form-input search-input text-xs font-bold bg-carbon-mid"
                     style={{ cursor: 'text', color: '#fff' }}
                     value={busquedaCliente}
-                    onChange={(e) => { setBusquedaCliente(e.target.value); if(filtros.idCliente) setFiltros({...filtros, idCliente: ''}); }}
-                    onFocus={() => busquedaCliente && setMostrarSugerencias(true)} />
+                    onChange={(e) => { setBusquedaCliente(e.target.value); if (filtros.idCliente) setFiltros({ ...filtros, idCliente: '' }); }}
+                    onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
+                  />
                   {filtros.idCliente && (
                     <button type="button" onClick={limpiarCliente} className="absolute right-2 top-2.5 text-gray-400 hover:text-red-500"><X size={14} /></button>
                   )}
@@ -917,11 +964,18 @@ const ReporteVentas = () => {
               </div>
             </div>
 
+            {errorFecha && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-xl">
+                <AlertCircle size={14} className="text-red-400 shrink-0" />
+                <span className="text-[11px] font-black text-red-400 uppercase tracking-widest">{errorFecha}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end border-t border-steel/20 pt-6">
-              <FilterCheckboxGroup 
-                label="Estado Orden" 
-                selectedValues={filtros.estadosOrden} 
-                onChange={(vals) => setFiltros({...filtros, estadosOrden: vals})}
+              <FilterCheckboxGroup
+                label="Estado Orden"
+                selectedValues={filtros.estadosOrden}
+                onChange={(vals) => setFiltros({ ...filtros, estadosOrden: vals })}
                 options={[
                   { label: 'En Espera', value: 'En Espera' },
                   { label: 'En Proceso', value: 'En Proceso' },
@@ -931,26 +985,26 @@ const ReporteVentas = () => {
                   { label: 'Entregada', value: 'Entregada' }
                 ]}
               />
-              <FilterCheckboxGroup 
-                label="Estado Pago" 
-                selectedValues={filtros.estadosPago} 
-                onChange={(vals) => setFiltros({...filtros, estadosPago: vals})}
+              <FilterCheckboxGroup
+                label="Estado Pago"
+                selectedValues={filtros.estadosPago}
+                onChange={(vals) => setFiltros({ ...filtros, estadosPago: vals })}
                 options={[
                   { label: 'Pendiente', value: 'Pendiente' },
                   { label: 'Parcial', value: 'Parcial' },
                   { label: 'Pagado', value: 'Pagado' }
                 ]}
               />
-              <FilterCheckboxGroup 
-                label="Moneda" 
-                selectedValues={filtros.monedas} 
-                onChange={(vals) => setFiltros({...filtros, monedas: vals})}
+              <FilterCheckboxGroup
+                label="Moneda"
+                selectedValues={filtros.monedas}
+                onChange={(vals) => setFiltros({ ...filtros, monedas: vals })}
                 options={[
                   { label: 'Soles (PEN)', value: 'PEN' },
                   { label: 'Dólares (USD)', value: 'USD' }
                 ]}
               />
-              
+
               <div className="form-group mb-0">
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-2 block">Opciones Exportación:</label>
                 <div className="flex gap-4 p-2 bg-carbon-light rounded-lg border border-steel/20 h-[42px] items-center">
@@ -975,7 +1029,11 @@ const ReporteVentas = () => {
                 <button type="button" onClick={limpiarFiltros} className="btn btn-outline flex-1 border-steel/30 text-wire hover:bg-carbon-light" title="Limpiar filtros">
                   <RefreshCw size={16} /> Reiniciar
                 </button>
-                <button type="submit" className="btn btn-primary flex-1 shadow-lg shadow-primary/20" disabled={loading}>
+                <button
+                  type="submit"
+                  className="btn btn-primary flex-1 shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={loading || !!errorFecha}
+                >
                   {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />} Buscar
                 </button>
               </div>
@@ -1013,49 +1071,43 @@ const ReporteVentas = () => {
             <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Facturas (PEN)</p>
             <h3 className="stat-value text-white">{formatearMoneda(resumen.factura_pen || 0, 'PEN')}</h3>
           </div>
-          <div className="stat-icon bg-primary/10 text-primary"><FileCheck size={20}/></div>
+          <div className="stat-icon bg-primary/10 text-primary"><FileCheck size={20} /></div>
         </div>
-
         <div className="stat-card border-l-4 border-primary">
           <div className="stat-content">
             <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Facturas (USD)</p>
             <h3 className="stat-value text-primary">{formatearMoneda(resumen.factura_usd || 0, 'USD')}</h3>
           </div>
-          <div className="stat-icon bg-primary/10 text-primary"><DollarSign size={20}/></div>
+          <div className="stat-icon bg-primary/10 text-primary"><DollarSign size={20} /></div>
         </div>
-
         <div className="stat-card border-l-4 border-info">
           <div className="stat-content">
             <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Notas de Venta (PEN)</p>
             <h3 className="stat-value text-white">{formatearMoneda(resumen.nota_venta_pen || 0, 'PEN')}</h3>
           </div>
-          <div className="stat-icon bg-info/10 text-info"><FileText size={20}/></div>
+          <div className="stat-icon bg-info/10 text-info"><FileText size={20} /></div>
         </div>
-
         <div className="stat-card border-l-4 border-info">
           <div className="stat-content">
             <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Notas de Venta (USD)</p>
             <h3 className="stat-value text-info">{formatearMoneda(resumen.nota_venta_usd || 0, 'USD')}</h3>
           </div>
-          <div className="stat-icon bg-info/10 text-info"><DollarSign size={20}/></div>
+          <div className="stat-icon bg-info/10 text-info"><DollarSign size={20} /></div>
         </div>
-
         <div className="stat-card border-l-4 border-steel">
           <div className="stat-content">
             <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Sin Comprobante (PEN)</p>
             <h3 className="stat-value text-white">{formatearMoneda(resumen.sin_comprobante_pen || 0, 'PEN')}</h3>
           </div>
-          <div className="stat-icon bg-steel/10 text-wire"><ShoppingCart size={20}/></div>
+          <div className="stat-icon bg-steel/10 text-wire"><ShoppingCart size={20} /></div>
         </div>
-
         <div className="stat-card border-l-4 border-steel">
           <div className="stat-content">
             <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Sin Comprobante (USD)</p>
             <h3 className="stat-value text-wire">{formatearMoneda(resumen.sin_comprobante_usd || 0, 'USD')}</h3>
           </div>
-          <div className="stat-icon bg-steel/10 text-wire"><DollarSign size={20}/></div>
+          <div className="stat-icon bg-steel/10 text-wire"><DollarSign size={20} /></div>
         </div>
-
         <div className="stat-card border-l-4 border-success col-span-1 lg:col-span-2">
           <div className="stat-content flex justify-between items-center w-full">
             <div>
@@ -1069,7 +1121,7 @@ const ReporteVentas = () => {
               </h3>
             </div>
           </div>
-          <div className="stat-icon bg-success/10 text-success ml-4"><TrendingUp size={24}/></div>
+          <div className="stat-icon bg-success/10 text-success ml-4"><TrendingUp size={24} /></div>
         </div>
       </div>
 
@@ -1130,8 +1182,8 @@ const ReporteVentas = () => {
                       {(item.numero_comprobante || item.numero_comprobante_sunat) && (
                         <div className="text-xs text-muted">
                           {item.tipo_comprobante}: {(item.tipo_comprobante === 'Factura' && item.facturado_sunat && item.numero_comprobante_sunat)
-                             ? <span className="text-green-600 font-medium">{item.numero_comprobante_sunat}</span>
-                             : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat) ? '' : item.numero_comprobante}
+                            ? <span className="text-green-600 font-medium">{item.numero_comprobante_sunat}</span>
+                            : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat) ? '' : item.numero_comprobante}
                         </div>
                       )}
                     </td>
@@ -1165,7 +1217,7 @@ const ReporteVentas = () => {
                 <tr>
                   <td colSpan={convertirUSD && tcVenta ? 12 : 11} className="px-4 py-12 text-center text-muted">
                     <div className="flex flex-col items-center justify-center">
-                      <Search size={32} className="mb-2 opacity-20"/>No se encontraron ventas con los filtros seleccionados.
+                      <Search size={32} className="mb-2 opacity-20" />No se encontraron ventas con los filtros seleccionados.
                     </div>
                   </td>
                 </tr>

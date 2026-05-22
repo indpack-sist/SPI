@@ -386,12 +386,12 @@ const ReporteVentas = () => {
               : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat)
                 ? ''
                 : (item.numero_comprobante || ''),
-          'Facturado SUNAT': item.facturado_sunat ? 'Si' : 'No',
-          'Fecha Fact. SUNAT': (item.facturado_sunat && item.fecha_facturacion_sunat) ? formatearFecha(item.fecha_facturacion_sunat) : '',
+          'Facturado SUNAT': item.tipo_comprobante === 'Nota de Venta' ? 'No amerita' : (item.facturado_sunat ? 'Si' : 'No'),
           'Cliente': item.cliente,
           'RUC': item.ruc,
           'Vendedor': item.vendedor,
           'Fecha Emision': formatearFecha(item.fecha_emision),
+          'Fecha Fact. SUNAT': item.tipo_comprobante === 'Nota de Venta' ? 'No amerita' : ((item.facturado_sunat && item.fecha_facturacion_sunat) ? formatearFecha(item.fecha_facturacion_sunat) : ''),
           'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
           'Moneda': item.moneda,
           'TC Orden': esUSD ? tcOrden : '-',
@@ -442,55 +442,150 @@ const ReporteVentas = () => {
         }
       }
 
+      // Estilo amarillo para la columna de fecha activa (Filtro)
+      let colFiltroIndex = -1;
+      if (filtros.filtroFecha === 'fecha_emision') colFiltroIndex = 8;
+      else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 9;
+      else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 4;
+
+      if (colFiltroIndex !== -1) {
+        for (let R = 0; R < totalRows; R++) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: colFiltroIndex });
+          if (wsResumen[cellRef]) {
+            if (!wsResumen[cellRef].s) wsResumen[cellRef].s = {};
+            wsResumen[cellRef].s = {
+              ...wsResumen[cellRef].s,
+              fill: { fgColor: { rgb: "FFF2CC" } }, // Amarillo sutil
+              font: { bold: R === 0 || wsResumen[cellRef].s.font?.bold }
+            };
+          }
+        }
+      }
+
       XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
 
-      const productosAgrupados = {};
+      const productosAgrupados = {
+        'Factura PEN': {}, 'Factura USD': {},
+        'Nota de Venta PEN': {}, 'Nota de Venta USD': {},
+        'Sin Comprobante PEN': {}, 'Sin Comprobante USD': {}
+      };
+
       dataFiltrada.forEach((orden) => {
         if (orden.detalles && orden.detalles.length > 0) {
           const tcOrden = parseFloat(orden.tipo_cambio || 1);
+          const tipoDoc = String(orden.tipo_comprobante || '').trim();
+          const esFactura = tipoDoc.includes('Factura');
+          const esNotaVenta = tipoDoc.includes('Nota de Venta');
+          const tipoImpuesto = String(orden.tipo_impuesto || '').toUpperCase().trim();
+          const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
+          const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
+          
+          let categoriaBase = 'Sin Comprobante';
+          if (esFactura) {
+              if (!esSinImpuesto || facturasExportacion.includes(orden.numero)) {
+                  categoriaBase = 'Factura';
+              } else {
+                  categoriaBase = 'Nota de Venta';
+              }
+          } else if (esNotaVenta) {
+              categoriaBase = 'Nota de Venta';
+          }
+          
+          const grupoKey = `${categoriaBase} ${orden.moneda}`;
+
           orden.detalles.forEach(det => {
             const key = det.codigo_producto;
-            if (!productosAgrupados[key]) {
-              productosAgrupados[key] = {
+            if (!productosAgrupados[grupoKey][key]) {
+              productosAgrupados[grupoKey][key] = {
                 codigo: det.codigo_producto, nombre: det.producto_nombre,
-                unidad_medida: det.unidad_medida, moneda: 'PEN (Unif.)',
+                unidad_medida: det.unidad_medida, moneda: orden.moneda,
                 cantidad_total: 0, cantidad_despachada_total: 0, cantidad_pendiente_total: 0,
-                subtotal_pen: 0, descuento_pen: 0, ordenes: []
+                subtotal: 0, descuento: 0, ordenes: []
               };
             }
-            const factor = (orden.moneda === 'USD') ? tcOrden : 1;
-            productosAgrupados[key].cantidad_total += parseFloat(det.cantidad);
-            productosAgrupados[key].cantidad_despachada_total += parseFloat(det.cantidad_despachada || 0);
-            productosAgrupados[key].cantidad_pendiente_total += parseFloat(det.cantidad) - parseFloat(det.cantidad_despachada || 0);
-            productosAgrupados[key].subtotal_pen += parseFloat(det.subtotal) * factor;
-            productosAgrupados[key].descuento_pen += parseFloat(det.descuento || 0) * factor;
-            productosAgrupados[key].ordenes.push({ 
+            productosAgrupados[grupoKey][key].cantidad_total += parseFloat(det.cantidad);
+            productosAgrupados[grupoKey][key].cantidad_despachada_total += parseFloat(det.cantidad_despachada || 0);
+            productosAgrupados[grupoKey][key].cantidad_pendiente_total += parseFloat(det.cantidad) - parseFloat(det.cantidad_despachada || 0);
+            productosAgrupados[grupoKey][key].subtotal += parseFloat(det.subtotal);
+            productosAgrupados[grupoKey][key].descuento += parseFloat(det.descuento || 0);
+            productosAgrupados[grupoKey][key].ordenes.push({ 
               numero: orden.numero, 
               cliente: orden.cliente, 
               cantidad: parseFloat(det.cantidad), 
-              precio_unitario_pen: parseFloat(det.precio_unitario) * factor, 
-              subtotal_pen: parseFloat(det.subtotal) * factor,
-              tc: tcOrden,
-              moneda_orig: orden.moneda
+              precio_unitario: parseFloat(det.precio_unitario), 
+              subtotal: parseFloat(det.subtotal),
+              tc: tcOrden
             });
           });
         }
       });
 
-      const datosProductos = [];
-      Object.values(productosAgrupados).sort((a, b) => b.subtotal_pen - a.subtotal_pen).forEach(prod => {
-        datosProductos.push({
-          'Codigo': prod.codigo, 'Producto': prod.nombre, 'Unidad': prod.unidad_medida, 'Moneda': prod.moneda,
-          'Cant. Total': parseFloat(prod.cantidad_total.toFixed(3)), 'Cant. Despachada': parseFloat(prod.cantidad_despachada_total.toFixed(3)),
-          'Cant. Pendiente': parseFloat(prod.cantidad_pendiente_total.toFixed(3)), 'Descuento Total (PEN)': parseFloat(prod.descuento_pen.toFixed(3)),
-          'Subtotal (PEN)': parseFloat(prod.subtotal_pen.toFixed(3)), 'N Ordenes': prod.ordenes.length,
-          'Ordenes Detalle': prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad} @ TC ${o.tc})`).join(' | ')
-        });
+      const datosAOA = [];
+      const categorias = [
+        { key: 'Factura PEN', titulo: '=== FACTURAS (PEN) ===' },
+        { key: 'Factura USD', titulo: '=== FACTURAS (USD) ===' },
+        { key: 'Nota de Venta PEN', titulo: '=== NOTAS DE VENTA (PEN) ===' },
+        { key: 'Nota de Venta USD', titulo: '=== NOTAS DE VENTA (USD) ===' },
+        { key: 'Sin Comprobante PEN', titulo: '=== SIN COMPROBANTE (PEN) ===' },
+        { key: 'Sin Comprobante USD', titulo: '=== SIN COMPROBANTE (USD) ===' }
+      ];
+
+      categorias.forEach(cat => {
+        const productosEnCategoria = Object.values(productosAgrupados[cat.key]);
+        if (productosEnCategoria.length > 0) {
+          productosEnCategoria.sort((a, b) => b.subtotal - a.subtotal);
+          
+          datosAOA.push([cat.titulo]);
+          datosAOA.push([
+            'Codigo', 'Producto', 'Unidad', 'Moneda', 
+            'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente', 
+            'Descuento Total', 'Subtotal', 'N Ordenes', 'Detalle de Ordenes (Origen)'
+          ]);
+          
+          productosEnCategoria.forEach(prod => {
+            datosAOA.push([
+              prod.codigo, prod.nombre, prod.unidad_medida, prod.moneda,
+              parseFloat(prod.cantidad_total.toFixed(3)), parseFloat(prod.cantidad_despachada_total.toFixed(3)),
+              parseFloat(prod.cantidad_pendiente_total.toFixed(3)), parseFloat(prod.descuento.toFixed(3)),
+              parseFloat(prod.subtotal.toFixed(3)), prod.ordenes.length,
+              prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad} unid. @ ${prod.moneda} ${o.precio_unitario})`).join(' | ')
+            ]);
+          });
+          datosAOA.push([]); // Fila en blanco para separar
+          datosAOA.push([]);
+        }
       });
 
-      if (datosProductos.length > 0) {
-        const wsProductos = XLSX.utils.json_to_sheet(datosProductos);
-        wsProductos['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 100 }];
+      if (datosAOA.length > 0) {
+        const wsProductos = XLSX.utils.aoa_to_sheet(datosAOA);
+        wsProductos['!cols'] = [
+          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, 
+          { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, 
+          { wch: 14 }, { wch: 10 }, { wch: 120 }
+        ];
+
+        // Aplicar estilos básicos a los títulos de sección
+        for (let R = 0; R < datosAOA.length; R++) {
+          if (datosAOA[R].length === 1 && datosAOA[R][0].toString().startsWith('===')) {
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: 0 });
+            if (wsProductos[cellRef]) {
+               if(!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
+               wsProductos[cellRef].s.font = { bold: true, color: { rgb: "FFFFFF" } };
+               wsProductos[cellRef].s.fill = { fgColor: { rgb: "333333" } };
+            }
+          } else if (datosAOA[R].length > 1 && datosAOA[R][0] === 'Codigo') {
+            // Estilo para encabezados de tabla
+            for(let C = 0; C < 11; C++) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (wsProductos[cellRef]) {
+                   if(!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
+                   wsProductos[cellRef].s.font = { bold: true };
+                   wsProductos[cellRef].s.fill = { fgColor: { rgb: "E0E0E0" } };
+                }
+            }
+          }
+        }
+
         XLSX.utils.book_append_sheet(wb, wsProductos, 'Resumen Productos');
       }
 
@@ -955,8 +1050,8 @@ const ReporteVentas = () => {
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Vendedor</th>
                 <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Emision</th>
-                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
                 <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>SUNAT</th>
+                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 {convertirUSD && tcVenta && <th className="px-4 py-3 text-right">Total (PEN)</th>}
                 <th className="px-4 py-3 text-center">Estado Pago</th>

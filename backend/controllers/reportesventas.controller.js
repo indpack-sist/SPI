@@ -175,6 +175,7 @@ export const getReporteVentas = async (req, res) => {
                 if (orden.tipo_venta === 'Crédito') kpis.totalCreditoPEN += totalOriginal;
                 else kpis.totalContadoPEN += totalOriginal;
             }
+            const subtotalPEN = esDolar ? subtotalOriginal * tcOrden : subtotalOriginal;
             const igvPEN = esDolar ? igvOriginal * tcOrden : igvOriginal;
             const totalPEN = esDolar ? totalOriginal * tcOrden : totalOriginal;
             const pagadoPEN = esDolar ? pagadoOriginal * tcOrden : pagadoOriginal;

@@ -417,8 +417,8 @@ export const getReporteVentas = async (req, res) => {
 export const getReporteProductoDespachos = async (req, res) => {
     try {
         const { idProducto, fechaInicio, fechaFin, idCliente, estados, tipoFecha } = req.query;
-        if (!idProducto || !fechaInicio || !fechaFin) {
-            return res.status(400).json({ success: false, error: 'Faltan parámetros: idProducto, fechaInicio y fechaFin son requeridos' });
+        if ((!idProducto && !idCliente) || !fechaInicio || !fechaFin) {
+            return res.status(400).json({ success: false, error: 'Faltan parámetros: Se requiere idProducto o idCliente, además de fechaInicio y fechaFin' });
         }
 
         let listaEstados = ['Despachada', 'Despacho Parcial', 'Entregada'];
@@ -439,6 +439,9 @@ export const getReporteProductoDespachos = async (req, res) => {
                 ov.subtotal AS subtotal_orden,
                 ov.total AS total_orden,
                 c.razon_social as cliente,
+                p.id_producto,
+                p.codigo as codigo_producto,
+                p.nombre as nombre_producto,
                 dov.cantidad AS cantidad_total,
                 dov.cantidad_despachada,
                 dov.precio_unitario,
@@ -449,15 +452,20 @@ export const getReporteProductoDespachos = async (req, res) => {
             FROM detalle_orden_venta dov
             INNER JOIN ordenes_venta ov ON dov.id_orden_venta = ov.id_orden_venta
             INNER JOIN clientes c ON ov.id_cliente = c.id_cliente
+            INNER JOIN productos p ON dov.id_producto = p.id_producto
             LEFT JOIN salidas s ON ov.id_salida = s.id_salida
-            WHERE dov.id_producto = ? 
-              AND dov.cantidad_despachada > 0 
+            WHERE dov.cantidad_despachada > 0 
               AND DATE(${campoFechaFiltro}) BETWEEN ? AND ?
               AND ov.estado IN (?)
               AND (s.id_salida IS NULL OR (s.estado != 'Cancelada' AND s.estado != 'Anulado'))
         `;
         
-        const params = [idProducto, fechaInicio, fechaFin, listaEstados];
+        const params = [fechaInicio, fechaFin, listaEstados];
+
+        if (idProducto && idProducto !== 'null' && idProducto !== '') {
+            sql += ` AND dov.id_producto = ?`;
+            params.push(idProducto);
+        }
 
         if (idCliente && idCliente !== 'null' && idCliente !== '') {
             sql += ` AND ov.id_cliente = ?`;

@@ -234,7 +234,18 @@ const ReporteDeudasClientes = () => {
 
         const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-        const CustomTick = ({ x, y, payload }) => {
+        const handleChartClick = (e, tipo, keyG, tituloG) => {
+            if (e && e.activePayload && e.activePayload.length > 0) {
+                handleDrillDown(e.activePayload[0].payload, tipo, keyG, tituloG);
+            } else if (e && e.name) {
+                handleDrillDown(e, tipo, keyG, tituloG);
+            }
+        };
+
+        const CustomTick = (props) => {
+            const { x, y, payload } = props;
+            if (!payload || !payload.value) return null;
+            
             const words = payload.value.split(' ');
             let lines = [];
             let currentLine = '';
@@ -256,7 +267,6 @@ const ReporteDeudasClientes = () => {
                             key={index}
                             x={0} 
                             y={12 + index * 12} 
-                            dy={16} 
                             textAnchor="middle" 
                             fill="#fff" 
                             fontSize={10} 
@@ -289,7 +299,7 @@ const ReporteDeudasClientes = () => {
                         <div className="card-body p-6 flex-1">
                             <div style={{ width: '100%', height: 320 }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
+                                    <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }} onClick={(e) => handleChartClick(e, 'aging', keyGrupo, tituloBase)}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
                                         <XAxis type="number" hide />
                                         <YAxis 
@@ -309,7 +319,7 @@ const ReporteDeudasClientes = () => {
                                         />
                                         <Bar dataKey="monto" radius={[0, 6, 6, 0]} cursor="pointer">
                                             {data.aging.map((e, i) => (
-                                                <Cell key={`cell-${i}`} fill={e.color} onClick={() => handleDrillDown(e, 'aging', keyGrupo, tituloBase)} />
+                                                <Cell key={`cell-${i}`} fill={e.color} />
                                             ))}
                                         </Bar>
                                     </BarChart>
@@ -328,17 +338,13 @@ const ReporteDeudasClientes = () => {
                         <div className="card-body p-6 flex-1">
                             <div style={{ width: '100%', height: 320 }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.topDeudores} margin={{ bottom: 50, top: 10, right: 30 }}>
+                                    <BarChart data={data.topDeudores} margin={{ bottom: 80, top: 10, right: 30 }} onClick={(e) => handleChartClick(e, 'deudores', keyGrupo, tituloBase)}>
                                         <XAxis 
                                             dataKey="name" 
                                             stroke="#fff" 
-                                            fontSize={12} 
-                                            angle={0} 
-                                            textAnchor="middle" 
                                             interval={0} 
-                                            height={70} 
-                                            tick={{ fontWeight: '900', fill: '#fff' }}
-                                            formatter={(val) => val.length > 15 ? val.substring(0, 12) + '...' : val}
+                                            height={90} 
+                                            tick={<CustomTick />}
                                         />
                                         <YAxis 
                                             stroke="#aaa" 
@@ -352,9 +358,9 @@ const ReporteDeudasClientes = () => {
                                             labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
                                             formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`} 
                                         />
-                                        <Bar dataKey="deuda" fill={color} radius={[6, 6, 0, 0]} cursor="pointer">
+                                        <Bar dataKey="deuda" radius={[6, 6, 0, 0]} cursor="pointer">
                                             {data.topDeudores.map((e, i) => (
-                                                <Cell key={`cell-${i}`} fill={color} onClick={() => handleDrillDown(e, 'deudores', keyGrupo, tituloBase)} />
+                                                <Cell key={`cell-${i}`} fill={DEUDORES_COLORS[i % DEUDORES_COLORS.length]} />
                                             ))}
                                         </Bar>
                                     </BarChart>

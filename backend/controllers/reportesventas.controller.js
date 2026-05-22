@@ -37,7 +37,7 @@ export const getReporteVentas = async (req, res) => {
             LEFT JOIN salidas s ON ov.id_salida = s.id_salida
             WHERE DATE(${campoFecha}) BETWEEN ? AND ?
             AND ov.estado != 'Cancelada'
-            AND ov.estado_verificacion != 'Rechazada'
+            AND ov.estado_verificacion = 'Aprobada'
         `;
 
         const params = [fechaInicio, fechaFin];
@@ -128,95 +128,79 @@ export const getReporteVentas = async (req, res) => {
         const listaDetalle = ordenes.map(orden => {
             const esDolar = orden.moneda === 'USD';
             const tcOrden = parseFloat(orden.tipo_cambio) || 1;
-            
             const subtotalOriginal = parseFloat(orden.subtotal) || 0;
             const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
             const comisionOriginal = parseFloat(orden.total_comision) || 0;
 
             const tipoImpuesto = String(orden.tipo_impuesto || '').toUpperCase().trim();
             const esSinImpuesto = ['INA', 'EXO', 'INAFECTO', 'EXONERADO', '0', 'LIBRE'].includes(tipoImpuesto);
-            const porcentajeImp = esSinImpuesto ? 0 : (
-                orden.porcentaje_impuesto !== null && orden.porcentaje_impuesto !== undefined
-                    ? parseFloat(orden.porcentaje_impuesto)
-                    : 18
-            );
+            
+            // Lógica Sincronizada con OrdenesVenta.jsx: Usar subtotal si no hay impuesto
+            const montoOriginal = esSinImpuesto ? subtotalOriginal : (parseFloat(orden.total) || 0);
 
             const tipoComprobante = String(orden.tipo_comprobante || '').trim();
-            const esFactura = tipoComprobante === 'Factura';
-            const esNotaVenta = tipoComprobante === 'Nota de Venta';
+            const esFacturaRaw = tipoComprobante.includes('Factura');
+            const esNotaVenta = tipoComprobante.includes('Nota de Venta');
+            const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
-            const igvOriginal = esNotaVenta ? 0 : subtotalOriginal * (porcentajeImp / 100);
-            const totalOriginal = esNotaVenta ? subtotalOriginal : subtotalOriginal + igvOriginal;
-            const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
-
-            // Accumulation Logic
-            if (esDolar) {
-                kpis.totalVentasUSD += totalOriginal;
-                kpis.totalPagadoUSD += pagadoOriginal;
-                kpis.totalPorCobrarUSD += pendienteOriginal;
-                kpis.totalComisionesUSD += comisionOriginal;
-
-                if (esFactura) kpis.facturaUSD += totalOriginal;
-                else if (esNotaVenta) kpis.notaVentaUSD += totalOriginal;
-                else kpis.sinComprobanteUSD += totalOriginal;
-
-                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoUSD += totalOriginal;
-                else kpis.totalContadoUSD += totalOriginal;
-            } else {
-                kpis.totalVentasPEN += totalOriginal;
-                kpis.totalPagadoPEN += pagadoOriginal;
-                kpis.totalPorCobrarPEN += pendienteOriginal;
-                kpis.totalComisionesPEN += comisionOriginal;
-
-                if (esFactura) kpis.facturaPEN += totalOriginal;
-                else if (esNotaVenta) kpis.notaVentaPEN += totalOriginal;
-                else kpis.sinComprobantePEN += totalOriginal;
-
-                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoPEN += totalOriginal;
-                else kpis.totalContadoPEN += totalOriginal;
+            // Clasificación Sincronizada:
+            let categoria = 'sin_comprobante';
+            if (esFacturaRaw) {
+                // Si es factura pero no tiene impuesto (y no es exportación aprobada), se cuenta como nota de venta
+                if (!esSinImpuesto || facturasExportacion.includes(orden.numero_orden)) {
+                    categoria = 'factura';
+                } else {
+                    categoria = 'nota_venta';
+                }
+            } else if (esNotaVenta) {
+                categoria = 'nota_venta';
             }
-            const subtotalPEN = esDolar ? subtotalOriginal * tcOrden : subtotalOriginal;
-            const igvPEN = esDolar ? igvOriginal * tcOrden : igvOriginal;
-            const totalPEN = esDolar ? totalOriginal * tcOrden : totalOriginal;
+
+            const pendienteOriginal = Math.max(0, montoOriginal - pagadoOriginal);
+
+            // Valores convertidos
+            const montoPEN = esDolar ? montoOriginal * tcOrden : montoOriginal;
             const pagadoPEN = esDolar ? pagadoOriginal * tcOrden : pagadoOriginal;
             const pendientePEN = esDolar ? pendienteOriginal * tcOrden : pendienteOriginal;
 
-            // Acumular unificados (todo a PEN usando TC de la orden)
-            kpis.unificadoVentasPEN += totalPEN;
-            kpis.unificadoPagadoPEN += pagadoPEN;
-            kpis.unificadoPorCobrarPEN += pendientePEN;
-
             if (esDolar) {
-                kpis.totalVentasUSD += totalOriginal;
+                kpis.totalVentasUSD += montoOriginal;
                 kpis.totalPagadoUSD += pagadoOriginal;
                 kpis.totalPorCobrarUSD += pendienteOriginal;
                 kpis.totalComisionesUSD += comisionOriginal;
-                
-                if (orden.tipo_venta === 'Crédito') {
-                    kpis.totalCreditoUSD += totalOriginal;
-                } else {
-                    kpis.totalContadoUSD += totalOriginal;
-                }
-                
+
+                if (categoria === 'factura') kpis.facturaUSD += montoOriginal;
+                else if (categoria === 'nota_venta') kpis.notaVentaUSD += montoOriginal;
+                else kpis.sinComprobanteUSD += montoOriginal;
+
+                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoUSD += montoOriginal;
+                else kpis.totalContadoUSD += montoOriginal;
+
                 if (conteoEstadoPagoUSD[orden.estado_pago] !== undefined) {
-                    conteoEstadoPagoUSD[orden.estado_pago] += totalOriginal;
+                    conteoEstadoPagoUSD[orden.estado_pago] += montoOriginal;
                 }
             } else {
-                kpis.totalVentasPEN += totalOriginal;
+                kpis.totalVentasPEN += montoOriginal;
                 kpis.totalPagadoPEN += pagadoOriginal;
                 kpis.totalPorCobrarPEN += pendienteOriginal;
                 kpis.totalComisionesPEN += comisionOriginal;
-                
-                if (orden.tipo_venta === 'Crédito') {
-                    kpis.totalCreditoPEN += totalOriginal;
-                } else {
-                    kpis.totalContadoPEN += totalOriginal;
-                }
-                
+
+                if (categoria === 'factura') kpis.facturaPEN += montoOriginal;
+                else if (categoria === 'nota_venta') kpis.notaVentaPEN += montoOriginal;
+                else kpis.sinComprobantePEN += montoOriginal;
+
+                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoPEN += montoOriginal;
+                else kpis.totalContadoPEN += montoOriginal;
+
                 if (conteoEstadoPagoPEN[orden.estado_pago] !== undefined) {
-                    conteoEstadoPagoPEN[orden.estado_pago] += totalOriginal;
+                    conteoEstadoPagoPEN[orden.estado_pago] += montoOriginal;
                 }
             }
+
+            // Acumular unificados
+            kpis.unificadoVentasPEN += montoPEN;
+            kpis.unificadoPagadoPEN += pagadoPEN;
+            kpis.unificadoPorCobrarPEN += pendientePEN;
 
             let estadoLogistico = 'A tiempo';
             const fechaReferencia = orden.fecha_despacho || orden.fecha_entrega_real;

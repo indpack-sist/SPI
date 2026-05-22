@@ -201,6 +201,7 @@ function OrdenesVenta() {
   const [filtroTipoComprobante, setFiltroTipoComprobante] = useState(() => getSessionArray('ordenes_filtros_tipo_comprobante'));
   const [filtroEstadoSunat, setFiltroEstadoSunat] = useState(() => getSessionArray('ordenes_filtros_estado_sunat'));
   const [filtroVendedor, setFiltroVendedor] = useState(() => getSessionArray('ordenes_filtros_vendedor'));
+  const [filtroMoneda, setFiltroMoneda] = useState(() => getSessionArray('ordenes_filtros_moneda'));
   
   const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || '');
   const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || '');
@@ -224,10 +225,11 @@ function OrdenesVenta() {
     sessionStorage.setItem('ordenes_filtros_tipo_comprobante', JSON.stringify(filtroTipoComprobante));
     sessionStorage.setItem('ordenes_filtros_estado_sunat', JSON.stringify(filtroEstadoSunat));
     sessionStorage.setItem('ordenes_filtros_vendedor', JSON.stringify(filtroVendedor));
+    sessionStorage.setItem('ordenes_filtros_moneda', JSON.stringify(filtroMoneda));
     sessionStorage.setItem('ordenes_fecha_inicio', fechaInicio);
     sessionStorage.setItem('ordenes_fecha_fin', fechaFin);
     sessionStorage.setItem('ordenes_busqueda', busqueda);
-  }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, fechaInicio, fechaFin, busqueda]);
+  }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, filtroMoneda, fechaInicio, fechaFin, busqueda]);
 
   useEffect(() => {
     setInputPage(currentPage.toString());
@@ -237,7 +239,7 @@ function OrdenesVenta() {
   useEffect(() => {
     cargarDatos(false);
     cargarTCDesdeSession();
-  }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, fechaInicio, fechaFin]);
+  }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, filtroMoneda, fechaInicio, fechaFin]);
 
   useEffect(() => {
     cargarDatos(true);
@@ -309,6 +311,7 @@ function OrdenesVenta() {
       if (filtroTipoComprobante.length > 0) filtros.tipo_comprobante = filtroTipoComprobante;
       if (filtroEstadoSunat.length > 0) filtros.estado_sunat = filtroEstadoSunat;
       if (filtroVendedor.length > 0) filtros.vendedor = filtroVendedor;
+      if (filtroMoneda.length > 0) filtros.moneda = filtroMoneda;
       if (fechaInicio) filtros.fecha_inicio = fechaInicio;
       if (fechaFin) filtros.fecha_fin = fechaFin;
       
@@ -334,6 +337,7 @@ function OrdenesVenta() {
     setFiltroTipoComprobante([]);
     setFiltroEstadoSunat([]);
     setFiltroVendedor([]);
+    setFiltroMoneda([]);
     setFechaInicio('');
     setFechaFin('');
     setBusqueda('');
@@ -831,7 +835,7 @@ function OrdenesVenta() {
             </div>
 
             {mostrarFiltrosAvanzados && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mt-4 pt-4 border-t border-steel/20 animate-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 mt-4 pt-4 border-t border-steel/20 animate-in slide-in-from-top-2 duration-300">
                 <FilterCheckboxGroup label="Estado Logístico" selectedValues={filtroEstado} onChange={setFiltroEstado} options={[
                   { label: 'En Espera', value: 'En Espera' }, { label: 'En Proceso', value: 'En Proceso' }, { label: 'Atendido por Producción', value: 'Atendido por Producción' }, { label: 'Despacho Parcial', value: 'Despacho Parcial' }, { label: 'Despachada', value: 'Despachada' }, { label: 'Entregada', value: 'Entregada' }, { label: 'Cancelada', value: 'Cancelada' }
                 ]} />
@@ -849,6 +853,9 @@ function OrdenesVenta() {
                 ]} />
                 <FilterCheckboxGroup label="Vendedor" selectedValues={filtroVendedor} onChange={setFiltroVendedor} options={[
                   { label: 'JOHANNA VALLE TORRES', value: '12' }, { label: 'YESSICA GABY ORDOÑEZ PEREZ', value: '13' }, { label: 'VALESHKA BETSABETH LAZARO COLMENARES', value: '20' }
+                ]} />
+                <FilterCheckboxGroup label="Moneda" selectedValues={filtroMoneda} onChange={setFiltroMoneda} options={[
+                  { label: 'Soles (PEN)', value: 'PEN' }, { label: 'Dólares (USD)', value: 'USD' }
                 ]} />
               </div>
             )}

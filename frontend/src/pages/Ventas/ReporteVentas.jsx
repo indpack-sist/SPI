@@ -372,12 +372,9 @@ const ReporteVentas = () => {
     setLoadingExcel(true);
     try {
       const wb = XLSX.utils.book_new();
-      const hayUSD = dataFiltrada.some(item => item.moneda === 'USD');
-
-      const datosResumen = dataFiltrada.map(item => {
-        const esUSD = item.moneda === 'USD';
+      
+      const mapBaseItem = (item, incluirPEN) => {
         const tcOrden = parseFloat(item.tipo_cambio || 1);
-        
         const base = {
           'Orden': item.numero,
           'Tipo Comprobante': item.tipo_comprobante || '',
@@ -394,75 +391,100 @@ const ReporteVentas = () => {
           'Fecha Fact. SUNAT': item.tipo_comprobante === 'Nota de Venta' ? 'No amerita' : ((item.facturado_sunat && item.fecha_facturacion_sunat) ? formatearFecha(item.fecha_facturacion_sunat) : ''),
           'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
           'Moneda': item.moneda,
-          'TC Orden': esUSD ? tcOrden : '-',
+          'TC Orden': item.moneda === 'USD' ? tcOrden : '-',
           'Subtotal Orig.': parseFloat(parseFloat(item.subtotal).toFixed(3)),
           'IGV Orig.': parseFloat(parseFloat(item.igv).toFixed(3)),
           'Total Orig.': parseFloat(parseFloat(item.total).toFixed(3)),
           'Pagado Orig.': parseFloat(parseFloat(item.monto_pagado).toFixed(3)),
-          'Por Cobrar Orig.': parseFloat(parseFloat(item.pendiente_cobro).toFixed(3)),
-          'Subtotal (PEN)': parseFloat(parseFloat(item.subtotal_pen || item.subtotal).toFixed(3)),
-          'IGV (PEN)': parseFloat(parseFloat(item.igv_pen || item.igv).toFixed(3)),
-          'Total (PEN)': parseFloat(parseFloat(item.total_pen || item.total).toFixed(3)),
-          'Pagado (PEN)': parseFloat(parseFloat(item.monto_pagado_pen || item.monto_pagado).toFixed(3)),
-          'Por Cobrar (PEN)': parseFloat(parseFloat(item.pendiente_cobro_pen || item.pendiente_cobro).toFixed(3)),
-          'Estado Pago': item.estado_pago,
-          'Estado': item.estado,
-          'Tipo Venta': item.tipo_venta,
-          'Estado Logistico': item.estado_logistico
+          'Por Cobrar Orig.': parseFloat(parseFloat(item.pendiente_cobro).toFixed(3))
         };
 
+        if (incluirPEN) {
+          base['Subtotal (PEN)'] = parseFloat(parseFloat(item.subtotal_pen || item.subtotal).toFixed(3));
+          base['IGV (PEN)'] = parseFloat(parseFloat(item.igv_pen || item.igv).toFixed(3));
+          base['Total (PEN)'] = parseFloat(parseFloat(item.total_pen || item.total).toFixed(3));
+          base['Pagado (PEN)'] = parseFloat(parseFloat(item.monto_pagado_pen || item.monto_pagado).toFixed(3));
+          base['Por Cobrar (PEN)'] = parseFloat(parseFloat(item.pendiente_cobro_pen || item.pendiente_cobro).toFixed(3));
+        }
+
+        base['Estado Pago'] = item.estado_pago;
+        base['Estado'] = item.estado;
+        base['Tipo Venta'] = item.tipo_venta;
+        base['Condición Pago'] = item.tipo_venta === 'Crédito' ? `${item.dias_credito} días (Vence: ${formatearFecha(item.fecha_vencimiento)})` : '-';
+
         return base;
-      });
+      };
 
-      const wsResumen = XLSX.utils.json_to_sheet(datosResumen);
-      const colsBase = [
-        { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 15 },
-        { wch: 30 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 },
-        { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-        { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-        { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 15 }
-      ];
-      wsResumen['!cols'] = colsBase;
+      const crearHojaResumen = (datos, nombreHoja, tieneColumnasPEN) => {
+        if (datos.length === 0) return;
+        
+        const ws = XLSX.utils.json_to_sheet(datos);
+        
+        const colsBase = [
+          { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 15 },
+          { wch: 30 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 },
+          { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+          { wch: 14 }, { wch: 14 }
+        ];
+        
+        if (tieneColumnasPEN) {
+           colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 });
+        }
+        colsBase.push({ wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 25 });
+        ws['!cols'] = colsBase;
 
-      // Estilo para las columnas PEN
-      const totalRows = datosResumen.length + 1;
-      const penColsStart = 17; // 'Subtotal (PEN)'
-      const penColsEnd = 21;   // 'Por Cobrar (PEN)'
-      for (let R = 0; R < totalRows; R++) {
-        for (let C = penColsStart; C <= penColsEnd; C++) {
-          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-          if (wsResumen[cellRef]) {
-            if (!wsResumen[cellRef].s) wsResumen[cellRef].s = {};
-            wsResumen[cellRef].s = {
-              fill: { fgColor: { rgb: "E6F4EA" } }, // Verde muy claro para PEN
-              font: { bold: R === 0 },
-              numFmt: '#,##0.000'
-            };
+        const totalRows = datos.length + 1;
+
+        if (tieneColumnasPEN) {
+          const penColsStart = 17;
+          const penColsEnd = 21;
+          for (let R = 0; R < totalRows; R++) {
+            for (let C = penColsStart; C <= penColsEnd; C++) {
+              const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+              if (ws[cellRef]) {
+                if (!ws[cellRef].s) ws[cellRef].s = {};
+                ws[cellRef].s = {
+                  fill: { fgColor: { rgb: "E6F4EA" } }, 
+                  font: { bold: R === 0 },
+                  numFmt: '#,##0.000'
+                };
+              }
+            }
           }
         }
-      }
 
-      // Estilo amarillo para la columna de fecha activa (Filtro)
-      let colFiltroIndex = -1;
-      if (filtros.filtroFecha === 'fecha_emision') colFiltroIndex = 8;
-      else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 9;
-      else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 4;
+        let colFiltroIndex = -1;
+        if (filtros.filtroFecha === 'fecha_emision') colFiltroIndex = 7;
+        else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 8;
+        else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 9;
 
-      if (colFiltroIndex !== -1) {
-        for (let R = 0; R < totalRows; R++) {
-          const cellRef = XLSX.utils.encode_cell({ r: R, c: colFiltroIndex });
-          if (wsResumen[cellRef]) {
-            if (!wsResumen[cellRef].s) wsResumen[cellRef].s = {};
-            wsResumen[cellRef].s = {
-              ...wsResumen[cellRef].s,
-              fill: { fgColor: { rgb: "FFF2CC" } }, // Amarillo sutil
-              font: { bold: R === 0 || wsResumen[cellRef].s.font?.bold }
-            };
+        if (colFiltroIndex !== -1) {
+          for (let R = 0; R < totalRows; R++) {
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: colFiltroIndex });
+            if (ws[cellRef]) {
+              if (!ws[cellRef].s) ws[cellRef].s = {};
+              ws[cellRef].s = {
+                ...ws[cellRef].s,
+                fill: { fgColor: { rgb: "FFF2CC" } }, 
+                font: { bold: R === 0 || ws[cellRef].s.font?.bold }
+              };
+            }
           }
         }
-      }
 
-      XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+        XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+      };
+
+      const dataSoles = dataFiltrada.filter(item => item.moneda === 'PEN');
+      const dataUSD = dataFiltrada.filter(item => item.moneda === 'USD');
+
+      const datosSoles = dataSoles.map(item => mapBaseItem(item, false));
+      const datosUSD = dataUSD.map(item => mapBaseItem(item, true));
+      const datosUnificados = dataFiltrada.map(item => mapBaseItem(item, true));
+
+      crearHojaResumen(datosSoles, 'Resumen Soles', false);
+      crearHojaResumen(datosUSD, 'Resumen USD', true);
+      crearHojaResumen(datosUnificados, 'Resumen Unificado', true);
 
       const productosAgrupados = {
         'Factura PEN': {}, 'Factura USD': {},

@@ -332,6 +332,8 @@ function OrdenesVenta() {
     setFiltroEstadoPago([]);
     setFiltroVerificacion([]);
     setFiltroTipoComprobante([]);
+    setFiltroEstadoSunat([]);
+    setFiltroVendedor([]);
     setFechaInicio('');
     setFechaFin('');
     setBusqueda('');

@@ -373,7 +373,7 @@ export const getReporteVentas = async (req, res) => {
 
 export const getReporteProductoDespachos = async (req, res) => {
     try {
-        const { idProducto, fechaInicio, fechaFin, idCliente, estados } = req.query;
+        const { idProducto, fechaInicio, fechaFin, idCliente, estados, tipoFecha } = req.query;
         if (!idProducto || !fechaInicio || !fechaFin) {
             return res.status(400).json({ success: false, error: 'Faltan parámetros: idProducto, fechaInicio y fechaFin son requeridos' });
         }
@@ -382,6 +382,8 @@ export const getReporteProductoDespachos = async (req, res) => {
         if (estados) {
             listaEstados = Array.isArray(estados) ? estados : estados.split(',');
         }
+
+        const campoFechaFiltro = tipoFecha === 'despacho' ? 's.fecha_movimiento' : 'ov.fecha_emision';
 
         let sql = `
             SELECT 
@@ -407,7 +409,7 @@ export const getReporteProductoDespachos = async (req, res) => {
             LEFT JOIN salidas s ON ov.id_salida = s.id_salida
             WHERE dov.id_producto = ? 
               AND dov.cantidad_despachada > 0 
-              AND DATE(ov.fecha_emision) BETWEEN ? AND ?
+              AND DATE(${campoFechaFiltro}) BETWEEN ? AND ?
               AND ov.estado IN (?)
               AND (s.id_salida IS NULL OR (s.estado != 'Cancelada' AND s.estado != 'Anulado'))
         `;

@@ -735,9 +735,9 @@ const ReporteVentas = () => {
                   <input type="date" className="form-input text-xs font-bold bg-carbon-mid" style={{ cursor: 'text', color: '#fff' }} value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})} />
                 </div>
               </div>
-              <div className="form-group mb-0 relative md:col-span-2" ref={wrapperRef}>
+              <div className="form-group mb-0 relative md:col-span-2" ref={wrapperRef} style={{ zIndex: 50 }}>
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Cliente</label>
-                <div className="search-input-wrapper">
+                <div className="search-input-wrapper relative">
                   <Search className="search-icon text-primary" size={14} />
                   <input type="text" placeholder="Buscar cliente por nombre o RUC..." className="form-input search-input text-xs font-bold bg-carbon-mid" 
                     style={{ cursor: 'text', color: '#fff' }}
@@ -749,9 +749,9 @@ const ReporteVentas = () => {
                   )}
                 </div>
                 {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                  <ul className="absolute z-[100] w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto" style={{ backgroundColor: '#111', top: '100%' }}>
+                  <ul className="absolute z-[9999] w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto" style={{ backgroundColor: '#1a1a1a', top: '100%' }}>
                     {clientesSugeridos.map(cliente => (
-                      <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-xs border-b border-steel/20 last:border-0 hover:bg-white/5 transition-colors">
+                      <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-xs border-b border-steel/20 last:border-0 hover:bg-white/10 transition-colors relative z-[10000]">
                         <div className="font-bold text-mist">{cliente.razon_social}</div>
                         <div className="text-[10px] text-wire font-mono">RUC: {cliente.ruc}</div>
                       </li>

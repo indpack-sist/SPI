@@ -138,7 +138,7 @@ const ReporteDeudasClientes = () => {
         }
 
         if (ordenesFiltradas.length > 0) {
-            setDetalleExpandido({ grupoKey: keyGrupo, titulo: subTitulo, data: ordenesFiltradas });
+            setDetalleExpandido({ grupoKey: keyGrupo, chartType: tipoGrafico, titulo: subTitulo, data: ordenesFiltradas });
         }
     };
 
@@ -227,153 +227,129 @@ const ReporteDeudasClientes = () => {
     );
 
     const renderGrupoGraficos = (keyGrupo, tituloBase, color, moneda) => {
-        const data = reporteData.resumen[keyGrupo];
-        if (!data || parseFloat(data.total) <= 0) return null;
-        const tituloTop = filtros.idCliente ? `Distribución de Deuda: ${busquedaCliente}` : "Top 5 Deudores Críticos";
-        const isExpanded = detalleExpandido.grupoKey === keyGrupo;
+    const data = reporteData.resumen[keyGrupo];
+    if (!data || parseFloat(data.total) <= 0) return null;
+    const tituloTop = filtros.idCliente ? `Distribución de Deuda: ${busquedaCliente}` : "Top 5 Deudores Críticos";
+    const isExpanded = detalleExpandido.grupoKey === keyGrupo;
 
-        const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
+    const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-        const handleChartClick = (data, tipo, keyG, tituloG) => {
-            if (!data) return;
-            // Si el click viene directamente de la Barra (tiene payload interno o es el propio dato)
-            const payloadReal = data.payload || (data.activePayload ? data.activePayload[0].payload : data);
-            if (payloadReal && payloadReal.name) {
-                handleDrillDown(payloadReal, tipo, keyG, tituloG);
+    const CustomTick = (props) => {
+        const { x, y, payload } = props;
+        if (!payload || !payload.value) return null;
+        const words = payload.value.split(' ');
+        let lines = [];
+        let currentLine = '';
+        words.forEach(word => {
+            if ((currentLine + word).length > 12) {
+                if (currentLine) lines.push(currentLine);
+                currentLine = word + ' ';
+            } else {
+                currentLine += word + ' ';
             }
-        };
-
-        const CustomTick = (props) => {
-            const { x, y, payload } = props;
-            if (!payload || !payload.value) return null;
-            
-            const words = payload.value.split(' ');
-            let lines = [];
-            let currentLine = '';
-            
-            words.forEach(word => {
-                if ((currentLine + word).length > 12) {
-                    if (currentLine) lines.push(currentLine);
-                    currentLine = word + ' ';
-                } else {
-                    currentLine += word + ' ';
-                }
-            });
-            if (currentLine) lines.push(currentLine.trim());
-
-            return (
-                <g transform={`translate(${x},${y})`}>
-                    {lines.map((line, index) => (
-                        <text 
-                            key={index}
-                            x={0} 
-                            y={12 + index * 12} 
-                            textAnchor="middle" 
-                            fill="#fff" 
-                            fontSize={10} 
-                            fontWeight="bold"
-                        >
-                            {line.length > 15 ? line.substring(0, 13) + '...' : line}
-                        </text>
-                    ))}
-                </g>
-            );
-        };
-
+        });
+        if (currentLine) lines.push(currentLine.trim());
         return (
-            <div className="space-y-6 mt-12 pt-8 border-t border-white/10" key={keyGrupo}>
-                <div className="flex items-center justify-center gap-3 mb-4">
-                    <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/20"></div>
-                    <h2 className="text-sm font-black text-white uppercase tracking-[0.4em] text-center px-8 py-3 bg-white/5 rounded-full border border-white/20 shadow-2xl">
-                        {tituloBase}
-                    </h2>
-                    <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/20"></div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Aging */}
-                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'aging' ? 'ring-2 ring-primary/50' : ''}`}>
-                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
-                            <PieChart size={20} style={{ color }} />
-                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">Antigüedad de Deuda (Aging)</h3>
-                        </div>
-                        <div className="card-body p-6 flex-1">
-                            <div style={{ width: '100%', height: 320 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }} onClick={(e) => handleChartClick(e, 'aging', keyGrupo, tituloBase)}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
-                                        <XAxis type="number" hide />
-                                        <YAxis 
-                                            dataKey="name" 
-                                            type="category" 
-                                            stroke="#fff" 
-                                            fontSize={13} 
-                                            width={100} 
-                                            tick={{ fontWeight: '900', fill: '#fff' }} 
-                                        />
-                                        <Tooltip 
-                                            cursor={{ fill: 'rgba(255,255,255,0.08)' }} 
-                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }} 
-                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
-                                            formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`} 
-                                        />
-                                        <Bar dataKey="monto" radius={[0, 6, 6, 0]} cursor="pointer">
-                                            {data.aging.map((e, i) => (
-                                                <Cell key={`cell-${i}`} fill={e.color} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                        {isExpanded && detalleExpandido.chartType === 'aging' && renderTablaAuditoria()}
-                    </div>
-
-                    {/* Top Deudores */}
-                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'deudores' ? 'ring-2 ring-primary/50' : ''}`}>
-                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
-                            <TrendingUp size={20} style={{ color }} />
-                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">{tituloTop}</h3>
-                        </div>
-                        <div className="card-body p-6 flex-1">
-                            <div style={{ width: '100%', height: 320 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.topDeudores} margin={{ bottom: 80, top: 10, right: 30 }} onClick={(e) => handleChartClick(e, 'deudores', keyGrupo, tituloBase)}>
-                                        <XAxis 
-                                            dataKey="name" 
-                                            stroke="#fff" 
-                                            interval={0} 
-                                            height={90} 
-                                            tick={<CustomTick />}
-                                        />
-                                        <YAxis 
-                                            stroke="#aaa" 
-                                            fontSize={11} 
-                                            tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v/1000)}k`} 
-                                            tick={{ fontWeight: 'bold' }}
-                                        />
-                                        <Tooltip 
-                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }} 
-                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
-                                            formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`} 
-                                        />
-                                        <Bar dataKey="deuda" radius={[6, 6, 0, 0]} cursor="pointer">
-                                            {data.topDeudores.map((e, i) => (
-                                                <Cell key={`cell-${i}`} fill={DEUDORES_COLORS[i % DEUDORES_COLORS.length]} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                        {isExpanded && detalleExpandido.chartType === 'deudores' && renderTablaAuditoria()}
-                    </div>
-                </div>
-            </div>
+            <g transform={`translate(${x},${y})`}>
+                {lines.map((line, index) => (
+                    <text key={index} x={0} y={12 + index * 12} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">
+                        {line.length > 15 ? line.substring(0, 13) + '...' : line}
+                    </text>
+                ))}
+            </g>
         );
     };
+
+    return (
+        <div className="space-y-6 mt-12 pt-8 border-t border-white/10" key={keyGrupo}>
+            <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/20"></div>
+                <h2 className="text-sm font-black text-white uppercase tracking-[0.4em] text-center px-8 py-3 bg-white/5 rounded-full border border-white/20 shadow-2xl">
+                    {tituloBase}
+                </h2>
+                <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/20"></div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Aging */}
+                <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'aging' ? 'ring-2 ring-primary/50' : ''}`}>
+                    <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
+                        <PieChart size={20} style={{ color }} />
+                        <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">Antigüedad de Deuda (Aging)</h3>
+                    </div>
+                    <div className="card-body p-6 flex-1">
+                        <div style={{ width: '100%', height: 320 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                {/* ✅ Sin onClick en BarChart */}
+                                <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
+                                    <XAxis type="number" hide />
+                                    <YAxis dataKey="name" type="category" stroke="#fff" fontSize={13} width={100} tick={{ fontWeight: '900', fill: '#fff' }} />
+                                    <Tooltip
+                                        cursor={{ fill: 'rgba(255,255,255,0.08)' }}
+                                        contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
+                                        itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
+                                        labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
+                                        formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
+                                    />
+                                    {/* ✅ onClick movido aquí, datos llegan directamente */}
+                                    <Bar
+                                        dataKey="monto"
+                                        radius={[0, 6, 6, 0]}
+                                        cursor="pointer"
+                                        onClick={(barData) => handleDrillDown(barData, 'aging', keyGrupo, tituloBase)}
+                                    >
+                                        {data.aging.map((e, i) => (
+                                            <Cell key={`cell-${i}`} fill={e.color} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    {isExpanded && detalleExpandido.chartType === 'aging' && renderTablaAuditoria()}
+                </div>
+
+                {/* Top Deudores */}
+                <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'deudores' ? 'ring-2 ring-primary/50' : ''}`}>
+                    <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
+                        <TrendingUp size={20} style={{ color }} />
+                        <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">{tituloTop}</h3>
+                    </div>
+                    <div className="card-body p-6 flex-1">
+                        <div style={{ width: '100%', height: 320 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                {/* ✅ Sin onClick en BarChart */}
+                                <BarChart data={data.topDeudores} margin={{ bottom: 80, top: 10, right: 30 }}>
+                                    <XAxis dataKey="name" stroke="#fff" interval={0} height={90} tick={<CustomTick />} />
+                                    <YAxis stroke="#aaa" fontSize={11} tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v / 1000)}k`} tick={{ fontWeight: 'bold' }} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
+                                        itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
+                                        labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
+                                        formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
+                                    />
+                                    {/* ✅ onClick movido aquí */}
+                                    <Bar
+                                        dataKey="deuda"
+                                        radius={[6, 6, 0, 0]}
+                                        cursor="pointer"
+                                        onClick={(barData) => handleDrillDown(barData, 'deudores', keyGrupo, tituloBase)}
+                                    >
+                                        {data.topDeudores.map((e, i) => (
+                                            <Cell key={`cell-${i}`} fill={DEUDORES_COLORS[i % DEUDORES_COLORS.length]} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    {isExpanded && detalleExpandido.chartType === 'deudores' && renderTablaAuditoria()}
+                </div>
+            </div>
+        </div>
+    );
+};
 
     return (
         <div className="p-4 md:p-6 page-reporte-cuentas bg-carbon text-mist min-h-screen">

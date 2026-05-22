@@ -218,12 +218,14 @@ const ReporteProductoDespachos = () => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
             return (
-                <div className="p-3 rounded shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '1px solid #444', color: '#fff', zIndex: 1000, position: 'relative' }}>
-                    <p className="font-bold text-sm mb-1">{data.fecha}</p>
-                    <p className="text-primary text-xs font-bold mb-2">Orden: {data.orden}</p>
-                    <p className="text-mist text-xs mb-1"><span className="text-wire font-bold">Cliente:</span> {data.cliente}</p>
-                    <p className="text-mist text-xs mb-1"><span className="text-wire font-bold">Cantidad:</span> {data.cantidad}</p>
-                    <p className="text-mist text-xs"><span className="text-wire font-bold">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}</p>
+                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '2px solid #444', color: '#fff', zIndex: 1000, position: 'relative', minWidth: '250px' }}>
+                    <p className="font-bold text-lg mb-2" style={{ color: '#fff', borderBottom: '1px solid #333', paddingBottom: '8px' }}>{data.fecha}</p>
+                    <p className="text-primary text-sm font-black mb-3 uppercase tracking-wider">Orden: {data.orden}</p>
+                    <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cliente:</span> {data.cliente}</p>
+                    <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cantidad:</span> {data.cantidad}</p>
+                    <p className="text-mist text-base font-bold mt-2" style={{ color: '#e8b84b' }}>
+                        <span className="text-wire font-bold mr-1">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}
+                    </p>
                 </div>
             );
         }
@@ -238,7 +240,7 @@ const ReporteProductoDespachos = () => {
         const esMuyDenso = cantidadPuntos > 30;
         const esDenso = cantidadPuntos > 15;
         
-        // Tamaños dinámicos escalados (triplicados/aumentados)
+        // Tamaños dinámicos escalados
         const fontSizeEjes = esMuyDenso ? 12 : esDenso ? 14 : 16;
         const radioPunto = esMuyDenso ? 4 : esDenso ? 5 : 7;
         const strokeLinea = esMuyDenso ? 2.5 : esDenso ? 3.5 : 4.5;
@@ -247,7 +249,7 @@ const ReporteProductoDespachos = () => {
         const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 8) : esDenso ? 1 : 0;
 
         return (
-            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden" style={{ display: 'flex', flexDirection: 'column', height: '900px' }}>
+            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden" style={{ display: 'flex', flexDirection: 'column', height: '700px' }}>
                 <div className="card-header border-b border-steel/30 px-6 py-5 flex flex-col items-center justify-center gap-1">
                     <TrendingUp size={28} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
                     <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] text-center">{titulo}</h3>

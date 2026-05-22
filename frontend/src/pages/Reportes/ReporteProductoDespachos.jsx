@@ -25,9 +25,13 @@ const particionarDatosGrafico = (detalle) => {
         const punto = {
             idUnico: `${fechaFormateada}-${item.numero_orden}-${index}`, // ID unico para XAxis
             fecha: fechaFormateada,
+            fechaDespacho: item.fecha_despacho_real,
             precio: parseFloat(item.precio_unitario),
             cliente: item.cliente,
             cantidad: parseFloat(item.cantidad_despachada),
+            cantidadTotal: parseFloat(item.cantidad_total || item.cantidad_despachada),
+            cantidadPendiente: Math.max(0, parseFloat(item.cantidad_total || 0) - parseFloat(item.cantidad_despachada || 0)),
+            estado: item.estado,
             moneda: item.moneda,
             orden: item.numero_orden
         };
@@ -218,12 +222,39 @@ const ReporteProductoDespachos = () => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
             return (
-                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '2px solid #444', color: '#fff', zIndex: 1000, position: 'relative', minWidth: '250px' }}>
-                    <p className="font-bold text-lg mb-2" style={{ color: '#fff', borderBottom: '1px solid #333', paddingBottom: '8px' }}>{data.fecha}</p>
-                    <p className="text-primary text-sm font-black mb-3 uppercase tracking-wider">Orden: {data.orden}</p>
+                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '2px solid #444', color: '#fff', zIndex: 1000, position: 'relative', minWidth: '280px' }}>
+                    <div className="flex justify-between items-start mb-2 border-b border-steel/30 pb-2">
+                        <p className="font-bold text-lg" style={{ color: '#fff' }}>{data.fecha}</p>
+                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded ${
+                            data.estado === 'Entregada' ? 'bg-success/20 text-success border border-success/30' :
+                            data.estado === 'Despacho Parcial' ? 'bg-warning/20 text-warning border border-warning/30' :
+                            'bg-primary/20 text-primary border border-primary/30'
+                        }`}>
+                            {data.estado}
+                        </span>
+                    </div>
+                    
+                    <p className="text-primary text-sm font-black mb-1 uppercase tracking-wider">Orden: {data.orden}</p>
+                    <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
+                        Despacho: {data.fechaDespacho ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') : 'Pendiente'}
+                    </p>
+                    
                     <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cliente:</span> {data.cliente}</p>
-                    <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cantidad:</span> {data.cantidad}</p>
-                    <p className="text-mist text-base font-bold mt-2" style={{ color: '#e8b84b' }}>
+                    
+                    <div className="grid grid-cols-2 gap-2 mb-4 bg-carbon/50 p-2 rounded border border-steel/10">
+                        <div>
+                            <p className="text-[10px] text-wire uppercase font-black">Despachado</p>
+                            <p className="text-sm font-black text-white">{data.cantidad}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-wire uppercase font-black">Pendiente</p>
+                            <p className={`text-sm font-black ${data.cantidadPendiente > 0 ? 'text-warning' : 'text-success'}`}>
+                                {data.cantidadPendiente}
+                            </p>
+                        </div>
+                    </div>
+
+                    <p className="text-mist text-base font-bold" style={{ color: '#e8b84b' }}>
                         <span className="text-wire font-bold mr-1">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}
                     </p>
                 </div>
@@ -495,12 +526,15 @@ const ReporteProductoDespachos = () => {
                                     <thead>
                                         <tr>
                                             <th>Emisión</th>
+                                            <th>Despacho</th>
                                             <th>N° Orden</th>
                                             <th>Documento</th>
                                             <th>Cliente</th>
-                                            <th className="text-right">Cant.</th>
+                                            <th className="text-right">Cant. Solicitada</th>
+                                            <th className="text-right">Cant. Despachada</th>
+                                            <th className="text-right">Cant. Pendiente</th>
                                             <th className="text-right">Precio Unit.</th>
-                                            <th className="text-right">Subtotal</th>
+                                            <th className="text-right">Subtotal Desp.</th>
                                             <th className="text-center">Estado</th>
                                         </tr>
                                     </thead>
@@ -510,10 +544,16 @@ const ReporteProductoDespachos = () => {
                                                 const tipoDoc = String(row.tipo_comprobante || '').trim() || 'Sin Comprobante';
                                                 const esFactura = tipoDoc.includes('Factura');
                                                 const esNV = tipoDoc.includes('Nota de Venta');
+                                                const cantSolicitada = parseFloat(row.cantidad_total || row.cantidad_despachada);
+                                                const cantDespachada = parseFloat(row.cantidad_despachada);
+                                                const cantPendiente = Math.max(0, cantSolicitada - cantDespachada);
 
                                                 return (
                                                     <tr key={idx} className="transition-colors">
                                                         <td className="font-medium">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</td>
+                                                        <td className="font-medium text-wire">
+                                                            {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : '-'}
+                                                        </td>
                                                         <td className="font-mono font-bold">
                                                             <Link 
                                                                 to={`/ventas/ordenes/${row.id_orden_venta}`} 
@@ -533,9 +573,13 @@ const ReporteProductoDespachos = () => {
                                                                 {tipoDoc}
                                                             </span>
                                                         </td>
-                                                        <td className="truncate max-w-[250px] font-medium" title={row.cliente}>{row.cliente}</td>
-                                                        <td className="text-right font-black text-white">{formatearNumero(row.cantidad_despachada)}</td>
-                                                        <td className="text-right font-mono text-mist">
+                                                        <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
+                                                        <td className="text-right font-medium text-mist">{formatearNumero(cantSolicitada)}</td>
+                                                        <td className="text-right font-black text-white">{formatearNumero(cantDespachada)}</td>
+                                                        <td className={`text-right font-black ${cantPendiente > 0 ? 'text-warning' : 'text-success'}`}>
+                                                            {formatearNumero(cantPendiente)}
+                                                        </td>
+                                                        <td className="text-right font-mono text-mist text-[11px]">
                                                             <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>
                                                             {formatearNumero(row.precio_unitario)}
                                                         </td>
@@ -544,10 +588,10 @@ const ReporteProductoDespachos = () => {
                                                             {formatearNumero(row.subtotal_item)}
                                                         </td>
                                                         <td className="text-center">
-                                                            <span className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-black rounded ${
-                                                                row.estado === 'Entregada' 
-                                                                    ? 'bg-success/10 text-success border border-success/20' 
-                                                                    : 'bg-warning/10 text-warning border border-warning/20'
+                                                            <span className={`px-2.5 py-1 text-[9px] uppercase tracking-widest font-black rounded border ${
+                                                                row.estado === 'Entregada' ? 'bg-success/10 text-success border-success/20' :
+                                                                row.estado === 'Despacho Parcial' ? 'bg-warning/10 text-warning border-warning/20' :
+                                                                'bg-primary/10 text-primary border-primary/20'
                                                             }`}>
                                                                 {row.estado}
                                                             </span>
@@ -557,7 +601,7 @@ const ReporteProductoDespachos = () => {
                                             })
                                         ) : (
                                             <tr>
-                                                <td colSpan="8" className="text-center py-12 text-wire text-sm uppercase tracking-widest font-bold">
+                                                <td colSpan="11" className="text-center py-12 text-wire text-sm uppercase tracking-widest font-bold">
                                                     No se encontraron despachos.
                                                 </td>
                                             </tr>

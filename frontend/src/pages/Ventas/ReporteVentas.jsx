@@ -42,7 +42,9 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleToggle = (value) => {
+  const handleToggle = (e, value) => {
+    e.preventDefault();
+    e.stopPropagation();
     const newValues = selectedValues.includes(value)
       ? selectedValues.filter(v => v !== value)
       : [...selectedValues, value];
@@ -50,10 +52,10 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
   };
 
   return (
-    <div className="form-group mb-0 relative" ref={containerRef}>
+    <div className="form-group mb-0 relative" ref={containerRef} style={{ zIndex: isOpen ? 100 : 10 }}>
       <label className="form-label uppercase text-[10px] text-muted font-bold tracking-wider mb-1 block">{label}</label>
       <div 
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
         className={`form-input flex justify-between items-center cursor-pointer min-h-[38px] transition-all ${selectedValues.length > 0 ? 'border-primary shadow-sm bg-primary/5' : 'bg-carbon-light'}`}
       >
         <span className="text-xs font-medium truncate pr-2">
@@ -65,21 +67,16 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
       </div>
 
       {isOpen && (
-        <div className="absolute z-[100] mt-1 w-64 bg-carbon-mid border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200">
+        <div className="absolute left-0 mt-1 w-64 border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
+             style={{ backgroundColor: '#1a1a1a', zIndex: 1000 }}>
           <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
             {options.map((opt) => (
-              <label 
+              <div 
                 key={opt.value} 
-                className="flex items-center px-3 py-2 hover:bg-carbon-light rounded-md cursor-pointer group transition-colors"
-                onClick={(e) => e.stopPropagation()}
+                className="flex items-center px-3 py-2 hover:bg-white/5 rounded-md cursor-pointer group transition-colors"
+                onClick={(e) => handleToggle(e, opt.value)}
               >
-                <div className="relative flex items-center">
-                  <input
-                    type="checkbox"
-                    className="hidden"
-                    checked={selectedValues.includes(opt.value)}
-                    onChange={() => handleToggle(opt.value)}
-                  />
+                <div className="relative flex items-center pointer-events-none">
                   <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
                     selectedValues.includes(opt.value) 
                     ? 'bg-primary border-primary' 
@@ -88,19 +85,19 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
                     {selectedValues.includes(opt.value) && <CheckCircle size={10} className="text-carbon font-bold" />}
                   </div>
                 </div>
-                <span className={`ml-3 text-xs font-medium transition-colors ${
+                <span className={`ml-3 text-xs font-medium transition-colors pointer-events-none ${
                   selectedValues.includes(opt.value) ? 'text-primary' : 'text-mist'
                 }`}>
                   {opt.label}
                 </span>
-              </label>
+              </div>
             ))}
           </div>
           {selectedValues.length > 0 && (
             <div className="border-t border-steel/20 mt-2 pt-2 px-3">
               <button 
-                onClick={(e) => { e.stopPropagation(); onChange([]); }}
-                className="text-[10px] uppercase font-black text-danger hover:text-danger/80 tracking-widest flex items-center gap-1"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange([]); }}
+                className="text-[10px] uppercase font-black text-danger hover:text-danger/80 tracking-widest flex items-center gap-1 w-full"
               >
                 <X size={10} /> Limpiar Selección
               </button>

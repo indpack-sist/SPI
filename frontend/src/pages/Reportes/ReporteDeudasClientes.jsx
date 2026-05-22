@@ -34,6 +34,7 @@ const ReporteDeudasClientes = () => {
 
     const [detalleExpandido, setDetalleExpandido] = useState({
         grupoKey: null, 
+        chartType: null,
         titulo: '',
         data: []
     });
@@ -141,11 +142,132 @@ const ReporteDeudasClientes = () => {
         }
     };
 
+    const renderTablaAuditoria = () => (
+        <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-6 border-t-2 border-primary/40 bg-carbon-dark rounded-b-2xl shadow-inner overflow-hidden col-span-1 lg:col-span-2" style={{ borderColor: 'rgba(232, 184, 75, 0.4)' }}>
+            <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-carbon-light/50">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/20 rounded-lg shadow-inner">
+                        <Zap size={20} className="text-primary" />
+                    </div>
+                    <div>
+                        <h3 className="text-xs font-black text-white uppercase tracking-widest">{detalleExpandido.titulo}</h3>
+                        <p className="text-[9px] text-wire font-bold uppercase tracking-[0.2em]">Auditoría de documentos fuente</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setDetalleExpandido({ grupoKey: null, chartType: null, titulo: '', data: [] })}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#2a2a2a] hover:bg-red-500/30 border border-white/10 hover:border-red-500/50 text-wire hover:text-red-500 transition-all shadow-lg"
+                    style={{ cursor: 'pointer' }}
+                >
+                    <X size={18} />
+                </button>
+            </div>
+            
+            <div className="overflow-x-auto custom-scrollbar max-h-[400px]">
+                <table className="table-gerencial w-full text-left border-collapse whitespace-nowrap">
+                    <thead className="sticky top-0 z-10">
+                        <tr>
+                            <th className="pl-6 bg-carbon-light">Orden</th>
+                            <th className="bg-carbon-light">Emisión / Venc.</th>
+                            <th className="bg-carbon-light">Cliente</th>
+                            <th className="text-right bg-carbon-light">Total Real</th>
+                            <th className="text-right bg-carbon-light">Saldo Pendiente</th>
+                            <th className="text-center bg-carbon-light">Mora</th>
+                            <th className="text-right pr-6 bg-carbon-light">Auditar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {detalleExpandido.data.map(item => {
+                            const dias = parseInt(item.dias_vencidos) || 0;
+                            const esVencido = dias > 0;
+                            let badge = "bg-green-500/15 text-green-400 border-green-500/30";
+                            if (dias > 60) badge = "bg-red-600/15 text-red-400 border-red-600/30";
+                            else if (dias > 30) badge = "bg-orange-500/15 text-orange-400 border-orange-500/30";
+                            else if (dias > 0) badge = "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
+                            
+                            return (
+                            <tr key={item.id_orden_venta} className="hover:bg-white/[0.04] border-b border-white/5 transition-colors">
+                                <td className="pl-6 py-3">
+                                    <div className="font-mono font-bold text-primary text-xs">{item.numero_orden}</div>
+                                    <div className="text-[9px] text-wire uppercase font-black tracking-tight">{item.tipo_comprobante}</div>
+                                </td>
+                                <td className="py-3">
+                                    <div className="text-xs text-white">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</div>
+                                    <div className={`text-[9px] font-black ${esVencido ? 'text-red-400' : 'text-wire'}`}>Vence: {new Date(item.fecha_vencimiento).toLocaleDateString('es-PE')}</div>
+                                </td>
+                                <td className="text-xs text-mist font-bold truncate max-w-[200px] py-3" title={item.cliente}>{item.cliente}</td>
+                                <td className="text-right font-mono font-bold text-wire text-xs py-3">{item.moneda} {formatearNum(item.total_real)}</td>
+                                <td className="text-right font-mono py-3">
+                                    <div className="font-black text-white text-xs">{item.moneda} {formatearNum(item.deuda_pendiente)}</div>
+                                    <div className="text-[9px] text-green-500 font-black">Pagado: {parseFloat(item.monto_pagado).toFixed(2)}</div>
+                                </td>
+                                <td className="text-center py-3">
+                                    <span className={`px-2 py-0.5 text-[9px] font-black border rounded-full ${badge}`}>
+                                        {esVencido ? `${dias} DÍAS MORA` : 'AL DÍA'}
+                                    </span>
+                                </td>
+                                <td className="text-right pr-6 py-3">
+                                    <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-1.5 bg-[#222] border border-white/10 hover:border-primary/50 hover:bg-primary/20 text-primary transition-all inline-flex rounded-lg shadow-xl">
+                                        <ExternalLink size={16} />
+                                    </Link>
+                                </td>
+                            </tr>
+                        )})}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="px-6 py-4 bg-carbon-light/40 border-t border-white/10 flex justify-between items-center">
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Resumen de Selección</span>
+                    <span className="text-[8px] text-wire font-bold uppercase tracking-[0.1em]">{detalleExpandido.data.length} registros componen este monto</span>
+                </div>
+            </div>
+        </div>
+    );
+
     const renderGrupoGraficos = (keyGrupo, tituloBase, color, moneda) => {
         const data = reporteData.resumen[keyGrupo];
         if (!data || parseFloat(data.total) <= 0) return null;
         const tituloTop = filtros.idCliente ? `Distribución de Deuda: ${busquedaCliente}` : "Top 5 Deudores Críticos";
         const isExpanded = detalleExpandido.grupoKey === keyGrupo;
+
+        const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
+
+        const CustomTick = ({ x, y, payload }) => {
+            const words = payload.value.split(' ');
+            let lines = [];
+            let currentLine = '';
+            
+            words.forEach(word => {
+                if ((currentLine + word).length > 12) {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine) lines.push(currentLine.trim());
+
+            return (
+                <g transform={`translate(${x},${y})`}>
+                    {lines.map((line, index) => (
+                        <text 
+                            key={index}
+                            x={0} 
+                            y={12 + index * 12} 
+                            dy={16} 
+                            textAnchor="middle" 
+                            fill="#fff" 
+                            fontSize={10} 
+                            fontWeight="bold"
+                        >
+                            {line.length > 15 ? line.substring(0, 13) + '...' : line}
+                        </text>
+                    ))}
+                </g>
+            );
+        };
 
         return (
             <div className="space-y-6 mt-12 pt-8 border-t border-white/10" key={keyGrupo}>
@@ -159,12 +281,12 @@ const ReporteDeudasClientes = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Aging */}
-                    <div className="card border border-white/10 bg-carbon-mid overflow-hidden shadow-2xl">
+                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'aging' ? 'ring-2 ring-primary/50' : ''}`}>
                         <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
                             <PieChart size={20} style={{ color }} />
                             <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">Antigüedad de Deuda (Aging)</h3>
                         </div>
-                        <div className="card-body p-6">
+                        <div className="card-body p-6 flex-1">
                             <div style={{ width: '100%', height: 320 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
@@ -194,15 +316,16 @@ const ReporteDeudasClientes = () => {
                                 </ResponsiveContainer>
                             </div>
                         </div>
+                        {isExpanded && detalleExpandido.chartType === 'aging' && renderTablaAuditoria()}
                     </div>
 
                     {/* Top Deudores */}
-                    <div className="card border border-white/10 bg-carbon-mid overflow-hidden shadow-2xl">
+                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'deudores' ? 'ring-2 ring-primary/50' : ''}`}>
                         <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
                             <TrendingUp size={20} style={{ color }} />
                             <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">{tituloTop}</h3>
                         </div>
-                        <div className="card-body p-6">
+                        <div className="card-body p-6 flex-1">
                             <div style={{ width: '100%', height: 320 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={data.topDeudores} margin={{ bottom: 50, top: 10, right: 30 }}>
@@ -238,83 +361,9 @@ const ReporteDeudasClientes = () => {
                                 </ResponsiveContainer>
                             </div>
                         </div>
+                        {isExpanded && detalleExpandido.chartType === 'deudores' && renderTablaAuditoria()}
                     </div>
                 </div>
-
-                {isExpanded && (
-                    <div className="animate-in slide-in-from-top-4 fade-in duration-500 mt-8 border-2 border-primary/40 bg-carbon-dark rounded-2xl shadow-2xl overflow-hidden" style={{ borderColor: 'rgba(232, 184, 75, 0.4)' }}>
-                        <div className="px-8 py-5 border-b border-white/10 flex justify-between items-center bg-carbon-light/50">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-primary/20 rounded-xl shadow-inner">
-                                    <Zap size={24} className="text-primary" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">{detalleExpandido.titulo}</h3>
-                                    <p className="text-[10px] text-wire font-bold uppercase tracking-[0.2em]">Auditoría de documentos fuente</p>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => setDetalleExpandido({ grupoKey: null, titulo: '', data: [] })}
-                                className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#2a2a2a] hover:bg-red-500/30 border border-white/10 hover:border-red-500/50 text-wire hover:text-red-500 transition-all shadow-lg"
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <X size={22} />
-                            </button>
-                        </div>
-                        
-                        <div className="overflow-x-auto">
-                            <table className="table-gerencial w-full text-left border-collapse whitespace-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th className="pl-8">Orden</th>
-                                        <th>Emisión</th>
-                                        <th>Cliente</th>
-                                        <th className="text-right">Saldo Pendiente</th>
-                                        <th className="text-center">Mora</th>
-                                        <th className="text-right pr-8">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {detalleExpandido.data.map(item => (
-                                        <tr key={item.id_orden_venta} className="hover:bg-white/[0.04] border-b border-white/5 transition-colors">
-                                            <td className="pl-8 font-mono font-bold text-primary text-sm">{item.numero_orden}</td>
-                                            <td className="text-sm text-white">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</td>
-                                            <td className="text-sm text-mist font-bold truncate max-w-[250px]" title={item.cliente}>{item.cliente}</td>
-                                            <td className="text-right font-mono font-black text-white text-sm">
-                                                <span className="text-wire mr-1 font-normal">{item.moneda}</span>
-                                                {formatearNum(item.deuda_pendiente)}
-                                            </td>
-                                            <td className="text-center">
-                                                <span className={`px-3 py-1 text-[10px] font-black border rounded-full ${
-                                                    parseInt(item.dias_vencidos) > 0 ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'
-                                                }`}>{parseInt(item.dias_vencidos) > 0 ? `${item.dias_vencidos} DÍAS MORA` : 'AL DÍA'}</span>
-                                            </td>
-                                            <td className="text-right pr-8">
-                                                <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-2 bg-[#222] border border-white/10 hover:border-primary/50 hover:bg-primary/20 text-primary transition-all inline-flex rounded-xl shadow-xl">
-                                                    <ExternalLink size={18} />
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div className="px-8 py-6 bg-carbon-light/40 border-t border-white/10 flex justify-between items-center">
-                            <div className="flex flex-col">
-                                <span className="text-[11px] font-black text-white uppercase tracking-widest">Resumen de Auditoría</span>
-                                <span className="text-[9px] text-wire font-bold uppercase tracking-[0.1em]">{detalleExpandido.data.length} registros encontrados</span>
-                            </div>
-                            <button 
-                                onClick={() => setDetalleExpandido({ grupoKey: null, titulo: '', data: [] })}
-                                className="px-8 py-3 bg-[#e8b84b] hover:bg-[#d4a33a] text-[#1a1a1a] text-[11px] font-black rounded-xl uppercase tracking-[0.2em] transition-all shadow-2xl border-none cursor-pointer active:scale-95"
-                                style={{ backgroundColor: '#e8b84b', color: '#1a1a1a' }}
-                            >
-                                CERRAR AUDITORÍA
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
         );
     };
@@ -474,80 +523,7 @@ const ReporteDeudasClientes = () => {
                         </div>
                     </div>
 
-                    <div className="card shadow-2xl mb-16 border border-white/10">
-                        <div className="card-header border-b border-white/10 py-4 px-6 flex justify-between items-center bg-carbon-light/20">
-                            <h3 className="text-[0.85rem] font-black text-white uppercase tracking-widest flex items-center gap-3">
-                                <FileText size={20} className="text-wire" /> Trazabilidad Detallada de Deuda
-                            </h3>
-                            <div className="flex gap-2">
-                                <span className="text-[10px] font-black px-4 py-1.5 bg-primary/10 text-primary rounded-full uppercase border border-primary/20">
-                                    {reporteData.detalle.length} movimientos
-                                </span>
-                            </div>
-                        </div>
-                        <div className="card-body p-0 overflow-x-auto">
-                            <table className="table-gerencial w-full text-left border-collapse whitespace-nowrap">
-                                <thead>
-                                    <tr>
-                                        <th className="pl-6">Emisión / Venc.</th>
-                                        <th>N° Orden</th>
-                                        <th>Cliente</th>
-                                        <th className="text-right">Total Real</th>
-                                        <th className="text-right">Pendiente</th>
-                                        <th className="text-center">Estado / Mora</th>
-                                        <th className="text-right pr-6">Auditar</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {reporteData.detalle.length > 0 ? (
-                                        reporteData.detalle.map((row) => {
-                                            const dias = parseInt(row.dias_vencidos);
-                                            const esVencido = dias > 0;
-                                            let badge = "bg-green-500/15 text-green-400 border-green-500/30";
-                                            if (dias > 60) badge = "bg-red-600/15 text-red-400 border-red-600/30";
-                                            else if (dias > 30) badge = "bg-orange-500/15 text-orange-400 border-orange-500/30";
-                                            else if (dias > 0) badge = "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
-                                            return (
-                                                <tr key={row.id_orden_venta} className="hover:bg-white/[0.05] border-b border-white/5 transition-all">
-                                                    <td className="pl-6">
-                                                        <div className="font-black text-white text-xs">{new Date(row.fecha_emision).toLocaleDateString('es-PE')}</div>
-                                                        <div className={`text-[10px] font-black ${esVencido ? 'text-red-400' : 'text-wire'}`}>Vence: {new Date(row.fecha_vencimiento).toLocaleDateString('es-PE')}</div>
-                                                    </td>
-                                                    <td>
-                                                        <div className="font-black text-primary font-mono text-xs">{row.numero_orden}</div>
-                                                        <div className="text-[10px] text-wire uppercase font-black tracking-tight">{row.tipo_comprobante}</div>
-                                                    </td>
-                                                    <td>
-                                                        <div className="font-black text-mist text-xs truncate max-w-[220px]" title={row.cliente}>{row.cliente}</div>
-                                                        <div className="text-[10px] text-wire uppercase font-bold tracking-tighter">{row.estado}</div>
-                                                    </td>
-                                                    <td className="text-right font-mono text-xs font-bold">{row.moneda} {formatearNum(row.total_real)}</td>
-                                                    <td className="text-right font-mono">
-                                                        <div className="font-black text-white text-sm">{row.moneda} {formatearNum(row.deuda_pendiente)}</div>
-                                                        <div className="text-[10px] text-green-500 font-black">Pagado: {parseFloat(row.monto_pagado).toFixed(2)}</div>
-                                                    </td>
-                                                    <td className="text-center">
-                                                        <span className={`px-3 py-1 text-[10px] font-black border rounded-full ${badge}`}>
-                                                            {esVencido ? `${dias} DÍAS MORA` : 'AL DÍA'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="text-right pr-6">
-                                                        <Link to={`/ventas/ordenes/${row.id_orden_venta}`} target="_blank" className="p-2 bg-carbon-mid border border-white/10 hover:border-primary/50 hover:bg-primary/10 text-primary transition-all inline-flex rounded-xl shadow-lg group">
-                                                            <ExternalLink size={18} className="group-hover:scale-110" />
-                                                        </Link>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    ) : (
-                                        <tr><td colSpan="7" className="text-center py-20 text-wire text-sm uppercase font-black tracking-widest italic opacity-50">No hay movimientos pendientes de cobro</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div className="space-y-20 pb-32">
+                    <div className="space-y-20 pb-32 mt-12">
                         {renderGrupoGraficos('facturasPEN', 'Análisis: Facturas (PEN)', '#10B981', 'PEN')}
                         {renderGrupoGraficos('facturasUSD', 'Análisis: Facturas (USD)', '#e8b84b', 'USD')}
                         {renderGrupoGraficos('notasVentaPEN', 'Análisis: N. Venta (PEN)', '#3B82F6', 'PEN')}

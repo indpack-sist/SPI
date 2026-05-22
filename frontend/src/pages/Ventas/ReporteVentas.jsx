@@ -28,6 +28,90 @@ const COLORS_PIE = {
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
+const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleToggle = (value) => {
+    const newValues = selectedValues.includes(value)
+      ? selectedValues.filter(v => v !== value)
+      : [...selectedValues, value];
+    onChange(newValues);
+  };
+
+  return (
+    <div className="form-group mb-0 relative" ref={containerRef}>
+      <label className="form-label uppercase text-[10px] text-muted font-bold tracking-wider mb-1 block">{label}</label>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`form-input flex justify-between items-center cursor-pointer min-h-[38px] transition-all ${selectedValues.length > 0 ? 'border-primary shadow-sm bg-primary/5' : 'bg-carbon-light'}`}
+      >
+        <span className="text-xs font-medium truncate pr-2">
+          {selectedValues.length === 0 ? 'Todos' : 
+           selectedValues.length === 1 ? selectedValues[0] : 
+           `${selectedValues.length} seleccionados`}
+        </span>
+        <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-400'} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-[100] mt-1 w-64 bg-carbon-mid border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200">
+          <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
+            {options.map((opt) => (
+              <label 
+                key={opt.value} 
+                className="flex items-center px-3 py-2 hover:bg-carbon-light rounded-md cursor-pointer group transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={selectedValues.includes(opt.value)}
+                    onChange={() => handleToggle(opt.value)}
+                  />
+                  <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                    selectedValues.includes(opt.value) 
+                    ? 'bg-primary border-primary' 
+                    : 'bg-transparent border-steel group-hover:border-wire'
+                  }`}>
+                    {selectedValues.includes(opt.value) && <CheckCircle size={10} className="text-carbon font-bold" />}
+                  </div>
+                </div>
+                <span className={`ml-3 text-xs font-medium transition-colors ${
+                  selectedValues.includes(opt.value) ? 'text-primary' : 'text-mist'
+                }`}>
+                  {opt.label}
+                </span>
+              </label>
+            ))}
+          </div>
+          {selectedValues.length > 0 && (
+            <div className="border-t border-steel/20 mt-2 pt-2 px-3">
+              <button 
+                onClick={(e) => { e.stopPropagation(); onChange([]); }}
+                className="text-[10px] uppercase font-black text-danger hover:text-danger/80 tracking-widest flex items-center gap-1"
+              >
+                <X size={10} /> Limpiar Selección
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ReporteVentas = () => {
   const [loading, setLoading] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
@@ -58,8 +142,10 @@ const ReporteVentas = () => {
     fechaInicio: primerDiaMes.toISOString().split('T')[0],
     fechaFin: fechaHoy.toISOString().split('T')[0],
     idCliente: '',
-    estadoOrden: '',
-    estadoPago: '',
+    idVendedor: '',
+    estadosOrden: [],
+    estadosPago: [],
+    monedas: [],
     filtroFecha: 'fecha_emision'
   });
 
@@ -229,12 +315,19 @@ const ReporteVentas = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await reportesAPI.getVentas({
+      const params = {
         fechaInicio: filtros.fechaInicio,
         fechaFin: filtros.fechaFin,
         idCliente: filtros.idCliente,
+        idVendedor: filtros.idVendedor,
         filtro_fecha: filtros.filtroFecha
-      });
+      };
+
+      if (filtros.estadosOrden.length > 0) params.estadoOrden = filtros.estadosOrden.join(',');
+      if (filtros.estadosPago.length > 0) params.estadoPago = filtros.estadosPago.join(',');
+      if (filtros.monedas.length > 0) params.moneda = filtros.monedas.join(',');
+
+      const response = await reportesAPI.getVentas(params);
       if (response.data.success) {
         setDataReporte(response.data.data);
         setDataFiltrada(response.data.data.detalle);
@@ -245,6 +338,20 @@ const ReporteVentas = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const limpiarFiltros = () => {
+    setFiltros({
+      fechaInicio: primerDiaMes.toISOString().split('T')[0],
+      fechaFin: fechaHoy.toISOString().split('T')[0],
+      idCliente: '',
+      idVendedor: '',
+      estadosOrden: [],
+      estadosPago: [],
+      monedas: [],
+      filtroFecha: 'fecha_emision'
+    });
+    limpiarCliente();
   };
 
   const descargarPDF = async () => {
@@ -580,47 +687,57 @@ const ReporteVentas = () => {
 
       <div className="card mb-6">
         <div className="card-body">
-          <form onSubmit={generarReporte} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <form onSubmit={generarReporte} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
               <div className="form-group mb-0">
-                <label className="form-label uppercase text-xs text-muted">Filtrar por</label>
-                <select className="form-select" value={filtros.filtroFecha} onChange={(e) => setFiltros({...filtros, filtroFecha: e.target.value})}>
-                  <option value="fecha_emision">Fecha Emision</option>
-                  <option value="fecha_sunat">Fecha Facturado SUNAT</option>
-                </select>
+                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Filtrar por:</label>
+                <div className="flex bg-carbon-light p-1 rounded-lg border border-steel/20 h-[38px] items-center">
+                  {[
+                    { id: 'fecha_emision', label: 'Emisión' },
+                    { id: 'fecha_despacho', label: 'Despacho' },
+                    { id: 'fecha_sunat', label: 'SUNAT' }
+                  ].map(opcion => (
+                    <button 
+                      key={opcion.id}
+                      type="button"
+                      onClick={() => setFiltros({...filtros, filtroFecha: opcion.id})}
+                      className={`flex-1 h-full rounded text-[9px] font-black uppercase tracking-wider transition-all ${filtros.filtroFecha === opcion.id ? 'bg-primary text-carbon shadow-md' : 'text-wire hover:text-mist'}`}
+                    >
+                      {opcion.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+              
               <div className="form-group mb-0">
-                <label className="form-label uppercase text-xs text-muted">Desde</label>
-                <div className="input-with-icon"><Calendar className="icon" size={16} />
-                  <input type="date" className="form-input" value={filtros.fechaInicio} onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})} />
+                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Desde</label>
+                <div className="input-with-icon"><Calendar className="icon text-primary" size={14} />
+                  <input type="date" className="form-input text-xs font-bold" value={filtros.fechaInicio} onChange={(e) => setFiltros({...filtros, fechaInicio: e.target.value})} />
                 </div>
               </div>
               <div className="form-group mb-0">
-                <label className="form-label uppercase text-xs text-muted">Hasta</label>
-                <div className="input-with-icon"><Calendar className="icon" size={16} />
-                  <input type="date" className="form-input" value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})} />
+                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Hasta</label>
+                <div className="input-with-icon"><Calendar className="icon text-primary" size={14} />
+                  <input type="date" className="form-input text-xs font-bold" value={filtros.fechaFin} onChange={(e) => setFiltros({...filtros, fechaFin: e.target.value})} />
                 </div>
               </div>
-              <div className="form-group mb-0 relative" ref={wrapperRef}>
-                <label className="form-label uppercase text-xs text-muted">Cliente</label>
+              <div className="form-group mb-0 relative md:col-span-2" ref={wrapperRef}>
+                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Cliente</label>
                 <div className="search-input-wrapper">
-                  <Search className="search-icon" size={16} />
-                  <input type="text" placeholder="Buscar cliente por nombre o RUC..." className="form-input search-input" value={busquedaCliente}
+                  <Search className="search-icon text-primary" size={14} />
+                  <input type="text" placeholder="Buscar cliente por nombre o RUC..." className="form-input search-input text-xs font-bold" value={busquedaCliente}
                     onChange={(e) => { setBusquedaCliente(e.target.value); if(filtros.idCliente) setFiltros({...filtros, idCliente: ''}); }}
                     onFocus={() => busquedaCliente && setMostrarSugerencias(true)} />
                   {filtros.idCliente && (
-                    <button type="button" onClick={limpiarCliente} className="absolute right-2 top-2.5 text-gray-400 hover:text-red-500"><X size={16} /></button>
+                    <button type="button" onClick={limpiarCliente} className="absolute right-2 top-2.5 text-gray-400 hover:text-red-500"><X size={14} /></button>
                   )}
                 </div>
                 {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                  <ul className="absolute z-50 w-full border border-border rounded-none shadow-lg mt-1 max-h-96 overflow-y-auto" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                  <ul className="absolute z-50 w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto bg-carbon-mid">
                     {clientesSugeridos.map(cliente => (
-                      <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-sm border-b border-border last:border-0"
-                        style={{ color: 'var(--text-primary)' }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--carbon-light)'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                        <div className="font-medium">{cliente.razon_social}</div>
-                        <div className="text-xs text-muted">RUC: {cliente.ruc}</div>
+                      <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-xs border-b border-steel/20 last:border-0 hover:bg-carbon-light transition-colors">
+                        <div className="font-bold text-mist">{cliente.razon_social}</div>
+                        <div className="text-[10px] text-wire font-mono">RUC: {cliente.ruc}</div>
                       </li>
                     ))}
                   </ul>
@@ -628,43 +745,69 @@ const ReporteVentas = () => {
               </div>
             </div>
 
-            <div className="flex justify-between items-end border-t border-gray-200 pt-4">
-              <div className="flex gap-3">
-                <div className="form-group mb-0">
-                  <label className="form-label uppercase text-xs text-muted">Estado Orden</label>
-                  <select className="form-select" value={filtros.estadoOrden} onChange={(e) => setFiltros({...filtros, estadoOrden: e.target.value})}>
-                    <option value="">Todos</option><option value="En Espera">En Espera</option><option value="En Proceso">En Proceso</option>
-                    <option value="Atendido por Produccion">Atendido por Produccion</option><option value="Despacho Parcial">Despacho Parcial</option>
-                    <option value="Despachada">Despachada</option><option value="Entregada">Entregada</option>
-                  </select>
-                </div>
-                <div className="form-group mb-0">
-                  <label className="form-label uppercase text-xs text-muted">Estado Pago</label>
-                  <select className="form-select" value={filtros.estadoPago} onChange={(e) => setFiltros({...filtros, estadoPago: e.target.value})}>
-                    <option value="">Todos</option><option value="Pendiente">Pendiente</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option>
-                  </select>
-                </div>
-                <div className="form-group mb-0">
-                  <label className="form-label uppercase text-xs text-muted">Detalle Excel</label>
-                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                    <input type="checkbox" checked={incluirDetalleExcel} onChange={(e) => setIncluirDetalleExcel(e.target.checked)} className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2" />
-                    <span className="text-sm text-gray-700">Incluir hojas de detalle</span>
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4 items-end border-t border-steel/20 pt-6">
+              <FilterCheckboxGroup 
+                label="Estado Orden" 
+                selectedValues={filtros.estadosOrden} 
+                onChange={(vals) => setFiltros({...filtros, estadosOrden: vals})}
+                options={[
+                  { label: 'En Espera', value: 'En Espera' },
+                  { label: 'En Proceso', value: 'En Proceso' },
+                  { label: 'Atendido por Produccion', value: 'Atendido por Produccion' },
+                  { label: 'Despacho Parcial', value: 'Despacho Parcial' },
+                  { label: 'Despachada', value: 'Despachada' },
+                  { label: 'Entregada', value: 'Entregada' }
+                ]}
+              />
+              <FilterCheckboxGroup 
+                label="Estado Pago" 
+                selectedValues={filtros.estadosPago} 
+                onChange={(vals) => setFiltros({...filtros, estadosPago: vals})}
+                options={[
+                  { label: 'Pendiente', value: 'Pendiente' },
+                  { label: 'Parcial', value: 'Parcial' },
+                  { label: 'Pagado', value: 'Pagado' }
+                ]}
+              />
+              <FilterCheckboxGroup 
+                label="Moneda" 
+                selectedValues={filtros.monedas} 
+                onChange={(vals) => setFiltros({...filtros, monedas: vals})}
+                options={[
+                  { label: 'Soles (PEN)', value: 'PEN' },
+                  { label: 'Dólares (USD)', value: 'USD' }
+                ]}
+              />
+              
+              <div className="flex gap-2">
+                <div className="form-group mb-0 flex-1">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" checked={incluirDetalleExcel} onChange={(e) => setIncluirDetalleExcel(e.target.checked)} className="hidden" />
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${incluirDetalleExcel ? 'bg-success border-success' : 'border-steel group-hover:border-wire'}`}>
+                      {incluirDetalleExcel && <CheckCircle size={10} className="text-carbon" />}
+                    </div>
+                    <span className="text-[10px] font-bold text-wire uppercase tracking-wider">Hojas Excel</span>
                   </label>
                 </div>
-                <div className="form-group mb-0">
-                  <label className="form-label uppercase text-xs text-muted">Detalle PDF</label>
-                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                    <input type="checkbox" checked={incluirDetallePDF} onChange={(e) => setIncluirDetallePDF(e.target.checked)} className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2" />
-                    <span className="text-sm text-gray-700">Incluir detalle ordenes</span>
+                <div className="form-group mb-0 flex-1">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" checked={incluirDetallePDF} onChange={(e) => setIncluirDetallePDF(e.target.checked)} className="hidden" />
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${incluirDetallePDF ? 'bg-danger border-danger' : 'border-steel group-hover:border-wire'}`}>
+                      {incluirDetallePDF && <CheckCircle size={10} className="text-carbon" />}
+                    </div>
+                    <span className="text-[10px] font-bold text-wire uppercase tracking-wider">Detalle PDF</span>
                   </label>
                 </div>
-                <button type="button" onClick={() => { setFiltros({...filtros, estadoOrden: '', estadoPago: '', filtroFecha: 'fecha_emision'}); }} className="btn btn-ghost" title="Limpiar filtros">
-                  <RefreshCw size={16} />
+              </div>
+
+              <div className="flex gap-2">
+                <button type="button" onClick={limpiarFiltros} className="btn btn-outline flex-1 border-steel/30 text-wire hover:bg-carbon-light" title="Limpiar filtros">
+                  <RefreshCw size={16} /> Reiniciar
+                </button>
+                <button type="submit" className="btn btn-primary flex-1 shadow-lg shadow-primary/20" disabled={loading}>
+                  {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />} Buscar
                 </button>
               </div>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? <Loading size="sm" color="white" /> : <Filter size={18} />} Buscar
-              </button>
             </div>
           </form>
         </div>
@@ -791,12 +934,13 @@ const ReporteVentas = () => {
                 <th className="px-4 py-3">Orden</th>
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Vendedor</th>
-                <th className="px-4 py-3">Emision</th>
-                <th className="px-4 py-3">Despacho</th>
+                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Emision</th>
+                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
+                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>SUNAT</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 {convertirUSD && tcVenta && <th className="px-4 py-3 text-right">Total (PEN)</th>}
                 <th className="px-4 py-3 text-center">Estado Pago</th>
-                <th className="px-4 py-3 text-center">Estado</th>
+                <th className="px-4 py-3 text-center">Estado Orden</th>
                 <th className="px-4 py-3 text-center">Logistica</th>
               </tr>
             </thead>
@@ -822,9 +966,12 @@ const ReporteVentas = () => {
                       <div className="text-xs text-muted">{item.ruc}</div>
                     </td>
                     <td className="px-4 py-3 text-muted text-xs truncate w-24">{item.vendedor}</td>
-                    <td className="px-4 py-3 text-muted whitespace-nowrap text-xs">{formatearFecha(item.fecha_emision)}</td>
-                    <td className="px-4 py-3 text-muted whitespace-nowrap text-xs">
+                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>{formatearFecha(item.fecha_emision)}</td>
+                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
                       {item.fecha_despacho ? formatearFecha(item.fecha_despacho) : <span className="text-gray-400 italic">Pendiente</span>}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
+                      {item.fecha_facturacion_sunat ? formatearFecha(item.fecha_facturacion_sunat) : '-'}
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-gray-700">
                       <span className="text-xs text-muted mr-1">{item.moneda}</span>
@@ -842,7 +989,7 @@ const ReporteVentas = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={convertirUSD && tcVenta ? 11 : 10} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={convertirUSD && tcVenta ? 12 : 11} className="px-4 py-12 text-center text-muted">
                     <div className="flex flex-col items-center justify-center">
                       <Search size={32} className="mb-2 opacity-20"/>No se encontraron ventas con los filtros seleccionados.
                     </div>

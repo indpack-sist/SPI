@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../config/api';
 import { Search, Package, Box, User, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const particionarDatosGrafico = (detalle) => {
     const grupos = {
@@ -233,18 +233,28 @@ const ReporteProductoDespachos = () => {
     const renderGrafico = (datos, titulo, colorLinea) => {
         if (!datos || datos.length === 0) return null;
 
-        const anchoPunto = 60;
-        const anchoDinamico = Math.max(datos.length * anchoPunto, 600);
+        // Lógica inteligente basada en la densidad de datos
+        const cantidadPuntos = datos.length;
+        const esMuyDenso = cantidadPuntos > 30;
+        const esDenso = cantidadPuntos > 15;
+        
+        // Tamaños dinámicos
+        const fontSizeEjes = esMuyDenso ? 8 : esDenso ? 9 : 10;
+        const radioPunto = esMuyDenso ? 2 : esDenso ? 3 : 4;
+        const strokeLinea = esMuyDenso ? 1.5 : 2.5;
+        
+        // Intervalo de etiquetas en X para evitar solapamiento
+        const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 10) : esDenso ? 2 : 0;
 
         return (
-            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden">
+            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden flex flex-col h-[350px]">
                 <div className="card-header border-b border-steel/30 px-6 py-4 flex flex-col items-center justify-center gap-1">
                     <TrendingUp size={22} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
                     <h3 className="text-xs font-black text-white uppercase tracking-[0.2em] text-center">{titulo}</h3>
                 </div>
-                <div className="card-body p-6 overflow-x-auto custom-scrollbar">
-                    <div style={{ width: anchoDinamico, height: 260, position: 'relative' }}>
-                        <LineChart width={anchoDinamico} height={260} data={datos} margin={{ top: 20, right: 40, left: 10, bottom: 20 }}>
+                <div className="card-body p-4 flex-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={datos} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                             <XAxis 
                                 dataKey="idUnico" 
@@ -253,30 +263,31 @@ const ReporteProductoDespachos = () => {
                                     const found = datos.find(d => d.idUnico === val);
                                     return found ? found.fecha : val;
                                 }}
-                                tick={{ fill: '#888', fontSize: 10, fontWeight: 'bold' }} 
+                                tick={{ fill: '#888', fontSize: fontSizeEjes, fontWeight: 'bold' }} 
                                 tickMargin={12}
-                                interval={0}
+                                interval={intervaloX}
                             />
                             <YAxis 
                                 stroke="#888" 
-                                tick={{ fill: '#888', fontSize: 10 }}
+                                tick={{ fill: '#888', fontSize: fontSizeEjes }}
                                 tickFormatter={(value) => `${value.toFixed(2)}`}
                                 domain={['auto', 'auto']}
+                                width={50}
                             />
                             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />
-                            <Legend wrapperStyle={{ fontSize: '11px', color: '#ccc', paddingTop: '15px' }} />
+                            <Legend wrapperStyle={{ fontSize: `${fontSizeEjes + 1}px`, color: '#ccc', paddingTop: '10px' }} />
                             <Line 
                                 type="monotone" 
                                 dataKey="precio" 
                                 name="Precio Unitario" 
                                 stroke={colorLinea} 
-                                strokeWidth={3} 
-                                dot={{ r: 5, strokeWidth: 2, fill: '#1a1a1a', stroke: colorLinea }} 
-                                activeDot={{ r: 7, strokeWidth: 0, fill: colorLinea }} 
+                                strokeWidth={strokeLinea} 
+                                dot={{ r: radioPunto, strokeWidth: 1, fill: '#1a1a1a', stroke: colorLinea }} 
+                                activeDot={{ r: radioPunto + 2, strokeWidth: 0, fill: colorLinea }} 
                                 isAnimationActive={false}
                             />
                         </LineChart>
-                    </div>
+                    </ResponsiveContainer>
                 </div>
             </div>
         );

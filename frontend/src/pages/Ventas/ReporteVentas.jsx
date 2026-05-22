@@ -390,14 +390,18 @@ const ReporteVentas = () => {
           'Fecha Emision': formatearFecha(item.fecha_emision),
           'Fecha Fact. SUNAT': item.tipo_comprobante === 'Nota de Venta' ? 'No amerita' : ((item.facturado_sunat && item.fecha_facturacion_sunat) ? formatearFecha(item.fecha_facturacion_sunat) : ''),
           'Fecha Despacho': item.fecha_despacho ? formatearFecha(item.fecha_despacho) : 'Pendiente',
-          'Moneda': item.moneda,
-          'TC Orden': item.moneda === 'USD' ? tcOrden : '-',
-          'Subtotal Orig.': parseFloat(parseFloat(item.subtotal).toFixed(3)),
-          'IGV Orig.': parseFloat(parseFloat(item.igv).toFixed(3)),
-          'Total Orig.': parseFloat(parseFloat(item.total).toFixed(3)),
-          'Pagado Orig.': parseFloat(parseFloat(item.monto_pagado).toFixed(3)),
-          'Por Cobrar Orig.': parseFloat(parseFloat(item.pendiente_cobro).toFixed(3))
+          'Moneda': item.moneda
         };
+
+        if (incluirPEN) {
+          base['TC Orden'] = item.moneda === 'USD' ? tcOrden : '-';
+        }
+
+        base['Subtotal Orig.'] = parseFloat(parseFloat(item.subtotal).toFixed(3));
+        base['IGV Orig.'] = parseFloat(parseFloat(item.igv).toFixed(3));
+        base['Total Orig.'] = parseFloat(parseFloat(item.total).toFixed(3));
+        base['Pagado Orig.'] = parseFloat(parseFloat(item.monto_pagado).toFixed(3));
+        base['Por Cobrar Orig.'] = parseFloat(parseFloat(item.pendiente_cobro).toFixed(3));
 
         if (incluirPEN) {
           base['Subtotal (PEN)'] = parseFloat(parseFloat(item.subtotal_pen || item.subtotal).toFixed(3));
@@ -423,29 +427,53 @@ const ReporteVentas = () => {
         const colsBase = [
           { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 15 },
           { wch: 30 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 },
-          { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-          { wch: 14 }, { wch: 14 }
+          { wch: 8 }
         ];
+
+        if (tieneColumnasPEN) {
+          colsBase.push({ wch: 10 }); // TC Orden
+        }
+
+        colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }); // Subtotal -> Por Cobrar Orig
         
         if (tieneColumnasPEN) {
-           colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 });
+           colsBase.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }); // Columnas PEN
         }
-        colsBase.push({ wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 25 });
+        colsBase.push({ wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 25 }); // Estado Pago -> Condicion
         ws['!cols'] = colsBase;
 
         const totalRows = datos.length + 1;
+        const totalCols = Object.keys(datos[0]).length;
+
+        // Estilos para cabeceras (separadores de columna)
+        for (let C = 0; C < totalCols; C++) {
+          const cellRef = XLSX.utils.encode_cell({ r: 0, c: C });
+          if (ws[cellRef]) {
+            if (!ws[cellRef].s) ws[cellRef].s = {};
+            ws[cellRef].s = {
+              ...ws[cellRef].s,
+              font: { bold: true, color: { rgb: "FFFFFF" } },
+              fill: { fgColor: { rgb: "4B5563" } }, // Gris oscuro para encabezados
+              border: {
+                left: { style: "thin", color: { rgb: "D1D5DB" } },
+                right: { style: "thin", color: { rgb: "D1D5DB" } }
+              }
+            };
+          }
+        }
 
         if (tieneColumnasPEN) {
-          const penColsStart = 17;
-          const penColsEnd = 21;
-          for (let R = 0; R < totalRows; R++) {
+          // El inicio cambia según si está la columna TC Orden (índice 11) o no
+          const penColsStart = 11 + 5; // Empieza después de Por Cobrar Orig
+          const penColsEnd = penColsStart + 4;
+          for (let R = 1; R < totalRows; R++) { // Omitir R=0 que es la cabecera ya estilizada
             for (let C = penColsStart; C <= penColsEnd; C++) {
               const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
               if (ws[cellRef]) {
                 if (!ws[cellRef].s) ws[cellRef].s = {};
                 ws[cellRef].s = {
+                  ...ws[cellRef].s,
                   fill: { fgColor: { rgb: "E6F4EA" } }, 
-                  font: { bold: R === 0 },
                   numFmt: '#,##0.000'
                 };
               }
@@ -459,14 +487,13 @@ const ReporteVentas = () => {
         else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 9;
 
         if (colFiltroIndex !== -1) {
-          for (let R = 0; R < totalRows; R++) {
+          for (let R = 1; R < totalRows; R++) { // Omitir R=0
             const cellRef = XLSX.utils.encode_cell({ r: R, c: colFiltroIndex });
             if (ws[cellRef]) {
               if (!ws[cellRef].s) ws[cellRef].s = {};
               ws[cellRef].s = {
                 ...ws[cellRef].s,
-                fill: { fgColor: { rgb: "FFF2CC" } }, 
-                font: { bold: R === 0 || ws[cellRef].s.font?.bold }
+                fill: { fgColor: { rgb: "FFF2CC" } }
               };
             }
           }
@@ -561,14 +588,14 @@ const ReporteVentas = () => {
           datosAOA.push([
             'Codigo', 'Producto', 'Unidad', 'Moneda', 
             'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente', 
-            'Descuento Total', 'Subtotal', 'N Ordenes', 'Detalle de Ordenes (Origen)'
+            'Subtotal', 'N Ordenes', 'Detalle de Ordenes (Origen)'
           ]);
           
           productosEnCategoria.forEach(prod => {
             datosAOA.push([
               prod.codigo, prod.nombre, prod.unidad_medida, prod.moneda,
               parseFloat(prod.cantidad_total.toFixed(3)), parseFloat(prod.cantidad_despachada_total.toFixed(3)),
-              parseFloat(prod.cantidad_pendiente_total.toFixed(3)), parseFloat(prod.descuento.toFixed(3)),
+              parseFloat(prod.cantidad_pendiente_total.toFixed(3)), 
               parseFloat(prod.subtotal.toFixed(3)), prod.ordenes.length,
               prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad} unid. @ ${prod.moneda} ${o.precio_unitario})`).join(' | ')
             ]);
@@ -582,7 +609,7 @@ const ReporteVentas = () => {
         const wsProductos = XLSX.utils.aoa_to_sheet(datosAOA);
         wsProductos['!cols'] = [
           { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, 
-          { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, 
+          { wch: 12 }, { wch: 16 }, { wch: 16 }, 
           { wch: 14 }, { wch: 10 }, { wch: 120 }
         ];
 
@@ -597,7 +624,7 @@ const ReporteVentas = () => {
             }
           } else if (datosAOA[R].length > 1 && datosAOA[R][0] === 'Codigo') {
             // Estilo para encabezados de tabla
-            for(let C = 0; C < 11; C++) {
+            for(let C = 0; C < 10; C++) {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (wsProductos[cellRef]) {
                    if(!wsProductos[cellRef].s) wsProductos[cellRef].s = {};

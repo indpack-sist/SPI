@@ -165,8 +165,8 @@ const ReporteProductoDespachos = () => {
     }, [clientes, busquedaCliente]);
 
     const generarReporte = async () => {
-        if (!filtros.idProducto) {
-            setError("Debe seleccionar un producto.");
+        if (!filtros.idProducto && !filtros.idCliente) {
+            setError("Debe seleccionar un producto o un cliente.");
             return;
         }
 
@@ -225,133 +225,119 @@ const ReporteProductoDespachos = () => {
         return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
     };
 
-    const gruposGraficos = useMemo(() => {
-        return reporteData ? particionarDatosGrafico(reporteData.detalle) : null;
+    const productosAgrupados = useMemo(() => {
+        if (!reporteData || !reporteData.detalle) return [];
+        const grupos = {};
+        reporteData.detalle.forEach(row => {
+            const key = row.id_producto || 'desconocido';
+            if (!grupos[key]) {
+                grupos[key] = {
+                    id_producto: key,
+                    codigo: row.codigo_producto || 'N/A',
+                    nombre: row.nombre_producto || 'Producto Desconocido',
+                    total_solicitada: 0,
+                    total_despachada: 0,
+                    total_pendiente: 0,
+                    detalles: []
+                };
+            }
+            const solicitada = parseFloat(row.cantidad_total || row.cantidad_despachada);
+            const despachada = parseFloat(row.cantidad_despachada);
+            
+            grupos[key].total_solicitada += solicitada;
+            grupos[key].total_despachada += despachada;
+            grupos[key].total_pendiente += Math.max(0, solicitada - despachada);
+            grupos[key].detalles.push(row);
+        });
+        return Object.values(grupos).sort((a,b) => b.total_despachada - a.total_despachada);
     }, [reporteData]);
 
-    const CustomTooltip = ({ active, payload }) => {
-        if (active && payload && payload.length) {
-            const data = payload[0].payload;
-            const fechaPrincipal = filtros.tipoFecha === 'despacho' && data.fechaDespacho 
-                ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') 
-                : data.fecha;
+    const renderTablaDetalles = (detalles) => (
+        <div className="card-body p-0 overflow-x-auto">
+            <div className="table-container border-0 rounded-none">
+                <table className="w-full text-left border-collapse whitespace-nowrap">
+                    <thead>
+                        <tr>
+                            <th style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Emisión</th>
+                            <th style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
+                            <th>N° Orden</th>
+                            <th>Documento</th>
+                            <th>Cliente</th>
+                            <th className="text-right">Cant. Solicitada</th>
+                            <th className="text-right">Cant. Despachada</th>
+                            <th className="text-right">Cant. Pendiente</th>
+                            <th className="text-right">Precio Unit.</th>
+                            <th className="text-right">Subtotal Desp.</th>
+                            <th className="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {detalles.map((row, idx) => {
+                            const tipoDoc = String(row.tipo_comprobante || '').trim() || 'Sin Comprobante';
+                            const esFactura = tipoDoc.includes('Factura');
+                            const esNV = tipoDoc.includes('Nota de Venta');
+                            const cantSolicitada = parseFloat(row.cantidad_total || row.cantidad_despachada);
+                            const cantDespachada = parseFloat(row.cantidad_despachada);
+                            const cantPendiente = Math.max(0, cantSolicitada - cantDespachada);
 
-            return (
-                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '2px solid #444', color: '#fff', zIndex: 1000, position: 'relative', minWidth: '280px' }}>
-                    <div className="flex justify-between items-start mb-2 border-b border-steel/30 pb-2">
-                        <div>
-                            <p className="font-bold text-lg" style={{ color: '#fff' }}>{fechaPrincipal}</p>
-                            <p className="text-[10px] text-wire uppercase font-black tracking-widest">
-                                {filtros.tipoFecha === 'despacho' ? 'Ref: Fecha Despacho' : 'Ref: Fecha Emisión'}
-                            </p>
-                        </div>
-                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded ${
-                            data.estado === 'Entregada' ? 'bg-success/20 text-success border border-success/30' :
-                            data.estado === 'Despacho Parcial' ? 'bg-warning/20 text-warning border border-warning/30' :
-                            'bg-primary/20 text-primary border border-primary/30'
-                        }`}>
-                            {data.estado}
-                        </span>
-                    </div>
-                    
-                    <p className="text-primary text-sm font-black mb-1 uppercase tracking-wider">Orden: {data.orden}</p>
-                    {filtros.tipoFecha === 'emision' && (
-                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
-                            Despacho: {data.fechaDespacho ? new Date(data.fechaDespacho).toLocaleDateString('es-PE') : 'Pendiente'}
-                        </p>
-                    )}
-                    {filtros.tipoFecha === 'despacho' && (
-                        <p className="text-white text-[11px] font-bold mb-4 uppercase tracking-widest opacity-70">
-                            Emisión: {data.fecha}
-                        </p>
-                    )}
-                    
-                    <p className="text-mist text-sm mb-2"><span className="text-wire font-bold mr-1">Cliente:</span> {data.cliente}</p>
-                    
-                    <div className="grid grid-cols-2 gap-2 mb-4 bg-carbon/50 p-2 rounded border border-steel/10">
-                        <div>
-                            <p className="text-[10px] text-wire uppercase font-black">Despachado</p>
-                            <p className="text-sm font-black text-white">{data.cantidad}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-wire uppercase font-black">Pendiente</p>
-                            <p className={`text-sm font-black ${data.cantidadPendiente > 0 ? 'text-warning' : 'text-success'}`}>
-                                {data.cantidadPendiente}
-                            </p>
-                        </div>
-                    </div>
-
-                    <p className="text-mist text-base font-bold" style={{ color: '#e8b84b' }}>
-                        <span className="text-wire font-bold mr-1">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}
-                    </p>
-                </div>
-            );
-        }
-        return null;
-    };
-
-    const renderGrafico = (datos, titulo, colorLinea) => {
-        if (!datos || datos.length === 0) return null;
-
-        // Lógica inteligente basada en la densidad de datos
-        const cantidadPuntos = datos.length;
-        const esMuyDenso = cantidadPuntos > 30;
-        const esDenso = cantidadPuntos > 15;
-        
-        // Tamaños dinámicos escalados
-        const fontSizeEjes = esMuyDenso ? 12 : esDenso ? 14 : 16;
-        const radioPunto = esMuyDenso ? 4 : esDenso ? 5 : 7;
-        const strokeLinea = esMuyDenso ? 2.5 : esDenso ? 3.5 : 4.5;
-        
-        // Intervalo de etiquetas en X para evitar solapamiento
-        const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 8) : esDenso ? 1 : 0;
-
-        return (
-            <div className="card border border-steel/20 shadow-xl bg-carbon-mid overflow-hidden" style={{ display: 'flex', flexDirection: 'column', height: '700px' }}>
-                <div className="card-header border-b border-steel/30 px-6 py-5 flex flex-col items-center justify-center gap-1">
-                    <TrendingUp size={28} className={titulo.includes('USD') ? "text-primary" : "text-white"} />
-                    <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] text-center">{titulo}</h3>
-                </div>
-                <div className="card-body p-6" style={{ flex: 1, minHeight: 0 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={datos} margin={{ top: 20, right: 40, left: 20, bottom: 40 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                            <XAxis 
-                                dataKey="idUnico" 
-                                stroke="#888" 
-                                tickFormatter={(val) => {
-                                    const found = datos.find(d => d.idUnico === val);
-                                    return found ? found.fecha : val;
-                                }}
-                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }} 
-                                tickMargin={20}
-                                interval={intervaloX}
-                            />
-                            <YAxis 
-                                stroke="#888" 
-                                tick={{ fill: '#bbb', fontSize: fontSizeEjes, fontWeight: 'bold' }}
-                                tickFormatter={(value) => `${value.toFixed(2)}`}
-                                domain={['auto', 'auto']}
-                                width={80}
-                            />
-                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />
-                            <Legend wrapperStyle={{ fontSize: `${fontSizeEjes + 2}px`, color: '#ccc', paddingTop: '30px', fontWeight: 'bold' }} />
-                            <Line 
-                                type="monotone" 
-                                dataKey="precio" 
-                                name="Precio Unitario" 
-                                stroke={colorLinea} 
-                                strokeWidth={strokeLinea} 
-                                dot={{ r: radioPunto, strokeWidth: 2, fill: '#1a1a1a', stroke: colorLinea }} 
-                                activeDot={{ r: radioPunto + 3, strokeWidth: 0, fill: colorLinea }} 
-                                isAnimationActive={false}
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
+                            return (
+                                <tr key={idx} className="transition-colors">
+                                    <td className="font-medium" style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
+                                        {new Date(row.fecha_emision).toLocaleDateString('es-PE')}
+                                    </td>
+                                    <td className="font-medium" style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
+                                        {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : '-'}
+                                    </td>
+                                    <td className="font-mono font-bold">
+                                        <Link 
+                                            to={`/ventas/ordenes/${row.id_orden_venta}`} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-primary hover:text-primary/80 transition-colors underline decoration-primary/30"
+                                        >
+                                            {row.numero_orden}
+                                        </Link>
+                                    </td>
+                                    <td>
+                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded ${
+                                            esFactura ? 'bg-success/10 text-success border border-success/20' :
+                                            esNV ? 'bg-info/10 text-info border border-info/20' :
+                                            'bg-steel/20 text-wire border border-steel/30'
+                                        }`}>
+                                            {tipoDoc}
+                                        </span>
+                                    </td>
+                                    <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
+                                    <td className="text-right font-medium text-mist">{formatearNumero(cantSolicitada)}</td>
+                                    <td className="text-right font-black text-white">{formatearNumero(cantDespachada)}</td>
+                                    <td className={`text-right font-black ${cantPendiente > 0 ? 'text-warning' : 'text-success'}`}>
+                                        {formatearNumero(cantPendiente)}
+                                    </td>
+                                    <td className="text-right font-mono text-mist text-[11px]">
+                                        <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>
+                                        {formatearNumero(row.precio_unitario)}
+                                    </td>
+                                    <td className="text-right font-black text-white">
+                                        <span className="text-wire mr-1 font-mono">{row.moneda === 'USD' ? '$' : 'S/'}</span>
+                                        {formatearNumero(row.subtotal_item)}
+                                    </td>
+                                    <td className="text-center">
+                                        <span className={`px-2.5 py-1 text-[9px] uppercase tracking-widest font-black rounded border ${
+                                            row.estado === 'Entregada' ? 'bg-success/10 text-success border-success/20' :
+                                            row.estado === 'Despacho Parcial' ? 'bg-warning/10 text-warning border-warning/20' :
+                                            'bg-primary/10 text-primary border-primary/20'
+                                        }`}>
+                                            {row.estado}
+                                        </span>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
-        );
-    };
+        </div>
+    );
 
     return (
         <div className="p-4 md:p-6 page-reporte-despachos">
@@ -396,7 +382,7 @@ const ReporteProductoDespachos = () => {
                     <div className="flex flex-col lg:flex-row gap-4 items-end">
                         <div className="form-group flex-1 w-full" ref={dropdownProductoRef}>
                             <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
-                                Producto a consultar *
+                                Producto (Opcional si elige cliente)
                             </label>
                             <div className="relative">
                                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire z-10" />
@@ -436,7 +422,7 @@ const ReporteProductoDespachos = () => {
 
                         <div className="form-group flex-1 w-full" ref={dropdownClienteRef}>
                             <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">
-                                Cliente (Opcional)
+                                Cliente (Opcional si elige producto)
                             </label>
                             <div className="relative">
                                 <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire z-10" />
@@ -601,120 +587,49 @@ const ReporteProductoDespachos = () => {
                         </div>
                     </div>
 
-                    <div className="card shadow-2xl relative border border-steel/20 bg-carbon">
-                        <div className="card-header border-b border-steel/30 px-6 py-4">
-                            <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-                                Registro Detallado
-                                <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">
-                                    {reporteData.detalle.length} movs
-                                </span>
-                            </h3>
-                        </div>
+                    {productosAgrupados.map(prod => {
+                        const graficosProd = particionarDatosGrafico(prod.detalles);
                         
-                        <div className="card-body p-0 overflow-x-auto">
-                            <div className="table-container border-0 rounded-none">
-                                <table className="w-full text-left border-collapse whitespace-nowrap">
-                                    <thead>
-                                        <tr>
-                                            <th style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Emisión</th>
-                                            <th style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
-                                            <th>N° Orden</th>
-                                            <th>Documento</th>
-                                            <th>Cliente</th>
-                                            <th className="text-right">Cant. Solicitada</th>
-                                            <th className="text-right">Cant. Despachada</th>
-                                            <th className="text-right">Cant. Pendiente</th>
-                                            <th className="text-right">Precio Unit.</th>
-                                            <th className="text-right">Subtotal Desp.</th>
-                                            <th className="text-center">Estado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {reporteData.detalle.length > 0 ? (
-                                            reporteData.detalle.map((row, idx) => {
-                                                const tipoDoc = String(row.tipo_comprobante || '').trim() || 'Sin Comprobante';
-                                                const esFactura = tipoDoc.includes('Factura');
-                                                const esNV = tipoDoc.includes('Nota de Venta');
-                                                const cantSolicitada = parseFloat(row.cantidad_total || row.cantidad_despachada);
-                                                const cantDespachada = parseFloat(row.cantidad_despachada);
-                                                const cantPendiente = Math.max(0, cantSolicitada - cantDespachada);
-
-                                                return (
-                                                    <tr key={idx} className="transition-colors">
-                                                        <td className="font-medium" style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
-                                                            {new Date(row.fecha_emision).toLocaleDateString('es-PE')}
-                                                        </td>
-                                                        <td className="font-medium" style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
-                                                            {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : '-'}
-                                                        </td>
-                                                        <td className="font-mono font-bold">
-                                                            <Link 
-                                                                to={`/ventas/ordenes/${row.id_orden_venta}`} 
-                                                                target="_blank" 
-                                                                rel="noopener noreferrer"
-                                                                className="text-primary hover:text-primary/80 transition-colors underline decoration-primary/30"
-                                                            >
-                                                                {row.numero_orden}
-                                                            </Link>
-                                                        </td>
-                                                        <td>
-                                                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded ${
-                                                                esFactura ? 'bg-success/10 text-success border border-success/20' :
-                                                                esNV ? 'bg-info/10 text-info border border-info/20' :
-                                                                'bg-steel/20 text-wire border border-steel/30'
-                                                            }`}>
-                                                                {tipoDoc}
-                                                            </span>
-                                                        </td>
-                                                        <td className="truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
-                                                        <td className="text-right font-medium text-mist">{formatearNumero(cantSolicitada)}</td>
-                                                        <td className="text-right font-black text-white">{formatearNumero(cantDespachada)}</td>
-                                                        <td className={`text-right font-black ${cantPendiente > 0 ? 'text-warning' : 'text-success'}`}>
-                                                            {formatearNumero(cantPendiente)}
-                                                        </td>
-                                                        <td className="text-right font-mono text-mist text-[11px]">
-                                                            <span className="text-wire mr-1">{row.moneda === 'USD' ? '$' : 'S/'}</span>
-                                                            {formatearNumero(row.precio_unitario)}
-                                                        </td>
-                                                        <td className="text-right font-black text-white">
-                                                            <span className="text-wire mr-1 font-mono">{row.moneda === 'USD' ? '$' : 'S/'}</span>
-                                                            {formatearNumero(row.subtotal_item)}
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <span className={`px-2.5 py-1 text-[9px] uppercase tracking-widest font-black rounded border ${
-                                                                row.estado === 'Entregada' ? 'bg-success/10 text-success border-success/20' :
-                                                                row.estado === 'Despacho Parcial' ? 'bg-warning/10 text-warning border-warning/20' :
-                                                                'bg-primary/10 text-primary border-primary/20'
-                                                            }`}>
-                                                                {row.estado}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })
-                                        ) : (
-                                            <tr>
-                                                <td colSpan="11" className="text-center py-12 text-wire text-sm uppercase tracking-widest font-bold">
-                                                    No se encontraron despachos.
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                        return (
+                        <div key={prod.id_producto} className="card shadow-2xl relative border border-steel/20 bg-carbon mb-6">
+                            <div className="card-header border-b border-steel/30 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                    {prod.codigo} - {prod.nombre}
+                                    <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">
+                                        {prod.detalles.length} movs
+                                    </span>
+                                </h3>
+                                <div className="flex gap-4 w-full md:w-auto justify-between md:justify-end bg-carbon-mid p-2 rounded-lg border border-steel/30">
+                                    <div className="text-center md:text-right px-2">
+                                        <p className="text-[10px] text-wire uppercase font-black tracking-widest">Solicitado</p>
+                                        <p className="text-sm font-black text-white">{formatearNumero(prod.total_solicitada)}</p>
+                                    </div>
+                                    <div className="text-center md:text-right px-2 border-l border-steel/30">
+                                        <p className="text-[10px] text-wire uppercase font-black tracking-widest">Despachado</p>
+                                        <p className="text-sm font-black text-success">{formatearNumero(prod.total_despachada)}</p>
+                                    </div>
+                                    <div className="text-center md:text-right px-2 border-l border-steel/30">
+                                        <p className="text-[10px] text-wire uppercase font-black tracking-widest">Pendiente</p>
+                                        <p className={`text-sm font-black ${prod.total_pendiente > 0 ? 'text-warning' : 'text-mist'}`}>
+                                            {formatearNumero(prod.total_pendiente)}
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
+                            {renderTablaDetalles(prod.detalles)}
+                            
+                            {graficosProd && (
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-t border-steel/20 bg-carbon-mid">
+                                    {renderGrafico(graficosProd.facturasPEN, 'Evolución: Facturas (PEN)', '#10B981')}
+                                    {renderGrafico(graficosProd.facturasUSD, 'Evolución: Facturas (USD)', '#e8b84b')}
+                                    {renderGrafico(graficosProd.notasVentaPEN, 'Evolución: N. Venta (PEN)', '#3B82F6')}
+                                    {renderGrafico(graficosProd.notasVentaUSD, 'Evolución: N. Venta (USD)', '#60A5FA')}
+                                    {renderGrafico(graficosProd.sinComprPEN, 'Evolución: Sin Compr. (PEN)', '#F59E0B')}
+                                    {renderGrafico(graficosProd.sinComprUSD, 'Evolución: Sin Compr. (USD)', '#FCD34D')}
+                                </div>
+                            )}
                         </div>
-                    </div>
-
-                    {gruposGraficos && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                            {renderGrafico(gruposGraficos.facturasPEN, 'Evolución: Facturas (PEN)', '#10B981')}
-                            {renderGrafico(gruposGraficos.facturasUSD, 'Evolución: Facturas (USD)', '#e8b84b')}
-                            {renderGrafico(gruposGraficos.notasVentaPEN, 'Evolución: N. Venta (PEN)', '#3B82F6')}
-                            {renderGrafico(gruposGraficos.notasVentaUSD, 'Evolución: N. Venta (USD)', '#60A5FA')}
-                            {renderGrafico(gruposGraficos.sinComprPEN, 'Evolución: Sin Compr. (PEN)', '#F59E0B')}
-                            {renderGrafico(gruposGraficos.sinComprUSD, 'Evolución: Sin Compr. (USD)', '#FCD34D')}
-                        </div>
-                    )}
+                    )})}
 
                 </div>
             )}

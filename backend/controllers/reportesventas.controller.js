@@ -158,47 +158,14 @@ export const getReporteVentas = async (req, res) => {
 
             const pendienteOriginal = Math.max(0, montoOriginal - pagadoOriginal);
 
-            // Valores convertidos
-            const montoPEN = esDolar ? montoOriginal * tcOrden : montoOriginal;
+            const subtotalPEN = esDolar ? subtotalOriginal * tcOrden : subtotalOriginal;
+            const totalPEN = esDolar ? montoOriginal * tcOrden : montoOriginal;
+            const igvPEN = totalPEN - subtotalPEN;
             const pagadoPEN = esDolar ? pagadoOriginal * tcOrden : pagadoOriginal;
             const pendientePEN = esDolar ? pendienteOriginal * tcOrden : pendienteOriginal;
 
-            if (esDolar) {
-                kpis.totalVentasUSD += montoOriginal;
-                kpis.totalPagadoUSD += pagadoOriginal;
-                kpis.totalPorCobrarUSD += pendienteOriginal;
-                kpis.totalComisionesUSD += comisionOriginal;
-
-                if (categoria === 'factura') kpis.facturaUSD += montoOriginal;
-                else if (categoria === 'nota_venta') kpis.notaVentaUSD += montoOriginal;
-                else kpis.sinComprobanteUSD += montoOriginal;
-
-                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoUSD += montoOriginal;
-                else kpis.totalContadoUSD += montoOriginal;
-
-                if (conteoEstadoPagoUSD[orden.estado_pago] !== undefined) {
-                    conteoEstadoPagoUSD[orden.estado_pago] += montoOriginal;
-                }
-            } else {
-                kpis.totalVentasPEN += montoOriginal;
-                kpis.totalPagadoPEN += pagadoOriginal;
-                kpis.totalPorCobrarPEN += pendienteOriginal;
-                kpis.totalComisionesPEN += comisionOriginal;
-
-                if (categoria === 'factura') kpis.facturaPEN += montoOriginal;
-                else if (categoria === 'nota_venta') kpis.notaVentaPEN += montoOriginal;
-                else kpis.sinComprobantePEN += montoOriginal;
-
-                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoPEN += montoOriginal;
-                else kpis.totalContadoPEN += montoOriginal;
-
-                if (conteoEstadoPagoPEN[orden.estado_pago] !== undefined) {
-                    conteoEstadoPagoPEN[orden.estado_pago] += montoOriginal;
-                }
-            }
-
-            // Acumular unificados
-            kpis.unificadoVentasPEN += montoPEN;
+            // Acumular unificados (todo a PEN usando TC de la orden)
+            kpis.unificadoVentasPEN += totalPEN;
             kpis.unificadoPagadoPEN += pagadoPEN;
             kpis.unificadoPorCobrarPEN += pendientePEN;
 

@@ -222,10 +222,12 @@ function OrdenesVenta() {
     sessionStorage.setItem('ordenes_filtros_estado_pago', JSON.stringify(filtroEstadoPago));
     sessionStorage.setItem('ordenes_filtros_verificacion', JSON.stringify(filtroVerificacion));
     sessionStorage.setItem('ordenes_filtros_tipo_comprobante', JSON.stringify(filtroTipoComprobante));
+    sessionStorage.setItem('ordenes_filtros_estado_sunat', JSON.stringify(filtroEstadoSunat));
+    sessionStorage.setItem('ordenes_filtros_vendedor', JSON.stringify(filtroVendedor));
     sessionStorage.setItem('ordenes_fecha_inicio', fechaInicio);
     sessionStorage.setItem('ordenes_fecha_fin', fechaFin);
     sessionStorage.setItem('ordenes_busqueda', busqueda);
-  }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, fechaInicio, fechaFin, busqueda]);
+  }, [filtroEstado, filtroEstadoPago, filtroVerificacion, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, fechaInicio, fechaFin, busqueda]);
 
   useEffect(() => {
     setInputPage(currentPage.toString());
@@ -235,7 +237,7 @@ function OrdenesVenta() {
   useEffect(() => {
     cargarDatos(false);
     cargarTCDesdeSession();
-  }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, fechaInicio, fechaFin]);
+  }, [filtroEstado, filtroVerificacion, filtroEstadoPago, filtroTipoComprobante, filtroEstadoSunat, filtroVendedor, fechaInicio, fechaFin]);
 
   useEffect(() => {
     cargarDatos(true);
@@ -305,6 +307,8 @@ function OrdenesVenta() {
       if (filtroEstadoPago.length > 0) filtros.estado_pago = filtroEstadoPago;
       if (filtroVerificacion.length > 0) filtros.estado_verificacion = filtroVerificacion;
       if (filtroTipoComprobante.length > 0) filtros.tipo_comprobante = filtroTipoComprobante;
+      if (filtroEstadoSunat.length > 0) filtros.estado_sunat = filtroEstadoSunat;
+      if (filtroVendedor.length > 0) filtros.vendedor = filtroVendedor;
       if (fechaInicio) filtros.fecha_inicio = fechaInicio;
       if (fechaFin) filtros.fecha_fin = fechaFin;
       

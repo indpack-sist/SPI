@@ -234,11 +234,12 @@ const ReporteDeudasClientes = () => {
 
         const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-        const handleChartClick = (e, tipo, keyG, tituloG) => {
-            if (e && e.activePayload && e.activePayload.length > 0) {
-                handleDrillDown(e.activePayload[0].payload, tipo, keyG, tituloG);
-            } else if (e && e.name) {
-                handleDrillDown(e, tipo, keyG, tituloG);
+        const handleChartClick = (data, tipo, keyG, tituloG) => {
+            if (!data) return;
+            // Si el click viene directamente de la Barra (tiene payload interno o es el propio dato)
+            const payloadReal = data.payload || (data.activePayload ? data.activePayload[0].payload : data);
+            if (payloadReal && payloadReal.name) {
+                handleDrillDown(payloadReal, tipo, keyG, tituloG);
             }
         };
 

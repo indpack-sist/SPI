@@ -67,8 +67,18 @@ const ReporteProductoDespachos = () => {
         idProducto: '',
         idCliente: '',
         fechaInicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-        fechaFin: new Date().toISOString().split('T')[0]
+        fechaFin: new Date().toISOString().split('T')[0],
+        estados: ['Despachada', 'Despacho Parcial', 'Entregada']
     });
+
+    const handleToggleEstado = (estado) => {
+        setFiltros(prev => {
+            const nuevosEstados = prev.estados.includes(estado)
+                ? prev.estados.filter(e => e !== estado)
+                : [...prev.estados, estado];
+            return { ...prev, estados: nuevosEstados };
+        });
+    };
     
     const [loading, setLoading] = useState(false);
     const [reporteData, setReporteData] = useState(null);
@@ -455,6 +465,36 @@ const ReporteProductoDespachos = () => {
                             <div className="form-group flex-1 lg:w-32">
                                 <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-1.5 block">Hasta</label>
                                 <input type="date" name="fechaFin" value={filtros.fechaFin} onChange={handleChangeFiltro} className="form-input w-full text-sm font-bold" />
+                            </div>
+                        </div>
+
+                        <div className="form-group w-full lg:w-auto min-w-[300px]">
+                            <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] mb-2 block">Estados a incluir</label>
+                            <div className="flex flex-wrap gap-2 p-2 bg-carbon/50 rounded-lg border border-steel/20 h-[48px] items-center">
+                                {['Despachada', 'Despacho Parcial', 'Entregada'].map(estado => (
+                                    <label key={estado} className="flex items-center gap-2 cursor-pointer select-none group">
+                                        <div className="relative">
+                                            <input
+                                                type="checkbox"
+                                                className="hidden"
+                                                checked={filtros.estados.includes(estado)}
+                                                onChange={() => handleToggleEstado(estado)}
+                                            />
+                                            <div className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                                                filtros.estados.includes(estado) 
+                                                ? 'bg-primary border-primary' 
+                                                : 'bg-transparent border-steel group-hover:border-wire'
+                                            }`}>
+                                                {filtros.estados.includes(estado) && <div className="w-2 h-2 bg-carbon rounded-full" />}
+                                            </div>
+                                        </div>
+                                        <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
+                                            filtros.estados.includes(estado) ? 'text-primary' : 'text-wire group-hover:text-mist'
+                                        }`}>
+                                            {estado}
+                                        </span>
+                                    </label>
+                                ))}
                             </div>
                         </div>
 

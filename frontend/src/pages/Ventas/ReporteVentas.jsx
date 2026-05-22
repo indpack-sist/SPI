@@ -690,25 +690,39 @@ const ReporteVentas = () => {
           <form onSubmit={generarReporte} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
               <div className="form-group mb-0">
-                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Filtrar por:</label>
-                <div className="flex bg-carbon-light p-1 rounded-lg border border-steel/20 h-[38px] items-center">
+                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-[0.2em] mb-2 block">Filtrar por:</label>
+                <div className="flex gap-3 p-2 bg-carbon-light rounded-lg border border-steel/20 h-[42px] items-center">
                   {[
                     { id: 'fecha_emision', label: 'Emisión' },
                     { id: 'fecha_despacho', label: 'Despacho' },
                     { id: 'fecha_sunat', label: 'SUNAT' }
                   ].map(opcion => (
-                    <button 
-                      key={opcion.id}
-                      type="button"
-                      onClick={() => setFiltros({...filtros, filtroFecha: opcion.id})}
-                      className={`flex-1 h-full rounded text-[9px] font-black uppercase tracking-wider transition-all ${filtros.filtroFecha === opcion.id ? 'bg-primary text-carbon shadow-md' : 'text-wire hover:text-mist'}`}
-                    >
-                      {opcion.label}
-                    </button>
+                    <label key={opcion.id} className="flex items-center gap-1.5 cursor-pointer select-none group">
+                      <div className="relative">
+                        <input
+                          type="radio"
+                          className="hidden"
+                          checked={filtros.filtroFecha === opcion.id}
+                          onChange={() => setFiltros({...filtros, filtroFecha: opcion.id})}
+                        />
+                        <div className={`w-3.5 h-3.5 rounded-full border transition-all flex items-center justify-center ${
+                          filtros.filtroFecha === opcion.id 
+                          ? 'bg-primary border-primary shadow-sm shadow-primary/20' 
+                          : 'bg-transparent border-steel group-hover:border-wire'
+                        }`}>
+                          {filtros.filtroFecha === opcion.id && <div className="w-1 h-1 bg-carbon rounded-full" />}
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-black uppercase tracking-wider transition-colors ${
+                        filtros.filtroFecha === opcion.id ? 'text-primary' : 'text-wire group-hover:text-mist'
+                      }`}>
+                        {opcion.label}
+                      </span>
+                    </label>
                   ))}
                 </div>
               </div>
-              
+
               <div className="form-group mb-0">
                 <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-1 block">Desde</label>
                 <div className="input-with-icon"><Calendar className="icon text-primary" size={14} />
@@ -745,7 +759,7 @@ const ReporteVentas = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4 items-end border-t border-steel/20 pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end border-t border-steel/20 pt-6">
               <FilterCheckboxGroup 
                 label="Estado Orden" 
                 selectedValues={filtros.estadosOrden} 
@@ -779,28 +793,27 @@ const ReporteVentas = () => {
                 ]}
               />
               
-              <div className="flex gap-2">
-                <div className="form-group mb-0 flex-1">
-                  <label className="flex items-center gap-2 cursor-pointer group">
+              <div className="form-group mb-0">
+                <label className="form-label uppercase text-[10px] text-muted font-bold tracking-widest mb-2 block">Opciones Exportación:</label>
+                <div className="flex gap-4 p-2 bg-carbon-light rounded-lg border border-steel/20 h-[42px] items-center">
+                  <label className="flex items-center gap-2 cursor-pointer group select-none">
                     <input type="checkbox" checked={incluirDetalleExcel} onChange={(e) => setIncluirDetalleExcel(e.target.checked)} className="hidden" />
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${incluirDetalleExcel ? 'bg-success border-success' : 'border-steel group-hover:border-wire'}`}>
-                      {incluirDetalleExcel && <CheckCircle size={10} className="text-carbon" />}
+                    <div className={`w-3.5 h-3.5 rounded border transition-all flex items-center justify-center ${incluirDetalleExcel ? 'bg-success border-success' : 'bg-transparent border-steel group-hover:border-wire'}`}>
+                      {incluirDetalleExcel && <CheckCircle size={10} className="text-carbon font-bold" />}
                     </div>
-                    <span className="text-[10px] font-bold text-wire uppercase tracking-wider">Hojas Excel</span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider ${incluirDetalleExcel ? 'text-success' : 'text-wire'}`}>Hojas Excel</span>
                   </label>
-                </div>
-                <div className="form-group mb-0 flex-1">
-                  <label className="flex items-center gap-2 cursor-pointer group">
+                  <label className="flex items-center gap-2 cursor-pointer group select-none">
                     <input type="checkbox" checked={incluirDetallePDF} onChange={(e) => setIncluirDetallePDF(e.target.checked)} className="hidden" />
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${incluirDetallePDF ? 'bg-danger border-danger' : 'border-steel group-hover:border-wire'}`}>
-                      {incluirDetallePDF && <CheckCircle size={10} className="text-carbon" />}
+                    <div className={`w-3.5 h-3.5 rounded border transition-all flex items-center justify-center ${incluirDetallePDF ? 'bg-danger border-danger' : 'bg-transparent border-steel group-hover:border-wire'}`}>
+                      {incluirDetallePDF && <CheckCircle size={10} className="text-carbon font-bold" />}
                     </div>
-                    <span className="text-[10px] font-bold text-wire uppercase tracking-wider">Detalle PDF</span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider ${incluirDetallePDF ? 'text-danger' : 'text-wire'}`}>Detalle PDF</span>
                   </label>
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="lg:col-span-2 flex gap-2">
                 <button type="button" onClick={limpiarFiltros} className="btn btn-outline flex-1 border-steel/30 text-wire hover:bg-carbon-light" title="Limpiar filtros">
                   <RefreshCw size={16} /> Reiniciar
                 </button>
@@ -836,66 +849,69 @@ const ReporteVentas = () => {
         </div>
       )}
 
-      <div className="stats-grid">
-        <div className="stat-card border-l-4 border-blue-500">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="stat-card border-l-4 border-primary">
           <div className="stat-content">
-            <p className="text-xs text-muted font-bold uppercase tracking-wider">Ventas Totales</p>
-            <h3 className="stat-value text-gray-900">{formatearMoneda(resumen.total_ventas_pen, 'PEN')}</h3>
-            {resumen.total_ventas_usd > 0 && (
-              <p className="text-sm text-blue-700 font-semibold mt-1">
-                {formatearMoneda(resumen.total_ventas_usd, 'USD')}
-                {convertirUSD && tcVenta && (<span className="text-xs ml-2" style={{ color: 'var(--accent, #ca8a04)' }}>= S/ {formatearNumero(resumen.total_ventas_usd * tcVenta)}</span>)}
-              </p>
-            )}
-            <div className="flex gap-2 mt-2 text-xs flex-wrap">
-              <span className="badge badge-info badge-sm">Ct PEN: {formatearMoneda(resumen.contado_pen, 'PEN')}</span>
-              <span className="badge badge-purple-100 text-purple-900 badge-sm border border-purple-200">Cr PEN: {formatearMoneda(resumen.credito_pen, 'PEN')}</span>
-              {resumen.contado_usd > 0 && (<span className="badge badge-info badge-sm">Ct USD: {formatearMoneda(resumen.contado_usd, 'USD')}</span>)}
-              {resumen.credito_usd > 0 && (<span className="badge badge-purple-100 text-purple-900 badge-sm border border-purple-200">Cr USD: {formatearMoneda(resumen.credito_usd, 'USD')}</span>)}
+            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Facturas (PEN)</p>
+            <h3 className="stat-value text-white">{formatearMoneda(resumen.factura_pen || 0, 'PEN')}</h3>
+          </div>
+          <div className="stat-icon bg-primary/10 text-primary"><FileCheck size={20}/></div>
+        </div>
+
+        <div className="stat-card border-l-4 border-primary">
+          <div className="stat-content">
+            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Facturas (USD)</p>
+            <h3 className="stat-value text-primary">{formatearMoneda(resumen.factura_usd || 0, 'USD')}</h3>
+          </div>
+          <div className="stat-icon bg-primary/10 text-primary"><DollarSign size={20}/></div>
+        </div>
+
+        <div className="stat-card border-l-4 border-info">
+          <div className="stat-content">
+            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Notas de Venta (PEN)</p>
+            <h3 className="stat-value text-white">{formatearMoneda(resumen.nota_venta_pen || 0, 'PEN')}</h3>
+          </div>
+          <div className="stat-icon bg-info/10 text-info"><FileText size={20}/></div>
+        </div>
+
+        <div className="stat-card border-l-4 border-info">
+          <div className="stat-content">
+            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Notas de Venta (USD)</p>
+            <h3 className="stat-value text-info">{formatearMoneda(resumen.nota_venta_usd || 0, 'USD')}</h3>
+          </div>
+          <div className="stat-icon bg-info/10 text-info"><DollarSign size={20}/></div>
+        </div>
+
+        <div className="stat-card border-l-4 border-steel">
+          <div className="stat-content">
+            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Sin Comprobante (PEN)</p>
+            <h3 className="stat-value text-white">{formatearMoneda(resumen.sin_comprobante_pen || 0, 'PEN')}</h3>
+          </div>
+          <div className="stat-icon bg-steel/10 text-wire"><ShoppingCart size={20}/></div>
+        </div>
+
+        <div className="stat-card border-l-4 border-steel">
+          <div className="stat-content">
+            <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Sin Comprobante (USD)</p>
+            <h3 className="stat-value text-wire">{formatearMoneda(resumen.sin_comprobante_usd || 0, 'USD')}</h3>
+          </div>
+          <div className="stat-icon bg-steel/10 text-wire"><DollarSign size={20}/></div>
+        </div>
+
+        <div className="stat-card border-l-4 border-success col-span-1 lg:col-span-2">
+          <div className="stat-content flex justify-between items-center w-full">
+            <div>
+              <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Total Operaciones</p>
+              <h3 className="stat-value text-success">{resumen.cantidad_ordenes || 0} Ordenes</h3>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Ventas Totales (PEN Unif.)</p>
+              <h3 className="text-lg font-black text-white">
+                {formatearMoneda(resumen.total_ventas_pen + (resumen.total_ventas_usd * (tcVenta || 1)), 'PEN')}
+              </h3>
             </div>
           </div>
-          <div className="stat-icon bg-blue-50 text-blue-600"><DollarSign size={24}/></div>
-        </div>
-
-        <div className="stat-card border-l-4 border-green-500">
-          <div className="stat-content">
-            <p className="text-xs text-muted font-bold uppercase tracking-wider">Cobrado</p>
-            <h3 className="stat-value text-success">{formatearMoneda(resumen.total_pagado_pen, 'PEN')}</h3>
-            {resumen.total_pagado_usd > 0 && (
-              <p className="text-sm text-green-700 font-semibold mt-1">
-                {formatearMoneda(resumen.total_pagado_usd, 'USD')}
-                {convertirUSD && tcVenta && (<span className="text-xs ml-2" style={{ color: 'var(--accent, #ca8a04)' }}>= S/ {formatearNumero(resumen.total_pagado_usd * tcVenta)}</span>)}
-              </p>
-            )}
-            <p className="text-xs text-gray-400 mt-2">Liquidez ingresada</p>
-          </div>
-          <div className="stat-icon bg-green-50 text-success"><CheckCircle size={24}/></div>
-        </div>
-
-        <div className="stat-card border-l-4 border-red-500">
-          <div className="stat-content">
-            <p className="text-xs text-muted font-bold uppercase tracking-wider">Por Cobrar</p>
-            <h3 className="stat-value text-danger">{formatearMoneda(resumen.total_pendiente_pen, 'PEN')}</h3>
-            {resumen.total_pendiente_usd > 0 && (
-              <p className="text-sm text-red-700 font-semibold mt-1">
-                {formatearMoneda(resumen.total_pendiente_usd, 'USD')}
-                {convertirUSD && tcVenta && (<span className="text-xs ml-2" style={{ color: 'var(--accent, #ca8a04)' }}>= S/ {formatearNumero(resumen.total_pendiente_usd * tcVenta)}</span>)}
-              </p>
-            )}
-            <p className="text-xs text-gray-400 mt-2">Credito pendiente</p>
-          </div>
-          <div className="stat-icon bg-red-50 text-danger"><AlertCircle size={24}/></div>
-        </div>
-
-        <div className="stat-card border-l-4 border-orange-500">
-          <div className="stat-content">
-            <p className="text-xs text-muted font-bold uppercase tracking-wider">Operaciones</p>
-            <h3 className="stat-value text-gray-900">{resumen.cantidad_ordenes}</h3>
-            <div className="mt-2 text-xs flex items-center gap-2">
-              <span className={`badge ${resumen.pedidos_retrasados > 0 ? 'badge-danger' : 'badge-success'}`}>{resumen.pedidos_retrasados} Retrasos</span>
-            </div>
-          </div>
-          <div className="stat-icon bg-orange-50 text-orange-600"><Truck size={24}/></div>
+          <div className="stat-icon bg-success/10 text-success ml-4"><TrendingUp size={24}/></div>
         </div>
       </div>
 

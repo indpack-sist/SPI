@@ -100,23 +100,23 @@ export const getReporteVentas = async (req, res) => {
         }
 
         let kpis = {
-            totalVentasPEN: 0,
-            totalVentasUSD: 0,
-            totalPagadoPEN: 0,
-            totalPagadoUSD: 0,
-            totalPorCobrarPEN: 0,
-            totalPorCobrarUSD: 0,
-            totalContadoPEN: 0,
-            totalContadoUSD: 0,
-            totalCreditoPEN: 0,
-            totalCreditoUSD: 0,
+            totalVentasPEN: 0, totalVentasUSD: 0,
+            totalPagadoPEN: 0, totalPagadoUSD: 0,
+            totalPorCobrarPEN: 0, totalPorCobrarUSD: 0,
+            totalContadoPEN: 0, totalContadoUSD: 0,
+            totalCreditoPEN: 0, totalCreditoUSD: 0,
             pedidosAtrasados: 0,
-            totalComisionesPEN: 0,
-            totalComisionesUSD: 0,
-            // Nuevos KPIs unificados usando TC de cada orden
+            totalComisionesPEN: 0, totalComisionesUSD: 0,
+            
+            // Desglose por tipo y moneda
+            facturaPEN: 0, facturaUSD: 0,
+            notaVentaPEN: 0, notaVentaUSD: 0,
+            sinComprobantePEN: 0, sinComprobanteUSD: 0,
+
             unificadoVentasPEN: 0,
             unificadoPagadoPEN: 0,
-            unificadoPorCobrarPEN: 0
+            unificadoPorCobrarPEN: 0,
+            cantidadOrdenes: ordenes.length
         };
 
         const conteoEstadoPagoPEN = { 'Pagado': 0, 'Parcial': 0, 'Pendiente': 0 };
@@ -141,13 +141,40 @@ export const getReporteVentas = async (req, res) => {
                     : 18
             );
 
-            const esNotaVenta = orden.tipo_comprobante === 'Nota de Venta';
+            const tipoComprobante = String(orden.tipo_comprobante || '').trim();
+            const esFactura = tipoComprobante === 'Factura';
+            const esNotaVenta = tipoComprobante === 'Nota de Venta';
+
             const igvOriginal = esNotaVenta ? 0 : subtotalOriginal * (porcentajeImp / 100);
             const totalOriginal = esNotaVenta ? subtotalOriginal : subtotalOriginal + igvOriginal;
             const pendienteOriginal = Math.max(0, totalOriginal - pagadoOriginal);
 
-            // Valores convertidos específicos de esta orden
-            const subtotalPEN = esDolar ? subtotalOriginal * tcOrden : subtotalOriginal;
+            // Accumulation Logic
+            if (esDolar) {
+                kpis.totalVentasUSD += totalOriginal;
+                kpis.totalPagadoUSD += pagadoOriginal;
+                kpis.totalPorCobrarUSD += pendienteOriginal;
+                kpis.totalComisionesUSD += comisionOriginal;
+
+                if (esFactura) kpis.facturaUSD += totalOriginal;
+                else if (esNotaVenta) kpis.notaVentaUSD += totalOriginal;
+                else kpis.sinComprobanteUSD += totalOriginal;
+
+                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoUSD += totalOriginal;
+                else kpis.totalContadoUSD += totalOriginal;
+            } else {
+                kpis.totalVentasPEN += totalOriginal;
+                kpis.totalPagadoPEN += pagadoOriginal;
+                kpis.totalPorCobrarPEN += pendienteOriginal;
+                kpis.totalComisionesPEN += comisionOriginal;
+
+                if (esFactura) kpis.facturaPEN += totalOriginal;
+                else if (esNotaVenta) kpis.notaVentaPEN += totalOriginal;
+                else kpis.sinComprobantePEN += totalOriginal;
+
+                if (orden.tipo_venta === 'Crédito') kpis.totalCreditoPEN += totalOriginal;
+                else kpis.totalContadoPEN += totalOriginal;
+            }
             const igvPEN = esDolar ? igvOriginal * tcOrden : igvOriginal;
             const totalPEN = esDolar ? totalOriginal * tcOrden : totalOriginal;
             const pagadoPEN = esDolar ? pagadoOriginal * tcOrden : pagadoOriginal;

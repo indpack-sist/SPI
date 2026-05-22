@@ -52,25 +52,26 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
   };
 
   return (
-    <div className="form-group mb-0 relative" ref={containerRef} style={{ zIndex: isOpen ? 100 : 10 }}>
+    <div className="form-group mb-0 flex flex-col justify-end" ref={containerRef} style={{ zIndex: isOpen ? 100 : 10 }}>
       <label className="form-label uppercase text-[10px] text-muted font-bold tracking-wider mb-1 block">{label}</label>
-      <div 
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
-        className={`form-input flex justify-between items-center transition-all ${selectedValues.length > 0 ? 'border-primary shadow-sm bg-primary/5' : 'bg-carbon-mid'}`}
-        style={{ cursor: 'pointer', borderColor: '#444', color: '#fff' }}
-      >
-        <span className="text-xs font-bold truncate pr-2" style={{ color: '#fff' }}>
-          {selectedValues.length === 0 ? 'Todos' : 
-           selectedValues.length === 1 ? selectedValues[0] : 
-           `${selectedValues.length} seleccionados`}
-        </span>
-        <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-200'} />
-      </div>
+      <div className="relative w-full">
+        <div 
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
+          className={`form-input flex justify-between items-center transition-all bg-carbon-mid`}
+          style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)', color: '#fff', height: '38px', width: '100%' }}
+        >
+          <span className="text-xs font-bold truncate pr-2" style={{ color: '#fff' }}>
+            {selectedValues.length === 0 ? 'Todos' : 
+             selectedValues.length === 1 ? selectedValues[0] : 
+             `${selectedValues.length} seleccionados`}
+          </span>
+          <Filter size={14} className={selectedValues.length > 0 ? 'text-primary' : 'text-gray-300'} />
+        </div>
 
-      {isOpen && (
-        <div className="absolute left-0 top-full mt-1 w-64 border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
-             style={{ backgroundColor: '#111', zIndex: 1000 }}>
-          <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
+        {isOpen && (
+          <div className="absolute left-0 right-0 w-full border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
+               style={{ top: '100%', marginTop: '4px', backgroundColor: '#111', zIndex: 1000 }}>
+            <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
             {options.map((opt) => (
               <div 
                 key={opt.value} 

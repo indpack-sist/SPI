@@ -476,19 +476,35 @@ const ReporteProductoDespachos = () => {
                         
                         <div className="flex flex-col gap-2 w-full lg:w-auto">
                             <label className="form-label text-[0.6rem] font-black text-wire uppercase tracking-[0.2em] block">Filtrar por:</label>
-                            <div className="flex bg-carbon/50 p-1 rounded-lg border border-steel/20 h-[48px] items-center">
-                                <button 
-                                    onClick={() => setFiltros({...filtros, tipoFecha: 'emision'})}
-                                    className={`px-4 h-full rounded text-[10px] font-black uppercase tracking-wider transition-all ${filtros.tipoFecha === 'emision' ? 'bg-primary text-carbon shadow-lg' : 'text-wire hover:text-mist'}`}
-                                >
-                                    Emisión
-                                </button>
-                                <button 
-                                    onClick={() => setFiltros({...filtros, tipoFecha: 'despacho'})}
-                                    className={`px-4 h-full rounded text-[10px] font-black uppercase tracking-wider transition-all ${filtros.tipoFecha === 'despacho' ? 'bg-primary text-carbon shadow-lg' : 'text-wire hover:text-mist'}`}
-                                >
-                                    Despacho
-                                </button>
+                            <div className="flex gap-4 p-2 bg-carbon/50 rounded-lg border border-steel/20 h-[48px] items-center">
+                                {[
+                                    { id: 'emision', label: 'Emisión' },
+                                    { id: 'despacho', label: 'Despacho' }
+                                ].map(opcion => (
+                                    <label key={opcion.id} className="flex items-center gap-2 cursor-pointer select-none group">
+                                        <div className="relative">
+                                            <input
+                                                type="radio"
+                                                name="tipoFecha"
+                                                className="hidden"
+                                                checked={filtros.tipoFecha === opcion.id}
+                                                onChange={() => setFiltros({...filtros, tipoFecha: opcion.id})}
+                                            />
+                                            <div className={`w-4 h-4 rounded-full border transition-all flex items-center justify-center ${
+                                                filtros.tipoFecha === opcion.id 
+                                                ? 'bg-primary border-primary shadow-lg shadow-primary/20' 
+                                                : 'bg-transparent border-steel group-hover:border-wire'
+                                            }`}>
+                                                {filtros.tipoFecha === opcion.id && <div className="w-1.5 h-1.5 bg-carbon rounded-full" />}
+                                            </div>
+                                        </div>
+                                        <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
+                                            filtros.tipoFecha === opcion.id ? 'text-primary' : 'text-wire group-hover:text-mist'
+                                        }`}>
+                                            {opcion.label}
+                                        </span>
+                                    </label>
+                                ))}
                             </div>
                         </div>
 

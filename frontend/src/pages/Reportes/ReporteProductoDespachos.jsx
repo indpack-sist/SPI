@@ -241,7 +241,7 @@ const ReporteProductoDespachos = () => {
         // Tamaños dinámicos escalados (triplicados/aumentados)
         const fontSizeEjes = esMuyDenso ? 12 : esDenso ? 14 : 16;
         const radioPunto = esMuyDenso ? 4 : esDenso ? 5 : 7;
-        const strokeLinea = esMuyDenso ? 2.5 : 3.5 : 4.5;
+        const strokeLinea = esMuyDenso ? 2.5 : esDenso ? 3.5 : 4.5;
         
         // Intervalo de etiquetas en X para evitar solapamiento
         const intervaloX = esMuyDenso ? Math.ceil(cantidadPuntos / 8) : esDenso ? 1 : 0;

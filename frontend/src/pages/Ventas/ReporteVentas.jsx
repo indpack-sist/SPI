@@ -668,13 +668,13 @@ const ReporteVentas = () => {
             ['Transporte', orden.transporte_nombre || ''], ['Placa Transporte', orden.transporte_placa || ''],
             ['Direccion Entrega', orden.direccion_entrega || ''], ['Ciudad', orden.ciudad_entrega || ''],
             [''], ['PRODUCTOS'],
-            ['Producto', 'Codigo', 'Cantidad', 'Unidad', 'P. Unitario', 'Descuento', 'Subtotal', 'Despachado']
+            ['Producto', 'Codigo', 'Cantidad', 'Unidad', 'P. Unitario', 'Subtotal', 'Despachado']
           ];
 
           if (orden.detalles && orden.detalles.length > 0) {
             orden.detalles.forEach(det => {
               datosOrden.push([det.producto_nombre, det.codigo_producto, det.cantidad, det.unidad_medida,
-                `${orden.moneda} ${det.precio_unitario}`, parseFloat(det.descuento) > 0 ? `${orden.moneda} ${det.descuento}` : '-',
+                `${orden.moneda} ${det.precio_unitario}`,
                 `${orden.moneda} ${det.subtotal}`, `${det.cantidad_despachada}/${det.cantidad}`]);
             });
           }
@@ -699,8 +699,18 @@ const ReporteVentas = () => {
             datosOrden.push(['Comision (' + orden.porcentaje_comision_promedio + '%)', `${orden.moneda} ${orden.total_comision}`]);
           }
 
+          const docsAsociados = [
+            [''], ['DOCUMENTOS ASOCIADOS'],
+            ['Cotizacion', orden.numero_cotizacion || '']
+          ];
+          
+          if (orden.tipo_comprobante && String(orden.tipo_comprobante).includes('Nota de Venta')) {
+              docsAsociados.push(['Guia Interna', orden.numero_guia_interna || '']);
+          }
+          docsAsociados.push(['OC Cliente', orden.orden_compra_cliente || '']);
+
           datosOrden.push([''], ['PERSONAL'], ['Vendedor', orden.vendedor], ['Registrado por', orden.registrador], ['Verificador', orden.verificador]);
-          datosOrden.push([''], ['DOCUMENTOS ASOCIADOS'], ['Cotizacion', orden.numero_cotizacion || ''], ['Guia Interna', orden.numero_guia_interna || ''], ['OC Cliente', orden.orden_compra_cliente || '']);
+          datosOrden.push(...docsAsociados);
 
           const wsOrden = XLSX.utils.aoa_to_sheet(datosOrden);
           wsOrden['!cols'] = [{ wch: 30 }, { wch: 50 }];

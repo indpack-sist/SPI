@@ -27,13 +27,14 @@ const ReporteDeudasClientes = () => {
         estadoSunat: '',
         soloVencidas: false
     });
-    
+
     const [loading, setLoading] = useState(false);
     const [reporteData, setReporteData] = useState(null);
     const [error, setError] = useState(null);
+    const [errorFecha, setErrorFecha] = useState('');
 
     const [detalleExpandido, setDetalleExpandido] = useState({
-        grupoKey: null, 
+        grupoKey: null,
         chartType: null,
         titulo: '',
         data: []
@@ -60,7 +61,7 @@ const ReporteDeudasClientes = () => {
     const clientesFiltrados = useMemo(() => {
         if (!busquedaCliente) return [];
         const term = busquedaCliente.toLowerCase();
-        return clientes.filter(c => 
+        return clientes.filter(c =>
             c.razon_social.toLowerCase().includes(term) || (c.ruc && c.ruc.includes(term))
         ).slice(0, 50);
     }, [clientes, busquedaCliente]);
@@ -73,10 +74,25 @@ const ReporteDeudasClientes = () => {
 
     const handleChangeFiltro = (e) => {
         const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-        setFiltros({ ...filtros, [e.target.name]: value });
+        const nuevosFiltros = { ...filtros, [e.target.name]: value };
+        setFiltros(nuevosFiltros);
+
+        const inicio = e.target.name === 'fechaInicio' ? value : nuevosFiltros.fechaInicio;
+        const fin = e.target.name === 'fechaFin' ? value : nuevosFiltros.fechaFin;
+
+        if (inicio && fin) {
+            if (inicio > fin) {
+                setErrorFecha('La fecha "Desde" no puede ser posterior a la fecha "Hasta".');
+            } else {
+                setErrorFecha('');
+            }
+        } else {
+            setErrorFecha('');
+        }
     };
 
     const generarReporte = async () => {
+        if (errorFecha) return;
         setLoading(true);
         setError(null);
         setDetalleExpandido({ grupoKey: null, titulo: '', data: [] });
@@ -154,7 +170,7 @@ const ReporteDeudasClientes = () => {
                         <p className="text-[9px] text-wire font-bold uppercase tracking-[0.2em]">Auditoría de documentos fuente</p>
                     </div>
                 </div>
-                <button 
+                <button
                     onClick={() => setDetalleExpandido({ grupoKey: null, chartType: null, titulo: '', data: [] })}
                     className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#2a2a2a] hover:bg-red-500/30 border border-white/10 hover:border-red-500/50 text-wire hover:text-red-500 transition-all shadow-lg"
                     style={{ cursor: 'pointer' }}
@@ -162,7 +178,7 @@ const ReporteDeudasClientes = () => {
                     <X size={18} />
                 </button>
             </div>
-            
+
             <div className="overflow-x-auto custom-scrollbar max-h-[400px]">
                 <table className="table-gerencial w-full text-left border-collapse whitespace-nowrap">
                     <thead className="sticky top-0 z-10">
@@ -184,35 +200,36 @@ const ReporteDeudasClientes = () => {
                             if (dias > 60) badge = "bg-red-600/15 text-red-400 border-red-600/30";
                             else if (dias > 30) badge = "bg-orange-500/15 text-orange-400 border-orange-500/30";
                             else if (dias > 0) badge = "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
-                            
+
                             return (
-                            <tr key={item.id_orden_venta} className="hover:bg-white/[0.04] border-b border-white/5 transition-colors">
-                                <td className="pl-6 py-3">
-                                    <div className="font-mono font-bold text-primary text-xs">{item.numero_orden}</div>
-                                    <div className="text-[9px] text-wire uppercase font-black tracking-tight">{item.tipo_comprobante}</div>
-                                </td>
-                                <td className="py-3">
-                                    <div className="text-xs text-white">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</div>
-                                    <div className={`text-[9px] font-black ${esVencido ? 'text-red-400' : 'text-wire'}`}>Vence: {new Date(item.fecha_vencimiento).toLocaleDateString('es-PE')}</div>
-                                </td>
-                                <td className="text-xs text-mist font-bold truncate max-w-[200px] py-3" title={item.cliente}>{item.cliente}</td>
-                                <td className="text-right font-mono font-bold text-wire text-xs py-3">{item.moneda} {formatearNum(item.total_real)}</td>
-                                <td className="text-right font-mono py-3">
-                                    <div className="font-black text-white text-xs">{item.moneda} {formatearNum(item.deuda_pendiente)}</div>
-                                    <div className="text-[9px] text-green-500 font-black">Pagado: {parseFloat(item.monto_pagado).toFixed(2)}</div>
-                                </td>
-                                <td className="text-center py-3">
-                                    <span className={`px-2 py-0.5 text-[9px] font-black border rounded-full ${badge}`}>
-                                        {esVencido ? `${dias} DÍAS MORA` : 'AL DÍA'}
-                                    </span>
-                                </td>
-                                <td className="text-right pr-6 py-3">
-                                    <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-1.5 bg-[#222] border border-white/10 hover:border-primary/50 hover:bg-primary/20 text-primary transition-all inline-flex rounded-lg shadow-xl">
-                                        <ExternalLink size={16} />
-                                    </Link>
-                                </td>
-                            </tr>
-                        )})}
+                                <tr key={item.id_orden_venta} className="hover:bg-white/[0.04] border-b border-white/5 transition-colors">
+                                    <td className="pl-6 py-3">
+                                        <div className="font-mono font-bold text-primary text-xs">{item.numero_orden}</div>
+                                        <div className="text-[9px] text-wire uppercase font-black tracking-tight">{item.tipo_comprobante}</div>
+                                    </td>
+                                    <td className="py-3">
+                                        <div className="text-xs text-white">{new Date(item.fecha_emision).toLocaleDateString('es-PE')}</div>
+                                        <div className={`text-[9px] font-black ${esVencido ? 'text-red-400' : 'text-wire'}`}>Vence: {new Date(item.fecha_vencimiento).toLocaleDateString('es-PE')}</div>
+                                    </td>
+                                    <td className="text-xs text-mist font-bold truncate max-w-[200px] py-3" title={item.cliente}>{item.cliente}</td>
+                                    <td className="text-right font-mono font-bold text-wire text-xs py-3">{item.moneda} {formatearNum(item.total_real)}</td>
+                                    <td className="text-right font-mono py-3">
+                                        <div className="font-black text-white text-xs">{item.moneda} {formatearNum(item.deuda_pendiente)}</div>
+                                        <div className="text-[9px] text-green-500 font-black">Pagado: {parseFloat(item.monto_pagado).toFixed(2)}</div>
+                                    </td>
+                                    <td className="text-center py-3">
+                                        <span className={`px-2 py-0.5 text-[9px] font-black border rounded-full ${badge}`}>
+                                            {esVencido ? `${dias} DÍAS MORA` : 'AL DÍA'}
+                                        </span>
+                                    </td>
+                                    <td className="text-right pr-6 py-3">
+                                        <Link to={`/ventas/ordenes/${item.id_orden_venta}`} target="_blank" className="p-1.5 bg-[#222] border border-white/10 hover:border-primary/50 hover:bg-primary/20 text-primary transition-all inline-flex rounded-lg shadow-xl">
+                                            <ExternalLink size={16} />
+                                        </Link>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -227,129 +244,123 @@ const ReporteDeudasClientes = () => {
     );
 
     const renderGrupoGraficos = (keyGrupo, tituloBase, color, moneda) => {
-    const data = reporteData.resumen[keyGrupo];
-    if (!data || parseFloat(data.total) <= 0) return null;
-    const tituloTop = filtros.idCliente ? `Distribución de Deuda: ${busquedaCliente}` : "Top 5 Deudores Críticos";
-    const isExpanded = detalleExpandido.grupoKey === keyGrupo;
+        const data = reporteData.resumen[keyGrupo];
+        if (!data || parseFloat(data.total) <= 0) return null;
+        const tituloTop = filtros.idCliente ? `Distribución de Deuda: ${busquedaCliente}` : "Top 5 Deudores Críticos";
+        const isExpanded = detalleExpandido.grupoKey === keyGrupo;
 
-    const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
+        const DEUDORES_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-    const CustomTick = (props) => {
-        const { x, y, payload } = props;
-        if (!payload || !payload.value) return null;
-        const words = payload.value.split(' ');
-        let lines = [];
-        let currentLine = '';
-        words.forEach(word => {
-            if ((currentLine + word).length > 12) {
-                if (currentLine) lines.push(currentLine);
-                currentLine = word + ' ';
-            } else {
-                currentLine += word + ' ';
-            }
-        });
-        if (currentLine) lines.push(currentLine.trim());
+        const CustomTick = (props) => {
+            const { x, y, payload } = props;
+            if (!payload || !payload.value) return null;
+            const words = payload.value.split(' ');
+            let lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                if ((currentLine + word).length > 12) {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine) lines.push(currentLine.trim());
+            return (
+                <g transform={`translate(${x},${y})`}>
+                    {lines.map((line, index) => (
+                        <text key={index} x={0} y={12 + index * 12} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">
+                            {line.length > 15 ? line.substring(0, 13) + '...' : line}
+                        </text>
+                    ))}
+                </g>
+            );
+        };
+
         return (
-            <g transform={`translate(${x},${y})`}>
-                {lines.map((line, index) => (
-                    <text key={index} x={0} y={12 + index * 12} textAnchor="middle" fill="#fff" fontSize={10} fontWeight="bold">
-                        {line.length > 15 ? line.substring(0, 13) + '...' : line}
-                    </text>
-                ))}
-            </g>
+            <div className="space-y-6 mt-12 pt-8 border-t border-white/10" key={keyGrupo}>
+                <div className="flex items-center justify-center gap-3 mb-4">
+                    <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/20"></div>
+                    <h2 className="text-sm font-black text-white uppercase tracking-[0.4em] text-center px-8 py-3 bg-white/5 rounded-full border border-white/20 shadow-2xl">
+                        {tituloBase}
+                    </h2>
+                    <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/20"></div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'aging' ? 'ring-2 ring-primary/50' : ''}`}>
+                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
+                            <PieChart size={20} style={{ color }} />
+                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">Antigüedad de Deuda (Aging)</h3>
+                        </div>
+                        <div className="card-body p-6 flex-1">
+                            <div style={{ width: '100%', height: 320 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" stroke="#fff" fontSize={13} width={100} tick={{ fontWeight: '900', fill: '#fff' }} />
+                                        <Tooltip
+                                            cursor={{ fill: 'rgba(255,255,255,0.08)' }}
+                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
+                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
+                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
+                                            formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
+                                        />
+                                        <Bar
+                                            dataKey="monto"
+                                            radius={[0, 6, 6, 0]}
+                                            cursor="pointer"
+                                            onClick={(barData) => handleDrillDown(barData, 'aging', keyGrupo, tituloBase)}
+                                        >
+                                            {data.aging.map((e, i) => (
+                                                <Cell key={`cell-${i}`} fill={e.color} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                        {isExpanded && detalleExpandido.chartType === 'aging' && renderTablaAuditoria()}
+                    </div>
+
+                    <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'deudores' ? 'ring-2 ring-primary/50' : ''}`}>
+                        <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
+                            <TrendingUp size={20} style={{ color }} />
+                            <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">{tituloTop}</h3>
+                        </div>
+                        <div className="card-body p-6 flex-1">
+                            <div style={{ width: '100%', height: 320 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={data.topDeudores} margin={{ bottom: 80, top: 10, right: 30 }}>
+                                        <XAxis dataKey="name" stroke="#fff" interval={0} height={90} tick={<CustomTick />} />
+                                        <YAxis stroke="#aaa" fontSize={11} tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v / 1000)}k`} tick={{ fontWeight: 'bold' }} />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
+                                            itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
+                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
+                                            formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
+                                        />
+                                        <Bar
+                                            dataKey="deuda"
+                                            radius={[6, 6, 0, 0]}
+                                            cursor="pointer"
+                                            onClick={(barData) => handleDrillDown(barData, 'deudores', keyGrupo, tituloBase)}
+                                        >
+                                            {data.topDeudores.map((e, i) => (
+                                                <Cell key={`cell-${i}`} fill={DEUDORES_COLORS[i % DEUDORES_COLORS.length]} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                        {isExpanded && detalleExpandido.chartType === 'deudores' && renderTablaAuditoria()}
+                    </div>
+                </div>
+            </div>
         );
     };
-
-    return (
-        <div className="space-y-6 mt-12 pt-8 border-t border-white/10" key={keyGrupo}>
-            <div className="flex items-center justify-center gap-3 mb-4">
-                <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent to-white/20"></div>
-                <h2 className="text-sm font-black text-white uppercase tracking-[0.4em] text-center px-8 py-3 bg-white/5 rounded-full border border-white/20 shadow-2xl">
-                    {tituloBase}
-                </h2>
-                <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-white/20"></div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Aging */}
-                <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'aging' ? 'ring-2 ring-primary/50' : ''}`}>
-                    <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
-                        <PieChart size={20} style={{ color }} />
-                        <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">Antigüedad de Deuda (Aging)</h3>
-                    </div>
-                    <div className="card-body p-6 flex-1">
-                        <div style={{ width: '100%', height: 320 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                {/* ✅ Sin onClick en BarChart */}
-                                <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
-                                    <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" stroke="#fff" fontSize={13} width={100} tick={{ fontWeight: '900', fill: '#fff' }} />
-                                    <Tooltip
-                                        cursor={{ fill: 'rgba(255,255,255,0.08)' }}
-                                        contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
-                                        itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                        labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
-                                        formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
-                                    />
-                                    {/* ✅ onClick movido aquí, datos llegan directamente */}
-                                    <Bar
-                                        dataKey="monto"
-                                        radius={[0, 6, 6, 0]}
-                                        cursor="pointer"
-                                        onClick={(barData) => handleDrillDown(barData, 'aging', keyGrupo, tituloBase)}
-                                    >
-                                        {data.aging.map((e, i) => (
-                                            <Cell key={`cell-${i}`} fill={e.color} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                    {isExpanded && detalleExpandido.chartType === 'aging' && renderTablaAuditoria()}
-                </div>
-
-                {/* Top Deudores */}
-                <div className={`card border border-white/10 bg-carbon-mid shadow-2xl flex flex-col ${isExpanded && detalleExpandido.chartType === 'deudores' ? 'ring-2 ring-primary/50' : ''}`}>
-                    <div className="card-header border-b border-white/10 py-4 px-6 flex flex-col items-center justify-center gap-2 bg-carbon-light/20">
-                        <TrendingUp size={20} style={{ color }} />
-                        <h3 className="text-[0.75rem] font-black text-white uppercase tracking-[0.3em]">{tituloTop}</h3>
-                    </div>
-                    <div className="card-body p-6 flex-1">
-                        <div style={{ width: '100%', height: 320 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                {/* ✅ Sin onClick en BarChart */}
-                                <BarChart data={data.topDeudores} margin={{ bottom: 80, top: 10, right: 30 }}>
-                                    <XAxis dataKey="name" stroke="#fff" interval={0} height={90} tick={<CustomTick />} />
-                                    <YAxis stroke="#aaa" fontSize={11} tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v / 1000)}k`} tick={{ fontWeight: 'bold' }} />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
-                                        itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                        labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
-                                        formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
-                                    />
-                                    {/* ✅ onClick movido aquí */}
-                                    <Bar
-                                        dataKey="deuda"
-                                        radius={[6, 6, 0, 0]}
-                                        cursor="pointer"
-                                        onClick={(barData) => handleDrillDown(barData, 'deudores', keyGrupo, tituloBase)}
-                                    >
-                                        {data.topDeudores.map((e, i) => (
-                                            <Cell key={`cell-${i}`} fill={DEUDORES_COLORS[i % DEUDORES_COLORS.length]} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                    {isExpanded && detalleExpandido.chartType === 'deudores' && renderTablaAuditoria()}
-                </div>
-            </div>
-        </div>
-    );
-};
 
     return (
         <div className="p-4 md:p-6 page-reporte-cuentas bg-carbon text-mist min-h-screen">
@@ -381,7 +392,7 @@ const ReporteDeudasClientes = () => {
                 <div className="card-body p-6 space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="form-group lg:col-span-1 relative" ref={dropdownClienteRef}>
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><User size={12}/> Cliente</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><User size={12} /> Cliente</label>
                             <div className="relative">
                                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
                                 <input
@@ -414,7 +425,7 @@ const ReporteDeudasClientes = () => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Coins size={12}/> Moneda</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Coins size={12} /> Moneda</label>
                             <select name="moneda" value={filtros.moneda} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="">Todas las Monedas</option>
                                 <option value="PEN">Soles (PEN)</option>
@@ -422,7 +433,7 @@ const ReporteDeudasClientes = () => {
                             </select>
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><FileText size={12}/> Comprobante</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><FileText size={12} /> Comprobante</label>
                             <select name="tipoComprobante" value={filtros.tipoComprobante} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="">Todos los Tipos</option>
                                 <option value="Factura">Factura</option>
@@ -431,7 +442,7 @@ const ReporteDeudasClientes = () => {
                             </select>
                         </div>
                         <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Box size={12}/> Estado SUNAT</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Box size={12} /> Estado SUNAT</label>
                             <select name="estadoSunat" value={filtros.estadoSunat} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="">Todos (SUNAT e Internos)</option>
                                 <option value="con_correlativo">Solo con Correlativo SUNAT</option>
@@ -442,7 +453,7 @@ const ReporteDeudasClientes = () => {
 
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="form-group">
-                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Clock size={12}/> Tipo de Fecha</label>
+                            <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 flex items-center gap-2"><Clock size={12} /> Tipo de Fecha</label>
                             <select name="tipoFecha" value={filtros.tipoFecha} onChange={handleChangeFiltro} className="form-select w-full font-bold">
                                 <option value="fecha_emision">Fecha de Emisión (Orden)</option>
                                 <option value="fecha_sunat">Fecha de Facturación SUNAT</option>
@@ -450,19 +461,44 @@ const ReporteDeudasClientes = () => {
                         </div>
                         <div className="form-group">
                             <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Desde</label>
-                            <input type="date" name="fechaInicio" value={filtros.fechaInicio} onChange={handleChangeFiltro} className="form-input w-full" />
+                            <input
+                                type="date"
+                                name="fechaInicio"
+                                value={filtros.fechaInicio}
+                                onChange={handleChangeFiltro}
+                                max={filtros.fechaFin || undefined}
+                                className={`form-input w-full ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                            />
                         </div>
                         <div className="form-group">
                             <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Hasta</label>
-                            <input type="date" name="fechaFin" value={filtros.fechaFin} onChange={handleChangeFiltro} className="form-input w-full" />
+                            <input
+                                type="date"
+                                name="fechaFin"
+                                value={filtros.fechaFin}
+                                onChange={handleChangeFiltro}
+                                min={filtros.fechaInicio || undefined}
+                                className={`form-input w-full ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
+                            />
                         </div>
                         <div className="form-group">
                             <label className="text-[0.65rem] font-black text-wire uppercase tracking-widest mb-2 block">Acción</label>
-                            <button onClick={generarReporte} disabled={loading} className="btn btn-primary w-full h-[46px] font-black tracking-widest uppercase text-[11px] shadow-2xl shadow-primary/30 flex items-center justify-center gap-2 transition-all active:scale-95 border-none">
-                                <TrendingUp size={16}/> {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
+                            <button
+                                onClick={generarReporte}
+                                disabled={loading || !!errorFecha}
+                                className="btn btn-primary w-full h-[46px] font-black tracking-widest uppercase text-[11px] shadow-2xl shadow-primary/30 flex items-center justify-center gap-2 transition-all active:scale-95 border-none disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                <TrendingUp size={16} /> {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
                             </button>
                         </div>
                     </div>
+
+                    {errorFecha && (
+                        <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-xl">
+                            <AlertCircle size={14} className="text-red-400 shrink-0" />
+                            <span className="text-[11px] font-black text-red-400 uppercase tracking-widest">{errorFecha}</span>
+                        </div>
+                    )}
 
                     <div className="pt-4 border-t border-white/10 flex items-center justify-between">
                         <label className="flex items-center gap-4 cursor-pointer group">

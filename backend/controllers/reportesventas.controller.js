@@ -222,16 +222,16 @@ export const getReporteVentas = async (req, res) => {
             const vendedor = orden.nombre_vendedor || 'Sin Asignar';
             const keyVendedor = `${vendedor}_${orden.moneda}`;
             if (!ventasPorVendedor[keyVendedor]) ventasPorVendedor[keyVendedor] = 0;
-            ventasPorVendedor[keyVendedor] += totalOriginal;
+            ventasPorVendedor[keyVendedor] += montoOriginal;
 
             const keyEstado = `${orden.estado}_${orden.moneda}`;
             if (!ventasPorEstado[keyEstado]) ventasPorEstado[keyEstado] = 0;
-            ventasPorEstado[keyEstado] += totalOriginal;
+            ventasPorEstado[keyEstado] += montoOriginal;
 
             const fechaStr = new Date(orden.fecha_emision).toISOString().split('T')[0];
             const keyDia = `${fechaStr}_${orden.moneda}`;
             if (!ventasPorDia[keyDia]) ventasPorDia[keyDia] = 0;
-            ventasPorDia[keyDia] += totalOriginal;
+            ventasPorDia[keyDia] += montoOriginal;
 
             const detallesOrden = detallesMap[orden.id_orden_venta] || [];
 
@@ -285,8 +285,8 @@ export const getReporteVentas = async (req, res) => {
                 moneda: orden.moneda,
                 tipo_cambio: tcOrden,
                 subtotal: subtotalOriginal.toFixed(3),
-                igv: igvOriginal.toFixed(3),
-                total: totalOriginal.toFixed(3),
+                igv: (montoOriginal - subtotalOriginal).toFixed(3),
+                total: montoOriginal.toFixed(3),
                 subtotal_pen: subtotalPEN.toFixed(3),
                 igv_pen: igvPEN.toFixed(3),
                 total_pen: totalPEN.toFixed(3),

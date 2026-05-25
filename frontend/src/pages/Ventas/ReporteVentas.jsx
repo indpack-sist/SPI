@@ -10,7 +10,7 @@ import {
   FileText, CheckCircle, AlertCircle, Truck, User, X,
   Eye, Package, MapPin, Phone, Mail, CreditCard, FileCheck,
   ShoppingCart, Percent, Building2, RefreshCw, ArrowRightLeft,
-  RefreshCcw, AlertTriangle, Clock
+  RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { reportesAPI, clientesAPI, tipoCambioAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
@@ -137,6 +137,9 @@ const ReporteVentas = () => {
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
   const [convertirUSD, setConvertirUSD] = useState(false);
+  const [mostrarModalTC, setMostrarModalTC] = useState(false);
+  const [modoUnificacion, setModoUnificacion] = useState('mixto'); // 'sunat', 'mixto', 'historico'
+  const [mostrarDesgloseUSD, setMostrarDesgloseUSD] = useState(false);
 
   const fechaHoy = new Date();
   const primerDiaMes = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth(), 1);
@@ -255,9 +258,41 @@ const ReporteVentas = () => {
     return 'Expira pronto';
   };
 
-  const totalUnificadoPEN = (pen, usd) => {
-    if (!convertirUSD || !tcVenta) return null;
-    return parseFloat(pen) + (parseFloat(usd) * tcVenta);
+  const handleToggleConvertirUSD = () => {
+    if (!convertirUSD) {
+      setMostrarModalTC(true);
+    } else {
+      setConvertirUSD(false);
+      setModoUnificacion('mixto');
+    }
+  };
+
+  const aplicarModoUnificacion = (modo) => {
+    setModoUnificacion(modo);
+    setConvertirUSD(true);
+    setMostrarModalTC(false);
+  };
+
+  const calcularTotalUnificadoPorModo = (propItem) => {
+    return dataReporte.detalle.reduce((sum, item) => {
+      const val = parseFloat(item[propItem] || 0);
+      if (item.moneda === 'USD') {
+        const tcOrden = parseFloat(item.tipo_cambio || 1);
+        if (modoUnificacion === 'sunat') {
+          return sum + (val * tcVenta);
+        } else if (modoUnificacion === 'mixto') {
+          return sum + (val * (tcOrden > 3 ? tcOrden : tcVenta));
+        } else { // historico
+          return sum + (val * tcOrden);
+        }
+      }
+      return sum + val;
+    }, 0);
+  };
+
+  const totalUnificadoPEN = (pen, usd, propItem) => {
+    if (!convertirUSD) return calcularTotalUnificadoPorModo(propItem);
+    return calcularTotalUnificadoPorModo(propItem);
   };
 
   const formatearMoneda = (valor, moneda = 'PEN') => {
@@ -406,7 +441,14 @@ const ReporteVentas = () => {
       const wb = XLSX.utils.book_new();
 
       const mapBaseItem = (item, incluirPEN) => {
-        const tcOrden = parseFloat(item.tipo_cambio || 1);
+        const tcOrdenOriginal = parseFloat(item.tipo_cambio || 1);
+        let tcAplicado = tcOrdenOriginal;
+        
+        if (convertirUSD && item.moneda === 'USD') {
+          if (modoUnificacion === 'sunat') tcAplicado = tcVenta;
+          else if (modoUnificacion === 'mixto') tcAplicado = tcOrdenOriginal > 3 ? tcOrdenOriginal : tcVenta;
+        }
+
         const base = {
           'Orden': item.numero,
           'Tipo Comprobante': item.tipo_comprobante || '',
@@ -426,7 +468,7 @@ const ReporteVentas = () => {
         };
 
         if (incluirPEN) {
-          base['TC Orden'] = item.moneda === 'USD' ? tcOrden : '-';
+          base['TC Orden'] = item.moneda === 'USD' ? tcAplicado : '-';
         }
 
         base['Subtotal Orig.'] = parseFloat(parseFloat(item.subtotal).toFixed(3));
@@ -436,11 +478,19 @@ const ReporteVentas = () => {
         base['Por Cobrar Orig.'] = parseFloat(parseFloat(item.pendiente_cobro).toFixed(3));
 
         if (incluirPEN) {
-          base['Subtotal (PEN)'] = parseFloat(parseFloat(item.subtotal_pen || item.subtotal).toFixed(3));
-          base['IGV (PEN)'] = parseFloat(parseFloat(item.igv_pen || item.igv).toFixed(3));
-          base['Total (PEN)'] = parseFloat(parseFloat(item.total_pen || item.total).toFixed(3));
-          base['Pagado (PEN)'] = parseFloat(parseFloat(item.monto_pagado_pen || item.monto_pagado).toFixed(3));
-          base['Por Cobrar (PEN)'] = parseFloat(parseFloat(item.pendiente_cobro_pen || item.pendiente_cobro).toFixed(3));
+          if (item.moneda === 'USD') {
+            base['Subtotal (PEN)'] = parseFloat((parseFloat(item.subtotal) * tcAplicado).toFixed(3));
+            base['IGV (PEN)'] = parseFloat((parseFloat(item.igv) * tcAplicado).toFixed(3));
+            base['Total (PEN)'] = parseFloat((parseFloat(item.total) * tcAplicado).toFixed(3));
+            base['Pagado (PEN)'] = parseFloat((parseFloat(item.monto_pagado) * tcAplicado).toFixed(3));
+            base['Por Cobrar (PEN)'] = parseFloat((parseFloat(item.pendiente_cobro) * tcAplicado).toFixed(3));
+          } else {
+            base['Subtotal (PEN)'] = parseFloat(parseFloat(item.subtotal).toFixed(3));
+            base['IGV (PEN)'] = parseFloat(parseFloat(item.igv).toFixed(3));
+            base['Total (PEN)'] = parseFloat(parseFloat(item.total).toFixed(3));
+            base['Pagado (PEN)'] = parseFloat(parseFloat(item.monto_pagado).toFixed(3));
+            base['Por Cobrar (PEN)'] = parseFloat(parseFloat(item.pendiente_cobro).toFixed(3));
+          }
         }
 
         base['Estado Pago'] = item.estado_pago;
@@ -668,7 +718,14 @@ const ReporteVentas = () => {
 
       if (incluirDetalleExcel) {
         dataFiltrada.forEach((orden) => {
-          const tcOrden = parseFloat(orden.tipo_cambio || 1);
+          const tcOrdenOriginal = parseFloat(orden.tipo_cambio || 1);
+          let tcAplicado = tcOrdenOriginal;
+          
+          if (convertirUSD && orden.moneda === 'USD') {
+            if (modoUnificacion === 'sunat') tcAplicado = tcVenta;
+            else if (modoUnificacion === 'mixto') tcAplicado = tcOrdenOriginal > 3 ? tcOrdenOriginal : tcVenta;
+          }
+
           const nombreHoja = orden.numero.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 31);
           const formaPagoTexto = orden.tipo_venta === 'Credito' ? `Credito ${orden.dias_credito} Dias` : 'Contado';
           const fechaVencimientoTexto = orden.tipo_venta === 'Credito' ? formatearFecha(orden.fecha_vencimiento) : '-';
@@ -716,12 +773,12 @@ const ReporteVentas = () => {
             ['Pendiente de Cobro', `${orden.moneda} ${orden.pendiente_cobro}`]);
 
           if (orden.moneda === 'USD') {
-            datosOrden.push([''], ['CONVERSION A SOLES (TC Aplicado: S/ ' + tcOrden.toFixed(3) + ')'],
-              ['Subtotal (PEN)', `S/ ${orden.subtotal_pen}`],
-              ['IGV (PEN)', `S/ ${orden.igv_pen}`],
-              ['Total (PEN)', `S/ ${orden.total_pen}`],
-              ['Pagado (PEN)', `S/ ${orden.monto_pagado_pen}`],
-              ['Pendiente (PEN)', `S/ ${orden.pendiente_cobro_pen}`]);
+            datosOrden.push([''], ['CONVERSION A SOLES (TC Aplicado: S/ ' + tcAplicado.toFixed(3) + ')'],
+              ['Subtotal (PEN)', `S/ ${parseFloat((parseFloat(orden.subtotal) * tcAplicado).toFixed(3))}`],
+              ['IGV (PEN)', `S/ ${parseFloat((parseFloat(orden.igv) * tcAplicado).toFixed(3))}`],
+              ['Total (PEN)', `S/ ${parseFloat((parseFloat(orden.total) * tcAplicado).toFixed(3))}`],
+              ['Pagado (PEN)', `S/ ${parseFloat((parseFloat(orden.monto_pagado) * tcAplicado).toFixed(3))}`],
+              ['Pendiente (PEN)', `S/ ${parseFloat((parseFloat(orden.pendiente_cobro) * tcAplicado).toFixed(3))}`]);
           }
 
           if (parseFloat(orden.total_comision) > 0) {
@@ -792,6 +849,81 @@ const ReporteVentas = () => {
     return <ShoppingCart size={16} className="text-green-600" />;
   };
 
+  const renderDesgloseUnificacion = () => {
+    const ordenesUSD = dataFiltrada.filter(item => item.moneda === 'USD');
+    if (ordenesUSD.length === 0) return null;
+
+    let grupoSunat = [];
+    let grupoHistorico = [];
+
+    ordenesUSD.forEach(orden => {
+      const tcOrden = parseFloat(orden.tipo_cambio || 1);
+      const totalOrden = parseFloat(orden.total || 0);
+
+      if (modoUnificacion === 'sunat') {
+        grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tipo: 'Global SUNAT' });
+      } else if (modoUnificacion === 'historico') {
+        grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tipo: 'Estricto Histórico' });
+      } else if (modoUnificacion === 'mixto') {
+        if (tcOrden > 3) {
+          grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tipo: 'Histórico Válido' });
+        } else {
+          grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tipo: 'SUNAT Rescate' });
+        }
+      }
+    });
+
+    return (
+      <div className="mt-4 border-t border-yellow-200/50 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+        <h4 className="text-xs font-bold text-yellow-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <FileText size={14} /> Desglose de Órdenes en USD ({ordenesUSD.length})
+        </h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {grupoHistorico.length > 0 && (
+            <div className="bg-white/40 rounded-lg p-3 border border-yellow-200/30">
+              <div className="flex justify-between items-center mb-2">
+                <h5 className="text-[10px] font-black text-gray-700 uppercase">Respetando TC de la Orden</h5>
+                <span className="badge badge-secondary badge-sm bg-gray-200 text-gray-700 border-none">{grupoHistorico.length}</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto custom-scrollbar pr-1 space-y-1">
+                {grupoHistorico.map(o => (
+                  <div key={o.numero} className="flex justify-between items-center text-xs py-1 border-b border-gray-100 last:border-0">
+                    <span className="font-mono text-gray-600">{o.numero}</span>
+                    <div className="text-right">
+                      <span className="text-gray-500 mr-2 text-[10px]">TC: {o.tcUsado.toFixed(3)}</span>
+                      <span className="font-bold text-gray-800">S/ {formatearNumero(o.valorPen)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {grupoSunat.length > 0 && (
+            <div className="bg-yellow-100/50 rounded-lg p-3 border border-yellow-300/30">
+              <div className="flex justify-between items-center mb-2">
+                <h5 className="text-[10px] font-black text-yellow-800 uppercase">Aplicando TC SUNAT</h5>
+                <span className="badge badge-warning badge-sm border-none bg-yellow-200 text-yellow-800">{grupoSunat.length}</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto custom-scrollbar pr-1 space-y-1">
+                {grupoSunat.map(o => (
+                  <div key={o.numero} className="flex justify-between items-center text-xs py-1 border-b border-yellow-200/30 last:border-0">
+                    <span className="font-mono text-yellow-800">{o.numero}</span>
+                    <div className="text-right">
+                      <span className="text-yellow-600 mr-2 text-[10px]">TC: {o.tcUsado.toFixed(3)}</span>
+                      <span className="font-bold text-yellow-900">S/ {formatearNumero(o.valorPen)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const resumen = dataReporte.resumen;
   const hayUSDenData = resumen.total_ventas_usd > 0;
 
@@ -850,7 +982,7 @@ const ReporteVentas = () => {
             </div>
             <div className="flex items-center gap-2">
               {tipoCambio && hayUSDenData && (
-                <button className={`btn btn-sm ${convertirUSD ? 'btn-warning' : 'btn-outline'}`} onClick={() => setConvertirUSD(!convertirUSD)}
+                <button className={`btn btn-sm ${convertirUSD ? 'btn-warning' : 'btn-outline'}`} onClick={handleToggleConvertirUSD}
                   title={convertirUSD ? 'Mostrando totales unificados en PEN' : 'Convertir USD a PEN con TC SUNAT'}>
                   <ArrowRightLeft size={14} />{convertirUSD ? 'Viendo en PEN' : 'Unificar a PEN'}
                 </button>
@@ -1051,21 +1183,33 @@ const ReporteVentas = () => {
 
       {convertirUSD && tcVenta && hayUSDenData && (
         <div className="card mb-4 p-4 rounded-lg" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.08))', border: '1px solid var(--accent-border, rgba(234,179,8,0.3))' }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ArrowRightLeft size={20} style={{ color: 'var(--accent, #ca8a04)' }} />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <ArrowRightLeft size={20} style={{ color: 'var(--accent, #ca8a04)' }} className="mt-1" />
               <div>
                 <p className="text-sm font-semibold" style={{ color: 'var(--accent, #ca8a04)' }}>
-                  Totales unificados en Soles (TC Venta SUNAT: S/ {tcVenta.toFixed(3)})
+                  {modoUnificacion === 'sunat' ? `Totales unificados en Soles (TC Global SUNAT: S/ ${tcVenta.toFixed(3)})` : 
+                   modoUnificacion === 'mixto' ? `Totales unificados en Soles (TC Híbrido: SUNAT S/ ${tcVenta.toFixed(3)} + Históricos)` : 
+                   'Totales unificados en Soles (Respetando TC Histórico de cada orden estricto)'}
                 </p>
-                <div className="flex gap-6 mt-1">
-                  <span className="text-sm">Ventas: <strong className="text-base">S/ {formatearNumero(totalUnificadoPEN(resumen.total_ventas_pen, resumen.total_ventas_usd))}</strong></span>
-                  <span className="text-sm text-green-700">Cobrado: <strong>S/ {formatearNumero(totalUnificadoPEN(resumen.total_pagado_pen, resumen.total_pagado_usd))}</strong></span>
-                  <span className="text-sm text-red-700">Por Cobrar: <strong>S/ {formatearNumero(totalUnificadoPEN(resumen.total_pendiente_pen, resumen.total_pendiente_usd))}</strong></span>
+                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-1">
+                  <span className="text-sm">Ventas: <strong className="text-base">S/ {formatearNumero(totalUnificadoPEN(resumen.total_ventas_pen, resumen.total_ventas_usd, 'total'))}</strong></span>
+                  <span className="text-sm text-green-700">Cobrado: <strong>S/ {formatearNumero(totalUnificadoPEN(resumen.total_pagado_pen, resumen.total_pagado_usd, 'monto_pagado'))}</strong></span>
+                  <span className="text-sm text-red-700">Por Cobrar: <strong>S/ {formatearNumero(totalUnificadoPEN(resumen.total_pendiente_pen, resumen.total_pendiente_usd, 'pendiente_cobro'))}</strong></span>
                 </div>
               </div>
             </div>
+            
+            <button 
+              onClick={() => setMostrarDesgloseUSD(!mostrarDesgloseUSD)}
+              className="btn btn-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-none whitespace-nowrap"
+            >
+              {mostrarDesgloseUSD ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {mostrarDesgloseUSD ? 'Ocultar desglose' : 'Ver desglose de órdenes afectadas'}
+            </button>
           </div>
+          
+          {mostrarDesgloseUSD && renderDesgloseUnificacion()}
         </div>
       )}
 
@@ -1121,7 +1265,7 @@ const ReporteVentas = () => {
             <div className="text-right">
               <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Ventas Totales (PEN Unif.)</p>
               <h3 className="text-lg font-black text-white">
-                {formatearMoneda(resumen.total_ventas_pen + (resumen.total_ventas_usd * (tcVenta || 1)), 'PEN')}
+                {formatearMoneda(usarTcSunatGlobal && convertirUSD ? parseFloat(resumen.total_ventas_pen || 0) + (parseFloat(resumen.total_ventas_usd || 0) * tcVenta) : calcularTotalUnificadoHistorico('total'), 'PEN')}
               </h3>
             </div>
           </div>
@@ -1227,7 +1371,13 @@ const ReporteVentas = () => {
                     </td>
                     {convertirUSD && (
                       <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--accent, #ca8a04)' }}>
-                        S/ {formatearNumero(item.total_pen || (item.moneda === 'USD' ? parseFloat(item.total) * (parseFloat(item.tipo_cambio) || 1) : item.total), 3)}
+                        S/ {formatearNumero(
+                          item.moneda === 'USD'
+                            ? (modoUnificacion === 'sunat' ? parseFloat(item.total) * tcVenta : 
+                               modoUnificacion === 'mixto' ? parseFloat(item.total) * (parseFloat(item.tipo_cambio || 1) > 3 ? parseFloat(item.tipo_cambio || 1) : tcVenta) : 
+                               parseFloat(item.total) * parseFloat(item.tipo_cambio || 1))
+                            : parseFloat(item.total)
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-3 text-center">{obtenerBadgeEstadoPago(item.estado_pago)}</td>
@@ -1248,6 +1398,53 @@ const ReporteVentas = () => {
           </table>
         </div>
       </div>
+
+      {mostrarModalTC && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="bg-gray-50 border-b border-gray-100 p-5 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg"><ArrowRightLeft size={20} /></div>
+                <div>
+                  <h3 className="font-bold text-gray-800 text-lg">Opciones de Unificación</h3>
+                  <p className="text-xs text-gray-500">¿Cómo deseas calcular las órdenes en Dólares (USD)?</p>
+                </div>
+              </div>
+              <button onClick={() => setMostrarModalTC(false)} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={24} /></button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <button onClick={() => aplicarModoUnificacion('sunat')} className="w-full text-left p-4 rounded-xl border-2 border-transparent hover:border-yellow-400 hover:bg-yellow-50/50 transition-all group flex items-start gap-4">
+                <div className="mt-1 p-2 bg-gray-100 rounded-full group-hover:bg-yellow-100 group-hover:text-yellow-600 transition-colors"><DollarSign size={20} /></div>
+                <div>
+                  <h4 className="font-bold text-gray-800 group-hover:text-yellow-700 transition-colors">Forzar TC SUNAT Global</h4>
+                  <p className="text-sm text-gray-500 mt-1">Multiplica <strong>todas</strong> las órdenes en USD por el tipo de cambio de venta en vivo (S/ {tcVenta?.toFixed(3)}). Ideal para proyectar el valor actual.</p>
+                </div>
+              </button>
+
+              <button onClick={() => aplicarModoUnificacion('mixto')} className="w-full text-left p-4 rounded-xl border-2 border-yellow-500 bg-yellow-50/30 hover:bg-yellow-50 transition-all group flex items-start gap-4 relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-yellow-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Recomendado</div>
+                <div className="mt-1 p-2 bg-yellow-100 text-yellow-600 rounded-full"><TrendingUp size={20} /></div>
+                <div>
+                  <h4 className="font-bold text-gray-900">Modo Inteligente / Híbrido</h4>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Respeta el TC de las órdenes que tienen un tipo de cambio real guardado (TC {'>'} 3).<br/>
+                    A las órdenes sin TC o con TC por defecto (TC {'<'} 3), les aplica el TC de la SUNAT en vivo (S/ {tcVenta?.toFixed(3)}) para evitar descuadres.
+                  </p>
+                </div>
+              </button>
+
+              <button onClick={() => aplicarModoUnificacion('historico')} className="w-full text-left p-4 rounded-xl border-2 border-transparent hover:border-gray-300 hover:bg-gray-50 transition-all group flex items-start gap-4">
+                <div className="mt-1 p-2 bg-gray-100 rounded-full group-hover:bg-gray-200 transition-colors"><Clock size={20} /></div>
+                <div>
+                  <h4 className="font-bold text-gray-800 group-hover:text-gray-900 transition-colors">Estricto Histórico</h4>
+                  <p className="text-sm text-gray-500 mt-1">Multiplica cada orden por el TC exacto que tiene guardado en la base de datos, incluyendo aquellas que se guardaron con TC de 1.000 por defecto.</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mostrarDetalleOrden && ordenSeleccionada && (
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -1388,10 +1585,17 @@ const ReporteVentas = () => {
                 </div>
                 {convertirUSD && ordenSeleccionada.moneda === 'USD' && (
                   <div className="mt-4 pt-3 rounded-lg p-3" style={{ background: 'var(--accent-dim, rgba(234,179,8,0.08))', border: '1px solid var(--accent-border, rgba(234,179,8,0.3))' }}>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--accent, #ca8a04)' }}><ArrowRightLeft size={12} className="inline mr-1" />Equivalente en Soles (TC Aplicado: S/ {parseFloat(ordenSeleccionada.tipo_cambio || 1).toFixed(3)})</p>
-                    <div className="flex justify-between text-sm"><span>Total:</span><span className="font-bold" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {formatearNumero(ordenSeleccionada.total_pen)}</span></div>
-                    <div className="flex justify-between text-sm"><span>Pagado:</span><span className="font-semibold text-green-700">S/ {formatearNumero(ordenSeleccionada.monto_pagado_pen)}</span></div>
-                    <div className="flex justify-between text-sm"><span>Pendiente:</span><span className="font-semibold text-red-700">S/ {formatearNumero(ordenSeleccionada.pendiente_cobro_pen)}</span></div>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--accent, #ca8a04)' }}>
+                      <ArrowRightLeft size={12} className="inline mr-1" />Equivalente en Soles 
+                      (TC Aplicado: S/ {
+                        (modoUnificacion === 'sunat' ? tcVenta : 
+                         modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : 
+                         parseFloat(ordenSeleccionada.tipo_cambio || 1)).toFixed(3)
+                      })
+                    </p>
+                    <div className="flex justify-between text-sm"><span>Total:</span><span className="font-bold" style={{ color: 'var(--accent, #ca8a04)' }}>S/ {formatearNumero(parseFloat(ordenSeleccionada.total) * (modoUnificacion === 'sunat' ? tcVenta : modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : parseFloat(ordenSeleccionada.tipo_cambio || 1)))}</span></div>
+                    <div className="flex justify-between text-sm"><span>Pagado:</span><span className="font-semibold text-green-700">S/ {formatearNumero(parseFloat(ordenSeleccionada.monto_pagado) * (modoUnificacion === 'sunat' ? tcVenta : modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : parseFloat(ordenSeleccionada.tipo_cambio || 1)))}</span></div>
+                    <div className="flex justify-between text-sm"><span>Pendiente:</span><span className="font-semibold text-red-700">S/ {formatearNumero(parseFloat(ordenSeleccionada.pendiente_cobro) * (modoUnificacion === 'sunat' ? tcVenta : modoUnificacion === 'mixto' ? (parseFloat(ordenSeleccionada.tipo_cambio || 1) > 3 ? parseFloat(ordenSeleccionada.tipo_cambio || 1) : tcVenta) : parseFloat(ordenSeleccionada.tipo_cambio || 1)))}</span></div>
                   </div>
                 )}
               </div>

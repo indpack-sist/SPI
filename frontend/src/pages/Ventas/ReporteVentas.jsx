@@ -1750,7 +1750,6 @@ const ReporteVentas = () => {
                 {convertirUSD && tcVenta && <th className="px-4 py-3 text-right">Total (PEN)</th>}
                 <th className="px-4 py-3 text-center">Estado Pago</th>
                 <th className="px-4 py-3 text-center">Estado Orden</th>
-                <th className="px-4 py-3 text-center">Logistica</th>
               </tr>
             </thead>
             <tbody>
@@ -1776,11 +1775,11 @@ const ReporteVentas = () => {
                     </td>
                     <td className="px-4 py-3 text-muted text-xs truncate w-24">{item.vendedor}</td>
                     <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>{formatearFecha(item.fecha_emision)}</td>
-                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
-                      {item.fecha_despacho ? formatearFecha(item.fecha_despacho) : <span className="text-gray-400 italic">Pendiente</span>}
-                    </td>
                     <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
                       {item.fecha_facturacion_sunat ? formatearFecha(item.fecha_facturacion_sunat) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
+                      {item.fecha_despacho ? formatearFecha(item.fecha_despacho) : <span className="text-gray-400 italic">Pendiente</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {item.moneda === 'USD' && parseFloat(item.tipo_cambio || 1) !== 1 ? (
@@ -1817,12 +1816,11 @@ const ReporteVentas = () => {
                     )}
                     <td className="px-4 py-3 text-center">{obtenerBadgeEstadoPago(item.estado_pago)}</td>
                     <td className="px-4 py-3 text-center">{obtenerBadgeEstado(item.estado)}</td>
-                    <td className="px-4 py-3 text-center">{obtenerBadgeLogistica(item.estado_logistico)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={convertirUSD && tcVenta ? 12 : 11} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={convertirUSD && tcVenta ? 11 : 10} className="px-4 py-12 text-center text-muted">
                     <div className="flex flex-col items-center justify-center">
                       <Search size={32} className="mb-2 opacity-20" />No se encontraron ventas con los filtros seleccionados.
                     </div>

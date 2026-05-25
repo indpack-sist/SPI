@@ -1788,14 +1788,13 @@ const ReporteVentas = () => {
                           {item.tipo_comprobante}: {(item.tipo_comprobante === 'Factura' && item.facturado_sunat && item.numero_comprobante_sunat)
                             ? (
                               <button 
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); abrirVisorSunat(item); }}
-                                className="text-green-600 font-bold hover:text-green-700 hover:underline flex items-center gap-1 border-none bg-transparent p-0 cursor-pointer"
-                                title="Ver comprobante SUNAT"
-                              >
-                                {item.numero_comprobante_sunat}
-                                <FileCheck size={12} />
-                              </button>
+  type="button"
+  onClick={(e) => { e.stopPropagation(); abrirVisorSunat(item); }}
+  className="btn btn-ghost btn-xs text-green-600"
+  title="Ver comprobante SUNAT"
+>
+  <FileCheck size={14} /> {item.numero_comprobante_sunat}
+</button>
                             )
                             : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat) ? '' : item.numero_comprobante}
                         </div>

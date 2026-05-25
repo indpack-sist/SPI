@@ -59,7 +59,7 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
         <div 
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
           className="form-input flex justify-between items-center transition-all bg-carbon-mid"
-          style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)', color: '#fff', height: '38px', width: '100%' }}
+style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--accent)' : 'var(--steel)', color: '#fff', height: '38px', width: '100%', backgroundColor: 'var(--carbon-mid)' }}
         >
           <span className="text-xs font-bold truncate pr-2" style={{ color: '#fff' }}>
             {selectedValues.length === 0 ? 'Todos' : 

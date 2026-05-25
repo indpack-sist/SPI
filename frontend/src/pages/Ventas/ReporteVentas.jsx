@@ -331,6 +331,7 @@ const ReporteVentas = () => {
     estadosOrden: [],
     estadosPago: [],
     monedas: [],
+    tiposDocumento: [],
     filtroFecha: 'fecha_emision'
   });
 
@@ -552,6 +553,15 @@ const ReporteVentas = () => {
     }
     if (filtros.estadosPago && filtros.estadosPago.length > 0) {
       filtrada = filtrada.filter(item => filtros.estadosPago.includes(item.estado_pago));
+    }
+    if (filtros.tiposDocumento && filtros.tiposDocumento.length > 0) {
+      filtrada = filtrada.filter(item => {
+        const tipo = item.tipo_comprobante || '';
+        if (filtros.tiposDocumento.includes('Sin Comprobante') && (tipo === '' || tipo === null)) {
+          return true;
+        }
+        return filtros.tiposDocumento.includes(tipo);
+      });
     }
     setDataFiltrada(filtrada);
   };
@@ -1513,6 +1523,16 @@ const ReporteVentas = () => {
                 options={[
                   { label: 'Soles (PEN)', value: 'PEN' },
                   { label: 'Dólares (USD)', value: 'USD' }
+                ]}
+              />
+              <FilterCheckboxGroup
+                label="Tipo de Documento"
+                selectedValues={filtros.tiposDocumento}
+                onChange={(vals) => setFiltros({ ...filtros, tiposDocumento: vals })}
+                options={[
+                  { label: 'Factura', value: 'Factura' },
+                  { label: 'Nota de Venta', value: 'Nota de Venta' },
+                  { label: 'Sin Comprobante', value: 'Sin Comprobante' }
                 ]}
               />
 

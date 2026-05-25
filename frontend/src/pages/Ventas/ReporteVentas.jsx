@@ -1265,7 +1265,7 @@ const ReporteVentas = () => {
             <div className="text-right">
               <p className="text-[10px] text-wire font-black uppercase tracking-widest mb-1">Ventas Totales (PEN Unif.)</p>
               <h3 className="text-lg font-black text-white">
-                {formatearMoneda(usarTcSunatGlobal && convertirUSD ? parseFloat(resumen.total_ventas_pen || 0) + (parseFloat(resumen.total_ventas_usd || 0) * tcVenta) : calcularTotalUnificadoHistorico('total'), 'PEN')}
+                {formatearMoneda(totalUnificadoPEN(resumen.total_ventas_pen, resumen.total_ventas_usd, 'total'), 'PEN')}
               </h3>
             </div>
           </div>

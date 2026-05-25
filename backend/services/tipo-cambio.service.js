@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const DECOLECTA_API_URL = 'https://api.decolecta.com/v1';
-const DECOLECTA_API_KEY = process.env.DECOLECTA_API_KEY;
+const DECOLECTA_API_KEY = process.env.API_DECOLECTA_TOKEN || process.env.DECOLECTA_API_KEY;
 const API_TIMEOUT = 10000;
 
 let tipoCambioCache = {

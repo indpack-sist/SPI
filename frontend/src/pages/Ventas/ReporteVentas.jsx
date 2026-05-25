@@ -646,6 +646,7 @@ const ReporteVentas = () => {
       estadosOrden: [],
       estadosPago: [],
       monedas: [],
+      tiposDocumento: [],
       filtroFecha: 'fecha_emision'
     });
     setErrorFecha('');

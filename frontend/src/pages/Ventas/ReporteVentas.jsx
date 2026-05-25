@@ -1038,63 +1038,148 @@ const ReporteVentas = () => {
     ordenesUSD.forEach(orden => {
       const tcOrden = parseFloat(orden.tipo_cambio || 1);
       const totalOrden = parseFloat(orden.total || 0);
+      const montoOriginalPEN = totalOrden * tcOrden;
 
       if (modoUnificacion === 'sunat') {
-        grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tipo: 'Global SUNAT' });
+        grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'Global SUNAT' });
       } else if (modoUnificacion === 'historico') {
-        grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tipo: 'Estricto Histórico' });
+        grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'Estricto Historico' });
       } else if (modoUnificacion === 'mixto') {
         if (tcOrden > 3) {
-          grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tipo: 'Histórico Válido' });
+          grupoHistorico.push({ ...orden, tcUsado: tcOrden, valorPen: totalOrden * tcOrden, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'Historico Valido' });
         } else {
-          grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tipo: 'SUNAT Rescate' });
+          grupoSunat.push({ ...orden, tcUsado: tcVenta, valorPen: totalOrden * tcVenta, tcOriginal: tcOrden, montoOriginalPEN, tipo: 'SUNAT Rescate' });
         }
       }
     });
 
-    return (
-      <div className="mt-4 border-t border-yellow-200/50 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
-        <h4 className="text-xs font-bold text-yellow-800 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <FileText size={14} /> Desglose de Órdenes en USD ({ordenesUSD.length})
-        </h4>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {grupoHistorico.length > 0 && (
-            <div className="bg-white/40 rounded-lg p-3 border border-yellow-200/30">
-              <div className="flex justify-between items-center mb-2">
-                <h5 className="text-[10px] font-black text-gray-700 uppercase">Respetando TC de la Orden</h5>
-                <span className="badge badge-secondary badge-sm bg-gray-200 text-gray-700 border-none">{grupoHistorico.length}</span>
+    const FilaOrden = ({ o, esGrupoSunat }) => {
+      const tcCambio = o.tcUsado !== o.tcOriginal;
+      return (
+        <div
+          style={{
+            borderRadius: '8px',
+            border: esGrupoSunat ? '1px solid rgba(202,138,4,0.25)' : '1px solid rgba(100,116,139,0.2)',
+            backgroundColor: esGrupoSunat ? 'rgba(254,249,195,0.4)' : 'rgba(255,255,255,0.35)',
+            padding: '10px 12px',
+            marginBottom: '6px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: esGrupoSunat ? '#92400e' : '#334155' }}>
+              {o.numero}
+            </span>
+            <span style={{
+              fontSize: '9px',
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              padding: '2px 7px',
+              borderRadius: '4px',
+              backgroundColor: esGrupoSunat ? 'rgba(202,138,4,0.15)' : 'rgba(100,116,139,0.15)',
+              color: esGrupoSunat ? '#92400e' : '#475569',
+            }}>
+              {o.tipo}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '6px' }}>
+            <div style={{
+              backgroundColor: 'rgba(255,255,255,0.6)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              border: '1px solid rgba(100,116,139,0.15)',
+            }}>
+              <div style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#64748b', marginBottom: '3px' }}>
+                Original
               </div>
-              <div className="max-h-40 overflow-y-auto custom-scrollbar pr-1 space-y-1">
-                {grupoHistorico.map(o => (
-                  <div key={o.numero} className="flex justify-between items-center text-xs py-1 border-b border-gray-100 last:border-0">
-                    <span className="font-mono text-gray-600">{o.numero}</span>
-                    <div className="text-right">
-                      <span className="text-gray-500 mr-2 text-[10px]">TC: {o.tcUsado.toFixed(3)}</span>
-                      <span className="font-bold text-gray-800">S/ {formatearNumero(o.valorPen)}</span>
-                    </div>
-                  </div>
-                ))}
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                USD {formatearNumero(parseFloat(o.total))}
+              </div>
+              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                TC: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>{o.tcOriginal.toFixed(3)}</span>
+              </div>
+              <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>
+                = S/ {formatearNumero(o.montoOriginalPEN)}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                backgroundColor: tcCambio ? (esGrupoSunat ? 'rgba(202,138,4,0.15)' : 'rgba(99,102,241,0.1)') : 'rgba(16,185,129,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <ArrowRightLeft size={13} style={{ color: tcCambio ? (esGrupoSunat ? '#b45309' : '#6366f1') : '#10b981' }} />
+              </div>
+              {tcCambio && (
+                <span style={{ fontSize: '8px', fontWeight: 800, color: esGrupoSunat ? '#b45309' : '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Ajuste
+                </span>
+              )}
+            </div>
+
+            <div style={{
+              borderRadius: '6px',
+              padding: '6px 10px',
+              border: esGrupoSunat ? '1px solid rgba(202,138,4,0.35)' : '1px solid rgba(99,102,241,0.2)',
+              backgroundColor: esGrupoSunat ? 'rgba(254,243,199,0.7)' : 'rgba(239,246,255,0.7)',
+            }}>
+              <div style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: esGrupoSunat ? '#92400e' : '#4338ca', marginBottom: '3px' }}>
+                Convertido
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: esGrupoSunat ? '#78350f' : '#312e81' }}>
+                S/ {formatearNumero(o.valorPen)}
+              </div>
+              <div style={{ fontSize: '10px', marginTop: '2px', color: esGrupoSunat ? '#92400e' : '#4338ca' }}>
+                TC: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{o.tcUsado.toFixed(3)}</span>
+              </div>
+              {tcCambio && (
+                <div style={{ fontSize: '9px', marginTop: '2px', color: o.valorPen >= o.montoOriginalPEN ? '#059669' : '#dc2626', fontWeight: 700 }}>
+                  {o.valorPen >= o.montoOriginalPEN ? '+' : ''}S/ {formatearNumero(o.valorPen - o.montoOriginalPEN)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div style={{ marginTop: '16px', borderTop: '1px solid rgba(202,138,4,0.3)', paddingTop: '16px' }}>
+        <h4 style={{ fontSize: '11px', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <FileText size={14} /> Desglose de Ordenes en USD ({ordenesUSD.length})
+        </h4>
+
+        <div style={{ display: 'grid', gridTemplateColumns: grupoHistorico.length > 0 && grupoSunat.length > 0 ? '1fr 1fr' : '1fr', gap: '16px' }}>
+          {grupoHistorico.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>
+                  Respetando TC de la Orden
+                </span>
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 8px', borderRadius: '4px', backgroundColor: 'rgba(100,116,139,0.15)', color: '#475569' }}>
+                  {grupoHistorico.length}
+                </span>
+              </div>
+              <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                {grupoHistorico.map(o => <FilaOrden key={o.numero} o={o} esGrupoSunat={false} />)}
               </div>
             </div>
           )}
 
           {grupoSunat.length > 0 && (
-            <div className="bg-yellow-100/50 rounded-lg p-3 border border-yellow-300/30">
-              <div className="flex justify-between items-center mb-2">
-                <h5 className="text-[10px] font-black text-yellow-800 uppercase">Aplicando TC SUNAT</h5>
-                <span className="badge badge-warning badge-sm border-none bg-yellow-200 text-yellow-800">{grupoSunat.length}</span>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#92400e' }}>
+                  Aplicando TC SUNAT
+                </span>
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 8px', borderRadius: '4px', backgroundColor: 'rgba(202,138,4,0.2)', color: '#92400e' }}>
+                  {grupoSunat.length}
+                </span>
               </div>
-              <div className="max-h-40 overflow-y-auto custom-scrollbar pr-1 space-y-1">
-                {grupoSunat.map(o => (
-                  <div key={o.numero} className="flex justify-between items-center text-xs py-1 border-b border-yellow-200/30 last:border-0">
-                    <span className="font-mono text-yellow-800">{o.numero}</span>
-                    <div className="text-right">
-                      <span className="text-yellow-600 mr-2 text-[10px]">TC: {o.tcUsado.toFixed(3)}</span>
-                      <span className="font-bold text-yellow-900">S/ {formatearNumero(o.valorPen)}</span>
-                    </div>
-                  </div>
-                ))}
+              <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                {grupoSunat.map(o => <FilaOrden key={o.numero} o={o} esGrupoSunat={true} />)}
               </div>
             </div>
           )}

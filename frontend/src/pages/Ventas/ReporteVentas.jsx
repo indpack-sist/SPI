@@ -738,7 +738,7 @@ const ReporteVentas = () => {
             ...(orden.facturado_sunat ? [['Comprobante SUNAT', orden.numero_comprobante_sunat || ''], ['Fecha Facturacion SUNAT', formatearFecha(orden.fecha_facturacion_sunat)]] : []),
             ['Estado', orden.estado], ['Estado Verificacion', orden.estado_verificacion], ['Estado Pago', orden.estado_pago],
             ['Tipo de Venta', orden.tipo_venta], ['Forma de Pago', formaPagoTexto], ['Fecha Vencimiento', fechaVencimientoTexto],
-            ['Moneda', orden.moneda], ['Tipo de Cambio Orden', orden.moneda === 'USD' ? tcOrden : '1.000'],
+            ['Moneda', orden.moneda], ['Tipo de Cambio Orden', orden.moneda === 'USD' ? tcOrdenOriginal : '1.000'],
             [''], ['INFORMACION DEL CLIENTE'],
             ['Razon Social', orden.cliente], ['RUC', orden.ruc], ['Direccion', orden.direccion_cliente || ''],
             ['Telefono', orden.telefono_cliente || ''], ['Email', orden.email_cliente || ''],

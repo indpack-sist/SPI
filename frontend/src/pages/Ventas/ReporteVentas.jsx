@@ -1638,7 +1638,7 @@ const ReporteVentas = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

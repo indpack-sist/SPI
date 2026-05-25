@@ -1596,6 +1596,47 @@ const ReporteVentas = () => {
           </div>
         </div>
       )}
+
+      {mostrarModalTC && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden relative" style={{ width: '90%', maxWidth: '400px' }}>
+            <div className="border-b border-gray-200 p-4 flex justify-between items-center bg-gray-50" style={{ backgroundColor: '#f9fafb' }}>
+              <h3 className="font-bold flex items-center gap-2 text-base m-0" style={{ color: '#1f2937' }}>
+                <ArrowRightLeft className="text-primary" size={18} /> Opciones de Unificación
+              </h3>
+              <button onClick={() => setMostrarModalTC(false)} className="p-1 border-none bg-transparent hover:bg-gray-200 rounded cursor-pointer" style={{ color: '#6b7280' }}><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-3" style={{ backgroundColor: '#ffffff' }}>
+              <p className="text-sm mb-4" style={{ color: '#4b5563' }}>¿Cómo deseas calcular el equivalente en Soles (PEN) para las órdenes en Dólares?</p>
+              
+              <div onClick={() => aplicarModoUnificacion('sunat')} className="w-full text-left p-3 rounded-lg border border-gray-200 transition-colors flex items-start gap-3 cursor-pointer hover:bg-blue-50 hover:border-blue-300" style={{ backgroundColor: '#ffffff' }}>
+                <DollarSign size={18} className="mt-0.5 shrink-0" style={{ color: '#6b7280' }} />
+                <div>
+                  <h4 className="font-semibold text-sm m-0" style={{ color: '#1f2937' }}>Forzar TC SUNAT Global</h4>
+                  <p className="text-xs mt-1 mb-0" style={{ color: '#6b7280' }}>Multiplica todas las órdenes USD por S/ {tcVenta?.toFixed(3)}</p>
+                </div>
+              </div>
+
+              <div onClick={() => aplicarModoUnificacion('mixto')} className="w-full text-left p-3 rounded-lg border-2 transition-colors flex items-start gap-3 relative cursor-pointer hover:bg-blue-100" style={{ backgroundColor: '#eff6ff', borderColor: 'var(--primary)' }}>
+                <div className="absolute top-0 right-0 text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg" style={{ backgroundColor: 'var(--primary)' }}>RECOMENDADO</div>
+                <TrendingUp size={18} className="mt-0.5 shrink-0" style={{ color: 'var(--primary)' }} />
+                <div>
+                  <h4 className="font-semibold text-sm m-0" style={{ color: 'var(--primary)' }}>Híbrido / Inteligente</h4>
+                  <p className="text-xs mt-1 mb-0" style={{ color: '#1e40af' }}>Respeta TC real ({'>'} 3). Usa SUNAT para el resto.</p>
+                </div>
+              </div>
+
+              <div onClick={() => aplicarModoUnificacion('historico')} className="w-full text-left p-3 rounded-lg border border-gray-200 transition-colors flex items-start gap-3 cursor-pointer hover:bg-blue-50 hover:border-blue-300" style={{ backgroundColor: '#ffffff' }}>
+                <Clock size={18} className="mt-0.5 shrink-0" style={{ color: '#6b7280' }} />
+                <div>
+                  <h4 className="font-semibold text-sm m-0" style={{ color: '#1f2937' }}>Estricto Histórico</h4>
+                  <p className="text-xs mt-1 mb-0" style={{ color: '#6b7280' }}>Usa solo el TC guardado en la base de datos.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

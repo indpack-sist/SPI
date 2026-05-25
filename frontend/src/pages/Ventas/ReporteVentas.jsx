@@ -326,10 +326,18 @@ const ReporteVentas = () => {
     orden: null
   });
 
-  const abrirVisorSunat = (row) => {
+  const abrirVisorSunat = (item) => {
+    // El modal espera ruc_cliente y comprobante_sunat_url
+    // Pero en reportes vienen como ruc y url_comprobante
+    const ordenMapeada = {
+      ...item,
+      ruc_cliente: item.ruc,
+      comprobante_sunat_url: item.url_comprobante || item.comprobante_sunat_url
+    };
+    
     setModalSunat({
       isOpen: true,
-      orden: row
+      orden: ordenMapeada
     });
   };
 

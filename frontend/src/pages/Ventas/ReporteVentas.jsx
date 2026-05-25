@@ -16,6 +16,7 @@ import {
 import { reportesAPI, clientesAPI, tipoCambioAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
+import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { generarReporteVentasPDF } from './reporteVentasPDF'; 
 
 const COLORS_PIE = {
@@ -319,6 +320,18 @@ const ReporteVentas = () => {
   const [mostrarModalTC, setMostrarModalTC] = useState(false);
   const [modoUnificacion, setModoUnificacion] = useState('mixto');
   const [mostrarDesgloseUSD, setMostrarDesgloseUSD] = useState(false);
+
+  const [modalSunat, setModalSunat] = useState({
+    isOpen: false,
+    orden: null
+  });
+
+  const abrirVisorSunat = (row) => {
+    setModalSunat({
+      isOpen: true,
+      orden: row
+    });
+  };
 
   const fechaHoy = new Date();
   const primerDiaMes = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth(), 1);
@@ -1763,9 +1776,19 @@ const ReporteVentas = () => {
                     <td className="px-4 py-3">
                       <div className="font-mono font-medium text-primary">{item.numero}</div>
                       {(item.numero_comprobante || item.numero_comprobante_sunat) && (
-                        <div className="text-xs text-muted">
+                        <div className="text-xs text-muted flex items-center gap-1">
                           {item.tipo_comprobante}: {(item.tipo_comprobante === 'Factura' && item.facturado_sunat && item.numero_comprobante_sunat)
-                            ? <span className="text-green-600 font-medium">{item.numero_comprobante_sunat}</span>
+                            ? (
+                              <button 
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); abrirVisorSunat(item); }}
+                                className="text-green-600 font-bold hover:text-green-700 hover:underline flex items-center gap-1 border-none bg-transparent p-0 cursor-pointer"
+                                title="Ver comprobante SUNAT"
+                              >
+                                {item.numero_comprobante_sunat}
+                                <FileCheck size={12} />
+                              </button>
+                            )
                             : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat) ? '' : item.numero_comprobante}
                         </div>
                       )}
@@ -2029,6 +2052,17 @@ const ReporteVentas = () => {
             </div>
           </div>
         </div>
+      )}
+      {modalSunat.isOpen && (
+        <ModalValidacionSunat
+          isOpen={modalSunat.isOpen}
+          onClose={() => setModalSunat({ isOpen: false, orden: null })}
+          orden={modalSunat.orden}
+          file={null}
+          readOnly={true}
+          existingData={modalSunat.orden}
+          onConfirm={() => {}}
+        />
       )}
       </div>
     </>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import XLSX from 'xlsx-js-style';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, 
@@ -114,6 +115,184 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
   );
 };
 
+const ModalTC = ({ mostrarModalTC, tcVenta, setMostrarModalTC, aplicarModoUnificacion }) => {
+  if (!mostrarModalTC) return null;
+
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(2px)',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) setMostrarModalTC(false); }}
+    >
+      <div
+        style={{
+          width: '90%',
+          maxWidth: '420px',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
+          backgroundColor: 'var(--bg-card, #1a1f2e)',
+          border: '1px solid var(--border-color, rgba(255,255,255,0.08))',
+        }}
+      >
+        <div
+          style={{
+            borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.08))',
+            padding: '16px 20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: 'var(--bg-secondary, #12161f)',
+          }}
+        >
+          <h3
+            style={{
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '15px',
+              margin: 0,
+              color: 'var(--text-primary, #f1f5f9)',
+            }}
+          >
+            <ArrowRightLeft size={18} style={{ color: 'var(--primary)' }} />
+            Opciones de Unificación
+          </h3>
+          <button
+            onClick={() => setMostrarModalTC(false)}
+            style={{
+              padding: '4px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: 'var(--text-muted, #94a3b8)',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <p style={{ fontSize: '13px', marginBottom: '6px', color: 'var(--text-secondary, #cbd5e1)', margin: '0 0 10px 0' }}>
+            ¿Cómo deseas calcular el equivalente en Soles (PEN) para las órdenes en Dólares?
+          </p>
+
+          <div
+            onClick={() => aplicarModoUnificacion('sunat')}
+            style={{
+              padding: '14px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              backgroundColor: 'var(--bg-secondary, #12161f)',
+              transition: 'border-color 0.15s, background-color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.backgroundColor = 'var(--primary-dim, rgba(99,102,241,0.08))'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color, rgba(255,255,255,0.1))'; e.currentTarget.style.backgroundColor = 'var(--bg-secondary, #12161f)'; }}
+          >
+            <DollarSign size={18} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--text-muted, #94a3b8)' }} />
+            <div>
+              <h4 style={{ fontWeight: 600, fontSize: '13px', margin: '0 0 4px 0', color: 'var(--text-primary, #f1f5f9)' }}>
+                Forzar TC SUNAT Global
+              </h4>
+              <p style={{ fontSize: '11px', margin: 0, color: 'var(--text-muted, #94a3b8)' }}>
+                Multiplica todas las órdenes USD por S/ {tcVenta?.toFixed(3)}
+              </p>
+            </div>
+          </div>
+
+          <div
+            onClick={() => aplicarModoUnificacion('mixto')}
+            style={{
+              padding: '14px',
+              borderRadius: '10px',
+              border: '2px solid var(--primary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              backgroundColor: 'var(--primary-dim, rgba(99,102,241,0.1))',
+              position: 'relative',
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                backgroundColor: 'var(--primary)',
+                color: '#fff',
+                fontSize: '9px',
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: '0 8px 0 8px',
+                letterSpacing: '0.05em',
+              }}
+            >
+              RECOMENDADO
+            </div>
+            <TrendingUp size={18} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--primary)' }} />
+            <div>
+              <h4 style={{ fontWeight: 700, fontSize: '13px', margin: '0 0 4px 0', color: 'var(--primary)' }}>
+                Híbrido / Inteligente
+              </h4>
+              <p style={{ fontSize: '11px', margin: 0, color: 'var(--text-secondary, #cbd5e1)' }}>
+                Respeta TC real ({'>'} 3). Usa SUNAT para el resto.
+              </p>
+            </div>
+          </div>
+
+          <div
+            onClick={() => aplicarModoUnificacion('historico')}
+            style={{
+              padding: '14px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              backgroundColor: 'var(--bg-secondary, #12161f)',
+              transition: 'border-color 0.15s, background-color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.backgroundColor = 'var(--primary-dim, rgba(99,102,241,0.08))'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color, rgba(255,255,255,0.1))'; e.currentTarget.style.backgroundColor = 'var(--bg-secondary, #12161f)'; }}
+          >
+            <Clock size={18} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--text-muted, #94a3b8)' }} />
+            <div>
+              <h4 style={{ fontWeight: 600, fontSize: '13px', margin: '0 0 4px 0', color: 'var(--text-primary, #f1f5f9)' }}>
+                Estricto Histórico
+              </h4>
+              <p style={{ fontSize: '11px', margin: 0, color: 'var(--text-muted, #94a3b8)' }}>
+                Usa solo el TC guardado en la base de datos.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 const ReporteVentas = () => {
   const [loading, setLoading] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
@@ -138,7 +317,7 @@ const ReporteVentas = () => {
   const [loadingTC, setLoadingTC] = useState(false);
   const [convertirUSD, setConvertirUSD] = useState(false);
   const [mostrarModalTC, setMostrarModalTC] = useState(false);
-  const [modoUnificacion, setModoUnificacion] = useState('mixto'); // 'sunat', 'mixto', 'historico'
+  const [modoUnificacion, setModoUnificacion] = useState('mixto');
   const [mostrarDesgloseUSD, setMostrarDesgloseUSD] = useState(false);
 
   const fechaHoy = new Date();
@@ -282,7 +461,7 @@ const ReporteVentas = () => {
           return sum + (val * tcVenta);
         } else if (modoUnificacion === 'mixto') {
           return sum + (val * (tcOrden > 3 ? tcOrden : tcVenta));
-        } else { // historico
+        } else {
           return sum + (val * tcOrden);
         }
       }
@@ -929,6 +1108,13 @@ const ReporteVentas = () => {
 
   return (
     <>
+      <ModalTC
+        mostrarModalTC={mostrarModalTC}
+        tcVenta={tcVenta}
+        setMostrarModalTC={setMostrarModalTC}
+        aplicarModoUnificacion={aplicarModoUnificacion}
+      />
+
       <div className="w-full px-6 py-8 font-sans">
         <div className="flex justify-between items-center mb-6">
         <div>
@@ -1593,47 +1779,6 @@ const ReporteVentas = () => {
 
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 flex justify-end rounded-b-xl">
               <button onClick={() => setMostrarDetalleOrden(false)} className="btn btn-secondary">Cerrar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {mostrarModalTC && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden relative" style={{ width: '90%', maxWidth: '400px' }}>
-            <div className="border-b border-gray-200 p-4 flex justify-between items-center bg-gray-50" style={{ backgroundColor: '#f9fafb' }}>
-              <h3 className="font-bold flex items-center gap-2 text-base m-0" style={{ color: '#1f2937' }}>
-                <ArrowRightLeft className="text-primary" size={18} /> Opciones de Unificación
-              </h3>
-              <button onClick={() => setMostrarModalTC(false)} className="p-1 border-none bg-transparent hover:bg-gray-200 rounded cursor-pointer" style={{ color: '#6b7280' }}><X size={20} /></button>
-            </div>
-            <div className="p-5 space-y-3" style={{ backgroundColor: '#ffffff' }}>
-              <p className="text-sm mb-4" style={{ color: '#4b5563' }}>¿Cómo deseas calcular el equivalente en Soles (PEN) para las órdenes en Dólares?</p>
-              
-              <div onClick={() => aplicarModoUnificacion('sunat')} className="w-full text-left p-3 rounded-lg border border-gray-200 transition-colors flex items-start gap-3 cursor-pointer hover:bg-blue-50 hover:border-blue-300" style={{ backgroundColor: '#ffffff' }}>
-                <DollarSign size={18} className="mt-0.5 shrink-0" style={{ color: '#6b7280' }} />
-                <div>
-                  <h4 className="font-semibold text-sm m-0" style={{ color: '#1f2937' }}>Forzar TC SUNAT Global</h4>
-                  <p className="text-xs mt-1 mb-0" style={{ color: '#6b7280' }}>Multiplica todas las órdenes USD por S/ {tcVenta?.toFixed(3)}</p>
-                </div>
-              </div>
-
-              <div onClick={() => aplicarModoUnificacion('mixto')} className="w-full text-left p-3 rounded-lg border-2 transition-colors flex items-start gap-3 relative cursor-pointer hover:bg-blue-100" style={{ backgroundColor: '#eff6ff', borderColor: 'var(--primary)' }}>
-                <div className="absolute top-0 right-0 text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg" style={{ backgroundColor: 'var(--primary)' }}>RECOMENDADO</div>
-                <TrendingUp size={18} className="mt-0.5 shrink-0" style={{ color: 'var(--primary)' }} />
-                <div>
-                  <h4 className="font-semibold text-sm m-0" style={{ color: 'var(--primary)' }}>Híbrido / Inteligente</h4>
-                  <p className="text-xs mt-1 mb-0" style={{ color: '#1e40af' }}>Respeta TC real ({'>'} 3). Usa SUNAT para el resto.</p>
-                </div>
-              </div>
-
-              <div onClick={() => aplicarModoUnificacion('historico')} className="w-full text-left p-3 rounded-lg border border-gray-200 transition-colors flex items-start gap-3 cursor-pointer hover:bg-blue-50 hover:border-blue-300" style={{ backgroundColor: '#ffffff' }}>
-                <Clock size={18} className="mt-0.5 shrink-0" style={{ color: '#6b7280' }} />
-                <div>
-                  <h4 className="font-semibold text-sm m-0" style={{ color: '#1f2937' }}>Estricto Histórico</h4>
-                  <p className="text-xs mt-1 mb-0" style={{ color: '#6b7280' }}>Usa solo el TC guardado en la base de datos.</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>

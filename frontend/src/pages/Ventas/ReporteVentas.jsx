@@ -1402,41 +1402,41 @@ const ReporteVentas = () => {
 
 
       {mostrarModalTC && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-content bg-white rounded-xl shadow-lg w-full max-w-md m-4 flex flex-col overflow-hidden">
-            <div className="border-b border-gray-200 p-4 flex justify-between items-center bg-gray-50 rounded-t-xl">
-              <h3 className="font-bold text-gray-800 flex items-center gap-2 text-base">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden" style={{ width: '90%', maxWidth: '400px' }}>
+            <div className="border-b border-gray-200 p-4 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2 text-base m-0">
                 <ArrowRightLeft className="text-primary" size={18} /> Opciones de Unificación
               </h3>
-              <button onClick={() => setMostrarModalTC(false)} className="btn btn-ghost btn-sm p-1"><X size={20} /></button>
+              <button onClick={() => setMostrarModalTC(false)} className="text-gray-500 hover:text-gray-800 p-1"><X size={20} /></button>
             </div>
             <div className="p-5 space-y-3 bg-white">
               <p className="text-sm text-gray-600 mb-4">¿Cómo deseas calcular el equivalente en Soles (PEN) para las órdenes en Dólares?</p>
               
-              <button onClick={() => aplicarModoUnificacion('sunat')} className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-blue-50 transition-colors flex items-start gap-3">
-                <DollarSign size={18} className="text-gray-500 mt-0.5" />
+              <div onClick={() => aplicarModoUnificacion('sunat')} className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-blue-50 transition-colors flex items-start gap-3 cursor-pointer" style={{ backgroundColor: '#ffffff' }}>
+                <DollarSign size={18} className="text-gray-500 mt-0.5 shrink-0" />
                 <div>
-                  <h4 className="font-semibold text-gray-800 text-sm">Forzar TC SUNAT Global</h4>
-                  <p className="text-xs text-gray-500 mt-1">Multiplica todas las órdenes USD por S/ {tcVenta?.toFixed(3)}</p>
+                  <h4 className="font-semibold text-gray-800 text-sm m-0">Forzar TC SUNAT Global</h4>
+                  <p className="text-xs text-gray-500 mt-1 mb-0">Multiplica todas las órdenes USD por S/ {tcVenta?.toFixed(3)}</p>
                 </div>
-              </button>
+              </div>
 
-              <button onClick={() => aplicarModoUnificacion('mixto')} className="w-full text-left p-3 rounded-lg border-2 border-primary bg-blue-50 hover:bg-blue-100 transition-colors flex items-start gap-3 relative">
+              <div onClick={() => aplicarModoUnificacion('mixto')} className="w-full text-left p-3 rounded-lg border-2 border-primary hover:bg-blue-100 transition-colors flex items-start gap-3 relative cursor-pointer" style={{ backgroundColor: '#eff6ff' }}>
                 <div className="absolute top-0 right-0 bg-primary text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg">RECOMENDADO</div>
-                <TrendingUp size={18} className="text-primary mt-0.5" />
+                <TrendingUp size={18} className="text-primary mt-0.5 shrink-0" />
                 <div>
-                  <h4 className="font-semibold text-primary text-sm">Híbrido / Inteligente</h4>
-                  <p className="text-xs text-blue-800 mt-1">Respeta TC real de la orden ({'>'} 3). Usa SUNAT para el resto.</p>
+                  <h4 className="font-semibold text-primary text-sm m-0">Híbrido / Inteligente</h4>
+                  <p className="text-xs text-blue-800 mt-1 mb-0">Respeta TC real ({'>'} 3). Usa SUNAT para el resto.</p>
                 </div>
-              </button>
+              </div>
 
-              <button onClick={() => aplicarModoUnificacion('historico')} className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-blue-50 transition-colors flex items-start gap-3">
-                <Clock size={18} className="text-gray-500 mt-0.5" />
+              <div onClick={() => aplicarModoUnificacion('historico')} className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-blue-50 transition-colors flex items-start gap-3 cursor-pointer" style={{ backgroundColor: '#ffffff' }}>
+                <Clock size={18} className="text-gray-500 mt-0.5 shrink-0" />
                 <div>
-                  <h4 className="font-semibold text-gray-800 text-sm">Estricto Histórico</h4>
-                  <p className="text-xs text-gray-500 mt-1">Usa solo el TC guardado en la base de datos para cada orden.</p>
+                  <h4 className="font-semibold text-gray-800 text-sm m-0">Estricto Histórico</h4>
+                  <p className="text-xs text-gray-500 mt-1 mb-0">Usa solo el TC guardado en la base de datos.</p>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
         </div>

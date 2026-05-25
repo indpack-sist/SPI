@@ -454,7 +454,7 @@ const ReporteVentas = () => {
   };
 
   const calcularTotalUnificadoPorModo = (propItem) => {
-    return dataReporte.detalle.reduce((sum, item) => {
+    return dataFiltrada.reduce((sum, item) => {
       const val = parseFloat(item[propItem] || 0);
       if (item.moneda === 'USD') {
         const tcOrden = parseFloat(item.tipo_cambio || 1);
@@ -468,6 +468,46 @@ const ReporteVentas = () => {
       }
       return sum + val;
     }, 0);
+  };
+
+  const calcularResumenFiltrado = () => {
+    const inicial = {
+      factura_pen: 0, factura_usd: 0,
+      nota_venta_pen: 0, nota_venta_usd: 0,
+      sin_comprobante_pen: 0, sin_comprobante_usd: 0,
+      total_ventas_pen: 0, total_ventas_usd: 0,
+      total_pagado_pen: 0, total_pagado_usd: 0,
+      total_pendiente_pen: 0, total_pendiente_usd: 0,
+      total_comisiones_pen: 0, total_comisiones_usd: 0,
+      cantidad_ordenes: dataFiltrada.length
+    };
+
+    return dataFiltrada.reduce((acc, item) => {
+      const total = parseFloat(item.total || 0);
+      const pagado = parseFloat(item.monto_pagado || 0);
+      const pendiente = parseFloat(item.pendiente_cobro || 0);
+      const comision = parseFloat(item.total_comision || 0);
+      const tipo = (item.tipo_comprobante || '').trim();
+
+      if (item.moneda === 'PEN') {
+        acc.total_ventas_pen += total;
+        acc.total_pagado_pen += pagado;
+        acc.total_pendiente_pen += pendiente;
+        acc.total_comisiones_pen += comision;
+        if (tipo === 'Factura') acc.factura_pen += total;
+        else if (tipo === 'Nota de Venta') acc.nota_venta_pen += total;
+        else acc.sin_comprobante_pen += total;
+      } else {
+        acc.total_ventas_usd += total;
+        acc.total_pagado_usd += pagado;
+        acc.total_pendiente_usd += pendiente;
+        acc.total_comisiones_usd += comision;
+        if (tipo === 'Factura') acc.factura_usd += total;
+        else if (tipo === 'Nota de Venta') acc.nota_venta_usd += total;
+        else acc.sin_comprobante_usd += total;
+      }
+      return acc;
+    }, inicial);
   };
 
   const totalUnificadoPEN = (pen, usd, propItem) => {
@@ -1301,7 +1341,7 @@ const ReporteVentas = () => {
     );
   };
 
-  const resumen = dataReporte.resumen;
+  const resumen = calcularResumenFiltrado();
   const hayUSDenData = resumen.total_ventas_usd > 0;
 
   return (

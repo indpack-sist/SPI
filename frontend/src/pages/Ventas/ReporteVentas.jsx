@@ -327,15 +327,13 @@ const ReporteVentas = () => {
   });
 
   const abrirVisorSunat = (item) => {
-    // El modal espera campos específicos que en reportes vienen distintos:
-    // ruc_cliente <- ruc
-    // comprobante_sunat_url <- url_comprobante
-    // id_orden_venta <- id
+    // El modal espera campos específicos que en reportes pueden venir distintos:
+    // Fallback: intenta url_comprobante, si no existe usa comprobante_sunat_url
     const ordenMapeada = {
       ...item,
       id_orden_venta: item.id,
       ruc_cliente: item.ruc,
-      comprobante_sunat_url: item.url_comprobante
+      comprobante_sunat_url: item.url_comprobante || item.comprobante_sunat_url
     };
     
     setModalSunat({

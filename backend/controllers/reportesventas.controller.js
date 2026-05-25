@@ -244,6 +244,7 @@ export const getReporteVentas = async (req, res) => {
                 tipo_comprobante: orden.tipo_comprobante,
                 numero_comprobante: orden.numero_comprobante,
                 comprobante_url: orden.comprobante_url,
+                comprobante_sunat_url: orden.comprobante_sunat_url,
                 facturado_sunat: orden.facturado_sunat,
                 numero_comprobante_sunat: orden.numero_comprobante_sunat,
                 fecha_facturacion_sunat: orden.fecha_facturacion_sunat,

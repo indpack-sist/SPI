@@ -1203,9 +1203,27 @@ const ReporteVentas = () => {
                     <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
                       {item.fecha_facturacion_sunat ? formatearFecha(item.fecha_facturacion_sunat) : '-'}
                     </td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-700">
-                      <span className="text-xs text-muted mr-1">{item.moneda}</span>
-                      {formatearNumero(item.total)}
+                    <td className="px-4 py-3 text-right">
+                      {item.moneda === 'USD' && parseFloat(item.tipo_cambio || 1) !== 1 ? (
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-gray-700">
+                            <span className="text-xs text-muted mr-1">USD</span>
+                            {formatearNumero(item.total)}
+                          </span>
+                          <span className="text-[10px] text-primary font-semibold mt-0.5">
+                            TC: {parseFloat(item.tipo_cambio).toFixed(3)}
+                          </span>
+                          <span className="text-xs font-bold mt-0.5" style={{ color: 'var(--accent, #ca8a04)' }}>
+                            <span className="text-[10px] mr-1">S/</span>
+                            {formatearNumero(parseFloat(item.total) * parseFloat(item.tipo_cambio))}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-bold text-gray-700">
+                          <span className="text-xs text-muted mr-1">{item.moneda}</span>
+                          {formatearNumero(item.total)}
+                        </span>
+                      )}
                     </td>
                     {convertirUSD && (
                       <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--accent, #ca8a04)' }}>

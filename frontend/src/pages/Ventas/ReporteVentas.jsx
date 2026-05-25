@@ -928,8 +928,9 @@ const ReporteVentas = () => {
   const hayUSDenData = resumen.total_ventas_usd > 0;
 
   return (
-    <div className="w-full px-6 py-8 font-sans">
-      <div className="flex justify-between items-center mb-6">
+    <>
+      <div className="w-full px-6 py-8 font-sans">
+        <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <TrendingUp className="text-primary" /> Dashboard de Ventas

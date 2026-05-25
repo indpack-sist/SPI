@@ -1055,18 +1055,27 @@ const ReporteVentas = () => {
 
     const FilaOrden = ({ o, esGrupoSunat }) => {
       const tcCambio = o.tcUsado !== o.tcOriginal;
+      const diferencia = o.valorPen - o.montoOriginalPEN;
+
       return (
-        <div
-          style={{
-            borderRadius: '8px',
-            border: esGrupoSunat ? '1px solid rgba(202,138,4,0.25)' : '1px solid rgba(100,116,139,0.2)',
-            backgroundColor: esGrupoSunat ? 'rgba(254,249,195,0.4)' : 'rgba(255,255,255,0.35)',
-            padding: '10px 12px',
-            marginBottom: '6px',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: esGrupoSunat ? '#92400e' : '#334155' }}>
+        <div style={{
+          borderRadius: '2px',
+          border: esGrupoSunat
+            ? '1px solid rgba(232,184,75,0.2)'
+            : '1px solid var(--steel)',
+          backgroundColor: esGrupoSunat
+            ? 'rgba(232,184,75,0.05)'
+            : 'var(--carbon-mid)',
+          padding: '10px 12px',
+          marginBottom: '6px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              fontWeight: 700,
+              color: esGrupoSunat ? 'var(--accent)' : 'var(--mist)',
+            }}>
               {o.numero}
             </span>
             <span style={{
@@ -1075,68 +1084,119 @@ const ReporteVentas = () => {
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               padding: '2px 7px',
-              borderRadius: '4px',
-              backgroundColor: esGrupoSunat ? 'rgba(202,138,4,0.15)' : 'rgba(100,116,139,0.15)',
-              color: esGrupoSunat ? '#92400e' : '#475569',
+              borderRadius: '2px',
+              backgroundColor: esGrupoSunat ? 'rgba(232,184,75,0.12)' : 'var(--carbon-light)',
+              border: esGrupoSunat ? '1px solid rgba(232,184,75,0.3)' : '1px solid var(--steel)',
+              color: esGrupoSunat ? 'var(--accent)' : 'var(--wire)',
             }}>
               {o.tipo}
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '8px' }}>
             <div style={{
-              backgroundColor: 'rgba(255,255,255,0.6)',
-              borderRadius: '6px',
-              padding: '6px 10px',
-              border: '1px solid rgba(100,116,139,0.15)',
+              backgroundColor: 'var(--carbon-light)',
+              borderRadius: '2px',
+              padding: '8px 10px',
+              border: '1px solid var(--steel)',
             }}>
-              <div style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#64748b', marginBottom: '3px' }}>
+              <div style={{
+                fontSize: '9px',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: 'var(--wire)',
+                marginBottom: '4px',
+              }}>
                 Original
               </div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--white)' }}>
                 USD {formatearNumero(parseFloat(o.total))}
               </div>
-              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                TC: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>{o.tcOriginal.toFixed(3)}</span>
+              <div style={{ fontSize: '10px', color: 'var(--wire)', marginTop: '3px' }}>
+                TC: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--mist)' }}>{o.tcOriginal.toFixed(3)}</span>
               </div>
-              <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--steel-light)', marginTop: '2px' }}>
                 = S/ {formatearNumero(o.montoOriginalPEN)}
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
               <div style={{
-                width: '28px', height: '28px', borderRadius: '50%',
-                backgroundColor: tcCambio ? (esGrupoSunat ? 'rgba(202,138,4,0.15)' : 'rgba(99,102,241,0.1)') : 'rgba(16,185,129,0.1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                backgroundColor: tcCambio
+                  ? (esGrupoSunat ? 'rgba(232,184,75,0.12)' : 'var(--carbon-light)')
+                  : 'rgba(46,204,113,0.1)',
+                border: tcCambio
+                  ? (esGrupoSunat ? '1px solid rgba(232,184,75,0.3)' : '1px solid var(--steel)')
+                  : '1px solid rgba(46,204,113,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}>
-                <ArrowRightLeft size={13} style={{ color: tcCambio ? (esGrupoSunat ? '#b45309' : '#6366f1') : '#10b981' }} />
+                <ArrowRightLeft size={12} style={{
+                  color: tcCambio
+                    ? (esGrupoSunat ? 'var(--accent)' : 'var(--wire)')
+                    : '#2ecc71',
+                }} />
               </div>
               {tcCambio && (
-                <span style={{ fontSize: '8px', fontWeight: 800, color: esGrupoSunat ? '#b45309' : '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span style={{
+                  fontSize: '8px',
+                  fontWeight: 800,
+                  color: esGrupoSunat ? 'var(--accent)' : 'var(--wire)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
                   Ajuste
                 </span>
               )}
             </div>
 
             <div style={{
-              borderRadius: '6px',
-              padding: '6px 10px',
-              border: esGrupoSunat ? '1px solid rgba(202,138,4,0.35)' : '1px solid rgba(99,102,241,0.2)',
-              backgroundColor: esGrupoSunat ? 'rgba(254,243,199,0.7)' : 'rgba(239,246,255,0.7)',
+              borderRadius: '2px',
+              padding: '8px 10px',
+              border: esGrupoSunat
+                ? '1px solid rgba(232,184,75,0.35)'
+                : '1px solid var(--steel)',
+              backgroundColor: esGrupoSunat
+                ? 'rgba(232,184,75,0.08)'
+                : 'var(--carbon)',
             }}>
-              <div style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: esGrupoSunat ? '#92400e' : '#4338ca', marginBottom: '3px' }}>
+              <div style={{
+                fontSize: '9px',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: esGrupoSunat ? 'var(--accent)' : 'var(--wire)',
+                marginBottom: '4px',
+              }}>
                 Convertido
               </div>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: esGrupoSunat ? '#78350f' : '#312e81' }}>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 800,
+                color: esGrupoSunat ? 'var(--accent)' : 'var(--mist)',
+              }}>
                 S/ {formatearNumero(o.valorPen)}
               </div>
-              <div style={{ fontSize: '10px', marginTop: '2px', color: esGrupoSunat ? '#92400e' : '#4338ca' }}>
+              <div style={{
+                fontSize: '10px',
+                marginTop: '3px',
+                color: esGrupoSunat ? 'rgba(232,184,75,0.7)' : 'var(--wire)',
+              }}>
                 TC: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{o.tcUsado.toFixed(3)}</span>
               </div>
               {tcCambio && (
-                <div style={{ fontSize: '9px', marginTop: '2px', color: o.valorPen >= o.montoOriginalPEN ? '#059669' : '#dc2626', fontWeight: 700 }}>
-                  {o.valorPen >= o.montoOriginalPEN ? '+' : ''}S/ {formatearNumero(o.valorPen - o.montoOriginalPEN)}
+                <div style={{
+                  fontSize: '10px',
+                  marginTop: '3px',
+                  fontWeight: 700,
+                  color: diferencia >= 0 ? '#2ecc71' : '#e74c3c',
+                }}>
+                  {diferencia >= 0 ? '+' : ''}S/ {formatearNumero(diferencia)}
                 </div>
               )}
             </div>
@@ -1146,23 +1206,52 @@ const ReporteVentas = () => {
     };
 
     return (
-      <div style={{ marginTop: '16px', borderTop: '1px solid rgba(202,138,4,0.3)', paddingTop: '16px' }}>
-        <h4 style={{ fontSize: '11px', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <FileText size={14} /> Desglose de Ordenes en USD ({ordenesUSD.length})
+      <div style={{ marginTop: '16px', borderTop: '1px solid var(--steel)', paddingTop: '16px' }}>
+        <h4 style={{
+          fontSize: '10px',
+          fontWeight: 800,
+          color: 'var(--wire)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.15em',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}>
+          <FileText size={13} style={{ color: 'var(--accent)' }} />
+          Desglose de Ordenes en USD ({ordenesUSD.length})
         </h4>
 
-        <div style={{ display: 'grid', gridTemplateColumns: grupoHistorico.length > 0 && grupoSunat.length > 0 ? '1fr 1fr' : '1fr', gap: '16px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: grupoHistorico.length > 0 && grupoSunat.length > 0 ? '1fr 1fr' : '1fr',
+          gap: '16px',
+        }}>
           {grupoHistorico.length > 0 && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  color: 'var(--wire)',
+                }}>
                   Respetando TC de la Orden
                 </span>
-                <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 8px', borderRadius: '4px', backgroundColor: 'rgba(100,116,139,0.15)', color: '#475569' }}>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '1px 8px',
+                  borderRadius: '2px',
+                  backgroundColor: 'var(--carbon-light)',
+                  border: '1px solid var(--steel)',
+                  color: 'var(--wire)',
+                }}>
                   {grupoHistorico.length}
                 </span>
               </div>
-              <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                 {grupoHistorico.map(o => <FilaOrden key={o.numero} o={o} esGrupoSunat={false} />)}
               </div>
             </div>
@@ -1171,14 +1260,28 @@ const ReporteVentas = () => {
           {grupoSunat.length > 0 && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#92400e' }}>
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  color: 'var(--accent)',
+                }}>
                   Aplicando TC SUNAT
                 </span>
-                <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 8px', borderRadius: '4px', backgroundColor: 'rgba(202,138,4,0.2)', color: '#92400e' }}>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '1px 8px',
+                  borderRadius: '2px',
+                  backgroundColor: 'rgba(232,184,75,0.1)',
+                  border: '1px solid rgba(232,184,75,0.25)',
+                  color: 'var(--accent)',
+                }}>
                   {grupoSunat.length}
                 </span>
               </div>
-              <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                 {grupoSunat.map(o => <FilaOrden key={o.numero} o={o} esGrupoSunat={true} />)}
               </div>
             </div>

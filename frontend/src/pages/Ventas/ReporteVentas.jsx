@@ -315,7 +315,7 @@ const ReporteVentas = () => {
 
   useEffect(() => {
     aplicarFiltrosLocales();
-  }, [filtros.estadoOrden, filtros.estadoPago, dataReporte.detalle]);
+  }, [filtros.estadosOrden, filtros.estadosPago, dataReporte.detalle]);
 
   const seleccionarCliente = (cliente) => {
     setFiltros({ ...filtros, idCliente: cliente.id_cliente });
@@ -333,8 +333,12 @@ const ReporteVentas = () => {
 
   const aplicarFiltrosLocales = () => {
     let filtrada = [...dataReporte.detalle];
-    if (filtros.estadoOrden) filtrada = filtrada.filter(item => item.estado === filtros.estadoOrden);
-    if (filtros.estadoPago) filtrada = filtrada.filter(item => item.estado_pago === filtros.estadoPago);
+    if (filtros.estadosOrden && filtros.estadosOrden.length > 0) {
+      filtrada = filtrada.filter(item => filtros.estadosOrden.includes(item.estado));
+    }
+    if (filtros.estadosPago && filtros.estadosPago.length > 0) {
+      filtrada = filtrada.filter(item => filtros.estadosPago.includes(item.estado_pago));
+    }
     setDataFiltrada(filtrada);
   };
 

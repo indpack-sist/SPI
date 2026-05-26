@@ -41,7 +41,6 @@ import { ordenesVentaAPI, tipoCambioAPI } from '../../config/api';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
-// Componente para el grupo de checkboxes de filtro
 const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -216,7 +215,6 @@ function OrdenesVenta() {
 
   const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || getDefaultFirstDay());
   const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || getDefaultLastDay());
-  const [filtroRapido, setFiltroRapido] = useState(() => sessionStorage.getItem('ordenes_filtro_rapido') || 'mes');
   const [busqueda, setBusqueda] = useState(() => sessionStorage.getItem('ordenes_busqueda') || '');
   
   const initPage = parseInt(sessionStorage.getItem('ordenes_pagina') || '1');
@@ -229,41 +227,6 @@ function OrdenesVenta() {
   const [loadingTC, setLoadingTC] = useState(false);
   const [mostrarConversion, setMostrarConversion] = useState(false);
 
-  // Funciones para filtros rápidos
-  const aplicarFiltroRapido = (tipo) => {
-    setFiltroRapido(tipo);
-    sessionStorage.setItem('ordenes_filtro_rapido', tipo);
-    const hoy = new Date();
-    
-    if (tipo === '7dias') {
-      const hace7 = new Date(hoy);
-      hace7.setDate(hoy.getDate() - 6); // 6 days ago + today = 7 days
-      setFechaInicio(`${hace7.getFullYear()}-${String(hace7.getMonth() + 1).padStart(2, '0')}-${String(hace7.getDate()).padStart(2, '0')}`);
-      setFechaFin(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`);
-    } else if (tipo === 'mes') {
-      setFechaInicio(getDefaultFirstDay());
-      setFechaFin(getDefaultLastDay());
-    } else if (tipo === 'ano') {
-      setFechaInicio(`${hoy.getFullYear()}-01-01`);
-      setFechaFin(`${hoy.getFullYear()}-12-31`);
-    }
-  };
-
-  const getTextoFiltroRapido = (tipo) => {
-    const hoy = new Date();
-    if (tipo === '7dias') {
-      const hace7 = new Date(hoy);
-      hace7.setDate(hoy.getDate() - 6);
-      const strHace7 = `${String(hace7.getDate()).padStart(2, '0')}/${String(hace7.getMonth() + 1).padStart(2, '0')}`;
-      const strHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}`;
-      return `Últimos 7 días (${strHace7} - ${strHoy})`;
-    } else if (tipo === 'ano') {
-      return `Este Año (desde 01/01/${hoy.getFullYear()})`;
-    }
-    return 'Este Mes';
-  };
-
-  // Guardar en session storage cada que cambian los filtros
   useEffect(() => {
     sessionStorage.setItem('ordenes_filtros_estado', JSON.stringify(filtroEstado));
     sessionStorage.setItem('ordenes_filtros_estado_pago', JSON.stringify(filtroEstadoPago));
@@ -378,18 +341,10 @@ function OrdenesVenta() {
 
   const handleFechaInicioChange = (e) => {
     setFechaInicio(e.target.value);
-    if (filtroRapido !== 'personalizado') {
-      setFiltroRapido('personalizado');
-      sessionStorage.setItem('ordenes_filtro_rapido', 'personalizado');
-    }
   };
 
   const handleFechaFinChange = (e) => {
     setFechaFin(e.target.value);
-    if (filtroRapido !== 'personalizado') {
-      setFiltroRapido('personalizado');
-      sessionStorage.setItem('ordenes_filtro_rapido', 'personalizado');
-    }
   };
 
   const limpiarFiltros = () => {
@@ -400,7 +355,8 @@ function OrdenesVenta() {
     setFiltroEstadoSunat([]);
     setFiltroVendedor([]);
     setFiltroMoneda([]);
-    aplicarFiltroRapido('mes'); // Restablece fechas y estado de filtro
+    setFechaInicio(getDefaultFirstDay());
+    setFechaFin(getDefaultLastDay());
     setBusqueda('');
     setCurrentPage(1);
   };
@@ -419,9 +375,7 @@ function OrdenesVenta() {
     );
   });
 
-  // Calcular estadísticas dinámicamente basadas en los filtros actuales
   const estadisticas = ordenesFiltradas.reduce((acc, orden) => {
-    // Regla de Exclusión Global: No sumar Canceladas, Pendientes de Verificación ni Rechazadas
     if (
       orden.estado === 'Cancelada' || 
       orden.estado_verificacion === 'Pendiente' || 
@@ -434,12 +388,9 @@ function OrdenesVenta() {
     const monto = esSinImpuesto ? parseFloat(orden.subtotal || 0) : parseFloat(orden.total || 0);
     const tipo = String(orden.tipo_comprobante || '').trim();
     
-    // Excepciones para Facturas de Exportación (sin IGV válido)
     const facturasExportacion = ['OV-2026-0380', 'OV-2026-0277', 'OV-2026-0162', 'OV-2026-0093'];
 
     if (tipo.includes('Factura')) {
-      // REGLA: Si es Factura pero NO tiene IGV, se considera un error del usuario y se suma como Nota de Venta
-      // EXCEPCIÓN: Facturas de exportación aprobadas explícitamente
       if (!esSinImpuesto || facturasExportacion.includes(orden.numero_orden)) {
         if (orden.moneda === 'PEN') acc.facturas_pen += monto;
         if (orden.moneda === 'USD') acc.facturas_usd += monto;
@@ -467,7 +418,6 @@ function OrdenesVenta() {
   const currentItems = ordenesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(ordenesFiltradas.length / itemsPerPage);
 
-  // Guardar lista de IDs filtrados para la navegación en el detalle
   useEffect(() => {
     const idsFiltrados = ordenesFiltradas.map(o => o.id_orden_venta);
     sessionStorage.setItem('ordenes_filtradas_ids', JSON.stringify(idsFiltrados));
@@ -559,20 +509,6 @@ function OrdenesVenta() {
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
-  };
-
-  const getMesName = () => {
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    if (fechaInicio && fechaFin) {
-      const [y1, m1] = fechaInicio.split('-');
-      const [y2, m2] = fechaFin.split('-');
-      if (y1 === y2 && m1 === m2) {
-        return `${meses[parseInt(m1, 10) - 1]} ${y1}`;
-      }
-      return 'Variado';
-    }
-    const now = new Date();
-    return `${meses[now.getMonth()]} ${now.getFullYear()}`;
   };
 
   const getEstadoVerificacionConfig = (estadoVerif) => {
@@ -837,19 +773,15 @@ function OrdenesVenta() {
       
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
         <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-              <div className="p-2 bg-primary/10 rounded-lg"><ShoppingCart size={28} className="text-primary" /></div>
-              <span className="uppercase font-barlow text-white">Órdenes de Venta</span>
-            </h1>
-            <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
-          </div>
-          <div className="flex flex-col items-end gap-3 w-full md:w-auto pt-1">
-            <div className="text-[0.85rem] md:text-sm font-black text-mist tracking-widest uppercase flex items-center gap-2">
-              <Calendar size={18} className="text-primary" />
-              {filtroRapido === 'personalizado' ? `FECHAS: ${formatearFechaVisual(fechaInicio)} - ${formatearFechaVisual(fechaFin)}` : getTextoFiltroRapido(filtroRapido).toUpperCase()}
+          <div className="flex flex-col gap-3">
+            <div>
+              <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
+                <div className="p-2 bg-primary/10 rounded-lg"><ShoppingCart size={28} className="text-primary" /></div>
+                <span className="uppercase font-barlow text-white">Órdenes de Venta</span>
+              </h1>
+              <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
             </div>
-            <div className="flex gap-3 w-full md:w-auto justify-end">
+            <div className="flex gap-3">
               <button 
                 className="btn btn-outline border-steel text-mist font-black text-sm tracking-widest h-12 px-6 shadow-xl" 
                 onClick={() => navigate('/ventas/ordenes/verificacion')}
@@ -862,6 +794,18 @@ function OrdenesVenta() {
               >
                 <Plus size={22} /> NUEVA ORDEN
               </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end justify-center h-full pt-2">
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[0.55rem] font-black text-wire uppercase tracking-[0.25em]">Período filtrado</span>
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-carbon-mid border border-steel/50 rounded-lg shadow-inner">
+                <Calendar size={16} className="text-primary" />
+                <span className="text-sm font-black text-mist tracking-widest uppercase">
+                  {formatearFechaVisual(fechaInicio)} — {formatearFechaVisual(fechaFin)}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -901,61 +845,24 @@ function OrdenesVenta() {
         <div className="card mb-4 bg-carbon-mid border border-steel/30 shadow-xl">
           <div className="card-body p-4">
             <div className="flex flex-col md:flex-row gap-3">
-              <div className="flex flex-col gap-2 md:flex-row flex-1">
-                <div className="relative flex-1">
-                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
-                  <input type="text" className="form-input w-full pl-10 h-11" placeholder="Buscar por N°, cliente, RUC..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-                </div>
-                
-                <div className="flex items-center gap-1.5 p-1 bg-carbon rounded border border-steel/50">
-                  <button 
-                    onClick={() => aplicarFiltroRapido('7dias')}
-                    className={`px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-widest rounded transition-all whitespace-nowrap ${filtroRapido === '7dias' ? 'bg-primary text-carbon shadow-lg scale-105 z-10' : 'text-wire hover:text-mist hover:bg-steel/30'}`}
-                    title={getTextoFiltroRapido('7dias')}
-                  >
-                    7 Días
-                  </button>
-                  <button 
-                    onClick={() => aplicarFiltroRapido('mes')}
-                    className={`px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-widest rounded transition-all whitespace-nowrap ${filtroRapido === 'mes' ? 'bg-primary text-carbon shadow-lg scale-105 z-10' : 'text-wire hover:text-mist hover:bg-steel/30'}`}
-                    title="Este Mes"
-                  >
-                    Mes
-                  </button>
-                  <button 
-                    onClick={() => aplicarFiltroRapido('ano')}
-                    className={`px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-widest rounded transition-all whitespace-nowrap ${filtroRapido === 'ano' ? 'bg-primary text-carbon shadow-lg scale-105 z-10' : 'text-wire hover:text-mist hover:bg-steel/30'}`}
-                    title={getTextoFiltroRapido('ano')}
-                  >
-                    Año
-                  </button>
-                </div>
+              <div className="relative flex-1">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+                <input type="text" className="form-input w-full pl-10 h-11" placeholder="Buscar por N°, cliente, RUC..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
               </div>
 
               <div className="flex gap-2">
                 <input 
                   type="date" 
-                  className="form-input text-xs h-11 w-36 disabled:opacity-50 disabled:cursor-not-allowed" 
+                  className="form-input text-xs h-11 w-36" 
                   value={fechaInicio} 
                   onChange={handleFechaInicioChange} 
-                  disabled={filtroRapido !== 'personalizado'}
                 />
                 <input 
                   type="date" 
-                  className="form-input text-xs h-11 w-36 disabled:opacity-50 disabled:cursor-not-allowed" 
+                  className="form-input text-xs h-11 w-36" 
                   value={fechaFin} 
                   onChange={handleFechaFinChange} 
-                  disabled={filtroRapido !== 'personalizado'}
                 />
-                {filtroRapido !== 'personalizado' && (
-                  <button 
-                    onClick={() => setFiltroRapido('personalizado')}
-                    className="btn btn-outline border-steel text-wire hover:text-mist h-11 px-2"
-                    title="Desbloquear para seleccionar fechas manualmente"
-                  >
-                    <Edit size={16} />
-                  </button>
-                )}
                 <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest transition-all ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline border-steel'}`}>
                   <Filter size={16} /> {mostrarFiltrosAvanzados ? 'CERRAR' : 'MÁS FILTROS'}
                 </button>

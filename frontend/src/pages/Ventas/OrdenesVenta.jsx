@@ -212,8 +212,8 @@ function OrdenesVenta() {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
-  const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || getDefaultFirstDay());
-  const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || getDefaultLastDay());
+  const [fechaInicio, setFechaInicio] = useState(() => getDefaultFirstDay());
+const [fechaFin, setFechaFin] = useState(() => getDefaultLastDay());
   const [busqueda, setBusqueda] = useState(() => sessionStorage.getItem('ordenes_busqueda') || '');
   
   const initPage = parseInt(sessionStorage.getItem('ordenes_pagina') || '1');

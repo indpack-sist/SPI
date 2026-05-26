@@ -209,8 +209,7 @@ function OrdenesVenta() {
 
   const getDefaultLastDay = () => {
     const date = new Date();
-    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-    return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
   const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || getDefaultFirstDay());
@@ -772,7 +771,8 @@ function OrdenesVenta() {
       {loading && <Loading message="Cargando órdenes de venta..." />}
       
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
-        <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
+
+        <div className="flex flex-row justify-between items-start gap-4 mb-6">
           <div className="flex flex-col gap-3">
             <div>
               <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
@@ -797,15 +797,13 @@ function OrdenesVenta() {
             </div>
           </div>
 
-          <div className="flex flex-col items-end justify-center h-full pt-2">
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-[0.55rem] font-black text-wire uppercase tracking-[0.25em]">Período filtrado</span>
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-carbon-mid border border-steel/50 rounded-lg shadow-inner">
-                <Calendar size={16} className="text-primary" />
-                <span className="text-sm font-black text-mist tracking-widest uppercase">
-                  {formatearFechaVisual(fechaInicio)} — {formatearFechaVisual(fechaFin)}
-                </span>
-              </div>
+          <div className="flex flex-col items-end gap-1 shrink-0 pt-1">
+            <span className="text-[0.55rem] font-black text-wire uppercase tracking-[0.25em]">Período filtrado</span>
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-carbon-mid border border-steel/50 rounded-lg shadow-inner">
+              <Calendar size={16} className="text-primary" />
+              <span className="text-sm font-black text-mist tracking-widest uppercase">
+                {formatearFechaVisual(fechaInicio)} — {formatearFechaVisual(fechaFin)}
+              </span>
             </div>
           </div>
         </div>

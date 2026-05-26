@@ -203,8 +203,20 @@ function OrdenesVenta() {
   const [filtroVendedor, setFiltroVendedor] = useState(() => getSessionArray('ordenes_filtros_vendedor'));
   const [filtroMoneda, setFiltroMoneda] = useState(() => getSessionArray('ordenes_filtros_moneda'));
   
-  const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || '');
-  const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || '');
+  const getDefaultFirstDay = () => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+  };
+
+  const getDefaultLastDay = () => {
+    const date = new Date();
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+  };
+
+  const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || getDefaultFirstDay());
+  const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || getDefaultLastDay());
+  const [filtroRapido, setFiltroRapido] = useState(() => sessionStorage.getItem('ordenes_filtro_rapido') || 'mes');
   const [busqueda, setBusqueda] = useState(() => sessionStorage.getItem('ordenes_busqueda') || '');
   
   const initPage = parseInt(sessionStorage.getItem('ordenes_pagina') || '1');
@@ -216,6 +228,40 @@ function OrdenesVenta() {
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
   const [mostrarConversion, setMostrarConversion] = useState(false);
+
+  // Funciones para filtros rápidos
+  const aplicarFiltroRapido = (tipo) => {
+    setFiltroRapido(tipo);
+    sessionStorage.setItem('ordenes_filtro_rapido', tipo);
+    const hoy = new Date();
+    
+    if (tipo === '7dias') {
+      const hace7 = new Date(hoy);
+      hace7.setDate(hoy.getDate() - 6); // 6 days ago + today = 7 days
+      setFechaInicio(`${hace7.getFullYear()}-${String(hace7.getMonth() + 1).padStart(2, '0')}-${String(hace7.getDate()).padStart(2, '0')}`);
+      setFechaFin(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`);
+    } else if (tipo === 'mes') {
+      setFechaInicio(getDefaultFirstDay());
+      setFechaFin(getDefaultLastDay());
+    } else if (tipo === 'ano') {
+      setFechaInicio(`${hoy.getFullYear()}-01-01`);
+      setFechaFin(`${hoy.getFullYear()}-12-31`);
+    }
+  };
+
+  const getTextoFiltroRapido = (tipo) => {
+    const hoy = new Date();
+    if (tipo === '7dias') {
+      const hace7 = new Date(hoy);
+      hace7.setDate(hoy.getDate() - 6);
+      const strHace7 = `${String(hace7.getDate()).padStart(2, '0')}/${String(hace7.getMonth() + 1).padStart(2, '0')}`;
+      const strHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+      return `Últimos 7 días (${strHace7} - ${strHoy})`;
+    } else if (tipo === 'ano') {
+      return `Este Año (desde 01/01/${hoy.getFullYear()})`;
+    }
+    return 'Este Mes';
+  };
 
   // Guardar en session storage cada que cambian los filtros
   useEffect(() => {
@@ -330,6 +376,22 @@ function OrdenesVenta() {
     }
   };
 
+  const handleFechaInicioChange = (e) => {
+    setFechaInicio(e.target.value);
+    if (filtroRapido !== 'personalizado') {
+      setFiltroRapido('personalizado');
+      sessionStorage.setItem('ordenes_filtro_rapido', 'personalizado');
+    }
+  };
+
+  const handleFechaFinChange = (e) => {
+    setFechaFin(e.target.value);
+    if (filtroRapido !== 'personalizado') {
+      setFiltroRapido('personalizado');
+      sessionStorage.setItem('ordenes_filtro_rapido', 'personalizado');
+    }
+  };
+
   const limpiarFiltros = () => {
     setFiltroEstado([]);
     setFiltroEstadoPago([]);
@@ -338,8 +400,7 @@ function OrdenesVenta() {
     setFiltroEstadoSunat([]);
     setFiltroVendedor([]);
     setFiltroMoneda([]);
-    setFechaInicio('');
-    setFechaFin('');
+    aplicarFiltroRapido('mes'); // Restablece fechas y estado de filtro
     setBusqueda('');
     setCurrentPage(1);
   };
@@ -498,6 +559,20 @@ function OrdenesVenta() {
   const formatearMoneda = (valor, moneda) => {
     const simbolo = moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+  };
+
+  const getMesName = () => {
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    if (fechaInicio && fechaFin) {
+      const [y1, m1] = fechaInicio.split('-');
+      const [y2, m2] = fechaFin.split('-');
+      if (y1 === y2 && m1 === m2) {
+        return `${meses[parseInt(m1, 10) - 1]} ${y1}`;
+      }
+      return 'Variado';
+    }
+    const now = new Date();
+    return `${meses[now.getMonth()]} ${now.getFullYear()}`;
   };
 
   const getEstadoVerificacionConfig = (estadoVerif) => {
@@ -790,27 +865,33 @@ function OrdenesVenta() {
 
         {estadisticas && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-            <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
+            <div className="card stat-card relative bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
+              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
               <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
+            <div className="card stat-card relative bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
+              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
               <p className="text-lg font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+            <div className="card stat-card relative bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
               <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+            <div className="card stat-card relative bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
               <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+            <div className="card stat-card relative bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
               <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+            <div className="card stat-card relative bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
               <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
             </div>
@@ -820,17 +901,65 @@ function OrdenesVenta() {
         <div className="card mb-4 bg-carbon-mid border border-steel/30 shadow-xl">
           <div className="card-body p-4">
             <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
-                <input type="text" className="form-input w-full pl-10 h-11" placeholder="Buscar por N°, cliente, RUC..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              <div className="flex flex-col gap-2 md:flex-row flex-1">
+                <div className="relative flex-1">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+                  <input type="text" className="form-input w-full pl-10 h-11" placeholder="Buscar por N°, cliente, RUC..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                </div>
+                
+                <div className="flex items-center gap-1.5 p-1 bg-carbon rounded border border-steel/50">
+                  <button 
+                    onClick={() => aplicarFiltroRapido('7dias')}
+                    className={`px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-widest rounded transition-all whitespace-nowrap ${filtroRapido === '7dias' ? 'bg-primary text-carbon shadow-lg scale-105 z-10' : 'text-wire hover:text-mist hover:bg-steel/30'}`}
+                    title={getTextoFiltroRapido('7dias')}
+                  >
+                    7 Días
+                  </button>
+                  <button 
+                    onClick={() => aplicarFiltroRapido('mes')}
+                    className={`px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-widest rounded transition-all whitespace-nowrap ${filtroRapido === 'mes' ? 'bg-primary text-carbon shadow-lg scale-105 z-10' : 'text-wire hover:text-mist hover:bg-steel/30'}`}
+                    title="Este Mes"
+                  >
+                    Mes
+                  </button>
+                  <button 
+                    onClick={() => aplicarFiltroRapido('ano')}
+                    className={`px-3 py-1.5 text-[0.65rem] font-bold uppercase tracking-widest rounded transition-all whitespace-nowrap ${filtroRapido === 'ano' ? 'bg-primary text-carbon shadow-lg scale-105 z-10' : 'text-wire hover:text-mist hover:bg-steel/30'}`}
+                    title={getTextoFiltroRapido('ano')}
+                  >
+                    Año
+                  </button>
+                </div>
               </div>
+
               <div className="flex gap-2">
-                <input type="date" className="form-input text-xs h-11 w-36" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
-                <input type="date" className="form-input text-xs h-11 w-36" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+                <input 
+                  type="date" 
+                  className="form-input text-xs h-11 w-36 disabled:opacity-50 disabled:cursor-not-allowed" 
+                  value={fechaInicio} 
+                  onChange={handleFechaInicioChange} 
+                  disabled={filtroRapido !== 'personalizado'}
+                />
+                <input 
+                  type="date" 
+                  className="form-input text-xs h-11 w-36 disabled:opacity-50 disabled:cursor-not-allowed" 
+                  value={fechaFin} 
+                  onChange={handleFechaFinChange} 
+                  disabled={filtroRapido !== 'personalizado'}
+                />
+                {filtroRapido !== 'personalizado' && (
+                  <button 
+                    onClick={() => setFiltroRapido('personalizado')}
+                    className="btn btn-outline border-steel text-wire hover:text-mist h-11 px-2"
+                    title="Desbloquear para seleccionar fechas manualmente"
+                  >
+                    <Edit size={16} />
+                  </button>
+                )}
                 <button onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)} className={`btn h-11 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest transition-all ${mostrarFiltrosAvanzados ? 'btn-primary' : 'btn-outline border-steel'}`}>
                   <Filter size={16} /> {mostrarFiltrosAvanzados ? 'CERRAR' : 'MÁS FILTROS'}
                 </button>
-                <button onClick={limpiarFiltros} className="btn btn-outline border-steel text-danger hover:bg-danger/10 h-11 px-3"><X size={18} /></button>
+                <button onClick={limpiarFiltros} className="btn btn-outline border-steel text-danger hover:bg-danger/10 h-11 px-3" title="Limpiar todos los filtros"><X size={18} /></button>
               </div>
             </div>
 

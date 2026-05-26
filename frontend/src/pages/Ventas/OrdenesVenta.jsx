@@ -836,7 +836,7 @@ function OrdenesVenta() {
       {loading && <Loading message="Cargando órdenes de venta..." />}
       
       <div className={`transition-opacity duration-300 ${loading ? 'opacity-0' : 'opacity-100'}`}>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
               <div className="p-2 bg-primary/10 rounded-lg"><ShoppingCart size={28} className="text-primary" /></div>
@@ -844,9 +844,10 @@ function OrdenesVenta() {
             </h1>
             <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
           </div>
-          <div className="flex flex-col items-end gap-2 w-full md:w-auto">
-            <div className="text-[0.65rem] font-bold text-wire bg-carbon-mid border border-steel px-3 py-1 rounded-full shadow-inner tracking-widest uppercase">
-              {filtroRapido === 'personalizado' ? `Fechas: ${formatearFechaVisual(fechaInicio)} - ${formatearFechaVisual(fechaFin)}` : getTextoFiltroRapido(filtroRapido)}
+          <div className="flex flex-col items-end gap-3 w-full md:w-auto pt-1">
+            <div className="text-[0.85rem] md:text-sm font-black text-mist tracking-widest uppercase flex items-center gap-2">
+              <Calendar size={18} className="text-primary" />
+              {filtroRapido === 'personalizado' ? `FECHAS: ${formatearFechaVisual(fechaInicio)} - ${formatearFechaVisual(fechaFin)}` : getTextoFiltroRapido(filtroRapido).toUpperCase()}
             </div>
             <div className="flex gap-3 w-full md:w-auto justify-end">
               <button 

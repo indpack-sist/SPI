@@ -844,19 +844,24 @@ function OrdenesVenta() {
             </h1>
             <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
           </div>
-          <div className="flex gap-3 w-full md:w-auto">
-            <button 
-              className="btn btn-outline border-steel text-mist font-black text-sm tracking-widest h-12 px-6 shadow-xl" 
-              onClick={() => navigate('/ventas/ordenes/verificacion')}
-            >
-              <Shield size={20} /> VERIFICACIÓN
-            </button>
-            <button 
-              className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 active:scale-95 transition-all" 
-              onClick={() => navigate('/ventas/ordenes/nueva')}
-            >
-              <Plus size={22} /> NUEVA ORDEN
-            </button>
+          <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+            <div className="text-[0.65rem] font-bold text-wire bg-carbon-mid border border-steel px-3 py-1 rounded-full shadow-inner tracking-widest uppercase">
+              {filtroRapido === 'personalizado' ? `Fechas: ${formatearFechaVisual(fechaInicio)} - ${formatearFechaVisual(fechaFin)}` : getTextoFiltroRapido(filtroRapido)}
+            </div>
+            <div className="flex gap-3 w-full md:w-auto justify-end">
+              <button 
+                className="btn btn-outline border-steel text-mist font-black text-sm tracking-widest h-12 px-6 shadow-xl" 
+                onClick={() => navigate('/ventas/ordenes/verificacion')}
+              >
+                <Shield size={20} /> VERIFICACIÓN
+              </button>
+              <button 
+                className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 active:scale-95 transition-all" 
+                onClick={() => navigate('/ventas/ordenes/nueva')}
+              >
+                <Plus size={22} /> NUEVA ORDEN
+              </button>
+            </div>
           </div>
         </div>
 
@@ -865,33 +870,27 @@ function OrdenesVenta() {
 
         {estadisticas && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-            <div className="card stat-card relative bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
-              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
               <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card relative bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
-              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
               <p className="text-lg font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
             </div>
-            <div className="card stat-card relative bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
-              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
               <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card relative bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
-              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
               <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
             </div>
-            <div className="card stat-card relative bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
-              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
               <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
             </div>
-            <div className="card stat-card relative bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
-              <span className="absolute top-2 right-2 text-[0.6rem] font-bold text-wire/60">{getMesName()}</span>
+            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
               <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
               <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
             </div>

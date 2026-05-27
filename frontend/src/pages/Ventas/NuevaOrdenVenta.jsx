@@ -936,11 +936,19 @@ useEffect(() => {
                             />
                         </div>
                         {archivosPrevios.orden_compra_url && !archivos.orden_compra && (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 mt-2">
+                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 mt-2 relative">
                                 <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                                <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight">
-                                  Documento guardado previamente. Sube uno nuevo para reemplazarlo.
+                                <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight flex-1">
+                                  Documentos guardados previamente.
                                 </p>
+                                <button
+                                    type="button"
+                                    className="btn btn-xs btn-outline border-red-200 hover:bg-red-50 hover:border-red-400 text-red-600 absolute right-2"
+                                    onClick={() => setArchivosPrevios({...archivosPrevios, orden_compra_url: null})}
+                                    title="Eliminar documentos adjuntos previamente"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
                             </div>
                         )}
                     </div>
@@ -1654,6 +1662,13 @@ useEffect(() => {
               {savingDireccion ? 'Guardando...' : 'Guardar Dirección'}
             </button>
           </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+export default NuevaOrdenVenta;     </div>
         </div>
       </Modal>
     </div>

@@ -821,6 +821,15 @@ export async function updateOrdenVenta(req, res) {
     let nuevaOrdenCompraUrl = ordenActual.orden_compra_url;
     let nuevoComprobanteUrl = ordenActual.comprobante_url;
 
+    if (req.body.limpiar_oc === 'true') {
+      nuevaOrdenCompraUrl = null;
+      ordenActual.orden_compra_url = null;
+    }
+    if (req.body.limpiar_comprobante === 'true') {
+      nuevoComprobanteUrl = null;
+      ordenActual.comprobante_url = null;
+    }
+
     // Helper para concatenar URLs nuevas a un JSON existente de forma segura
     const appendUrls = (existingJson, newUrls) => {
       if (!newUrls || newUrls.length === 0) return existingJson;

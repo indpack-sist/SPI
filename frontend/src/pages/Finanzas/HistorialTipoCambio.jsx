@@ -102,7 +102,15 @@ const HistorialTipoCambio = () => {
     // Map data
     const dataMap = {};
     historial.forEach(h => {
-        const d = new Date(h.fecha + 'T00:00:00').getDate();
+        // h.fecha might be an ISO string like "2026-01-01T05:00:00.000Z" from MySQL
+        let d;
+        if (typeof h.fecha === 'string') {
+           // Tomamos solo la parte YYYY-MM-DD para evitar problemas de zona horaria
+           const datePart = h.fecha.substring(0, 10);
+           d = new Date(datePart + 'T12:00:00').getDate(); // Mediodía para asegurar el mismo día
+        } else {
+           d = new Date(h.fecha).getDate();
+        }
         dataMap[d] = h;
     });
 

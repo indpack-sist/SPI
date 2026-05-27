@@ -680,6 +680,13 @@ useEffect(() => {
         orden: index + 1
       }))));
 
+      if (archivosPrevios.orden_compra_url === null) {
+        formData.append('limpiar_oc', 'true');
+      }
+      if (archivosPrevios.comprobante_url === null) {
+        formData.append('limpiar_comprobante', 'true');
+      }
+
       if (tieneOC && archivos.orden_compra) {
         if (Array.isArray(archivos.orden_compra)) {
           archivos.orden_compra.forEach(file => formData.append('orden_compra', file));
@@ -1535,14 +1542,24 @@ useEffect(() => {
                           </button>
 
                           {archivosPrevios.comprobante_url && (
-                              <button
-                                  type="button"
-                                  className="btn btn-sm btn-primary px-3 shadow-md shadow-blue-100"
-                                  onClick={() => verArchivo(archivosPrevios.comprobante_url)}
-                                  title="Ver comprobante actual"
-                              >
-                                  <Eye size={16} />
-                              </button>
+                              <div className="flex gap-1 w-full">
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-primary px-3 shadow-md shadow-blue-100 flex-1"
+                                    onClick={() => verArchivo(archivosPrevios.comprobante_url)}
+                                    title="Ver comprobante actual"
+                                >
+                                    <Eye size={16} />
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline border-red-200 hover:bg-red-50 text-red-600 px-3 flex-1 flex justify-center items-center"
+                                    onClick={() => setArchivosPrevios({...archivosPrevios, comprobante_url: null})}
+                                    title="Eliminar comprobante guardado"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                              </div>
                           )}
                         </div>
 

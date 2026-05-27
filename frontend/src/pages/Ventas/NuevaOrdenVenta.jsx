@@ -1668,11 +1668,4 @@ useEffect(() => {
   );
 }
 
-export default NuevaOrdenVenta;     </div>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
 export default NuevaOrdenVenta;

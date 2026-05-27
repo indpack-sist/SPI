@@ -22,7 +22,14 @@ const HistorialTipoCambio = () => {
     try {
       setLoading(true);
       const res = await tipoCambioAPI.obtenerHistorial({ mes: currentMonth, anio: currentYear });
-      setHistorial(res.data.data || []);
+      // El interceptor de axios ya devuelve data directo en res, o a veces envuelto.
+      // Verificamos si res tiene data y es array, o si res.data es array.
+      let dataArray = [];
+      if (Array.isArray(res)) dataArray = res;
+      else if (res.data && Array.isArray(res.data)) dataArray = res.data;
+      else if (res.data && res.data.data && Array.isArray(res.data.data)) dataArray = res.data.data;
+      
+      setHistorial(dataArray);
     } catch (err) {
       showAlert('error', err.error || 'Error al cargar el historial');
     } finally {

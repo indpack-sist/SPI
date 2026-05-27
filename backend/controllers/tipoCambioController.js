@@ -111,14 +111,12 @@ export const subirHistorialExcel = async (req, res) => {
       compra = VALUES(compra), venta = VALUES(venta), promedio = VALUES(promedio), origen = VALUES(origen)
     `;
     
-    await executeQuery(query, [insertedRecords]);
+    // pool.query support bulk inserts, unlike pool.execute
+    await pool.query(query, [insertedRecords]);
 
     res.json({ success: true, message: `Se importaron ${insertedRecords.length} registros exitosamente.` });
   } catch (error) {
     console.error('Error en subirHistorialExcel:', error);
     res.status(500).json({ success: false, error: 'Error interno procesando el archivo Excel.' });
-  }
-};
-rchivo Excel.' });
   }
 };

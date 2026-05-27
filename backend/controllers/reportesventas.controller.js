@@ -80,7 +80,7 @@ export const getReporteVentas = async (req, res) => {
 
         // EXTRAER FECHAS FACTURACION SUNAT Y OBTENER HISTORIAL TC
         let historialTCMap = {};
-        if (tipo_unificacion === 'historico' && ordenes.length > 0) {
+        if (ordenes.length > 0) {
             const fechasFacturacion = ordenes
                 .map(o => o.fecha_facturacion_sunat)
                 .filter(fecha => fecha !== null && fecha !== undefined);
@@ -155,41 +155,13 @@ export const getReporteVentas = async (req, res) => {
 
         const listaDetalle = ordenes.map(orden => {
             const esDolar = orden.moneda === 'USD';
-            
-            // Determinar el TC a usar según el tipo de unificación
-            let tcAplicado = parseFloat(orden.tipo_cambio) || 1;
-            const tcBaseOrden = parseFloat(orden.tipo_cambio) || 0;
-            const tcDiaConsulta = parseFloat(tc_dia) || 1;
+            const tcOrden = parseFloat(orden.tipo_cambio) || 1;
 
-            if (tipo_unificacion === 'global') {
-                tcAplicado = tcDiaConsulta;
-            } else if (tipo_unificacion === 'mixto') {
-                // Híbrido: Si la orden tiene un TC válido (>3), se usa. Si no, usa el del día de la consulta.
-                if (tcBaseOrden > 3) {
-                    tcAplicado = tcBaseOrden;
-                } else {
-                    tcAplicado = tcDiaConsulta;
-                }
-            } else if (tipo_unificacion === 'historico') {
-                // Histórico SUNAT: Si la orden tiene TC válido, lo respeta (regla acordada con el usuario).
-                // Si no, busca el TC histórico por fecha de facturación.
-                if (tcBaseOrden > 3) {
-                    tcAplicado = tcBaseOrden;
-                } else if (orden.fecha_facturacion_sunat) {
-                    const fechaFStr = new Date(orden.fecha_facturacion_sunat).toISOString().split('T')[0];
-                    if (historialTCMap[fechaFStr]) {
-                        tcAplicado = historialTCMap[fechaFStr];
-                    } else {
-                        // Fallback si no hay historial para ese día
-                        tcAplicado = tcDiaConsulta;
-                    }
-                } else {
-                    // Fallback si no tiene fecha de facturación SUNAT
-                    tcAplicado = tcDiaConsulta;
-                }
+            let tcHistorico = null;
+            if (orden.fecha_facturacion_sunat) {
+                const fechaFStr = new Date(orden.fecha_facturacion_sunat).toISOString().split('T')[0];
+                tcHistorico = historialTCMap[fechaFStr] || null;
             }
-
-            const tcOrden = tcAplicado;
 
             const subtotalOriginal = parseFloat(orden.subtotal) || 0;
             const pagadoOriginal = parseFloat(orden.monto_pagado) || 0;
@@ -350,6 +322,7 @@ export const getReporteVentas = async (req, res) => {
                 telefono_entrega: orden.telefono_entrega,
                 moneda: orden.moneda,
                 tipo_cambio: tcOrden,
+                tc_historico: tcHistorico,
                 subtotal: subtotalOriginal.toFixed(3),
                 igv: (montoOriginal - subtotalOriginal).toFixed(3),
                 total: montoOriginal.toFixed(3),

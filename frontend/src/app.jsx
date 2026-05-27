@@ -453,6 +453,14 @@ function App() {
                           </ProtectedRouteWithPermiso>
                         } 
                       />
+                      <Route 
+                        path="/finanzas/historial-tc" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="pagosCobranzas">
+                            <HistorialTipoCambio />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
 
                       <Route 
                         path="/reportes/sire" 

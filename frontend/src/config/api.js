@@ -363,6 +363,13 @@ export const dashboard = {
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
 
+export const tipoCambioAPI = {
+  obtenerHistorial: (params) => api.get('/tipo-cambio/historial', { params }),
+  subirHistorialExcel: (formData) => api.post('/tipo-cambio/historial/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+};
+
 export const ordenesProduccionAPI = {
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),
@@ -820,7 +827,11 @@ export const notificacionesAPI = {
 };
 export const tipoCambioAPI = {
   actualizar: () => api.post('/tipo-cambio/actualizar'),
-  obtener: () => api.get('/tipo-cambio')
+  obtener: () => api.get('/tipo-cambio'),
+  obtenerHistorial: (params) => api.get('/tipo-cambio/historial', { params }),
+  subirHistorialExcel: (formData) => api.post('/tipo-cambio/historial/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
 };
 export const reportesAPI = {
   getSireVentas: (params) => api.get('/reportes/sire/ventas', { params }),

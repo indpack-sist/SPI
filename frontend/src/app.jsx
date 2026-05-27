@@ -54,6 +54,7 @@ import DetalleCompra from './pages/Compras/DetalleCompra';
 import CuentasPago from './pages/Finanzas/CuentasPago';
 import DetalleCuenta from './pages/Finanzas/DetalleCuenta';
 import PagosCobranzas from './pages/Finanzas/PagosCobranzas';
+import HistorialTipoCambio from './pages/Finanzas/HistorialTipoCambio';
 
 import ReportesSIRE from './pages/Reportes/ReportesSIRE';
 import ReporteProductoDespachos from './pages/Reportes/ReporteProductoDespachos';

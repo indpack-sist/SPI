@@ -645,6 +645,11 @@ const ReporteVentas = () => {
       if (filtros.estadosPago.length > 0) params.estadoPago = filtros.estadosPago.join(',');
       if (filtros.monedas.length > 0) params.moneda = filtros.monedas.join(',');
 
+      if (convertirUSD) {
+          params.tipo_unificacion = modoUnificacion === 'sunat' ? 'global' : modoUnificacion;
+          params.tc_dia = tcVenta;
+      }
+
       const response = await reportesAPI.getVentas(params);
       if (response.data.success) {
         setDataReporte(response.data.data);

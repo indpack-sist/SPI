@@ -44,6 +44,67 @@ export function obtenerTipoCambioCache() {
 
 export async function actualizarTipoCambio(date = null) {
   try {
+    // 1. Determinar la fecha a consultar
+    const dateToQuery = date || new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }).split(',')[0].split('/').reverse().join('-'); 
+    // Format mm/dd/yyyy to yyyy-mm-dd roughly, or just rely on MySQL handling if we parse date cleanly
+    
+    // Mejor formato de fecha actual en Lima
+    let fechaConsulta = date;
+    if (!fechaConsulta) {
+       const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
+       const yyyy = today.getFullYear();
+       const mm = String(today.getMonth() + 1).padStart(2, '0');
+       const dd = String(today.getDate()).padStart(2, '0');
+       fechaConsulta = `${yyyy}-${mm}-${dd}`;
+    }
+
+    // 2. Consulta Inteligente: Verificar BD Local primero
+    try {
+      const dbResult = await executeQuery(
+        `SELECT compra, venta, promedio, fecha, moneda_base, moneda_destino 
+         FROM tipo_cambio_historico 
+         WHERE fecha = ?`, 
+        [fechaConsulta]
+      );
+      
+      if (dbResult.success && dbResult.data && dbResult.data.length > 0) {
+        const localTC = dbResult.data[0];
+        
+        // Formatear la fecha para que sea string en lugar de objeto Date de MySQL
+        const dateObj = new Date(localTC.fecha);
+        const fechaStr = dateObj.toISOString().split('T')[0];
+
+        const tipoCambioLocal = {
+          compra: parseFloat(localTC.compra),
+          venta: parseFloat(localTC.venta),
+          promedio: parseFloat(localTC.promedio),
+          fecha: fechaStr,
+          moneda_base: localTC.moneda_base || 'USD',
+          moneda_destino: localTC.moneda_destino || 'PEN'
+        };
+
+        // Actualizar caché
+        tipoCambioCache = {
+          data: tipoCambioLocal,
+          timestamp: Date.now()
+        };
+
+        console.log(`TC para ${fechaConsulta} obtenido de BD Local (Ahorrando 1 petición API)`);
+
+        return {
+          valido: true,
+          ...tipoCambioLocal,
+          desde_cache: false,
+          desde_bd_local: true,
+          actualizado: true
+        };
+      }
+    } catch (dbReadError) {
+      console.error('Error leyendo TC local, procediendo a API externa:', dbReadError);
+    }
+
+    // 3. Si no existe localmente, consultar API de Decolecta
+    console.log(`TC para ${fechaConsulta} no encontrado localmente. Consultando API Decolecta...`);
     const params = {};
     if (date) {
       params.date = date; 

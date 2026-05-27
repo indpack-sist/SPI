@@ -363,13 +363,6 @@ export const dashboard = {
   actualizarTipoCambio: (params) => api.get('/dashboard/tipo-cambio/actualizar', { params })
 };
 
-export const tipoCambioAPI = {
-  obtenerHistorial: (params) => api.get('/tipo-cambio/historial', { params }),
-  subirHistorialExcel: (formData) => api.post('/tipo-cambio/historial/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-};
-
 export const ordenesProduccionAPI = {
   getAll: (params) => api.get('/produccion/ordenes', { params }),
   getById: (id) => api.get(`/produccion/ordenes/${id}`),

@@ -821,6 +821,21 @@ export async function updateOrdenVenta(req, res) {
     let nuevaOrdenCompraUrl = ordenActual.orden_compra_url;
     let nuevoComprobanteUrl = ordenActual.comprobante_url;
 
+    // Helper para concatenar URLs nuevas a un JSON existente de forma segura
+    const appendUrls = (existingJson, newUrls) => {
+      if (!newUrls || newUrls.length === 0) return existingJson;
+      let existingArray = [];
+      if (existingJson) {
+         try {
+           const parsed = JSON.parse(existingJson);
+           existingArray = Array.isArray(parsed) ? parsed : [parsed];
+         } catch(e) {
+           existingArray = [existingJson]; 
+         }
+      }
+      return JSON.stringify([...existingArray, ...newUrls]);
+    };
+
     if (req.files) {
       if (req.files.orden_compra && req.files.orden_compra.length > 0) {
         const urls = [];
@@ -828,9 +843,7 @@ export async function updateOrdenVenta(req, res) {
           const resultadoOC = await subirArchivoACloudinary(file, 'indpack_ventas/ordenes_compra');
           urls.push(resultadoOC.secure_url);
         }
-        // Si ya hay URLs, podríamos querer agregarlas, pero si el frontend envía nuevos archivos para reemplazar, sobrescribimos.
-        // Asumiendo que el frontend manda nuevos archivos para reemplazar, sobrescribimos.
-        nuevaOrdenCompraUrl = JSON.stringify(urls);
+        nuevaOrdenCompraUrl = appendUrls(ordenActual.orden_compra_url, urls);
       }
       if (req.files.comprobante && req.files.comprobante.length > 0) {
         const urls = [];
@@ -838,7 +851,7 @@ export async function updateOrdenVenta(req, res) {
           const resultadoComp = await subirArchivoACloudinary(file, 'indpack_ventas/comprobantes');
           urls.push(resultadoComp.secure_url);
         }
-        nuevoComprobanteUrl = JSON.stringify(urls);
+        nuevoComprobanteUrl = appendUrls(ordenActual.comprobante_url, urls);
       }
     }
 

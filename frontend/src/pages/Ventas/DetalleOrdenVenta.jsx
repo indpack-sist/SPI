@@ -2165,8 +2165,16 @@ function DetalleOrdenVenta() {
                                 {(() => {
                                     let urls = [];
                                     try {
-                                        urls = JSON.parse(orden.orden_compra_url);
-                                        if (!Array.isArray(urls)) urls = [orden.orden_compra_url];
+                                        if (Array.isArray(orden.orden_compra_url)) {
+                                            urls = orden.orden_compra_url;
+                                        } else if (typeof orden.orden_compra_url === 'string') {
+                                            if (orden.orden_compra_url.startsWith('[')) {
+                                                urls = JSON.parse(orden.orden_compra_url);
+                                                if (!Array.isArray(urls)) urls = [orden.orden_compra_url];
+                                            } else {
+                                                urls = [orden.orden_compra_url];
+                                            }
+                                        }
                                     } catch {
                                         urls = [orden.orden_compra_url];
                                     }

@@ -134,7 +134,7 @@ function NuevaOrdenVenta() {
           if (campo === 'comprobante') {
             return { ...prev, comprobante: [...(prev.comprobante || []), file] };
           } else {
-            return { ...prev, orden_compra: file }; // OC solo permite 1
+            return { ...prev, orden_compra: [...(prev.orden_compra || []), file] };
           }
         });
         
@@ -877,20 +877,20 @@ useEffect(() => {
                         <div className="flex gap-3 items-stretch">
                             <div 
                                 className={`flex-1 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all relative overflow-hidden group
-                                  ${archivos.orden_compra 
+                                  ${archivos.orden_compra && archivos.orden_compra.length > 0 
                                     ? 'border-green-500 bg-green-50 shadow-inner' 
                                     : 'border-orange-200 bg-orange-50/50 hover:bg-orange-50 hover:border-orange-400'}`}
                                 tabIndex="0"
                                 onPaste={(e) => handlePaste(e, 'orden_compra')}
                                 title="Haz clic aquí y presiona Ctrl+V para pegar una captura"
                             >
-                                {archivos.orden_compra ? (
+                                {archivos.orden_compra && archivos.orden_compra.length > 0 ? (
                                     <div className="flex flex-col items-center justify-center gap-1 animate-in zoom-in duration-300">
                                         <div className="p-2 bg-green-500 text-white rounded-full shadow-lg">
                                           <CheckCircle size={20} />
                                         </div>
-                                        <span className="font-bold text-green-700 text-sm truncate max-w-[180px]">{archivos.orden_compra.name}</span>
-                                        <span className="text-[10px] text-green-600 uppercase font-bold">Archivo listo para enviar</span>
+                                        <span className="font-bold text-green-700 text-sm truncate max-w-[180px]">{archivos.orden_compra.length} archivo(s)</span>
+                                        <span className="text-[10px] text-green-600 uppercase font-bold">Listos para enviar</span>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center py-1">
@@ -929,9 +929,10 @@ useEffect(() => {
                             <input 
                                 id="file-upload-oc"
                                 type="file" 
+                                multiple
                                 className="hidden" 
                                 accept=".pdf,image/*"
-                                onChange={(e) => setArchivos({...archivos, orden_compra: e.target.files[0]})}
+                                onChange={(e) => setArchivos({...archivos, orden_compra: [...(archivos.orden_compra || []), ...Array.from(e.target.files)]})}
                             />
                         </div>
                         {archivosPrevios.orden_compra_url && !archivos.orden_compra && (

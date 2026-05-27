@@ -821,13 +821,29 @@ export async function updateOrdenVenta(req, res) {
     let nuevaOrdenCompraUrl = ordenActual.orden_compra_url;
     let nuevoComprobanteUrl = ordenActual.comprobante_url;
 
+    // The frontend sends the remaining URLs stringified if some were deleted. 
+    // If it's explicitly null string from frontend, we clear it.
+    if (req.body.orden_compra_url !== undefined) {
+      if (req.body.orden_compra_url === 'null' || req.body.orden_compra_url === '') {
+        nuevaOrdenCompraUrl = null;
+      } else {
+        nuevaOrdenCompraUrl = req.body.orden_compra_url;
+      }
+    }
+    
+    if (req.body.comprobante_url !== undefined) {
+      if (req.body.comprobante_url === 'null' || req.body.comprobante_url === '') {
+        nuevoComprobanteUrl = null;
+      } else {
+        nuevoComprobanteUrl = req.body.comprobante_url;
+      }
+    }
+
     if (req.body.limpiar_oc === 'true') {
       nuevaOrdenCompraUrl = null;
-      ordenActual.orden_compra_url = null;
     }
     if (req.body.limpiar_comprobante === 'true') {
       nuevoComprobanteUrl = null;
-      ordenActual.comprobante_url = null;
     }
 
     // Helper para concatenar URLs nuevas a un JSON existente de forma segura

@@ -122,6 +122,31 @@ function NuevaOrdenVenta() {
     window.open(proxyUrl, '_blank');
   };
 
+  const getArrayFromUrls = (urlData) => {
+    if (!urlData) return [];
+    if (Array.isArray(urlData)) return urlData;
+    if (typeof urlData === 'string') {
+        if (urlData.startsWith('[')) {
+            try {
+                return JSON.parse(urlData);
+            } catch(e) {
+                return [urlData];
+            }
+        }
+        return [urlData];
+    }
+    return [];
+  };
+
+  const handleEliminarArchivoPrevio = (campo, indexStr) => {
+      const urlsArray = getArrayFromUrls(archivosPrevios[campo]);
+      const newUrlsArray = urlsArray.filter((_, idx) => idx !== indexStr);
+      setArchivosPrevios({
+          ...archivosPrevios,
+          [campo]: newUrlsArray.length > 0 ? JSON.stringify(newUrlsArray) : null
+      });
+  };
+
   const handlePaste = (e, campo) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
@@ -922,14 +947,28 @@ useEffect(() => {
                               </button>
 
                               {archivosPrevios.orden_compra_url && (
-                                  <button
-                                      type="button"
-                                      className="btn btn-primary px-4 py-2 shadow-lg shadow-blue-200"
-                                      onClick={() => verArchivo(archivosPrevios.orden_compra_url)}
-                                      title="Ver archivo actual"
-                                  >
-                                      <Eye size={20} />
-                                  </button>
+                                  <div className="flex flex-col gap-1 w-full mt-2">
+                                      {getArrayFromUrls(archivosPrevios.orden_compra_url).map((url, idx) => (
+                                          <div key={idx} className="flex gap-1 w-full">
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm btn-primary px-3 shadow-lg shadow-blue-200 flex-1"
+                                                onClick={() => verArchivo(url)}
+                                                title={`Ver archivo ${idx + 1}`}
+                                            >
+                                                <Eye size={16} /> Ver {idx + 1}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm btn-outline border-red-200 hover:bg-red-50 text-red-600 px-3"
+                                                onClick={() => handleEliminarArchivoPrevio('orden_compra_url', idx)}
+                                                title={`Eliminar archivo ${idx + 1}`}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                          </div>
+                                      ))}
+                                  </div>
                               )}
                             </div>
 
@@ -1542,23 +1581,27 @@ useEffect(() => {
                           </button>
 
                           {archivosPrevios.comprobante_url && (
-                              <div className="flex gap-1 w-full">
-                                <button
-                                    type="button"
-                                    className="btn btn-sm btn-primary px-3 shadow-md shadow-blue-100 flex-1"
-                                    onClick={() => verArchivo(archivosPrevios.comprobante_url)}
-                                    title="Ver comprobante actual"
-                                >
-                                    <Eye size={16} />
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline border-red-200 hover:bg-red-50 text-red-600 px-3 flex-1 flex justify-center items-center"
-                                    onClick={() => setArchivosPrevios({...archivosPrevios, comprobante_url: null})}
-                                    title="Eliminar comprobante guardado"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
+                              <div className="flex flex-col gap-1 w-full mt-2">
+                                  {getArrayFromUrls(archivosPrevios.comprobante_url).map((url, idx) => (
+                                      <div key={idx} className="flex gap-1 w-full">
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-primary px-3 shadow-md shadow-blue-100 flex-1"
+                                            onClick={() => verArchivo(url)}
+                                            title={`Ver comprobante ${idx + 1}`}
+                                        >
+                                            <Eye size={16} /> Ver {idx + 1}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline border-red-200 hover:bg-red-50 text-red-600 px-3"
+                                            onClick={() => handleEliminarArchivoPrevio('comprobante_url', idx)}
+                                            title={`Eliminar comprobante ${idx + 1}`}
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                      </div>
+                                  ))}
                               </div>
                           )}
                         </div>

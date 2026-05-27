@@ -1,5 +1,5 @@
 import { actualizarTipoCambio, obtenerTipoCambioCache } from '../services/tipo-cambio.service.js';
-import { executeQuery } from '../config/database.js';
+import { executeQuery, pool } from '../config/database.js';
 import * as xlsx from 'xlsx';
 
 export const obtenerTC = (req, res) => {
@@ -32,7 +32,7 @@ export const obtenerHistorial = async (req, res) => {
     `;
     const historial = await executeQuery(query, [mes, anio]);
     
-    res.json({ success: true, data: historial });
+    res.json({ success: true, data: historial.success ? historial.data : [] });
   } catch (error) {
     console.error('Error en obtenerHistorial:', error);
     res.status(500).json({ success: false, error: 'Error al obtener el historial' });
@@ -117,5 +117,8 @@ export const subirHistorialExcel = async (req, res) => {
   } catch (error) {
     console.error('Error en subirHistorialExcel:', error);
     res.status(500).json({ success: false, error: 'Error interno procesando el archivo Excel.' });
+  }
+};
+rchivo Excel.' });
   }
 };

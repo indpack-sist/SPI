@@ -130,11 +130,11 @@ const HistorialTipoCambio = () => {
             <div className="calendar-day-data">
               <div className="tc-row">
                 <span className="tc-label">C:</span>
-                <span className="tc-value">{data.compra.toFixed(3)}</span>
+                <span className="tc-value">{parseFloat(data.compra).toFixed(3)}</span>
               </div>
               <div className="tc-row">
                 <span className="tc-label">V:</span>
-                <span className="tc-value">{data.venta.toFixed(3)}</span>
+                <span className="tc-value">{parseFloat(data.venta).toFixed(3)}</span>
               </div>
             </div>
           ) : (

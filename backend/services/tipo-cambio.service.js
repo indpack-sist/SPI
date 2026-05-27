@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { executeQuery } from '../config/database.js';
 
 const DECOLECTA_API_URL = 'https://api.decolecta.com/v1';
 const DECOLECTA_API_KEY = process.env.API_DECOLECTA_TOKEN || process.env.DECOLECTA_API_KEY;
@@ -74,6 +75,18 @@ export async function actualizarTipoCambio(date = null) {
         data: tipoCambio,
         timestamp: Date.now()
       };
+
+      try {
+        await executeQuery(
+          `INSERT INTO tipo_cambio_historico (fecha, compra, venta, promedio, origen) 
+           VALUES (?, ?, ?, ?, 'SUNAT_API') 
+           ON DUPLICATE KEY UPDATE 
+           compra = VALUES(compra), venta = VALUES(venta), promedio = VALUES(promedio)`,
+          [tipoCambio.fecha, tipoCambio.compra, tipoCambio.venta, tipoCambio.promedio]
+        );
+      } catch (dbError) {
+        console.error('Error al guardar tipo de cambio en historial BD:', dbError);
+      }
 
       return {
         valido: true,

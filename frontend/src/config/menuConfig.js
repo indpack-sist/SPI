@@ -67,6 +67,7 @@ export const menuConfig = [
     items: [
       { path: '/finanzas/cuentas-pago', icon: CreditCard, label: 'Pagos', modulo: 'cuentasPago', color: '#2C3E50' },
       { path: '/finanzas/pagos-cobranzas', icon: Banknote, label: 'Cobranzas', modulo: 'pagosCobranzas', color: '#27AE60' },
+      { path: '/finanzas/historial-tc', icon: Calendar, label: 'Historial TC', modulo: 'pagosCobranzas', color: '#8E44AD' },
       { path: '/solicitudes-credito', icon: FileInput, label: 'Créditos', modulo: 'solicitudesCredito', color: '#5D6D7E' }
     ]
   },

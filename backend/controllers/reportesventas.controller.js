@@ -97,7 +97,7 @@ export const getReporteVentas = async (req, res) => {
                 
                 tcRecords.forEach(record => {
                     const fechaStr = new Date(record.fecha).toISOString().split('T')[0];
-                    historialTCMap[fechaStr] = parseFloat(record.promedio);
+                    historialTCMap[fechaStr] = parseFloat(record.venta);
                 });
             }
         }
@@ -234,10 +234,23 @@ export const getReporteVentas = async (req, res) => {
                 }
             }
 
-            // Acumular unificados (todo a PEN usando TC de la orden)
-            kpis.unificadoVentasPEN += totalPEN;
-            kpis.unificadoPagadoPEN += pagadoPEN;
-            kpis.unificadoPorCobrarPEN += pendientePEN;
+            // Acumular unificados (todo a PEN usando TC de la orden o Historico)
+            let tcParaUnificar = tcOrden;
+            if (tipo_unificacion === 'sunat') {
+                tcParaUnificar = tcDiaConsulta;
+            } else if (tipo_unificacion === 'mixto') {
+                tcParaUnificar = tcOrden > 3 ? tcOrden : tcDiaConsulta;
+            } else if (tipo_unificacion === 'historico') {
+                tcParaUnificar = tcHistorico || tcDiaConsulta;
+            }
+
+            const totalUnificadoPEN = esDolar ? montoOriginal * tcParaUnificar : montoOriginal;
+            const pagadoUnificadoPEN = esDolar ? pagadoOriginal * tcParaUnificar : pagadoOriginal;
+            const pendienteUnificadoPEN = esDolar ? pendienteOriginal * tcParaUnificar : pendienteOriginal;
+
+            kpis.unificadoVentasPEN += totalUnificadoPEN;
+            kpis.unificadoPagadoPEN += pagadoUnificadoPEN;
+            kpis.unificadoPorCobrarPEN += pendienteUnificadoPEN;
 
             let estadoLogistico = 'A tiempo';
             const fechaReferencia = orden.fecha_despacho || orden.fecha_entrega_real;

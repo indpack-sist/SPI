@@ -119,12 +119,12 @@ export default function TableroSupervisor() {
                   <div className="flex justify-between items-center text-xs mb-3 bg-carbon-light p-2 rounded">
                     <div>
                       <div className="text-wire text-[10px] uppercase">Planificado</div>
-                      <div className="font-bold text-white">{parseFloat(orden.cantidad_planificada || 0).toFixed(0)}</div>
+                      <div className="font-bold text-white">{parseFloat(orden.cantidad_unidades || 0).toFixed(0)}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-wire text-[10px] uppercase">Producido</div>
-                      <div className={`font-bold ${parseFloat(orden.cantidad_producida) !== parseFloat(orden.cantidad_planificada) && orden.estado === 'Finalizada' ? 'text-danger' : 'text-success'}`}>
-                        {parseFloat(orden.cantidad_producida || 0).toFixed(0)}
+                      <div className={`font-bold ${parseFloat(orden.cantidad_unidades_producida) !== parseFloat(orden.cantidad_unidades) && orden.estado === 'Finalizada' ? 'text-danger' : 'text-success'}`}>
+                        {parseFloat(orden.cantidad_unidades_producida || 0).toFixed(0)}
                       </div>
                     </div>
                   </div>

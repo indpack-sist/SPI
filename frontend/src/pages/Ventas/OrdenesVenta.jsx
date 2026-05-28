@@ -153,6 +153,7 @@ function OrdenesVenta() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [descargandoPDF, setDescargandoPDF] = useState(null);
+  const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false);
 
   const [visorArchivo, setVisorArchivo] = useState({
     isOpen: false,
@@ -812,31 +813,48 @@ const [fechaFin, setFechaFin] = useState(() => getDefaultLastDay());
         {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
         {estadisticas && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-            <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
-              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
-              <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
-            </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
-              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
-              <p className="text-lg font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
-            </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
-              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
-              <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
-            </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
-              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
-              <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
-            </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
-              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
-              <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
-            </div>
-            <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
-              <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
-              <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
-            </div>
+          <div className="flex flex-col items-center mb-6">
+            <button 
+              onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
+              className={`flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
+                mostrarEstadisticas 
+                  ? 'bg-carbon-light text-mist border border-steel/50' 
+                  : 'bg-primary text-carbon hover:shadow-[0_0_15px_rgba(232,184,75,0.4)] hover:scale-105'
+              }`}
+            >
+              <TrendingUp size={16} />
+              {mostrarEstadisticas ? 'Ocultar Resumen' : 'Ver Resumen General'}
+              <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarEstadisticas ? 'rotate-180' : ''}`} />
+            </button>
+
+            {mostrarEstadisticas && (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-4 w-full animate-in slide-in-from-top-4 fade-in duration-300">
+                <div className="card stat-card bg-carbon-mid border-l-4 border-success/50 shadow-lg !py-3">
+                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (PEN)</p>
+                  <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.facturas_pen || 0, 'PEN')}</p>
+                </div>
+                <div className="card stat-card bg-carbon-mid border-l-4 border-primary/50 shadow-lg !py-3">
+                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">FACTURAS (USD)</p>
+                  <p className="text-lg font-black text-primary">{formatearMoneda(estadisticas.facturas_usd || 0, 'USD')}</p>
+                </div>
+                <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (PEN)</p>
+                  <p className="text-lg font-black text-white">{formatearMoneda(estadisticas.notas_venta_pen || 0, 'PEN')}</p>
+                </div>
+                <div className="card stat-card bg-carbon-mid border-l-4 border-info/50 shadow-lg !py-3">
+                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">N. VENTA (USD)</p>
+                  <p className="text-xl font-black text-white">{formatearMoneda(estadisticas.notas_venta_usd || 0, 'USD')}</p>
+                </div>
+                <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (PEN)</p>
+                  <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_pen || 0, 'PEN')}</p>
+                </div>
+                <div className="card stat-card bg-carbon-mid border-l-4 border-warning/50 shadow-lg !py-3">
+                  <p className="text-[0.5rem] font-black text-wire uppercase tracking-[0.2em] mb-0.5">SIN COMPR. (USD)</p>
+                  <p className="text-lg font-black text-warning">{formatearMoneda(estadisticas.sin_comprobante_usd || 0, 'USD')}</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

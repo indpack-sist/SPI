@@ -30,6 +30,7 @@ import OrdenesProduccion from './pages/Produccion/OrdenesProduccion';
 import OrdenDetalle from './pages/Produccion/OrdenDetalle';
 import CrearOrden from './pages/Produccion/CrearOrden';
 import CalendarioProduccion from './pages/Produccion/CalendarioProduccion';
+import TableroSupervisor from './pages/Produccion/TableroSupervisor';
 
 import Cotizaciones from './pages/Ventas/Cotizaciones';
 import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
@@ -209,6 +210,15 @@ function App() {
                         element={
                           <ProtectedRouteWithPermiso modulos={['ordenesProduccion', 'cotizaciones']}>
                             <CalendarioProduccion />
+                          </ProtectedRouteWithPermiso>
+                        } 
+                      />
+
+                      <Route 
+                        path="/produccion/tablero" 
+                        element={
+                          <ProtectedRouteWithPermiso modulo="ordenesProduccion" requiredRoles={['Supervisor']}>
+                            <TableroSupervisor />
                           </ProtectedRouteWithPermiso>
                         } 
                       />

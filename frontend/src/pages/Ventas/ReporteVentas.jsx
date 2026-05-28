@@ -848,7 +848,12 @@ const ReporteVentas = () => {
 
       crearHojaResumen(datosSoles, 'Resumen Soles', false);
       crearHojaResumen(datosUSD, 'Resumen USD', true);
-      crearHojaResumen(datosUnificados, 'Resumen Unificado', true);
+      
+      // Solo crear resumen unificado si hay más de una moneda involucrada 
+      // o si no hay filtros específicos de moneda (lo que implica ambas)
+      if (filtros.monedas.length !== 1) {
+        crearHojaResumen(datosUnificados, 'Resumen Unificado', true);
+      }
 
       const productosAgrupados = {
         'Factura PEN': {}, 'Factura USD': {},

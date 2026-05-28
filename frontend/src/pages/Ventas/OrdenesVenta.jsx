@@ -814,18 +814,14 @@ const [fechaFin, setFechaFin] = useState(() => getDefaultLastDay());
 
         {estadisticas && (
           <div className="flex flex-col items-center mb-6">
-            <button 
-              onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
-              className={`flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
-                mostrarEstadisticas 
-                  ? 'bg-carbon-light text-mist border border-steel/50' 
-                  : 'bg-primary text-carbon hover:shadow-[0_0_15px_rgba(232,184,75,0.4)] hover:scale-105'
-              }`}
-            >
-              <TrendingUp size={16} />
-              {mostrarEstadisticas ? 'Ocultar Resumen' : 'Ver Resumen General'}
-              <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarEstadisticas ? 'rotate-180' : ''}`} />
-            </button>
+            <button
+  onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
+  className="flex items-center gap-2 h-11 px-6 btn btn-outline border-steel text-mist font-black text-[0.7rem] tracking-widest transition-all hover:border-primary hover:text-primary"
+>
+  <TrendingUp size={16} className={mostrarEstadisticas ? 'text-primary' : ''} />
+  {mostrarEstadisticas ? 'OCULTAR RESUMEN' : 'VER RESUMEN GENERAL'}
+  <ChevronDown size={14} className={`transition-transform duration-300 ${mostrarEstadisticas ? 'rotate-180 text-primary' : ''}`} />
+</button>
 
             {mostrarEstadisticas && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-4 w-full animate-in slide-in-from-top-4 fade-in duration-300">

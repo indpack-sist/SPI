@@ -704,8 +704,8 @@ const ReporteVentas = () => {
         if (convertirUSD && item.moneda === 'USD') {
           if (modoUnificacion === 'sunat') tcAplicado = tcVenta;
           else if (modoUnificacion === 'mixto') tcAplicado = tcOrdenOriginal > 3 ? tcOrdenOriginal : tcVenta;
+          else if (modoUnificacion === 'historico') tcAplicado = item.tc_historico ? parseFloat(item.tc_historico) : tcVenta;
         }
-
         const base = {
           'Orden': item.numero,
           'Tipo Comprobante': item.tipo_comprobante || '',

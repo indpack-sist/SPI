@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ordenesProduccionAPI } from '../../../config/api';
-import Loading from '../../UI/Loading';
-import Alert from '../../UI/Alert';
+import { ordenesProduccionAPI } from '../../config/api';
+import Loading from '../../components/UI/Loading';
+import Alert from '../../components/UI/Alert';
 import { Play, Pause, CheckSquare, Clock, AlertTriangle, UserMinus, Factory, Settings } from 'lucide-react';
 
 const COLUMNAS = [

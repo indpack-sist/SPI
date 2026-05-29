@@ -614,12 +614,19 @@ function VerificarOrdenes() {
                         <div className="flex gap-2 flex-wrap">
                             {datosVerificacion.orden.orden_compra_url && (() => {
                                 let urls = [];
-                                try {
-                                    urls = JSON.parse(datosVerificacion.orden.orden_compra_url);
-                                    if (!Array.isArray(urls)) urls = [datosVerificacion.orden.orden_compra_url];
-                                } catch {
+                                if (Array.isArray(datosVerificacion.orden.orden_compra_url)) {
+                                    urls = datosVerificacion.orden.orden_compra_url;
+                                } else if (typeof datosVerificacion.orden.orden_compra_url === 'string') {
+                                    try {
+                                        urls = JSON.parse(datosVerificacion.orden.orden_compra_url);
+                                        if (!Array.isArray(urls)) urls = [datosVerificacion.orden.orden_compra_url];
+                                    } catch {
+                                        urls = [datosVerificacion.orden.orden_compra_url];
+                                    }
+                                } else {
                                     urls = [datosVerificacion.orden.orden_compra_url];
                                 }
+                                
                                 return urls.map((url, i) => (
                                     <button 
                                         key={`oc-${i}`}

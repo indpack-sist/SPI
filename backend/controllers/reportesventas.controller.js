@@ -52,8 +52,9 @@ export const getReporteVentas = async (req, res) => {
         }
 
         if (idVendedor && idVendedor !== 'null' && idVendedor !== '') {
-            sql += ` AND ov.id_comercial = ?`;
-            params.push(idVendedor);
+            const vendedores = idVendedor.split(',');
+            sql += ` AND ov.id_comercial IN (${vendedores.map(() => '?').join(',')})`;
+            params.push(...vendedores);
         }
 
         if (estadoOrden) {

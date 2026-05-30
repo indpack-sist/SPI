@@ -13,7 +13,7 @@ import {
   ShoppingCart, Percent, Building2, RefreshCw, ArrowRightLeft,
   RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { reportesAPI, clientesAPI, tipoCambioAPI } from '../../config/api';
+import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
@@ -348,13 +348,32 @@ const ReporteVentas = () => {
     fechaInicio: primerDiaMes.toISOString().split('T')[0],
     fechaFin: fechaHoy.toISOString().split('T')[0],
     idCliente: '',
-    idVendedor: '',
+    idVendedor: [],
     estadosOrden: [],
     estadosPago: [],
     monedas: [],
     tiposDocumento: [],
     filtroFecha: 'fecha_emision'
   });
+
+  const [vendedoresList, setVendedoresList] = useState([]);
+
+  useEffect(() => {
+    const fetchVendedores = async () => {
+      try {
+        const response = await empleadosAPI.getByRol('Vendedor');
+        if (response.data.success) {
+          const opciones = (response.data.data || [])
+            .filter(e => e.estado === 'Activo')
+            .map(e => ({ label: e.nombre_completo, value: e.id_empleado.toString() }));
+          setVendedoresList(opciones);
+        }
+      } catch (error) {
+        console.error("Error al cargar vendedores", error);
+      }
+    };
+    fetchVendedores();
+  }, []);
 
   const [dataReporte, setDataReporte] = useState({
     resumen: {
@@ -616,6 +635,12 @@ const ReporteVentas = () => {
     if (filtros.estadosPago && filtros.estadosPago.length > 0) {
       filtrada = filtrada.filter(item => filtros.estadosPago.includes(item.estado_pago));
     }
+    if (filtros.idVendedor && filtros.idVendedor.length > 0) {
+      const selectedNames = vendedoresList
+        .filter(v => filtros.idVendedor.includes(v.value))
+        .map(v => v.label);
+      filtrada = filtrada.filter(item => selectedNames.includes(item.vendedor));
+    }
     if (filtros.tiposDocumento && filtros.tiposDocumento.length > 0) {
       filtrada = filtrada.filter(item => {
         const tipo = item.tipo_comprobante || '';
@@ -638,13 +663,13 @@ const ReporteVentas = () => {
         fechaInicio: filtros.fechaInicio,
         fechaFin: filtros.fechaFin,
         idCliente: filtros.idCliente,
-        idVendedor: filtros.idVendedor,
         filtro_fecha: filtros.filtroFecha
       };
 
       if (filtros.estadosOrden.length > 0) params.estadoOrden = filtros.estadosOrden.join(',');
       if (filtros.estadosPago.length > 0) params.estadoPago = filtros.estadosPago.join(',');
       if (filtros.monedas.length > 0) params.moneda = filtros.monedas.join(',');
+      if (filtros.idVendedor && filtros.idVendedor.length > 0) params.idVendedor = filtros.idVendedor.join(',');
 
       if (convertirUSD) {
           params.tipo_unificacion = modoUnificacion === 'sunat' ? 'global' : modoUnificacion;
@@ -669,7 +694,7 @@ const ReporteVentas = () => {
       fechaInicio: primerDiaMes.toISOString().split('T')[0],
       fechaFin: fechaHoy.toISOString().split('T')[0],
       idCliente: '',
-      idVendedor: '',
+      idVendedor: [],
       estadosOrden: [],
       estadosPago: [],
       monedas: [],
@@ -1589,6 +1614,12 @@ const ReporteVentas = () => {
                   { label: 'Parcial', value: 'Parcial' },
                   { label: 'Pagado', value: 'Pagado' }
                 ]}
+              />
+              <FilterCheckboxGroup
+                label="Vendedor"
+                selectedValues={filtros.idVendedor}
+                onChange={(vals) => setFiltros({ ...filtros, idVendedor: vals })}
+                options={vendedoresList}
               />
               <FilterCheckboxGroup
                 label="Moneda"

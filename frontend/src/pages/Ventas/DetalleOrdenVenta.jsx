@@ -70,6 +70,9 @@ function DetalleOrdenVenta() {
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   const [modalReservaStock, setModalReservaStock] = useState(false);
   const [modalSunatOpen, setModalSunatOpen] = useState(false);
+  const [modalAnularFactura, setModalAnularFactura] = useState(false);
+  const [motivoAnulacionFactura, setMotivoAnulacionFactura] = useState('');
+  const [facturasAnuladas, setFacturasAnuladas] = useState([]);
   const [fileSunat, setFileSunat] = useState(null);
   const [modalConfirmarGuiaInterna, setModalConfirmarGuiaInterna] = useState(false);
   const [salidaSeleccionadaGI, setSalidaSeleccionadaGI] = useState(null);
@@ -300,12 +303,13 @@ function DetalleOrdenVenta() {
       setLoading(true);
       setError(null);
       
-      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes] = await Promise.all([
+      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes] = await Promise.all([
         ordenesVentaAPI.getById(id),
         ordenesVentaAPI.getPagos(id),
         ordenesVentaAPI.getResumenPagos(id),
         ordenesVentaAPI.getSalidas(id).catch(() => ({ data: { success: true, data: [] } })),
-        cuentasPagoAPI.getAll({ estado: 'Activo' })
+        cuentasPagoAPI.getAll({ estado: 'Activo' }),
+        ordenesVentaAPI.getHistorialFacturasAnuladas(id).catch(() => ({ data: { success: true, data: [] } }))
       ]);
       
       if (ordenRes.data.success) {
@@ -320,6 +324,7 @@ function DetalleOrdenVenta() {
       if (resumenRes.data.success) setResumenPagos(resumenRes.data.data);
       if (salidasRes.data.success) setSalidas(salidasRes.data.data || []);
       if (cuentasRes.data.success) setCuentasPago(cuentasRes.data.data || []);
+      if (facturasAnuladasRes && facturasAnuladasRes.data && facturasAnuladasRes.data.success) setFacturasAnuladas(facturasAnuladasRes.data.data || []);
       
     } catch (err) {
       console.error(err);
@@ -1147,6 +1152,34 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al desmarcar facturación SUNAT');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleAnularFacturaSunat = async () => {
+    if (!motivoAnulacionFactura.trim()) {
+      setError('Debe ingresar un motivo de anulación de factura');
+      return;
+    }
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.anularFacturaSunat(id, {
+        motivo_anulacion: motivoAnulacionFactura
+      });
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setModalAnularFactura(false);
+        setMotivoAnulacionFactura('');
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al anular facturación SUNAT');
     } finally {
       setProcesando(false);
     }
@@ -2303,16 +2336,25 @@ function DetalleOrdenVenta() {
                                     <BadgeCheck size={16} className="text-emerald-600" />
                                     <span className="font-bold text-emerald-700 text-sm">Facturado en SUNAT</span>
                                 </div>
-                                <button
-                                    className="p-1 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
-                                    onClick={() => {
-                                        setFileSunat(null);
-                                        setModalSunatOpen(true);
-                                    }}
-                                    title="Ver Detalle Factura SUNAT"
-                                >
-                                    <Eye size={20} />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        className="btn btn-xs btn-outline border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                        onClick={() => {
+                                            setFileSunat(null);
+                                            setModalSunatOpen(true);
+                                        }}
+                                        title="Ver Detalle Factura SUNAT"
+                                    >
+                                        <Eye size={14} className="mr-1" /> Ver PDF
+                                    </button>
+                                    <button
+                                        className="btn btn-xs btn-danger"
+                                        onClick={() => setModalAnularFactura(true)}
+                                        title="Anular Factura SUNAT"
+                                    >
+                                        Anular
+                                    </button>
+                                </div>
                             </div>
                             {orden.numero_comprobante_sunat && (
                                 <div>
@@ -2339,6 +2381,37 @@ function DetalleOrdenVenta() {
                                 <Clock size={14} />
                                 Pendiente de facturar en SUNAT
                             </p>
+                        </div>
+                    )}
+
+                    {/* Historial de Facturas Anuladas */}
+                    {facturasAnuladas.length > 0 && (
+                        <div className="mt-4">
+                            <p className="text-xs font-bold uppercase text-red-600 mb-2 flex items-center gap-1">
+                                <Trash2 size={14} /> Historial Facturas Anuladas
+                            </p>
+                            <div className="space-y-2">
+                                {facturasAnuladas.map((factura) => (
+                                    <div key={factura.id_anulacion} className="bg-red-50 border border-red-200 rounded p-2 text-sm">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="font-bold font-mono text-red-700">{factura.numero_comprobante_sunat}</span>
+                                            {factura.comprobante_sunat_url && (
+                                                <button
+                                                    className="text-red-600 hover:text-red-800 underline text-xs flex items-center gap-1"
+                                                    onClick={() => abrirVisor(factura.comprobante_sunat_url, `Factura Anulada: ${factura.numero_comprobante_sunat}`)}
+                                                >
+                                                    <Eye size={12} /> Ver PDF
+                                                </button>
+                                            )}
+                                        </div>
+                                        <p className="text-red-800"><span className="font-semibold text-xs">Motivo:</span> {factura.motivo_anulacion}</p>
+                                        <div className="flex justify-between items-center mt-1 text-xs text-red-600/80">
+                                            <span>{formatearFechaHora(factura.fecha_anulacion)}</span>
+                                            <span>Por: {factura.usuario_anulacion || 'Sistema'}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -3669,6 +3742,58 @@ function DetalleOrdenVenta() {
               disabled={procesando}
             >
               {procesando ? 'Generando...' : 'Sí, Generar Correlativo'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalAnularFactura}
+        onClose={() => {
+          setModalAnularFactura(false);
+          setMotivoAnulacionFactura('');
+        }}
+        title="Anular Factura SUNAT"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="alert alert-danger">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>¡Atención!</strong> Esta acción anulará la vinculación de la factura actual y la guardará en el historial. La orden volverá a estar pendiente de facturación.
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Motivo de Anulación *</label>
+            <textarea
+              className="form-textarea"
+              value={motivoAnulacionFactura}
+              onChange={(e) => setMotivoAnulacionFactura(e.target.value)}
+              rows={4}
+              placeholder="Ingrese el motivo por el cual se anula esta factura (Ej: Error en montos, Anulada en SUNAT, etc.)..."
+              required
+            ></textarea>
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                setModalAnularFactura(false);
+                setMotivoAnulacionFactura('');
+              }}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={handleAnularFacturaSunat}
+              disabled={procesando || !motivoAnulacionFactura.trim()}
+            >
+              <Trash2 size={20} />
+              {procesando ? 'Anulando...' : 'Confirmar Anulación'}
             </button>
           </div>
         </div>

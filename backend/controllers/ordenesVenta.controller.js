@@ -3894,6 +3894,131 @@ export async function desmarcarFacturadoSunat(req, res) {
   }
 }
 
+export async function anularFacturaSunat(req, res) {
+  try {
+    const { id } = req.params;
+    const { motivo_anulacion } = req.body;
+    const { id_empleado, rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({ success: false, error: 'No tienes permisos para anular la facturación SUNAT' });
+    }
+
+    if (!motivo_anulacion || motivo_anulacion.trim() === '') {
+      return res.status(400).json({ success: false, error: 'El motivo de anulación es obligatorio' });
+    }
+
+    const ordenResult = await executeQuery(
+      'SELECT id_orden_venta, numero_orden, estado, facturado_sunat, numero_comprobante_sunat, comprobante_sunat_url FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const orden = ordenResult.data[0];
+
+    if (orden.facturado_sunat !== 1) {
+      return res.status(400).json({ success: false, error: 'Esta orden no está marcada como facturada en SUNAT' });
+    }
+
+    if (!orden.numero_comprobante_sunat) {
+      return res.status(400).json({ success: false, error: 'La orden no tiene un número de comprobante asociado para anular' });
+    }
+
+    const comprobanteUrlToSave = typeof orden.comprobante_sunat_url === 'object' && orden.comprobante_sunat_url !== null 
+      ? JSON.stringify(orden.comprobante_sunat_url) 
+      : orden.comprobante_sunat_url;
+
+    const queries = [
+      {
+        sql: `INSERT INTO facturas_anuladas_ov 
+              (id_orden_venta, numero_comprobante_sunat, comprobante_sunat_url, motivo_anulacion, id_usuario_anulacion)
+              VALUES (?, ?, ?, ?, ?)`,
+        params: [id, orden.numero_comprobante_sunat, comprobanteUrlToSave, motivo_anulacion.trim(), id_empleado]
+      },
+      {
+        sql: `UPDATE ordenes_venta
+              SET
+                facturado_sunat = 0,
+                fecha_facturacion_sunat = NULL,
+                numero_comprobante_sunat = NULL,
+                comprobante_sunat_url = NULL,
+                id_facturador = NULL
+              WHERE id_orden_venta = ?`,
+        params: [id]
+      }
+    ];
+
+    const transactionResult = await executeTransaction(queries);
+
+    if (!transactionResult.success) {
+      return res.status(500).json({ success: false, error: transactionResult.error });
+    }
+
+    res.json({
+      success: true,
+      message: 'Factura SUNAT anulada correctamente. La orden vuelve a estar pendiente de facturación.',
+      data: {
+        id_orden_venta: parseInt(id),
+        numero_orden: orden.numero_orden,
+        facturado_sunat: false
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function getHistorialFacturasAnuladas(req, res) {
+  try {
+    const { id } = req.params;
+
+    const result = await executeQuery(`
+      SELECT 
+        fa.id_anulacion,
+        fa.numero_comprobante_sunat,
+        fa.comprobante_sunat_url,
+        fa.motivo_anulacion,
+        fa.fecha_anulacion,
+        e.nombre_completo AS usuario_anulacion
+      FROM facturas_anuladas_ov fa
+      LEFT JOIN empleados e ON fa.id_usuario_anulacion = e.id_empleado
+      WHERE fa.id_orden_venta = ?
+      ORDER BY fa.fecha_anulacion DESC
+    `, [id]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    // Process JSON parse for the urls if necessary
+    const data = result.data.map(item => {
+      let url = item.comprobante_sunat_url;
+      try {
+        if (typeof url === 'string' && url.startsWith('{')) {
+          url = JSON.parse(url);
+        }
+      } catch (e) {}
+      return {
+        ...item,
+        comprobante_sunat_url: url
+      };
+    });
+
+    res.json({
+      success: true,
+      data: data
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function asignarGuiaInternaASalida(req, res) {
   try {
     const { id, idSalida } = req.params;

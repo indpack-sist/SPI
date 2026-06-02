@@ -40,6 +40,8 @@ import {
   reenviarOrdenVerificacion,
   marcarFacturadoSunat,
   desmarcarFacturadoSunat,
+  anularFacturaSunat,
+  getHistorialFacturasAnuladas,
   asignarGuiaInternaASalida,
   parsearFacturaSunat,
   vincularFacturaSunat
@@ -81,6 +83,8 @@ router.post('/:id/ejecutar-reserva', verificarToken, verificarOrdenAprobada, eje
 
 router.patch('/:id/facturar-sunat', verificarToken, marcarFacturadoSunat);
 router.patch('/:id/desmarcar-sunat', verificarToken, desmarcarFacturadoSunat);
+router.post('/:id/anular-factura-sunat', verificarToken, anularFacturaSunat);
+router.get('/:id/facturas-anuladas', verificarToken, getHistorialFacturasAnuladas);
 
 router.put('/:id/estado', verificarToken, verificarOrdenAprobada, actualizarEstadoOrdenVenta);
 router.put('/:id/prioridad', verificarToken, verificarOrdenAprobada, actualizarPrioridadOrdenVenta);

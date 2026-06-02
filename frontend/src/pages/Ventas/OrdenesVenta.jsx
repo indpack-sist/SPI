@@ -203,18 +203,8 @@ function OrdenesVenta() {
   const [filtroVendedor, setFiltroVendedor] = useState(() => getSessionArray('ordenes_filtros_vendedor'));
   const [filtroMoneda, setFiltroMoneda] = useState(() => getSessionArray('ordenes_filtros_moneda'));
   
-  const getDefaultFirstDay = () => {
-    const date = new Date();
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
-  };
-
-  const getDefaultLastDay = () => {
-    const date = new Date();
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  };
-
-  const [fechaInicio, setFechaInicio] = useState(() => getDefaultFirstDay());
-const [fechaFin, setFechaFin] = useState(() => getDefaultLastDay());
+  const [fechaInicio, setFechaInicio] = useState(() => sessionStorage.getItem('ordenes_fecha_inicio') || '');
+  const [fechaFin, setFechaFin] = useState(() => sessionStorage.getItem('ordenes_fecha_fin') || '');
   const [busqueda, setBusqueda] = useState(() => sessionStorage.getItem('ordenes_busqueda') || '');
   
   const initPage = parseInt(sessionStorage.getItem('ordenes_pagina') || '1');
@@ -347,6 +337,40 @@ const [fechaFin, setFechaFin] = useState(() => getDefaultLastDay());
     setFechaFin(e.target.value);
   };
 
+  // --- CALCULO DINAMICO DE FECHAS PARA EL TEXTO SUPERIOR ---
+  const [textoFechaPeriodo, setTextoFechaPeriodo] = useState('');
+
+  useEffect(() => {
+    if (fechaInicio && fechaFin) {
+      // Si el usuario aplicó filtro de fechas manual
+      setTextoFechaPeriodo(`${formatearFechaVisual(fechaInicio)} — ${formatearFechaVisual(fechaFin)}`);
+    } else if (ordenes.length > 0) {
+      // Si no hay filtro manual, buscamos la orden válida más antigua
+      const ordenesValidas = ordenes.filter(o => o.estado !== 'Cancelada' && o.fecha_emision);
+      
+      if (ordenesValidas.length > 0) {
+        // Ordenar por fecha para encontrar la más antigua
+        // Asumiendo formato YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss.sssZ
+        const fechasOrdenadas = [...ordenesValidas].sort((a, b) => {
+          return new Date(a.fecha_emision.split('T')[0]) - new Date(b.fecha_emision.split('T')[0]);
+        });
+        
+        const fechaMasAntigua = fechasOrdenadas[0].fecha_emision;
+        
+        // Obtener el día de hoy en formato local
+        const hoy = new Date();
+        const strHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+        
+        setTextoFechaPeriodo(`${formatearFechaVisual(fechaMasAntigua)} — ${formatearFechaVisual(strHoy)}`);
+      } else {
+        setTextoFechaPeriodo('SIN REGISTROS VÁLIDOS');
+      }
+    } else {
+       setTextoFechaPeriodo('CARGANDO...');
+    }
+  }, [ordenes, fechaInicio, fechaFin]);
+  // ---------------------------------------------------------
+
   const limpiarFiltros = () => {
     setFiltroEstado([]);
     setFiltroEstadoPago([]);
@@ -355,8 +379,8 @@ const [fechaFin, setFechaFin] = useState(() => getDefaultLastDay());
     setFiltroEstadoSunat([]);
     setFiltroVendedor([]);
     setFiltroMoneda([]);
-    setFechaInicio(getDefaultFirstDay());
-    setFechaFin(getDefaultLastDay());
+    setFechaInicio('');
+    setFechaFin('');
     setBusqueda('');
     setCurrentPage(1);
   };
@@ -803,7 +827,7 @@ const [fechaFin, setFechaFin] = useState(() => getDefaultLastDay());
             <div className="flex items-center gap-2 px-4 py-2.5 bg-carbon-mid border border-steel/50 rounded-lg shadow-inner">
               <Calendar size={16} className="text-primary" />
               <span className="text-sm font-black text-mist tracking-widest uppercase">
-                {formatearFechaVisual(fechaInicio)} — {formatearFechaVisual(fechaFin)}
+                {textoFechaPeriodo}
               </span>
             </div>
           </div>

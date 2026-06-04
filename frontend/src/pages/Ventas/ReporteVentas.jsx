@@ -1051,6 +1051,136 @@ const ReporteVentas = () => {
         XLSX.utils.book_append_sheet(wb, wsProductos, 'Resumen Productos');
       }
 
+      // NUEVA HOJA: RESUMEN POR FECHA
+      const fechasAgrupadas = {};
+      dataFiltrada.forEach(orden => {
+        const fechaText = orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente';
+        if (!fechasAgrupadas[fechaText]) {
+          fechasAgrupadas[fechaText] = {
+            fecha: fechaText,
+            items: [],
+            rawDate: orden.fecha_despacho ? new Date(orden.fecha_despacho).getTime() : 0 
+          };
+        }
+        if (orden.detalles && orden.detalles.length > 0) {
+          orden.detalles.forEach(det => {
+            const guia = orden.numero_guia_interna ? `(Guía: ${orden.numero_guia_interna})` : '';
+            const numComp = (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat) ? orden.numero_comprobante_sunat : orden.numero_comprobante;
+            const compText = numComp ? `${numComp} ${guia}` : (orden.numero_guia_interna ? `Guía: ${orden.numero_guia_interna}` : '-');
+            
+            fechasAgrupadas[fechaText].items.push({
+              orden: orden.numero,
+              comprobante: compText.trim(),
+              fecha_emision: orden.fecha_emision ? formatearFecha(orden.fecha_emision) : '-',
+              cliente: orden.cliente,
+              moneda: orden.moneda,
+              codigo: det.codigo_producto,
+              producto: det.producto_nombre,
+              unidad: det.unidad_medida,
+              cantidad: parseFloat(det.cantidad),
+              precio_unitario: parseFloat(det.precio_unitario),
+              subtotal: parseFloat(det.subtotal)
+            });
+          });
+        }
+      });
+
+      const fechasArray = Object.values(fechasAgrupadas).sort((a, b) => {
+        if (a.fecha === 'Pendiente') return 1;
+        if (b.fecha === 'Pendiente') return -1;
+        return b.rawDate - a.rawDate; // Descendente por defecto
+      });
+
+      const datosFechasAOA = [];
+      const mergesFechas = [];
+
+      if (fechasArray.length > 0) {
+        datosFechasAOA.push(['=== RESUMEN POR FECHA DE DESPACHO ===']);
+        datosFechasAOA.push([
+          'Fecha Despacho', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Cliente', 
+          'Codigo', 'Producto', 'Unidad', 'Moneda', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden'
+        ]);
+
+        fechasArray.forEach(fechaData => {
+          const startRowIndex = datosFechasAOA.length;
+          const nItems = fechaData.items.length;
+
+          if (nItems === 0) return;
+
+          fechaData.items.forEach((item, idx) => {
+            if (idx === 0) {
+              datosFechasAOA.push([
+                fechaData.fecha,
+                item.orden, item.comprobante, item.fecha_emision, item.cliente,
+                item.codigo, item.producto, item.unidad, item.moneda,
+                parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
+              ]);
+            } else {
+              datosFechasAOA.push([
+                '',
+                item.orden, item.comprobante, item.fecha_emision, item.cliente,
+                item.codigo, item.producto, item.unidad, item.moneda,
+                parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
+              ]);
+            }
+          });
+
+          if (nItems > 1) {
+            const endRowIndex = startRowIndex + nItems - 1;
+            mergesFechas.push({ s: { r: startRowIndex, c: 0 }, e: { r: endRowIndex, c: 0 } });
+          }
+        });
+
+        if (datosFechasAOA.length > 1) {
+          const wsFechas = XLSX.utils.aoa_to_sheet(datosFechasAOA);
+          wsFechas['!merges'] = mergesFechas;
+          wsFechas['!cols'] = [
+            { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 35 }, 
+            { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, 
+            { wch: 12 }, { wch: 14 }
+          ];
+
+          const borderStyle = {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+          };
+
+          for (let R = 0; R < datosFechasAOA.length; R++) {
+            if (datosFechasAOA[R].length === 1 && datosFechasAOA[R][0] && datosFechasAOA[R][0].toString().startsWith('===')) {
+              const cellRef = XLSX.utils.encode_cell({ r: R, c: 0 });
+              if (wsFechas[cellRef]) {
+                if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};
+                wsFechas[cellRef].s.font = { bold: true, color: { rgb: "FFFFFF" } };
+                wsFechas[cellRef].s.fill = { fgColor: { rgb: "333333" } };
+              }
+            } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] === 'Fecha Despacho') {
+              for (let C = 0; C < 12; C++) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (wsFechas[cellRef]) {
+                  if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};
+                  wsFechas[cellRef].s.font = { bold: true };
+                  wsFechas[cellRef].s.fill = { fgColor: { rgb: "E0E0E0" } };
+                  wsFechas[cellRef].s.alignment = { horizontal: "center", vertical: "center" };
+                  wsFechas[cellRef].s.border = borderStyle;
+                }
+              }
+            } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] !== 'Fecha Despacho') {
+              for (let C = 0; C < 12; C++) {
+                  const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                  if (wsFechas[cellRef]) {
+                    if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};
+                    wsFechas[cellRef].s.alignment = { vertical: "center" };
+                    wsFechas[cellRef].s.border = borderStyle;
+                  }
+              }
+            }
+          }
+          XLSX.utils.book_append_sheet(wb, wsFechas, 'Resumen por Fecha');
+        }
+      }
+
       if (incluirDetalleExcel) {
         dataFiltrada.forEach((orden) => {
           const tcOrdenOriginal = parseFloat(orden.tipo_cambio || 1);

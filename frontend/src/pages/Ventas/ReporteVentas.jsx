@@ -1088,7 +1088,7 @@ const ReporteVentas = () => {
       const fechasArray = Object.values(fechasAgrupadas).sort((a, b) => {
         if (a.fecha === 'Pendiente') return 1;
         if (b.fecha === 'Pendiente') return -1;
-        return b.rawDate - a.rawDate; // Descendente por defecto
+        return a.rawDate - b.rawDate; // Ascendente: más antiguo arriba, más reciente abajo
       });
 
       const datosFechasAOA = [];
@@ -1102,32 +1102,61 @@ const ReporteVentas = () => {
         ]);
 
         fechasArray.forEach(fechaData => {
-          const startRowIndex = datosFechasAOA.length;
+          const startRowIndexDate = datosFechasAOA.length;
           const nItems = fechaData.items.length;
 
           if (nItems === 0) return;
 
+          // Sub-agrupación por orden dentro de la fecha
+          let currentOrden = null;
+          let ordenStartRow = -1;
+          let ordenItemCount = 0;
+
           fechaData.items.forEach((item, idx) => {
-            if (idx === 0) {
-              datosFechasAOA.push([
-                fechaData.fecha,
-                item.orden, item.comprobante, item.fecha_emision, item.cliente,
-                item.codigo, item.producto, item.unidad, item.moneda,
-                parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
-              ]);
-            } else {
-              datosFechasAOA.push([
-                '',
-                item.orden, item.comprobante, item.fecha_emision, item.cliente,
-                item.codigo, item.producto, item.unidad, item.moneda,
-                parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
-              ]);
+            const isNewOrden = item.orden !== currentOrden;
+            
+            // Si cambia la orden y ya teníamos una, aplicamos el merge de la orden anterior
+            if (isNewOrden && ordenStartRow !== -1 && ordenItemCount > 1) {
+              const ordenEndRow = datosFechasAOA.length - 1;
+              [1, 2, 3, 4].forEach(c => { // Orden, Comprobante, Fecha Emisión, Cliente
+                mergesFechas.push({ s: { r: ordenStartRow, c: c }, e: { r: ordenEndRow, c: c } });
+              });
             }
+
+            if (isNewOrden) {
+              currentOrden = item.orden;
+              ordenStartRow = datosFechasAOA.length;
+              ordenItemCount = 1;
+            } else {
+              ordenItemCount++;
+            }
+
+            // Para la primera fila de la FECHA (idx === 0)
+            const isFirstInDate = idx === 0;
+
+            datosFechasAOA.push([
+              isFirstInDate ? fechaData.fecha : '',
+              isNewOrden ? item.orden : '', 
+              isNewOrden ? item.comprobante : '', 
+              isNewOrden ? item.fecha_emision : '', 
+              isNewOrden ? item.cliente : '',
+              item.codigo, item.producto, item.unidad, item.moneda,
+              parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
+            ]);
           });
 
+          // Asegurarse de aplicar el merge para la última orden de la fecha si tuvo más de 1 ítem
+          if (ordenStartRow !== -1 && ordenItemCount > 1) {
+            const ordenEndRow = datosFechasAOA.length - 1;
+            [1, 2, 3, 4].forEach(c => {
+              mergesFechas.push({ s: { r: ordenStartRow, c: c }, e: { r: ordenEndRow, c: c } });
+            });
+          }
+
+          // Merge para la columna de Fecha
           if (nItems > 1) {
-            const endRowIndex = startRowIndex + nItems - 1;
-            mergesFechas.push({ s: { r: startRowIndex, c: 0 }, e: { r: endRowIndex, c: 0 } });
+            const endRowIndexDate = startRowIndexDate + nItems - 1;
+            mergesFechas.push({ s: { r: startRowIndexDate, c: 0 }, e: { r: endRowIndexDate, c: 0 } });
           }
         });
 

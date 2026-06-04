@@ -928,6 +928,9 @@ const ReporteVentas = () => {
               numero: orden.numero,
               cliente: orden.cliente,
               guia_interna: orden.numero_guia_interna || null,
+              numero_comprobante: (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat) ? orden.numero_comprobante_sunat : orden.numero_comprobante,
+              fecha_emision: orden.fecha_emision,
+              fecha_despacho: orden.fecha_despacho,
               cantidad: parseFloat(det.cantidad),
               precio_unitario: parseFloat(det.precio_unitario),
               subtotal: parseFloat(det.subtotal),
@@ -956,7 +959,7 @@ const ReporteVentas = () => {
           datosAOA.push([cat.titulo]);
           datosAOA.push([
             'Codigo', 'Producto', 'Unidad', 'Moneda',
-            'Orden (Guía)', 'Cliente', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
+            'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha Despacho', 'Cliente', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
             'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente', 'Subtotal General', 'N Ordenes'
           ]);
 
@@ -965,20 +968,22 @@ const ReporteVentas = () => {
             const nOrdenes = prod.ordenes.length;
 
             prod.ordenes.forEach((o, idx) => {
-              const guia = o.guia_interna ? ` (Guía: ${o.guia_interna})` : '';
-              const ordenText = `${o.numero}${guia}`;
+              const guia = o.guia_interna ? `(Guía: ${o.guia_interna})` : '';
+              const compText = o.numero_comprobante ? `${o.numero_comprobante} ${guia}` : (o.guia_interna ? `Guía: ${o.guia_interna}` : '-');
+              const fEmision = o.fecha_emision ? formatearFecha(o.fecha_emision) : '-';
+              const fDespacho = o.fecha_despacho ? formatearFecha(o.fecha_despacho) : 'Pendiente';
 
               if (idx === 0) {
                 datosAOA.push([
                   prod.codigo, prod.nombre, prod.unidad_medida, prod.moneda,
-                  ordenText, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
+                  o.numero, compText.trim(), fEmision, fDespacho, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
                   parseFloat(prod.cantidad_total.toFixed(3)), parseFloat(prod.cantidad_despachada_total.toFixed(3)),
                   parseFloat(prod.cantidad_pendiente_total.toFixed(3)), parseFloat(prod.subtotal.toFixed(3)), nOrdenes
                 ]);
               } else {
                 datosAOA.push([
                   '', '', '', '',
-                  ordenText, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
+                  o.numero, compText.trim(), fEmision, fDespacho, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
                   '', '', '', '', ''
                 ]);
               }
@@ -986,7 +991,7 @@ const ReporteVentas = () => {
 
             if (nOrdenes > 1) {
               const endRowIndex = startRowIndex + nOrdenes - 1;
-              [0, 1, 2, 3, 9, 10, 11, 12, 13].forEach(c => {
+              [0, 1, 2, 3, 12, 13, 14, 15, 16].forEach(c => {
                 merges.push({ s: { r: startRowIndex, c: c }, e: { r: endRowIndex, c: c } });
               });
             }
@@ -1001,9 +1006,16 @@ const ReporteVentas = () => {
         wsProductos['!merges'] = merges;
         wsProductos['!cols'] = [
           { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 },
-          { wch: 25 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+          { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
           { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }
         ];
+
+        const borderStyle = {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        };
 
         for (let R = 0; R < datosAOA.length; R++) {
           if (datosAOA[R].length === 1 && datosAOA[R][0] && datosAOA[R][0].toString().startsWith('===')) {
@@ -1014,21 +1026,23 @@ const ReporteVentas = () => {
               wsProductos[cellRef].s.fill = { fgColor: { rgb: "333333" } };
             }
           } else if (datosAOA[R].length > 1 && datosAOA[R][0] === 'Codigo') {
-            for (let C = 0; C < 14; C++) {
+            for (let C = 0; C < 17; C++) {
               const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
               if (wsProductos[cellRef]) {
                 if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
                 wsProductos[cellRef].s.font = { bold: true };
                 wsProductos[cellRef].s.fill = { fgColor: { rgb: "E0E0E0" } };
                 wsProductos[cellRef].s.alignment = { horizontal: "center", vertical: "center" };
+                wsProductos[cellRef].s.border = borderStyle;
               }
             }
           } else if (datosAOA[R].length > 1 && datosAOA[R][0] !== 'Codigo') {
-            for (let C = 0; C < 14; C++) {
+            for (let C = 0; C < 17; C++) {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (wsProductos[cellRef]) {
                   if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
                   wsProductos[cellRef].s.alignment = { vertical: "center" };
+                  wsProductos[cellRef].s.border = borderStyle;
                 }
             }
           }

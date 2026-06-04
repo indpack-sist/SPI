@@ -874,9 +874,9 @@ const ReporteVentas = () => {
       crearHojaResumen(datosSoles, 'Resumen Soles', false);
       crearHojaResumen(datosUSD, 'Resumen USD', true);
       
-      // Solo crear resumen unificado si hay más de una moneda involucrada 
-      // o si no hay filtros específicos de moneda (lo que implica ambas)
-      if (filtros.monedas.length !== 1) {
+      // Solo crear resumen unificado si hay datos en ambas monedas en el resultado
+      // o si la orden fue explícita y se involucran ambas (por si acaso).
+      if (dataSoles.length > 0 && dataUSD.length > 0) {
         crearHojaResumen(datosUnificados, 'Resumen Unificado', true);
       }
 
@@ -927,6 +927,7 @@ const ReporteVentas = () => {
             productosAgrupados[grupoKey][key].ordenes.push({
               numero: orden.numero,
               cliente: orden.cliente,
+              guia_interna: orden.numero_guia_interna || null,
               cantidad: parseFloat(det.cantidad),
               precio_unitario: parseFloat(det.precio_unitario),
               subtotal: parseFloat(det.subtotal),
@@ -937,6 +938,7 @@ const ReporteVentas = () => {
       });
 
       const datosAOA = [];
+      const merges = [];
       const categorias = [
         { key: 'Factura PEN', titulo: '=== FACTURAS (PEN) ===' },
         { key: 'Factura USD', titulo: '=== FACTURAS (USD) ===' },
@@ -954,18 +956,40 @@ const ReporteVentas = () => {
           datosAOA.push([cat.titulo]);
           datosAOA.push([
             'Codigo', 'Producto', 'Unidad', 'Moneda',
-            'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente',
-            'Subtotal', 'N Ordenes', 'Detalle de Ordenes (Origen)'
+            'Orden (Guía)', 'Cliente', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
+            'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente', 'Subtotal General', 'N Ordenes'
           ]);
 
           productosEnCategoria.forEach(prod => {
-            datosAOA.push([
-              prod.codigo, prod.nombre, prod.unidad_medida, prod.moneda,
-              parseFloat(prod.cantidad_total.toFixed(3)), parseFloat(prod.cantidad_despachada_total.toFixed(3)),
-              parseFloat(prod.cantidad_pendiente_total.toFixed(3)),
-              parseFloat(prod.subtotal.toFixed(3)), prod.ordenes.length,
-              prod.ordenes.map(o => `${o.numero} (${o.cliente}: ${o.cantidad} unid. @ ${prod.moneda} ${o.precio_unitario})`).join(' | ')
-            ]);
+            const startRowIndex = datosAOA.length;
+            const nOrdenes = prod.ordenes.length;
+
+            prod.ordenes.forEach((o, idx) => {
+              const guia = o.guia_interna ? ` (Guía: ${o.guia_interna})` : '';
+              const ordenText = `${o.numero}${guia}`;
+
+              if (idx === 0) {
+                datosAOA.push([
+                  prod.codigo, prod.nombre, prod.unidad_medida, prod.moneda,
+                  ordenText, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
+                  parseFloat(prod.cantidad_total.toFixed(3)), parseFloat(prod.cantidad_despachada_total.toFixed(3)),
+                  parseFloat(prod.cantidad_pendiente_total.toFixed(3)), parseFloat(prod.subtotal.toFixed(3)), nOrdenes
+                ]);
+              } else {
+                datosAOA.push([
+                  '', '', '', '',
+                  ordenText, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
+                  '', '', '', '', ''
+                ]);
+              }
+            });
+
+            if (nOrdenes > 1) {
+              const endRowIndex = startRowIndex + nOrdenes - 1;
+              [0, 1, 2, 3, 9, 10, 11, 12, 13].forEach(c => {
+                merges.push({ s: { r: startRowIndex, c: c }, e: { r: endRowIndex, c: c } });
+              });
+            }
           });
           datosAOA.push([]);
           datosAOA.push([]);
@@ -974,14 +998,15 @@ const ReporteVentas = () => {
 
       if (datosAOA.length > 0) {
         const wsProductos = XLSX.utils.aoa_to_sheet(datosAOA);
+        wsProductos['!merges'] = merges;
         wsProductos['!cols'] = [
           { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 },
-          { wch: 12 }, { wch: 16 }, { wch: 16 },
-          { wch: 14 }, { wch: 10 }, { wch: 120 }
+          { wch: 25 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+          { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }
         ];
 
         for (let R = 0; R < datosAOA.length; R++) {
-          if (datosAOA[R].length === 1 && datosAOA[R][0].toString().startsWith('===')) {
+          if (datosAOA[R].length === 1 && datosAOA[R][0] && datosAOA[R][0].toString().startsWith('===')) {
             const cellRef = XLSX.utils.encode_cell({ r: R, c: 0 });
             if (wsProductos[cellRef]) {
               if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
@@ -989,13 +1014,22 @@ const ReporteVentas = () => {
               wsProductos[cellRef].s.fill = { fgColor: { rgb: "333333" } };
             }
           } else if (datosAOA[R].length > 1 && datosAOA[R][0] === 'Codigo') {
-            for (let C = 0; C < 10; C++) {
+            for (let C = 0; C < 14; C++) {
               const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
               if (wsProductos[cellRef]) {
                 if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
                 wsProductos[cellRef].s.font = { bold: true };
                 wsProductos[cellRef].s.fill = { fgColor: { rgb: "E0E0E0" } };
+                wsProductos[cellRef].s.alignment = { horizontal: "center", vertical: "center" };
               }
+            }
+          } else if (datosAOA[R].length > 1 && datosAOA[R][0] !== 'Codigo') {
+            for (let C = 0; C < 14; C++) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (wsProductos[cellRef]) {
+                  if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
+                  wsProductos[cellRef].s.alignment = { vertical: "center" };
+                }
             }
           }
         }

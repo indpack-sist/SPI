@@ -13,7 +13,7 @@ import {
   ShoppingCart, Percent, Building2, RefreshCw, ArrowRightLeft,
   RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI } from '../../config/api';
+import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI, ordenesVentaAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
@@ -313,6 +313,26 @@ const ReporteVentas = () => {
 
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
   const [mostrarDetalleOrden, setMostrarDetalleOrden] = useState(false);
+  const [historialDespachos, setHistorialDespachos] = useState([]);
+
+  useEffect(() => {
+    const fetchDespachos = async () => {
+      if (ordenSeleccionada && mostrarDetalleOrden) {
+        try {
+          const res = await ordenesVentaAPI.getSalidas(ordenSeleccionada.id_orden_venta || ordenSeleccionada.id);
+          if (res.data.success) {
+            setHistorialDespachos(res.data.data || []);
+          }
+        } catch (e) {
+          console.error('Error fetching despachos', e);
+          setHistorialDespachos([]);
+        }
+      } else {
+        setHistorialDespachos([]);
+      }
+    };
+    fetchDespachos();
+  }, [ordenSeleccionada, mostrarDetalleOrden]);
 
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
@@ -2034,19 +2054,19 @@ const ReporteVentas = () => {
                     <td className="px-4 py-3">
                       <div className="font-mono font-medium text-primary">{item.numero}</div>
                       {(item.numero_comprobante || item.numero_comprobante_sunat) && (
-                        <div className="text-xs text-muted flex items-center gap-1">
+                        <div className="text-xs text-muted flex items-center gap-1 mt-1">
                           {item.tipo_comprobante}: {(item.tipo_comprobante === 'Factura' && item.facturado_sunat && item.numero_comprobante_sunat)
                             ? (
                               <button 
   type="button"
   onClick={(e) => { e.stopPropagation(); abrirVisorSunat(item); }}
-  className="btn btn-ghost btn-xs text-green-600"
+  className="btn btn-ghost btn-sm text-green-700 font-bold"
   title="Ver comprobante SUNAT"
 >
-  <FileCheck size={14} /> {item.numero_comprobante_sunat}
+  <FileCheck size={16} /> <span className="text-sm">{item.numero_comprobante_sunat}</span>
 </button>
                             )
-                            : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat) ? '' : item.numero_comprobante}
+                            : (item.tipo_comprobante === 'Factura' && !item.facturado_sunat) ? '' : <span className="text-sm font-bold text-gray-700">{item.numero_comprobante}</span>}
                         </div>
                       )}
                     </td>
@@ -2296,6 +2316,17 @@ const ReporteVentas = () => {
                   <div className="card-body p-4">
                     <h4 className="font-semibold text-gray-700 mb-2 text-sm">Documentos Asociados</h4>
                     <div className="space-y-1 text-sm">
+                      <div className="flex justify-between items-center"><span className="text-muted">Comprobante:</span>
+                        <span className="font-bold text-gray-800 text-right">
+                          {(ordenSeleccionada.tipo_comprobante === 'Factura' && ordenSeleccionada.facturado_sunat && ordenSeleccionada.numero_comprobante_sunat) ? (
+                            <span className="text-green-700">{ordenSeleccionada.numero_comprobante_sunat} (SUNAT)</span>
+                          ) : ordenSeleccionada.numero_comprobante ? (
+                            <span>{ordenSeleccionada.tipo_comprobante}: {ordenSeleccionada.numero_comprobante}</span>
+                          ) : (
+                            <span className="text-gray-400 italic">Pendiente</span>
+                          )}
+                        </span>
+                      </div>
                       {ordenSeleccionada.numero_cotizacion && (<div className="flex justify-between"><span className="text-muted">Cotizacion:</span><span className="font-medium text-gray-800">{ordenSeleccionada.numero_cotizacion}</span></div>)}
                       {ordenSeleccionada.numero_guia_interna && (<div className="flex justify-between"><span className="text-muted">Guia Interna:</span><span className="font-medium text-gray-800">{ordenSeleccionada.numero_guia_interna}</span></div>)}
                       {ordenSeleccionada.orden_compra_cliente && (<div className="flex justify-between"><span className="text-muted">OC Cliente:</span><span className="font-medium text-gray-800">{ordenSeleccionada.orden_compra_cliente}</span></div>)}
@@ -2303,6 +2334,34 @@ const ReporteVentas = () => {
                   </div>
                 </div>
               </div>
+
+              {historialDespachos.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2"><Truck size={16} className="text-blue-600" /> Historial de Despachos</h4>
+                  <div className="space-y-3">
+                    {historialDespachos.map((despacho, index) => (
+                      <div key={despacho.id_salida || index} className="bg-gray-50 border border-gray-200 rounded p-3 text-sm">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-gray-800 flex items-center gap-2">
+                            Salida #{despacho.id_salida}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${despacho.estado === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{despacho.estado}</span>
+                          </span>
+                          <span className="text-muted font-mono">{formatearFechaHora(despacho.fecha_movimiento)}</span>
+                        </div>
+                        {despacho.observaciones && (
+                          <div className="text-gray-600 mt-1">
+                            <span className="font-medium text-gray-700">Ref / Guía:</span> {despacho.observaciones}
+                          </div>
+                        )}
+                        <div className="text-gray-600 mt-1 flex justify-between">
+                          <span><span className="font-medium text-gray-700">Responsable:</span> {despacho.responsable || 'No registrado'}</span>
+                          <span><span className="font-medium text-gray-700">Ítems despachados:</span> {despacho.total_items || 0}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {(ordenSeleccionada.observaciones || ordenSeleccionada.observaciones_verificador || ordenSeleccionada.motivo_rechazo) && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Plus, Package, Save, DollarSign, Edit, Trash2, Tag, ChevronDown, Check } from 'lucide-react';
+import { Search, FileText, Plus, Package, Save, DollarSign, Edit, Trash2, Tag, ChevronDown, Check, Eye, EyeOff } from 'lucide-react';
 import { clientesAPI, listasPreciosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
 import Loading from '../../components/UI/Loading';
@@ -24,6 +24,7 @@ function ListaPrecios() {
   const [modalOpen, setModalOpen] = useState(false);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [busquedaProdModal, setBusquedaProdModal] = useState('');
+  const [mostrarSoloIncluidos, setMostrarSoloIncluidos] = useState(false);
   
   const [modoEdicion, setModoEdicion] = useState(false);
   const [idListaEditar, setIdListaEditar] = useState(null);
@@ -118,6 +119,8 @@ function ListaPrecios() {
     if (!clienteSel) return;
     setModoEdicion(false);
     setIdListaEditar(null);
+    setMostrarSoloIncluidos(false);
+    setBusquedaProdModal('');
     setNuevaLista({
       nombre_lista: '',
       moneda: 'PEN',
@@ -132,6 +135,8 @@ function ListaPrecios() {
     
     setModoEdicion(true);
     setIdListaEditar(lista.id_lista);
+    setMostrarSoloIncluidos(true);
+    setBusquedaProdModal('');
     
     try {
         setLoading(true);
@@ -256,10 +261,14 @@ function ListaPrecios() {
     }
   };
 
-  const productosFiltradosModal = productosCatalogo.filter(p => 
-    p.nombre.toLowerCase().includes(busquedaProdModal.toLowerCase()) || 
-    p.codigo.toLowerCase().includes(busquedaProdModal.toLowerCase())
-  );
+  const productosFiltradosModal = productosCatalogo.filter(p => {
+    const cumpleBusqueda = p.nombre.toLowerCase().includes(busquedaProdModal.toLowerCase()) || p.codigo.toLowerCase().includes(busquedaProdModal.toLowerCase());
+    
+    if (mostrarSoloIncluidos) {
+      return cumpleBusqueda && nuevaLista.items[p.id_producto] !== undefined;
+    }
+    return cumpleBusqueda;
+  });
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col overflow-hidden page-listas-precios">
@@ -508,11 +517,19 @@ function ListaPrecios() {
                             onChange={(e) => setBusquedaProdModal(e.target.value)}
                         />
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                        <div className="badge badge-primary font-black uppercase tracking-widest text-[10px] px-2 py-1 shadow-[0_0_10px_rgba(232,184,75,0.2)]">
-                            {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] !== undefined && nuevaLista.items[k] !== '').length} productos
+                    <div className="flex items-center gap-4">
+                        <button 
+                            className={`flex items-center gap-2 h-10 px-4 rounded-lg border text-[0.65rem] font-black tracking-widest transition-all ${mostrarSoloIncluidos ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(232,184,75,0.1)]' : 'bg-carbon-mid border-steel text-wire hover:text-mist hover:border-wire'}`}
+                            onClick={() => setMostrarSoloIncluidos(!mostrarSoloIncluidos)}
+                        >
+                            {mostrarSoloIncluidos ? <Eye size={16} /> : <EyeOff size={16} />}
+                            {mostrarSoloIncluidos ? 'MOSTRAR TODO EL CATÁLOGO' : 'VER SOLO INCLUIDOS'}
+                        </button>
+                        <div className="flex flex-col items-end gap-1 border-l border-steel pl-4">
+                            <div className="badge badge-primary font-black uppercase tracking-widest text-[10px] px-2 py-1 shadow-[0_0_10px_rgba(232,184,75,0.2)]">
+                                {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] !== undefined && nuevaLista.items[k] !== '').length} productos
+                            </div>
                         </div>
-                        <p className="text-[10px] font-bold text-wire uppercase tracking-wider">Active el check para incluir</p>
                     </div>
                 </div>
                 
@@ -527,7 +544,13 @@ function ListaPrecios() {
                             </tr>
                         </thead>
                         <tbody>
-                            {productosFiltradosModal.map(p => {
+                            {productosFiltradosModal.length === 0 ? (
+                              <tr>
+                                <td colSpan="4" className="text-center py-8">
+                                  <p className="text-wire font-bold uppercase tracking-widest text-xs">No se encontraron productos</p>
+                                </td>
+                              </tr>
+                            ) : productosFiltradosModal.map(p => {
                                 const precioRef = parseFloat((nuevaLista.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0).toFixed(2);
                                 const isSelected = nuevaLista.items[p.id_producto] !== undefined;
 
@@ -535,12 +558,12 @@ function ListaPrecios() {
                                 <tr key={p.id_producto} className={`border-b border-steel/50 ${isSelected ? 'bg-primary/10' : 'hover:bg-carbon-light'}`}>
                                     <td className="text-center align-middle">
                                         <div className="flex justify-center">
-                                          <div 
-                                            className={`w-5 h-5 border-2 rounded flex items-center justify-center cursor-pointer transition-all ${isSelected ? 'bg-primary border-primary shadow-[0_0_10px_rgba(232,184,75,0.3)]' : 'bg-carbon border-steel'}`}
-                                            onClick={() => handleToggleProductoEnLista(p.id_producto, precioRef)}
-                                          >
-                                            {isSelected && <Check size={14} className="text-carbon stroke-[4px]" />}
-                                          </div>
+                                          <input 
+                                              type="checkbox"
+                                              className="w-5 h-5 rounded border-steel bg-carbon-mid accent-primary cursor-pointer shadow-sm hover:ring-2 hover:ring-primary/50 transition-all"
+                                              checked={isSelected}
+                                              onChange={() => handleToggleProductoEnLista(p.id_producto, precioRef)}
+                                          />
                                         </div>
                                     </td>
                                     <td>

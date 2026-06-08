@@ -43,11 +43,15 @@ function ListaPrecios() {
     try {
       const [resClientes, resProductos] = await Promise.all([
         clientesAPI.getAll({ estado: 'Activo' }),
-        productosAPI.getAll({ estado: 'Activo' })
+        productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: 3 })
       ]);
       
       if (resClientes.data.success) setClientes(resClientes.data.data);
-      if (resProductos.data.success) setProductosCatalogo(resProductos.data.data);
+      if (resProductos.data.success) {
+        // En caso la API no soporte el filtrado directo, filtramos en el cliente por seguridad
+        const terminados = resProductos.data.data.filter(p => p.id_tipo_inventario === 3);
+        setProductosCatalogo(terminados.length > 0 ? terminados : resProductos.data.data.filter(p => p.id_tipo_inventario === 3));
+      }
     } catch (err) {
       console.error(err);
       setError('Error al cargar datos iniciales');

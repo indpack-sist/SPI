@@ -322,14 +322,7 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
       });
 
       yPos += 10;
-
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('OBSERVACIONES', 40, yPos);
-      
-      doc.fontSize(8).font('Helvetica');
-      if (cotizacion.observaciones) {
-        doc.text(cotizacion.observaciones, 40, yPos + 15, { width: 330 });
-      }
+      const footerStartY = yPos;
 
       // Lógica de Impuestos
       const tipoImpuesto = cotizacion.tipo_impuesto || 'IGV';
@@ -346,11 +339,59 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
       
       const etiquetaImpuesto = ETIQUETAS_IMPUESTO[tipoImpuesto] || `IGV (${porcentajeImpuesto}%)`;
 
+      // -- LADO DERECHO: CUADROS DE TOTALES (O MUESTRA) --
+      let rightY = footerStartY;
+      if (!cotizacion.es_muestra) {
+        doc.roundedRect(385, rightY, 85, 15, 3).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.text('SUB TOTAL', 390, rightY + 4);
+        
+        doc.roundedRect(470, rightY, 92, 15, 3).stroke('#CCCCCC');
+        doc.fontSize(8).font('Helvetica').fillColor('#000000');
+        doc.text(`${simboloMoneda} ${fmtNum(subtotalCalculado)}`, 475, rightY + 4, { align: 'right', width: 80 });
+
+        rightY += 20;
+
+        doc.roundedRect(385, rightY, 85, 15, 3).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.text(etiquetaImpuesto, 390, rightY + 4);
+        
+        doc.roundedRect(470, rightY, 92, 15, 3).stroke('#CCCCCC');
+        doc.fontSize(8).font('Helvetica').fillColor('#000000');
+        doc.text(`${simboloMoneda} ${fmtNum(montoImpuesto)}`, 475, rightY + 4, { align: 'right', width: 80 });
+
+        rightY += 20;
+
+        doc.roundedRect(385, rightY, 85, 15, 3).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+        doc.text('TOTAL', 390, rightY + 4);
+        
+        doc.roundedRect(470, rightY, 92, 15, 3).stroke('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+        doc.text(`${simboloMoneda} ${fmtNum(totalCalculado)}`, 475, rightY + 4, { align: 'right', width: 80 });
+
+        rightY += 25;
+      }
+
+      // -- LADO IZQUIERDO: OBSERVACIONES --
+      let leftY = footerStartY;
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('OBSERVACIONES', 40, leftY);
+      leftY += 15;
+      
+      doc.fontSize(8).font('Helvetica');
+      if (cotizacion.observaciones) {
+        doc.text(cotizacion.observaciones, 40, leftY, { width: 330 });
+        leftY += calcularAlturaTexto(doc, cotizacion.observaciones, 330, 8);
+      }
+      leftY += 10;
+
+      // Unificar YPos tomando el mayor
+      yPos = Math.max(leftY, rightY) + 5;
+
       if (cotizacion.es_muestra) {
-        yPos += 15;
         doc.fontSize(16).font('Helvetica-Bold').fillColor('#b45309');
         doc.text('MUESTRA SIN VALOR COMERCIAL', 40, yPos, { align: 'center', width: 522 });
-        
         yPos += 45;
         
         if (yPos + 80 > 700) {
@@ -372,36 +413,6 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
         
         yPos += 40;
       } else {
-        doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-        doc.text('SUB TOTAL', 390, yPos + 4);
-        
-        doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
-        doc.fontSize(8).font('Helvetica').fillColor('#000000');
-        doc.text(`${simboloMoneda} ${fmtNum(subtotalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
-
-        yPos += 20;
-
-        doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-        doc.text(etiquetaImpuesto, 390, yPos + 4);
-        
-        doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
-        doc.fontSize(8).font('Helvetica').fillColor('#000000');
-        doc.text(`${simboloMoneda} ${fmtNum(montoImpuesto)}`, 475, yPos + 4, { align: 'right', width: 80 });
-
-        yPos += 20;
-
-        doc.roundedRect(385, yPos, 85, 15, 3).fill('#CCCCCC');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
-        doc.text('TOTAL', 390, yPos + 4);
-        
-        doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-        doc.text(`${simboloMoneda} ${fmtNum(totalCalculado)}`, 475, yPos + 4, { align: 'right', width: 80 });
-
-        yPos += 25;
-
         doc.fontSize(8).font('Helvetica');
         const totalEnLetras = numeroALetras(totalCalculado, cotizacion.moneda);
         doc.text(`SON: ${totalEnLetras}`, 40, yPos, { width: 522, align: 'left' });

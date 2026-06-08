@@ -56,7 +56,6 @@ function NuevaCotizacion() {
   const modoDuplicar = location.state?.duplicar === true;
     
   const [loading, setLoading] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [cooldownActivo, setCooldownActivo] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);

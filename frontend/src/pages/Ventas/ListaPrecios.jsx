@@ -497,7 +497,7 @@ function ListaPrecios() {
                     <label className="form-label text-[0.65rem] font-black text-wire uppercase tracking-widest mb-1.5">Moneda</label>
                     <div className="relative">
                       <select 
-                          className="form-input h-11 font-bold text-mist w-full"
+                          className="form-input h-11 font-bold text-mist w-full cursor-pointer"
                           value={nuevaLista.moneda}
                           onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
                       >

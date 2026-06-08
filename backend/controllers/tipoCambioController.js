@@ -120,3 +120,36 @@ export const subirHistorialExcel = async (req, res) => {
     res.status(500).json({ success: false, error: 'Error interno procesando el archivo Excel.' });
   }
 };
+
+export const guardarHistorialManual = async (req, res) => {
+  try {
+    const { fecha, compra, venta } = req.body;
+
+    if (!fecha || compra === undefined || venta === undefined) {
+      return res.status(400).json({ success: false, error: 'Fecha, compra y venta son requeridos' });
+    }
+
+    const compraNum = parseFloat(compra);
+    const ventaNum = parseFloat(venta);
+
+    if (isNaN(compraNum) || isNaN(ventaNum)) {
+      return res.status(400).json({ success: false, error: 'Los valores de compra y venta deben ser numéricos' });
+    }
+
+    const promedioNum = (compraNum + ventaNum) / 2;
+
+    const query = `
+      INSERT INTO tipo_cambio_historico (fecha, compra, venta, promedio, origen)
+      VALUES (?, ?, ?, ?, 'MANUAL')
+      ON DUPLICATE KEY UPDATE 
+      compra = VALUES(compra), venta = VALUES(venta), promedio = VALUES(promedio), origen = VALUES(origen)
+    `;
+    
+    await executeQuery(query, [fecha, compraNum, ventaNum, promedioNum]);
+
+    res.json({ success: true, message: 'Registro guardado exitosamente.' });
+  } catch (error) {
+    console.error('Error en guardarHistorialManual:', error);
+    res.status(500).json({ success: false, error: 'Error al guardar el tipo de cambio manual.' });
+  }
+};

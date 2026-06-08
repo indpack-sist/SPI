@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar as CalendarIcon, UploadCloud, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { Calendar as CalendarIcon, UploadCloud, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, FileSpreadsheet, Edit3 } from 'lucide-react';
 import { tipoCambioAPI } from '../../config/api';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import Modal from '../../components/UI/Modal';
 import './HistorialTipoCambio.css';
 
 const HistorialTipoCambio = () => {
@@ -16,14 +17,17 @@ const HistorialTipoCambio = () => {
   const [uploading, setUploading] = useState(false);
   const [alert, setAlert] = useState({ show: false, type: '', message: '' });
   
+  // Estado para el modal de edición manual
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editData, setEditData] = useState({ fecha: '', compra: '', venta: '' });
+  const [savingManual, setSavingManual] = useState(false);
+
   const fileInputRef = useRef(null);
 
   const fetchHistorial = async () => {
     try {
       setLoading(true);
       const res = await tipoCambioAPI.obtenerHistorial({ mes: currentMonth, anio: currentYear });
-      // El interceptor de axios ya devuelve data directo en res, o a veces envuelto.
-      // Verificamos si res tiene data y es array, o si res.data es array.
       let dataArray = [];
       if (Array.isArray(res)) dataArray = res;
       else if (res.data && Array.isArray(res.data)) dataArray = res.data;
@@ -76,7 +80,7 @@ const HistorialTipoCambio = () => {
     try {
       setUploading(true);
       const res = await tipoCambioAPI.subirHistorialExcel(formData);
-      showAlert('success', res.data.message || 'Archivo cargado correctamente');
+      showAlert('success', res.data?.message || res.message || 'Archivo cargado correctamente');
       fetchHistorial();
     } catch (err) {
       showAlert('error', err.error || 'Error al procesar el archivo Excel');
@@ -90,7 +94,35 @@ const HistorialTipoCambio = () => {
     fileInputRef.current?.click();
   };
 
-  // Helper para generar el calendario
+  const handleDayClick = (day, data) => {
+    const formattedDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (data) {
+      setEditData({ fecha: formattedDate, compra: data.compra, venta: data.venta });
+    } else {
+      setEditData({ fecha: formattedDate, compra: '', venta: '' });
+    }
+    setModalOpen(true);
+  };
+
+  const handleSaveManual = async (e) => {
+    e.preventDefault();
+    try {
+      setSavingManual(true);
+      await tipoCambioAPI.guardarManual({
+        fecha: editData.fecha,
+        compra: parseFloat(editData.compra),
+        venta: parseFloat(editData.venta)
+      });
+      showAlert('success', 'Tipo de cambio guardado manualmente.');
+      setModalOpen(false);
+      fetchHistorial();
+    } catch (error) {
+      showAlert('error', error.error || 'Error al guardar manualmente.');
+    } finally {
+      setSavingManual(false);
+    }
+  };
+
   const getDaysInMonth = (month, year) => new Date(year, month, 0).getDate();
   const getFirstDayOfMonth = (month, year) => new Date(year, month - 1, 1).getDay();
 
@@ -99,15 +131,12 @@ const HistorialTipoCambio = () => {
     const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
     const days = [];
     
-    // Map data
     const dataMap = {};
     historial.forEach(h => {
-        // h.fecha might be an ISO string like "2026-01-01T05:00:00.000Z" from MySQL
         let d;
         if (typeof h.fecha === 'string') {
-           // Tomamos solo la parte YYYY-MM-DD para evitar problemas de zona horaria
            const datePart = h.fecha.substring(0, 10);
-           d = new Date(datePart + 'T12:00:00').getDate(); // Mediodía para asegurar el mismo día
+           d = new Date(datePart + 'T12:00:00').getDate();
         } else {
            d = new Date(h.fecha).getDate();
         }
@@ -116,7 +145,6 @@ const HistorialTipoCambio = () => {
 
     const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-    // Rellenar días en blanco al inicio (Ajuste para que Lunes sea 0 o Domingo sea 0 según preferencia, aquí asumimos Domingo=0 de getDay())
     for (let i = 0; i < firstDay; i++) {
       days.push(<div key={`empty-${i}`} className="calendar-cell empty"></div>);
     }
@@ -124,8 +152,17 @@ const HistorialTipoCambio = () => {
     for (let day = 1; day <= daysInMonth; day++) {
       const data = dataMap[day];
       days.push(
-        <div key={day} className={`calendar-cell ${data ? 'has-data' : ''}`}>
-          <div className="calendar-day-header">{day}</div>
+        <div 
+          key={day} 
+          className={`calendar-cell ${data ? 'has-data' : ''} interactive-cell`}
+          onClick={() => handleDayClick(day, data)}
+          title="Clic para editar o agregar"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="calendar-day-header">
+            {day}
+            <Edit3 size={12} className="edit-icon text-muted opacity-50 ml-auto inline-block" />
+          </div>
           {data ? (
             <div className="calendar-day-data">
               <div className="tc-row">
@@ -202,6 +239,9 @@ const HistorialTipoCambio = () => {
 
       <div className="card">
         <div className="card-body" style={{ minHeight: '400px' }}>
+          <div className="mb-4 text-sm text-muted">
+            <em>💡 Tip: Haz clic en cualquier día del calendario para ingresar o editar el tipo de cambio manualmente.</em>
+          </div>
           {loading ? (
              <div className="flex justify-center items-center h-64"><Loading size="lg" /></div>
           ) : (
@@ -219,6 +259,58 @@ const HistorialTipoCambio = () => {
             </div>
          </div>
       </div>
+
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={`Tipo de Cambio para: ${editData.fecha}`}
+      >
+        <form onSubmit={handleSaveManual} className="space-y-4">
+          <div className="form-group">
+            <label className="form-label">Compra</label>
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              required
+              className="form-control"
+              value={editData.compra}
+              onChange={(e) => setEditData({ ...editData, compra: e.target.value })}
+              placeholder="Ej: 3.750"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Venta</label>
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              required
+              className="form-control"
+              value={editData.venta}
+              onChange={(e) => setEditData({ ...editData, venta: e.target.value })}
+              placeholder="Ej: 3.780"
+            />
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setModalOpen(false)}
+              disabled={savingManual}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={savingManual}
+            >
+              {savingManual ? <Loading size="sm" color="white" /> : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

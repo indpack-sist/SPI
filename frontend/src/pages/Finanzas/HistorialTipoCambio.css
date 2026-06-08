@@ -129,6 +129,24 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+.calendar-cell.interactive-cell:hover {
+  border-color: var(--primary, #6366f1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-card-hover, #2d3748);
+}
+
+.calendar-cell .edit-icon {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.calendar-cell.interactive-cell:hover .edit-icon {
+  opacity: 1;
+}
+
 .calendar-day-header {
   font-size: 14px;
   font-weight: 600;

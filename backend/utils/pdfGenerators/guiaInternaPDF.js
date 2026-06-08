@@ -285,7 +285,17 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
 
       yPos += 15;
 
-      if (yPos + 50 > 700) { doc.addPage(); yPos = 50; }
+      // Calcular altura dinámica de las observaciones para ubicar correctamente lo de abajo
+      let alturaObservaciones = 0;
+      if (orden.observaciones) {
+         alturaObservaciones = calcularAlturaTexto(doc, orden.observaciones, 330, 8) + 15; // 15 = Titulo 'OBSERVACIONES'
+      }
+
+      // Verificamos si hay espacio para observaciones, total y caja de firmas (aprox 70px para firmas)
+      if (yPos + Math.max(alturaObservaciones, 15) + 70 > 750) { 
+        doc.addPage(); 
+        yPos = 50; 
+      }
 
       if (orden.observaciones) {
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
@@ -300,6 +310,21 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       doc.roundedRect(470, yPos, 92, 15, 3).stroke('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
       doc.text(`${detalles.length}`, 475, yPos + 4, { align: 'right', width: 80 });
+
+      // Añadimos el campo de firma debajo (tomando en cuenta el espacio que hayan ocupado las obs.)
+      yPos += Math.max(alturaObservaciones, 20) + 40; // 40 es el espacio para la firma
+
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('CONFORMIDAD DE RECEPCIÓN', 40, yPos);
+      yPos += 15;
+
+      doc.font('Helvetica');
+      doc.text('Recibido por (Nombre y Apellido): ____________________________________________________', 40, yPos);
+      yPos += 20;
+      doc.text('Firma:', 40, yPos);
+      doc.text('_________________________________', 80, yPos);
+      doc.text('Fecha:', 350, yPos);
+      doc.text('___________________', 380, yPos);
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Documento de Control Interno - INDPACK S.A.C.', 50, 770, { align: 'center', width: 495 });

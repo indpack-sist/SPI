@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Plus, ChevronRight, Package, Save, X, DollarSign, Edit, Trash2 } from 'lucide-react';
+import { Search, FileText, Plus, Package, Save, DollarSign, Edit, Trash2, Tag, ChevronDown, Check } from 'lucide-react';
 import { clientesAPI, listasPreciosAPI, productosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
 import Loading from '../../components/UI/Loading';
@@ -161,7 +161,7 @@ function ListaPrecios() {
 
   const eliminarLista = async (e, idLista) => {
       e.stopPropagation();
-      if(!confirm('¿Estás seguro de eliminar esta lista de precios?')) return;
+      if(!confirm('¿Estás seguro de eliminar esta lista de precios? Esto no se puede deshacer.')) return;
 
       try {
           setLoading(true);
@@ -190,6 +190,20 @@ function ListaPrecios() {
       }
     }));
   };
+  
+  const handleToggleProductoEnLista = (idProducto, precioRef) => {
+      setNuevaLista(prev => {
+          const items = { ...prev.items };
+          if (items[idProducto] !== undefined) {
+              // Si ya existe, lo quitamos de la lista
+              delete items[idProducto];
+          } else {
+              // Si no existe, lo agregamos con su precio de referencia
+              items[idProducto] = precioRef;
+          }
+          return { ...prev, items };
+      });
+  };
 
   const guardarLista = async () => {
     if (!nuevaLista.nombre_lista) {
@@ -205,7 +219,7 @@ function ListaPrecios() {
       }));
 
     if (productosParaGuardar.length === 0) {
-      alert('Debe asignar precio al menos a un producto');
+      alert('Debe asignar precio al menos a un producto para guardar la lista.');
       return;
     }
 
@@ -248,260 +262,321 @@ function ListaPrecios() {
   );
 
   return (
-    <div className="p-6 h-screen flex flex-col">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Package size={28} /> Listas de Precios por Cliente
-        </h1>
+    <div className="p-4 md:p-6 h-full flex flex-col overflow-hidden page-listas-precios">
+      <style dangerouslySetInnerHTML={{__html: `
+        .page-listas-precios, .page-listas-precios .card { background-color: var(--carbon) !important; color: var(--mist) !important; }
+        .page-listas-precios .search-input, .page-listas-precios .form-input, .page-listas-precios input, .page-listas-precios select {
+          background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important;
+        }
+        .page-listas-precios .table-container { background-color: var(--carbon) !important; border: 1px solid var(--steel) !important; border-radius: 6px !important; overflow: hidden !important; }
+        .page-listas-precios table th { background-color: var(--carbon-light) !important; color: var(--wire) !important; border-bottom: 1px solid var(--steel) !important; }
+        .page-listas-precios table td { border-bottom: 1px solid var(--steel) !important; color: var(--mist) !important; }
+        .page-listas-precios table tr:hover td { background-color: var(--carbon-mid) !important; }
+        .page-listas-precios .bg-blue-50\\/50, .page-listas-precios .bg-blue-50\\/30, .page-listas-precios .bg-green-50\\/50 { background-color: var(--primary-10) !important; border-color: var(--primary) !important; }
+      `}} />
+
+      <div className="flex flex-row justify-between items-start gap-4 mb-6 shrink-0">
+          <div className="flex flex-col gap-3">
+            <div>
+              <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
+                <div className="p-2 bg-primary/10 rounded-lg"><Tag size={28} className="text-primary" /></div>
+                <span className="uppercase font-barlow text-white">Listas de Precios</span>
+              </h1>
+              <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de precios especiales por cliente</p>
+            </div>
+          </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-0">
         
-        <div className="card flex flex-col h-full">
-          <div className="p-4 border-b">
-            <h3 className="font-bold mb-2">1. Seleccionar Cliente</h3>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 text-muted" size={18} />
+        {/* Selector de Clientes */}
+        <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex flex-col h-full">
+          <div className="card-header border-b border-steel/20 p-4">
+            <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">1. Seleccionar Cliente</h2>
+            <div className="relative flex items-center mt-3">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
               <input 
                 type="text" 
-                className="form-input pl-10" 
+                className="form-input w-full pl-10 h-11" 
                 placeholder="Buscar cliente..." 
+                value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)} 
               />
             </div>
           </div>
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 p-2 scrollbar-thin">
             {clientes.filter(c => c.razon_social.toLowerCase().includes(busqueda.toLowerCase())).map(c => (
               <div 
                 key={c.id_cliente} 
                 onClick={() => seleccionarCliente(c)} 
-                className={`p-4 border-b cursor-pointer hover:bg-blue-50 transition ${clienteSel?.id_cliente === c.id_cliente ? 'bg-blue-50 border-l-4 border-l-primary' : ''}`}
+                className={`p-3 mb-1 rounded-lg border cursor-pointer transition-all ${clienteSel?.id_cliente === c.id_cliente ? 'bg-primary/10 border-primary shadow-[0_0_10px_rgba(232,184,75,0.1)]' : 'border-transparent hover:border-steel hover:bg-carbon-light'}`}
               >
-                <p className="font-bold text-sm">{c.razon_social}</p>
-                <p className="text-xs text-muted">{c.ruc}</p>
+                <p className={`font-bold text-sm line-clamp-1 ${clienteSel?.id_cliente === c.id_cliente ? 'text-primary' : 'text-mist'}`}>{c.razon_social}</p>
+                <p className="text-xs text-wire font-mono mt-1">RUC: {c.ruc}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="md:col-span-2 flex flex-col gap-6 h-full overflow-hidden">
+        {/* Panel Central y Derecho */}
+        <div className="md:col-span-2 flex flex-col gap-6 h-full min-h-0">
           {clienteSel ? (
             <>
-              <div className="card flex-shrink-0">
-                <div className="card-header flex justify-between items-center bg-gray-50">
+              {/* Contenedor de Listas */}
+              <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex flex-col shrink-0 max-h-[40%]">
+                <div className="card-header flex justify-between items-center border-b border-steel/20 p-4 bg-carbon-light">
                   <div>
-                    <h2 className="font-bold text-lg">Listas de {clienteSel.razon_social}</h2>
-                    <p className="text-xs text-muted">Seleccione una lista para ver sus precios</p>
+                    <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">Listas de {clienteSel.razon_social}</h2>
+                    <p className="text-[0.6rem] font-bold text-wire uppercase tracking-widest mt-1">Haga clic en Editar para modificar productos.</p>
                   </div>
-                  <button onClick={abrirModalNuevaLista} className="btn btn-sm btn-primary">
-                    <Plus size={16} /> Nueva Lista
+                  <button onClick={abrirModalNuevaLista} className="btn btn-primary font-black text-xs tracking-widest h-10 px-4 shadow-xl active:scale-95 transition-all flex items-center gap-2">
+                    <Plus size={16} /> NUEVA LISTA
                   </button>
                 </div>
-                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-48 overflow-y-auto">
-                  {listas.length === 0 && <p className="text-muted text-sm col-span-2 text-center py-4">Este cliente no tiene listas de precios creadas.</p>}
+                
+                <div className="p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 scrollbar-thin bg-carbon">
+                  {listas.length === 0 && <p className="text-wire text-sm col-span-2 text-center py-8 uppercase tracking-widest font-black">Este cliente no tiene listas de precios creadas.</p>}
                   {listas.map(l => (
                     <div 
                         key={l.id_lista} 
                         onClick={() => verDetalle(l)} 
-                        className={`p-4 border rounded-lg hover:shadow-md cursor-pointer flex justify-between items-center transition group relative
-                            ${listaSeleccionadaID === l.id_lista ? 'border-primary bg-blue-50/50' : 'border-gray-200'}
+                        className={`p-4 border rounded-xl cursor-pointer flex justify-between items-center transition-all bg-carbon-light
+                            ${listaSeleccionadaID === l.id_lista ? 'border-primary shadow-[0_0_15px_rgba(232,184,75,0.2)]' : 'border-steel hover:border-wire'}
                         `}
                     >
-                      <div>
-                        <p className="font-bold text-primary flex items-center gap-2">
-                            {l.nombre_lista}
-                            <span className="badge badge-sm badge-outline text-[10px]">{l.moneda}</span>
-                        </p>
-                        <p className="text-xs text-muted">{l.total_productos} productos asignados</p>
+                      <div className="flex-1 overflow-hidden pr-2">
+                        <div className="flex items-center gap-2 mb-2">
+                            <h3 className={`font-black truncate ${listaSeleccionadaID === l.id_lista ? 'text-primary' : 'text-mist'}`} title={l.nombre_lista}>{l.nombre_lista}</h3>
+                            <span className="badge badge-sm badge-info shrink-0 text-[10px] uppercase font-black tracking-wider">{l.moneda}</span>
+                        </div>
+                        <p className="text-xs text-wire font-medium uppercase tracking-wider">{l.total_productos} productos incluidos</p>
                       </div>
                       
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button 
-                            className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="btn btn-xs btn-outline border-steel p-2 hover:border-primary hover:text-primary transition-colors text-mist"
                             onClick={(e) => abrirModalEditarLista(e, l)}
-                            title="Editar Lista"
+                            title="Editar Lista (Añadir/Eliminar Productos)"
                         >
-                            <Edit size={16} />
+                            <Edit size={14} />
                         </button>
                         <button 
-                            className="p-1.5 rounded-full hover:bg-red-100 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="btn btn-xs btn-outline border-steel p-2 hover:border-danger hover:text-danger hover:bg-danger/10 transition-colors text-mist"
                             onClick={(e) => eliminarLista(e, l.id_lista)}
-                            title="Eliminar Lista"
+                            title="Eliminar Lista Completa"
                         >
-                            <Trash2 size={16} />
+                            <Trash2 size={14} />
                         </button>
-                        <ChevronRight className="text-muted self-center ml-1" />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="card flex-1 flex flex-col overflow-hidden">
-                <div className="card-header flex justify-between items-center border-b">
-                  <h2 className="font-bold flex items-center gap-2">
-                    <FileText size={18} /> Productos en Lista
+              {/* Contenedor de Detalle de Productos */}
+              <div className="card shadow-2xl bg-carbon-mid border border-steel/30 flex-1 flex flex-col min-h-0">
+                <div className="card-header flex justify-between items-center border-b border-steel/20 p-4 bg-carbon-light shrink-0">
+                  <h2 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">
+                    <FileText size={16} className="text-primary" /> VISUALIZACIÓN DE LISTA
                   </h2>
-                  {seleccionados.length > 0 && (
-                    <button onClick={generarCotizacion} className="btn btn-success animate-fadeIn">
-                      Generar Cotización ({seleccionados.length})
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                      {seleccionados.length > 0 && (
+                        <button onClick={generarCotizacion} className="btn h-10 px-4 flex items-center gap-2 text-[0.7rem] font-black tracking-widest transition-all btn-success animate-fadeIn">
+                          COTIZAR ({seleccionados.length})
+                        </button>
+                      )}
+                  </div>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-0">
+                <div className="flex-1 overflow-auto bg-carbon">
                     {detalleLista.length > 0 ? (
-                        <table className="table w-full">
-                            <thead className="sticky top-0 bg-white z-10 shadow-sm">
-                                <tr>
-                                    <th className="w-10 text-center">
-                                        <input 
-                                            type="checkbox" 
-                                            onChange={(e) => {
-                                                if(e.target.checked) setSeleccionados(detalleLista);
-                                                else setSeleccionados([]);
-                                            }}
-                                            checked={seleccionados.length === detalleLista.length && detalleLista.length > 0}
-                                        />
-                                    </th>
-                                    <th>Producto</th>
-                                    <th className="text-right">Precio Estándar</th>
-                                    <th className="text-right">Precio Especial</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {detalleLista.map(item => (
-                                    <tr key={item.id_producto} className={seleccionados.find(s => s.id_producto === item.id_producto) ? 'bg-green-50' : 'hover:bg-gray-50'}>
-                                        <td className="text-center">
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 cursor-pointer" 
-                                                checked={!!seleccionados.find(s => s.id_producto === item.id_producto)} 
-                                                onChange={() => toggleSeleccion(item)} 
-                                            />
-                                        </td>
-                                        <td>
-                                            <p className="font-bold text-sm text-gray-800">{item.producto}</p>
-                                            <p className="text-xs text-muted font-mono">{item.codigo}</p>
-                                        </td>
-                                        <td className="text-right text-muted line-through text-xs">
-                                            {item.moneda} {parseFloat(item.precio_estandar).toFixed(2)}
-                                        </td>
-                                        <td className="text-right">
-                                            <span className="font-bold text-primary text-lg">
-                                                {item.moneda} {parseFloat(item.precio_especial).toFixed(2)}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div className="table-container m-0 border-0 rounded-none h-full">
+                          <table className="table w-full relative">
+                              <thead className="sticky top-0 bg-carbon-light shadow-sm z-10">
+                                  <tr>
+                                      <th className="w-12 text-center border-b border-steel">
+                                          <input 
+                                              type="checkbox" 
+                                              className="w-4 h-4 rounded border-steel bg-carbon-mid accent-primary"
+                                              onChange={(e) => {
+                                                  if(e.target.checked) setSeleccionados(detalleLista);
+                                                  else setSeleccionados([]);
+                                              }}
+                                              checked={seleccionados.length === detalleLista.length && detalleLista.length > 0}
+                                          />
+                                      </th>
+                                      <th className="font-bold text-xs text-wire uppercase tracking-widest border-b border-steel">Producto</th>
+                                      <th className="text-right font-bold text-xs text-wire uppercase tracking-widest border-b border-steel">Precio Estándar</th>
+                                      <th className="text-right font-bold text-xs text-wire uppercase tracking-widest border-b border-steel">Precio de Lista</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {detalleLista.map(item => (
+                                      <tr key={item.id_producto} className={`${seleccionados.find(s => s.id_producto === item.id_producto) ? 'bg-primary/10' : 'hover:bg-carbon-light'}`}>
+                                          <td className="text-center align-middle border-b border-steel">
+                                              <input 
+                                                  type="checkbox" 
+                                                  className="w-4 h-4 rounded border-steel bg-carbon-mid accent-primary cursor-pointer" 
+                                                  checked={!!seleccionados.find(s => s.id_producto === item.id_producto)} 
+                                                  onChange={() => toggleSeleccion(item)} 
+                                              />
+                                          </td>
+                                          <td className="border-b border-steel">
+                                              <p className="font-bold text-sm text-mist">{item.producto}</p>
+                                              <p className="text-xs text-wire font-mono mt-1">{item.codigo}</p>
+                                          </td>
+                                          <td className="text-right text-wire line-through text-xs border-b border-steel align-middle">
+                                              {item.moneda} {parseFloat(item.precio_estandar).toFixed(2)}
+                                          </td>
+                                          <td className="text-right border-b border-steel align-middle p-3">
+                                              <span className="font-black text-primary text-base bg-carbon px-3 py-1.5 rounded border border-steel shadow-inner">
+                                                  {item.moneda} {parseFloat(item.precio_especial).toFixed(2)}
+                                              </span>
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                        </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-muted">
-                            <Package size={48} className="mb-2 opacity-20" />
-                            <p>Seleccione una lista arriba para ver los precios</p>
+                        <div className="h-full flex flex-col items-center justify-center text-wire p-8">
+                            <div className="bg-carbon-light p-5 rounded-xl border border-steel mb-4 shadow-inner">
+                                <Package size={48} className="text-steel" />
+                            </div>
+                            <p className="text-sm font-black uppercase tracking-widest text-mist">Ninguna lista seleccionada</p>
+                            <p className="text-xs mt-2 text-center max-w-sm text-wire uppercase tracking-wider leading-relaxed">
+                                Seleccione una lista arriba para ver sus precios, o edite una lista para agregar o remover productos.
+                            </p>
                         </div>
                     )}
                 </div>
               </div>
             </>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-muted bg-gray-50 rounded-lg border border-dashed border-gray-300">
-              <p className="text-lg">Seleccione un cliente para comenzar</p>
+            <div className="h-full flex flex-col items-center justify-center bg-carbon-mid rounded-xl border-2 border-dashed border-steel/50 shadow-inner">
+              <div className="bg-carbon-light p-6 rounded-full shadow-lg border border-steel mb-4">
+                <Search size={32} className="text-wire" />
+              </div>
+              <p className="text-sm font-black text-mist uppercase tracking-widest">Seleccione un cliente</p>
+              <p className="text-xs text-wire mt-2 uppercase tracking-wider font-medium">Podrá visualizar, crear y editar sus listas de precios</p>
             </div>
           )}
         </div>
       </div>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modoEdicion ? "Editar Lista de Precios" : "Crear Nueva Lista de Precios"} size="lg">
-        <div className="flex flex-col h-[70vh]">
-            <div className="grid grid-cols-2 gap-4 mb-4">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={modoEdicion ? "Editar Lista de Precios" : "Crear Nueva Lista de Precios"} size="xl">
+        <div className="flex flex-col h-[75vh] page-listas-precios p-1">
+            <div className="grid grid-cols-2 gap-4 mb-4 shrink-0 bg-carbon-mid p-4 rounded-xl border border-steel shadow-inner">
                 <div>
-                    <label className="form-label">Nombre de la Lista</label>
+                    <label className="form-label text-[0.65rem] font-black text-wire uppercase tracking-widest mb-1.5">Nombre de la Lista</label>
                     <input 
                         type="text" 
-                        className="form-input" 
+                        className="form-input h-11 font-bold text-mist" 
                         placeholder="Ej: Precios 2026, Mayorista..." 
                         value={nuevaLista.nombre_lista}
                         onChange={(e) => setNuevaLista({...nuevaLista, nombre_lista: e.target.value})}
                     />
                 </div>
                 <div>
-                    <label className="form-label">Moneda</label>
-                    <select 
-                        className="form-select"
-                        value={nuevaLista.moneda}
-                        onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
-                    >
-                        <option value="PEN">Soles (PEN)</option>
-                        <option value="USD">Dólares (USD)</option>
-                    </select>
+                    <label className="form-label text-[0.65rem] font-black text-wire uppercase tracking-widest mb-1.5">Moneda</label>
+                    <div className="relative">
+                      <select 
+                          className="form-input h-11 font-bold text-mist appearance-none w-full"
+                          value={nuevaLista.moneda}
+                          onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
+                      >
+                          <option value="PEN" className="bg-carbon text-mist">Soles (PEN)</option>
+                          <option value="USD" className="bg-carbon text-mist">Dólares (USD)</option>
+                      </select>
+                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-wire pointer-events-none" />
+                    </div>
                 </div>
             </div>
 
-            <div className="flex-1 border rounded-lg flex flex-col overflow-hidden">
-                <div className="p-2 border-b bg-gray-50 flex justify-between items-center">
-                    <input 
-                        type="text" 
-                        className="form-input form-input-sm w-2/3" 
-                        placeholder="Filtrar productos..." 
-                        value={busquedaProdModal}
-                        onChange={(e) => setBusquedaProdModal(e.target.value)}
-                    />
-                    <div className="text-xs text-muted">
-                        {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] > 0).length} productos con precio
+            <div className="flex-1 border border-steel rounded-xl flex flex-col min-h-0 bg-carbon overflow-hidden shadow-xl">
+                <div className="p-3 border-b border-steel bg-carbon-light flex justify-between items-center shrink-0">
+                    <div className="relative w-1/2 flex items-center">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-wire" />
+                        <input 
+                            type="text" 
+                            className="form-input h-10 w-full pl-10 text-sm" 
+                            placeholder="Buscar producto por nombre o código..." 
+                            value={busquedaProdModal}
+                            onChange={(e) => setBusquedaProdModal(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                        <div className="badge badge-primary font-black uppercase tracking-widest text-[10px] px-2 py-1 shadow-[0_0_10px_rgba(232,184,75,0.2)]">
+                            {Object.keys(nuevaLista.items).filter(k => nuevaLista.items[k] !== undefined && nuevaLista.items[k] !== '').length} productos
+                        </div>
+                        <p className="text-[10px] font-bold text-wire uppercase tracking-wider">Active el check para incluir</p>
                     </div>
                 </div>
-                <div className="overflow-y-auto flex-1">
+                
+                <div className="overflow-y-auto flex-1 scrollbar-thin">
                     <table className="table w-full">
-                        <thead className="sticky top-0 bg-white z-10">
+                        <thead className="sticky top-0 bg-carbon-mid shadow-md z-10 border-b border-steel">
                             <tr>
-                                <th>Producto</th>
-                                <th className="text-right w-32">Precio Ref.</th>
-                                <th className="text-right w-40">Precio Especial</th>
+                                <th className="w-16 text-center font-black text-[10px] text-wire uppercase tracking-widest py-3">Incluir</th>
+                                <th className="font-black text-[10px] text-wire uppercase tracking-widest py-3">Producto</th>
+                                <th className="text-right w-32 font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Ref.</th>
+                                <th className="text-right w-48 font-black text-[10px] text-wire uppercase tracking-widest py-3">Precio Especial</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {productosFiltradosModal.map(p => (
-                                <tr key={p.id_producto} className={nuevaLista.items[p.id_producto] ? 'bg-blue-50/30' : ''}>
-                                    <td>
-                                        <div className="font-medium text-sm">{p.nombre}</div>
-                                        <div className="text-xs text-muted">{p.codigo}</div>
+                            {productosFiltradosModal.map(p => {
+                                const precioRef = parseFloat((nuevaLista.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0).toFixed(2);
+                                const isSelected = nuevaLista.items[p.id_producto] !== undefined;
+
+                                return (
+                                <tr key={p.id_producto} className={`border-b border-steel/50 ${isSelected ? 'bg-primary/10' : 'hover:bg-carbon-light'}`}>
+                                    <td className="text-center align-middle">
+                                        <div className="flex justify-center">
+                                          <div 
+                                            className={`w-5 h-5 border-2 rounded flex items-center justify-center cursor-pointer transition-all ${isSelected ? 'bg-primary border-primary shadow-[0_0_10px_rgba(232,184,75,0.3)]' : 'bg-carbon border-steel'}`}
+                                            onClick={() => handleToggleProductoEnLista(p.id_producto, precioRef)}
+                                          >
+                                            {isSelected && <Check size={14} className="text-carbon stroke-[4px]" />}
+                                          </div>
+                                        </div>
                                     </td>
-                                    <td className="text-right text-xs text-muted">
-    {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} 
-    {parseFloat(
-        (nuevaLista.moneda === 'PEN' ? (p.precio_venta_soles || p.precio_venta) : p.precio_venta) || 0
-    ).toFixed(2)}
-</td>
-                                    <td className="text-right">
-                                        <div className="relative">
-                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                                    <td>
+                                        <div className={`font-bold text-sm ${isSelected ? 'text-mist' : 'text-wire'}`}>{p.nombre}</div>
+                                        <div className="text-xs text-wire font-mono mt-1">{p.codigo}</div>
+                                    </td>
+                                    <td className="text-right text-xs text-wire align-middle font-medium">
+                                        {nuevaLista.moneda === 'PEN' ? 'S/' : '$'} {precioRef}
+                                    </td>
+                                    <td className="text-right align-middle p-2">
+                                        <div className="relative flex items-center">
+                                            <span className={`absolute left-3 font-bold select-none ${isSelected ? 'text-primary' : 'text-steel'}`}>
                                                 {nuevaLista.moneda === 'PEN' ? 'S/' : '$'}
                                             </span>
                                             <input 
                                                 type="number" 
-                                                className={`form-input form-input-sm text-right pl-6 ${nuevaLista.items[p.id_producto] ? 'border-primary bg-white font-bold text-primary' : ''}`}
+                                                className={`form-input w-full text-right pl-8 h-10 ${isSelected ? 'border-primary shadow-[0_0_10px_rgba(232,184,75,0.1)] font-black text-primary bg-carbon text-lg' : 'bg-carbon-mid border-steel text-wire opacity-50'}`}
                                                 placeholder="0.00"
-                                                value={nuevaLista.items[p.id_producto] || ''}
+                                                disabled={!isSelected}
+                                                value={isSelected ? nuevaLista.items[p.id_producto] : ''}
                                                 onChange={(e) => handlePrecioChange(p.id_producto, e.target.value)}
                                             />
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-                <button className="btn btn-outline" onClick={() => setModalOpen(false)}>Cancelar</button>
-                <button className="btn btn-primary" onClick={guardarLista} disabled={loading}>
-                    {loading ? 'Guardando...' : (modoEdicion ? 'Actualizar Lista' : 'Guardar Lista')}
+            <div className="mt-5 flex justify-end gap-3 shrink-0">
+                <button className="btn btn-outline border-steel text-mist h-11 px-6 font-black text-xs tracking-widest hover:border-wire hover:bg-carbon-light" onClick={() => setModalOpen(false)}>CANCELAR</button>
+                <button className="btn btn-primary min-w-[200px] h-11 flex justify-center items-center gap-2 font-black text-xs tracking-widest shadow-[0_0_20px_rgba(232,184,75,0.2)] active:scale-95 transition-all" onClick={guardarLista} disabled={loading}>
+                    {loading ? <Loading size="sm" /> : <Save size={18} />}
+                    {modoEdicion ? 'ACTUALIZAR LISTA' : 'GUARDAR LISTA'}
                 </button>
             </div>
         </div>

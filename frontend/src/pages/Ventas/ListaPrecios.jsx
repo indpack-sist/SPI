@@ -497,14 +497,13 @@ function ListaPrecios() {
                     <label className="form-label text-[0.65rem] font-black text-wire uppercase tracking-widest mb-1.5">Moneda</label>
                     <div className="relative">
                       <select 
-                          className="form-input h-11 font-bold text-mist appearance-none w-full"
+                          className="form-input h-11 font-bold text-mist w-full"
                           value={nuevaLista.moneda}
                           onChange={(e) => setNuevaLista({...nuevaLista, moneda: e.target.value})}
                       >
                           <option value="PEN" className="bg-carbon text-mist">Soles (PEN)</option>
                           <option value="USD" className="bg-carbon text-mist">Dólares (USD)</option>
                       </select>
-                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-wire pointer-events-none" />
                     </div>
                 </div>
             </div>

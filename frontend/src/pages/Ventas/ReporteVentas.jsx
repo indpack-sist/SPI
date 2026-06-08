@@ -976,12 +976,23 @@ const ReporteVentas = () => {
         if (productosEnCategoria.length > 0) {
           productosEnCategoria.sort((a, b) => b.subtotal - a.subtotal);
 
+          const isUSD = cat.key.includes('USD');
+          
           datosAOA.push([cat.titulo]);
-          datosAOA.push([
+          
+          const headers = [
             'Codigo', 'Producto', 'Unidad', 'Moneda',
-            'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha Despacho', 'Cliente', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
-            'Cant. Total', 'Cant. Despachada', 'Cant. Pendiente', 'Subtotal General', 'N Ordenes'
-          ]);
+            'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha Despacho', 'Cliente'
+          ];
+          
+          if (isUSD) {
+            headers.push('Vendedor', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden', 'TC', 'Subtotal (PEN)');
+          } else {
+            headers.push('Cant. Orden', 'P. Unitario', 'Subtotal Orden');
+          }
+          
+          headers.push('Cant. Total', 'Cant. Despachada', 'Cant. Pendiente', 'Subtotal General', 'N Ordenes');
+          datosAOA.push(headers);
 
           productosEnCategoria.forEach(prod => {
             const startRowIndex = datosAOA.length;
@@ -993,25 +1004,43 @@ const ReporteVentas = () => {
               const fEmision = o.fecha_emision ? formatearFecha(o.fecha_emision) : '-';
               const fDespacho = o.fecha_despacho ? formatearFecha(o.fecha_despacho) : 'Pendiente';
 
+              let rowData = [];
               if (idx === 0) {
-                datosAOA.push([
+                rowData = [
                   prod.codigo, prod.nombre, prod.unidad_medida, prod.moneda,
-                  o.numero, compText.trim(), fEmision, fDespacho, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
+                  o.numero, compText.trim(), fEmision, fDespacho, o.cliente
+                ];
+                if (isUSD) {
+                  rowData.push(o.vendedor || '-', parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)), parseFloat(o.tc.toFixed(3)), parseFloat((o.subtotal * o.tc).toFixed(3)));
+                } else {
+                  rowData.push(parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)));
+                }
+                rowData.push(
                   parseFloat(prod.cantidad_total.toFixed(3)), parseFloat(prod.cantidad_despachada_total.toFixed(3)),
                   parseFloat(prod.cantidad_pendiente_total.toFixed(3)), parseFloat(prod.subtotal.toFixed(3)), nOrdenes
-                ]);
+                );
               } else {
-                datosAOA.push([
+                rowData = [
                   '', '', '', '',
-                  o.numero, compText.trim(), fEmision, fDespacho, o.cliente, parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)),
-                  '', '', '', '', ''
-                ]);
+                  o.numero, compText.trim(), fEmision, fDespacho, o.cliente
+                ];
+                if (isUSD) {
+                   rowData.push(o.vendedor || '-', parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)), parseFloat(o.tc.toFixed(3)), parseFloat((o.subtotal * o.tc).toFixed(3)));
+                } else {
+                   rowData.push(parseFloat(o.cantidad.toFixed(3)), parseFloat(o.precio_unitario.toFixed(3)), parseFloat(o.subtotal.toFixed(3)));
+                }
+                rowData.push('', '', '', '', '');
               }
+              datosAOA.push(rowData);
             });
 
             if (nOrdenes > 1) {
               const endRowIndex = startRowIndex + nOrdenes - 1;
-              [0, 1, 2, 3, 12, 13, 14, 15, 16].forEach(c => {
+              const mergeCols = [0, 1, 2, 3];
+              const totalCols = headers.length;
+              mergeCols.push(totalCols - 5, totalCols - 4, totalCols - 3, totalCols - 2, totalCols - 1);
+              
+              mergeCols.forEach(c => {
                 merges.push({ s: { r: startRowIndex, c: c }, e: { r: endRowIndex, c: c } });
               });
             }
@@ -1024,10 +1053,13 @@ const ReporteVentas = () => {
       if (datosAOA.length > 0) {
         const wsProductos = XLSX.utils.aoa_to_sheet(datosAOA);
         wsProductos['!merges'] = merges;
+        
+        // Calcular wch basado en el máximo número de columnas posibles (que es cuando isUSD es true)
         wsProductos['!cols'] = [
-          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 },
-          { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
-          { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }
+          { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, // 0-3
+          { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, // 4-8
+          { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, // 9-14 (Vendedor y USD extras)
+          { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 } // 15-19
         ];
 
         const borderStyle = {
@@ -1038,15 +1070,16 @@ const ReporteVentas = () => {
         };
 
         for (let R = 0; R < datosAOA.length; R++) {
-          if (datosAOA[R].length === 1 && datosAOA[R][0] && datosAOA[R][0].toString().startsWith('===')) {
+          const rowLength = datosAOA[R].length;
+          if (rowLength === 1 && datosAOA[R][0] && datosAOA[R][0].toString().startsWith('===')) {
             const cellRef = XLSX.utils.encode_cell({ r: R, c: 0 });
             if (wsProductos[cellRef]) {
               if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
               wsProductos[cellRef].s.font = { bold: true, color: { rgb: "FFFFFF" } };
               wsProductos[cellRef].s.fill = { fgColor: { rgb: "333333" } };
             }
-          } else if (datosAOA[R].length > 1 && datosAOA[R][0] === 'Codigo') {
-            for (let C = 0; C < 17; C++) {
+          } else if (rowLength > 1 && datosAOA[R][0] === 'Codigo') {
+            for (let C = 0; C < rowLength; C++) {
               const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
               if (wsProductos[cellRef]) {
                 if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
@@ -1056,8 +1089,8 @@ const ReporteVentas = () => {
                 wsProductos[cellRef].s.border = borderStyle;
               }
             }
-          } else if (datosAOA[R].length > 1 && datosAOA[R][0] !== 'Codigo') {
-            for (let C = 0; C < 17; C++) {
+          } else if (rowLength > 1 && datosAOA[R][0] !== 'Codigo') {
+            for (let C = 0; C < rowLength; C++) {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (wsProductos[cellRef]) {
                   if (!wsProductos[cellRef].s) wsProductos[cellRef].s = {};
@@ -1071,15 +1104,34 @@ const ReporteVentas = () => {
         XLSX.utils.book_append_sheet(wb, wsProductos, 'Resumen Productos');
       }
 
-      // NUEVA HOJA: RESUMEN POR FECHA
+      // NUEVA HOJA: RESUMEN POR FECHA (Dinámico)
       const fechasAgrupadas = {};
+      
+      let tituloResumen = 'FECHA';
+      if (filtros.filtroFecha === 'fecha_emision') tituloResumen = 'FECHA DE EMISION';
+      else if (filtros.filtroFecha === 'fecha_sunat') tituloResumen = 'FECHA FACTURACION SUNAT';
+      else if (filtros.filtroFecha === 'fecha_despacho') tituloResumen = 'FECHA DE DESPACHO';
+
       dataFiltrada.forEach(orden => {
-        const fechaText = orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente';
-        if (!fechasAgrupadas[fechaText]) {
-          fechasAgrupadas[fechaText] = {
-            fecha: fechaText,
+        let fechaAgrupacion = 'Pendiente';
+        let rawDateValue = 0;
+
+        if (filtros.filtroFecha === 'fecha_emision') {
+          fechaAgrupacion = orden.fecha_emision ? formatearFecha(orden.fecha_emision) : 'Pendiente';
+          rawDateValue = orden.fecha_emision ? new Date(orden.fecha_emision).getTime() : 0;
+        } else if (filtros.filtroFecha === 'fecha_sunat') {
+          fechaAgrupacion = orden.fecha_facturacion_sunat ? formatearFecha(orden.fecha_facturacion_sunat) : 'Pendiente';
+          rawDateValue = orden.fecha_facturacion_sunat ? new Date(orden.fecha_facturacion_sunat).getTime() : 0;
+        } else {
+          fechaAgrupacion = orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente';
+          rawDateValue = orden.fecha_despacho ? new Date(orden.fecha_despacho).getTime() : 0;
+        }
+
+        if (!fechasAgrupadas[fechaAgrupacion]) {
+          fechasAgrupadas[fechaAgrupacion] = {
+            fecha: fechaAgrupacion,
             items: [],
-            rawDate: orden.fecha_despacho ? new Date(orden.fecha_despacho).getTime() : 0 
+            rawDate: rawDateValue 
           };
         }
         if (orden.detalles && orden.detalles.length > 0) {
@@ -1088,10 +1140,12 @@ const ReporteVentas = () => {
             const numComp = (orden.tipo_comprobante === 'Factura' && orden.facturado_sunat && orden.numero_comprobante_sunat) ? orden.numero_comprobante_sunat : orden.numero_comprobante;
             const compText = numComp ? `${numComp} ${guia}` : (orden.numero_guia_interna ? `Guía: ${orden.numero_guia_interna}` : '-');
             
-            fechasAgrupadas[fechaText].items.push({
+            fechasAgrupadas[fechaAgrupacion].items.push({
               orden: orden.numero,
               comprobante: compText.trim(),
               fecha_emision: orden.fecha_emision ? formatearFecha(orden.fecha_emision) : '-',
+              fecha_sunat: (orden.tipo_comprobante === 'Nota de Venta') ? 'No amerita' : (orden.fecha_facturacion_sunat ? formatearFecha(orden.fecha_facturacion_sunat) : '-'),
+              fecha_despacho: orden.fecha_despacho ? formatearFecha(orden.fecha_despacho) : 'Pendiente',
               cliente: orden.cliente,
               moneda: orden.moneda,
               codigo: det.codigo_producto,
@@ -1099,7 +1153,9 @@ const ReporteVentas = () => {
               unidad: det.unidad_medida,
               cantidad: parseFloat(det.cantidad),
               precio_unitario: parseFloat(det.precio_unitario),
-              subtotal: parseFloat(det.subtotal)
+              subtotal: parseFloat(det.subtotal),
+              tc: parseFloat(orden.tipo_cambio || 1),
+              vendedor: orden.vendedor
             });
           });
         }
@@ -1134,6 +1190,7 @@ const ReporteVentas = () => {
 
           fechaData.items.forEach((item, idx) => {
             const isNewOrden = item.orden !== currentOrden;
+            const isUSD = item.moneda === 'USD';
             
             // Si cambia la orden y ya teníamos una, aplicamos el merge de la orden anterior
             if (isNewOrden && ordenStartRow !== -1 && ordenItemCount > 1) {
@@ -1153,8 +1210,8 @@ const ReporteVentas = () => {
 
             // Para la primera fila de la FECHA (idx === 0)
             const isFirstInDate = idx === 0;
-
-            datosFechasAOA.push([
+            
+            let rowData = [
               isFirstInDate ? fechaData.fecha : '',
               isNewOrden ? item.orden : '', 
               isNewOrden ? item.comprobante : '', 
@@ -1162,7 +1219,15 @@ const ReporteVentas = () => {
               isNewOrden ? item.cliente : '',
               item.codigo, item.producto, item.unidad, item.moneda,
               parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
-            ]);
+            ];
+
+            if (isUSD) {
+               rowData.push(item.tc ? parseFloat(item.tc.toFixed(3)) : '-', parseFloat((item.subtotal * (item.tc || 1)).toFixed(3)), item.vendedor || '-');
+            } else {
+               rowData.push('-', '-', item.vendedor || '-');
+            }
+
+            datosFechasAOA.push(rowData);
           });
 
           // Asegurarse de aplicar el merge para la última orden de la fecha si tuvo más de 1 ítem
@@ -1181,12 +1246,18 @@ const ReporteVentas = () => {
         });
 
         if (datosFechasAOA.length > 1) {
+          // Ajustamos los encabezados de forma general para incluir las 3 fechas secuenciales y las columnas de USD
+          datosFechasAOA[1] = [
+            'Fecha Agrupación', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha SUNAT', 'Fecha Despacho', 'Cliente', 
+            'Codigo', 'Producto', 'Unidad', 'Moneda', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
+            'TC', 'Subtotal (PEN)', 'Vendedor'
+          ];
           const wsFechas = XLSX.utils.aoa_to_sheet(datosFechasAOA);
           wsFechas['!merges'] = mergesFechas;
           wsFechas['!cols'] = [
-            { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 35 }, 
+            { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, 
             { wch: 15 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, 
-            { wch: 12 }, { wch: 14 }
+            { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 25 }
           ];
 
           const borderStyle = {
@@ -1196,6 +1267,12 @@ const ReporteVentas = () => {
             right: { style: "thin", color: { rgb: "000000" } }
           };
 
+          // Determinar qué columna de fecha se debe pintar de amarillo según el filtro
+          let colFiltroIndex = -1;
+          if (filtros.filtroFecha === 'fecha_emision') colFiltroIndex = 3;
+          else if (filtros.filtroFecha === 'fecha_sunat') colFiltroIndex = 4;
+          else if (filtros.filtroFecha === 'fecha_despacho') colFiltroIndex = 5;
+
           for (let R = 0; R < datosFechasAOA.length; R++) {
             if (datosFechasAOA[R].length === 1 && datosFechasAOA[R][0] && datosFechasAOA[R][0].toString().startsWith('===')) {
               const cellRef = XLSX.utils.encode_cell({ r: R, c: 0 });
@@ -1204,8 +1281,8 @@ const ReporteVentas = () => {
                 wsFechas[cellRef].s.font = { bold: true, color: { rgb: "FFFFFF" } };
                 wsFechas[cellRef].s.fill = { fgColor: { rgb: "333333" } };
               }
-            } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] === 'Fecha Despacho') {
-              for (let C = 0; C < 12; C++) {
+            } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] === 'Fecha Agrupación') {
+              for (let C = 0; C < 17; C++) {
                 const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                 if (wsFechas[cellRef]) {
                   if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};
@@ -1215,13 +1292,24 @@ const ReporteVentas = () => {
                   wsFechas[cellRef].s.border = borderStyle;
                 }
               }
-            } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] !== 'Fecha Despacho') {
-              for (let C = 0; C < 12; C++) {
+            } else if (datosFechasAOA[R].length > 1 && datosFechasAOA[R][0] !== 'Fecha Agrupación') {
+              const isUSD = datosFechasAOA[R][10] === 'USD'; 
+              for (let C = 0; C < 17; C++) {
                   const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
                   if (wsFechas[cellRef]) {
                     if (!wsFechas[cellRef].s) wsFechas[cellRef].s = {};
                     wsFechas[cellRef].s.alignment = { vertical: "center" };
                     wsFechas[cellRef].s.border = borderStyle;
+                    
+                    // Pintar celdas de USD de verde
+                    if (isUSD && (C >= 14 && C <= 16)) {
+                      wsFechas[cellRef].s.fill = { fgColor: { rgb: "E6F4EA" } };
+                    }
+                    
+                    // Pintar celda de fecha filtrada de amarillo
+                    if (C === colFiltroIndex) {
+                       wsFechas[cellRef].s.fill = { fgColor: { rgb: "FFF2CC" } };
+                    }
                   }
               }
             }

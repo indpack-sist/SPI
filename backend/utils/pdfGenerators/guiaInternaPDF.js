@@ -302,14 +302,14 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       }
 
       // -- SECCIÓN DE FIRMA ESTÁTICA AL PIE DE PÁGINA --
-      const firmaY = 670; 
+      const firmaY = 620; 
       
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
       doc.text('CONFORMIDAD DE RECEPCIÓN', 0, firmaY, { align: 'center' });
       
       doc.font('Helvetica');
       // Línea única centrada, 50 puntos por debajo del título
-      doc.text('_______________________________________________________', 0, firmaY + 50, { align: 'center' });
+      doc.text('___________________________', 0, firmaY + 50, { align: 'center' });
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Documento de Control Interno - INDPACK S.A.C.', 50, 770, { align: 'center', width: 495 });

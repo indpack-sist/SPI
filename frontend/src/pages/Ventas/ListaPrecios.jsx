@@ -505,7 +505,6 @@ function ListaPrecios() {
                           <option value="PEN" className="bg-carbon text-mist">Soles (PEN)</option>
                           <option value="USD" className="bg-carbon text-mist">Dólares (USD)</option>
                       </select>
-                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-wire pointer-events-none" />
                     </div>
                 </div>
             </div>

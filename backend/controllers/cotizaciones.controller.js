@@ -197,6 +197,9 @@ export async function createCotizacion(req, res) {
     let tipoImpuestoFinal = tipo_impuesto || 'IGV';
     let validezDiasFinal = parseInt(validez_dias) || 7;
 
+    const comercialFinal = id_comercial || req.user?.id_empleado;
+    const registradorTemporal = req.user?.id_empleado || comercialFinal;
+
     if (esMuestra) {
       if (!plazoPagoFinal || plazoPagoFinal.trim() === '') {
         plazoPagoFinal = 'Sin Valor Comercial';
@@ -206,6 +209,20 @@ export async function createCotizacion(req, res) {
     if (!id_cliente) return res.status(400).json({ success: false, error: 'Cliente es obligatorio' });
     if (!detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Debe agregar al menos un producto' });
     
+    // Validación anti-doble clic: buscar cotización reciente
+    if (registradorTemporal) {
+      const resultDoble = await executeQuery(`
+        SELECT id_cotizacion FROM cotizaciones 
+        WHERE id_cliente = ? 
+        AND id_comercial = ? 
+        AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
+      `, [id_cliente, registradorTemporal]);
+      
+      if (resultDoble.success && resultDoble.data.length > 0) {
+        return res.status(429).json({ success: false, error: 'Se detectó una creación duplicada. Por favor espere unos segundos.' });
+      }
+    }
+
     // Solo validar plazo_pago si NO es muestra o si sigue vacío después del ajuste
     if (!plazoPagoFinal || plazoPagoFinal.trim() === '') {
       return res.status(400).json({ success: false, error: 'Plazo de pago es obligatorio' });

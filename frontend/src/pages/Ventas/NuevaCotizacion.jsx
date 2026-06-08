@@ -56,7 +56,8 @@ function NuevaCotizacion() {
   const modoDuplicar = location.state?.duplicar === true;
     
   const [loading, setLoading] = useState(false);
-  const [loadingTC, setLoadingTC] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [cooldownActivo, setCooldownActivo] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [cotizacionConvertida, setCotizacionConvertida] = useState(false);
@@ -694,9 +695,11 @@ setFormCabecera(prev => ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (cooldownActivo || loading) return;
     setError(null);
     try {
       setLoading(true);
+      setCooldownActivo(true);
       const payload = {
         id_cliente: parseInt(formCabecera.id_cliente),
         id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
@@ -1586,10 +1589,10 @@ setFormCabecera(prev => ({
           <button
             type="submit"
             className="btn btn-primary btn-lg"
-            disabled={loading || !clienteSeleccionado || detalle.length === 0}
+            disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
           >
             <Save size={20} />
-            {loading ? 'Guardando...' : modoEdicion ? 'Actualizar Cotizacion' : 'Guardar Cotizacion'}
+            {loading ? 'Procesando...' : cooldownActivo ? 'Espere por favor...' : modoEdicion ? 'Actualizar Cotizacion' : 'Guardar Cotizacion'}
           </button>
         </div>
       </form>

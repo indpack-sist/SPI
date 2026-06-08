@@ -243,7 +243,6 @@ export async function createCotizacion(req, res) {
       }
     }
 
-    const comercialFinal = id_comercial || req.user?.id_empleado;
     if (!comercialFinal) return res.status(400).json({ success: false, error: 'No se pudo determinar el comercial responsable' });
 
     let fechaEmisionFinal = fecha_emision;

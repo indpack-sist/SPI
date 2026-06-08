@@ -302,27 +302,14 @@ export async function generarPDFGuiaInterna(orden, numeroGuiaInterna) {
       }
 
       // -- SECCIÓN DE FIRMA ESTÁTICA AL PIE DE PÁGINA --
-      // Posición fija cerca del pie, sin importar el contenido anterior (si no hubo overflow general)
-      const firmaY = 660; 
-      
-      // Asegurarse de no sobrescribir, en un caso muy extremo donde observaciones lleguen hasta abajo.
-      // Normalmente esto ya está manejado por los saltos de página anteriores.
+      const firmaY = 670; 
       
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
       doc.text('CONFORMIDAD DE RECEPCIÓN', 0, firmaY, { align: 'center' });
       
-      // Coordenadas para centrar el bloque de firma
-      // Ancho total del bloque estimado: 350
-      const startX = 145; // (595 - 350) / 2 para centrar en A4 (width ~595)
-      const labelX = startX;
-      const lineX = startX + 160; // Punto común donde empiezan las líneas '_'
-      
       doc.font('Helvetica');
-      doc.text('Recibido por (Nombre y Apellido):', labelX, firmaY + 25);
-      doc.text('____________________________________________________', lineX, firmaY + 25);
-      
-      doc.text('Firma:', labelX, firmaY + 50);
-      doc.text('____________________________________________________', lineX, firmaY + 50);
+      // Línea única centrada, 50 puntos por debajo del título
+      doc.text('_______________________________________________________', 0, firmaY + 50, { align: 'center' });
 
       doc.fontSize(7).font('Helvetica').fillColor('#666666');
       doc.text('Documento de Control Interno - INDPACK S.A.C.', 50, 770, { align: 'center', width: 495 });

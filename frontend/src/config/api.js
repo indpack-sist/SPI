@@ -825,7 +825,8 @@ export const tipoCambioAPI = {
   obtenerHistorial: (params) => api.get('/tipo-cambio/historial', { params }),
   subirHistorialExcel: (formData) => api.post('/tipo-cambio/historial/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
-  })
+  }),
+  guardarManual: (data) => api.post('/tipo-cambio/historial/manual', data)
 };
 export const reportesAPI = {
   getSireVentas: (params) => api.get('/reportes/sire/ventas', { params }),

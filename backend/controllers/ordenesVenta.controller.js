@@ -580,6 +580,18 @@ export async function createOrdenVenta(req, res) {
       return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
     }
 
+    // Validación anti-doble clic: buscar orden reciente
+    const resultDoble = await executeQuery(`
+      SELECT id_orden_venta FROM ordenes_venta 
+      WHERE id_cliente = ? 
+      AND id_registrado_por = ? 
+      AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
+    `, [id_cliente, id_registrado_por]);
+    
+    if (resultDoble.success && resultDoble.data.length > 0) {
+      return res.status(429).json({ success: false, error: 'Se detectó una creación duplicada. Por favor espere unos segundos.' });
+    }
+
     let idVehiculoFinal = null;
     let idConductorFinal = null;
     let transNombreFinal = null;

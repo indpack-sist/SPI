@@ -281,6 +281,7 @@ function ListaPrecios() {
         .page-listas-precios .search-input, .page-listas-precios .form-input, .page-listas-precios input, .page-listas-precios select {
           background-color: var(--carbon-mid) !important; border: 1px solid var(--steel) !important; color: var(--white) !important; font-family: inherit !important;
         }
+        .page-listas-precios select { cursor: pointer !important; }
         .page-listas-precios .table-container { background-color: var(--carbon) !important; border: 1px solid var(--steel) !important; border-radius: 6px !important; overflow: hidden !important; }
         .page-listas-precios table th { background-color: var(--carbon-light) !important; color: var(--wire) !important; border-bottom: 1px solid var(--steel) !important; }
         .page-listas-precios table td { border-bottom: 1px solid var(--steel) !important; color: var(--mist) !important; }

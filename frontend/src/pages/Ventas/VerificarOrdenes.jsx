@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   Shield,
   CheckCircle,
   XCircle,
@@ -16,12 +16,16 @@ import {
   X,
   Eye,
   ChevronRight,
-  Download
+  Download,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldOff
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import { ordenesVentaAPI, archivosAPI } from '../../config/api';
 
 function VerificarOrdenes() {
@@ -43,9 +47,12 @@ function VerificarOrdenes() {
   const [visorArchivo, setVisorArchivo] = useState({
     open: false,
     url: '',
-    tipo: '', 
+    tipo: '',
     titulo: ''
   });
+
+  const [modalVerifOCOpen, setModalVerifOCOpen] = useState(false);
+  const [guardandoVerifOC, setGuardandoVerifOC] = useState(false);
 
   const [formRechazo, setFormRechazo] = useState({
     motivo_rechazo: '',
@@ -153,6 +160,35 @@ function VerificarOrdenes() {
 
   const cerrarVisor = () => {
     setVisorArchivo({ open: false, url: '', tipo: '', titulo: '' });
+  };
+
+  const getArchivosOCParaModal = () => {
+    const raw = datosVerificacion?.orden?.orden_compra_url;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [raw];
+    } catch {
+      return [raw];
+    }
+  };
+
+  const handleVerificarOCDesdeVerif = async () => {
+    if (!datosVerificacion?.orden?.id_orden_venta) return;
+    try {
+      setGuardandoVerifOC(true);
+      await ordenesVentaAPI.verificarOC(datosVerificacion.orden.id_orden_venta, true);
+      // Refresh datosVerificacion so badge updates
+      const res = await ordenesVentaAPI.getDatosVerificacion(datosVerificacion.orden.id_orden_venta);
+      if (res.data.success) setDatosVerificacion(res.data.data);
+      setModalVerifOCOpen(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al verificar OC');
+    } finally {
+      setGuardandoVerifOC(false);
+    }
   };
 
   const handleAprobar = async () => {
@@ -611,32 +647,44 @@ function VerificarOrdenes() {
                   {(datosVerificacion.orden.orden_compra_url || datosVerificacion.orden.comprobante_url) && (
                     <div className="pt-3 border-t border-blue-200 mt-2">
                         <p className="text-xs font-bold text-blue-800 mb-2">Documentos Adjuntos</p>
+
+                        {/* Badge de verificación OC */}
+                        {datosVerificacion.orden.orden_compra_url && (
+                          <div className="mb-2">
+                            {datosVerificacion.orden.estado_verificacion_oc === 'Verificado' ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">
+                                <ShieldCheck size={11} /> OC Verificada
+                                {datosVerificacion.orden.fecha_verificacion_oc && (
+                                  <span className="font-normal text-green-600 ml-1">
+                                    · {new Date(datosVerificacion.orden.fecha_verificacion_oc).toLocaleDateString('es-PE')}
+                                  </span>
+                                )}
+                              </span>
+                            ) : datosVerificacion.orden.estado_verificacion_oc === 'Omitida' ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full">
+                                <ShieldOff size={11} /> Verificación omitida
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                                <ShieldAlert size={11} /> Sin verificar
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex gap-2 flex-wrap">
-                            {datosVerificacion.orden.orden_compra_url && (() => {
-                                let urls = [];
-                                if (Array.isArray(datosVerificacion.orden.orden_compra_url)) {
-                                    urls = datosVerificacion.orden.orden_compra_url;
-                                } else if (typeof datosVerificacion.orden.orden_compra_url === 'string') {
-                                    try {
-                                        urls = JSON.parse(datosVerificacion.orden.orden_compra_url);
-                                        if (!Array.isArray(urls)) urls = [datosVerificacion.orden.orden_compra_url];
-                                    } catch {
-                                        urls = [datosVerificacion.orden.orden_compra_url];
-                                    }
-                                } else {
-                                    urls = [datosVerificacion.orden.orden_compra_url];
-                                }
-                                
-                                return urls.map((url, i) => (
-                                    <button 
-                                        key={`oc-${i}`}
-                                        className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Orden de Compra ${i + 1}` : 'Orden de Compra')}
-                                    >
-                                        <Eye size={12}/> {urls.length > 1 ? `Ver O/C Cliente ${i + 1}` : 'Ver O/C Cliente'}
-                                    </button>
-                                ));
-                            })()}
+                            {/* Botón único para abrir ModalVerificacionOC */}
+                            {datosVerificacion.orden.orden_compra_url && (
+                              <button
+                                className="btn btn-xs btn-outline bg-amber-50 border-amber-400 text-amber-700 hover:bg-amber-100 flex items-center gap-1"
+                                onClick={() => setModalVerifOCOpen(true)}
+                              >
+                                <ShieldCheck size={12} />
+                                {datosVerificacion.orden.estado_verificacion_oc === 'Verificado'
+                                  ? 'Ver/Re-verificar OC'
+                                  : 'Verificar OC'}
+                              </button>
+                            )}
                             {datosVerificacion.orden.comprobante_url && (() => {
                                 let urls = [];
                                 if (Array.isArray(datosVerificacion.orden.comprobante_url)) {
@@ -652,7 +700,7 @@ function VerificarOrdenes() {
                                     urls = [datosVerificacion.orden.comprobante_url];
                                 }
                                 return urls.map((url, i) => (
-                                    <button 
+                                    <button
                                         key={`comp-${i}`}
                                         className="btn btn-xs btn-outline bg-white flex items-center gap-1"
                                         onClick={() => abrirVisor(url, urls.length > 1 ? `Comprobante de Pago ${i + 1}` : 'Comprobante de Pago')}
@@ -1188,15 +1236,15 @@ function VerificarOrdenes() {
       >
         <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
           {visorArchivo.tipo === 'pdf' ? (
-            <iframe 
-              src={visorArchivo.url} 
+            <iframe
+              src={visorArchivo.url}
               className="w-full h-[70vh] border-0 rounded"
               title="Visor de PDF"
             />
           ) : (
-            <img 
-              src={visorArchivo.url} 
-              alt="Visualización de archivo" 
+            <img
+              src={visorArchivo.url}
+              alt="Visualización de archivo"
               className="max-w-full max-h-[70vh] object-contain rounded shadow-lg"
             />
           )}
@@ -1207,6 +1255,25 @@ function VerificarOrdenes() {
           </button>
         </div>
       </Modal>
+
+      {/* Modal verificación OC — solo disponible cuando hay una orden abierta */}
+      {datosVerificacion && (
+        <ModalVerificacionOC
+          isOpen={modalVerifOCOpen}
+          onCancelar={() => setModalVerifOCOpen(false)}
+          onVerificado={handleVerificarOCDesdeVerif}
+          onOmitir={null}
+          guardando={guardandoVerifOC}
+          archivosOC={getArchivosOCParaModal()}
+          detalle={datosVerificacion.orden.detalle || []}
+          totales={{
+            subtotal: datosVerificacion.orden.subtotal,
+            impuesto: datosVerificacion.orden.impuesto,
+            total: datosVerificacion.orden.total
+          }}
+          moneda={datosVerificacion.orden.moneda}
+        />
+      )}
 
     </div>
   );

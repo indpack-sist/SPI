@@ -18,7 +18,7 @@ function detectarTipo(url) {
 
 export default function ModalVerificacionOC({
   isOpen, onVerificado, onOmitir, onCancelar,
-  archivosOC, detalle, totales, moneda
+  archivosOC, detalle, totales, moneda, guardando = false
 }) {
   const [indice, setIndice] = useState(0);
 
@@ -170,19 +170,29 @@ export default function ModalVerificacionOC({
 
       {/* Botones de acción */}
       <div className="flex items-center justify-between mt-4 pt-4 border-t">
-        <button
-          onClick={onOmitir}
-          className="flex items-center gap-2 btn btn-outline text-gray-600 border-gray-300 hover:bg-gray-100"
-        >
-          <SkipForward size={15} />
-          Guardar sin verificar
-        </button>
+        {onOmitir != null ? (
+          <button
+            onClick={onOmitir}
+            className="flex items-center gap-2 btn btn-outline text-gray-600 border-gray-300 hover:bg-gray-100"
+          >
+            <SkipForward size={15} />
+            Guardar sin verificar
+          </button>
+        ) : (
+          <button
+            onClick={onCancelar}
+            className="flex items-center gap-2 btn btn-outline text-gray-600 border-gray-300 hover:bg-gray-100"
+          >
+            Cerrar
+          </button>
+        )}
         <button
           onClick={onVerificado}
+          disabled={guardando}
           className="flex items-center gap-2 btn btn-primary px-6"
         >
           <CheckCircle size={15} />
-          Verificado y conforme — Guardar
+          {guardando ? 'Guardando...' : 'Verificado y conforme'}
         </button>
       </div>
     </Modal>

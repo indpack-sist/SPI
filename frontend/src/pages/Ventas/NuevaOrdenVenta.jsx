@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { 
+import {
   ArrowLeft, Plus, Trash2, Save, Search,
   ShoppingCart, Building, Calculator,
   MapPin, DollarSign, CreditCard, Info, Clock,
-  FileText, Lock, CheckCircle, Truck, User, Box, Eye, FilePlus, Package
+  FileText, Lock, CheckCircle, Truck, User, Box, Eye, FilePlus, Package, ShieldCheck
 } from 'lucide-react';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
+import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import { ordenesVentaAPI, clientesAPI, productosAPI, empleadosAPI, cotizacionesAPI, archivosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -67,6 +68,8 @@ function NuevaOrdenVenta() {
   const [archivos, setArchivos] = useState({ orden_compra: [], comprobante: [] });
   const [archivosPrevios, setArchivosPrevios] = useState({ orden_compra_url: [], comprobante_url: [] });
   const [tieneOC, setTieneOC] = useState(false);
+  const [modalVerificacionOCOpen, setModalVerificacionOCOpen] = useState(false);
+  const pendingVerifOC = useRef('Sin verificar');
 
   const [formCabecera, setFormCabecera] = useState({
     id_cliente: '',
@@ -644,37 +647,36 @@ useEffect(() => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (loading) return;
-    if (submitCooldown.current) return;
+  const tieneArchivosOC = tieneOC && (
+    (archivos.orden_compra && archivos.orden_compra.length > 0) ||
+    (archivosPrevios.orden_compra_url && archivosPrevios.orden_compra_url.length > 0)
+  );
 
-    setError(null);
-    
-    if (!clienteSeleccionado) {
-      setError('Debe seleccionar un cliente');
-      return;
-    }
-    if (detalle.length === 0) {
-      setError('Debe agregar al menos un producto');
-      return;
-    }
-    const productosSinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
-    if (productosSinPrecio) {
-      setError('Todos los productos deben tener un precio de venta válido');
-      return;
-    }
-    if (tieneOC && (!formCabecera.orden_compra_cliente || (!archivos.orden_compra && !archivosPrevios.orden_compra_url))) {
-      setError('Si seleccionó "Con Orden de Compra", debe ingresar el correlativo y subir el archivo.');
-      return;
+  const getArchivosOCParaModal = () => {
+    const locales = archivos.orden_compra || [];
+    const previos = archivosPrevios.orden_compra_url || [];
+    return [...locales, ...previos];
+  };
+
+  const validarFormulario = () => {
+    if (!clienteSeleccionado) return 'Debe seleccionar un cliente';
+    if (detalle.length === 0) return 'Debe agregar al menos un producto';
+    const sinPrecio = detalle.some(item => !item.precio_venta || parseFloat(item.precio_venta) <= 0);
+    if (sinPrecio) return 'Todos los productos deben tener un precio de venta válido';
+    if (tieneOC && (!formCabecera.orden_compra_cliente || (!archivos.orden_compra?.length && !archivosPrevios.orden_compra_url?.length))) {
+      return 'Si seleccionó "Con Orden de Compra", debe ingresar el correlativo y subir el archivo.';
     }
     if (estadoCredito?.usar_limite_credito && formCabecera.tipo_venta === 'Crédito') {
       const disponible = formCabecera.moneda === 'USD' ? estadoCredito.credito_usd.disponible : estadoCredito.credito_pen.disponible;
       if (totales.total > disponible) {
-        setError(`Límite de crédito excedido. Disponible: ${formatearMoneda(disponible)}. Total de Orden: ${formatearMoneda(totales.total)}`);
-        return;
+        return `Límite de crédito excedido. Disponible: ${formatearMoneda(disponible)}. Total de Orden: ${formatearMoneda(totales.total)}`;
       }
     }
+    return null;
+  };
+
+  const submitActual = async () => {
+    if (loading || submitCooldown.current) return;
 
     submitCooldown.current = true;
     setCooldownActivo(true);
@@ -682,10 +684,10 @@ useEffect(() => {
       submitCooldown.current = false;
       setCooldownActivo(false);
     }, 5000);
-    
+
     try {
       setLoading(true);
-      
+
       const formData = new FormData();
       Object.keys(formCabecera).forEach(key => {
         if (!tieneOC && key === 'orden_compra_cliente') {
@@ -695,13 +697,15 @@ useEffect(() => {
         }
       });
 
+      formData.append('estado_verificacion_oc', pendingVerifOC.current || 'Sin verificar');
+
       formData.append('detalle', JSON.stringify(detalle.map((item, index) => ({
         id_producto: item.id_producto,
         cantidad: parseFloat(item.cantidad),
         precio_base: parseFloat(item.precio_base),
-        precio_unitario: parseFloat(item.precio_venta), 
+        precio_unitario: parseFloat(item.precio_venta),
         porcentaje_comision: 0,
-        descuento_porcentaje: 0, 
+        descuento_porcentaje: 0,
         orden: index + 1
       }))));
 
@@ -741,7 +745,7 @@ useEffect(() => {
           setTimeout(() => navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`), 1500);
         }
       }
-      
+
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al guardar la orden de venta');
@@ -750,6 +754,37 @@ useEffect(() => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAbrirVerificacion = () => {
+    setError(null);
+    const err = validarFormulario();
+    if (err) { setError(err); return; }
+    setModalVerificacionOCOpen(true);
+  };
+
+  const handleGuardarVerificado = () => {
+    pendingVerifOC.current = 'Verificado';
+    setModalVerificacionOCOpen(false);
+    submitActual();
+  };
+
+  const handleGuardarOmitido = () => {
+    pendingVerifOC.current = 'Omitida';
+    setModalVerificacionOCOpen(false);
+    submitActual();
+  };
+
+  const handleGuardarDirecto = () => {
+    setError(null);
+    const err = validarFormulario();
+    if (err) { setError(err); return; }
+    pendingVerifOC.current = tieneArchivosOC ? 'Omitida' : 'Sin verificar';
+    submitActual();
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
   };
 
   const clientesFiltrados = clientes.filter(c =>
@@ -1617,19 +1652,54 @@ useEffect(() => {
                     </div>
                 </div>
 
-                <button 
-                  type="submit" 
-                  className={`btn btn-primary w-full py-4 mt-6 text-lg font-black tracking-tight shadow-xl transition-all active:scale-95 ${loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo ? 'opacity-70 grayscale' : 'hover:shadow-primary/40'}`}
-                  disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
-                >
-                  <Save size={24} className={loading ? 'animate-spin' : ''} />
-                  {loading ? 'PROCESANDO...' : cooldownActivo ? 'ESPERE POR FAVOR...' : modoEdicion ? 'ACTUALIZAR ORDEN DE VENTA' : 'GUARDAR ORDEN DE VENTA'}
-                </button>
+                {tieneArchivosOC ? (
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={handleAbrirVerificacion}
+                      className={`btn flex-1 py-4 text-sm font-black tracking-tight shadow-xl transition-all active:scale-95 bg-amber-500 hover:bg-amber-600 text-white border-amber-500 ${loading || cooldownActivo ? 'opacity-70 grayscale' : ''}`}
+                      disabled={loading || cooldownActivo}
+                    >
+                      <ShieldCheck size={20} className={loading ? 'animate-spin' : ''} />
+                      {loading ? 'PROCESANDO...' : 'VERIFICAR OC'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGuardarDirecto}
+                      className={`btn btn-primary flex-1 py-4 text-sm font-black tracking-tight shadow-xl transition-all active:scale-95 ${loading || cooldownActivo ? 'opacity-70 grayscale' : 'hover:shadow-primary/40'}`}
+                      disabled={loading || cooldownActivo}
+                    >
+                      <Save size={20} className={loading ? 'animate-spin' : ''} />
+                      {loading ? 'PROCESANDO...' : cooldownActivo ? 'ESPERE...' : modoEdicion ? 'ACTUALIZAR' : 'GUARDAR'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGuardarDirecto}
+                    className={`btn btn-primary w-full py-4 mt-6 text-lg font-black tracking-tight shadow-xl transition-all active:scale-95 ${loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo ? 'opacity-70 grayscale' : 'hover:shadow-primary/40'}`}
+                    disabled={loading || !clienteSeleccionado || detalle.length === 0 || cooldownActivo}
+                  >
+                    <Save size={24} className={loading ? 'animate-spin' : ''} />
+                    {loading ? 'PROCESANDO...' : cooldownActivo ? 'ESPERE POR FAVOR...' : modoEdicion ? 'ACTUALIZAR ORDEN DE VENTA' : 'GUARDAR ORDEN DE VENTA'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       </form>
+
+      <ModalVerificacionOC
+        isOpen={modalVerificacionOCOpen}
+        onVerificado={handleGuardarVerificado}
+        onOmitir={handleGuardarOmitido}
+        onCancelar={() => setModalVerificacionOCOpen(false)}
+        archivosOC={getArchivosOCParaModal()}
+        detalle={detalle}
+        totales={totales}
+        moneda={formCabecera.moneda}
+      />
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
         <div className="mb-4">

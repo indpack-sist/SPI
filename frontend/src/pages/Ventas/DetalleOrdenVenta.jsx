@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
+import {
   ArrowLeft, Edit, Download, Package, Truck, CheckCircle,
   XCircle, Clock, FileText, Building, DollarSign, MapPin,
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
   ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw, Eye,
-    BadgeCheck, ArrowRightLeft, RefreshCcw
+    BadgeCheck, ArrowRightLeft, RefreshCcw, ShieldCheck, ShieldAlert, ShieldOff
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
+import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI } from '../../config/api';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
@@ -70,6 +71,12 @@ function DetalleOrdenVenta() {
   const [modalRectificarOpen, setModalRectificarOpen] = useState(false);
   const [modalReservaStock, setModalReservaStock] = useState(false);
   const [modalSunatOpen, setModalSunatOpen] = useState(false);
+  const [modalVerificacionOCOpen, setModalVerificacionOCOpen] = useState(false);
+  const [guardandoVerifOC, setGuardandoVerifOC] = useState(false);
+  const [documentosAdicionales, setDocumentosAdicionales] = useState([]);
+  const [formDocumento, setFormDocumento] = useState({ tipo_documento: '', correlativo: '', archivos: [] });
+  const [guardandoDocumento, setGuardandoDocumento] = useState(false);
+  const [eliminandoDocumento, setEliminandoDocumento] = useState(null);
   const [modalAnularFactura, setModalAnularFactura] = useState(false);
   const [motivoAnulacionFactura, setMotivoAnulacionFactura] = useState('');
   const [facturasAnuladas, setFacturasAnuladas] = useState([]);
@@ -303,13 +310,14 @@ function DetalleOrdenVenta() {
       setLoading(true);
       setError(null);
       
-      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes] = await Promise.all([
+      const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes, documentosRes] = await Promise.all([
         ordenesVentaAPI.getById(id),
         ordenesVentaAPI.getPagos(id),
         ordenesVentaAPI.getResumenPagos(id),
         ordenesVentaAPI.getSalidas(id).catch(() => ({ data: { success: true, data: [] } })),
         cuentasPagoAPI.getAll({ estado: 'Activo' }),
-        ordenesVentaAPI.getHistorialFacturasAnuladas(id).catch(() => ({ data: { success: true, data: [] } }))
+        ordenesVentaAPI.getHistorialFacturasAnuladas(id).catch(() => ({ data: { success: true, data: [] } })),
+        ordenesVentaAPI.getDocumentosAdicionales(id).catch(() => ({ data: { success: true, data: [] } }))
       ]);
       
       if (ordenRes.data.success) {
@@ -324,7 +332,8 @@ function DetalleOrdenVenta() {
       if (resumenRes.data.success) setResumenPagos(resumenRes.data.data);
       if (salidasRes.data.success) setSalidas(salidasRes.data.data || []);
       if (cuentasRes.data.success) setCuentasPago(cuentasRes.data.data || []);
-      if (facturasAnuladasRes && facturasAnuladasRes.data && facturasAnuladasRes.data.success) setFacturasAnuladas(facturasAnuladasRes.data.data || []);
+      if (facturasAnuladasRes?.data?.success) setFacturasAnuladas(facturasAnuladasRes.data.data || []);
+      if (documentosRes?.data?.success) setDocumentosAdicionales(documentosRes.data.data || []);
       
     } catch (err) {
       console.error(err);
@@ -1182,6 +1191,88 @@ function DetalleOrdenVenta() {
       setError(err.response?.data?.error || 'Error al anular facturación SUNAT');
     } finally {
       setProcesando(false);
+    }
+  };
+
+  const getArchivosOCParaModal = () => {
+    if (!orden?.orden_compra_url) return [];
+    try {
+      const parsed = typeof orden.orden_compra_url === 'string'
+        ? JSON.parse(orden.orden_compra_url)
+        : orden.orden_compra_url;
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [orden.orden_compra_url];
+    }
+  };
+
+  const handleVerificarOC = async (verificado) => {
+    try {
+      setGuardandoVerifOC(true);
+      setError(null);
+      const response = await ordenesVentaAPI.verificarOC(id, verificado);
+      if (response.data.success) {
+        setModalVerificacionOCOpen(false);
+        setSuccess(verificado ? 'OC verificada y conforme.' : 'OC guardada sin verificar.');
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al guardar la verificación');
+    } finally {
+      setGuardandoVerifOC(false);
+    }
+  };
+
+  const TIPOS_DOCUMENTO_ADICIONAL = [
+    'Guía de Remisión',
+    'Nota de Crédito',
+    'Nota de Débito',
+    'Contrato',
+    'Proforma',
+    'Carta',
+    'Otros',
+  ];
+
+  const handleAgregarDocumento = async () => {
+    if (!formDocumento.tipo_documento) {
+      setError('Seleccione el tipo de documento');
+      return;
+    }
+    try {
+      setGuardandoDocumento(true);
+      setError(null);
+      const fd = new FormData();
+      fd.append('tipo_documento', formDocumento.tipo_documento);
+      if (formDocumento.correlativo) fd.append('correlativo', formDocumento.correlativo);
+      formDocumento.archivos.forEach(f => fd.append('documentos_adicionales', f));
+      const res = await ordenesVentaAPI.agregarDocumentoAdicional(id, fd);
+      if (res.data.success) {
+        setDocumentosAdicionales(prev => [res.data.data, ...prev]);
+        setFormDocumento({ tipo_documento: '', correlativo: '', archivos: [] });
+        setSuccess('Documento agregado correctamente');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al agregar documento');
+    } finally {
+      setGuardandoDocumento(false);
+    }
+  };
+
+  const handleEliminarDocumento = async (idDoc) => {
+    try {
+      setEliminandoDocumento(idDoc);
+      setError(null);
+      const res = await ordenesVentaAPI.eliminarDocumentoAdicional(id, idDoc);
+      if (res.data.success) {
+        setDocumentosAdicionales(prev =>
+          prev.map(d => d.id_documento === idDoc ? res.data.data : d)
+        );
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al eliminar documento');
+    } finally {
+      setEliminandoDocumento(null);
     }
   };
 
@@ -2188,40 +2279,76 @@ function DetalleOrdenVenta() {
                 )}
 
                 {orden.orden_compra_cliente && (
-                    <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded flex justify-between items-center">
-                        <div>
-                            <label className="text-sm font-medium text-muted">O/C Cliente:</label>
-                            <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
-                        </div>
-                        {orden.orden_compra_url && (
-                            <div className="flex gap-1 flex-wrap justify-end">
-                                {(() => {
-                                    let urls = [];
-                                    try {
-                                        if (Array.isArray(orden.orden_compra_url)) {
-                                            urls = orden.orden_compra_url;
-                                        } else if (typeof orden.orden_compra_url === 'string') {
-                                            if (orden.orden_compra_url.startsWith('[')) {
-                                                urls = JSON.parse(orden.orden_compra_url);
-                                                if (!Array.isArray(urls)) urls = [orden.orden_compra_url];
-                                            } else {
-                                                urls = [orden.orden_compra_url];
-                                            }
-                                        }
-                                    } catch {
-                                        urls = [orden.orden_compra_url];
-                                    }
-                                    return urls.map((url, index) => (
-                                        <button 
-                                            key={index}
-                                            className="btn btn-xs btn-outline bg-white flex items-center gap-1"
-                                            onClick={() => abrirVisor(url, urls.length > 1 ? `Orden de Compra Cliente ${index + 1}` : 'Orden de Compra Cliente')}
-                                        >
-                                            <Eye size={14}/> {urls.length > 1 ? `Ver ${index + 1}` : 'Ver'}
-                                        </button>
-                                    ));
-                                })()}
+                    <div className="pb-2 mb-2 border-b border-gray-100 bg-orange-50 p-3 rounded-lg space-y-2">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <label className="text-sm font-medium text-muted">O/C Cliente:</label>
+                                <p className="font-mono font-bold text-orange-800">{orden.orden_compra_cliente}</p>
                             </div>
+                            {/* Badge de verificación OC */}
+                            {orden.estado_verificacion_oc === 'Verificado' && (
+                                <span className="flex items-center gap-1 text-xs font-bold text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded-full">
+                                    <ShieldCheck size={12} /> Verificada
+                                </span>
+                            )}
+                            {orden.estado_verificacion_oc === 'Omitida' && (
+                                <span className="flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded-full">
+                                    <ShieldAlert size={12} /> Sin verificar
+                                </span>
+                            )}
+                            {(!orden.estado_verificacion_oc || orden.estado_verificacion_oc === 'Sin verificar') && (
+                                <span className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-100 border border-gray-200 px-2 py-1 rounded-full">
+                                    <ShieldOff size={12} /> Sin verificar
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* Botones ver archivos */}
+                            {orden.orden_compra_url && (() => {
+                                let urls = [];
+                                try {
+                                    if (Array.isArray(orden.orden_compra_url)) {
+                                        urls = orden.orden_compra_url;
+                                    } else if (typeof orden.orden_compra_url === 'string') {
+                                        if (orden.orden_compra_url.startsWith('[')) {
+                                            urls = JSON.parse(orden.orden_compra_url);
+                                            if (!Array.isArray(urls)) urls = [orden.orden_compra_url];
+                                        } else {
+                                            urls = [orden.orden_compra_url];
+                                        }
+                                    }
+                                } catch {
+                                    urls = [orden.orden_compra_url];
+                                }
+                                return urls.map((url, index) => (
+                                    <button
+                                        key={index}
+                                        className="btn btn-xs btn-outline bg-white flex items-center gap-1"
+                                        onClick={() => abrirVisor(url, urls.length > 1 ? `Orden de Compra Cliente ${index + 1}` : 'Orden de Compra Cliente')}
+                                    >
+                                        <Eye size={14}/> {urls.length > 1 ? `Ver ${index + 1}` : 'Ver'}
+                                    </button>
+                                ));
+                            })()}
+
+                            {/* Botón verificar OC */}
+                            {orden.orden_compra_url && orden.estado !== 'Cancelada' && (
+                                <button
+                                    className="btn btn-xs bg-amber-500 hover:bg-amber-600 text-white border-amber-500 flex items-center gap-1 ml-auto"
+                                    onClick={() => setModalVerificacionOCOpen(true)}
+                                    disabled={guardandoVerifOC}
+                                >
+                                    <ShieldCheck size={12} />
+                                    {orden.estado_verificacion_oc === 'Verificado' ? 'Re-verificar OC' : 'Verificar OC'}
+                                </button>
+                            )}
+                        </div>
+
+                        {orden.estado_verificacion_oc === 'Verificado' && orden.fecha_verificacion_oc && (
+                            <p className="text-[10px] text-green-600">
+                                Verificado el {new Date(orden.fecha_verificacion_oc).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
                         )}
                     </div>
                 )}
@@ -2415,6 +2542,167 @@ function DetalleOrdenVenta() {
                         </div>
                     )}
                 </div>
+            </div>
+        </div>
+
+        {/* Documentos Adicionales */}
+        <div className="card h-full">
+            <div className="card-header">
+                <h2 className="card-title"><FileText size={20} /> Documentos Adicionales</h2>
+            </div>
+            <div className="card-body space-y-3">
+
+                {/* Formulario agregar */}
+                {orden.estado !== 'Cancelada' && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Agregar documento</p>
+                        <div className="flex gap-2 flex-wrap">
+                            <select
+                                className="form-select text-sm flex-1 min-w-[160px]"
+                                value={formDocumento.tipo_documento}
+                                onChange={e => setFormDocumento(f => ({ ...f, tipo_documento: e.target.value }))}
+                            >
+                                <option value="">Tipo de documento...</option>
+                                {TIPOS_DOCUMENTO_ADICIONAL.map(t => (
+                                    <option key={t} value={t}>{t}</option>
+                                ))}
+                            </select>
+                            <input
+                                type="text"
+                                className="form-input text-sm flex-1 min-w-[140px]"
+                                placeholder="Correlativo / N° (opcional)"
+                                value={formDocumento.correlativo}
+                                onChange={e => setFormDocumento(f => ({ ...f, correlativo: e.target.value }))}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className={`flex-1 flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-2 cursor-pointer transition-colors text-sm
+                                ${formDocumento.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept=".pdf,image/*"
+                                    className="hidden"
+                                    onChange={e => setFormDocumento(f => ({ ...f, archivos: Array.from(e.target.files) }))}
+                                />
+                                {formDocumento.archivos.length > 0
+                                    ? <><CheckCircle size={14} /> {formDocumento.archivos.length} archivo(s) seleccionado(s)</>
+                                    : <><Plus size={14} /> Adjuntar archivo(s)</>
+                                }
+                            </label>
+                            <button
+                                className="btn btn-primary btn-sm px-4"
+                                onClick={handleAgregarDocumento}
+                                disabled={guardandoDocumento || !formDocumento.tipo_documento}
+                            >
+                                {guardandoDocumento ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+                                {guardandoDocumento ? 'Guardando...' : 'Agregar'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Lista de documentos activos */}
+                {(() => {
+                    const activos   = documentosAdicionales.filter(d => !d.deleted_at);
+                    const eliminados = documentosAdicionales.filter(d =>  d.deleted_at);
+
+                    const renderUrls = (doc, extraClass = '') => {
+                        let urls = [];
+                        try {
+                            if (doc.archivos_url) {
+                                const parsed = typeof doc.archivos_url === 'string' ? JSON.parse(doc.archivos_url) : doc.archivos_url;
+                                urls = Array.isArray(parsed) ? parsed : [parsed];
+                            }
+                        } catch { urls = []; }
+                        return (
+                            <div className={`flex gap-1 mt-1.5 flex-wrap ${extraClass}`}>
+                                {urls.map((url, i) => (
+                                    <button
+                                        key={i}
+                                        className="btn btn-xs btn-outline flex items-center gap-1"
+                                        onClick={() => abrirVisor(url, `${doc.tipo_documento}${doc.correlativo ? ' ' + doc.correlativo : ''}${urls.length > 1 ? ` (${i + 1})` : ''}`)}
+                                    >
+                                        <Eye size={12} /> {urls.length > 1 ? `Ver ${i + 1}` : 'Ver'}
+                                    </button>
+                                ))}
+                                {urls.length === 0 && <span className="text-xs text-gray-400 italic">Sin archivo</span>}
+                            </div>
+                        );
+                    };
+
+                    return (
+                        <>
+                            {activos.length === 0 && eliminados.length === 0 && (
+                                <p className="text-sm text-gray-400 text-center py-2">Sin documentos adicionales</p>
+                            )}
+
+                            {activos.length > 0 && (
+                                <div className="space-y-2">
+                                    {activos.map(doc => (
+                                        <div key={doc.id_documento} className="flex items-start justify-between gap-2 p-2 border border-gray-100 rounded-lg bg-white hover:bg-gray-50 transition-colors">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
+                                                    {doc.correlativo && (
+                                                        <span className="font-mono text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{doc.correlativo}</span>
+                                                    )}
+                                                </div>
+                                                {renderUrls(doc)}
+                                                <p className="text-[10px] text-gray-400 mt-1">
+                                                    {doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </p>
+                                            </div>
+                                            {orden.estado !== 'Cancelada' && (
+                                                <button
+                                                    className="btn btn-xs btn-outline border-red-200 text-red-500 hover:bg-red-50 shrink-0"
+                                                    onClick={() => handleEliminarDocumento(doc.id_documento)}
+                                                    disabled={eliminandoDocumento === doc.id_documento}
+                                                    title="Eliminar documento"
+                                                >
+                                                    {eliminandoDocumento === doc.id_documento
+                                                        ? <RefreshCw size={12} className="animate-spin" />
+                                                        : <Trash2 size={12} />
+                                                    }
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Historial de eliminados */}
+                            {eliminados.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-gray-100">
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1 mb-2">
+                                        <Trash2 size={12} /> Historial de documentos eliminados
+                                    </p>
+                                    <div className="space-y-2">
+                                        {eliminados.map(doc => (
+                                            <div key={doc.id_documento} className="p-2 border border-red-100 rounded-lg bg-red-50/40 opacity-75">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-xs font-bold text-gray-500 bg-gray-200 line-through px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
+                                                    {doc.correlativo && (
+                                                        <span className="font-mono text-xs text-gray-400 line-through">{doc.correlativo}</span>
+                                                    )}
+                                                </div>
+                                                {renderUrls(doc)}
+                                                <div className="mt-1 space-y-0.5">
+                                                    <p className="text-[10px] text-gray-400">
+                                                        Agregado por {doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                    </p>
+                                                    <p className="text-[10px] text-red-500 font-medium">
+                                                        Eliminado por {doc.eliminado_por || 'Sistema'} · {new Date(doc.deleted_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
             </div>
         </div>
 
@@ -3815,6 +4103,17 @@ function DetalleOrdenVenta() {
             setSuccess(`Factura SUNAT ${data.numero_comprobante_sunat} vinculada correctamente`);
             cargarDatos();
         }}
+      />
+
+      <ModalVerificacionOC
+        isOpen={modalVerificacionOCOpen}
+        onVerificado={() => handleVerificarOC(true)}
+        onOmitir={() => handleVerificarOC(false)}
+        onCancelar={() => setModalVerificacionOCOpen(false)}
+        archivosOC={getArchivosOCParaModal()}
+        detalle={orden?.detalle || []}
+        totales={{ subtotal: orden?.subtotal, impuesto: orden?.igv, total: orden?.total }}
+        moneda={orden?.moneda}
       />
     </div>
   );

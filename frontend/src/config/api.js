@@ -625,7 +625,17 @@ export const ordenesVentaAPI = {
 
   getConductores: () => api.get('/ordenes-venta/catalogo/conductores'),
 
-  getVehiculos: () => api.get('/ordenes-venta/catalogo/vehiculos')
+  getVehiculos: () => api.get('/ordenes-venta/catalogo/vehiculos'),
+
+  verificarOC: (id, verificado) => api.patch(`/ordenes-venta/${id}/verificar-oc`, { verificado }),
+
+  getDocumentosAdicionales: (id) => api.get(`/ordenes-venta/${id}/documentos`),
+
+  agregarDocumentoAdicional: (id, formData) => api.post(`/ordenes-venta/${id}/documentos`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+
+  eliminarDocumentoAdicional: (id, idDoc) => api.delete(`/ordenes-venta/${id}/documentos/${idDoc}`)
 };
 
 export const guiasRemisionAPI = {

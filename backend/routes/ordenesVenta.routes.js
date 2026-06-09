@@ -44,7 +44,11 @@ import {
   getHistorialFacturasAnuladas,
   asignarGuiaInternaASalida,
   parsearFacturaSunat,
-  vincularFacturaSunat
+  vincularFacturaSunat,
+  verificarOC,
+  getDocumentosAdicionales,
+  agregarDocumentoAdicional,
+  eliminarDocumentoAdicional
 } from '../controllers/ordenesVenta.controller.js';
 import { getConductores } from '../controllers/empleados.controller.js';
 import { getVehiculosParaOrdenes } from '../controllers/flota.controller.js';
@@ -54,6 +58,10 @@ const router = express.Router();
 const uploadArchivos = uploadMiddleware.fields([
   { name: 'orden_compra', maxCount: 10 },
   { name: 'comprobante', maxCount: 10 }
+]);
+
+const uploadDocumento = uploadMiddleware.fields([
+  { name: 'documentos_adicionales', maxCount: 10 }
 ]);
 
 router.get('/estadisticas', verificarToken, getEstadisticasOrdenesVenta);
@@ -105,6 +113,11 @@ router.post('/:id/pagos', verificarToken, verificarOrdenAprobada, registrarPagoO
 router.delete('/:id/pagos/:idPago', verificarToken, verificarOrdenAprobada, anularPagoOrden);
 
 router.post('/parse-sunat', verificarToken, uploadMiddleware.single('pdf'), parsearFacturaSunat);
+router.patch('/:id/verificar-oc', verificarToken, verificarOC);
+
+router.get('/:id/documentos', verificarToken, getDocumentosAdicionales);
+router.post('/:id/documentos', verificarToken, uploadDocumento, agregarDocumentoAdicional);
+router.delete('/:id/documentos/:idDoc', verificarToken, eliminarDocumentoAdicional);
 
 router.get('/:id', verificarToken, getOrdenVentaById);
 router.put('/:id', verificarToken, puedeEditarOrdenRechazada, uploadArchivos, updateOrdenVenta);

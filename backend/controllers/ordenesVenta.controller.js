@@ -536,7 +536,8 @@ export async function createOrdenVenta(req, res) {
       telefono_entrega,
       observaciones,
       id_comercial,
-      detalle
+      detalle,
+      estado_verificacion_oc
     } = req.body;
 
     if (typeof detalle === 'string') {
@@ -707,8 +708,9 @@ export async function createOrdenVenta(req, res) {
         id_vehiculo, id_conductor, tipo_entrega, transporte_nombre, transporte_placa,
         transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
         contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
-        subtotal, igv, total, estado, estado_verificacion, stock_reservado
-      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0)
+        subtotal, igv, total, estado, estado_verificacion, stock_reservado,
+        estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc
+      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?)
     `, [
       numeroOrden, id_cliente, id_cotizacion || null,
       fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
@@ -717,7 +719,10 @@ export async function createOrdenVenta(req, res) {
       idVehiculoFinal, idConductorFinal, tipo_entrega || 'Vehiculo Empresa', transNombreFinal, transPlacaFinal,
       transCondFinal, transDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
       contacto_entrega, telefono_entrega, observaciones, id_comercial || null, id_registrado_por,
-      subtotal, impuesto, total
+      subtotal, impuesto, total,
+      estado_verificacion_oc || 'Sin verificar',
+      estado_verificacion_oc === 'Verificado' ? (id_registrado_por || null) : null,
+      estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null
     ]);
 
     if (!result.success) {
@@ -805,7 +810,8 @@ export async function updateOrdenVenta(req, res) {
       telefono_entrega,
       observaciones,
       id_comercial,
-      detalle
+      detalle,
+      estado_verificacion_oc
     } = req.body;
 
     if (typeof detalle === 'string') {
@@ -1034,9 +1040,12 @@ export async function updateOrdenVenta(req, res) {
       transporteDniFinal = transporte_dni || null;
     }
 
+    const nuevoEstadoVerifOC = estado_verificacion_oc || 'Sin verificar';
+    const idUsuarioActual = req.user?.id_empleado || null;
+
     const updateResult = await executeQuery(`
-      UPDATE ordenes_venta 
-      SET 
+      UPDATE ordenes_venta
+      SET
         id_cliente = ?, fecha_emision = ?, fecha_entrega_estimada = ?, fecha_vencimiento = ?,
         prioridad = ?, moneda = ?, tipo_cambio = ?, tipo_impuesto = ?, porcentaje_impuesto = ?,
         tipo_venta = ?, dias_credito = ?, plazo_pago = ?, forma_pago = ?, orden_compra_cliente = ?,
@@ -1044,7 +1053,10 @@ export async function updateOrdenVenta(req, res) {
         transporte_nombre = ?, transporte_placa = ?, transporte_conductor = ?, transporte_dni = ?,
         direccion_entrega = ?, lugar_entrega = ?, ciudad_entrega = ?, contacto_entrega = ?,
         telefono_entrega = ?, observaciones = ?, id_comercial = ?, subtotal = ?, igv = ?, total = ?,
-        total_comision = ?, porcentaje_comision_promedio = ?
+        total_comision = ?, porcentaje_comision_promedio = ?,
+        estado_verificacion_oc = ?,
+        verificado_oc_por = ?,
+        fecha_verificacion_oc = ?
       WHERE id_orden_venta = ?
     `, [
       id_cliente, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
@@ -1054,7 +1066,11 @@ export async function updateOrdenVenta(req, res) {
       idConductorFinal, tipoEntregaFinal, transporteNombreFinal, transportePlacaFinal,
       transporteConductorFinal, transporteDniFinal, direccion_entrega, lugar_entrega, ciudad_entrega,
       contacto_entrega, telefono_entrega, observaciones, id_comercial || null, subtotal, impuesto,
-      total, totalComision, porcentajeComisionPromedio, id
+      total, totalComision, porcentajeComisionPromedio,
+      nuevoEstadoVerifOC,
+      nuevoEstadoVerifOC === 'Verificado' ? idUsuarioActual : null,
+      nuevoEstadoVerifOC === 'Verificado' ? getFechaPeru() : null,
+      id
     ]);
 
     if (!updateResult.success) {
@@ -4161,6 +4177,149 @@ export async function parsearFacturaSunat(req, res) {
     });
   } catch (error) {
     console.error('Error en parsearFacturaSunat:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function getDocumentosAdicionales(req, res) {
+  try {
+    const { id } = req.params;
+    const result = await executeQuery(`
+      SELECT
+        d.id_documento, d.tipo_documento, d.correlativo, d.archivos_url, d.created_at,
+        d.deleted_at, d.deleted_by,
+        e.nombre_completo AS registrado_por,
+        e2.nombre_completo AS eliminado_por
+      FROM ordenes_venta_documentos d
+      LEFT JOIN empleados e  ON d.id_registrado_por = e.id_empleado
+      LEFT JOIN empleados e2 ON d.deleted_by = e2.id_empleado
+      WHERE d.id_orden_venta = ?
+      ORDER BY d.deleted_at IS NULL DESC, d.created_at DESC
+    `, [id]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: result.data });
+  } catch (error) {
+    console.error('Error en getDocumentosAdicionales:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function agregarDocumentoAdicional(req, res) {
+  try {
+    const { id } = req.params;
+    const { tipo_documento, correlativo } = req.body;
+    const id_registrado_por = req.user?.id_empleado || null;
+
+    if (!tipo_documento) {
+      return res.status(400).json({ success: false, error: 'El tipo de documento es obligatorio' });
+    }
+
+    let archivosUrl = null;
+    if (req.files && req.files.documentos_adicionales && req.files.documentos_adicionales.length > 0) {
+      const urls = [];
+      for (const file of req.files.documentos_adicionales) {
+        const resultado = await subirArchivoACloudinary(file, 'indpack_ventas/documentos_adicionales');
+        urls.push(resultado.secure_url);
+      }
+      archivosUrl = JSON.stringify(urls);
+    }
+
+    const result = await executeQuery(`
+      INSERT INTO ordenes_venta_documentos (id_orden_venta, tipo_documento, correlativo, archivos_url, id_registrado_por)
+      VALUES (?, ?, ?, ?, ?)
+    `, [id, tipo_documento, correlativo || null, archivosUrl, id_registrado_por]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    const nuevo = await executeQuery(`
+      SELECT d.*, e.nombre_completo AS registrado_por
+      FROM ordenes_venta_documentos d
+      LEFT JOIN empleados e ON d.id_registrado_por = e.id_empleado
+      WHERE d.id_documento = ?
+    `, [result.data.insertId]);
+
+    res.status(201).json({ success: true, data: nuevo.data[0] });
+  } catch (error) {
+    console.error('Error en agregarDocumentoAdicional:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function eliminarDocumentoAdicional(req, res) {
+  try {
+    const { id, idDoc } = req.params;
+    const id_usuario = req.user?.id_empleado || null;
+
+    const existe = await executeQuery(
+      'SELECT id_documento, deleted_at FROM ordenes_venta_documentos WHERE id_documento = ? AND id_orden_venta = ?',
+      [idDoc, id]
+    );
+    if (!existe.success || existe.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Documento no encontrado' });
+    }
+    if (existe.data[0].deleted_at) {
+      return res.status(400).json({ success: false, error: 'El documento ya fue eliminado' });
+    }
+
+    const result = await executeQuery(
+      'UPDATE ordenes_venta_documentos SET deleted_at = ?, deleted_by = ? WHERE id_documento = ?',
+      [getFechaPeru(), id_usuario, idDoc]
+    );
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    const actualizado = await executeQuery(`
+      SELECT d.*, e.nombre_completo AS registrado_por, e2.nombre_completo AS eliminado_por
+      FROM ordenes_venta_documentos d
+      LEFT JOIN empleados e  ON d.id_registrado_por = e.id_empleado
+      LEFT JOIN empleados e2 ON d.deleted_by = e2.id_empleado
+      WHERE d.id_documento = ?
+    `, [idDoc]);
+
+    res.json({ success: true, data: actualizado.data[0] });
+  } catch (error) {
+    console.error('Error en eliminarDocumentoAdicional:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+export async function verificarOC(req, res) {
+  try {
+    const { id } = req.params;
+    const { verificado } = req.body;
+    const id_usuario = req.user?.id_empleado || null;
+
+    const estado = verificado ? 'Verificado' : 'Omitida';
+
+    const result = await executeQuery(`
+      UPDATE ordenes_venta
+      SET
+        estado_verificacion_oc = ?,
+        verificado_oc_por = ?,
+        fecha_verificacion_oc = ?
+      WHERE id_orden_venta = ?
+    `, [
+      estado,
+      verificado ? id_usuario : null,
+      verificado ? getFechaPeru() : null,
+      id
+    ]);
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: { estado_verificacion_oc: estado } });
+  } catch (error) {
+    console.error('Error en verificarOC:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

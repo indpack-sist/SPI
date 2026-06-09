@@ -6,7 +6,7 @@ import {
   AlertCircle, TrendingUp, Plus, ShoppingCart, Calculator,
   CreditCard, Trash2, Factory, AlertTriangle, PackageOpen, User, Percent, Calendar,
   ChevronLeft, ChevronRight, Lock, Save, Box, ClipboardList, Shield, RefreshCw, Eye,
-    BadgeCheck, ArrowRightLeft, RefreshCcw, ShieldCheck, ShieldAlert, ShieldOff
+    BadgeCheck, ArrowRightLeft, RefreshCcw, ShieldCheck, ShieldAlert, ShieldOff, X
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
@@ -87,8 +87,9 @@ function DetalleOrdenVenta() {
   const [visorArchivo, setVisorArchivo] = useState({
     open: false,
     url: '',
-    tipo: '', 
-    titulo: ''
+    tipo: '',
+    titulo: '',
+    isObjectUrl: false
   });
   
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
@@ -165,7 +166,20 @@ function DetalleOrdenVenta() {
 
   const abrirVisor = (url, titulo) => {
     if (!url) return;
-    
+
+    // Archivo local (File object) — vista previa antes de subir
+    if (url instanceof File) {
+      const objectUrl = URL.createObjectURL(url);
+      setVisorArchivo({
+        open: true,
+        url: objectUrl,
+        tipo: url.type === 'application/pdf' ? 'pdf' : 'img',
+        titulo: titulo || url.name,
+        isObjectUrl: true
+      });
+      return;
+    }
+
     // Defensa contra arrays u objetos que lleguen a este punto
     let cleanUrl = url;
     if (Array.isArray(cleanUrl)) cleanUrl = cleanUrl[0];
@@ -173,24 +187,28 @@ function DetalleOrdenVenta() {
         try {
             cleanUrl = String(cleanUrl);
         } catch {
-            return; // No se puede procesar
+            return;
         }
     }
-    
+
     const extension = cleanUrl.split('.').pop().toLowerCase();
     const esPdf = extension === 'pdf';
     const proxyUrl = archivosAPI.getProxyUrl(cleanUrl);
-    
+
     setVisorArchivo({
       open: true,
       url: proxyUrl,
       tipo: esPdf ? 'pdf' : 'img',
-      titulo: titulo
+      titulo: titulo,
+      isObjectUrl: false
     });
   };
 
   const cerrarVisor = () => {
-    setVisorArchivo({ open: false, url: '', tipo: '', titulo: '' });
+    if (visorArchivo.isObjectUrl && visorArchivo.url) {
+      URL.revokeObjectURL(visorArchivo.url);
+    }
+    setVisorArchivo({ open: false, url: '', tipo: '', titulo: '', isObjectUrl: false });
   };
 
   const cargarTCDesdeSession = () => {
@@ -2599,6 +2617,33 @@ function DetalleOrdenVenta() {
                                 {guardandoDocumento ? 'Guardando...' : 'Agregar'}
                             </button>
                         </div>
+
+                        {/* Vista previa de archivos seleccionados (antes de subir) */}
+                        {formDocumento.archivos.length > 0 && (
+                            <div className="flex gap-1.5 flex-wrap pt-1">
+                                {formDocumento.archivos.map((file, i) => (
+                                    <div key={i} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs">
+                                        <span className="text-gray-700 max-w-[130px] truncate" title={file.name}>{file.name}</span>
+                                        <button
+                                            type="button"
+                                            className="btn btn-xs btn-outline py-0 px-1.5 flex items-center gap-0.5"
+                                            onClick={() => abrirVisor(file, file.name)}
+                                            title="Vista previa"
+                                        >
+                                            <Eye size={11} /> Ver
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                                            onClick={() => setFormDocumento(f => ({ ...f, archivos: f.archivos.filter((_, j) => j !== i) }))}
+                                            title="Quitar archivo"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 

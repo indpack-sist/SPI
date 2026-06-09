@@ -5,17 +5,19 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell, Area, AreaChart
 } from 'recharts';
-import { 
+import {
   Calendar, Search, Filter, Download, FileSpreadsheet,
-  DollarSign, TrendingUp, PieChart as PieIcon, 
+  DollarSign, TrendingUp, PieChart as PieIcon,
   FileText, CheckCircle, AlertCircle, Truck, User, X,
   Eye, Package, MapPin, Phone, Mail, CreditCard, FileCheck,
   ShoppingCart, Percent, Building2, RefreshCw, ArrowRightLeft,
-  RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp
+  RefreshCcw, AlertTriangle, Clock, ChevronDown, ChevronUp,
+  ShieldCheck, ShieldAlert, ShieldOff, Trash2
 } from 'lucide-react';
-import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI, ordenesVentaAPI } from '../../config/api';
+import { reportesAPI, clientesAPI, tipoCambioAPI, empleadosAPI, ordenesVentaAPI, archivosAPI } from '../../config/api';
 import Loading from '../../components/UI/Loading';
 import Alert from '../../components/UI/Alert';
+import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { generarReporteVentasPDF } from './reporteVentasPDF'; 
 
@@ -314,25 +316,44 @@ const ReporteVentas = () => {
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
   const [mostrarDetalleOrden, setMostrarDetalleOrden] = useState(false);
   const [historialDespachos, setHistorialDespachos] = useState([]);
+  const [historialFacturasAnuladas, setHistorialFacturasAnuladas] = useState([]);
+  const [documentosAdicionales, setDocumentosAdicionales] = useState([]);
+  const [visorArchivo, setVisorArchivo] = useState({ open: false, url: '', tipo: '', titulo: '' });
 
   useEffect(() => {
-    const fetchDespachos = async () => {
+    const fetchDatosDetalle = async () => {
       if (ordenSeleccionada && mostrarDetalleOrden) {
+        const idOV = ordenSeleccionada.id_orden_venta || ordenSeleccionada.id;
         try {
-          const res = await ordenesVentaAPI.getSalidas(ordenSeleccionada.id_orden_venta || ordenSeleccionada.id);
-          if (res.data.success) {
-            setHistorialDespachos(res.data.data || []);
-          }
+          const [despachoRes, facturasRes, docsRes] = await Promise.allSettled([
+            ordenesVentaAPI.getSalidas(idOV),
+            ordenesVentaAPI.getHistorialFacturasAnuladas(idOV),
+            ordenesVentaAPI.getDocumentosAdicionales(idOV)
+          ]);
+          setHistorialDespachos(despachoRes.status === 'fulfilled' && despachoRes.value.data.success ? despachoRes.value.data.data || [] : []);
+          setHistorialFacturasAnuladas(facturasRes.status === 'fulfilled' && facturasRes.value.data.success ? facturasRes.value.data.data || [] : []);
+          setDocumentosAdicionales(docsRes.status === 'fulfilled' && docsRes.value.data.success ? docsRes.value.data.data || [] : []);
         } catch (e) {
-          console.error('Error fetching despachos', e);
-          setHistorialDespachos([]);
+          console.error('Error fetching detalle orden', e);
         }
       } else {
         setHistorialDespachos([]);
+        setHistorialFacturasAnuladas([]);
+        setDocumentosAdicionales([]);
       }
     };
-    fetchDespachos();
+    fetchDatosDetalle();
   }, [ordenSeleccionada, mostrarDetalleOrden]);
+
+  const abrirVisor = (url, titulo) => {
+    if (!url) return;
+    let cleanUrl = Array.isArray(url) ? url[0] : url;
+    if (typeof cleanUrl !== 'string') return;
+    const ext = cleanUrl.split('?')[0].split('.').pop().toLowerCase();
+    setVisorArchivo({ open: true, url: archivosAPI.getProxyUrl(cleanUrl), tipo: ext === 'pdf' ? 'pdf' : 'img', titulo });
+  };
+
+  const cerrarVisor = () => setVisorArchivo({ open: false, url: '', tipo: '', titulo: '' });
 
   const [tipoCambio, setTipoCambio] = useState(null);
   const [loadingTC, setLoadingTC] = useState(false);
@@ -2414,7 +2435,54 @@ const ReporteVentas = () => {
                       </div>
                       {ordenSeleccionada.numero_cotizacion && (<div className="flex justify-between"><span className="text-muted">Cotizacion:</span><span className="font-medium text-gray-800">{ordenSeleccionada.numero_cotizacion}</span></div>)}
                       {ordenSeleccionada.numero_guia_interna && (<div className="flex justify-between"><span className="text-muted">Guia Interna:</span><span className="font-medium text-gray-800">{ordenSeleccionada.numero_guia_interna}</span></div>)}
-                      {ordenSeleccionada.orden_compra_cliente && (<div className="flex justify-between"><span className="text-muted">OC Cliente:</span><span className="font-medium text-gray-800">{ordenSeleccionada.orden_compra_cliente}</span></div>)}
+                      {(ordenSeleccionada.orden_compra_cliente || ordenSeleccionada.orden_compra_url) && (
+                        <div className="pt-2 border-t border-gray-100 mt-1 space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted">OC Cliente:</span>
+                            <span className="font-medium text-gray-800">{ordenSeleccionada.orden_compra_cliente || '—'}</span>
+                          </div>
+                          {/* Badge verificación OC */}
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted">Verificación OC:</span>
+                            {ordenSeleccionada.estado_verificacion_oc === 'Verificado' ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">
+                                <ShieldCheck size={11} /> Verificada
+                                {ordenSeleccionada.fecha_verificacion_oc && (
+                                  <span className="font-normal ml-1">· {new Date(ordenSeleccionada.fecha_verificacion_oc).toLocaleDateString('es-PE')}</span>
+                                )}
+                              </span>
+                            ) : ordenSeleccionada.estado_verificacion_oc === 'Omitida' ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full">
+                                <ShieldOff size={11} /> Omitida
+                              </span>
+                            ) : ordenSeleccionada.orden_compra_url ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                                <ShieldAlert size={11} /> Sin verificar
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">—</span>
+                            )}
+                          </div>
+                          {/* Archivos OC */}
+                          {ordenSeleccionada.orden_compra_url && (() => {
+                            let urls = [];
+                            try {
+                              const raw = ordenSeleccionada.orden_compra_url;
+                              const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                              urls = Array.isArray(parsed) ? parsed : [raw];
+                            } catch { urls = [ordenSeleccionada.orden_compra_url]; }
+                            return (
+                              <div className="flex gap-1 flex-wrap">
+                                {urls.map((url, i) => (
+                                  <button key={i} className="btn btn-xs btn-outline flex items-center gap-1" onClick={() => abrirVisor(url, urls.length > 1 ? `OC Cliente ${i + 1}` : 'OC Cliente')}>
+                                    <Eye size={11} /> {urls.length > 1 ? `Ver OC ${i + 1}` : 'Ver OC'}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2448,6 +2516,92 @@ const ReporteVentas = () => {
                 </div>
               )}
 
+              {/* Historial de facturas anuladas */}
+              {historialFacturasAnuladas.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-red-800 mb-3 flex items-center gap-2"><FileCheck size={16} className="text-red-600" /> Historial de Facturas Anuladas ({historialFacturasAnuladas.length})</h4>
+                  <div className="space-y-2">
+                    {historialFacturasAnuladas.map((f, i) => (
+                      <div key={f.id_factura_anulada || i} className="bg-white border border-red-200 rounded p-3 text-sm">
+                        <div className="flex justify-between items-start flex-wrap gap-1">
+                          <span className="font-bold text-red-700">{f.numero_comprobante_sunat || f.numero_comprobante || `Factura ${i + 1}`}</span>
+                          <span className="text-xs text-gray-500">{f.fecha_anulacion ? new Date(f.fecha_anulacion).toLocaleDateString('es-PE') : '—'}</span>
+                        </div>
+                        {f.motivo_anulacion && <p className="text-xs text-gray-600 mt-1"><span className="font-medium">Motivo:</span> {f.motivo_anulacion}</p>}
+                        {f.anulado_por && <p className="text-xs text-gray-500 mt-0.5">Anulado por: {f.anulado_por}</p>}
+                        {f.comprobante_sunat_url && (
+                          <button className="btn btn-xs btn-outline mt-1.5 flex items-center gap-1" onClick={() => abrirVisor(f.comprobante_sunat_url, `Factura Anulada: ${f.numero_comprobante_sunat || ''}`)}>
+                            <Eye size={11} /> Ver archivo
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Documentos adicionales */}
+              {documentosAdicionales.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-blue-600" /> Documentos Adicionales</h4>
+                  {(() => {
+                    const activos   = documentosAdicionales.filter(d => !d.deleted_at);
+                    const eliminados = documentosAdicionales.filter(d =>  d.deleted_at);
+
+                    const renderDocUrls = (doc) => {
+                      let urls = [];
+                      try {
+                        const parsed = typeof doc.archivos_url === 'string' ? JSON.parse(doc.archivos_url) : doc.archivos_url;
+                        urls = Array.isArray(parsed) ? parsed : [parsed];
+                      } catch { urls = []; }
+                      return urls.map((url, i) => (
+                        <button key={i} className="btn btn-xs btn-outline flex items-center gap-1" onClick={() => abrirVisor(url, `${doc.tipo_documento}${doc.correlativo ? ' ' + doc.correlativo : ''}${urls.length > 1 ? ` (${i + 1})` : ''}`)}>
+                          <Eye size={11} /> {urls.length > 1 ? `Ver ${i + 1}` : 'Ver'}
+                        </button>
+                      ));
+                    };
+
+                    return (
+                      <div className="space-y-3">
+                        {activos.length > 0 && (
+                          <div className="space-y-2">
+                            {activos.map(doc => (
+                              <div key={doc.id_documento} className="flex items-start justify-between gap-2 p-2 border border-gray-100 rounded-lg bg-gray-50 text-sm">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
+                                    {doc.correlativo && <span className="font-mono text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{doc.correlativo}</span>}
+                                  </div>
+                                  <div className="flex gap-1 mt-1.5 flex-wrap">{renderDocUrls(doc)}</div>
+                                  <p className="text-[10px] text-gray-400 mt-1">{doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {eliminados.length > 0 && (
+                          <div className="pt-2 border-t border-gray-100">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1 mb-2"><Trash2 size={11} /> Eliminados</p>
+                            <div className="space-y-2">
+                              {eliminados.map(doc => (
+                                <div key={doc.id_documento} className="p-2 border border-red-100 rounded-lg bg-red-50/40 opacity-75 text-sm">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-gray-400 bg-gray-200 line-through px-2 py-0.5 rounded-full">{doc.tipo_documento}</span>
+                                    {doc.correlativo && <span className="font-mono text-xs text-gray-400 line-through">{doc.correlativo}</span>}
+                                  </div>
+                                  <div className="flex gap-1 mt-1.5 flex-wrap">{renderDocUrls(doc)}</div>
+                                  <p className="text-[10px] text-red-500 mt-1">Eliminado por {doc.eliminado_por || 'Sistema'} · {new Date(doc.deleted_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               {(ordenSeleccionada.observaciones || ordenSeleccionada.observaciones_verificador || ordenSeleccionada.motivo_rechazo) && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2"><FileCheck size={16} className="text-yellow-600" /> Observaciones</h4>
@@ -2466,6 +2620,24 @@ const ReporteVentas = () => {
           </div>
         </div>
       )}
+      <Modal
+        isOpen={visorArchivo.open}
+        onClose={cerrarVisor}
+        title={visorArchivo.titulo}
+        size="2xl"
+      >
+        <div className="flex justify-center items-center bg-gray-100 p-4 rounded-lg min-h-[50vh]">
+          {visorArchivo.tipo === 'pdf' ? (
+            <iframe src={visorArchivo.url} className="w-full h-[70vh] border-0 rounded" title="Visor de archivo" />
+          ) : (
+            <img src={visorArchivo.url} alt="Visualización de archivo" className="max-w-full max-h-[70vh] object-contain rounded shadow-lg" />
+          )}
+        </div>
+        <div className="flex justify-end mt-4">
+          <button className="btn btn-primary" onClick={cerrarVisor}>Cerrar Visor</button>
+        </div>
+      </Modal>
+
       {modalSunat.isOpen && (
         <ModalValidacionSunat
           isOpen={modalSunat.isOpen}

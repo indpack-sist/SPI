@@ -391,6 +391,7 @@ function OrdenesVenta() {
     return (
       orden.numero_orden?.toLowerCase().includes(term) ||
       orden.numero_comprobante?.toLowerCase().includes(term) ||
+      orden.numero_comprobante_sunat?.toLowerCase().includes(term) ||
       orden.numero_cotizacion?.toLowerCase().includes(term) ||
       orden.cliente?.toLowerCase().includes(term) ||
       orden.ruc_cliente?.toLowerCase().includes(term) ||

@@ -1171,10 +1171,11 @@ const ReporteVentas = () => {
       const mergesFechas = [];
 
       if (fechasArray.length > 0) {
-        datosFechasAOA.push(['=== RESUMEN POR FECHA DE DESPACHO ===']);
+        datosFechasAOA.push([`=== RESUMEN POR ${tituloResumen} ===`]);
         datosFechasAOA.push([
-          'Fecha Despacho', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Cliente', 
-          'Codigo', 'Producto', 'Unidad', 'Moneda', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden'
+          'Fecha Agrupación', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha SUNAT', 'Fecha Despacho', 'Cliente',
+          'Codigo', 'Producto', 'Unidad', 'Moneda', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
+          'TC', 'Subtotal (PEN)', 'Vendedor'
         ]);
 
         fechasArray.forEach(fechaData => {
@@ -1191,11 +1192,11 @@ const ReporteVentas = () => {
           fechaData.items.forEach((item, idx) => {
             const isNewOrden = item.orden !== currentOrden;
             const isUSD = item.moneda === 'USD';
-            
+
             // Si cambia la orden y ya teníamos una, aplicamos el merge de la orden anterior
             if (isNewOrden && ordenStartRow !== -1 && ordenItemCount > 1) {
               const ordenEndRow = datosFechasAOA.length - 1;
-              [1, 2, 3, 4].forEach(c => { // Orden, Comprobante, Fecha Emisión, Cliente
+              [1, 2, 3, 4, 5, 6].forEach(c => { // Orden, Comprobante, Fecha Emisión, Fecha SUNAT, Fecha Despacho, Cliente
                 mergesFechas.push({ s: { r: ordenStartRow, c: c }, e: { r: ordenEndRow, c: c } });
               });
             }
@@ -1210,12 +1211,14 @@ const ReporteVentas = () => {
 
             // Para la primera fila de la FECHA (idx === 0)
             const isFirstInDate = idx === 0;
-            
+
             let rowData = [
               isFirstInDate ? fechaData.fecha : '',
-              isNewOrden ? item.orden : '', 
-              isNewOrden ? item.comprobante : '', 
-              isNewOrden ? item.fecha_emision : '', 
+              isNewOrden ? item.orden : '',
+              isNewOrden ? item.comprobante : '',
+              isNewOrden ? item.fecha_emision : '',
+              isNewOrden ? item.fecha_sunat : '',
+              isNewOrden ? item.fecha_despacho : '',
               isNewOrden ? item.cliente : '',
               item.codigo, item.producto, item.unidad, item.moneda,
               parseFloat(item.cantidad.toFixed(3)), parseFloat(item.precio_unitario.toFixed(3)), parseFloat(item.subtotal.toFixed(3))
@@ -1233,7 +1236,7 @@ const ReporteVentas = () => {
           // Asegurarse de aplicar el merge para la última orden de la fecha si tuvo más de 1 ítem
           if (ordenStartRow !== -1 && ordenItemCount > 1) {
             const ordenEndRow = datosFechasAOA.length - 1;
-            [1, 2, 3, 4].forEach(c => {
+            [1, 2, 3, 4, 5, 6].forEach(c => {
               mergesFechas.push({ s: { r: ordenStartRow, c: c }, e: { r: ordenEndRow, c: c } });
             });
           }
@@ -1246,12 +1249,6 @@ const ReporteVentas = () => {
         });
 
         if (datosFechasAOA.length > 1) {
-          // Ajustamos los encabezados de forma general para incluir las 3 fechas secuenciales y las columnas de USD
-          datosFechasAOA[1] = [
-            'Fecha Agrupación', 'Orden', 'Comprobante (Guía)', 'Fecha Emisión', 'Fecha SUNAT', 'Fecha Despacho', 'Cliente', 
-            'Codigo', 'Producto', 'Unidad', 'Moneda', 'Cant. Orden', 'P. Unitario', 'Subtotal Orden',
-            'TC', 'Subtotal (PEN)', 'Vendedor'
-          ];
           const wsFechas = XLSX.utils.aoa_to_sheet(datosFechasAOA);
           wsFechas['!merges'] = mergesFechas;
           wsFechas['!cols'] = [

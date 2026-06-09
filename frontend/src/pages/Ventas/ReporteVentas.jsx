@@ -2499,17 +2499,13 @@ const ReporteVentas = () => {
                             Salida #{despacho.id_salida}
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${despacho.estado === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{despacho.estado}</span>
                           </span>
-                          <span className="text-muted font-mono">{formatearFechaHora(despacho.fecha_movimiento)}</span>
+                          <span className="text-muted font-mono text-xs"><span className="font-medium text-gray-700">Ítems:</span> {despacho.total_items || 0}</span>
                         </div>
                         {despacho.observaciones && (
                           <div className="text-gray-600 mt-1">
                             <span className="font-medium text-gray-700">Ref / Guía:</span> {despacho.observaciones}
                           </div>
                         )}
-                        <div className="text-gray-600 mt-1 flex justify-between">
-                          <span><span className="font-medium text-gray-700">Responsable:</span> {despacho.responsable || 'No registrado'}</span>
-                          <span><span className="font-medium text-gray-700">Ítems despachados:</span> {despacho.total_items || 0}</span>
-                        </div>
                       </div>
                     ))}
                   </div>

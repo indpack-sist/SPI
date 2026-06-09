@@ -3834,11 +3834,11 @@ export async function marcarFacturadoSunat(req, res) {
       UPDATE ordenes_venta 
       SET 
         facturado_sunat = 1,
-        fecha_facturacion_sunat = NOW(),
+        fecha_facturacion_sunat = ?,
         numero_comprobante_sunat = ?,
         id_facturador = ?
       WHERE id_orden_venta = ?
-    `, [numero_comprobante_sunat?.trim() || null, id_empleado, id]);
+    `, [getFechaPeru(), numero_comprobante_sunat?.trim() || null, id_empleado, id]);
 
     if (!updateResult.success) {
       return res.status(500).json({ success: false, error: updateResult.error });
@@ -4229,9 +4229,9 @@ export async function agregarDocumentoAdicional(req, res) {
     }
 
     const result = await executeQuery(`
-      INSERT INTO ordenes_venta_documentos (id_orden_venta, tipo_documento, correlativo, archivos_url, id_registrado_por)
-      VALUES (?, ?, ?, ?, ?)
-    `, [id, tipo_documento, correlativo || null, archivosUrl, id_registrado_por]);
+      INSERT INTO ordenes_venta_documentos (id_orden_venta, tipo_documento, correlativo, archivos_url, id_registrado_por, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [id, tipo_documento, correlativo || null, archivosUrl, id_registrado_por, getFechaPeru()]);
 
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error });

@@ -3961,10 +3961,10 @@ export async function anularFacturaSunat(req, res) {
 
     const queries = [
       {
-        sql: `INSERT INTO facturas_anuladas_ov 
-              (id_orden_venta, numero_comprobante_sunat, comprobante_sunat_url, motivo_anulacion, id_usuario_anulacion)
-              VALUES (?, ?, ?, ?, ?)`,
-        params: [id, orden.numero_comprobante_sunat, comprobanteUrlToSave, motivo_anulacion.trim(), id_empleado]
+        sql: `INSERT INTO facturas_anuladas_ov
+              (id_orden_venta, numero_comprobante_sunat, comprobante_sunat_url, motivo_anulacion, id_usuario_anulacion, fecha_anulacion)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        params: [id, orden.numero_comprobante_sunat, comprobanteUrlToSave, motivo_anulacion.trim(), id_empleado, getFechaPeru()]
       },
       {
         sql: `UPDATE ordenes_venta

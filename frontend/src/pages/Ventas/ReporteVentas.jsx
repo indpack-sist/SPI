@@ -1299,7 +1299,7 @@ const ReporteVentas = () => {
                     wsFechas[cellRef].s.border = borderStyle;
                     
                     // Pintar celdas de USD de verde
-                    if (isUSD && (C >= 14 && C <= 16)) {
+                    if (isUSD && (C === 10 || (C >= 14 && C <= 15))) {
                       wsFechas[cellRef].s.fill = { fgColor: { rgb: "E6F4EA" } };
                     }
                     

@@ -88,6 +88,7 @@ function NuevaCotizacion() {
 
   const [listasPreciosCliente, setListasPreciosCliente] = useState([]);
   const [loadingListas, setLoadingListas] = useState(false);
+  const [loadingTC, setLoadingTC] = useState(false);
   const [detallesListas, setDetallesListas] = useState({});
   const [listasDesplegadas, setListasDesplegadas] = useState({});
   const [busquedaLista, setBusquedaLista] = useState('');

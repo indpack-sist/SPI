@@ -2539,7 +2539,7 @@ export async function anularPagoOrden(req, res) {
           montoPago,
           `Anulación pago ${pago.numero_pago} - Orden ${pago.numero_orden}`,
           pago.numero_pago,
-          idPago,
+          null,
           id_usuario
         ]
       });

@@ -290,26 +290,9 @@ function Cotizaciones() {
     }
   };
 
-  const handleDuplicar = async (id, e) => {
+  const handleDuplicar = (id, e) => {
     e.stopPropagation();
-    
-    try {
-      setError(null);
-      
-      const response = await cotizacionesAPI.duplicar(id);
-      
-      if (response.data.success) {
-        setSuccessMessage(`Cotización duplicada: ${response.data.data.numero_cotizacion}`);
-        await cargarDatos(true);
-        setTimeout(() => {
-          navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`);
-        }, 1500);
-      }
-      
-    } catch (err) {
-      console.error('Error al duplicar cotización:', err);
-      setError(err.response?.data?.error || 'Error al duplicar cotización');
-    }
+    navigate(`/ventas/cotizaciones/${id}/duplicar`);
   };
 
   const handleVerDetalle = (id) => {

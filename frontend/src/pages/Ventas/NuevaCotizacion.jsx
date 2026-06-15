@@ -52,8 +52,8 @@ function NuevaCotizacion() {
   const location = useLocation();
   const { user } = useAuth();
     
-  const modoEdicion = !!id;
-  const modoDuplicar = location.state?.duplicar === true;
+  const modoDuplicar = location.pathname.endsWith('/duplicar') || location.state?.duplicar === true;
+  const modoEdicion = !!id && !modoDuplicar;
     
   const [loading, setLoading] = useState(false);
   const [cooldownActivo, setCooldownActivo] = useState(false);

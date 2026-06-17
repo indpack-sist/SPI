@@ -14,6 +14,7 @@ function Navbar({ onToggleSidebar }) {
   const [noLeidas, setNoLeidas] = useState(0);
   const [showNotificaciones, setShowNotificaciones] = useState(false);
   const [socket, setSocket] = useState(null);
+  const [toastNotificaciones, setToastNotificaciones] = useState([]);
 
   useEffect(() => {
     cargarNotificaciones();
@@ -46,6 +47,7 @@ function Navbar({ onToggleSidebar }) {
       newSocket.on('nueva_notificacion', (notif) => {
         setNotificaciones(prev => [notif, ...prev]);
         setNoLeidas(prev => prev + 1);
+        setToastNotificaciones(prev => [notif, ...prev]);
         
         // 🔊 Sonido de notificación generado (Web Audio API)
         try {
@@ -105,6 +107,7 @@ function Navbar({ onToggleSidebar }) {
       await notificacionesAPI.marcarTodasLeidas();
       setNotificaciones(prev => prev.map(n => ({ ...n, leido: 1 })));
       setNoLeidas(0);
+      setToastNotificaciones([]);
     } catch (error) {
       console.error('Error al marcar todas como leídas:', error);
     }
@@ -114,17 +117,18 @@ function Navbar({ onToggleSidebar }) {
     if (!notif.leido) {
       try {
         await notificacionesAPI.marcarLeida(notif.id_notificacion);
-        setNotificaciones(prev => prev.map(n => 
+        setNotificaciones(prev => prev.map(n =>
           n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
         ));
+        setToastNotificaciones(prev => prev.filter(n => n.id_notificacion !== notif.id_notificacion));
         setNoLeidas(prev => Math.max(0, prev - 1));
       } catch (error) {
         console.error('Error al marcar notificación:', error);
       }
     }
-    
+
     setShowNotificaciones(false);
-    
+
     if (notif.ruta_destino && (!e || e.target.closest('.toast-close-btn') === null)) {
       navigate(notif.ruta_destino);
     }
@@ -134,9 +138,10 @@ function Navbar({ onToggleSidebar }) {
     e.stopPropagation();
     try {
       await notificacionesAPI.marcarLeida(notif.id_notificacion);
-      setNotificaciones(prev => prev.map(n => 
+      setNotificaciones(prev => prev.map(n =>
         n.id_notificacion === notif.id_notificacion ? { ...n, leido: 1 } : n
       ));
+      setToastNotificaciones(prev => prev.filter(n => n.id_notificacion !== notif.id_notificacion));
       setNoLeidas(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error(error);
@@ -176,8 +181,6 @@ function Navbar({ onToggleSidebar }) {
       default: return Bell;
     }
   };
-
-  const notificacionesActivas = notificaciones.filter(n => !n.leido);
 
   return (
     <>
@@ -270,7 +273,7 @@ function Navbar({ onToggleSidebar }) {
       </header>
 
       <div className="notification-toast-container">
-        {notificacionesActivas.map((notif) => {
+        {toastNotificaciones.map((notif) => {
             const Icono = getIconoNotificacion(notif.tipo);
             return (
                 <div 

@@ -41,8 +41,8 @@ function OrdenesProduccion() {
   const { user } = useAuth();
   
   const [ordenes, setOrdenes] = useState([]);
-  const [registrosParciales, setRegistrosParciales] = useState({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   
@@ -59,47 +59,36 @@ function OrdenesProduccion() {
   const esComercial = ['comercial', 'ventas', 'vendedor'].includes(userRole.toLowerCase());
 
   useEffect(() => {
-    cargarDatos();
+    cargarDatos({ silencioso: ordenes.length > 0 });
   }, [filtroEstado, filtroOrigen, fechaInicio, fechaFin]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [filtroEstado, filtroOrigen, busqueda, fechaInicio, fechaFin, filtroProgramadasHoy]);
 
-  const cargarDatos = async () => {
+  const cargarDatos = async ({ silencioso = false } = {}) => {
     try {
-      setLoading(true);
+      if (silencioso) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
-      
+
       const params = {};
       if (filtroEstado) params.estado = filtroEstado;
       if (filtroOrigen) params.origen_tipo = filtroOrigen;
       if (fechaInicio) params.fecha_inicio = fechaInicio;
       if (fechaFin) params.fecha_fin = fechaFin;
-      
+
       const response = await ordenesProduccionAPI.getAll(params);
-      const ordenesData = response.data.data || [];
-      setOrdenes(ordenesData);
-      
-      const registrosMap = {};
-      await Promise.all(
-        ordenesData
-          .filter(orden => orden.estado === 'Finalizada' || orden.estado === 'En Curso' || orden.estado === 'En Pausa')
-          .map(async (orden) => {
-            try {
-              const res = await ordenesProduccionAPI.getRegistrosParciales(orden.id_orden);
-              registrosMap[orden.id_orden] = res.data.data?.length || 0;
-            } catch (err) {
-              registrosMap[orden.id_orden] = 0;
-            }
-          })
-      );
-      setRegistrosParciales(registrosMap);
+      setOrdenes(response.data.data || []);
     } catch (err) {
       console.error('Error cargando datos:', err);
       setError(err.error || 'Error al cargar órdenes de producción');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -770,7 +759,7 @@ function OrdenesProduccion() {
              <span>
                Mostrando {currentItems.length > 0 ? indexOfFirstItem + 1 : 0} - {Math.min(indexOfLastItem, ordenesFiltradas.length)} de {ordenesFiltradas.length}
              </span>
-             <button className="btn btn-sm btn-outline ml-2" onClick={cargarDatos}><RefreshCw size={16}/></button>
+             <button className="btn btn-sm btn-outline ml-2" onClick={() => cargarDatos({ silencioso: true })} disabled={refreshing}><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''}/></button>
           </div>
         </div>
         <div className="card-body table-container">

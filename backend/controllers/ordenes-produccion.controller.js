@@ -100,7 +100,8 @@ export async function getAllOrdenes(req, res) {
           WHEN p.id_producto IS NULL THEN 1
           ELSE 0
         END AS producto_eliminado,
-        (SELECT COUNT(*) FROM op_adjuntos oa WHERE oa.id_orden = op.id_orden) AS total_adjuntos
+        (SELECT COUNT(*) FROM op_adjuntos oa WHERE oa.id_orden = op.id_orden) AS total_adjuntos,
+        (SELECT COUNT(*) FROM op_registros_produccion orp WHERE orp.id_orden = op.id_orden) AS total_registros_parciales
       FROM ordenes_produccion op
       LEFT JOIN productos p ON op.id_producto_terminado = p.id_producto
       LEFT JOIN empleados e ON op.id_supervisor = e.id_empleado

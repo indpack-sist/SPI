@@ -1368,20 +1368,34 @@ function OrdenDetalle() {
                     </p>
                 </div>
             </div>
-            <div className="pt-1">
-              <p className="text-xs text-muted uppercase font-semibold">Eficiencia (Kilos)</p>
-              <div className="flex items-center gap-2">
+            {parseFloat(orden.cantidad_unidades || 0) > 0 && (
+              <div className="pt-1">
+                <p className="text-xs text-muted uppercase font-semibold">Cumplimiento ({unidadProduccion})</p>
+                <div className="flex items-center gap-2">
                   <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div className="bg-blue-600 h-2.5 rounded-full" 
-                           style={{ width: `${Math.min(100, (parseFloat(orden.cantidad_producida || 0) / parseFloat(orden.cantidad_planificada)) * 100)}%` }}></div>
+                    <div className="bg-blue-600 h-2.5 rounded-full"
+                         style={{ width: `${Math.min(100, (parseFloat(orden.cantidad_unidades_producida || 0) / parseFloat(orden.cantidad_unidades)) * 100)}%` }}></div>
                   </div>
                   <span className="text-xs font-bold">
-                    {orden.cantidad_producida > 0 
-                      ? `${((parseFloat(orden.cantidad_producida) / parseFloat(orden.cantidad_planificada)) * 100).toFixed(1)}%`
-                      : '0%'}
+                    {`${((parseFloat(orden.cantidad_unidades_producida || 0) / parseFloat(orden.cantidad_unidades)) * 100).toFixed(1)}%`}
                   </span>
+                </div>
               </div>
-            </div>
+            )}
+            {parseFloat(orden.cantidad_planificada || 0) > 0 && (
+              <div className="pt-1">
+                <p className="text-xs text-muted uppercase font-semibold">Cumplimiento (Kilos)</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-blue-600 h-2.5 rounded-full"
+                         style={{ width: `${Math.min(100, (parseFloat(orden.cantidad_producida || 0) / parseFloat(orden.cantidad_planificada)) * 100)}%` }}></div>
+                  </div>
+                  <span className="text-xs font-bold">
+                    {`${((parseFloat(orden.cantidad_producida || 0) / parseFloat(orden.cantidad_planificada)) * 100).toFixed(1)}%`}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

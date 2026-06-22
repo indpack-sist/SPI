@@ -447,13 +447,17 @@ export const ordenesProduccionAPI = {
       
       const blob = await response.blob();
       
-      return { success: true, data: blob }; 
-      
+      return { success: true, data: blob };
+
     } catch (error) {
       console.error('Error al descargar Hoja de Ruta:', error);
       throw error;
     }
-  }
+  },
+
+  subirAdjunto: (id, formData) => api.post(`/produccion/ordenes/${id}/adjuntos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getAdjuntos: (id) => api.get(`/produccion/ordenes/${id}/adjuntos`),
+  eliminarAdjunto: (idAdjunto) => api.delete(`/produccion/ordenes/adjuntos/${idAdjunto}`)
 };
 
 export const cotizacionesAPI = {

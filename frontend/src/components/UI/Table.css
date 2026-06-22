@@ -85,9 +85,69 @@
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .pagination-controls {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+/* ── Mobile cards view ─────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .table-mobile thead {
+    display: none;
+  }
+
+  .table-mobile tbody tr {
+    display: block;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: var(--bg-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  .table-mobile tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .table-mobile tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    text-align: right !important;
+    font-size: 0.8125rem;
+    min-height: 2.25rem;
+  }
+
+  .table-mobile tbody td:last-child {
+    border-bottom: none;
+  }
+
+  .table-mobile tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    text-align: left;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+    padding-top: 0.125rem;
+    min-width: 80px;
+  }
+
+  .table-mobile tbody td[data-label="Acciones"],
+  .table-mobile tbody td[data-label=""] {
+    justify-content: flex-end;
+  }
+
+  .table-mobile tbody td[data-label="Acciones"]::before,
+  .table-mobile tbody td[data-label=""]::before {
+    display: none;
   }
 }

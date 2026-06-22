@@ -719,7 +719,7 @@ function CrearOrden() {
                     </div>
                 ) : (
                     <div className="table-container">
-                        <table className="table">
+                        <table className="table table-mobile">
                             <thead>
                                 <tr>
                                     <th>Insumo</th>
@@ -740,22 +740,22 @@ function CrearOrden() {
                                         const tieneStock = item.stock_actual >= calculado;
                                         return (
                                             <tr key={item.id_insumo}>
-                                                <td>
+                                                <td data-label="Insumo">
                                                     <div className="font-medium">{item.codigo_insumo}</div>
                                                     <div className="text-xs text-muted">{item.insumo}</div>
                                                 </td>
-                                                <td className="text-center font-bold text-blue-600">
+                                                <td data-label="Porcentaje (%)" className="text-center font-bold text-blue-600">
                                                     {`${item.porcentaje}%`}
                                                 </td>
-                                                <td className="text-right font-mono font-bold">
+                                                <td data-label="Calculado (Kg)" className="text-right font-mono font-bold">
                                                     {`${calculado.toFixed(2)} Kg`}
                                                 </td>
-                                                <td className="text-right">
+                                                <td data-label="Stock" className="text-right">
                                                     <span className={tieneStock ? 'text-success' : 'text-danger'}>
                                                         {item.stock_actual.toFixed(2)}
                                                     </span>
                                                 </td>
-                                                <td className="text-center">
+                                                <td data-label="">
                                                     <button
                                                         type="button"
                                                         className="btn btn-sm btn-danger p-1"
@@ -775,18 +775,18 @@ function CrearOrden() {
             </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-4">
-          <button 
-            type="button" 
-            className="btn btn-outline" 
+        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end mt-4">
+          <button
+            type="button"
+            className="btn btn-outline w-full sm:w-auto"
             onClick={() => navigate('/produccion/ordenes')}
             disabled={guardando}
           >
             Cancelar
           </button>
-          <button 
-            type="submit" 
-            className="btn btn-primary" 
+          <button
+            type="submit"
+            className="btn btn-primary w-full sm:w-auto"
             disabled={guardando || !formData.id_producto_terminado}
           >
             {guardando ? 'Creando...' : 'Crear Orden'}

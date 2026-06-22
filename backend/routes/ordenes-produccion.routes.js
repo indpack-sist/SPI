@@ -21,7 +21,11 @@ import {
   descargarHojaRutaController,
   completarAsignacionOP,
   editarOrdenCompleta,
-  verificarCalidad
+  verificarCalidad,
+  uploadMiddleware,
+  subirAdjunto,
+  getAdjuntosOrden,
+  eliminarAdjunto
 } from '../controllers/ordenes-produccion.controller.js';
 
 const router = express.Router();
@@ -62,5 +66,9 @@ router.post('/:id/anular', verificarPermiso('ordenesProduccion'), anularOrden);
 
 router.get('/:id/hoja-ruta', verificarPermiso('ordenesProduccion'), descargarHojaRutaController);
 router.put('/:id/editar-completa', verificarPermiso('ordenesProduccion'), editarOrdenCompleta);
+
+router.post('/:id/adjuntos', verificarPermiso('ordenesProduccion'), uploadMiddleware.single('archivo'), subirAdjunto);
+router.get('/:id/adjuntos', verificarPermiso('ordenesProduccion'), getAdjuntosOrden);
+router.delete('/adjuntos/:idAdjunto', verificarPermiso('ordenesProduccion'), eliminarAdjunto);
 
 export default router;

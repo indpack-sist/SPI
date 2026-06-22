@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Play, Pause, CheckCircle, XCircle, 
-  Package, Clock, FileText, ClipboardList, 
+import {
+  ArrowLeft, Play, Pause, CheckCircle, XCircle,
+  Package, Clock, FileText, ClipboardList,
   BarChart, AlertTriangle, Trash2, Plus,
   Layers, TrendingUp, TrendingDown, ShoppingCart,
-  UserCog, AlertCircle, Zap, Calendar as CalendarIcon, 
-  Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit, History, ShieldCheck
+  UserCog, AlertCircle, Zap, Calendar as CalendarIcon,
+  Users, Clipboard, Info, Hash, Scale, Ruler, Star, Edit, History, ShieldCheck,
+  Paperclip, Image, Download, Eye, X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/api';
@@ -99,6 +100,12 @@ function OrdenDetalle() {
 
   const [modalAnular, setModalAnular] = useState(false);
 
+  const [adjuntos, setAdjuntos] = useState([]);
+  const [subiendoAdjunto, setSubiendoAdjunto] = useState(false);
+  const [adjuntoVisor, setAdjuntoVisor] = useState(null);
+
+  const puedeSubirAdjunto = ['Supervisor', 'Calidad', 'Administrador', 'Jefe de Planta', 'Jefe de Producción'].includes(userRole);
+
   useEffect(() => {
     cargarDatos();
   }, [id]);
@@ -108,17 +115,19 @@ function OrdenDetalle() {
       setLoading(true);
       setError(null);
         
-      const [ordenRes, consumoRes, registrosRes, insumosRes] = await Promise.all([
+      const [ordenRes, consumoRes, registrosRes, insumosRes, adjuntosRes] = await Promise.all([
         ordenesProduccionAPI.getById(id),
         ordenesProduccionAPI.getConsumoMateriales(id),
         ordenesProduccionAPI.getRegistrosParciales(id).catch(() => ({ data: { data: [] } })),
-        productosAPI.getAll({ estado: 'Activo' }).catch(() => ({ data: { data: [] } }))
+        productosAPI.getAll({ estado: 'Activo' }).catch(() => ({ data: { data: [] } })),
+        ordenesProduccionAPI.getAdjuntos(id).catch(() => ({ data: { adjuntos: [] } }))
       ]);
-        
+
       setOrden(ordenRes.data.data);
       setConsumoMateriales(consumoRes.data.data);
       setRegistrosParciales(registrosRes.data.data || []);
       setInsumosDisponibles(insumosRes.data.data || []);
+      setAdjuntos(adjuntosRes.data.adjuntos || []);
         
       if (ordenRes.data.data.estado === 'Finalizada') {
         const analisisRes = await ordenesProduccionAPI.getAnalisisConsumo(id);
@@ -178,6 +187,36 @@ function OrdenDetalle() {
       setProductosMerma(response.data.data);
     } catch (err) {
       console.error('Error al cargar productos de merma:', err);
+    }
+  };
+
+  const handleSubirAdjunto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      setSubiendoAdjunto(true);
+      const formData = new FormData();
+      formData.append('archivo', file);
+      const res = await ordenesProduccionAPI.subirAdjunto(id, formData);
+      if (res.data.success) {
+        setAdjuntos(prev => [res.data.adjunto, ...prev]);
+        setSuccess('Adjunto subido correctamente.');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al subir el adjunto.');
+    } finally {
+      setSubiendoAdjunto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleEliminarAdjunto = async (idAdjunto) => {
+    if (!window.confirm('¿Eliminar este adjunto?')) return;
+    try {
+      await ordenesProduccionAPI.eliminarAdjunto(idAdjunto);
+      setAdjuntos(prev => prev.filter(a => a.id_adjunto !== idAdjunto));
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al eliminar el adjunto.');
     }
   };
 
@@ -1038,18 +1077,18 @@ function OrdenDetalle() {
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3">
         <div>
-          <h1 className="card-title text-2xl font-bold">Orden de Producción: {orden.numero_orden}</h1>
-          <div className="flex gap-2 items-center mt-2">
+          <h1 className="card-title text-xl sm:text-2xl font-bold">O.P.: {orden.numero_orden}</h1>
+          <div className="flex flex-wrap gap-2 items-center mt-2">
             <span className={`badge ${getBadgeEstado(orden.estado)}`}>{orden.estado}</span>
             {desdeOrdenVenta ? (
               <span className="badge badge-info flex items-center gap-1">
-                <ShoppingCart size={14} /> Desde Orden Venta
+                <ShoppingCart size={14} /> Desde O.V.
               </span>
             ) : (
               <span className="badge badge-secondary flex items-center gap-1">
-                <UserCog size={14} /> Creada por Supervisor
+                <UserCog size={14} /> Supervisor
               </span>
             )}
             {orden.es_manual === 1 && (
@@ -1060,57 +1099,54 @@ function OrdenDetalle() {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <button 
-            className="btn btn-outline" 
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="btn btn-outline btn-sm"
             onClick={handleDescargarHojaRuta}
             disabled={procesando}
             title="Descargar Hoja de Ruta para Operario"
           >
-            <Clipboard size={18} className="mr-2" /> Hoja de Ruta
+            <Clipboard size={16} className="mr-1" /> Hoja de Ruta
           </button>
 
           {puedeEditar && (
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary btn-sm"
               onClick={inicializarEdicion}
               disabled={procesando}
             >
-              <Edit size={18} className="mr-2" /> Editar Orden
+              <Edit size={16} className="mr-1" /> Editar
             </button>
           )}
 
           {puedeAsignar && (
-            <button 
-              className="btn btn-warning" 
-              onClick={() => {
-                cargarSupervisores();
-                setModalAsignar(true);
-              }}
+            <button
+              className="btn btn-warning btn-sm"
+              onClick={() => { cargarSupervisores(); setModalAsignar(true); }}
               disabled={procesando}
             >
-              <AlertCircle size={18} className="mr-2" /> 
-              {esPendienteAsignacionDesdeVenta ? 'Configurar Orden' : 'Asignar Personal'}
+              <AlertCircle size={16} className="mr-1" />
+              {esPendienteAsignacionDesdeVenta ? 'Configurar' : 'Asignar Personal'}
             </button>
           )}
           {puedeIniciar && (
-            <button className="btn btn-success" onClick={handleIniciar} disabled={procesando}>
-              <Play size={18} className="mr-2" /> Iniciar Producción
+            <button className="btn btn-success btn-sm" onClick={handleIniciar} disabled={procesando}>
+              <Play size={16} className="mr-1" /> Iniciar
             </button>
           )}
           {puedePausar && (
-            <button className="btn btn-warning" onClick={handlePausar} disabled={procesando}>
-              <Pause size={18} className="mr-2" /> Pausar
+            <button className="btn btn-warning btn-sm" onClick={handlePausar} disabled={procesando}>
+              <Pause size={16} className="mr-1" /> Pausar
             </button>
           )}
           {puedeReanudar && (
-            <button className="btn btn-primary" onClick={handleReanudar} disabled={procesando}>
-              <Play size={18} className="mr-2" /> Reanudar
+            <button className="btn btn-primary btn-sm" onClick={handleReanudar} disabled={procesando}>
+              <Play size={16} className="mr-1" /> Reanudar
             </button>
           )}
           {puedeRegistrarParcial && (
-            <button 
-              className="btn btn-info" 
+            <button
+              className="btn btn-info btn-sm"
               onClick={() => {
                 setCantidadUnidadesParcial('');
                 setObservacionesParcial('');
@@ -1122,12 +1158,12 @@ function OrdenDetalle() {
               }}
               disabled={procesando}
             >
-              <Layers size={18} className="mr-2" /> Registrar Parcial
+              <Layers size={16} className="mr-1" /> Parcial
             </button>
           )}
           {puedeFinalizar && (
-            <button 
-              className="btn btn-success" 
+            <button
+              className="btn btn-success btn-sm"
               onClick={() => {
                 setCantidadUnidadesFinal('');
                 setObservacionesFinal('');
@@ -1139,35 +1175,35 @@ function OrdenDetalle() {
               }}
               disabled={procesando}
             >
-              <CheckCircle size={18} className="mr-2" /> Finalizar
+              <CheckCircle size={16} className="mr-1" /> Finalizar
             </button>
           )}
 
-          {orden.estado === 'Finalizada' && 
-           (user?.rol === 'Calidad' || user?.rol === 'Administrador') && 
+          {orden.estado === 'Finalizada' &&
+           (user?.rol === 'Calidad' || user?.rol === 'Administrador') &&
            !(orden.observaciones && orden.observaciones.includes('[VERIFICACIÓN CALIDAD]')) && (
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary btn-sm"
               onClick={handleVerificarCalidad}
               disabled={procesando}
             >
-              <ShieldCheck size={18} className="mr-2" /> Verificar Calidad
+              <ShieldCheck size={16} className="mr-1" /> Verificar Calidad
             </button>
           )}
 
           {!['Cancelada', 'Anulada'].includes(orden.estado) && !esComercial && (
-            <button 
-                className="btn btn-danger ml-2"
-                onClick={() => setModalAnular(true)} 
-                disabled={procesando}
-                title="Revertir toda la producción e inventario"
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={() => setModalAnular(true)}
+              disabled={procesando}
+              title="Revertir toda la producción e inventario"
             >
-              <Trash2 size={18} className="mr-2" /> Anular (Revertir)
+              <Trash2 size={16} className="mr-1" /> Anular
             </button>
           )}
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div className="card">
           <div className="card-header flex items-center gap-2">
             <ClipboardList size={18} className="text-gray-500" />
@@ -1498,7 +1534,116 @@ function OrdenDetalle() {
           </div>
         </div>
       )}
-      
+
+      {/* ── ADJUNTOS ─────────────────────────────────────────────────────── */}
+      <div className="card mt-4">
+        <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Paperclip size={18} className="text-primary" />
+            <h2 className="card-title">Fotos y Adjuntos ({adjuntos.length})</h2>
+          </div>
+          {puedeSubirAdjunto && (
+            <div className={`flex gap-2 ${subiendoAdjunto ? 'opacity-50 pointer-events-none' : ''}`}>
+              <label className="btn btn-primary btn-sm flex items-center gap-1 cursor-pointer flex-1 sm:flex-none justify-center">
+                <Image size={14} /> {subiendoAdjunto ? 'Subiendo...' : 'Tomar foto'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleSubirAdjunto}
+                  disabled={subiendoAdjunto}
+                />
+              </label>
+              <label className="btn btn-outline btn-sm flex items-center gap-1 cursor-pointer flex-1 sm:flex-none justify-center">
+                <Paperclip size={14} /> Adjuntar archivo
+                <input
+                  type="file"
+                  accept="image/*,application/pdf,.doc,.docx"
+                  className="hidden"
+                  onChange={handleSubirAdjunto}
+                  disabled={subiendoAdjunto}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+        <div className="p-4">
+          {adjuntos.length === 0 ? (
+            <p className="text-muted text-sm text-center py-6">No hay fotos ni archivos adjuntos.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {adjuntos.map(adj => (
+                <div key={adj.id_adjunto} className="border rounded-lg overflow-hidden bg-gray-50 flex flex-col">
+                  {/* Thumbnail o ícono */}
+                  {adj.tipo_archivo === 'imagen' ? (
+                    <button
+                      className="block w-full aspect-square"
+                      onClick={() => setAdjuntoVisor(adj)}
+                    >
+                      <img
+                        src={adj.url}
+                        alt={adj.nombre_archivo}
+                        className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                      />
+                    </button>
+                  ) : (
+                    <a
+                      href={adj.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-col items-center justify-center aspect-square gap-2 hover:bg-gray-100 transition-colors px-2"
+                    >
+                      <FileText size={28} className="text-gray-400 shrink-0" />
+                      <span className="text-xs text-center text-gray-600 truncate w-full">{adj.nombre_archivo}</span>
+                    </a>
+                  )}
+                  {/* Metadata siempre visible */}
+                  <div className="p-2 border-t border-gray-100 flex items-start justify-between gap-1 bg-white">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-gray-700 truncate">{adj.nombre_archivo}</p>
+                      <p className="text-xs text-muted truncate">{adj.subido_por || 'Desconocido'}</p>
+                    </div>
+                    {puedeSubirAdjunto && (
+                      <button
+                        className="shrink-0 text-red-400 hover:text-red-600 p-0.5 rounded transition-colors"
+                        onClick={() => handleEliminarAdjunto(adj.id_adjunto)}
+                        title="Eliminar"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── VISOR IMAGEN ─────────────────────────────────────────────────── */}
+      {adjuntoVisor && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setAdjuntoVisor(null)}
+        >
+          <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
+            <button
+              className="absolute -top-8 right-0 text-white hover:text-gray-300"
+              onClick={() => setAdjuntoVisor(null)}
+            >
+              <X size={24} />
+            </button>
+            <img
+              src={adjuntoVisor.url}
+              alt={adjuntoVisor.nombre_archivo}
+              className="w-full max-h-[85vh] object-contain rounded"
+            />
+            <p className="text-white text-sm mt-2 text-center">{adjuntoVisor.nombre_archivo}</p>
+          </div>
+        </div>
+      )}
+
       <Modal
         isOpen={modalParcial}
         onClose={() => setModalParcial(false)}
@@ -1518,7 +1663,7 @@ function OrdenDetalle() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div className="form-group">
                 <label className="form-label">Cantidad {unidadProduccion} *</label>
                 <div className="relative input-with-icon">
@@ -1836,7 +1981,7 @@ function OrdenDetalle() {
                 <div className="relative input-with-icon">
                     <Scale className="icon" size={16} />
                     <div className="form-input bg-gray-100 flex items-center text-gray-700 font-bold" style={{ paddingLeft: '2.5rem' }}>
-                        {kilosFinalesCalculados.toFixed(2)} Kg
+                        {kilosAdicionalesCierre.toFixed(2)} Kg
                     </div>
                 </div>
                 <small className="text-muted block mt-1">Suma de insumos ingresados abajo.</small>
@@ -1928,7 +2073,7 @@ function OrdenDetalle() {
 
           <div className="border-t border-gray-200 pt-4 mt-4 bg-gray-50 p-4 rounded mb-4">
             <h3 className="font-semibold text-sm mb-3">Balance de Masas</h3>
-            <div className="grid grid-cols-4 gap-2 text-center text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-sm">
                 <div className="p-2 bg-white rounded border">
                     <div className="text-muted text-xs">Total Insumos</div>
                     <div className="font-bold">{totalInsumosReales.toFixed(2)} Kg</div>
@@ -2122,7 +2267,7 @@ function OrdenDetalle() {
       >
           <form onSubmit={handleGuardarEdicion}>
              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="form-group">
                         <label className="form-label">Producto Terminado *</label>
                         <select className="form-select" value={datosEdicion.id_producto_terminado} onChange={(e) => setDatosEdicion({...datosEdicion, id_producto_terminado: e.target.value})} required>
@@ -2139,7 +2284,7 @@ function OrdenDetalle() {
                     </div>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="form-group">
                         <label className="form-label">Cantidad Kilos *</label>
                         <input type="number" step="0.01" className="form-input" value={datosEdicion.cantidad_planificada} onChange={(e) => setDatosEdicion({...datosEdicion, cantidad_planificada: e.target.value})} required />
@@ -2181,7 +2326,7 @@ function OrdenDetalle() {
                     </div>
                 )}
                 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="form-group">
                         <label className="form-label">Medida</label>
                         <input className="form-input" value={datosEdicion.medida} onChange={(e) => setDatosEdicion({...datosEdicion, medida: e.target.value})} />
@@ -2196,7 +2341,7 @@ function OrdenDetalle() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="form-group">
                         <label className="form-label">Fecha Programada</label>
                         <input type="date" className="form-input" value={datosEdicion.fecha_programada} onChange={(e) => setDatosEdicion({...datosEdicion, fecha_programada: e.target.value})} />
@@ -2361,7 +2506,39 @@ function OrdenDetalle() {
                     <p>Al confirmar esta acción, se realizarán los siguientes movimientos automáticos:</p>
                 </div>
             </div>
-            
+
+            <ul className="text-sm space-y-2 pl-2">
+                <li className="flex items-start gap-2">
+                    <span className="text-red-500 font-bold mt-0.5">•</span>
+                    <span>El estado de la orden pasará a <strong>Anulada</strong> y no podrá modificarse.</span>
+                </li>
+                {parseFloat(orden?.cantidad_producida || 0) > 0 && (
+                    <li className="flex items-start gap-2">
+                        <span className="text-red-500 font-bold mt-0.5">•</span>
+                        <span>
+                            Se <strong>retirará del inventario</strong> el producto terminado producido hasta ahora
+                            (<strong>{parseFloat(orden.cantidad_producida).toFixed(2)} Kg</strong>
+                            {parseFloat(orden?.cantidad_unidades_producida || 0) > 0 && ` / ${orden.cantidad_unidades_producida} unid.`}).
+                        </span>
+                    </li>
+                )}
+                {consumoMateriales.length > 0 && (
+                    <li className="flex items-start gap-2">
+                        <span className="text-red-500 font-bold mt-0.5">•</span>
+                        <span>
+                            Los <strong>{consumoMateriales.length} insumos</strong> consumidos durante la producción serán
+                            <strong> devueltos a inventario</strong>.
+                        </span>
+                    </li>
+                )}
+                {mermas.length > 0 && (
+                    <li className="flex items-start gap-2">
+                        <span className="text-orange-500 font-bold mt-0.5">•</span>
+                        <span>Los registros de mermas quedarán eliminados junto con la orden.</span>
+                    </li>
+                )}
+            </ul>
+
             <div className="flex gap-3 justify-end pt-4 border-t mt-2">
                 <button className="btn btn-outline" onClick={() => setModalAnular(false)} disabled={procesando}>Cancelar</button>
                 <button className="btn btn-danger font-bold px-6" onClick={handleAnular} disabled={procesando}>{procesando ? 'Procesando...' : 'CONFIRMAR ANULACIÓN'}</button>

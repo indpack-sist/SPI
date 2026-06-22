@@ -27,7 +27,8 @@ import {
   CalendarCheck,
   Moon,
   Sun,
-  ShieldCheck
+  ShieldCheck,
+  Paperclip
 } from 'lucide-react';
 import { ordenesProduccionAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
@@ -200,7 +201,8 @@ function OrdenesProduccion() {
       'En Curso': { icono: Factory, color: 'text-primary', bg: 'badge-primary', texto: 'En Curso' },
       'En Pausa': { icono: Pause, color: 'text-info', bg: 'badge-info', texto: 'En Pausa' },
       'Finalizada': { icono: CheckCircle, color: 'text-success', bg: 'badge-success', texto: 'Finalizada' },
-      'Cancelada': { icono: XCircle, color: 'text-danger', bg: 'badge-danger', texto: 'Cancelada' }
+      'Cancelada': { icono: XCircle, color: 'text-danger', bg: 'badge-danger', texto: 'Cancelada' },
+      'Anulada': { icono: XCircle, color: 'text-danger', bg: 'badge-danger', texto: 'Anulada' }
     };
     return configs[estado] || configs['Pendiente'];
   };
@@ -529,6 +531,22 @@ function OrdenesProduccion() {
       )
     },
     {
+      header: 'Adjuntos',
+      accessor: 'total_adjuntos',
+      width: '80px',
+      align: 'center',
+      render: (value) => (
+        value > 0 ? (
+          <span className="flex items-center justify-center gap-1 text-primary text-sm font-medium">
+            <Paperclip size={14} />
+            {value}
+          </span>
+        ) : (
+          <span className="text-gray-300"><Paperclip size={14} /></span>
+        )
+      )
+    },
+    {
       header: 'Acciones',
       accessor: 'id_orden',
       width: '100px',
@@ -586,7 +604,7 @@ function OrdenesProduccion() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <div className="card">
           <div className="card-body">
             <div className="flex items-center justify-between">
@@ -756,11 +774,12 @@ function OrdenesProduccion() {
           </div>
         </div>
         <div className="card-body table-container">
-            <Table 
-              columns={columns} 
-              data={currentItems} 
-              emptyMessage="No hay órdenes registradas" 
+            <Table
+              columns={columns}
+              data={currentItems}
+              emptyMessage="No hay órdenes registradas"
               onRowClick={(row) => navigate(`/produccion/ordenes/${row.id_orden}`)}
+              mobileCards={true}
             />
         </div>
         

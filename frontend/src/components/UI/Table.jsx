@@ -1,14 +1,15 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import './Table.css';
 
-function Table({ 
-  columns, 
-  data, 
+function Table({
+  columns,
+  data,
   loading = false,
   emptyMessage = 'No hay datos para mostrar',
   pagination = null,
   onPageChange = null,
-  onRowClick = null
+  onRowClick = null,
+  mobileCards = false
 }) {
   if (loading) {
     return (
@@ -34,13 +35,13 @@ function Table({
   return (
     <div className="table-wrapper">
       <div className="table-container">
-        <table className="table">
+        <table className={`table${mobileCards ? ' table-mobile' : ''}`}>
           <thead>
             <tr>
               {columns.map((column, index) => (
-                <th 
-                  key={index} 
-                  style={{ 
+                <th
+                  key={index}
+                  style={{
                     width: column.width,
                     textAlign: column.align || 'left'
                   }}
@@ -52,17 +53,18 @@ function Table({
           </thead>
           <tbody>
             {data.map((row, rowIndex) => (
-              <tr 
+              <tr
                 key={rowIndex}
                 onClick={() => onRowClick && onRowClick(row)}
                 className={onRowClick ? "cursor-pointer hover:bg-gray-50 transition-colors" : ""}
               >
                 {columns.map((column, colIndex) => (
-                  <td 
+                  <td
                     key={colIndex}
+                    data-label={column.header}
                     style={{ textAlign: column.align || 'left' }}
                   >
-                    {column.render 
+                    {column.render
                       ? column.render(row[column.accessor], row, rowIndex)
                       : row[column.accessor]
                     }

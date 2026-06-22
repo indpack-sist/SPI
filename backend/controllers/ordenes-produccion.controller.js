@@ -1,6 +1,7 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { notificarNuevaOP } from '../utils/notificacionesHelper.js';
 import { generarPDFOrdenProduccion, generarPDFHojaRuta } from '../utils/pdf-generator.js';
+import { uploadMiddleware, subirArchivoACloudinary } from '../services/cloudinary.service.js';
 
 const getIO = (req) => req.app.get('socketio');
 
@@ -94,14 +95,12 @@ export async function getAllOrdenes(req, res) {
         ov.fecha_entrega_estimada AS fecha_estimada_venta,
         e_comercial.nombre_completo AS comercial_venta,
         rp.nombre_receta,
-        CASE 
-          WHEN op.id_receta_producto IS NULL AND op.costo_materiales = 0 THEN 1
-          ELSE 0
-        END AS es_manual,
-        CASE 
+        op.es_orden_manual AS es_manual,
+        CASE
           WHEN p.id_producto IS NULL THEN 1
           ELSE 0
-        END AS producto_eliminado
+        END AS producto_eliminado,
+        (SELECT COUNT(*) FROM op_adjuntos oa WHERE oa.id_orden = op.id_orden) AS total_adjuntos
       FROM ordenes_produccion op
       LEFT JOIN productos p ON op.id_producto_terminado = p.id_producto
       LEFT JOIN empleados e ON op.id_supervisor = e.id_empleado
@@ -175,14 +174,12 @@ export async function getOrdenById(req, res) {
         ov.id_orden_venta,
         ov.prioridad AS prioridad_venta,
         ov.fecha_entrega_estimada AS fecha_estimada_venta,
-        CASE 
-          WHEN op.id_receta_producto IS NULL AND op.costo_materiales = 0 THEN 1
-          ELSE 0
-        END AS es_manual,
-        CASE 
+        op.es_orden_manual AS es_manual,
+        CASE
           WHEN p.id_producto IS NULL THEN 1
           ELSE 0
-        END AS producto_eliminado
+        END AS producto_eliminado,
+        (SELECT COUNT(*) FROM op_adjuntos oa WHERE oa.id_orden = op.id_orden) AS total_adjuntos
       FROM ordenes_produccion op
       LEFT JOIN productos p ON op.id_producto_terminado = p.id_producto
       LEFT JOIN empleados e ON op.id_supervisor = e.id_empleado
@@ -335,23 +332,20 @@ export async function asignarRecetaYSupervisor(req, res) {
     else if (modo_receta === 'provisional' && receta_provisional && receta_provisional.length > 0) {
       rendimientoUnidades = parseFloat(rendimiento_receta) || 1;
       const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
-      
+
+      await executeQuery(`DELETE FROM op_recetas_provisionales WHERE id_orden = ?`, [id]);
+
       for (const item of receta_provisional) {
         const insumoResult = await executeQuery(`
-          SELECT 
-            codigo, 
-            nombre, 
-            unidad_medida, 
-            costo_unitario_promedio, 
-            stock_actual 
+          SELECT codigo, nombre, unidad_medida, costo_unitario_promedio, stock_actual
           FROM productos WHERE id_producto = ?
         `, [item.id_insumo]);
-        
+
         if (insumoResult.success && insumoResult.data.length > 0) {
           const prodData = insumoResult.data[0];
           const costoUnitario = parseFloat(prodData.costo_unitario_promedio);
           const cantidadTotalRequerida = parseFloat(item.cantidad_requerida) * lotesNecesarios;
-          
+
           costoMateriales += cantidadTotalRequerida * costoUnitario;
 
           insumosReporte.push({
@@ -365,14 +359,13 @@ export async function asignarRecetaYSupervisor(req, res) {
             cubre_stock: parseFloat(prodData.stock_actual) >= cantidadTotalRequerida,
             costo_unitario: costoUnitario
           });
+
+          await executeQuery(
+            `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
+            [id, item.id_insumo, cantidadTotalRequerida]
+          );
         }
       }
-      
-      await executeQuery(`
-        UPDATE ordenes_produccion 
-        SET receta_provisional = ?
-        WHERE id_orden = ?
-      `, [JSON.stringify(receta_provisional), id]);
     }
     else {
       return res.status(400).json({
@@ -509,6 +502,11 @@ export async function updateOrden(req, res) {
     if (operario_embalaje !== undefined) {
         updates.push('operario_embalaje = ?');
         params.push(operario_embalaje);
+    }
+
+    if (id_supervisor !== undefined && id_supervisor && orden.estado === 'Pendiente Asignación') {
+      updates.push('estado = ?');
+      params.push('Pendiente');
     }
 
     if (updates.length === 0) {
@@ -1030,7 +1028,9 @@ export async function registrarParcial(req, res) {
     const id_registrado_por = req.user?.id_empleado || req.user?.id || req.user?.userId || null;
 
     const ordenResult = await executeQuery(
-      `SELECT op.estado, op.numero_orden, op.id_producto_terminado, 
+      `SELECT op.estado, op.numero_orden, op.id_producto_terminado,
+              op.cantidad_planificada, op.cantidad_producida,
+              op.cantidad_unidades, op.cantidad_unidades_producida,
               p.id_tipo_inventario, p.unidad_medida, p.nombre as nombre_producto
        FROM ordenes_produccion op
        INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
@@ -1044,6 +1044,13 @@ export async function registrarParcial(req, res) {
     if (!['En Curso', 'En Pausa'].includes(orden.estado)) {
       return res.status(400).json({ error: 'La orden no está en estado válido para registrar avances.' });
     }
+
+    const yaProducidoKg  = parseFloat(orden.cantidad_producida || 0);
+    const metaKg         = parseFloat(orden.cantidad_planificada || 0);
+    const yaProducidoUnd = parseFloat(orden.cantidad_unidades_producida || 0);
+    const metaUnd        = parseFloat(orden.cantidad_unidades || 0);
+    const superaMeta     = (metaKg  > 0 && (yaProducidoKg  + cantidad_kilos)      >= metaKg)
+                        || (metaUnd > 0 && (yaProducidoUnd + cantidad_unidades)    >= metaUnd);
 
     if (cantidad_kilos === 0 && insumos_consumidos.length > 0) {
       cantidad_kilos = insumos_consumidos.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
@@ -1182,11 +1189,6 @@ export async function registrarParcial(req, res) {
                     params: [id, m.id_producto_merma, cantidadMerma, m.observaciones || null]
                 });
 
-                queries.push({
-                    sql: `INSERT INTO op_detalle_registros_produccion (id_registro, id_insumo, cantidad) VALUES (@id_registro_actual, ?, ?)`,
-                    params: [m.id_producto_merma, cantidadMerma]
-                });
-
                 mermasValidas.push({ id: m.id_producto_merma, cantidad: cantidadMerma });
             }
         }
@@ -1241,11 +1243,17 @@ export async function registrarParcial(req, res) {
 
     const result = await executeTransaction(queries);
     if (!result.success) {
-        console.error("Error SQL:", result.error); 
+        console.error("Error SQL:", result.error);
         return res.status(500).json({ error: "Error en base de datos al guardar registro parcial." });
     }
 
-    res.json({ success: true, message: 'Avance y merma registrados correctamente' });
+    res.json({
+      success: true,
+      message: superaMeta
+        ? 'Avance registrado. La producción alcanzó o superó la meta. Puede finalizar la orden.'
+        : 'Avance y merma registrados correctamente',
+      puede_finalizar: superaMeta
+    });
 
   } catch (error) {
     console.error('Error en registrarParcial:', error);
@@ -1506,12 +1514,18 @@ export async function finalizarProduccion(req, res) {
        WHERE op.id_orden = ? AND op.estado IN (?, ?)`,
       [id, 'En Curso', 'En Pausa']
     );
-    
+
     if (ordenResult.data.length === 0) {
       return res.status(404).json({ error: 'Orden no encontrada o no está en curso' });
     }
-    
+
     const orden = ordenResult.data[0];
+
+    const totalKgAcumulado  = parseFloat(orden.cantidad_producida || 0) + cantidad_kilos_final;
+    const totalUndAcumulado = parseFloat(orden.cantidad_unidades_producida || 0) + cantidad_unidades_final;
+    if (totalKgAcumulado === 0 && totalUndAcumulado === 0) {
+      return res.status(400).json({ error: 'No se puede finalizar con producción total de 0 Kg y 0 unidades. Registre al menos una cantidad producida.' });
+    }
     const queries = [];
     let costoAdicionalCierre = 0;
 
@@ -1660,11 +1674,6 @@ export async function finalizarProduccion(req, res) {
                 queries.push({
                     sql: 'INSERT INTO mermas_produccion (id_orden_produccion, id_producto_merma, cantidad, observaciones) VALUES (?, ?, ?, ?)',
                     params: [id, m.id_producto_merma, cantidadMerma, m.observaciones || null]
-                });
-
-                queries.push({
-                    sql: `INSERT INTO op_detalle_registros_produccion (id_registro, id_insumo, cantidad) VALUES (@id_registro_cierre, ?, ?)`,
-                    params: [m.id_producto_merma, cantidadMerma]
                 });
 
                 mermasValidas.push({ id: m.id_producto_merma, cantidad: cantidadMerma });
@@ -2227,18 +2236,20 @@ export async function cancelarOrden(req, res) {
       });
     }
 
+    await executeQuery(`DELETE FROM op_recetas_provisionales WHERE id_orden = ?`, [id]);
+
     if (recetaCalculada.length > 0) {
       const queries = recetaCalculada.map(item => ({
         sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
         params: [id, item.id_insumo, item.cantidad_requerida]
       }));
       await executeTransaction(queries);
-    } else if (receta_provisional && receta_provisional.length > 0) {
-      await executeQuery(`
-        UPDATE ordenes_produccion 
-        SET receta_provisional = ?
-        WHERE id_orden = ?
-      `, [JSON.stringify(receta_provisional), id]);
+    } else if (modo_receta === 'provisional' && receta_provisional && receta_provisional.length > 0) {
+      const provQueries = receta_provisional.map(item => ({
+        sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
+        params: [id, item.id_insumo, parseFloat(item.cantidad_requerida) * Math.ceil(cantidadPlan / rendimientoUnidades)]
+      }));
+      await executeTransaction(provQueries);
     }
 
     const lotesNecesarios = Math.ceil(cantidadPlan / rendimientoUnidades);
@@ -2266,12 +2277,12 @@ export async function cancelarOrden(req, res) {
 }
 export async function editarOrdenCompleta(req, res) {
   const { id } = req.params;
-  const { 
+  const {
     cantidad_planificada,
     cantidad_unidades,
     id_supervisor,
     observaciones,
-    fecha_programada, 
+    fecha_programada,
     fecha_programada_fin,
     turno,
     maquinista,
@@ -2283,111 +2294,89 @@ export async function editarOrdenCompleta(req, res) {
     gramaje,
     modo_receta,
     id_producto_terminado,
-    insumos 
+    insumos
   } = req.body;
 
-  let connection;
-
   try {
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
-
-    // 1. Actualizar la cabecera de la orden
-    // Forzamos id_receta_producto a NULL porque ahora es una receta personalizada (provisional)
-    const updateQuery = `
-      UPDATE ordenes_produccion 
-      SET 
-        id_producto_terminado = ?,
-        cantidad_planificada = ?,
-        cantidad_unidades = ?,
-        id_supervisor = ?,
-        observaciones = ?,
-        fecha_programada = ?,
-        fecha_programada_fin = ?,
-        turno = ?,
-        maquinista = ?,
-        ayudante = ?,
-        operario_corte = ?,
-        operario_embalaje = ?,
-        medida = ?,
-        peso_producto = ?,
-        gramaje = ?,
-        es_orden_manual = ?,
-        id_receta_producto = NULL
-      WHERE id_orden = ?
-    `;
+    const ordenCheck = await executeQuery(
+      `SELECT estado FROM ordenes_produccion WHERE id_orden = ? AND estado IN ('Pendiente Asignación','Pendiente')`,
+      [id]
+    );
+    if (!ordenCheck.success || ordenCheck.data.length === 0) {
+      return res.status(400).json({ error: 'Orden no encontrada o no puede editarse en su estado actual' });
+    }
 
     const esManual = modo_receta === 'manual' ? 1 : 0;
 
-    await connection.query(updateQuery, [
-      id_producto_terminado,
-      parseFloat(cantidad_planificada),
-      parseFloat(cantidad_unidades || 0),
-      id_supervisor || null,
-      observaciones,
-      fecha_programada || null,
-      fecha_programada_fin || null,
-      turno,
-      maquinista || null,
-      ayudante || null,
-      operario_corte || null,
-      operario_embalaje || null,
-      medida,
-      peso_producto,
-      gramaje,
-      esManual,
-      id
-    ]);
+    const headerQueries = [
+      {
+        sql: `UPDATE ordenes_produccion
+              SET id_producto_terminado = ?, cantidad_planificada = ?, cantidad_unidades = ?,
+                  id_supervisor = ?, observaciones = ?, fecha_programada = ?, fecha_programada_fin = ?,
+                  turno = ?, maquinista = ?, ayudante = ?, operario_corte = ?, operario_embalaje = ?,
+                  medida = ?, peso_producto = ?, gramaje = ?, es_orden_manual = ?, id_receta_producto = NULL
+              WHERE id_orden = ?`,
+        params: [
+          id_producto_terminado,
+          parseFloat(cantidad_planificada),
+          parseFloat(cantidad_unidades || 0),
+          id_supervisor || null,
+          observaciones || null,
+          fecha_programada || null,
+          fecha_programada_fin || null,
+          turno,
+          maquinista || null,
+          ayudante || null,
+          operario_corte || null,
+          operario_embalaje || null,
+          medida || null,
+          peso_producto || null,
+          gramaje || null,
+          esManual,
+          id
+        ]
+      },
+      { sql: `DELETE FROM op_consumo_materiales WHERE id_orden = ?`, params: [id] },
+      { sql: `DELETE FROM op_recetas_provisionales WHERE id_orden = ?`, params: [id] }
+    ];
 
-    // 2. Limpiar datos previos
-    // Borramos de ambas tablas para evitar datos fantasmas
-    await connection.query('DELETE FROM op_consumo_materiales WHERE id_orden = ?', [id]);
-    await connection.query('DELETE FROM op_recetas_provisionales WHERE id_orden = ?', [id]);
+    const headerResult = await executeTransaction(headerQueries);
+    if (!headerResult.success) throw new Error(headerResult.error);
 
     let nuevoCostoMateriales = 0;
 
-    // 3. Insertar nuevos insumos en la tabla PROVISIONAL
     if (modo_receta !== 'manual' && insumos && insumos.length > 0) {
-      for (const insumo of insumos) {
-        const porcentaje = parseFloat(insumo.porcentaje);
-        // Calculamos la cantidad requerida en Kilos basada en el porcentaje
-        const cantidadRequerida = (parseFloat(cantidad_planificada) * porcentaje) / 100;
+      const insumosIds = insumos.map(i => i.id_insumo);
+      const costosResult = await executeQuery(
+        `SELECT id_producto, costo_unitario_promedio FROM productos WHERE id_producto IN (${insumosIds.map(() => '?').join(',')})`,
+        insumosIds
+      );
+      const mapaCostos = {};
+      (costosResult.data || []).forEach(p => { mapaCostos[p.id_producto] = parseFloat(p.costo_unitario_promedio); });
 
-        // Obtenemos costo unitario para actualizar el costo total de la orden
-        const [productos] = await connection.query(
-          'SELECT costo_unitario_promedio FROM productos WHERE id_producto = ?', 
-          [insumo.id_insumo]
-        );
-        
-        const costoUnitario = productos.length > 0 ? parseFloat(productos[0].costo_unitario_promedio) : 0;
-        nuevoCostoMateriales += cantidadRequerida * costoUnitario;
+      const insertQueries = insumos.map(insumo => {
+        const cantidadRequerida = (parseFloat(cantidad_planificada) * parseFloat(insumo.porcentaje)) / 100;
+        nuevoCostoMateriales += cantidadRequerida * (mapaCostos[insumo.id_insumo] || 0);
+        return {
+          sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
+          params: [id, insumo.id_insumo, cantidadRequerida]
+        };
+      });
 
-        // CORRECCIÓN CLAVE: Insertar en op_recetas_provisionales
-        // Esta es la tabla que lee el frontend cuando el estado es 'Pendiente'
-        await connection.query(
-          `INSERT INTO op_recetas_provisionales 
-           (id_orden, id_insumo, cantidad_requerida) 
-           VALUES (?, ?, ?)`,
-          [id, insumo.id_insumo, cantidadRequerida]
-        );
-      }
+      const insertResult = await executeTransaction(insertQueries);
+      if (!insertResult.success) throw new Error(insertResult.error);
     }
 
-    // 4. Actualizar el costo total calculado en la cabecera
-    await connection.query(
-        'UPDATE ordenes_produccion SET costo_materiales = ? WHERE id_orden = ?',
-        [nuevoCostoMateriales, id]
+    await executeQuery(
+      `UPDATE ordenes_produccion SET costo_materiales = ? WHERE id_orden = ?`,
+      [nuevoCostoMateriales, id]
     );
 
-    await connection.commit();
     res.json({ success: true, message: 'Orden actualizada exitosamente' });
 
   } catch (error) {
-    if (connection) await connection.rollback();
     console.error('Error al editar orden:', error);
     res.status(500).json({ error: error.message });
-  } finally {
-    if (connection) connection.release();
   }
 }
 
@@ -2415,8 +2404,8 @@ export async function anularOrden(req, res) {
 
     const orden = ordenResult.data[0];
 
-    if (orden.estado === 'Cancelada') {
-      return res.status(400).json({ error: 'La orden ya está cancelada' });
+    if (['Cancelada', 'Anulada'].includes(orden.estado)) {
+      return res.status(400).json({ error: 'La orden ya ha sido cancelada o anulada' });
     }
 
     const queries = [];
@@ -2507,9 +2496,9 @@ export async function anularOrden(req, res) {
     }
 
     queries.push({
-      sql: `UPDATE ordenes_produccion 
-            SET estado = 'Cancelada', 
-                observaciones = CONCAT(IFNULL(observaciones, ''), ' [CANCELADA]') 
+      sql: `UPDATE ordenes_produccion
+            SET estado = 'Anulada',
+                observaciones = CONCAT(IFNULL(observaciones, ''), ' [ANULADA]')
             WHERE id_orden = ?`,
       params: [id]
     });
@@ -2570,6 +2559,122 @@ export async function anularOrden(req, res) {
 
   } catch (error) {
     console.error('Error al anular orden:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ─── ADJUNTOS ────────────────────────────────────────────────────────────────
+
+export { uploadMiddleware };
+
+export async function subirAdjunto(req, res) {
+  try {
+    const { id } = req.params;
+    const usuario = req.usuario;
+
+    const rolesPermitidos = ['Supervisor', 'Calidad', 'Administrador', 'Jefe de Planta', 'Jefe de Producción'];
+    if (!rolesPermitidos.includes(usuario.rol)) {
+      return res.status(403).json({ error: 'No tienes permiso para subir adjuntos.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se recibió ningún archivo.' });
+    }
+
+    const ordenResult = await executeQuery('SELECT id_orden FROM ordenes_produccion WHERE id_orden = ?', [id]);
+    if (!ordenResult.success || ordenResult.data.length === 0) {
+      return res.status(404).json({ error: 'Orden de producción no encontrada.' });
+    }
+
+    const resultado = await subirArchivoACloudinary(req.file, 'indpack_produccion');
+
+    const mime = req.file.mimetype;
+    let tipo_archivo = 'otro';
+    if (mime.startsWith('image/')) tipo_archivo = 'imagen';
+    else if (mime === 'application/pdf') tipo_archivo = 'pdf';
+    else if (mime.includes('word') || mime.includes('document')) tipo_archivo = 'documento';
+
+    const insertResult = await executeQuery(
+      `INSERT INTO op_adjuntos (id_orden, url, nombre_archivo, tipo_archivo, public_id_cloudinary, id_subido_por, fecha_subida)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        resultado.secure_url,
+        req.file.originalname,
+        tipo_archivo,
+        resultado.public_id,
+        usuario.id_empleado || null,
+        getFechaPeru()
+      ]
+    );
+
+    if (!insertResult.success) {
+      return res.status(500).json({ error: 'Error al guardar el adjunto en la base de datos.' });
+    }
+
+    res.status(201).json({
+      success: true,
+      adjunto: {
+        id_adjunto: insertResult.data.insertId,
+        url: resultado.secure_url,
+        nombre_archivo: req.file.originalname,
+        tipo_archivo,
+        fecha_subida: getFechaPeru()
+      }
+    });
+  } catch (error) {
+    console.error('Error al subir adjunto:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function getAdjuntosOrden(req, res) {
+  try {
+    const { id } = req.params;
+    const result = await executeQuery(
+      `SELECT oa.id_adjunto, oa.url, oa.nombre_archivo, oa.tipo_archivo, oa.fecha_subida,
+              CONCAT(e.nombres, ' ', e.apellidos) AS subido_por
+       FROM op_adjuntos oa
+       LEFT JOIN empleados e ON oa.id_subido_por = e.id_empleado
+       WHERE oa.id_orden = ?
+       ORDER BY oa.fecha_subida DESC`,
+      [id]
+    );
+    if (!result.success) {
+      return res.status(500).json({ error: 'Error al obtener adjuntos.' });
+    }
+    res.json({ success: true, adjuntos: result.data });
+  } catch (error) {
+    console.error('Error al obtener adjuntos:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function eliminarAdjunto(req, res) {
+  try {
+    const { idAdjunto } = req.params;
+    const usuario = req.usuario;
+
+    const rolesPermitidos = ['Supervisor', 'Calidad', 'Administrador', 'Jefe de Planta', 'Jefe de Producción'];
+    if (!rolesPermitidos.includes(usuario.rol)) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar adjuntos.' });
+    }
+
+    const adjuntoResult = await executeQuery('SELECT * FROM op_adjuntos WHERE id_adjunto = ?', [idAdjunto]);
+    if (!adjuntoResult.success || adjuntoResult.data.length === 0) {
+      return res.status(404).json({ error: 'Adjunto no encontrado.' });
+    }
+
+    const adjunto = adjuntoResult.data[0];
+
+    const deleteResult = await executeQuery('DELETE FROM op_adjuntos WHERE id_adjunto = ?', [idAdjunto]);
+    if (!deleteResult.success) {
+      return res.status(500).json({ error: 'Error al eliminar adjunto.' });
+    }
+
+    res.json({ success: true, message: 'Adjunto eliminado correctamente.' });
+  } catch (error) {
+    console.error('Error al eliminar adjunto:', error);
     res.status(500).json({ error: error.message });
   }
 }

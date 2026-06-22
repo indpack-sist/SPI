@@ -104,6 +104,8 @@ function OrdenDetalle() {
   const [subiendoAdjunto, setSubiendoAdjunto] = useState(false);
   const [adjuntoVisor, setAdjuntoVisor] = useState(null);
 
+  const [finalizarVieneDeParcial, setFinalizarVieneDeParcial] = useState(false);
+
   const puedeSubirAdjunto = ['Supervisor', 'Calidad', 'Administrador', 'Jefe de Planta', 'Jefe de Producción'].includes(userRole);
 
   useEffect(() => {
@@ -640,9 +642,38 @@ function OrdenDetalle() {
     }
   };
 
+  const pasarParcialAFinalizar = () => {
+    const reqMap = {};
+    consumoMateriales.forEach(item => {
+      reqMap[item.id_insumo] = parseFloat(item.cantidad_requerida || 0);
+    });
+
+    const insumosParaFinal = insumosParcialesConsumo.map(item => ({
+      id_insumo: item.id_insumo,
+      codigo_insumo: item.codigo_insumo,
+      insumo: item.insumo,
+      unidad_medida: item.unidad_medida,
+      cantidad_requerida: reqMap[item.id_insumo] || 0,
+      cantidad_ya_consumida: item.cantidad_ya_consumida || 0,
+      cantidad: item.cantidad,
+      es_nuevo: item.es_nuevo || false
+    }));
+
+    setCantidadUnidadesFinal(cantidadUnidadesParcial);
+    setInsumosFinalesConsumo(insumosParaFinal);
+    setFinalizarVieneDeParcial(true);
+    setModalParcial(false);
+    setModalFinalizar(true);
+  };
+
   const handleRegistroParcial = async (e) => {
     e.preventDefault();
-        
+
+    if (alcanzaMetaEnParcial) {
+      pasarParcialAFinalizar();
+      return;
+    }
+
     try {
       setProcesando(true);
       setError(null);
@@ -732,6 +763,7 @@ function OrdenDetalle() {
       if (response.data.success) {
         setSuccess('Producción finalizada exitosamente.');
         setModalFinalizar(false);
+        setFinalizarVieneDeParcial(false);
         setMermas([]);
         setMostrarMermas(false);
         setInsumosFinalesConsumo([]);
@@ -747,8 +779,19 @@ function OrdenDetalle() {
   };
 
   const kilosParcialCalculados = insumosParcialesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
-  
+
   const kilosAdicionalesCierre = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0), 0);
+
+  const yaKgAcumulado  = parseFloat(orden?.cantidad_producida || 0);
+  const yaUndAcumulado = parseFloat(orden?.cantidad_unidades_producida || 0);
+  const metaKgOrden    = parseFloat(orden?.cantidad_planificada || 0);
+  const metaUndOrden   = parseFloat(orden?.cantidad_unidades || 0);
+  const undNuevasParcial = parseFloat(cantidadUnidadesParcial || 0);
+
+  const alcanzaMetaEnParcial = modalParcial && (
+    (metaKgOrden  > 0 && (yaKgAcumulado  + kilosParcialCalculados) >= metaKgOrden)  ||
+    (metaUndOrden > 0 && (yaUndAcumulado + undNuevasParcial)       >= metaUndOrden)
+  );
   const kilosFinalesCalculados = parseFloat(orden?.cantidad_producida || 0) + kilosAdicionalesCierre;
 
   const handleAsignarSupervisor = async (e) => {
@@ -1169,6 +1212,7 @@ function OrdenDetalle() {
                 setObservacionesFinal('');
                 setMermas([]);
                 setMostrarMermas(false);
+                setFinalizarVieneDeParcial(false);
                 inicializarInsumosParaFinal();
                 cargarProductosMerma();
                 setModalFinalizar(true);
@@ -1655,13 +1699,35 @@ function OrdenDetalle() {
         size="lg"
       >
         <form onSubmit={handleRegistroParcial}>
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
-            <Info className="text-blue-500 shrink-0" size={20} />
-            <div className="text-sm text-blue-700">
-              <p><strong>Registro Parcial:</strong> Registre la cantidad de unidades fabricadas y los insumos consumidos. El peso total se calculará automáticamente.</p>
-              <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> de <strong>{parseFloat(orden.cantidad_planificada).toFixed(2)}</strong> Kg</p>
+          {alcanzaMetaEnParcial ? (
+            <div className="bg-green-50 border border-green-300 rounded-lg p-4 mb-4 flex gap-3">
+              <CheckCircle className="text-green-500 shrink-0 mt-0.5" size={20} />
+              <div className="text-sm text-green-800">
+                <p className="font-bold">Esta cantidad completa la producción planificada</p>
+                <p className="mt-1">
+                  Acumulado: <strong>{yaKgAcumulado.toFixed(2)} Kg</strong>
+                  {metaUndOrden > 0 && <> · <strong>{yaUndAcumulado} {unidadProduccion}</strong></>}
+                  &nbsp;+&nbsp;
+                  {kilosParcialCalculados > 0 && <><strong>{kilosParcialCalculados.toFixed(2)} Kg</strong>&nbsp;</>}
+                  {undNuevasParcial > 0 && <strong>{undNuevasParcial} {unidadProduccion}</strong>}
+                  &nbsp;=&nbsp;
+                  <strong className="text-green-700">
+                    {(yaKgAcumulado + kilosParcialCalculados).toFixed(2)} Kg
+                    {metaUndOrden > 0 && ` · ${yaUndAcumulado + undNuevasParcial} ${unidadProduccion}`}
+                  </strong>
+                </p>
+                <p className="text-xs mt-1 text-green-600">Al confirmar, pasarás directamente al cierre de la orden con estos mismos datos.</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
+              <Info className="text-blue-500 shrink-0" size={20} />
+              <div className="text-sm text-blue-700">
+                <p><strong>Registro Parcial:</strong> Registre la cantidad de unidades fabricadas y los insumos consumidos. El peso total se calculará automáticamente.</p>
+                <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)}</strong> de <strong>{parseFloat(orden.cantidad_planificada).toFixed(2)}</strong> Kg</p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div className="form-group">
@@ -1867,22 +1933,34 @@ function OrdenDetalle() {
             )}
           </div>
 
-          <div className="flex gap-2 justify-end mt-6">
-            <button 
-              type="button" 
-              className="btn btn-outline" 
-              onClick={() => setModalParcial(false)}
-              disabled={procesando}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-info"
-              disabled={procesando || insumosParcialesConsumo.length === 0}
-            >
-              {procesando ? 'Procesando...' : 'Registrar Producción Parcial'}
-            </button>
+          <div className="mt-6">
+            {alcanzaMetaEnParcial && (
+              <p className="text-xs text-green-700 text-right mb-2">
+                Los insumos y mermas ingresados se trasladarán al cierre final de la orden.
+              </p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setModalParcial(false)}
+                disabled={procesando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className={alcanzaMetaEnParcial ? 'btn btn-success' : 'btn btn-info'}
+                disabled={procesando || insumosParcialesConsumo.length === 0}
+              >
+                {procesando
+                  ? 'Procesando...'
+                  : alcanzaMetaEnParcial
+                    ? <span className="flex items-center gap-1"><CheckCircle size={16} /> Finalizar orden →</span>
+                    : 'Registrar Producción Parcial'
+                }
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -1941,7 +2019,7 @@ function OrdenDetalle() {
 
       <Modal
         isOpen={modalFinalizar}
-        onClose={() => setModalFinalizar(false)}
+        onClose={() => { setModalFinalizar(false); setFinalizarVieneDeParcial(false); }}
         title={
           <span className="flex items-center gap-2">
             <CheckCircle className="text-success" /> Finalizar Producción
@@ -1950,13 +2028,24 @@ function OrdenDetalle() {
         size="xl"
       >
         <form onSubmit={handleFinalizar}>
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
-            <Info className="text-blue-500 shrink-0" size={20} />
-            <div className="text-sm text-blue-700">
-              <p><strong>Cierre de Orden:</strong> Ingrese las cantidades <strong>ADICIONALES</strong> producidas en este cierre (no el total acumulado).</p>
-              <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{parseInt(orden.cantidad_unidades_producida || 0)} {unidadProduccion}</strong></p>
+          {finalizarVieneDeParcial ? (
+            <div className="bg-green-50 border border-green-300 rounded-lg p-4 mb-4 flex gap-3">
+              <CheckCircle className="text-green-500 shrink-0 mt-0.5" size={20} />
+              <div className="text-sm text-green-800">
+                <p className="font-bold">Datos trasladados desde el registro parcial</p>
+                <p className="mt-1">Las cantidades, insumos y mermas ya están cargados. Revísalos antes de confirmar el cierre.</p>
+                <p className="mt-1 text-xs text-green-600">Ya producidas (parciales anteriores): <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{parseInt(orden.cantidad_unidades_producida || 0)} {unidadProduccion}</strong></p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 flex gap-3">
+              <Info className="text-blue-500 shrink-0" size={20} />
+              <div className="text-sm text-blue-700">
+                <p><strong>Cierre de Orden:</strong> Ingrese las cantidades <strong>ADICIONALES</strong> producidas en este cierre (no el total acumulado).</p>
+                <p className="mt-1">Ya producidas: <strong>{parseFloat(orden.cantidad_producida || 0).toFixed(2)} Kg</strong> | <strong>{parseInt(orden.cantidad_unidades_producida || 0)} {unidadProduccion}</strong></p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="form-group">

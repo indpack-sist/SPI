@@ -71,69 +71,13 @@ function CrearOrden() {
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
     const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
 
-    if (!productoSeleccionado) {
-        return insumo.id_tipo_inventario === 2; 
-    }
+    if (!productoSeleccionado || !productoSeleccionado.categoria) return true;
 
-    const nombreProd = productoSeleccionado.nombre.toUpperCase();
-    const nombreInsumo = insumo.nombre.toUpperCase();
+    const categoriaProducto = productoSeleccionado.categoria.toLowerCase();
 
-    if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
-        return nombreInsumo.includes('ROLLO BURBUPACK');
-    }
-
-    if (nombreProd.includes('ESQUINERO')) {
-        return (
-            nombreInsumo.includes('PELETIZADO VERDE') || 
-            nombreInsumo.includes('BATERIA') ||
-            nombreInsumo.includes('BEIGE DURO') || 
-            nombreInsumo.includes('PLOMO DURO') ||
-            nombreInsumo.includes('CHANCACA VERDE') ||
-            nombreInsumo.includes('ESQUINERO MOLIDO') ||
-            nombreInsumo.includes('TUTI') ||
-            nombreInsumo.includes('PIGMENTO VERDE')
-        );
-    }
-
-    if (nombreProd.includes('BURBUPACK')) {
-        return (
-            nombreInsumo.includes('POLIETILENO DE BAJA') || 
-            nombreInsumo.includes('POLIETILENO DE ALTA') ||
-            nombreInsumo.includes('PELETIZADO POLIETILENO')
-        );
-    }
-
-    if (nombreProd.includes('ZUNCHO')) {
-        return (
-            nombreInsumo.includes('PELETIZADO NEGRO') || 
-            nombreInsumo.includes('CHATARRA') ||
-            nombreInsumo.includes('CHANCACA NEGRA') ||
-            nombreInsumo.includes('ZUNCHO MOLIDO') ||
-            nombreInsumo.includes('PIGMENTO NEGRO') ||
-            nombreInsumo.includes('OTROS')
-        );
-    }
-
-    if (nombreProd.includes('PELETIZADO NEGRO')) {
-        return (
-            nombreInsumo.includes('ETIQUETA MOLIDA') ||
-            nombreInsumo.includes('CHANCACA NEGRA') ||
-            nombreInsumo.includes('ZUNCHO MOLIDO') ||
-            nombreInsumo.includes('SACA MOLIDA') ||
-            nombreInsumo.includes('OTROS')
-        );
-    }
-
-    if (nombreProd.includes('PELETIZADO VERDE')) {
-        return (
-            nombreInsumo.includes('ETIQUETA MOLIDA') ||
-            nombreInsumo.includes('CHANCACA VERDE') ||
-            nombreInsumo.includes('SACA MOLIDA') ||
-            nombreInsumo.includes('OTROS')
-        );
-    }
-
-    return insumo.id_tipo_inventario === 2; 
+    // "Insumos Burbupack".includes("burbupack") → true
+    return insumo.categoria &&
+      insumo.categoria.toLowerCase().includes(categoriaProducto);
   });
 
   useEffect(() => {
@@ -189,7 +133,7 @@ function CrearOrden() {
       const [productosRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getAll({ requiere_receta: 'true', estado: 'Activo' }),
         empleadosAPI.getByRol('Supervisor'),
-        productosAPI.getAll({ estado: 'Activo', requiere_receta: 'false' })
+        productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: '1,2' })
       ]);
       
       setProductosTerminados(productosRes.data.data);

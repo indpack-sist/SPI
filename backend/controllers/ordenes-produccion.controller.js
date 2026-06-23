@@ -2635,7 +2635,7 @@ export async function getAdjuntosOrden(req, res) {
     const { id } = req.params;
     const result = await executeQuery(
       `SELECT oa.id_adjunto, oa.url, oa.nombre_archivo, oa.tipo_archivo, oa.fecha_subida,
-              CONCAT(e.nombres, ' ', e.apellidos) AS subido_por
+              e.nombre_completo AS subido_por
        FROM op_adjuntos oa
        LEFT JOIN empleados e ON oa.id_subido_por = e.id_empleado
        WHERE oa.id_orden = ?

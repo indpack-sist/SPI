@@ -2571,7 +2571,7 @@ export { uploadMiddleware };
 export async function subirAdjunto(req, res) {
   try {
     const { id } = req.params;
-    const usuario = req.usuario;
+    const usuario = req.user;
 
     const rolesPermitidos = ['Supervisor', 'Calidad', 'Administrador', 'Jefe de Planta', 'Jefe de Producción'];
     if (!rolesPermitidos.includes(usuario.rol)) {
@@ -2654,7 +2654,7 @@ export async function getAdjuntosOrden(req, res) {
 export async function eliminarAdjunto(req, res) {
   try {
     const { idAdjunto } = req.params;
-    const usuario = req.usuario;
+    const usuario = req.user;
 
     const rolesPermitidos = ['Supervisor', 'Calidad', 'Administrador', 'Jefe de Planta', 'Jefe de Producción'];
     if (!rolesPermitidos.includes(usuario.rol)) {

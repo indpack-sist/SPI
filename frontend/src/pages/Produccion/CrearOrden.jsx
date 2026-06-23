@@ -189,7 +189,7 @@ function CrearOrden() {
       const [productosRes, supervisoresRes, insumosRes] = await Promise.all([
         productosAPI.getAll({ requiere_receta: 'true', estado: 'Activo' }),
         empleadosAPI.getByRol('Supervisor'),
-        productosAPI.getAll({ estado: 'Activo' })
+        productosAPI.getAll({ estado: 'Activo', requiere_receta: 'false' })
       ]);
       
       setProductosTerminados(productosRes.data.data);

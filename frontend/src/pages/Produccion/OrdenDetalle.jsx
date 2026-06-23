@@ -121,7 +121,7 @@ function OrdenDetalle() {
         ordenesProduccionAPI.getById(id),
         ordenesProduccionAPI.getConsumoMateriales(id),
         ordenesProduccionAPI.getRegistrosParciales(id).catch(() => ({ data: { data: [] } })),
-        productosAPI.getAll({ estado: 'Activo' }).catch(() => ({ data: { data: [] } })),
+        productosAPI.getAll({ estado: 'Activo', requiere_receta: 'false' }).catch(() => ({ data: { data: [] } })),
         ordenesProduccionAPI.getAdjuntos(id).catch(() => ({ data: { adjuntos: [] } }))
       ]);
 
@@ -1664,7 +1664,7 @@ function OrdenDetalle() {
                     </div>
                     {puedeSubirAdjunto && (
                       <button
-                        className="shrink-0 text-red-400 hover:text-red-600 p-0.5 rounded transition-colors"
+                        className="btn btn-sm btn-danger p-1 shrink-0"
                         onClick={() => handleEliminarAdjunto(adj.id_adjunto)}
                         title="Eliminar"
                       >
@@ -1687,10 +1687,10 @@ function OrdenDetalle() {
         >
           <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
             <button
-              className="absolute -top-8 right-0 text-white hover:text-gray-300"
+              className="modal-close absolute top-2 right-2 bg-black/40 hover:bg-black/60 text-white z-10"
               onClick={() => setAdjuntoVisor(null)}
             >
-              <X size={24} />
+              <X size={20} />
             </button>
             <img
               src={adjuntoVisor.url}

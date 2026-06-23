@@ -71,13 +71,69 @@ function CrearOrden() {
   const insumosFiltradosParaMostrar = insumosDisponibles.filter(insumo => {
     const productoSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
 
-    if (!productoSeleccionado || !productoSeleccionado.categoria) return true;
+    if (!productoSeleccionado) {
+      return insumo.id_tipo_inventario === 2;
+    }
 
-    const categoriaProducto = productoSeleccionado.categoria.toLowerCase();
+    const nombreProd = productoSeleccionado.nombre.toUpperCase();
+    const nombreInsumo = insumo.nombre.toUpperCase();
 
-    // "Insumos Burbupack".includes("burbupack") → true
-    return insumo.categoria &&
-      insumo.categoria.toLowerCase().includes(categoriaProducto);
+    if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
+      return nombreInsumo.includes('ROLLO BURBUPACK');
+    }
+
+    if (nombreProd.includes('ESQUINERO')) {
+      return (
+        nombreInsumo.includes('PELETIZADO VERDE') ||
+        nombreInsumo.includes('BATERIA') ||
+        nombreInsumo.includes('BEIGE DURO') ||
+        nombreInsumo.includes('PLOMO DURO') ||
+        nombreInsumo.includes('CHANCACA VERDE') ||
+        nombreInsumo.includes('ESQUINERO MOLIDO') ||
+        nombreInsumo.includes('TUTI') ||
+        nombreInsumo.includes('PIGMENTO VERDE')
+      );
+    }
+
+    if (nombreProd.includes('BURBUPACK')) {
+      return (
+        nombreInsumo.includes('POLIETILENO DE BAJA') ||
+        nombreInsumo.includes('POLIETILENO DE ALTA') ||
+        nombreInsumo.includes('PELETIZADO POLIETILENO')
+      );
+    }
+
+    if (nombreProd.includes('ZUNCHO')) {
+      return (
+        nombreInsumo.includes('PELETIZADO NEGRO') ||
+        nombreInsumo.includes('CHATARRA') ||
+        nombreInsumo.includes('CHANCACA NEGRA') ||
+        nombreInsumo.includes('ZUNCHO MOLIDO') ||
+        nombreInsumo.includes('PIGMENTO NEGRO') ||
+        nombreInsumo.includes('OTROS')
+      );
+    }
+
+    if (nombreProd.includes('PELETIZADO NEGRO')) {
+      return (
+        nombreInsumo.includes('ETIQUETA MOLIDA') ||
+        nombreInsumo.includes('CHANCACA NEGRA') ||
+        nombreInsumo.includes('ZUNCHO MOLIDO') ||
+        nombreInsumo.includes('SACA MOLIDA') ||
+        nombreInsumo.includes('OTROS')
+      );
+    }
+
+    if (nombreProd.includes('PELETIZADO VERDE')) {
+      return (
+        nombreInsumo.includes('ETIQUETA MOLIDA') ||
+        nombreInsumo.includes('CHANCACA VERDE') ||
+        nombreInsumo.includes('SACA MOLIDA') ||
+        nombreInsumo.includes('OTROS')
+      );
+    }
+
+    return insumo.id_tipo_inventario === 2;
   });
 
   useEffect(() => {

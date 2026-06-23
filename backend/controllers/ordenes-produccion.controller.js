@@ -2620,7 +2620,8 @@ export async function subirAdjunto(req, res) {
         url: resultado.secure_url,
         nombre_archivo: req.file.originalname,
         tipo_archivo,
-        fecha_subida: getFechaPeru()
+        fecha_subida: getFechaPeru(),
+        subido_por: usuario.nombre_completo || null
       }
     });
   } catch (error) {

@@ -44,11 +44,13 @@ function IncidenciasPorProducto() {
     }
   };
 
-  const productosFiltrados = productos.filter(p => {
-    if (!busqueda) return true;
-    const t = busqueda.toLowerCase();
-    return p.nombre?.toLowerCase().includes(t) || p.codigo?.toLowerCase().includes(t);
-  });
+  const terminoBusqueda = busqueda.trim().toLowerCase();
+  const productosFiltrados = terminoBusqueda
+    ? productos.filter(p =>
+        p.nombre?.toLowerCase().includes(terminoBusqueda) ||
+        p.codigo?.toLowerCase().includes(terminoBusqueda)
+      )
+    : [];
 
   const columns = [
     {
@@ -136,17 +138,22 @@ function IncidenciasPorProducto() {
               <input type="text" className="form-input search-input" placeholder="Buscar producto..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1 max-h-[60vh] overflow-y-auto">
-              {productosFiltrados.slice(0, 200).map(p => (
-                <button
-                  key={p.id_producto}
-                  className={`text-left p-2 rounded-lg border transition-colors ${productoSel?.id_producto === p.id_producto ? 'border-primary bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
-                  onClick={() => seleccionarProducto(p)}
-                >
-                  <div className="text-sm font-medium truncate">{p.nombre}</div>
-                  <div className="text-xs text-muted font-mono">{p.codigo}</div>
-                </button>
-              ))}
-              {productosFiltrados.length === 0 && <p className="text-muted text-sm text-center py-4">Sin resultados.</p>}
+              {!terminoBusqueda ? (
+                <p className="text-muted text-sm text-center py-4">Escribe el nombre o código para buscar un producto.</p>
+              ) : productosFiltrados.length === 0 ? (
+                <p className="text-muted text-sm text-center py-4">Sin resultados para "{busqueda}".</p>
+              ) : (
+                productosFiltrados.slice(0, 50).map(p => (
+                  <button
+                    key={p.id_producto}
+                    className={`text-left p-2 rounded-lg border transition-colors ${productoSel?.id_producto === p.id_producto ? 'border-primary bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
+                    onClick={() => seleccionarProducto(p)}
+                  >
+                    <div className="text-sm font-medium truncate">{p.nombre}</div>
+                    <div className="text-xs text-muted font-mono">{p.codigo}</div>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>

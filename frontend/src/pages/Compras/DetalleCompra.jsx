@@ -13,11 +13,14 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import { comprasAPI, cuentasPagoAPI, productosAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 
 function DetalleCompra() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+  const { tienePermiso } = usePermisos();
+  const verMontos = tienePermiso('verPrecios'); // Calidad = false → oculta montos/factura/condiciones
+
   const [compra, setCompra] = useState(null);
   const [cuentasPago, setCuentasPago] = useState([]);
   const [letras, setLetras] = useState([]);
@@ -619,23 +622,25 @@ function DetalleCompra() {
               }`}>
                 {compra.estado}
               </span>
-              {usaFondosPropios && (
+              {verMontos && usaFondosPropios && (
                 <span className="badge badge-purple">Fondos Propios</span>
               )}
-              <span className="badge badge-outline">
-                {compra.forma_pago_detalle || compra.tipo_compra}
-              </span>
-              {esContadoSinPago && (
+              {verMontos && (
+                <span className="badge badge-outline">
+                  {compra.forma_pago_detalle || compra.tipo_compra}
+                </span>
+              )}
+              {verMontos && esContadoSinPago && (
                 <span className="badge badge-warning flex items-center gap-1">
                   <Clock size={12} /> Solo Registro
                 </span>
               )}
-              {(esCredito || esLetras) && tieneCronogramaPendiente && (
+              {verMontos && (esCredito || esLetras) && tieneCronogramaPendiente && (
                 <span className="badge badge-warning flex items-center gap-1">
                   <AlertCircle size={12} /> Sin Cronograma
                 </span>
               )}
-              {(esCredito || esLetras) && compra.cronograma_definido && (
+              {verMontos && (esCredito || esLetras) && compra.cronograma_definido && (
                 <span className="badge badge-success flex items-center gap-1">
                   <CheckCircle2 size={12} /> Cronograma OK
                 </span>
@@ -644,21 +649,22 @@ function DetalleCompra() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
+          {verMontos && (<>
           {compra.url_comprobante && (
-            <a 
-              href={compra.url_comprobante} 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            <a
+              href={compra.url_comprobante}
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn btn-outline text-blue-600 border-blue-200 hover:bg-blue-50"
             >
               <FileCheck size={18} /> Ver Comprobante
             </a>
           )}
-          
+
           <button className="btn btn-outline" onClick={handleDescargarPDF}>
             <Download size={18} /> PDF
           </button>
-          
+
           {esSoloFormato && !estaCancelada && (
             <button className="btn btn-success text-white" onClick={() => setModalConvertirOpen(true)}>
               <FileCheck size={18} /> Registrar Factura / Recibo
@@ -694,23 +700,25 @@ function DetalleCompra() {
                 </button>
               )}
               
-              <button 
-                className="btn btn-outline text-danger border-danger hover:bg-danger/10" 
+              <button
+                className="btn btn-outline text-danger border-danger hover:bg-danger/10"
                 onClick={() => setModalCancelarOpen(true)}
               >
                 <XCircle size={18} /> Cancelar / Anular
               </button>
             </>
           )}
+          </>)}
         </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
+      {verMontos && (<>
       <div className={`card mb-6 border-l-4 ${
-        estaCancelada ? 'border-danger' : 
-        estaPagado ? 'border-success' : 
+        estaCancelada ? 'border-danger' :
+        estaPagado ? 'border-success' :
         'border-warning'
       }`}>
         <div className="card-body grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -811,6 +819,7 @@ function DetalleCompra() {
           </div>
         </div>
       )}
+      </>)}
 
       {estaCancelada && (
         <div className="card mb-6 bg-red-50 border border-red-200">
@@ -842,15 +851,17 @@ function DetalleCompra() {
           
           {!esSoloFormato && (
             <>
-              <button 
-                className={`tab-item ${tabActiva === 'pagos' ? 'active' : ''}`} 
+              {verMontos && (
+              <button
+                className={`tab-item ${tabActiva === 'pagos' ? 'active' : ''}`}
                 onClick={() => setTabActiva('pagos')}
               >
                 Pagos
               </button>
-              {(esLetras || esCredito) && (
-                <button 
-                  className={`tab-item ${tabActiva === 'letras' ? 'active' : ''}`} 
+              )}
+              {verMontos && (esLetras || esCredito) && (
+                <button
+                  className={`tab-item ${tabActiva === 'letras' ? 'active' : ''}`}
                   onClick={() => setTabActiva('letras')}
                 >
                   {esLetras ? 'Letras' : 'Cuotas'}
@@ -893,8 +904,8 @@ function DetalleCompra() {
                       <th>Producto</th>
                       <th className="text-right">Cant. Solicitada</th>
                       {!esSoloFormato && <th className="text-right">Progreso Entrega</th>}
-                      <th className="text-right">Precio</th>
-                      <th className="text-right">Total</th>
+                      {verMontos && <th className="text-right">Precio</th>}
+                      {verMontos && <th className="text-right">Total</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -930,12 +941,13 @@ function DetalleCompra() {
                               </div>
                             </td>
                           )}
-                          <td className="text-right">{formatearMoneda(item.precio_unitario)}</td>
-                          <td className="text-right font-bold">{formatearMoneda(item.subtotal)}</td>
+                          {verMontos && <td className="text-right">{formatearMoneda(item.precio_unitario)}</td>}
+                          {verMontos && <td className="text-right font-bold">{formatearMoneda(item.subtotal)}</td>}
                         </tr>
                       );
                     })}
                   </tbody>
+                  {verMontos && (
                   <tfoot className="bg-gray-50 font-medium">
                     <tr>
                       <td colSpan={esSoloFormato ? 3 : 4} className="text-right">Subtotal</td>
@@ -952,6 +964,7 @@ function DetalleCompra() {
                       <td className="text-right font-bold text-lg">{formatearMoneda(compra.total)}</td>
                     </tr>
                   </tfoot>
+                  )}
                 </table>
               </div>
             </div>
@@ -1023,7 +1036,7 @@ function DetalleCompra() {
               </div>
             </div>
 
-            {compra.id_cuenta_pago && !usaFondosPropios && (
+            {verMontos && compra.id_cuenta_pago && !usaFondosPropios && (
               <div className="card">
                 <div className="card-header bg-gray-50">
                   <h3 className="card-title flex gap-2">
@@ -1040,7 +1053,7 @@ function DetalleCompra() {
               </div>
             )}
 
-            {!compra.id_cuenta_pago && !usaFondosPropios && esContadoSinPago && (
+            {verMontos && !compra.id_cuenta_pago && !usaFondosPropios && esContadoSinPago && (
               <div className="card border-l-4 border-orange-500">
                 <div className="card-body">
                   <div className="flex items-start gap-2">
@@ -1056,7 +1069,7 @@ function DetalleCompra() {
               </div>
             )}
 
-            {esCredito && !esSoloFormato && (
+            {verMontos && esCredito && !esSoloFormato && (
               <div className="card">
                 <div className="card-header bg-gray-50 flex justify-between items-center">
                   <h3 className="card-title flex gap-2">
@@ -1128,7 +1141,7 @@ function DetalleCompra() {
         </div>
       )}
 
-      {tabActiva === 'pagos' && (
+      {verMontos && tabActiva === 'pagos' && (
         <div className="card">
           <div className="card-header bg-gray-50">
             <h3 className="card-title flex gap-2">
@@ -1213,7 +1226,7 @@ function DetalleCompra() {
         </div>
       )}
 
-      {tabActiva === 'letras' && (
+      {verMontos && tabActiva === 'letras' && (
         <div className="space-y-6">
           {esCredito && (
             <div className="card">
@@ -1421,9 +1434,11 @@ function DetalleCompra() {
                       Hay {itemsPendientes.length} producto(s) pendiente(s) de ingresar al inventario
                     </p>
                   </div>
-                  <button className="btn btn-primary" onClick={handleAbrirIngresoInventario}>
-                    <PackagePlus size={18} /> Registrar Ingreso
-                  </button>
+                  {verMontos && (
+                    <button className="btn btn-primary" onClick={handleAbrirIngresoInventario}>
+                      <PackagePlus size={18} /> Registrar Ingreso
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1457,7 +1472,7 @@ function DetalleCompra() {
                       <th>Fecha</th>
                       <th>ID Entrada</th>
                       <th className="text-right">Items Ingresados</th>
-                      <th className="text-right">Total</th>
+                      {verMontos && <th className="text-right">Total</th>}
                       <th>Estado</th>
                       <th>Registrado Por</th>
                     </tr>
@@ -1470,9 +1485,11 @@ function DetalleCompra() {
                         <td className="text-right">
                           {parseFloat(ingreso.cantidad_items_ingresada).toFixed(2)}
                         </td>
+                        {verMontos && (
                         <td className="text-right font-bold">
                           {formatearMoneda(ingreso.total)}
                         </td>
+                        )}
                         <td>
                           <span className={`badge ${
                             ingreso.estado_ingreso === 'Completo' ? 'badge-success' : 'badge-info'

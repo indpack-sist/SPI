@@ -10,9 +10,12 @@ import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import { comprasAPI, cuentasPagoAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 
 function Compras() {
   const navigate = useNavigate();
+  const { tienePermiso } = usePermisos();
+  const verMontos = tienePermiso('verPrecios'); // Calidad = false → vista sin datos financieros
   
   const [compras, setCompras] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
@@ -319,13 +322,15 @@ function Compras() {
           </h1>
           <p className="text-muted">Registro, control de pagos y trazabilidad</p>
         </div>
-        <button 
-          className="btn btn-primary shadow-lg hover:shadow-xl transition-all"
-          onClick={() => navigate('/compras/nueva')}
-        >
-          <Plus size={20} />
-          Registrar Compra
-        </button>
+        {verMontos && (
+          <button
+            className="btn btn-primary shadow-lg hover:shadow-xl transition-all"
+            onClick={() => navigate('/compras/nueva')}
+          >
+            <Plus size={20} />
+            Registrar Compra
+          </button>
+        )}
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -347,7 +352,7 @@ function Compras() {
         </button>
       </div>
 
-      {activeTab === 'compras' && estadisticas && (
+      {verMontos && activeTab === 'compras' && estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <div className="card hover:border-blue-300 transition-colors">
             <div className="card-body">
@@ -432,7 +437,7 @@ function Compras() {
         </div>
       )}
 
-      {alertas && (
+      {verMontos && alertas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {alertas.cuotas_vencidas?.cantidad > 0 && (
             <div 
@@ -544,6 +549,7 @@ function Compras() {
                 />
             </div>
 
+            {verMontos && (
             <div className="w-40">
               <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Tipo de Compra</label>
               <select
@@ -557,7 +563,9 @@ function Compras() {
                 <option value="Letras">Letras</option>
               </select>
             </div>
+            )}
 
+            {verMontos && (
             <div className="w-48">
               <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Cuenta de Pago</label>
               <select
@@ -573,6 +581,7 @@ function Compras() {
                 ))}
               </select>
             </div>
+            )}
 
             {Object.values(filtros).some(v => v !== '') && (
               <button
@@ -595,18 +604,26 @@ function Compras() {
         </div>
         <div className="card-body p-0">
           <Table
-            columns={activeTab === 'compras' ? columns : [
-              columns[0], // N° OC
-              columns[1], // Proveedor
-              {
-                header: 'Tipo Solicitud',
-                accessor: 'tipo_documento',
-                width: '150px',
-                render: () => <span className="badge badge-outline">Formato OC</span>
-              },
-              columns[5], // Total
-              columns[7]  // Acciones
-            ]}
+            columns={(() => {
+              if (activeTab === 'compras') {
+                // Calidad (sin verPrecios): N° Compra, Proveedor, Recepción y Acciones (sin montos/pagos)
+                return verMontos ? columns : [columns[0], columns[1], columns[2], columns[7]];
+              }
+              // Pestaña Solicitudes OC
+              const base = [
+                columns[0], // N° OC
+                columns[1], // Proveedor
+                {
+                  header: 'Tipo Solicitud',
+                  accessor: 'tipo_documento',
+                  width: '150px',
+                  render: () => <span className="badge badge-outline">Formato OC</span>
+                }
+              ];
+              if (verMontos) base.push(columns[5]); // Total solo si puede ver montos
+              base.push(columns[7]); // Acciones
+              return base;
+            })()}
             data={comprasFiltradas}
             emptyMessage={activeTab === 'compras' ? "No hay compras registradas" : "No hay formatos de solicitud guardados"}
           />

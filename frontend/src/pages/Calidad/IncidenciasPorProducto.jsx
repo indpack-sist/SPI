@@ -22,7 +22,8 @@ function IncidenciasPorProducto() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    productosAPI.getAll({ estado: 'Activo' })
+    // Solo productos que requieren receta (BOM)
+    productosAPI.getAll({ estado: 'Activo', requiere_receta: 'true' })
       .then(res => setProductos(res.data.data || []))
       .catch(() => setError('Error al cargar productos'))
       .finally(() => setLoadingProductos(false));

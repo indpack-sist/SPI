@@ -47,12 +47,22 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
     });
 
     incidenciasAPI.getTipos()
-      .then(res => setTipos(res.data.data || []))
+      .then(res => {
+        // Deduplicamos por nombre (defensa ante filas repetidas en el catálogo)
+        const vistos = new Set();
+        const unicos = (res.data.data || []).filter(t => {
+          const clave = (t.nombre || '').trim().toLowerCase();
+          if (vistos.has(clave)) return false;
+          vistos.add(clave);
+          return true;
+        });
+        setTipos(unicos);
+      })
       .catch(() => setTipos([]));
 
-    // Solo cargamos catálogo de productos si no viene uno fijo
+    // Solo cargamos catálogo de productos si no viene uno fijo; solo los que requieren receta (BOM)
     if (!prefill.id_producto) {
-      productosAPI.getAll({ estado: 'Activo' })
+      productosAPI.getAll({ estado: 'Activo', requiere_receta: 'true' })
         .then(res => setProductos(res.data.data || []))
         .catch(() => setProductos([]));
     }

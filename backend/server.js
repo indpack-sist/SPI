@@ -22,6 +22,7 @@ import transferenciasRoutes from './routes/transferencias.routes.js';
 import inventarioRoutes from './routes/inventario.routes.js';
 
 import ordenesProduccionRoutes from './routes/ordenes-produccion.routes.js';
+import incidenciasRoutes from './routes/incidencias.routes.js';
 
 import cotizacionesRoutes from './routes/cotizaciones.routes.js';
 import ordenesVentaRoutes from './routes/ordenesVenta.routes.js';
@@ -150,6 +151,8 @@ app.use('/api/inventario/transferencias', verificarToken, verificarPermiso('tran
 app.use('/api/inventario', verificarToken, inventarioRoutes);
 
 app.use('/api/produccion/ordenes', verificarToken, verificarPermiso('ordenesProduccion'), ordenesProduccionRoutes);
+
+app.use('/api/calidad/incidencias', verificarToken, verificarPermiso('incidencias'), incidenciasRoutes);
 
 app.use('/api/cotizaciones', verificarToken, verificarPermiso('cotizaciones'), cotizacionesRoutes);
 app.use('/api/ordenes-venta', verificarToken, verificarPermiso('ordenesVenta'), ordenesVentaRoutes);

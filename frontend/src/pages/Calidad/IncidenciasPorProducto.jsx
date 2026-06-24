@@ -143,16 +143,31 @@ function IncidenciasPorProducto() {
               ) : productosFiltrados.length === 0 ? (
                 <p className="text-muted text-sm text-center py-4">Sin resultados para "{busqueda}".</p>
               ) : (
-                productosFiltrados.slice(0, 50).map(p => (
-                  <button
-                    key={p.id_producto}
-                    className={`text-left p-2 rounded-lg border transition-colors ${productoSel?.id_producto === p.id_producto ? 'border-primary bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
-                    onClick={() => seleccionarProducto(p)}
-                  >
-                    <div className="text-sm font-medium truncate">{p.nombre}</div>
-                    <div className="text-xs text-muted font-mono">{p.codigo}</div>
-                  </button>
-                ))
+                productosFiltrados.slice(0, 50).map(p => {
+                  const activo = productoSel?.id_producto === p.id_producto;
+                  return (
+                    <button
+                      key={p.id_producto}
+                      onClick={() => seleccionarProducto(p)}
+                      className="text-left w-full flex items-center gap-2 transition-colors"
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        border: activo ? '1px solid #2563EB' : '1px solid #E5E7EB',
+                        backgroundColor: activo ? '#EFF6FF' : '#FFFFFF',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => { if (!activo) e.currentTarget.style.backgroundColor = '#F9FAFB'; }}
+                      onMouseLeave={(e) => { if (!activo) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
+                    >
+                      <Package size={16} style={{ color: activo ? '#2563EB' : '#9CA3AF', flexShrink: 0 }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="text-sm font-medium truncate" style={{ color: '#111827' }}>{p.nombre}</div>
+                        <div className="text-xs font-mono" style={{ color: '#6B7280' }}>{p.codigo}</div>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>

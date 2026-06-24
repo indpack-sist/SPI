@@ -209,7 +209,7 @@ function IncidenciaDetalle() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="form-group">
                   <label className="form-label">Disposición</label>
-                  <select className="form-input" disabled={terminada} value={tratamiento.disposicion}
+                  <select className="form-select" disabled={terminada} value={tratamiento.disposicion}
                     onChange={(e) => setTratamiento(p => ({ ...p, disposicion: e.target.value }))}>
                     {DISPOSICIONES.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>

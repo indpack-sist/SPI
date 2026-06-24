@@ -118,7 +118,7 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
           <div className="form-group md:col-span-2">
             <label className="form-label">Producto afectado</label>
             <select
-              className="form-input"
+              className="form-select"
               value={form.id_producto}
               onChange={(e) => {
                 const prod = productos.find(p => String(p.id_producto) === e.target.value);
@@ -138,7 +138,7 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
 
         <div className="form-group">
           <label className="form-label">Tipo de defecto</label>
-          <select className="form-input" value={form.id_tipo} onChange={(e) => handleChange('id_tipo', e.target.value)}>
+          <select className="form-select" value={form.id_tipo} onChange={(e) => handleChange('id_tipo', e.target.value)}>
             <option value="">— Seleccionar —</option>
             {tipos.map(t => <option key={t.id_tipo} value={t.id_tipo}>{t.nombre}</option>)}
           </select>
@@ -146,21 +146,21 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
 
         <div className="form-group">
           <label className="form-label">Severidad</label>
-          <select className="form-input" value={form.severidad} onChange={(e) => handleChange('severidad', e.target.value)}>
+          <select className="form-select" value={form.severidad} onChange={(e) => handleChange('severidad', e.target.value)}>
             {SEVERIDADES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
         <div className="form-group">
           <label className="form-label">Fase de detección</label>
-          <select className="form-input" value={form.fase_deteccion} onChange={(e) => handleChange('fase_deteccion', e.target.value)}>
+          <select className="form-select" value={form.fase_deteccion} onChange={(e) => handleChange('fase_deteccion', e.target.value)}>
             {FASES.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
 
         <div className="form-group">
           <label className="form-label">Disposición</label>
-          <select className="form-input" value={form.disposicion} onChange={(e) => handleChange('disposicion', e.target.value)}>
+          <select className="form-select" value={form.disposicion} onChange={(e) => handleChange('disposicion', e.target.value)}>
             {DISPOSICIONES.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>

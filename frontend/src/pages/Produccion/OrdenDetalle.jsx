@@ -14,6 +14,7 @@ import { ordenesProduccionAPI, empleadosAPI, productosAPI } from '../../config/a
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import ModalNuevaIncidencia from '../Calidad/ModalNuevaIncidencia';
 
 function OrdenDetalle() {
   const { id } = useParams();
@@ -107,6 +108,12 @@ function OrdenDetalle() {
   const [finalizarVieneDeParcial, setFinalizarVieneDeParcial] = useState(false);
 
   const puedeSubirAdjunto = ['Supervisor', 'Calidad', 'Administrador', 'Jefe de Planta', 'Jefe de Producción'].includes(userRole);
+  const puedeRegistrarIncidencia = ['Supervisor', 'Calidad', 'Administrador', 'Produccion', 'Jefe de Planta', 'Jefe de Producción'].includes(userRole);
+
+  const [modalIncidencia, setModalIncidencia] = useState(false);
+  const [modalCalidad, setModalCalidad] = useState(false);
+  const [resultadoCalidad, setResultadoCalidad] = useState('');
+  const [observacionCalidad, setObservacionCalidad] = useState('');
 
   useEffect(() => {
     cargarDatos();
@@ -944,17 +951,23 @@ function OrdenDetalle() {
   };
 
   const handleVerificarCalidad = async () => {
-    if (!window.confirm('¿Está seguro de registrar la verificación de calidad para esta orden?')) {
+    if (!resultadoCalidad) {
+      setError('Seleccione un resultado de calidad.');
       return;
     }
-
     try {
       setProcesando(true);
       setError(null);
-      const response = await ordenesProduccionAPI.verificarCalidad(id);
+      const response = await ordenesProduccionAPI.verificarCalidad(id, {
+        resultado: resultadoCalidad,
+        observacion: observacionCalidad || null
+      });
       if (response.data.success) {
         setSuccess(response.data.message);
-        setOrden({ ...orden, observaciones: response.data.data.observaciones });
+        setModalCalidad(false);
+        setResultadoCalidad('');
+        setObservacionCalidad('');
+        cargarDatos();
       }
     } catch (err) {
       setError(err.response?.data?.error || err.error || 'Error al registrar la verificación de calidad');
@@ -1069,13 +1082,74 @@ function OrdenDetalle() {
 
   return (
     <div className="p-6">
-      <button className="btn btn-outline mb-4" onClick={() => navigate('/produccion/ordenes')}>
-        <ArrowLeft size={20} className="mr-2" />
-        Volver a Órdenes
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <button className="btn btn-outline" onClick={() => navigate('/produccion/ordenes')}>
+          <ArrowLeft size={20} className="mr-2" />
+          Volver a Órdenes
+        </button>
+        {puedeRegistrarIncidencia && (
+          <button className="btn btn-danger flex items-center gap-2" onClick={() => setModalIncidencia(true)}>
+            <AlertTriangle size={18} /> Registrar Incidencia
+          </button>
+        )}
+      </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      <ModalNuevaIncidencia
+        isOpen={modalIncidencia}
+        onClose={() => setModalIncidencia(false)}
+        onCreated={() => setSuccess('Incidencia de calidad registrada correctamente.')}
+        prefill={{
+          id_orden: orden.id_orden,
+          id_orden_venta: orden.id_orden_venta || null,
+          id_producto: orden.id_producto_terminado,
+          producto_nombre: orden.producto,
+          unidad_medida: orden.unidad_medida,
+          numero_op: orden.numero_orden,
+          numero_ov: orden.numero_orden_venta,
+          fase_deteccion: 'Producto Terminado'
+        }}
+      />
+
+      <Modal
+        isOpen={modalCalidad}
+        onClose={() => setModalCalidad(false)}
+        title={<span className="flex items-center gap-2"><ShieldCheck className="text-primary" /> Verificación de Calidad</span>}
+      >
+        <p className="text-sm text-muted mb-4">Registra el resultado de la inspección de calidad de la orden <strong>{orden.numero_orden}</strong>.</p>
+        <div className="form-group">
+          <label className="form-label">Resultado <span className="text-danger">*</span></label>
+          <div className="flex flex-col gap-2">
+            {[
+              { val: 'Aprobado', desc: 'El producto cumple con las especificaciones.', cls: 'border-success text-success' },
+              { val: 'Observado', desc: 'Cumple con observaciones. Se generará una incidencia.', cls: 'border-warning text-warning' },
+              { val: 'Rechazado', desc: 'No cumple. Se generará una incidencia.', cls: 'border-danger text-danger' }
+            ].map(op => (
+              <button
+                key={op.val}
+                type="button"
+                className={`text-left p-3 rounded-lg border-2 transition-colors ${resultadoCalidad === op.val ? op.cls + ' bg-gray-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                onClick={() => setResultadoCalidad(op.val)}
+              >
+                <div className="font-semibold">{op.val}</div>
+                <div className="text-xs text-muted">{op.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="form-group mt-3">
+          <label className="form-label">Observación {(resultadoCalidad === 'Rechazado' || resultadoCalidad === 'Observado') && <span className="text-muted">(se incluirá en la incidencia)</span>}</label>
+          <textarea className="form-input" rows={3} value={observacionCalidad} onChange={(e) => setObservacionCalidad(e.target.value)} placeholder="Detalle de la inspección..." />
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button className="btn btn-outline" onClick={() => setModalCalidad(false)} disabled={procesando}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleVerificarCalidad} disabled={procesando}>
+            {procesando ? 'Registrando...' : 'Registrar verificación'}
+          </button>
+        </div>
+      </Modal>
 
       {desdeOrdenVenta && (
         <div className="card border-l-4 border-info bg-blue-50 mb-4">
@@ -1225,14 +1299,20 @@ function OrdenDetalle() {
 
           {orden.estado === 'Finalizada' &&
            (user?.rol === 'Calidad' || user?.rol === 'Administrador') &&
-           !(orden.observaciones && orden.observaciones.includes('[VERIFICACIÓN CALIDAD]')) && (
+           !orden.resultado_calidad && (
             <button
               className="btn btn-primary btn-sm"
-              onClick={handleVerificarCalidad}
+              onClick={() => { setResultadoCalidad(''); setObservacionCalidad(''); setModalCalidad(true); }}
               disabled={procesando}
             >
               <ShieldCheck size={16} className="mr-1" /> Verificar Calidad
             </button>
+          )}
+
+          {orden.estado === 'Finalizada' && orden.resultado_calidad && (
+            <span className={`badge ${orden.resultado_calidad === 'Aprobado' ? 'badge-success' : orden.resultado_calidad === 'Observado' ? 'badge-warning' : 'badge-danger'} flex items-center gap-1`}>
+              <ShieldCheck size={14} /> Calidad: {orden.resultado_calidad}
+            </span>
           )}
 
           {!['Cancelada', 'Anulada'].includes(orden.estado) && !esComercial && (

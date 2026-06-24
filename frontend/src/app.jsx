@@ -32,6 +32,10 @@ import CrearOrden from './pages/Produccion/CrearOrden';
 import CalendarioProduccion from './pages/Produccion/CalendarioProduccion';
 import TableroSupervisor from './pages/Produccion/TableroSupervisor';
 
+import Incidencias from './pages/Calidad/Incidencias';
+import IncidenciaDetalle from './pages/Calidad/IncidenciaDetalle';
+import IncidenciasPorProducto from './pages/Calidad/IncidenciasPorProducto';
+
 import Cotizaciones from './pages/Ventas/Cotizaciones';
 import NuevaCotizacion from './pages/Ventas/NuevaCotizacion';
 import DetalleCotizacion from './pages/Ventas/DetalleCotizacion';
@@ -240,8 +244,33 @@ function App() {
                         } 
                       />
                       
-                      <Route 
-                        path="/ventas/cotizaciones" 
+                      <Route
+                        path="/calidad/incidencias"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="incidencias">
+                            <Incidencias />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+                      <Route
+                        path="/calidad/incidencias-por-producto"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="incidencias">
+                            <IncidenciasPorProducto />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+                      <Route
+                        path="/calidad/incidencias/:id"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="incidencias">
+                            <IncidenciaDetalle />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+
+                      <Route
+                        path="/ventas/cotizaciones"
                         element={
                           <ProtectedRouteWithPermiso modulo="cotizaciones">
                             <Cotizaciones />

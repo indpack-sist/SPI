@@ -1898,11 +1898,13 @@ export async function cancelarOrden(req, res) {
     }
     }
 
-    export async function verificarCalidad(req, res) {
-    try {
+export async function verificarCalidad(req, res) {
+  try {
     const { id } = req.params;
     const nombreVerificador = req.user.nombre_completo || req.user.nombre || 'Personal de Calidad';
+    const idEmpleado = req.user?.id_empleado || req.user?.id || req.user?.userId || null;
     const { rol } = req.user;
+    const { resultado, observacion } = req.body || {};
 
     if (rol !== 'Calidad' && rol !== 'Administrador') {
       return res.status(403).json({
@@ -1911,8 +1913,16 @@ export async function cancelarOrden(req, res) {
       });
     }
 
+    const RESULTADOS = ['Aprobado', 'Observado', 'Rechazado'];
+    if (!RESULTADOS.includes(resultado)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Debe indicar un resultado válido (Aprobado, Observado o Rechazado).'
+      });
+    }
+
     const ordenResult = await executeQuery(
-      'SELECT id_orden, estado, observaciones, numero_orden FROM ordenes_produccion WHERE id_orden = ?',
+      'SELECT id_orden, estado, observaciones, numero_orden, id_producto_terminado, resultado_calidad FROM ordenes_produccion WHERE id_orden = ?',
       [id]
     );
 
@@ -1929,48 +1939,86 @@ export async function cancelarOrden(req, res) {
       });
     }
 
-    if (orden.observaciones && orden.observaciones.includes('[VERIFICACIÓN CALIDAD]')) {
+    if (orden.resultado_calidad) {
       return res.status(400).json({
         success: false,
         error: 'Esta orden ya ha sido verificada por calidad.'
       });
     }
 
-    const fechaActual = new Date().toLocaleString('es-PE', { 
+    const fechaActual = getFechaPeru();
+    const fechaLegible = new Date().toLocaleString('es-PE', {
       timeZone: 'America/Lima',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     });
 
-    const marcaVerificacion = `\n\n[VERIFICACIÓN CALIDAD] Verificado por: ${nombreVerificador} el ${fechaActual}`;
-    const nuevasObservaciones = (orden.observaciones || '') + marcaVerificacion;
+    // Marca de texto para mantener compatibilidad con la vista de listado existente
+    const marca = `\n\n[VERIFICACIÓN CALIDAD] Resultado: ${resultado}. Verificado por: ${nombreVerificador} el ${fechaLegible}`;
+    const nuevasObservaciones = (orden.observaciones || '') + marca;
 
     const updateResult = await executeQuery(
-      'UPDATE ordenes_produccion SET observaciones = ? WHERE id_orden = ?',
-      [nuevasObservaciones, id]
+      `UPDATE ordenes_produccion
+       SET resultado_calidad = ?, id_verificado_calidad = ?, fecha_verificacion_calidad = ?, observacion_calidad = ?, observaciones = ?
+       WHERE id_orden = ?`,
+      [resultado, idEmpleado, fechaActual, observacion || null, nuevasObservaciones, id]
     );
 
     if (!updateResult.success) {
       return res.status(500).json({ success: false, error: updateResult.error });
     }
 
+    // Si NO se aprobó, generamos automáticamente una incidencia ligada a la O.P.
+    let incidenciaGenerada = null;
+    if (resultado === 'Rechazado' || resultado === 'Observado') {
+      const ultimaInc = await executeQuery('SELECT codigo FROM incidencias_calidad ORDER BY id_incidencia DESC LIMIT 1');
+      let secuencia = 1;
+      if (ultimaInc.success && ultimaInc.data.length > 0) {
+        const m = ultimaInc.data[0].codigo.match(/(\d+)$/);
+        if (m) secuencia = parseInt(m[1]) + 1;
+      }
+      const codigoInc = `INC-${new Date().getFullYear()}-${String(secuencia).padStart(4, '0')}`;
+      const severidad = resultado === 'Rechazado' ? 'Mayor' : 'Menor';
+      const descripcion = `Generada automáticamente por verificación de calidad (${resultado}) de la O.P. ${orden.numero_orden}.`
+        + (observacion ? ` Observación: ${observacion}` : '');
+
+      const insInc = await executeQuery(
+        `INSERT INTO incidencias_calidad (
+          codigo, id_orden, id_producto, severidad, fase_deteccion, descripcion,
+          disposicion, estado, id_detectado_por, fecha_deteccion, fecha_creacion
+        ) VALUES (?, ?, ?, ?, 'Producto Terminado', ?, 'Pendiente', 'Abierta', ?, ?, ?)`,
+        [codigoInc, orden.id_orden, orden.id_producto_terminado, severidad, descripcion, idEmpleado, fechaActual, fechaActual]
+      );
+
+      if (insInc.success) {
+        const idInc = insInc.data.insertId;
+        await executeQuery(
+          `INSERT INTO incidencias_historial (id_incidencia, accion, estado_anterior, estado_nuevo, comentario, id_usuario, fecha)
+           VALUES (?, 'Creación', NULL, 'Abierta', ?, ?, ?)`,
+          [idInc, `Generada automáticamente desde verificación de calidad (${resultado})`, idEmpleado, fechaActual]
+        );
+        incidenciaGenerada = { id_incidencia: idInc, codigo: codigoInc };
+      }
+    }
+
     res.json({
       success: true,
-      message: 'Verificación de calidad registrada exitosamente.',
+      message: incidenciaGenerada
+        ? `Verificación registrada (${resultado}). Se generó la incidencia ${incidenciaGenerada.codigo}.`
+        : `Verificación registrada (${resultado}).`,
       data: {
-        observaciones: nuevasObservaciones
+        resultado,
+        fecha_verificacion_calidad: fechaActual,
+        observaciones: nuevasObservaciones,
+        incidencia: incidenciaGenerada
       }
     });
 
-    } catch (error) {
+  } catch (error) {
     console.error('Error en verificarCalidad:', error);
     res.status(500).json({ success: false, error: error.message });
-    }
-    }
+  }
+}
 
     export async function completarAsignacionOP(req, res) {
   try {

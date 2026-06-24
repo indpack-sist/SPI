@@ -2,9 +2,10 @@ import {
   Home, Users, Truck, Building2, UserCircle2, 
   Package, Search, Factory, Calendar, FileText, 
   Tags, ShoppingCart, FileCheck, ShoppingBag, 
-  CreditCard, Banknote, FileInput, ArrowDownToLine, 
+  CreditCard, Banknote, FileInput, ArrowDownToLine,
   ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet,
-  TrendingUp // <--- AGREGADO: Nuevo icono para reportes
+  TrendingUp, // <--- AGREGADO: Nuevo icono para reportes
+  ShieldAlert, PackageSearch // <--- Módulo Calidad
 } from 'lucide-react';
 
 export const menuConfig = [
@@ -36,6 +37,13 @@ export const menuConfig = [
       { path: '/produccion/tablero', icon: Factory, label: 'Control Planta', modulo: 'ordenesProduccion', color: '#8E44AD', rolesExcluidos: ['calidad'] },
       { path: '/produccion/ordenes', icon: FileCheck, label: 'Producción', modulo: 'ordenesProduccion', color: '#C0392B' },
       { path: '/produccion/calendario', icon: Calendar, label: 'Calendario', modulo: 'ordenesProduccion', color: '#27AE60' } 
+    ]
+  },
+  {
+    title: 'Calidad',
+    items: [
+      { path: '/calidad/incidencias', icon: ShieldAlert, label: 'Incidencias', modulo: 'incidencias', color: '#C0392B' },
+      { path: '/calidad/incidencias-por-producto', icon: PackageSearch, label: 'Por Producto', modulo: 'incidencias', color: '#8E44AD' }
     ]
   },
   {

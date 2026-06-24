@@ -382,7 +382,7 @@ export const ordenesProduccionAPI = {
   getRegistrosParciales: (id) => api.get(`/produccion/ordenes/${id}/registros-parciales`),
   
   finalizar: (id, data) => api.post(`/produccion/ordenes/${id}/finalizar`, data),
-  verificarCalidad: (id) => api.post(`/produccion/ordenes/${id}/verificar-calidad`),
+  verificarCalidad: (id, data) => api.post(`/produccion/ordenes/${id}/verificar-calidad`, data),
   
   cancelar: (id) => api.post(`/produccion/ordenes/${id}/cancelar`),
   anular: (id) => api.post(`/produccion/ordenes/${id}/anular`),
@@ -458,6 +458,22 @@ export const ordenesProduccionAPI = {
   subirAdjunto: (id, formData) => api.post(`/produccion/ordenes/${id}/adjuntos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getAdjuntos: (id) => api.get(`/produccion/ordenes/${id}/adjuntos`),
   eliminarAdjunto: (idAdjunto) => api.delete(`/produccion/ordenes/adjuntos/${idAdjunto}`)
+};
+
+export const incidenciasAPI = {
+  getAll: (params) => api.get('/calidad/incidencias', { params }),
+  getById: (id) => api.get(`/calidad/incidencias/${id}`),
+  create: (data) => api.post('/calidad/incidencias', data),
+  update: (id, data) => api.put(`/calidad/incidencias/${id}`, data),
+  cambiarEstado: (id, data) => api.patch(`/calidad/incidencias/${id}/estado`, data),
+  getHistorial: (id) => api.get(`/calidad/incidencias/${id}/historial`),
+  getPorProducto: (idProducto) => api.get(`/calidad/incidencias/producto/${idProducto}`),
+  getTipos: () => api.get('/calidad/incidencias/auxiliar/tipos'),
+
+  // Adjuntos (mismo patrón que órdenes de producción + Cloudinary)
+  subirAdjunto: (id, formData) => api.post(`/calidad/incidencias/${id}/adjuntos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getAdjuntos: (id) => api.get(`/calidad/incidencias/${id}/adjuntos`),
+  eliminarAdjunto: (idAdjunto) => api.delete(`/calidad/incidencias/adjuntos/${idAdjunto}`)
 };
 
 export const cotizacionesAPI = {

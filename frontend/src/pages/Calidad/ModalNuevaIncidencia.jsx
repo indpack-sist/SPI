@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Save, Package } from 'lucide-react';
+import { ShieldAlert, Save, Package, Search, X } from 'lucide-react';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import { incidenciasAPI, productosAPI } from '../../config/api';
@@ -19,6 +19,10 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
 
+  // Buscador de producto
+  const [prodBusqueda, setProdBusqueda] = useState('');
+  const [prodSeleccionado, setProdSeleccionado] = useState(null);
+
   const productoFijo = !!prefill.id_producto;
 
   const [form, setForm] = useState({
@@ -35,6 +39,8 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
+    setProdBusqueda('');
+    setProdSeleccionado(null);
     setForm({
       id_producto: prefill.id_producto || '',
       id_tipo: '',
@@ -69,6 +75,14 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
   }, [isOpen]);
 
   const handleChange = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }));
+
+  const terminoProd = prodBusqueda.trim().toLowerCase();
+  const productosFiltrados = terminoProd
+    ? productos.filter(p =>
+        p.nombre?.toLowerCase().includes(terminoProd) ||
+        p.codigo?.toLowerCase().includes(terminoProd)
+      )
+    : [];
 
   const handleSubmit = async () => {
     if (!form.descripcion.trim()) {
@@ -117,22 +131,76 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
         {!productoFijo && (
           <div className="form-group md:col-span-2">
             <label className="form-label">Producto afectado</label>
-            <select
-              className="form-select"
-              value={form.id_producto}
-              onChange={(e) => {
-                const prod = productos.find(p => String(p.id_producto) === e.target.value);
-                handleChange('id_producto', e.target.value);
-                if (prod) handleChange('unidad_medida', prod.unidad_medida || '');
-              }}
-            >
-              <option value="">— Sin producto específico —</option>
-              {productos.map(p => (
-                <option key={p.id_producto} value={p.id_producto}>
-                  {p.codigo} — {p.nombre}
-                </option>
-              ))}
-            </select>
+
+            {prodSeleccionado ? (
+              <div className="flex items-center justify-between gap-2 p-2 rounded-lg border" style={{ borderColor: '#2563EB', backgroundColor: '#EFF6FF' }}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Package size={16} style={{ color: '#2563EB', flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="text-sm font-medium truncate" style={{ color: '#111827' }}>{prodSeleccionado.nombre}</div>
+                    <div className="text-xs font-mono" style={{ color: '#6B7280' }}>{prodSeleccionado.codigo}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline flex items-center gap-1 shrink-0"
+                  onClick={() => {
+                    setProdSeleccionado(null);
+                    setProdBusqueda('');
+                    handleChange('id_producto', '');
+                  }}
+                >
+                  <X size={14} /> Cambiar
+                </button>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <div className="search-input-wrapper">
+                  <Search size={16} className="search-icon" />
+                  <input
+                    type="text"
+                    className="form-input search-input"
+                    placeholder="Buscar por nombre o código..."
+                    value={prodBusqueda}
+                    onChange={(e) => setProdBusqueda(e.target.value)}
+                  />
+                </div>
+                {prodBusqueda.trim() && (
+                  <div
+                    className="flex flex-col gap-1"
+                    style={{ maxHeight: '220px', overflowY: 'auto', marginTop: '6px', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '6px', backgroundColor: '#FFFFFF' }}
+                  >
+                    {productosFiltrados.length === 0 ? (
+                      <p className="text-muted text-sm text-center py-3">Sin resultados para "{prodBusqueda}".</p>
+                    ) : (
+                      productosFiltrados.slice(0, 50).map(p => (
+                        <button
+                          key={p.id_producto}
+                          type="button"
+                          onClick={() => {
+                            setProdSeleccionado(p);
+                            handleChange('id_producto', String(p.id_producto));
+                            handleChange('unidad_medida', p.unidad_medida || '');
+                            setProdBusqueda('');
+                          }}
+                          className="text-left w-full flex items-center gap-2"
+                          style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', cursor: 'pointer' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F9FAFB'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
+                        >
+                          <Package size={16} style={{ color: '#9CA3AF', flexShrink: 0 }} />
+                          <div style={{ minWidth: 0 }}>
+                            <div className="text-sm font-medium truncate" style={{ color: '#111827' }}>{p.nombre}</div>
+                            <div className="text-xs font-mono" style={{ color: '#6B7280' }}>{p.codigo}</div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-muted mt-1">Opcional: deja vacío si la incidencia no es de un producto específico.</p>
+              </div>
+            )}
           </div>
         )}
 

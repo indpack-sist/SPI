@@ -412,7 +412,9 @@ export async function getHistorialMovimientos(req, res) {
           (sd.cantidad * sd.precio_unitario) AS costo_total,
           NULL AS documento_soporte,
           emp.nombre_completo AS registrado_por,
-          s.observaciones
+          s.observaciones,
+          s.estado,
+          sd.fue_reservado
         FROM salidas s
         INNER JOIN detalle_salidas sd ON s.id_salida = sd.id_salida
         INNER JOIN tipos_inventario ti ON s.id_tipo_inventario = ti.id_tipo_inventario
@@ -422,9 +424,26 @@ export async function getHistorialMovimientos(req, res) {
         ORDER BY s.fecha_movimiento DESC`,
         [id]
       );
-      
+
       if (salidas.success) {
-        movimientos = [...movimientos, ...salidas.data];
+        for (const sal of salidas.data) {
+          // Salida original (se marca como 'Anulado' en el front si corresponde)
+          movimientos.push(sal);
+
+          // Si la salida fue anulada y la mercadería retornó al stock físico
+          // (no era stock reservado), agregamos la entrada de reverso para que
+          // el kardex cuadre y se vea el retorno al inventario.
+          if (sal.estado === 'Anulado' && !sal.fue_reservado) {
+            movimientos.push({
+              ...sal,
+              tipo_movimiento: 'devolucion_anulacion',
+              estado: 'Activo',
+              motivo_salida: null,
+              destino: `Reverso anulación${sal.destino ? ' - ' + sal.destino : ''}`,
+              observaciones: 'Retorno a inventario por anulación de salida'
+            });
+          }
+        }
       }
     }
     

@@ -77,41 +77,25 @@ function CrearOrden() {
 
     const nombreProd = productoSeleccionado.nombre.toUpperCase();
     const nombreInsumo = insumo.nombre.toUpperCase();
+    const tipoInsumo = (insumo.tipo_inventario || '').toUpperCase();
 
+    // Las láminas se obtienen convirtiendo rollos burbupack
     if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
-      return nombreInsumo.includes('ROLLO BURBUPACK');
+      return tipoInsumo.includes('BURBUPACK');
     }
 
+    // El producto a fabricar determina el Tipo de Inventario de insumos permitido.
+    // De esta forma aparecen TODOS los insumos del tipo, sin depender de su nombre.
     if (nombreProd.includes('ESQUINERO')) {
-      return (
-        nombreInsumo.includes('PELETIZADO VERDE') ||
-        nombreInsumo.includes('BATERIA') ||
-        nombreInsumo.includes('BEIGE DURO') ||
-        nombreInsumo.includes('PLOMO DURO') ||
-        nombreInsumo.includes('CHANCACA VERDE') ||
-        nombreInsumo.includes('ESQUINERO MOLIDO') ||
-        nombreInsumo.includes('TUTI') ||
-        nombreInsumo.includes('PIGMENTO VERDE')
-      );
+      return tipoInsumo.includes('ESQUINERO');
     }
 
     if (nombreProd.includes('BURBUPACK')) {
-      return (
-        nombreInsumo.includes('POLIETILENO DE BAJA') ||
-        nombreInsumo.includes('POLIETILENO DE ALTA') ||
-        nombreInsumo.includes('PELETIZADO POLIETILENO')
-      );
+      return tipoInsumo.includes('BURBUPACK');
     }
 
     if (nombreProd.includes('ZUNCHO')) {
-      return (
-        nombreInsumo.includes('PELETIZADO NEGRO') ||
-        nombreInsumo.includes('CHATARRA') ||
-        nombreInsumo.includes('CHANCACA NEGRA') ||
-        nombreInsumo.includes('ZUNCHO MOLIDO') ||
-        nombreInsumo.includes('PIGMENTO NEGRO') ||
-        nombreInsumo.includes('OTROS')
-      );
+      return tipoInsumo.includes('ZUNCHO');
     }
 
     if (nombreProd.includes('PELETIZADO NEGRO')) {

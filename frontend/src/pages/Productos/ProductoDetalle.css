@@ -862,6 +862,25 @@
   font-size: 1rem;
 }
 
+.texto-anulado {
+  text-decoration: line-through;
+  color: #9ca3af;
+}
+
+.badge-anulado {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #b91c1c;
+  background-color: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
 .costo-unitario-text {
   font-size: 0.813rem;
   color: var(--text-secondary);

@@ -364,7 +364,8 @@ function ProductoDetalle() {
       'salida': { icono: TrendingDown, color: 'text-danger', bg: 'bg-danger', texto: 'Salida' },
       'transferencia_entrada': { icono: ArrowRightLeft, color: 'text-primary', bg: 'bg-primary', texto: 'Transfer. Entrada' },
       'transferencia_salida': { icono: ArrowRightLeft, color: 'text-warning', bg: 'bg-warning', texto: 'Transfer. Salida' },
-      'produccion_consumo': { icono: Factory, color: 'text-purple', bg: 'bg-purple', texto: 'Consumo Prod.' }
+      'produccion_consumo': { icono: Factory, color: 'text-purple', bg: 'bg-purple', texto: 'Consumo Prod.' },
+      'devolucion_anulacion': { icono: TrendingUp, color: 'text-success', bg: 'bg-success', texto: 'Entrada (Reverso)' }
     };
     return configs[tipo] || configs['entrada'];
   };
@@ -515,13 +516,15 @@ function ProductoDetalle() {
       header: 'Tipo',
       accessor: 'tipo_movimiento',
       width: '180px',
-      render: (value) => {
+      render: (value, row) => {
         const config = getTipoMovimientoConfig(value);
         const Icono = config.icono;
+        const anulado = row.estado === 'Anulado';
         return (
           <div className="tipo-movimiento-cell">
             <Icono size={16} className={config.color} />
-            <span>{config.texto}</span>
+            <span className={anulado ? 'texto-anulado' : ''}>{config.texto}</span>
+            {anulado && <span className="badge-anulado">Anulado</span>}
           </div>
         );
       }
@@ -549,8 +552,10 @@ function ProductoDetalle() {
       accessor: 'cantidad',
       align: 'right',
       width: '110px',
-      render: (value) => (
-        <div className="cantidad-historial">{parseFloat(value).toFixed(2)}</div>
+      render: (value, row) => (
+        <div className={`cantidad-historial ${row.estado === 'Anulado' ? 'texto-anulado' : ''}`}>
+          {parseFloat(value).toFixed(2)}
+        </div>
       )
     },
     ...(canSeePrices ? [

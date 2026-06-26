@@ -427,12 +427,10 @@ export async function getHistorialMovimientos(req, res) {
 
       if (salidas.success) {
         for (const sal of salidas.data) {
-          // Salida original (se marca como 'Anulado' en el front si corresponde)
-          movimientos.push(sal);
-
           // Si la salida fue anulada y la mercadería retornó al stock físico
-          // (no era stock reservado), agregamos la entrada de reverso para que
-          // el kardex cuadre y se vea el retorno al inventario.
+          // (no era stock reservado), agregamos la entrada de reverso. Va primero
+          // porque el retorno ocurre DESPUÉS de la anulación: como el historial
+          // muestra lo más reciente arriba, el reverso debe quedar sobre la salida.
           if (sal.estado === 'Anulado' && !sal.fue_reservado) {
             movimientos.push({
               ...sal,
@@ -443,6 +441,9 @@ export async function getHistorialMovimientos(req, res) {
               observaciones: 'Retorno a inventario por anulación de salida'
             });
           }
+
+          // Salida original (se marca como 'Anulado' en el front si corresponde)
+          movimientos.push(sal);
         }
       }
     }
@@ -536,7 +537,14 @@ export async function getHistorialMovimientos(req, res) {
       }
     }
     
-    movimientos.sort((a, b) => new Date(b.fecha_movimiento) - new Date(a.fecha_movimiento));
+    // Orden: más reciente primero. Ante fechas idénticas (ej. salida anulada y su
+    // reverso) se respeta el orden de inserción para mantener el reverso arriba.
+    movimientos.forEach((m, i) => { m.__orden = i; });
+    movimientos.sort((a, b) => {
+      const diff = new Date(b.fecha_movimiento) - new Date(a.fecha_movimiento);
+      return diff !== 0 ? diff : a.__orden - b.__orden;
+    });
+    movimientos.forEach((m) => { delete m.__orden; });
     
     res.json({
       success: true,

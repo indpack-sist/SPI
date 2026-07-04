@@ -54,13 +54,25 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.error('❌ Error al verificar autenticación:', error);
-      
-      if (error.response?.status === 401) {
-        console.log('🔒 Sesión expirada - redirigiendo a login');
+
+      // El interceptor ya marca las sesiones realmente inválidas/expiradas.
+      // Solo en ese caso limpiamos y redirigimos a login.
+      if (error?.sessionExpired || error?.status === 401) {
+        console.log('🔒 Sesión inválida/expirada - redirigiendo a login');
         limpiarSesion();
         navigate('/login', { replace: true });
       } else {
-        limpiarSesion();
+        // Error temporal (BD/red/backend "despertando"): NO cerramos sesión.
+        // Conservamos el token y restauramos el usuario cacheado si existe.
+        console.warn('⚠️ Error temporal al verificar sesión - se conserva la sesión');
+        const cachedUser = localStorage.getItem('user');
+        if (cachedUser) {
+          try {
+            setUser(JSON.parse(cachedUser));
+          } catch {
+            // usuario cacheado corrupto: se ignora, se conserva el token
+          }
+        }
       }
     } finally {
       setLoading(false);

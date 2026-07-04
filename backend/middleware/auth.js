@@ -548,7 +548,8 @@ export const verificarToken = (req, res, next) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
-        error: 'No se proporcionó token de autenticación'
+        error: 'No se proporcionó token de autenticación',
+        code: 'TOKEN_MISSING'
       });
     }
     const token = authHeader.split(' ')[1];
@@ -559,13 +560,15 @@ export const verificarToken = (req, res, next) => {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
         success: false,
-        error: 'Token inválido'
+        error: 'Token inválido',
+        code: 'TOKEN_INVALID'
       });
     }
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,
-        error: 'Token expirado'
+        error: 'Token expirado',
+        code: 'TOKEN_EXPIRED'
       });
     }
     return res.status(500).json({

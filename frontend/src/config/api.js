@@ -55,16 +55,22 @@ api.interceptors.response.use(
       });
     }
     
-    if (status === 401) {
-      console.log('401 Unauthorized - Sesión expirada');
+    // Solo cerramos sesión cuando el token es REALMENTE inválido/expirado.
+    // Un 401 por otra causa (ej. contraseña incorrecta) NO debe cerrar la sesión.
+    // Un fallo de BD/red ahora llega como 500, no como 401, así que tampoco cierra sesión.
+    const CODIGOS_SESION_INVALIDA = ['TOKEN_MISSING', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'USER_INACTIVE'];
+    const esSesionInvalida = status === 401 && CODIGOS_SESION_INVALIDA.includes(data?.code);
+
+    if (esSesionInvalida) {
+      console.log('Sesión inválida/expirada - cerrando sesión. Código:', data?.code);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
+
       if (!window.location.pathname.includes('/login')) {
         console.log('Redirigiendo a login...');
         window.location.replace('/login');
       }
-      
+
       return Promise.reject({
         ...data,
         status: 401,

@@ -102,14 +102,26 @@ export const verificarToken = async (req, res) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: 'Token no proporcionado'
+        error: 'Token no proporcionado',
+        code: 'TOKEN_MISSING'
       });
     }
 
-    const decoded = jwt.verify(
-      token, 
-      process.env.JWT_SECRET || 'indpack-secret-key-2025'
-    );
+    // 1) Verificación del token (errores de token => 401 genuino, cierra sesión)
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'indpack-secret-key-2025'
+      );
+    } catch (tokenError) {
+      const expirado = tokenError.name === 'TokenExpiredError';
+      return res.status(401).json({
+        success: false,
+        error: expirado ? 'Token expirado' : 'Token inválido',
+        code: expirado ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
+      });
+    }
 
     console.log('🔍 Token decodificado:', {
       id_empleado: decoded.id_empleado,
@@ -117,16 +129,27 @@ export const verificarToken = async (req, res) => {
       rol: decoded.rol
     });
 
+    // 2) Consulta a BD. Un fallo de BD NO debe cerrar la sesión => 500 (reintentable)
     const result = await executeQuery(
       'SELECT id_empleado, nombre_completo, email, rol, cargo, dni FROM empleados WHERE id_empleado = ? AND estado = "Activo"',
       [decoded.id_empleado]
     );
 
-    if (!result.success || result.data.length === 0) {
+    if (!result.success) {
+      console.error('⚠️ Error de BD al verificar token (no se cierra sesión):', result.error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error temporal al verificar la sesión. Intente nuevamente.',
+        code: 'DB_ERROR'
+      });
+    }
+
+    if (result.data.length === 0) {
       console.log('❌ Usuario no encontrado o inactivo:', decoded.id_empleado);
       return res.status(401).json({
         success: false,
-        error: 'Token inválido o usuario inactivo'
+        error: 'Usuario inactivo o no encontrado',
+        code: 'USER_INACTIVE'
       });
     }
 
@@ -147,10 +170,13 @@ export const verificarToken = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error al verificar token:', error);
-    res.status(401).json({
+    // Aquí solo llegan errores inesperados (BD, red, etc.), NO de token.
+    // No se cierra la sesión: se responde 500 para permitir reintento.
+    console.error('❌ Error inesperado al verificar sesión:', error);
+    res.status(500).json({
       success: false,
-      error: 'Token inválido o expirado'
+      error: 'Error temporal al verificar la sesión. Intente nuevamente.',
+      code: 'DB_ERROR'
     });
   }
 };

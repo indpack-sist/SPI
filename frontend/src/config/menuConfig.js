@@ -34,7 +34,7 @@ export const menuConfig = [
   {
     title: 'Producción',
     items: [
-      { path: '/produccion/tablero', icon: Factory, label: 'Control Planta', modulo: 'ordenesProduccion', color: '#8E44AD', rolesExcluidos: ['calidad'] },
+      { path: '/produccion/tablero', icon: Factory, label: 'Control Planta', modulo: 'ordenesProduccion', color: '#8E44AD', rolesExcluidos: ['calidad', 'Comercial'] },
       { path: '/produccion/ordenes', icon: FileCheck, label: 'Producción', modulo: 'ordenesProduccion', color: '#C0392B' },
       { path: '/produccion/calendario', icon: Calendar, label: 'Calendario', modulo: 'ordenesProduccion', color: '#27AE60' } 
     ]

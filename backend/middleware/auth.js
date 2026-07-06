@@ -108,14 +108,14 @@ const PERMISOS_POR_ROL = {
       entradas: false,
       salidas: false,
       transferencias: false,
-      ordenesProduccion: false,
+      ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
       compras: false,
-      cuentasPago: true,
-      pagosCobranzas: true,
+      cuentasPago: false,
+      pagosCobranzas: false,
       listasPrecios: true,
-      reportes: true
+      reportes: false
     },
     api: {
       dashboard: false,
@@ -129,7 +129,7 @@ const PERMISOS_POR_ROL = {
       entradas: false,
       salidas: false,
       transferencias: false,
-      ordenesProduccion: false,
+      ordenesProduccion: true,
       cotizaciones: true,
       ordenesVenta: true,
       compras: false,

@@ -13,9 +13,18 @@ const ETIQUETAS_IMPUESTO = {
 };
 
 const fmtNum = (num) => {
-  return Number(num).toLocaleString('en-US', { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: 3 
+  return Number(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3
+  });
+};
+
+// El precio unitario puede tener hasta 6 decimales; se muestra completo
+// para que P. Unit. × Cantidad reconcilie con el subtotal (precisión completa).
+const fmtPrecio = (num) => {
+  return Number(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6
   });
 };
 
@@ -229,7 +238,7 @@ export async function generarOrdenVentaPDF(orden) {
           doc.text(String(item.unidad_medida || 'UND'), 295, yTable, { width: 25, align: 'center' });
           doc.text(fmtNum(cantidad), 320, yTable, { width: 45, align: 'center' });
           doc.text(pesoTotal > 0 ? fmtPeso(pesoTotal) : '-', 365, yTable, { width: 45, align: 'center' });
-          doc.text(fmtNum(precioFinal), 415, yTable, { width: 50, align: 'right' });
+          doc.text(fmtPrecio(precioFinal), 415, yTable, { width: 50, align: 'right' });
           doc.text(fmtNum(totalLinea), 470, yTable, { width: 90, align: 'right' });
 
           yTable += 14;

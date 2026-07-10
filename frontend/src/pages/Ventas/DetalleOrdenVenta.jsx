@@ -150,6 +150,22 @@ function DetalleOrdenVenta() {
     const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
+
+  // El precio unitario puede tener hasta 6 decimales; se muestra completo
+  // para que P. Final × Pedido reconcilie con el Subtotal (que usa precisión completa).
+  const formatearNumeroPrecio = (valor) => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 6
+    }).format(valor);
+  };
+
+  const formatearMonedaPrecio = (valor, monedaOverride = null) => {
+    const monedaUsar = monedaOverride || orden?.moneda;
+    if (!monedaUsar && !valor) return '-';
+    const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${formatearNumeroPrecio(parseFloat(valor || 0))}`;
+  };
   const formatearPeso = (pesoKg) => {
     if (!pesoKg || pesoKg === 0) return '—';
     if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
@@ -1486,10 +1502,10 @@ function DetalleOrdenVenta() {
       align: 'right',
       render: (value) => (
         <div className="text-right">
-          <span className="font-medium text-primary">{formatearMoneda(value)}</span>
+          <span className="font-medium text-primary">{formatearMonedaPrecio(value)}</span>
           {esUSD && parseFloat(orden.tipo_cambio || 0) > 1 && (
             <div className="text-[10px] mt-0.5 font-bold text-gray-500">
-              S/ {formatearNumero(parseFloat(value) * parseFloat(orden.tipo_cambio))}
+              S/ {formatearNumeroPrecio(parseFloat(value) * parseFloat(orden.tipo_cambio))}
             </div>
           )}
         </div>

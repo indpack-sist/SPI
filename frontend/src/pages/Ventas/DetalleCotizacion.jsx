@@ -358,6 +358,20 @@ function DetalleCotizacion() {
     const simbolo = cotizacion?.moneda === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
   };
+
+  // El precio unitario puede tener hasta 6 decimales; se muestra completo
+  // para que P. Venta × Cantidad reconcilie con el Subtotal (que usa precisión completa).
+  const formatearNumeroPrecio = (valor) => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 6
+    }).format(valor);
+  };
+
+  const formatearMonedaPrecio = (valor) => {
+    const simbolo = cotizacion?.moneda === 'USD' ? '$' : 'S/';
+    return `${simbolo} ${formatearNumeroPrecio(parseFloat(valor || 0))}`;
+  };
   const formatearPeso = (pesoKg) => {
     if (!pesoKg || pesoKg === 0) return '—';
     if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
@@ -489,10 +503,10 @@ function DetalleCotizacion() {
       align: 'right',
       render: (value) => (
         <div className="text-right">
-          <span className="font-medium text-primary">{formatearMoneda(value)}</span>
+          <span className="font-medium text-primary">{formatearMonedaPrecio(value)}</span>
           {esUSD && tcVenta && (
             <div className="text-[10px] mt-0.5" style={{ color: 'var(--accent, #ca8a04)' }}>
-              S/ {formatearNumero(parseFloat(value) * tcVenta)}
+              S/ {formatearNumeroPrecio(parseFloat(value) * tcVenta)}
             </div>
           )}
         </div>

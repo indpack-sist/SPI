@@ -13,9 +13,18 @@ const ETIQUETAS_IMPUESTO = {
 };
 
 const fmtNum = (num) => {
-  return Number(num).toLocaleString('en-US', { 
-    minimumFractionDigits: 2, 
+  return Number(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 3
+  });
+};
+
+// El precio unitario puede tener hasta 6 decimales; se muestra completo
+// para que V. Unit. × Cant. reconcilie con el V. Venta (precisión completa).
+const fmtPrecio = (num) => {
+  return Number(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6
   });
 };
 
@@ -315,7 +324,7 @@ const descripcion = item.producto || item.nombre_producto_libre || '';
         doc.text(fmtNum(cantidad), 130, yPos + 5, { width: 50, align: 'center' });
         doc.text(item.unidad_medida, 185, yPos + 5, { width: 40, align: 'center' });
         doc.text(descripcion, 230, yPos + 5, { width: 215, lineGap: 2 });
-        doc.text(fmtNum(precioUnitario), 450, yPos + 5, { align: 'right', width: 50 });
+        doc.text(fmtPrecio(precioUnitario), 450, yPos + 5, { align: 'right', width: 50 });
         doc.text(`${simboloMoneda} ${fmtNum(valorVentaItem)}`, 505, yPos + 5, { align: 'right', width: 50 });
 
         yPos += alturaFila;

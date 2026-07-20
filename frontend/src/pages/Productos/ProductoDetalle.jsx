@@ -463,7 +463,7 @@ function ProductoDetalle() {
         return (
           <div className="stock-cell">
             <div className={`stock-valor ${suficiente ? 'stock-suficiente' : 'stock-insuficiente'}`}>
-              {stock.toFixed(2)} {row.unidad_medida}
+              {parseFloat(stock.toFixed(4))} {row.unidad_medida}
             </div>
             {!suficiente && (
               <div className="stock-alerta">
@@ -552,7 +552,7 @@ function ProductoDetalle() {
       width: '110px',
       render: (value, row) => (
         <div className={`cantidad-historial ${row.estado === 'Anulado' ? 'texto-anulado' : ''}`}>
-          {parseFloat(value).toFixed(2)}
+          {parseFloat(parseFloat(value).toFixed(4))}
         </div>
       )
     },
@@ -672,17 +672,17 @@ function ProductoDetalle() {
               <div className="stock-principal">
                 <span className="stock-label">Stock Actual</span>
                 <div className="stock-valor-grande">
-                  {parseFloat(producto.stock_actual).toFixed(2)}
+                  {parseFloat(parseFloat(producto.stock_actual).toFixed(4))}
                   <span className="stock-unidad">{producto.unidad_medida}</span>
                 </div>
               </div>
               <div className="info-row">
                 <span className="info-label">Stock Mínimo:</span>
-                <span className="info-value">{parseFloat(producto.stock_minimo).toFixed(2)}</span>
+                <span className="info-value">{parseFloat(parseFloat(producto.stock_minimo).toFixed(4))}</span>
               </div>
               <div className="info-row">
                 <span className="info-label">Stock Máximo:</span>
-                <span className="info-value">{parseFloat(producto.stock_maximo).toFixed(2)}</span>
+                <span className="info-value">{parseFloat(parseFloat(producto.stock_maximo).toFixed(4))}</span>
               </div>
               {canSeePrices && (
                 <div className="info-row">
@@ -1279,7 +1279,7 @@ function ProductoDetalle() {
               <option value="">Seleccione un insumo...</option>
               {insumosDisponibles.map(insumo => (
                 <option key={insumo.id_producto} value={insumo.id_producto}>
-                  {insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(insumo.stock_actual).toFixed(2)} {insumo.unidad_medida})
+                  {insumo.codigo} - {insumo.nombre} (Stock: {parseFloat(parseFloat(insumo.stock_actual).toFixed(4))} {insumo.unidad_medida})
                 </option>
               ))}
             </select>

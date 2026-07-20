@@ -234,7 +234,7 @@ function DetalleGuiaRemision() {
       align: 'right',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold text-lg">{parseFloat(value).toFixed(2)}</div>
+          <div className="font-bold text-lg">{parseFloat(parseFloat(value).toFixed(4))}</div>
           <div className="text-xs text-muted">{row.unidad_medida}</div>
         </div>
       )

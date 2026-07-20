@@ -1755,7 +1755,7 @@ useEffect(() => {
               </div>
               <div className="text-right">
                 <div className="font-bold text-primary">{formatearMoneda(p.precio_venta_soles || p.precio_venta)}</div>
-                <div className="text-xs text-muted">Stock: {parseFloat(p.stock_actual).toFixed(2)}</div>
+                <div className="text-xs text-muted">Stock: {parseFloat(parseFloat(p.stock_actual).toFixed(4))}</div>
               </div>
             </div>
           ))}

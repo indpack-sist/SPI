@@ -217,11 +217,11 @@ function Productos() {
     { header: 'Nombre', accessor: 'nombre' },
     { header: 'Tipo Inventario', accessor: 'tipo_inventario' },
     { header: 'Categoría', accessor: 'categoria' },
-    { 
-      header: 'Stock Actual', 
+    {
+      header: 'Stock Actual',
       accessor: 'stock_actual',
       align: 'right',
-      render: (value, row) => `${parseFloat(value).toFixed(2)} ${row.unidad_medida}`
+      render: (value, row) => `${parseFloat(parseFloat(value).toFixed(4))} ${row.unidad_medida}`
     },
     {
       header: 'Peso Unit.',
@@ -564,7 +564,7 @@ function Productos() {
               <label className="form-label">Stock Mínimo</label>
               <input
                 type="number"
-                step="0.01"
+                step="0.001"
                 className="form-input"
                 value={formData.stock_minimo}
                 onChange={(e) => setFormData({ ...formData, stock_minimo: e.target.value })}
@@ -576,7 +576,7 @@ function Productos() {
               <label className="form-label">Stock Máximo</label>
               <input
                 type="number"
-                step="0.01"
+                step="0.001"
                 className="form-input"
                 value={formData.stock_maximo}
                 onChange={(e) => setFormData({ ...formData, stock_maximo: e.target.value })}

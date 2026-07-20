@@ -1577,7 +1577,7 @@ function DetalleOrdenVenta() {
           return (
             <div className="flex flex-col gap-1">
               <span className="badge badge-warning">Stock Insuficiente</span>
-              <span className="text-xs text-muted">Stock: {stockDisponible.toFixed(2)}</span>
+              <span className="text-xs text-muted">Stock: {parseFloat(stockDisponible.toFixed(4))}</span>
             </div>
           );
         }
@@ -1590,7 +1590,7 @@ function DetalleOrdenVenta() {
                     En producción
                 </span>
                 <span className="text-[10px] text-danger text-center">
-                    Falta: {Math.max(0, cantidadRequerida - stockDisponible).toFixed(2)}
+                    Falta: {parseFloat(Math.max(0, cantidadRequerida - stockDisponible).toFixed(4))}
                 </span>
             </div>
           );
@@ -1606,7 +1606,7 @@ function DetalleOrdenVenta() {
             </span>
             {mostrarAlertaStock && faltante > 0 && (
                 <span className="text-xs text-danger">
-                  Falta: {faltante.toFixed(2)} {row.unidad_medida}
+                  Falta: {parseFloat(faltante.toFixed(4))} {row.unidad_medida}
                 </span>
             )}
           </div>
@@ -3351,9 +3351,9 @@ function DetalleOrdenVenta() {
                     <p className="font-semibold mb-1">Producto: {productoSeleccionado.producto}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div><strong>Código:</strong> {productoSeleccionado.codigo_producto}</div>
-                      <div><strong>Cantidad OV:</strong> {parseFloat(productoSeleccionado.cantidad).toFixed(2)} {productoSeleccionado.unidad_medida}</div>
-                      <div><strong>Stock actual:</strong> {parseFloat(productoSeleccionado.stock_disponible || 0).toFixed(2)} {productoSeleccionado.unidad_medida}</div>
-                      <div><strong>Faltante:</strong> {Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(2)} {productoSeleccionado.unidad_medida}</div>
+                      <div><strong>Cantidad OV:</strong> {parseFloat(parseFloat(productoSeleccionado.cantidad).toFixed(4))} {productoSeleccionado.unidad_medida}</div>
+                      <div><strong>Stock actual:</strong> {parseFloat(parseFloat(productoSeleccionado.stock_disponible || 0).toFixed(4))} {productoSeleccionado.unidad_medida}</div>
+                      <div><strong>Faltante:</strong> {parseFloat(Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(4))} {productoSeleccionado.unidad_medida}</div>
                     </div>
                   </div>
                 </div>
@@ -3363,8 +3363,8 @@ function DetalleOrdenVenta() {
                 <label className="form-label">Cantidad a Producir *</label>
                 <input
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step="0.001"
+                  min="0.001"
                   className="form-input"
                   value={cantidadOP}
                   onChange={(e) => setCantidadOP(e.target.value)}
@@ -3374,7 +3374,7 @@ function DetalleOrdenVenta() {
                   onWheel={handleWheelDisable}
                 />
                 <small className="text-muted block mt-1">
-                  Puede producir cualquier cantidad. El faltante sugerido es: {Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(2)} {productoSeleccionado.unidad_medida}
+                  Puede producir cualquier cantidad. El faltante sugerido es: {parseFloat(Math.max(0, parseFloat(productoSeleccionado.cantidad) - parseFloat(productoSeleccionado.stock_disponible || 0)).toFixed(4))} {productoSeleccionado.unidad_medida}
                 </small>
               </div>
 
@@ -3447,10 +3447,10 @@ function DetalleOrdenVenta() {
                       <div className="text-xs text-muted">{item.codigo_producto}</div>
                     </td>
                     <td className="text-right font-medium">
-                      {parseFloat(item.cantidad_pendiente).toFixed(2)}
+                      {parseFloat(parseFloat(item.cantidad_pendiente).toFixed(4))}
                     </td>
                     <td className="text-right text-muted">
-                      {parseFloat(item.stock_disponible).toFixed(2)}
+                      {parseFloat(parseFloat(item.stock_disponible).toFixed(4))}
                     </td>
                     <td>
                       <input
@@ -3458,7 +3458,7 @@ function DetalleOrdenVenta() {
                         className="form-input form-input-sm text-right"
                         min="0"
                         max={item.cantidad_pendiente}
-                        step="0.01"
+                        step="0.001"
                         value={item.cantidad_a_despachar}
                         onChange={(e) => handleCambioCantidadDespacho(item.id_producto, e.target.value)}
                         onWheel={handleWheelDisable}
@@ -3877,7 +3877,7 @@ function DetalleOrdenVenta() {
                 <label className="form-label">Nueva Cantidad *</label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.001"
                   min="0"
                   className="form-input"
                   value={rectificarForm.nueva_cantidad}
@@ -3997,7 +3997,7 @@ function DetalleOrdenVenta() {
                           className="form-input form-input-sm text-right w-24 ml-auto"
                           min="0"
                           max={Math.min(item.stock_maximo_disponible, item.cantidad_requerida)}
-                          step="0.01"
+                          step="0.001"
                           value={item.cantidad_a_reservar}
                           onChange={(e) => handleCambioCantidadManualReserva(item.id_detalle, e.target.value)}
                           onWheel={handleWheelDisable}

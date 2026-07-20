@@ -601,7 +601,7 @@ function NuevaGuiaRemision() {
                                 onChange={(e) => handleCantidadChange(index, e.target.value)}
                                 min="0"
                                 max={Math.min(producto?.cantidad_disponible || 0, producto?.stock_actual || 0)}
-                                step="0.01"
+                                step="0.001"
                                 required
                               />
                             </td>

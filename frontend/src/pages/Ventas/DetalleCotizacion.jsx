@@ -451,7 +451,7 @@ function DetalleCotizacion() {
             parseFloat(row.cantidad) > parseFloat(row.stock_disponible || 0) && (
               <div className="text-xs text-warning flex items-center gap-1 mt-1">
                 <AlertTriangle size={12} />
-                Stock insuficiente ({parseFloat(row.stock_disponible || 0).toFixed(2)} {row.unidad_medida})
+                Stock insuficiente ({parseFloat(parseFloat(row.stock_disponible || 0).toFixed(4))} {row.unidad_medida})
               </div>
             )
           )}
@@ -465,7 +465,7 @@ function DetalleCotizacion() {
       align: 'right',
       render: (value, row) => (
         <div className="text-right">
-          <div className="font-bold">{parseFloat(value).toFixed(2)}</div>
+          <div className="font-bold">{parseFloat(parseFloat(value).toFixed(4))}</div>
           <div className="text-xs text-muted">{row.unidad_medida}</div>
         </div>
       )
@@ -1257,7 +1257,7 @@ function DetalleCotizacion() {
                 <label className="form-label">Nueva Cantidad *</label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.001"
                   min="0"
                   className="form-input"
                   value={rectificarForm.nueva_cantidad}

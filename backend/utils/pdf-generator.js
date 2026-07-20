@@ -79,6 +79,10 @@ function formatearFechaHora(fecha) {
   return `${fechaStr} ${horaStr}`;
 }
 
+function fmtCantidad(valor) {
+  return String(parseFloat(parseFloat(valor || 0).toFixed(4)));
+}
+
 function calcularAlturaTexto(doc, texto, ancho, fontSize = 8) {
   const currentFontSize = doc._fontSize || 12;
   doc.fontSize(fontSize);
@@ -247,7 +251,7 @@ export async function generarPDFEntrada(datos) {
       const detalles = datos.detalles || [];
       
       detalles.forEach((item, idx) => {
-        const cantidad = parseFloat(item.cantidad).toFixed(2);
+        const cantidad = fmtCantidad(item.cantidad);
         const costoUnitario = parseFloat(item.costo_unitario).toFixed(2);
         const subtotal = parseFloat((item.cantidad || 0) * (item.costo_unitario || 0)).toFixed(2);
         
@@ -663,11 +667,11 @@ export async function generarPDFSalida(datos) {
           doc.text(item.codigo_producto, 40, yPos + 5);
           doc.text(descripcion, 110, yPos + 5, { width: 165, lineGap: 2 });
           doc.text(item.unidad_medida, 280, yPos + 5, { width: 25, align: 'center' });
-          doc.text(cantidadItem.toFixed(2), 305, yPos + 5, { width: 50, align: 'center' });
+          doc.text(fmtCantidad(cantidadItem), 305, yPos + 5, { width: 50, align: 'center' });
           doc.text(pesoTE > 0 ? fmtPeso(pesoTE) : '-', 355, yPos + 5, { width: 50, align: 'center' });
-          const despachado = parseFloat(item.cantidad_despachada || 0).toFixed(2);
+          const despachado = fmtCantidad(item.cantidad_despachada || 0);
           doc.text(despachado, 410, yPos + 5, { width: 65, align: 'center' });
-          const pendiente = parseFloat(item.cantidad_pendiente || 0).toFixed(2);
+          const pendiente = fmtCantidad(item.cantidad_pendiente || 0);
           if(parseFloat(pendiente) > 0) doc.fillColor('#cc0000');
           doc.text(pendiente, 480, yPos + 5, { width: 60, align: 'center' });
           doc.fillColor('#000000');
@@ -678,7 +682,7 @@ export async function generarPDFSalida(datos) {
 
           doc.text(item.codigo_producto, 40, yPos + 5);
           doc.text(descripcion, 140, yPos + 5, { width: 220, lineGap: 2 });
-          doc.text(cantidadItem.toFixed(2), 370, yPos + 5, { width: 55, align: 'center' });
+          doc.text(fmtCantidad(cantidadItem), 370, yPos + 5, { width: 55, align: 'center' });
           doc.text(pesoT > 0 ? fmtPeso(pesoT) : '-', 425, yPos + 5, { width: 55, align: 'center' });
           doc.text(item.unidad_medida, 485, yPos + 5, { width: 50, align: 'center' });
         }
@@ -709,7 +713,7 @@ export async function generarPDFSalida(datos) {
           doc.text(`Salida #${h.numero_guia || h.id_salida}`, 120, yPos + 2);
           doc.text(h.producto, 220, yPos + 2, { width: 220, ellipsis: true });
           doc.text(h.unidad_medida, 450, yPos + 2);
-          doc.text(parseFloat(h.cantidad).toFixed(2), 490, yPos + 2, { align: 'right', width: 60 });
+          doc.text(fmtCantidad(h.cantidad), 490, yPos + 2, { align: 'right', width: 60 });
           doc.moveTo(33, yPos + 12).lineTo(562, yPos + 12).lineWidth(0.5).stroke('#eeeeee');
           yPos += 12;
         });
@@ -892,7 +896,7 @@ export async function generarPDFTransferencia(datos) {
         doc.text(item.codigo_origen || item.codigo_producto || '', 40, yPos + 5);
         doc.text(descripcion, 130, yPos + 5, { width: 180, lineGap: 2 });
         doc.text(item.codigo_destino || 'Auto', 320, yPos + 5);
-        doc.text(`${parseFloat(item.cantidad || 0).toFixed(2)} ${item.unidad_medida || ''}`, 410, yPos + 5, { width: 50, align: 'center' });
+        doc.text(`${fmtCantidad(item.cantidad)} ${item.unidad_medida || ''}`, 410, yPos + 5, { width: 50, align: 'center' });
         doc.text(`S/ ${subtotal.toFixed(2)}`, 490, yPos + 5, { align: 'right', width: 60 });
 
         yPos += alturaFila;
@@ -1125,7 +1129,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
 
           doc.fontSize(7).font('Helvetica').fillColor('#000000');
           doc.text(formatearFechaHora(reg.fecha_registro), 40, yPos + 3);
-          doc.text(`${parseFloat(reg.cantidad_registrada).toFixed(2)}`, 180, yPos + 3);
+          doc.text(fmtCantidad(reg.cantidad_registrada), 180, yPos + 3);
           doc.text(reg.registrado_por || '-', 270, yPos + 3, { width: 140 });
           doc.text(reg.observaciones || '-', 420, yPos + 3, { width: 130 });
 
@@ -1163,7 +1167,7 @@ export async function generarPDFOrdenProduccion(datos, consumoMateriales = [], m
           doc.fontSize(7).font('Helvetica').fillColor('#000000');
           doc.text(merma.codigo || '-', 40, yPos + 3);
           doc.text(merma.producto_merma || '-', 120, yPos + 3, { width: 220 });
-          doc.text(`${parseFloat(merma.cantidad).toFixed(2)} ${merma.unidad_medida || ''}`, 350, yPos + 3);
+          doc.text(`${fmtCantidad(merma.cantidad)} ${merma.unidad_medida || ''}`, 350, yPos + 3);
           doc.text(merma.observaciones || '-', 450, yPos + 3, { width: 100 });
 
           yPos += 16;
@@ -1596,7 +1600,7 @@ export async function generarPDFOrdenVenta(orden) {
       const simboloMoneda = orden.moneda === 'USD' ? '$' : 'S/';
       
       orden.detalle.forEach((item, idx) => {
-        const cantidad = parseFloat(item.cantidad).toFixed(2);
+        const cantidad = fmtCantidad(item.cantidad);
         const precioUnitario = parseFloat(item.precio_unitario).toFixed(2);
         const valorVenta = parseFloat(item.valor_venta || (item.cantidad * item.precio_unitario * (1 - (item.descuento_porcentaje || 0)/100))).toFixed(2);
         
@@ -1861,7 +1865,7 @@ export async function generarPDFGuiaRemision(guia) {
         
         doc.text(item.codigo_producto || '-', 40, yPos + 5);
         doc.text(descripcion, 130, yPos + 5, { width: 240, lineGap: 2 });
-        doc.text(parseFloat(item.cantidad).toFixed(2), 380, yPos + 5, { width: 70, align: 'center' });
+        doc.text(fmtCantidad(item.cantidad), 380, yPos + 5, { width: 70, align: 'center' });
         doc.text(item.unidad_medida || 'unidad', 455, yPos + 5, { width: 50, align: 'center' });
         doc.text(`${parseFloat(item.peso_total_kg || 0).toFixed(2)} kg`, 510, yPos + 5, { align: 'right', width: 45 });
 
@@ -2328,7 +2332,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
       doc.font('Helvetica-Bold').text(`META ${unidadProduccion}:`, 380, yInfo + 6);
       doc.font('Helvetica').text(metaUnidades, 430, yInfo + 6);
       doc.font('Helvetica-Bold').text('META KG:', 480, yInfo + 6);
-      doc.font('Helvetica').text(`${parseFloat(orden.cantidad_planificada || 0).toFixed(2)}`, 520, yInfo + 6);
+      doc.font('Helvetica').text(fmtCantidad(orden.cantidad_planificada), 520, yInfo + 6);
 
       let currentY = yInfo + 18;
       if (esLamina) {
@@ -2407,7 +2411,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
                   doc.text(item.codigo_insumo || '', xCode + 2, yPos + 3, { width: wCode });
                   doc.text(item.insumo || '', xDesc + 2, yPos + 3, { width: wDesc, height: 8, lineBreak: false, ellipsis: true });
                   
-                  const cantidadPlan = parseFloat(item.cantidad_requerida || item.cantidad || item.cantidad_formulada || 0).toFixed(2);
+                  const cantidadPlan = fmtCantidad(item.cantidad_requerida || item.cantidad || item.cantidad_formulada || 0);
                   doc.text(cantidadPlan, xPlan + 2, yPos + 3, { width: wPlan, align: 'center' });
 
                   yPos += 10;

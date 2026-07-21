@@ -1099,6 +1099,43 @@ function DetalleOrdenVenta() {
       setDescargandoPDF(null);
     }
   };
+
+  const handleVerPDFSalida = async (idSalida, numeroSalida) => {
+    try {
+      setDescargandoPDF(`ver-${idSalida}`);
+      const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const numeroSalidaFormat = numeroSalida ? `SAL-${String(numeroSalida).padStart(6, '0')}` : idSalida;
+      setVisorArchivo({ open: true, url, tipo: 'pdf', titulo: `Constancia de Salida – ${numeroSalidaFormat}`, isObjectUrl: true });
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar el PDF de la guía de salida');
+    } finally {
+      setDescargandoPDF(null);
+    }
+  };
+
+  const handleVerPDFGuiaInternaSalida = async (idSalida) => {
+    try {
+      setDescargandoPDF(`ver-gi-${idSalida}`);
+      const response = await ordenesVentaAPI.descargarPDFGuiaInternaSalida(id, idSalida);
+      if (response.data.type === 'application/json') {
+        const errorText = await response.data.text();
+        const errorJson = JSON.parse(errorText);
+        throw new Error(errorJson.error || 'Error generado por el servidor');
+      }
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      setVisorArchivo({ open: true, url, tipo: 'pdf', titulo: `Guía Interna – Despacho ${idSalida}`, isObjectUrl: true });
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar el PDF de la guía interna');
+    } finally {
+      setDescargandoPDF(null);
+    }
+  };
+
   const handleRectificarCantidad = async (e) => {
     e.preventDefault();
     if (!productoRectificar) return;
@@ -3033,9 +3070,21 @@ function DetalleOrdenVenta() {
                            align:'center', 
                            render: (val, row) => (
                              <div className="flex gap-2 justify-center">
-                               <button 
-                                 className="btn btn-sm btn-outline" 
-                                 onClick={() => handleDescargarSalidaEspecificaPDF(val, row.numero_salida)} 
+                               <button
+                                 className="btn btn-sm btn-primary"
+                                 onClick={() => handleVerPDFSalida(val, row.numero_salida)}
+                                 disabled={descargandoPDF === `ver-${val}`}
+                                 title="Ver Constancia de Salida"
+                               >
+                                 {descargandoPDF === `ver-${val}` ? (
+                                   <div className="animate-spin rounded-full h-3 w-3 border-2 border-current"></div>
+                                 ) : (
+                                   <Eye size={14}/>
+                                 )}
+                               </button>
+                               <button
+                                 className="btn btn-sm btn-outline"
+                                 onClick={() => handleDescargarSalidaEspecificaPDF(val, row.numero_salida)}
                                  disabled={descargandoPDF === val}
                                  title="Descargar Constancia de Salida"
                                >
@@ -3048,9 +3097,22 @@ function DetalleOrdenVenta() {
 
                                {orden.tipo_comprobante === 'Nota de Venta' && (
                                  extraerGuiaInterna(row.observaciones) ? (
-                                   <button 
-                                     className="btn btn-sm btn-info text-white font-bold" 
-                                     onClick={() => handleDescargarGuiaInternaSalida(val)} 
+                                   <>
+                                   <button
+                                     className="btn btn-sm btn-info"
+                                     onClick={() => handleVerPDFGuiaInternaSalida(val)}
+                                     disabled={descargandoPDF === `ver-gi-${val}`}
+                                     title="Ver Guía Interna generada"
+                                   >
+                                     {descargandoPDF === `ver-gi-${val}` ? (
+                                       <div className="animate-spin rounded-full h-3 w-3 border-2 border-white"></div>
+                                     ) : (
+                                       <Eye size={14}/>
+                                     )}
+                                   </button>
+                                   <button
+                                     className="btn btn-sm btn-info text-white font-bold"
+                                     onClick={() => handleDescargarGuiaInternaSalida(val)}
                                      disabled={descargandoPDF === `gi-${val}`}
                                      title="Descargar Guía Interna generada"
                                    >
@@ -3060,6 +3122,7 @@ function DetalleOrdenVenta() {
                                        extraerGuiaInterna(row.observaciones)
                                      )}
                                    </button>
+                                   </>
                                  ) : (
                                    <button 
                                      className="btn btn-sm btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50" 

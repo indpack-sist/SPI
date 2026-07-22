@@ -621,7 +621,8 @@ export const ordenesVentaAPI = {
 
   marcarFacturadoSunat: (id, data) => api.patch(`/ordenes-venta/${id}/facturar-sunat`, data),
   desmarcarFacturadoSunat: (id) => api.patch(`/ordenes-venta/${id}/desmarcar-sunat`),
-  anularFacturaSunat: (id, data) => api.post(`/ordenes-venta/${id}/anular-factura-sunat`, data),
+  getFacturas: (id) => api.get(`/ordenes-venta/${id}/facturas`),
+  anularFacturaSunat: (id, idFactura, data) => api.post(`/ordenes-venta/${id}/facturas/${idFactura}/anular`, data),
   getHistorialFacturasAnuladas: (id) => api.get(`/ordenes-venta/${id}/facturas-anuladas`),
 
   descargarPDF: (id, tipo = 'orden') => {

@@ -696,23 +696,32 @@ function OrdenesVenta() {
         }
 
         if (value === 1) {
+          const numFacturas = Number(row.total_facturas || 0);
+          const totalFacturado = Number(row.total_facturado || 0);
+          const esParcial = totalFacturado > 0 && (Number(row.total || 0) - totalFacturado) > 1;
           return (
             <div className="flex flex-col items-center gap-0.5">
-              <span className="flex items-center gap-1 text-success font-black text-[9px] uppercase tracking-widest">
-                <BadgeCheck size={12} className="text-success" />
-                Facturado
+              <span className={`flex items-center gap-1 font-black text-[9px] uppercase tracking-widest ${esParcial ? 'text-warning' : 'text-success'}`}>
+                <BadgeCheck size={12} className={esParcial ? 'text-warning' : 'text-success'} />
+                {esParcial ? 'Parcial' : 'Facturado'}
               </span>
-              {row.numero_comprobante_sunat && (
-                <span className="font-mono text-[9px] text-mist">
-                  {row.numero_comprobante_sunat}
+              {numFacturas > 1 ? (
+                <span className="font-black text-[9px] text-info bg-info/10 px-1.5 py-0.5 rounded uppercase tracking-tight">
+                  {numFacturas} facturas
                 </span>
+              ) : (
+                row.numero_comprobante_sunat && (
+                  <span className="font-mono text-[9px] text-mist">
+                    {row.numero_comprobante_sunat}
+                  </span>
+                )
               )}
               {row.comprobante_sunat_url && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); abrirVisorSunat(row); }}
                   className="mt-1.5 flex items-center justify-center btn-sunat-viewer px-3 py-1 rounded shadow-sm group"
-                  title="Ver Detalle Factura SUNAT"
+                  title={numFacturas > 1 ? 'Ver última factura (abra el detalle para todas)' : 'Ver Detalle Factura SUNAT'}
                 >
                   <Eye size={12} className="group-hover:scale-110 transition-transform" />
                   <span className="ml-1 text-[8px] font-bold uppercase tracking-tighter">Ver PDF</span>

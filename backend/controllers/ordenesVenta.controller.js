@@ -91,7 +91,9 @@ export async function getAllOrdenesVenta(req, res) {
         ov.id_registrado_por,
         ov.id_verificador,
         (SELECT COUNT(*) FROM detalle_orden_venta WHERE id_orden_venta = ov.id_orden_venta) AS total_items,
-        (SELECT COUNT(*) FROM salidas WHERE observaciones LIKE CONCAT('%', ov.numero_orden, '%') AND estado = 'Activo') AS total_despachos
+        (SELECT COUNT(*) FROM salidas WHERE observaciones LIKE CONCAT('%', ov.numero_orden, '%') AND estado = 'Activo') AS total_despachos,
+        (SELECT COUNT(*) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida') AS total_facturas,
+        (SELECT COALESCE(SUM(fv.total), 0) FROM facturas_venta fv WHERE fv.id_orden_venta = ov.id_orden_venta AND fv.estado = 'Emitida') AS total_facturado
       FROM ordenes_venta ov
       LEFT JOIN cotizaciones c ON ov.id_cotizacion = c.id_cotizacion
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
@@ -3922,9 +3924,10 @@ export async function desmarcarFacturadoSunat(req, res) {
   }
 }
 
+// POST /:id/facturas/:idFactura/anular — anula una factura específica de la orden.
 export async function anularFacturaSunat(req, res) {
   try {
-    const { id } = req.params;
+    const { id, idFactura } = req.params;
     const { motivo_anulacion } = req.body;
     const { id_empleado, rol } = req.user;
 
@@ -3936,62 +3939,38 @@ export async function anularFacturaSunat(req, res) {
       return res.status(400).json({ success: false, error: 'El motivo de anulación es obligatorio' });
     }
 
-    const ordenResult = await executeQuery(
-      'SELECT id_orden_venta, numero_orden, estado, facturado_sunat, numero_comprobante_sunat, comprobante_sunat_url FROM ordenes_venta WHERE id_orden_venta = ?',
-      [id]
+    const facRes = await executeQuery(
+      'SELECT id_factura, numero_factura, estado FROM facturas_venta WHERE id_factura = ? AND id_orden_venta = ?',
+      [idFactura, id]
     );
 
-    if (!ordenResult.success || ordenResult.data.length === 0) {
-      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    if (!facRes.success || facRes.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Factura no encontrada para esta orden' });
     }
 
-    const orden = ordenResult.data[0];
-
-    if (orden.facturado_sunat !== 1) {
-      return res.status(400).json({ success: false, error: 'Esta orden no está marcada como facturada en SUNAT' });
+    if (facRes.data[0].estado === 'Anulada') {
+      return res.status(400).json({ success: false, error: 'Esta factura ya está anulada' });
     }
 
-    if (!orden.numero_comprobante_sunat) {
-      return res.status(400).json({ success: false, error: 'La orden no tiene un número de comprobante asociado para anular' });
+    const upd = await executeQuery(
+      `UPDATE facturas_venta
+          SET estado = 'Anulada', motivo_anulacion = ?, fecha_anulacion = ?, id_anulado_por = ?
+        WHERE id_factura = ?`,
+      [motivo_anulacion.trim(), getFechaPeru(), id_empleado, idFactura]
+    );
+
+    if (!upd.success) {
+      return res.status(500).json({ success: false, error: upd.error });
     }
 
-    const comprobanteUrlToSave = typeof orden.comprobante_sunat_url === 'object' && orden.comprobante_sunat_url !== null 
-      ? JSON.stringify(orden.comprobante_sunat_url) 
-      : orden.comprobante_sunat_url;
-
-    const queries = [
-      {
-        sql: `INSERT INTO facturas_anuladas_ov
-              (id_orden_venta, numero_comprobante_sunat, comprobante_sunat_url, motivo_anulacion, id_usuario_anulacion, fecha_anulacion)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        params: [id, orden.numero_comprobante_sunat, comprobanteUrlToSave, motivo_anulacion.trim(), id_empleado, getFechaPeru()]
-      },
-      {
-        sql: `UPDATE ordenes_venta
-              SET
-                facturado_sunat = 0,
-                fecha_facturacion_sunat = NULL,
-                numero_comprobante_sunat = NULL,
-                comprobante_sunat_url = NULL,
-                id_facturador = NULL
-              WHERE id_orden_venta = ?`,
-        params: [id]
-      }
-    ];
-
-    const transactionResult = await executeTransaction(queries);
-
-    if (!transactionResult.success) {
-      return res.status(500).json({ success: false, error: transactionResult.error });
-    }
+    await sincronizarResumenFacturacion(id);
 
     res.json({
       success: true,
-      message: 'Factura SUNAT anulada correctamente. La orden vuelve a estar pendiente de facturación.',
+      message: 'Factura anulada correctamente.',
       data: {
-        id_orden_venta: parseInt(id),
-        numero_orden: orden.numero_orden,
-        facturado_sunat: false
+        id_factura: parseInt(idFactura),
+        numero_comprobante_sunat: facRes.data[0].numero_factura
       }
     });
 
@@ -4006,36 +3985,27 @@ export async function getHistorialFacturasAnuladas(req, res) {
     const { id } = req.params;
 
     const result = await executeQuery(`
-      SELECT 
-        fa.id_anulacion,
-        fa.numero_comprobante_sunat,
-        fa.comprobante_sunat_url,
-        fa.motivo_anulacion,
-        fa.fecha_anulacion,
-        e.nombre_completo AS usuario_anulacion
-      FROM facturas_anuladas_ov fa
-      LEFT JOIN empleados e ON fa.id_usuario_anulacion = e.id_empleado
-      WHERE fa.id_orden_venta = ?
-      ORDER BY fa.fecha_anulacion DESC
+      SELECT
+        fv.id_factura                              AS id_anulacion,
+        fv.numero_factura                          AS numero_comprobante_sunat,
+        fv.url_pdf                                 AS comprobante_sunat_url,
+        fv.motivo_anulacion,
+        COALESCE(fv.fecha_anulacion, fv.fecha_emision) AS fecha_anulacion,
+        e.nombre_completo                          AS usuario_anulacion
+      FROM facturas_venta fv
+      LEFT JOIN empleados e ON fv.id_anulado_por = e.id_empleado
+      WHERE fv.id_orden_venta = ? AND fv.estado = 'Anulada'
+      ORDER BY COALESCE(fv.fecha_anulacion, fv.fecha_emision) DESC, fv.id_factura DESC
     `, [id]);
 
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error });
     }
 
-    // Process JSON parse for the urls if necessary
-    const data = result.data.map(item => {
-      let url = item.comprobante_sunat_url;
-      try {
-        if (typeof url === 'string' && url.startsWith('{')) {
-          url = JSON.parse(url);
-        }
-      } catch (e) {}
-      return {
-        ...item,
-        comprobante_sunat_url: url
-      };
-    });
+    const data = result.data.map(item => ({
+      ...item,
+      comprobante_sunat_url: extraerUrlPdf(item.comprobante_sunat_url)
+    }));
 
     res.json({
       success: true,
@@ -4324,46 +4294,221 @@ export async function verificarOC(req, res) {
   }
 }
 
+// ==========================================================================
+// FACTURACIÓN SUNAT (multi-factura por orden — tabla facturas_venta)
+// ==========================================================================
+
+// Normaliza el valor de url_pdf (JSON en BD) a una URL string simple.
+function extraerUrlPdf(v) {
+  if (!v) return null;
+  let val = v;
+  if (typeof val === 'string') {
+    const s = val.trim();
+    if (s.startsWith('[') || s.startsWith('{')) {
+      try { val = JSON.parse(s); } catch { return s; }
+    } else {
+      return s;
+    }
+  }
+  if (Array.isArray(val)) return val[0] || null;
+  if (typeof val === 'object' && val !== null) return val.url || null;
+  return null;
+}
+
+// Deriva subtotal e IGV a partir del importe total y la config de impuesto de la orden.
+function derivarMontosFactura(total, orden) {
+  const t = parseFloat(total) || 0;
+  const pct = parseFloat(orden?.porcentaje_impuesto || 0);
+  const tipo = String(orden?.tipo_impuesto || '').toUpperCase();
+  const sinIgv = pct <= 0 || ['EXO', 'EXONERADO', 'INA', 'INAFECTO', 'INAFECTA'].includes(tipo);
+  if (sinIgv) {
+    return { subtotal: +t.toFixed(4), igv: 0, total: +t.toFixed(4) };
+  }
+  const subtotal = +(t / (1 + pct / 100)).toFixed(4);
+  const igv = +(t - subtotal).toFixed(4);
+  return { subtotal, igv, total: +t.toFixed(4) };
+}
+
+// Recalcula los campos resumen de facturación en ordenes_venta desde facturas_venta.
+// Mantiene compatibilidad con el listado y las vistas que leen ov.facturado_sunat, etc.
+async function sincronizarResumenFacturacion(idOrden) {
+  const emitidas = await executeQuery(
+    `SELECT id_factura, numero_factura, url_pdf, fecha_emision, id_registrado_por
+       FROM facturas_venta
+      WHERE id_orden_venta = ? AND estado = 'Emitida'
+      ORDER BY fecha_emision ASC, id_factura ASC`,
+    [idOrden]
+  );
+  const rows = emitidas.success ? emitidas.data : [];
+  const count = rows.length;
+
+  let facturado = 0, numero = null, fecha = null, url = null, facturador = null;
+  if (count > 0) {
+    const ultima = rows[rows.length - 1];
+    facturado = 1;
+    numero = count === 1 ? rows[0].numero_factura : `${count} facturas`;
+    fecha = ultima.fecha_emision;
+    const urlUltima = extraerUrlPdf(ultima.url_pdf);
+    url = urlUltima ? JSON.stringify([urlUltima]) : null;
+    facturador = ultima.id_registrado_por || null;
+  }
+
+  await executeQuery(
+    `UPDATE ordenes_venta
+        SET facturado_sunat = ?, numero_comprobante_sunat = ?, fecha_facturacion_sunat = ?,
+            comprobante_sunat_url = ?, id_facturador = ?
+      WHERE id_orden_venta = ?`,
+    [facturado, numero, fecha, url, facturador, idOrden]
+  );
+}
+
+// GET /:id/facturas — todas las facturas (Emitidas y Anuladas) + resumen de saldo.
+export async function getFacturasOrden(req, res) {
+  try {
+    const { id } = req.params;
+
+    const ordenRes = await executeQuery(
+      'SELECT total, moneda FROM ordenes_venta WHERE id_orden_venta = ?',
+      [id]
+    );
+    if (!ordenRes.success || ordenRes.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+
+    const facturasRes = await executeQuery(`
+      SELECT
+        fv.id_factura, fv.numero_factura, fv.serie, fv.numero, fv.tipo_comprobante,
+        fv.fecha_emision, fv.subtotal, fv.igv, fv.total, fv.moneda, fv.estado,
+        fv.url_pdf, fv.motivo_anulacion, fv.fecha_anulacion,
+        e.nombre_completo  AS registrado_por,
+        e2.nombre_completo AS anulado_por
+      FROM facturas_venta fv
+      LEFT JOIN empleados e  ON fv.id_registrado_por = e.id_empleado
+      LEFT JOIN empleados e2 ON fv.id_anulado_por = e2.id_empleado
+      WHERE fv.id_orden_venta = ?
+      ORDER BY (fv.estado = 'Anulada'), fv.fecha_emision ASC, fv.id_factura ASC
+    `, [id]);
+
+    if (!facturasRes.success) {
+      return res.status(500).json({ success: false, error: facturasRes.error });
+    }
+
+    const facturas = facturasRes.data.map(f => ({ ...f, url_pdf: extraerUrlPdf(f.url_pdf) }));
+    const emitidas = facturas.filter(f => f.estado === 'Emitida');
+    const totalOrden = parseFloat(ordenRes.data[0].total || 0);
+    const totalFacturado = emitidas.reduce((s, f) => s + parseFloat(f.total || 0), 0);
+    const saldoPendiente = +(totalOrden - totalFacturado).toFixed(2);
+
+    res.json({
+      success: true,
+      data: {
+        facturas,
+        resumen: {
+          total_orden: +totalOrden.toFixed(2),
+          total_facturado: +totalFacturado.toFixed(2),
+          saldo_pendiente: saldoPendiente,
+          count_emitidas: emitidas.length,
+          moneda: ordenRes.data[0].moneda || 'PEN'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error en getFacturasOrden:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function vincularFacturaSunat(req, res) {
   try {
     const { id } = req.params;
-    let { numero_comprobante_sunat, fecha_facturacion_sunat, comprobante_url } = req.body;
+    let { numero_comprobante_sunat, fecha_facturacion_sunat, importe_total, comprobante_url, forzar } = req.body;
+    const id_empleado = req.user?.id_empleado || null;
 
+    if (!numero_comprobante_sunat || !numero_comprobante_sunat.trim()) {
+      return res.status(400).json({ success: false, error: 'El número de comprobante es obligatorio.' });
+    }
     if (!req.file && !comprobante_url) {
-        return res.status(400).json({ success: false, error: 'Se requiere el archivo PDF de la factura.' });
+      return res.status(400).json({ success: false, error: 'Se requiere el archivo PDF de la factura.' });
     }
 
+    const numero = numero_comprobante_sunat.trim();
+
+    const ordenRes = await executeQuery(
+      `SELECT id_orden_venta, id_cliente, total, moneda, porcentaje_impuesto, tipo_impuesto
+         FROM ordenes_venta WHERE id_orden_venta = ?`,
+      [id]
+    );
+    if (!ordenRes.success || ordenRes.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orden no encontrada' });
+    }
+    const orden = ordenRes.data[0];
+
+    // Duplicado: numero_factura es UNIQUE global
+    const dup = await executeQuery(
+      'SELECT id_factura, id_orden_venta FROM facturas_venta WHERE numero_factura = ?',
+      [numero]
+    );
+    if (dup.success && dup.data.length > 0) {
+      return res.status(400).json({ success: false, error: `El comprobante ${numero} ya está registrado en el sistema.` });
+    }
+
+    // Validación de saldo pendiente
+    const totalNuevo = parseFloat(String(importe_total ?? '').replace(/,/g, '')) || parseFloat(orden.total) || 0;
+    const totalOrden = parseFloat(orden.total || 0);
+    const sumaRes = await executeQuery(
+      `SELECT COALESCE(SUM(total), 0) AS suma FROM facturas_venta WHERE id_orden_venta = ? AND estado = 'Emitida'`,
+      [id]
+    );
+    const yaFacturado = parseFloat(sumaRes.data?.[0]?.suma || 0);
+    const tolerancia = 1;
+    const forzarBool = forzar === true || forzar === 'true' || forzar === 1 || forzar === '1';
+
+    if ((yaFacturado + totalNuevo) > (totalOrden + tolerancia) && !forzarBool) {
+      const saldo = +(totalOrden - yaFacturado).toFixed(2);
+      return res.status(409).json({
+        success: false,
+        code: 'EXCEDE_SALDO',
+        error: `El total de esta factura (${totalNuevo.toFixed(2)}) excede el saldo pendiente de facturar (${saldo.toFixed(2)}) de la orden.`,
+        data: { saldo_pendiente: saldo, total_facturado: +yaFacturado.toFixed(2), total_orden: totalOrden }
+      });
+    }
+
+    // Subir PDF a Cloudinary
     if (req.file) {
-        const resultCloudinary = await subirArchivoACloudinary(req.file, 'indpack_ventas/facturas_sunat');
-        comprobante_url = resultCloudinary.secure_url;
+      const resultCloudinary = await subirArchivoACloudinary(req.file, 'indpack_ventas/facturas_sunat');
+      comprobante_url = resultCloudinary.secure_url;
     }
-
-    const sql = `
-        UPDATE ordenes_venta 
-        SET 
-            facturado_sunat = 1,
-            numero_comprobante_sunat = ?,
-            fecha_facturacion_sunat = COALESCE(?, NOW()),
-            comprobante_sunat_url = ?
-        WHERE id_orden_venta = ?
-    `;
-    
     const urlJSON = comprobante_url ? JSON.stringify([comprobante_url]) : null;
-    const params = [numero_comprobante_sunat, fecha_facturacion_sunat || null, urlJSON, id];
 
-    const result = await executeQuery(sql, params);
+    const serie = numero.includes('-') ? numero.split('-')[0] : (numero.slice(0, 4) || 'F001');
+    const correlativo = numero.includes('-') ? (parseInt(numero.split('-').pop(), 10) || 0) : 0;
+    const montos = derivarMontosFactura(totalNuevo, orden);
 
-    if (!result.success) {
-        return res.status(500).json({ success: false, error: 'Error al actualizar la base de datos', details: result.error });
+    const insert = await executeQuery(
+      `INSERT INTO facturas_venta
+         (numero_factura, id_orden_venta, id_cliente, fecha_emision, tipo_comprobante,
+          serie, numero, subtotal, igv, total, moneda, estado, url_pdf, id_registrado_por)
+       VALUES (?, ?, ?, ?, 'Factura', ?, ?, ?, ?, ?, ?, 'Emitida', ?, ?)`,
+      [
+        numero, id, orden.id_cliente, fecha_facturacion_sunat || getFechaPeru(),
+        serie, correlativo, montos.subtotal, montos.igv, montos.total,
+        orden.moneda || 'PEN', urlJSON, id_empleado
+      ]
+    );
+    if (!insert.success) {
+      return res.status(500).json({ success: false, error: 'Error al registrar la factura', details: insert.error });
     }
+
+    await sincronizarResumenFacturacion(id);
 
     res.json({
-        success: true,
-        message: 'Factura SUNAT vinculada exitosamente',
-        data: {
-            numero_comprobante_sunat,
-            comprobante_url
-        }
+      success: true,
+      message: 'Factura registrada y vinculada exitosamente',
+      data: {
+        id_factura: insert.data.insertId,
+        numero_comprobante_sunat: numero,
+        comprobante_url
+      }
     });
   } catch (error) {
     console.error('Error en vincularFacturaSunat:', error);

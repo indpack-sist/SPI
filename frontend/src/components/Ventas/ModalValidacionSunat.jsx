@@ -3,7 +3,12 @@ import { api } from '../../config/api';
 import Alert from '../UI/Alert';
 import './ModalValidacionSunat.css';
 
-const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null }) => {
+const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0 }) => {
+    const esFacturacionParcial = Number(totalFacturado) > 0;
+    // Monto contra el que se valida: saldo pendiente si ya hay facturas, si no el total de la orden.
+    const montoObjetivo = (saldoPendiente !== null && saldoPendiente !== undefined)
+        ? Number(saldoPendiente)
+        : Number(orden?.total || 0);
     const [parsedData, setParsedData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [alert, setAlert] = useState(null);
@@ -91,11 +96,17 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
         }
 
         // Comparar Totales (Tolerancia de decimales)
-        if (formData.importe_total && orden?.total) {
+        if (formData.importe_total) {
             const totalPdf = parseFloat(String(formData.importe_total).replace(/,/g, ''));
-            const totalOrden = parseFloat(orden.total);
-            if (!isNaN(totalPdf) && Math.abs(totalPdf - totalOrden) > 1) { // 1 sol/dolar de tolerancia
-                advertencias.push(`El Total (${totalPdf}) difiere del total de la Orden (${totalOrden}).`);
+            if (!isNaN(totalPdf)) {
+                if (esFacturacionParcial) {
+                    // En facturación parcial validamos que no exceda el saldo pendiente
+                    if (totalPdf > montoObjetivo + 1) {
+                        advertencias.push(`El Total (${totalPdf.toFixed(2)}) excede el saldo pendiente de facturar (${montoObjetivo.toFixed(2)}).`);
+                    }
+                } else if (orden?.total && Math.abs(totalPdf - Number(orden.total)) > 1) {
+                    advertencias.push(`El Total (${totalPdf}) difiere del total de la Orden (${Number(orden.total)}).`);
+                }
             }
         }
 
@@ -147,28 +158,20 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        
-        if (!formData.numero_comprobante_sunat) {
-            setAlert({ type: 'error', message: 'El número de comprobante es obligatorio.' });
-            return;
-        }
-
-        // Doble validación: Si hay advertencias (vacíos o discrepancias), pedir confirmación
-        if (alert && alert.type === 'warning') {
-            const confirmar = window.confirm("Cuidado: Hay datos que no coinciden con la orden original o no pudieron ser leídos.\n\n¿Estás seguro de que deseas forzar la vinculación de este documento de todas formas?");
-            if (!confirmar) {
-                return; // Se cancela la vinculación
-            }
-        }
-
+    const enviarVinculacion = async (forzar) => {
         setLoading(true);
         try {
             const formDataSubmit = new FormData();
             formDataSubmit.append('pdf', file);
             formDataSubmit.append('numero_comprobante_sunat', formData.numero_comprobante_sunat);
-            
+
+            if (formData.importe_total) {
+                formDataSubmit.append('importe_total', String(formData.importe_total).replace(/,/g, ''));
+            }
+            if (forzar) {
+                formDataSubmit.append('forzar', 'true');
+            }
+
             // Convertimos la fecha DD/MM/YYYY a YYYY-MM-DD para MySQL si está presente
             if (formData.fecha_emision) {
                 const parts = formData.fecha_emision.split('/');
@@ -187,11 +190,44 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                 setAlert({ type: 'error', message: response.data.error || 'Error al vincular la factura' });
             }
         } catch (error) {
-            console.error('Error:', error);
-            setAlert({ type: 'error', message: 'Error de conexión al guardar los datos.' });
+            // El backend rechaza (409) cuando el total excede el saldo pendiente. Permitimos forzar.
+            if (error?.response?.status === 409 && error.response.data?.code === 'EXCEDE_SALDO') {
+                const confirmar = window.confirm(
+                    `${error.response.data.error}\n\n¿Deseas registrar esta factura de todas formas (facturación por encima del total)?`
+                );
+                if (confirmar) {
+                    await enviarVinculacion(true);
+                    return;
+                }
+                setAlert({ type: 'warning', message: error.response.data.error });
+            } else {
+                console.error('Error:', error);
+                setAlert({ type: 'error', message: error?.response?.data?.error || 'Error de conexión al guardar los datos.' });
+            }
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!formData.numero_comprobante_sunat) {
+            setAlert({ type: 'error', message: 'El número de comprobante es obligatorio.' });
+            return;
+        }
+
+        // Doble validación: Si hay advertencias (vacíos o discrepancias), pedir confirmación
+        let forzar = false;
+        if (alert && alert.type === 'warning') {
+            const confirmar = window.confirm("Cuidado: Hay datos que no coinciden con la orden original o no pudieron ser leídos.\n\n¿Estás seguro de que deseas forzar la vinculación de este documento de todas formas?");
+            if (!confirmar) {
+                return; // Se cancela la vinculación
+            }
+            forzar = true;
+        }
+
+        await enviarVinculacion(forzar);
     };
 
     if (!isOpen) return null;
@@ -265,7 +301,13 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                                     readOnly={readOnly}
                                     className={readOnly ? 'input-readonly' : ''}
                                 />
-                                <small>Total en la Orden: {orden?.total}</small>
+                                {esFacturacionParcial ? (
+                                    <small>
+                                        Ya facturado: {Number(totalFacturado).toFixed(2)} · <strong>Saldo pendiente: {montoObjetivo.toFixed(2)}</strong> (Total orden: {orden?.total})
+                                    </small>
+                                ) : (
+                                    <small>Total en la Orden: {orden?.total}</small>
+                                )}
                             </div>
 
                             <div className="sunat-form-actions">

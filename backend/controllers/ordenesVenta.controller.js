@@ -4498,7 +4498,7 @@ export async function getFacturasOrden(req, res) {
       SELECT
         fv.id_factura, fv.numero_factura, fv.serie, fv.numero, fv.tipo_comprobante,
         fv.fecha_emision, fv.subtotal, fv.igv, fv.total, fv.moneda, fv.estado,
-        fv.url_pdf, fv.motivo_anulacion, fv.fecha_anulacion,
+        fv.url_pdf, fv.motivo_anulacion, fv.fecha_anulacion, fv.id_salida,
         e.nombre_completo  AS registrado_por,
         e2.nombre_completo AS anulado_por
       FROM facturas_venta fv

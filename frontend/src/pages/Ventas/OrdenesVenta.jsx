@@ -163,14 +163,8 @@ function OrdenesVenta() {
 
   const [modalSunat, setModalSunat] = useState({
     isOpen: false,
-    orden: null
-  });
-
-  const [modalFacturas, setModalFacturas] = useState({
-    isOpen: false,
     orden: null,
-    facturas: [],
-    loading: false
+    facturas: null
   });
 
   const abrirVisor = (url, titulo) => {
@@ -189,19 +183,20 @@ function OrdenesVenta() {
   const abrirVisorSunat = (row) => {
     setModalSunat({
       isOpen: true,
-      orden: row
+      orden: row,
+      facturas: null
     });
   };
 
   const abrirListaFacturas = async (row) => {
-    setModalFacturas({ isOpen: true, orden: row, facturas: [], loading: true });
     try {
       const res = await ordenesVentaAPI.getFacturas(row.id_orden_venta);
       const data = res.data?.data || {};
       const emitidas = (data.facturas || []).filter(f => f.estado === 'Emitida');
-      setModalFacturas({ isOpen: true, orden: row, facturas: emitidas, loading: false });
+      setModalSunat({ isOpen: true, orden: row, facturas: emitidas });
     } catch (e) {
-      setModalFacturas({ isOpen: true, orden: row, facturas: [], loading: false });
+      // Fallback: abre el visor simple con lo que tenga la orden.
+      setModalSunat({ isOpen: true, orden: row, facturas: null });
     }
   };
 
@@ -1026,71 +1021,14 @@ function OrdenesVenta() {
 
       <ModalValidacionSunat
         isOpen={modalSunat.isOpen}
-        onClose={() => setModalSunat({ isOpen: false, orden: null })}
+        onClose={() => setModalSunat({ isOpen: false, orden: null, facturas: null })}
         orden={modalSunat.orden}
+        facturas={modalSunat.facturas}
         file={null}
         readOnly={true}
         existingData={modalSunat.orden}
         onConfirm={() => {}}
       />
-
-      <Modal
-        isOpen={modalFacturas.isOpen}
-        onClose={() => setModalFacturas({ isOpen: false, orden: null, facturas: [], loading: false })}
-        title={`Facturas de ${modalFacturas.orden?.numero_orden || ''}`}
-      >
-        <div className="space-y-2">
-          {modalFacturas.loading ? (
-            <div className="text-center py-6 text-wire">Cargando facturas...</div>
-          ) : modalFacturas.facturas.length === 0 ? (
-            <div className="text-center py-6 text-wire">Sin facturas emitidas</div>
-          ) : (
-            <>
-              <div className="flex justify-between text-xs text-mist px-1 pb-1 border-b border-gray-200">
-                <span>{modalFacturas.facturas.length} factura(s)</span>
-                <span>
-                  Total facturado:{' '}
-                  {formatearMoneda(
-                    modalFacturas.facturas.reduce((a, f) => a + parseFloat(f.total || 0), 0),
-                    modalFacturas.orden?.moneda
-                  )}
-                </span>
-              </div>
-              {modalFacturas.facturas.map((f) => {
-                const despachoLabel = f.id_salida
-                  ? `SAL-${String(f.id_salida).padStart(6, '0')}`
-                  : 'Orden completa';
-                return (
-                  <div key={f.id_factura} className="flex items-center justify-between gap-2 p-2 border border-gray-100 rounded-lg bg-white hover:bg-gray-50">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="badge badge-success font-mono text-xs">{f.numero_factura}</span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f.id_salida ? 'text-indigo-600 bg-indigo-50' : 'text-gray-600 bg-gray-100'}`}>
-                          {f.id_salida ? `Despacho ${despachoLabel}` : despachoLabel}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-mist mt-1">
-                        {formatearMoneda(f.total, f.moneda)}
-                        {f.fecha_emision && <> · {new Date(f.fecha_emision).toLocaleDateString('es-PE')}</>}
-                      </div>
-                    </div>
-                    {f.url_pdf && (
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-outline flex items-center gap-1 shrink-0"
-                        onClick={() => abrirVisor(f.url_pdf, `Factura ${f.numero_factura}`)}
-                        title="Ver PDF de la factura"
-                      >
-                        <Eye size={12} /> Ver
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }

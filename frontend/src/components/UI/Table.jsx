@@ -9,7 +9,7 @@ function Table({
   pagination = null,
   onPageChange = null,
   onRowClick = null,
-  mobileCards = false
+  mobileCards = true
 }) {
   if (loading) {
     return (

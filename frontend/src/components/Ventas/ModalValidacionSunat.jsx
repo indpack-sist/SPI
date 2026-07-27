@@ -9,10 +9,9 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
     const montoObjetivo = (saldoPendiente !== null && saldoPendiente !== undefined)
         ? Number(saldoPendiente)
         : Number(orden?.total || 0);
-    // Formato de moneda idéntico al de la Orden de Venta (formatearMoneda):
-    // símbolo según moneda + separador de miles + 2 a 3 decimales (caso "total").
+    // Formato de moneda para importes/totales: símbolo + separador de miles + 2 decimales.
     const simboloMoneda = orden?.moneda === 'USD' ? '$' : 'S/';
-    const fmtMoneda = (v) => `${simboloMoneda} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(parseFloat(v || 0))}`;
+    const fmtMoneda = (v) => `${simboloMoneda} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
     const [parsedData, setParsedData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [alert, setAlert] = useState(null);

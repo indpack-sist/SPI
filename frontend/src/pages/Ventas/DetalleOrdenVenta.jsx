@@ -158,11 +158,20 @@ function DetalleOrdenVenta() {
     }).format(valor);
   };
 
+  // Los importes/totales se muestran SIEMPRE con 2 decimales (los precios unitarios
+  // usan formatearMonedaPrecio, con hasta 6 decimales).
+  const formatearTotal2 = (valor) => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(parseFloat(valor || 0));
+  };
+
   const formatearMoneda = (valor, monedaOverride = null) => {
     const monedaUsar = monedaOverride || orden?.moneda;
     if (!monedaUsar && !valor) return '-';
     const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
-    return `${simbolo} ${formatearNumero(parseFloat(valor || 0))}`;
+    return `${simbolo} ${formatearTotal2(parseFloat(valor || 0))}`;
   };
 
   // El precio unitario puede tener hasta 6 decimales; se muestra completo

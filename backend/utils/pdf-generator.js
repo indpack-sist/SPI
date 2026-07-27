@@ -621,10 +621,10 @@ export async function generarPDFSalida(datos) {
       // Variante valorizada (uso interno): solo en la vista simple de un despacho.
       const mostrarValores = !!datos.incluir_valores && !mostrarDetalleExtendido;
       const simboloMonedaSalida = datos.moneda === 'USD' ? '$' : 'S/';
-      // Mismos decimales que la Orden de Venta:
-      //   precio unitario -> 2 a 6 decimales | valores/total -> 2 a 3 decimales, con separador de miles.
+      // Decimales: precio unitario -> 2 a 6 (respeta lo cargado en la OV).
+      //            importes/totales -> siempre 2 decimales, con separador de miles.
       const fmtPrecio = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(parseFloat(v || 0))}`;
-      const fmtValor  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(parseFloat(v || 0))}`;
+      const fmtValor  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
 
       // Columnas de la variante valorizada (dentro del ancho útil 33..562, sin desborde).
       const COLV = {
@@ -735,14 +735,17 @@ export async function generarPDFSalida(datos) {
       // Totales valorizados del despacho (solo variante interna): SUBTOTAL / IGV / TOTAL,
       // para que el TOTAL sea comparable con la factura (que incluye IGV).
       if (mostrarValores) {
-        const subT = itemsAMostrar.reduce(
+        const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+        // El valor unitario conserva su precisión (hasta 6 dec); el importe se redondea
+        // a 2 decimales al totalizar, para que subtotal + IGV = total exacto.
+        const subT = round2(itemsAMostrar.reduce(
           (acc, it) => acc + parseFloat(it.cantidad || 0) * parseFloat(it.precio_unitario || 0), 0
-        );
+        ));
         const pctImp = parseFloat(datos.porcentaje_impuesto || 0);
         const tipoImp = String(datos.tipo_impuesto || '').toUpperCase();
         const sinIgv = pctImp <= 0 || ['EXO', 'EXONERADO', 'INA', 'INAFECTO', 'INAFECTA'].includes(tipoImp);
-        const igvT = sinIgv ? 0 : subT * pctImp / 100;
-        const totT = subT + igvT;
+        const igvT = sinIgv ? 0 : round2(subT * pctImp / 100);
+        const totT = round2(subT + igvT);
 
         const filas = [['SUBTOTAL', subT, false]];
         if (!sinIgv) filas.push([`IGV (${pctImp}%)`, igvT, false]);

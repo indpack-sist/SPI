@@ -725,7 +725,7 @@ function OrdenesVenta() {
           const totalFacturado = Number(row.total_facturado || 0);
           const esParcial = totalFacturado > 0 && (Number(row.total || 0) - totalFacturado) > 1;
           return (
-            <div className="flex flex-col items-center gap-0.5">
+            <div className="flex flex-col items-center gap-1.5">
               <span className={`flex items-center gap-1 font-black text-[9px] uppercase tracking-widest ${esParcial ? 'text-warning' : 'text-success'}`}>
                 <BadgeCheck size={12} className={esParcial ? 'text-warning' : 'text-success'} />
                 {esParcial ? 'Parcial' : 'Facturado'}
@@ -734,7 +734,7 @@ function OrdenesVenta() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); abrirListaFacturas(row); }}
-                  className="badge badge-info badge-xs cursor-pointer"
+                  className="badge badge-info badge-sm cursor-pointer"
                   title="Ver todas las facturas de esta orden"
                 >
                   {numFacturas} facturas

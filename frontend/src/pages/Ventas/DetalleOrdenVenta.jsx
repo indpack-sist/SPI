@@ -2679,11 +2679,11 @@ function DetalleOrdenVenta() {
 
                             {/* Pestañas de facturas */}
                             {facturas.length > 1 && (
-                                <div className="flex flex-wrap gap-1 border-b pb-2">
+                                <div className="flex flex-wrap gap-1.5 border-b pb-2.5 mb-1">
                                     {facturas.map((f, idx) => (
                                         <button
                                             key={f.id_factura}
-                                            className={`badge badge-xs cursor-pointer font-mono transition-colors ${
+                                            className={`badge badge-sm cursor-pointer font-mono transition-colors ${
                                                 idx === facturaTabActiva
                                                     ? 'badge-success'
                                                     : 'badge-secondary'

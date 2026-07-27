@@ -2679,14 +2679,14 @@ function DetalleOrdenVenta() {
 
                             {/* Pestañas de facturas */}
                             {facturas.length > 1 && (
-                                <div className="flex flex-wrap gap-1 border-b border-gray-200">
+                                <div className="flex flex-wrap gap-1 border-b border-steel">
                                     {facturas.map((f, idx) => (
                                         <button
                                             key={f.id_factura}
                                             className={`px-2 py-1 text-xs font-mono rounded-t border-b-2 -mb-px transition-colors ${
                                                 idx === facturaTabActiva
-                                                    ? 'border-emerald-500 text-emerald-700 bg-emerald-50 font-bold'
-                                                    : 'border-transparent text-muted hover:text-emerald-600'
+                                                    ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10 font-bold'
+                                                    : 'border-transparent text-mist hover:text-emerald-400'
                                             }`}
                                             onClick={() => setFacturaTabActiva(idx)}
                                         >

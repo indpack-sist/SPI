@@ -80,6 +80,9 @@ function DetalleOrdenVenta() {
   const [modalAnularFactura, setModalAnularFactura] = useState(false);
   const [motivoAnulacionFactura, setMotivoAnulacionFactura] = useState('');
   const [facturasAnuladas, setFacturasAnuladas] = useState([]);
+  const [modalEliminarFactura, setModalEliminarFactura] = useState(false);
+  const [motivoEliminacionFactura, setMotivoEliminacionFactura] = useState('');
+  const [facturaAEliminar, setFacturaAEliminar] = useState(null);
   const [fileSunat, setFileSunat] = useState(null);
   const [facturas, setFacturas] = useState([]);
   const [resumenFacturacion, setResumenFacturacion] = useState(null);
@@ -1295,6 +1298,39 @@ function DetalleOrdenVenta() {
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Error al anular facturación SUNAT');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleEliminarFactura = async () => {
+    if (!motivoEliminacionFactura.trim()) {
+      setError('Debe ingresar el motivo de eliminación');
+      return;
+    }
+    if (!facturaAEliminar) {
+      setError('No se ha seleccionado una factura para eliminar');
+      return;
+    }
+
+    try {
+      setProcesando(true);
+      setError(null);
+
+      const response = await ordenesVentaAPI.eliminarFactura(id, facturaAEliminar.id_factura, {
+        motivo_eliminacion: motivoEliminacionFactura
+      });
+
+      if (response.data.success) {
+        setSuccess(response.data.message);
+        setModalEliminarFactura(false);
+        setMotivoEliminacionFactura('');
+        setFacturaAEliminar(null);
+        await cargarDatos();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Error al eliminar la factura');
     } finally {
       setProcesando(false);
     }
@@ -2675,9 +2711,19 @@ function DetalleOrdenVenta() {
                                                     setFacturaAAnular(facturas[facturaTabActiva]);
                                                     setModalAnularFactura(true);
                                                 }}
-                                                title="Anular esta factura"
+                                                title="Anular: se anuló formalmente en el portal de SUNAT"
                                             >
                                                 Anular
+                                            </button>
+                                            <button
+                                                className="btn btn-xs btn-outline border-gray-300 text-gray-600 hover:bg-gray-100"
+                                                onClick={() => {
+                                                    setFacturaAEliminar(facturas[facturaTabActiva]);
+                                                    setModalEliminarFactura(true);
+                                                }}
+                                                title="Eliminar: se registró por error/confusión (documento equivocado, mal vinculada)"
+                                            >
+                                                <Trash2 size={12} className="mr-1"/> Eliminar
                                             </button>
                                         </div>
                                     </div>
@@ -4438,6 +4484,64 @@ function DetalleOrdenVenta() {
             >
               <Trash2 size={20} />
               {procesando ? 'Anulando...' : 'Confirmar Anulación'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalEliminarFactura}
+        onClose={() => {
+          setModalEliminarFactura(false);
+          setMotivoEliminacionFactura('');
+          setFacturaAEliminar(null);
+        }}
+        title="Eliminar Factura (error de sistema)"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="alert alert-warning">
+            <AlertTriangle size={20} />
+            <div>
+              Usa <strong>Eliminar</strong> solo si la factura{' '}
+              <span className="font-mono font-bold">{facturaAEliminar?.numero_factura}</span>{' '}
+              se registró por <strong>error o confusión</strong> (documento equivocado, mal vinculada).
+              No es lo mismo que <strong>Anular</strong> (anulación formal en SUNAT). Se quitará de la
+              orden, se recalculará el saldo y se liberará el despacho.
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Motivo de Eliminación *</label>
+            <textarea
+              className="form-textarea"
+              value={motivoEliminacionFactura}
+              onChange={(e) => setMotivoEliminacionFactura(e.target.value)}
+              rows={4}
+              placeholder="Ej: Se adjuntó el documento equivocado, se vinculó a la orden incorrecta, etc."
+              required
+            ></textarea>
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                setModalEliminarFactura(false);
+                setMotivoEliminacionFactura('');
+                setFacturaAEliminar(null);
+              }}
+              disabled={procesando}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={handleEliminarFactura}
+              disabled={procesando || !motivoEliminacionFactura.trim()}
+            >
+              <Trash2 size={20} />
+              {procesando ? 'Eliminando...' : 'Confirmar Eliminación'}
             </button>
           </div>
         </div>

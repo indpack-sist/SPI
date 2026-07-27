@@ -621,6 +621,10 @@ export async function generarPDFSalida(datos) {
       // Variante valorizada (uso interno): solo en la vista simple de un despacho.
       const mostrarValores = !!datos.incluir_valores && !mostrarDetalleExtendido;
       const simboloMonedaSalida = datos.moneda === 'USD' ? '$' : 'S/';
+      // Mismos decimales que la Orden de Venta:
+      //   precio unitario -> 2 a 6 decimales | valores/total -> 2 a 3 decimales, con separador de miles.
+      const fmtPrecio = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(parseFloat(v || 0))}`;
+      const fmtValor  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(parseFloat(v || 0))}`;
 
       // Columnas de la variante valorizada (dentro del ancho útil 33..562, sin desborde).
       const COLV = {
@@ -711,8 +715,8 @@ export async function generarPDFSalida(datos) {
           doc.text(descripcion, COLV.desc.x, yPos + 5, { width: COLV.desc.w, lineGap: 2 });
           doc.text(fmtCantidad(cantidadItem), COLV.cant.x, yPos + 5, { width: COLV.cant.w, align: 'center' });
           doc.text(item.unidad_medida, COLV.und.x, yPos + 5, { width: COLV.und.w, align: 'center' });
-          doc.text(`${simboloMonedaSalida} ${precioU.toFixed(2)}`, COLV.vunit.x, yPos + 5, { width: COLV.vunit.w, align: 'right' });
-          doc.text(`${simboloMonedaSalida} ${valorV.toFixed(2)}`, COLV.vventa.x, yPos + 5, { width: COLV.vventa.w, align: 'right' });
+          doc.text(fmtPrecio(precioU), COLV.vunit.x, yPos + 5, { width: COLV.vunit.w, align: 'right' });
+          doc.text(fmtValor(valorV), COLV.vventa.x, yPos + 5, { width: COLV.vventa.w, align: 'right' });
         } else {
           const cantidadItem = parseFloat(item.cantidad);
           const pesoU = parseFloat(item.peso_unitario || 0);
@@ -728,19 +732,34 @@ export async function generarPDFSalida(datos) {
         yPos += alturaFila;
       });
 
-      // Total valorizado del despacho (solo variante interna).
+      // Totales valorizados del despacho (solo variante interna): SUBTOTAL / IGV / TOTAL,
+      // para que el TOTAL sea comparable con la factura (que incluye IGV).
       if (mostrarValores) {
-        const totalDespacho = itemsAMostrar.reduce(
+        const subT = itemsAMostrar.reduce(
           (acc, it) => acc + parseFloat(it.cantidad || 0) * parseFloat(it.precio_unitario || 0), 0
         );
-        if (yPos + 20 > 700) { doc.addPage(); yPos = 50; }
-        doc.roundedRect(COLV.vunit.x, yPos, COLV.vunit.w, 16, 3).fill('#CCCCCC');
-        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-        doc.text('VALOR DESPACHO', COLV.vunit.x + 4, yPos + 4, { width: COLV.vunit.w - 8 });
-        doc.roundedRect(COLV.vventa.x, yPos, COLV.vventa.w, 16, 3).stroke('#CCCCCC');
-        doc.font('Helvetica').fillColor('#000000');
-        doc.text(`${simboloMonedaSalida} ${totalDespacho.toFixed(2)}`, COLV.vventa.x + 4, yPos + 4, { width: COLV.vventa.w - 8, align: 'right' });
-        yPos += 22;
+        const pctImp = parseFloat(datos.porcentaje_impuesto || 0);
+        const tipoImp = String(datos.tipo_impuesto || '').toUpperCase();
+        const sinIgv = pctImp <= 0 || ['EXO', 'EXONERADO', 'INA', 'INAFECTO', 'INAFECTA'].includes(tipoImp);
+        const igvT = sinIgv ? 0 : subT * pctImp / 100;
+        const totT = subT + igvT;
+
+        const filas = [['SUBTOTAL', subT, false]];
+        if (!sinIgv) filas.push([`IGV (${pctImp}%)`, igvT, false]);
+        filas.push(['TOTAL', totT, true]);
+
+        if (yPos + filas.length * 18 + 4 > 700) { doc.addPage(); yPos = 50; }
+
+        filas.forEach(([label, val, bold]) => {
+          doc.roundedRect(COLV.vunit.x, yPos, COLV.vunit.w, 15, 3).fill('#CCCCCC');
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF');
+          doc.text(label, COLV.vunit.x + 5, yPos + 4, { width: COLV.vunit.w - 10 });
+          doc.roundedRect(COLV.vventa.x, yPos, COLV.vventa.w, 15, 3).stroke('#CCCCCC');
+          doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000000');
+          doc.text(fmtValor(val), COLV.vventa.x + 4, yPos + 4, { width: COLV.vventa.w - 8, align: 'right' });
+          yPos += 18;
+        });
+        yPos += 4;
       }
 
       yPos += 15;

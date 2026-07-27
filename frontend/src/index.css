@@ -1162,6 +1162,12 @@ html { scroll-behavior: smooth; }
   .card, .card-body, .p-6 { padding: 1rem; }
   .stats-grid { grid-template-columns: 1fr; }
   .table-container, .overflow-x-auto { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Red de seguridad: cualquier contenedor directo de una tabla no-tarjeta
+     debe poder desplazarse horizontalmente para que no se recorte en móvil */
+  *:has(> table:not(.table-mobile)) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .text-3xl { font-size: 1.5rem; line-height: 2rem; }
   .text-2xl { font-size: 1.25rem; line-height: 1.75rem; }
   .badge { font-size: 0.6rem; padding: 0.15rem 0.5rem; }

@@ -114,17 +114,24 @@
 
   .table-mobile tbody td {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
+    gap: 0.75rem;
     padding: 0.5rem 0.75rem;
     border-bottom: 1px solid var(--border);
     text-align: right !important;
     font-size: 0.8125rem;
-    min-height: 2.25rem;
+    min-height: 2.5rem;
   }
 
   .table-mobile tbody td:last-child {
     border-bottom: none;
+  }
+
+  /* El valor de cada celda alineado a la derecha, permitiendo salto de línea */
+  .table-mobile tbody td > * {
+    text-align: right;
+    margin-left: auto;
   }
 
   .table-mobile tbody td::before {
@@ -135,19 +142,30 @@
     letter-spacing: 0.04em;
     color: var(--text-secondary);
     text-align: left;
-    margin-right: 0.75rem;
     flex-shrink: 0;
-    padding-top: 0.125rem;
-    min-width: 80px;
+    min-width: 84px;
+    white-space: nowrap;
   }
 
+  /* Celdas de acciones: sin etiqueta, botones a la derecha con wrap */
   .table-mobile tbody td[data-label="Acciones"],
-  .table-mobile tbody td[data-label=""] {
+  .table-mobile tbody td[data-label=""],
+  .table-mobile tbody td[data-label="Opciones"] {
     justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--bg-secondary);
   }
 
   .table-mobile tbody td[data-label="Acciones"]::before,
-  .table-mobile tbody td[data-label=""]::before {
+  .table-mobile tbody td[data-label=""]::before,
+  .table-mobile tbody td[data-label="Opciones"]::before {
     display: none;
+  }
+
+  .table-mobile tbody td[data-label="Acciones"] > *,
+  .table-mobile tbody td[data-label="Opciones"] > * {
+    margin-left: 0;
   }
 }

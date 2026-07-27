@@ -75,7 +75,6 @@
 /* =====================================================
    HEADER
    ===================================================== */
-... (mantener el resto de estilos existentes y agregar estos nuevos)
 
 /* =====================================================
    PROGRESS BARS (Rankings)
@@ -613,12 +612,16 @@
 
 @media (max-width: 1024px) {
   .charts-grid { grid-template-columns: 1fr; }
+  .analytics-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
   .dashboard-container { padding: 1rem; }
 
   .inventario-grid { grid-template-columns: 1fr; }
+  .analytics-grid { grid-template-columns: 1fr; }
+  /* Evitar que las tablas de ranking fuercen ancho fijo y desborden */
+  .analytics-card .card-body { overflow-x: auto; }
 
   .dashboard-header {
     flex-direction: column;

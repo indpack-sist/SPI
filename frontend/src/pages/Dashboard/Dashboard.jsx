@@ -208,7 +208,7 @@ function Dashboard() {
             <h3 className="card-title"><BarChart3 size={18} className="mr-2" /> Top 10 Productos</h3>
           </div>
           <div className="card-body">
-            <table className="table">
+            <table className="table table-mobile">
               <thead>
                 <tr>
                   <th>Producto</th>
@@ -220,13 +220,13 @@ function Dashboard() {
               <tbody>
                 {resumen?.top_productos?.map((p) => (
                   <tr key={p.id_producto}>
-                    <td>
+                    <td data-label="Producto">
                       <div className="rank-name">{p.nombre}</div>
                       <div className="rank-sub">{p.codigo}</div>
                     </td>
-                    <td className="text-right font-bold">{p.total_cantidad}</td>
-                    <td className="text-right">{formatearPEN(p.valor_pen)}</td>
-                    <td className="text-right">{formatearUSD(p.valor_usd)}</td>
+                    <td data-label="Cant." className="text-right font-bold">{p.total_cantidad}</td>
+                    <td data-label="Total PEN" className="text-right">{formatearPEN(p.valor_pen)}</td>
+                    <td data-label="Total USD" className="text-right">{formatearUSD(p.valor_usd)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -239,7 +239,7 @@ function Dashboard() {
             <h3 className="card-title"><UserCheck size={18} className="mr-2" /> Top 10 Clientes</h3>
           </div>
           <div className="card-body">
-            <table className="table">
+            <table className="table table-mobile">
               <thead>
                 <tr>
                   <th>Cliente</th>
@@ -251,10 +251,10 @@ function Dashboard() {
               <tbody>
                 {resumen?.top_clientes?.map((c) => (
                   <tr key={c.id_cliente}>
-                    <td className="rank-name">{c.razon_social}</td>
-                    <td className="text-right font-bold">{c.total_ordenes}</td>
-                    <td className="text-right">{formatearPEN(c.monto_pen)}</td>
-                    <td className="text-right">{formatearUSD(c.monto_usd)}</td>
+                    <td data-label="Cliente" className="rank-name">{c.razon_social}</td>
+                    <td data-label="Órd." className="text-right font-bold">{c.total_ordenes}</td>
+                    <td data-label="Monto PEN" className="text-right">{formatearPEN(c.monto_pen)}</td>
+                    <td data-label="Monto USD" className="text-right">{formatearUSD(c.monto_usd)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -270,7 +270,7 @@ function Dashboard() {
             <h3 className="card-title"><Factory size={18} className="mr-2" /> Top Producción Finalizada</h3>
           </div>
           <div className="card-body">
-            <table className="table">
+            <table className="table table-mobile">
               <thead>
                 <tr>
                   <th>Producto</th>
@@ -283,13 +283,13 @@ function Dashboard() {
                 {produccionFinalizada && produccionFinalizada.length > 0 ? (
                   produccionFinalizada.map((p, idx) => (
                     <tr key={idx}>
-                      <td>
+                      <td data-label="Producto">
                         <div className="rank-name">{p.producto}</div>
                         <div className="rank-sub">{p.codigo}</div>
                       </td>
-                      <td className="text-right font-bold">{p.total_ordenes}</td>
-                      <td className="text-right">{p.cantidad_total.toLocaleString()}</td>
-                      <td>
+                      <td data-label="Órd. Finalizadas" className="text-right font-bold">{p.total_ordenes}</td>
+                      <td data-label="Cant. Producida" className="text-right">{p.cantidad_total.toLocaleString()}</td>
+                      <td data-label="Supervisor">
                         <div className="supervisor-breakdown">
                           {p.desglose_supervisores}
                         </div>

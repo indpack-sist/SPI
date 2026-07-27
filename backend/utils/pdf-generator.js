@@ -621,10 +621,12 @@ export async function generarPDFSalida(datos) {
       // Variante valorizada (uso interno): solo en la vista simple de un despacho.
       const mostrarValores = !!datos.incluir_valores && !mostrarDetalleExtendido;
       const simboloMonedaSalida = datos.moneda === 'USD' ? '$' : 'S/';
-      // Decimales: precio unitario -> 2 a 6 (respeta lo cargado en la OV).
-      //            importes/totales -> siempre 2 decimales, con separador de miles.
+      // Decimales: precio unitario y los importes intermedios (V. VENTA, SUBTOTAL, IGV)
+      // conservan hasta 6 decimales (según el precio de la OV). Solo el TOTAL final
+      // se redondea a 2 decimales. Todo con separador de miles.
       const fmtPrecio = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(parseFloat(v || 0))}`;
-      const fmtValor  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
+      const fmtValor  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(parseFloat(v || 0))}`;
+      const fmtTotal  = (v) => `${simboloMonedaSalida} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(v || 0))}`;
 
       // Columnas de la variante valorizada (dentro del ancho útil 33..562, sin desborde).
       const COLV = {
@@ -736,15 +738,15 @@ export async function generarPDFSalida(datos) {
       // para que el TOTAL sea comparable con la factura (que incluye IGV).
       if (mostrarValores) {
         const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
-        // El valor unitario conserva su precisión (hasta 6 dec); el importe se redondea
-        // a 2 decimales al totalizar, para que subtotal + IGV = total exacto.
-        const subT = round2(itemsAMostrar.reduce(
+        // Subtotal e IGV conservan su precisión completa (hasta 6 dec, según el precio).
+        // El redondeo a 2 decimales se aplica RECIÉN al total final.
+        const subT = itemsAMostrar.reduce(
           (acc, it) => acc + parseFloat(it.cantidad || 0) * parseFloat(it.precio_unitario || 0), 0
-        ));
+        );
         const pctImp = parseFloat(datos.porcentaje_impuesto || 0);
         const tipoImp = String(datos.tipo_impuesto || '').toUpperCase();
         const sinIgv = pctImp <= 0 || ['EXO', 'EXONERADO', 'INA', 'INAFECTO', 'INAFECTA'].includes(tipoImp);
-        const igvT = sinIgv ? 0 : round2(subT * pctImp / 100);
+        const igvT = sinIgv ? 0 : subT * pctImp / 100;
         const totT = round2(subT + igvT);
 
         const filas = [['SUBTOTAL', subT, false]];
@@ -759,7 +761,8 @@ export async function generarPDFSalida(datos) {
           doc.text(label, COLV.vunit.x + 5, yPos + 4, { width: COLV.vunit.w - 10 });
           doc.roundedRect(COLV.vventa.x, yPos, COLV.vventa.w, 15, 3).stroke('#CCCCCC');
           doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000000');
-          doc.text(fmtValor(val), COLV.vventa.x + 4, yPos + 4, { width: COLV.vventa.w - 8, align: 'right' });
+          // El TOTAL (bold) se muestra redondeado a 2 decimales; subtotal/IGV con su precisión.
+          doc.text((bold ? fmtTotal : fmtValor)(val), COLV.vventa.x + 4, yPos + 4, { width: COLV.vventa.w - 8, align: 'right' });
           yPos += 18;
         });
         yPos += 4;

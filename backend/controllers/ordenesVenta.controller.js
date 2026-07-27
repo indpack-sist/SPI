@@ -4067,9 +4067,13 @@ export async function eliminarFacturaVenta(req, res) {
       return res.status(400).json({ success: false, error: 'Esta factura ya fue eliminada' });
     }
 
+    // Libera el numero_factura del índice UNIQUE renombrándolo con un sufijo único.
+    // El número legible queda igual en las columnas serie/numero para auditoría, y
+    // como las 'Eliminada' nunca se muestran, el sufijo no afecta la vista.
     const upd = await executeQuery(
       `UPDATE facturas_venta
-          SET estado = 'Eliminada', motivo_eliminacion = ?, fecha_eliminacion = ?, id_eliminado_por = ?
+          SET estado = 'Eliminada', motivo_eliminacion = ?, fecha_eliminacion = ?, id_eliminado_por = ?,
+              numero_factura = CONCAT(numero_factura, '#ELIM', id_factura)
         WHERE id_factura = ?`,
       [motivo_eliminacion.trim(), getFechaPeru(), id_empleado, idFactura]
     );

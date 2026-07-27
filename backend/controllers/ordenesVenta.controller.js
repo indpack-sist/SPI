@@ -1404,11 +1404,11 @@ export async function registrarDespacho(req, res) {
     // Ya no generamos el correlativo aquí, ahora es manual
     const resultCabecera = await executeTransaction([{
       sql: `INSERT INTO salidas (
-        id_tipo_inventario, tipo_movimiento, id_cliente, total_costo,
+        id_tipo_inventario, tipo_movimiento, id_cliente, id_orden_venta, total_costo,
         total_precio, moneda, id_registrado_por, observaciones, estado, fecha_movimiento
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
-        3, 'Venta', orden.id_cliente, totalCosto, totalPrecio,
+        3, 'Venta', orden.id_cliente, id, totalCosto, totalPrecio,
         orden.moneda, id_usuario,
         `Despacho Orden ${orden.numero_orden}`,
         'Activo', fecha_despacho || getFechaPeru()
@@ -2075,6 +2075,8 @@ export async function descargarPDFOrdenVenta(req, res) {
 export async function descargarPDFDespacho(req, res) {
   try {
     const { id, idSalida } = req.params;
+    // Variante valorizada (uso interno): ?valores=1 muestra precios y valor del despacho.
+    const incluirValores = req.query.valores === '1' || req.query.valores === 'true';
 
     const ordenResult = await executeQuery(`
       SELECT 
@@ -2174,7 +2176,8 @@ export async function descargarPDFDespacho(req, res) {
       transporte_privado_conductor: orden.transporte_conductor,
       transporte_privado_dni: orden.transporte_dni,
       transporte_licencia: orden.transporte_licencia,
-      detalles: detalleResult.data
+      detalles: detalleResult.data,
+      incluir_valores: incluirValores
     };
 
     const pdfBuffer = await generarPDFSalida(datosPDF);
@@ -2646,28 +2649,73 @@ export async function getSalidasOrden(req, res) {
     }
     
     const numeroOrden = ordenRes.data[0].numero_orden;
-    
+
+    // Vinculación por FK real (id_orden_venta) con fallback por texto para
+    // salidas viejas que no alcanzaron el backfill de la migración.
     const sql = `
-      SELECT 
-        s.id_salida, 
-        s.id_salida as numero_salida, 
-        s.fecha_movimiento as fecha_salida, 
+      SELECT
+        s.id_salida,
+        s.id_salida as numero_salida,
+        s.fecha_movimiento as fecha_salida,
         s.observaciones,
         s.estado,
         s.total_costo,
+        s.total_precio,
         (SELECT COUNT(*) FROM detalle_salidas WHERE id_salida = s.id_salida) as total_items
       FROM salidas s
-      WHERE s.observaciones LIKE ? 
+      WHERE s.id_orden_venta = ?
+         OR (s.id_orden_venta IS NULL AND s.tipo_movimiento = 'Venta' AND s.observaciones LIKE ?)
       ORDER BY s.fecha_movimiento DESC
     `;
-    
-    const result = await executeQuery(sql, [`%${numeroOrden}%`]);
+
+    const result = await executeQuery(sql, [id, `%${numeroOrden}%`]);
 
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error });
     }
 
-    res.json({ success: true, data: result.data });
+    const salidas = result.data;
+    const ids = salidas.map(s => s.id_salida);
+
+    // Anidar factura (1 por despacho) y documentos adicionales de cada despacho.
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+
+      const facturasRes = await executeQuery(`
+        SELECT id_factura, id_salida, numero_factura, total, moneda, estado, url_pdf, fecha_emision
+        FROM facturas_venta
+        WHERE id_salida IN (${placeholders}) AND estado = 'Emitida'
+        ORDER BY fecha_emision ASC, id_factura ASC
+      `, ids);
+
+      const docsRes = await executeQuery(`
+        SELECT d.id_documento, d.id_salida, d.tipo_documento, d.correlativo, d.archivos_url, d.created_at,
+               e.nombre_completo AS registrado_por
+        FROM ordenes_venta_documentos d
+        LEFT JOIN empleados e ON d.id_registrado_por = e.id_empleado
+        WHERE d.id_salida IN (${placeholders}) AND d.deleted_at IS NULL
+        ORDER BY d.created_at DESC
+      `, ids);
+
+      const facturasPorSalida = {};
+      (facturasRes.success ? facturasRes.data : []).forEach(f => {
+        f.url_pdf = extraerUrlPdf(f.url_pdf);
+        (facturasPorSalida[f.id_salida] = facturasPorSalida[f.id_salida] || []).push(f);
+      });
+
+      const docsPorSalida = {};
+      (docsRes.success ? docsRes.data : []).forEach(d => {
+        (docsPorSalida[d.id_salida] = docsPorSalida[d.id_salida] || []).push(d);
+      });
+
+      salidas.forEach(s => {
+        const fs = facturasPorSalida[s.id_salida] || [];
+        s.factura = fs[0] || null;                    // 1 factura por despacho
+        s.documentos = docsPorSalida[s.id_salida] || [];
+      });
+    }
+
+    res.json({ success: true, data: salidas });
 
   } catch (error) {
     console.error(error);
@@ -4156,7 +4204,7 @@ export async function getDocumentosAdicionales(req, res) {
     const { id } = req.params;
     const result = await executeQuery(`
       SELECT
-        d.id_documento, d.tipo_documento, d.correlativo, d.archivos_url, d.created_at,
+        d.id_documento, d.id_salida, d.tipo_documento, d.correlativo, d.archivos_url, d.created_at,
         d.deleted_at, d.deleted_by,
         e.nombre_completo AS registrado_por,
         e2.nombre_completo AS eliminado_por
@@ -4183,6 +4231,8 @@ export async function agregarDocumentoAdicional(req, res) {
     const { id } = req.params;
     const { tipo_documento, correlativo } = req.body;
     const id_registrado_por = req.user?.id_empleado || null;
+    // id_salida opcional: cuando el documento (guía, etc.) se adjunta a un despacho concreto.
+    const idSalida = req.body.id_salida ? parseInt(req.body.id_salida, 10) : null;
 
     if (!tipo_documento) {
       return res.status(400).json({ success: false, error: 'El tipo de documento es obligatorio' });
@@ -4199,9 +4249,9 @@ export async function agregarDocumentoAdicional(req, res) {
     }
 
     const result = await executeQuery(`
-      INSERT INTO ordenes_venta_documentos (id_orden_venta, tipo_documento, correlativo, archivos_url, id_registrado_por, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [id, tipo_documento, correlativo || null, archivosUrl, id_registrado_por, getFechaPeru()]);
+      INSERT INTO ordenes_venta_documentos (id_orden_venta, id_salida, tipo_documento, correlativo, archivos_url, id_registrado_por, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [id, idSalida, tipo_documento, correlativo || null, archivosUrl, id_registrado_por, getFechaPeru()]);
 
     if (!result.success) {
       return res.status(500).json({ success: false, error: result.error });
@@ -4423,6 +4473,9 @@ export async function vincularFacturaSunat(req, res) {
     const { id } = req.params;
     let { numero_comprobante_sunat, fecha_facturacion_sunat, importe_total, comprobante_url, forzar } = req.body;
     const id_empleado = req.user?.id_empleado || null;
+    // id_salida opcional: cuando la factura se sube desde un despacho concreto.
+    const idSalida = req.body.id_salida ? parseInt(req.body.id_salida, 10) : null;
+    const forzarBool = forzar === true || forzar === 'true' || forzar === 1 || forzar === '1';
 
     if (!numero_comprobante_sunat || !numero_comprobante_sunat.trim()) {
       return res.status(400).json({ success: false, error: 'El número de comprobante es obligatorio.' });
@@ -4434,7 +4487,7 @@ export async function vincularFacturaSunat(req, res) {
     const numero = numero_comprobante_sunat.trim();
 
     const ordenRes = await executeQuery(
-      `SELECT id_orden_venta, id_cliente, total, moneda, porcentaje_impuesto, tipo_impuesto
+      `SELECT id_orden_venta, numero_orden, id_cliente, total, moneda, porcentaje_impuesto, tipo_impuesto
          FROM ordenes_venta WHERE id_orden_venta = ?`,
       [id]
     );
@@ -4442,6 +4495,41 @@ export async function vincularFacturaSunat(req, res) {
       return res.status(404).json({ success: false, error: 'Orden no encontrada' });
     }
     const orden = ordenRes.data[0];
+
+    // Si viene id_salida: validar que el despacho pertenece a esta orden y
+    // aplicar la regla blanda "1 factura por despacho" (avisa, permite forzar).
+    // Guardamos el valor del despacho para validar el monto de la factura más abajo.
+    let totalDespacho = null;      // salidas.total_precio del despacho
+    let yaFacturadoDespacho = 0;   // suma facturas Emitidas ya vinculadas a este despacho
+    if (idSalida) {
+      const salidaRes = await executeQuery(
+        `SELECT id_salida, total_precio FROM salidas
+          WHERE id_salida = ?
+            AND (id_orden_venta = ? OR (id_orden_venta IS NULL AND observaciones LIKE ?))`,
+        [idSalida, id, `%${orden.numero_orden}%`]
+      );
+      if (!salidaRes.success || salidaRes.data.length === 0) {
+        return res.status(400).json({ success: false, error: 'El despacho indicado no pertenece a esta orden.' });
+      }
+      totalDespacho = parseFloat(salidaRes.data[0].total_precio || 0);
+
+      const yaFactSalida = await executeQuery(
+        `SELECT COALESCE(SUM(total), 0) AS suma,
+                (SELECT numero_factura FROM facturas_venta WHERE id_salida = ? AND estado = 'Emitida' LIMIT 1) AS primera
+           FROM facturas_venta WHERE id_salida = ? AND estado = 'Emitida'`,
+        [idSalida, idSalida]
+      );
+      yaFacturadoDespacho = parseFloat(yaFactSalida.data?.[0]?.suma || 0);
+      const primeraFactura = yaFactSalida.data?.[0]?.primera || null;
+
+      if (primeraFactura && !forzarBool) {
+        return res.status(409).json({
+          success: false,
+          code: 'DESPACHO_YA_FACTURADO',
+          error: `Este despacho ya tiene una factura vinculada (${primeraFactura}). ¿Deseas vincular otra de todas formas?`
+        });
+      }
+    }
 
     // Duplicado: numero_factura es UNIQUE global
     const dup = await executeQuery(
@@ -4461,7 +4549,6 @@ export async function vincularFacturaSunat(req, res) {
     );
     const yaFacturado = parseFloat(sumaRes.data?.[0]?.suma || 0);
     const tolerancia = 1;
-    const forzarBool = forzar === true || forzar === 'true' || forzar === 1 || forzar === '1';
 
     if ((yaFacturado + totalNuevo) > (totalOrden + tolerancia) && !forzarBool) {
       const saldo = +(totalOrden - yaFacturado).toFixed(2);
@@ -4470,6 +4557,18 @@ export async function vincularFacturaSunat(req, res) {
         code: 'EXCEDE_SALDO',
         error: `El total de esta factura (${totalNuevo.toFixed(2)}) excede el saldo pendiente de facturar (${saldo.toFixed(2)}) de la orden.`,
         data: { saldo_pendiente: saldo, total_facturado: +yaFacturado.toFixed(2), total_orden: totalOrden }
+      });
+    }
+
+    // Validación por despacho: la factura no debe exceder el valor de la salida.
+    // El techo de la orden (arriba) sigue vigente como límite global.
+    if (idSalida && totalDespacho > 0 && (yaFacturadoDespacho + totalNuevo) > (totalDespacho + tolerancia) && !forzarBool) {
+      const saldoDespacho = +(totalDespacho - yaFacturadoDespacho).toFixed(2);
+      return res.status(409).json({
+        success: false,
+        code: 'EXCEDE_DESPACHO',
+        error: `El total de esta factura (${totalNuevo.toFixed(2)}) excede el valor pendiente de facturar de este despacho (${saldoDespacho.toFixed(2)}, valor del despacho: ${totalDespacho.toFixed(2)}).`,
+        data: { saldo_despacho: saldoDespacho, total_facturado_despacho: +yaFacturadoDespacho.toFixed(2), total_despacho: +totalDespacho.toFixed(2) }
       });
     }
 
@@ -4486,11 +4585,11 @@ export async function vincularFacturaSunat(req, res) {
 
     const insert = await executeQuery(
       `INSERT INTO facturas_venta
-         (numero_factura, id_orden_venta, id_cliente, fecha_emision, tipo_comprobante,
+         (numero_factura, id_orden_venta, id_salida, id_cliente, fecha_emision, tipo_comprobante,
           serie, numero, subtotal, igv, total, moneda, estado, url_pdf, id_registrado_por)
-       VALUES (?, ?, ?, ?, 'Factura', ?, ?, ?, ?, ?, ?, 'Emitida', ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'Factura', ?, ?, ?, ?, ?, ?, 'Emitida', ?, ?)`,
       [
-        numero, id, orden.id_cliente, fecha_facturacion_sunat || getFechaPeru(),
+        numero, id, idSalida, orden.id_cliente, fecha_facturacion_sunat || getFechaPeru(),
         serie, correlativo, montos.subtotal, montos.igv, montos.total,
         orden.moneda || 'PEN', urlJSON, id_empleado
       ]

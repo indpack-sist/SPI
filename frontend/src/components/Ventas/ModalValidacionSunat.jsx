@@ -3,12 +3,16 @@ import { api } from '../../config/api';
 import Alert from '../UI/Alert';
 import './ModalValidacionSunat.css';
 
-const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0 }) => {
+const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null }) => {
     const esFacturacionParcial = Number(totalFacturado) > 0;
     // Monto contra el que se valida: saldo pendiente si ya hay facturas, si no el total de la orden.
     const montoObjetivo = (saldoPendiente !== null && saldoPendiente !== undefined)
         ? Number(saldoPendiente)
         : Number(orden?.total || 0);
+    // Formato de moneda idéntico al de la Orden de Venta (formatearMoneda):
+    // símbolo según moneda + separador de miles + 2 a 3 decimales (caso "total").
+    const simboloMoneda = orden?.moneda === 'USD' ? '$' : 'S/';
+    const fmtMoneda = (v) => `${simboloMoneda} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(parseFloat(v || 0))}`;
     const [parsedData, setParsedData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [alert, setAlert] = useState(null);
@@ -99,13 +103,16 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
         if (formData.importe_total) {
             const totalPdf = parseFloat(String(formData.importe_total).replace(/,/g, ''));
             if (!isNaN(totalPdf)) {
-                if (esFacturacionParcial) {
-                    // En facturación parcial validamos que no exceda el saldo pendiente
+                if (esFacturacionParcial || idSalida) {
+                    // Factura parcial o atada a un despacho: validamos contra el monto objetivo
+                    // (saldo pendiente de la orden, o el valor del despacho según corresponda).
                     if (totalPdf > montoObjetivo + 1) {
-                        advertencias.push(`El Total (${totalPdf.toFixed(2)}) excede el saldo pendiente de facturar (${montoObjetivo.toFixed(2)}).`);
+                        advertencias.push(idSalida
+                            ? `El Total (${fmtMoneda(totalPdf)}) excede el valor pendiente de este despacho (${fmtMoneda(montoObjetivo)}).`
+                            : `El Total (${fmtMoneda(totalPdf)}) excede el saldo pendiente de facturar (${fmtMoneda(montoObjetivo)}).`);
                     }
                 } else if (orden?.total && Math.abs(totalPdf - Number(orden.total)) > 1) {
-                    advertencias.push(`El Total (${totalPdf}) difiere del total de la Orden (${Number(orden.total)}).`);
+                    advertencias.push(`El Total (${fmtMoneda(totalPdf)}) difiere del total de la Orden (${fmtMoneda(orden.total)}).`);
                 }
             }
         }
@@ -171,6 +178,10 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
             if (forzar) {
                 formDataSubmit.append('forzar', 'true');
             }
+            // Vincular la factura directamente a un despacho concreto (si aplica).
+            if (idSalida) {
+                formDataSubmit.append('id_salida', idSalida);
+            }
 
             // Convertimos la fecha DD/MM/YYYY a YYYY-MM-DD para MySQL si está presente
             if (formData.fecha_emision) {
@@ -190,10 +201,11 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                 setAlert({ type: 'error', message: response.data.error || 'Error al vincular la factura' });
             }
         } catch (error) {
-            // El backend rechaza (409) cuando el total excede el saldo pendiente. Permitimos forzar.
-            if (error?.response?.status === 409 && error.response.data?.code === 'EXCEDE_SALDO') {
+            // El backend rechaza (409) cuando el total excede el saldo pendiente,
+            // o cuando el despacho ya tiene una factura. En ambos casos permitimos forzar.
+            if (error?.response?.status === 409 && ['EXCEDE_SALDO', 'EXCEDE_DESPACHO', 'DESPACHO_YA_FACTURADO'].includes(error.response.data?.code)) {
                 const confirmar = window.confirm(
-                    `${error.response.data.error}\n\n¿Deseas registrar esta factura de todas formas (facturación por encima del total)?`
+                    `${error.response.data.error}\n\n¿Deseas registrar esta factura de todas formas?`
                 );
                 if (confirmar) {
                     await enviarVinculacion(true);
@@ -301,12 +313,17 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                                     readOnly={readOnly}
                                     className={readOnly ? 'input-readonly' : ''}
                                 />
-                                {esFacturacionParcial ? (
+                                {idSalida ? (
                                     <small>
-                                        Ya facturado: {Number(totalFacturado).toFixed(2)} · <strong>Saldo pendiente: {montoObjetivo.toFixed(2)}</strong> (Total orden: {orden?.total})
+                                        <strong>Valor pendiente del despacho: {fmtMoneda(montoObjetivo)}</strong>
+                                        {Number(totalFacturado) > 0 && <> · Ya facturado en el despacho: {fmtMoneda(totalFacturado)}</>}
+                                    </small>
+                                ) : esFacturacionParcial ? (
+                                    <small>
+                                        Ya facturado: {fmtMoneda(totalFacturado)} · <strong>Saldo pendiente: {fmtMoneda(montoObjetivo)}</strong> (Total orden: {fmtMoneda(orden?.total)})
                                     </small>
                                 ) : (
-                                    <small>Total en la Orden: {orden?.total}</small>
+                                    <small>Total en la Orden: {fmtMoneda(orden?.total)}</small>
                                 )}
                             </div>
 

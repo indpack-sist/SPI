@@ -616,9 +616,29 @@ export async function generarPDFSalida(datos) {
       }
 
       const detalles = datos.detalles || datos.detalle || [];
-      
+
       const mostrarDetalleExtendido = detalles.some(d => d.cantidad_pendiente !== undefined);
-      
+      // Variante valorizada (uso interno): solo en la vista simple de un despacho.
+      const mostrarValores = !!datos.incluir_valores && !mostrarDetalleExtendido;
+      const simboloMonedaSalida = datos.moneda === 'USD' ? '$' : 'S/';
+
+      // Columnas de la variante valorizada (dentro del ancho útil 33..562, sin desborde).
+      const COLV = {
+        codigo:  { x: 40,  w: 52 },
+        desc:    { x: 94,  w: 176 },
+        cant:    { x: 272, w: 44 },
+        und:     { x: 318, w: 34 },
+        vunit:   { x: 354, w: 95 },
+        vventa:  { x: 452, w: 108 }
+      };
+
+      if (mostrarValores) {
+        doc.fontSize(7).font('Helvetica-Oblique').fillColor('#cc0000');
+        doc.text('COPIA INTERNA VALORIZADA — uso interno, no destinada al cliente', 33, yPos, { width: 529 });
+        doc.fillColor('#000000');
+        yPos += 12;
+      }
+
       doc.rect(33, yPos, 529, 20).fill('#CCCCCC');
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
 
@@ -630,6 +650,13 @@ export async function generarPDFSalida(datos) {
         doc.text('PESO', 355, yPos + 6, { width: 50, align: 'center' });
         doc.text('DESPACHADO', 410, yPos + 6, { width: 65, align: 'center' });
         doc.text('PENDIENTE', 480, yPos + 6, { width: 60, align: 'center' });
+      } else if (mostrarValores) {
+        doc.text('CÓDIGO', COLV.codigo.x, yPos + 6, { width: COLV.codigo.w });
+        doc.text('DESCRIPCIÓN', COLV.desc.x, yPos + 6, { width: COLV.desc.w });
+        doc.text('CANT.', COLV.cant.x, yPos + 6, { width: COLV.cant.w, align: 'center' });
+        doc.text('UND', COLV.und.x, yPos + 6, { width: COLV.und.w, align: 'center' });
+        doc.text('V. UNIT.', COLV.vunit.x, yPos + 6, { width: COLV.vunit.w, align: 'right' });
+        doc.text('V. VENTA', COLV.vventa.x, yPos + 6, { width: COLV.vventa.w, align: 'right' });
       } else {
         doc.text('CÓDIGO', 40, yPos + 6);
         doc.text('DESCRIPCIÓN', 140, yPos + 6);
@@ -643,7 +670,7 @@ export async function generarPDFSalida(datos) {
 
       itemsAMostrar.forEach((item, idx) => {
         const descripcion = item.producto || item.nombre;
-        const anchoDesc = mostrarDetalleExtendido ? 165 : 220;
+        const anchoDesc = mostrarDetalleExtendido ? 165 : (mostrarValores ? COLV.desc.w : 220);
         const alturaDescripcion = calcularAlturaTexto(doc, descripcion, anchoDesc, 8);
         const alturaFila = Math.max(20, alturaDescripcion + 10);
 
@@ -675,6 +702,17 @@ export async function generarPDFSalida(datos) {
           if(parseFloat(pendiente) > 0) doc.fillColor('#cc0000');
           doc.text(pendiente, 480, yPos + 5, { width: 60, align: 'center' });
           doc.fillColor('#000000');
+        } else if (mostrarValores) {
+          const cantidadItem = parseFloat(item.cantidad);
+          const precioU = parseFloat(item.precio_unitario || 0);
+          const valorV = cantidadItem * precioU;
+
+          doc.text(item.codigo_producto, COLV.codigo.x, yPos + 5, { width: COLV.codigo.w });
+          doc.text(descripcion, COLV.desc.x, yPos + 5, { width: COLV.desc.w, lineGap: 2 });
+          doc.text(fmtCantidad(cantidadItem), COLV.cant.x, yPos + 5, { width: COLV.cant.w, align: 'center' });
+          doc.text(item.unidad_medida, COLV.und.x, yPos + 5, { width: COLV.und.w, align: 'center' });
+          doc.text(`${simboloMonedaSalida} ${precioU.toFixed(2)}`, COLV.vunit.x, yPos + 5, { width: COLV.vunit.w, align: 'right' });
+          doc.text(`${simboloMonedaSalida} ${valorV.toFixed(2)}`, COLV.vventa.x, yPos + 5, { width: COLV.vventa.w, align: 'right' });
         } else {
           const cantidadItem = parseFloat(item.cantidad);
           const pesoU = parseFloat(item.peso_unitario || 0);
@@ -689,6 +727,21 @@ export async function generarPDFSalida(datos) {
 
         yPos += alturaFila;
       });
+
+      // Total valorizado del despacho (solo variante interna).
+      if (mostrarValores) {
+        const totalDespacho = itemsAMostrar.reduce(
+          (acc, it) => acc + parseFloat(it.cantidad || 0) * parseFloat(it.precio_unitario || 0), 0
+        );
+        if (yPos + 20 > 700) { doc.addPage(); yPos = 50; }
+        doc.roundedRect(COLV.vunit.x, yPos, COLV.vunit.w, 16, 3).fill('#CCCCCC');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('VALOR DESPACHO', COLV.vunit.x + 4, yPos + 4, { width: COLV.vunit.w - 8 });
+        doc.roundedRect(COLV.vventa.x, yPos, COLV.vventa.w, 16, 3).stroke('#CCCCCC');
+        doc.font('Helvetica').fillColor('#000000');
+        doc.text(`${simboloMonedaSalida} ${totalDespacho.toFixed(2)}`, COLV.vventa.x + 4, yPos + 4, { width: COLV.vventa.w - 8, align: 'right' });
+        yPos += 22;
+      }
 
       yPos += 15;
 

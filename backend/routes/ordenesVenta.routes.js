@@ -41,6 +41,7 @@ import {
   marcarFacturadoSunat,
   desmarcarFacturadoSunat,
   anularFacturaSunat,
+  eliminarFacturaVenta,
   getHistorialFacturasAnuladas,
   getFacturasOrden,
   asignarGuiaInternaASalida,
@@ -94,6 +95,7 @@ router.patch('/:id/facturar-sunat', verificarToken, marcarFacturadoSunat);
 router.patch('/:id/desmarcar-sunat', verificarToken, desmarcarFacturadoSunat);
 router.get('/:id/facturas', verificarToken, getFacturasOrden);
 router.post('/:id/facturas/:idFactura/anular', verificarToken, anularFacturaSunat);
+router.delete('/:id/facturas/:idFactura', verificarToken, eliminarFacturaVenta);
 router.get('/:id/facturas-anuladas', verificarToken, getHistorialFacturasAnuladas);
 
 router.put('/:id/estado', verificarToken, verificarOrdenAprobada, actualizarEstadoOrdenVenta);

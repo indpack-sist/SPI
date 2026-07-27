@@ -4033,6 +4033,62 @@ export async function anularFacturaSunat(req, res) {
   }
 }
 
+// DELETE /:id/facturas/:idFactura — elimina (soft) una factura por confusión/error
+// de sistema (documento equivocado, mal vinculada, etc.). Distinto de "Anular"
+// (que es una anulación formal hecha en el portal de SUNAT).
+export async function eliminarFacturaVenta(req, res) {
+  try {
+    const { id, idFactura } = req.params;
+    const { motivo_eliminacion } = req.body;
+    const { id_empleado, rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({ success: false, error: 'No tienes permisos para eliminar facturas' });
+    }
+
+    if (!motivo_eliminacion || motivo_eliminacion.trim() === '') {
+      return res.status(400).json({ success: false, error: 'El motivo de eliminación es obligatorio' });
+    }
+
+    const facRes = await executeQuery(
+      'SELECT id_factura, numero_factura, estado FROM facturas_venta WHERE id_factura = ? AND id_orden_venta = ?',
+      [idFactura, id]
+    );
+
+    if (!facRes.success || facRes.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Factura no encontrada para esta orden' });
+    }
+
+    if (facRes.data[0].estado === 'Eliminada') {
+      return res.status(400).json({ success: false, error: 'Esta factura ya fue eliminada' });
+    }
+
+    const upd = await executeQuery(
+      `UPDATE facturas_venta
+          SET estado = 'Eliminada', motivo_eliminacion = ?, fecha_eliminacion = ?, id_eliminado_por = ?
+        WHERE id_factura = ?`,
+      [motivo_eliminacion.trim(), getFechaPeru(), id_empleado, idFactura]
+    );
+
+    if (!upd.success) {
+      return res.status(500).json({ success: false, error: upd.error });
+    }
+
+    // Recalcula el resumen: al no contar 'Emitida', libera saldo y despacho.
+    await sincronizarResumenFacturacion(id);
+
+    res.json({
+      success: true,
+      message: 'Factura eliminada correctamente.',
+      data: { id_factura: parseInt(idFactura), numero_factura: facRes.data[0].numero_factura }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export async function getHistorialFacturasAnuladas(req, res) {
   try {
     const { id } = req.params;
@@ -4440,7 +4496,7 @@ export async function getFacturasOrden(req, res) {
       FROM facturas_venta fv
       LEFT JOIN empleados e  ON fv.id_registrado_por = e.id_empleado
       LEFT JOIN empleados e2 ON fv.id_anulado_por = e2.id_empleado
-      WHERE fv.id_orden_venta = ?
+      WHERE fv.id_orden_venta = ? AND fv.estado != 'Eliminada'
       ORDER BY (fv.estado = 'Anulada'), fv.fecha_emision ASC, fv.id_factura ASC
     `, [id]);
 
@@ -4536,9 +4592,10 @@ export async function vincularFacturaSunat(req, res) {
       }
     }
 
-    // Duplicado: numero_factura es UNIQUE global
+    // Duplicado: numero_factura es UNIQUE global. Las 'Eliminada' (error de sistema)
+    // se ignoran para permitir volver a registrar incluso el mismo número.
     const dup = await executeQuery(
-      'SELECT id_factura, id_orden_venta FROM facturas_venta WHERE numero_factura = ?',
+      "SELECT id_factura, id_orden_venta FROM facturas_venta WHERE numero_factura = ? AND estado != 'Eliminada'",
       [numero]
     );
     if (dup.success && dup.data.length > 0) {

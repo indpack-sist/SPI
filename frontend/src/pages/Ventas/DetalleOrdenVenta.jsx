@@ -177,6 +177,16 @@ function DetalleOrdenVenta() {
     const simbolo = monedaUsar === 'USD' ? '$' : 'S/';
     return `${simbolo} ${formatearNumeroPrecio(parseFloat(valor || 0))}`;
   };
+
+  // Lleva un valor neto (sin IGV, como salidas.total_precio) a bruto con IGV,
+  // para poder cruzarlo con el total de una factura (que sí incluye IGV).
+  const calcularValorConIgv = (valorNeto) => {
+    const neto = parseFloat(valorNeto || 0);
+    const pct = parseFloat(orden?.porcentaje_impuesto || 0);
+    const tipo = String(orden?.tipo_impuesto || '').toUpperCase();
+    const sinIgv = pct <= 0 || ['EXO', 'EXONERADO', 'INA', 'INAFECTO', 'INAFECTA'].includes(tipo);
+    return sinIgv ? neto : neto * (1 + pct / 100);
+  };
   const formatearPeso = (pesoKg) => {
     if (!pesoKg || pesoKg === 0) return '—';
     if (pesoKg < 1) return `${(pesoKg * 1000).toFixed(0)} g`;
@@ -1392,7 +1402,8 @@ function DetalleOrdenVenta() {
   const handleSubirFacturaDespacho = (row) => {
     const facturado = row.factura ? parseFloat(row.factura.total || 0) : 0;
     setSalidaParaFactura(row.id_salida);
-    setSalidaFacturaInfo({ valor: parseFloat(row.total_precio || 0), facturado });
+    // El objetivo del modal es el valor del despacho CON IGV (comparable a la factura).
+    setSalidaFacturaInfo({ valor: calcularValorConIgv(row.total_precio), facturado });
     const input = document.getElementById('facturaSunatDespachoInput');
     if (input) input.click();
   };
@@ -3185,7 +3196,8 @@ function DetalleOrdenVenta() {
                            width: '180px',
                            align: 'center',
                            render: (factura, row) => {
-                             const valorDespacho = parseFloat(row.total_precio || 0);
+                             // Valor del despacho CON IGV para cruzar contra el total de la factura.
+                             const valorDespacho = calcularValorConIgv(row.total_precio);
                              const puedeFacturar = orden.tipo_comprobante === 'Factura' && row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada';
 
                              if (factura) {

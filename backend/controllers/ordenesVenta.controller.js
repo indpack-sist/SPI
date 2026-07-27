@@ -2086,6 +2086,9 @@ export async function descargarPDFDespacho(req, res) {
         ov.estado,
         ov.moneda,
         ov.id_cliente,
+        ov.tipo_comprobante,
+        ov.tipo_impuesto,
+        ov.porcentaje_impuesto,
         ov.tipo_entrega,
         ov.transporte_nombre,
         ov.transporte_placa,
@@ -2177,7 +2180,9 @@ export async function descargarPDFDespacho(req, res) {
       transporte_privado_dni: orden.transporte_dni,
       transporte_licencia: orden.transporte_licencia,
       detalles: detalleResult.data,
-      incluir_valores: incluirValores
+      incluir_valores: incluirValores,
+      tipo_impuesto: orden.tipo_impuesto,
+      porcentaje_impuesto: orden.porcentaje_impuesto
     };
 
     const pdfBuffer = await generarPDFSalida(datosPDF);
@@ -4560,16 +4565,24 @@ export async function vincularFacturaSunat(req, res) {
       });
     }
 
-    // Validación por despacho: la factura no debe exceder el valor de la salida.
-    // El techo de la orden (arriba) sigue vigente como límite global.
-    if (idSalida && totalDespacho > 0 && (yaFacturadoDespacho + totalNuevo) > (totalDespacho + tolerancia) && !forzarBool) {
-      const saldoDespacho = +(totalDespacho - yaFacturadoDespacho).toFixed(2);
-      return res.status(409).json({
-        success: false,
-        code: 'EXCEDE_DESPACHO',
-        error: `El total de esta factura (${totalNuevo.toFixed(2)}) excede el valor pendiente de facturar de este despacho (${saldoDespacho.toFixed(2)}, valor del despacho: ${totalDespacho.toFixed(2)}).`,
-        data: { saldo_despacho: saldoDespacho, total_facturado_despacho: +yaFacturadoDespacho.toFixed(2), total_despacho: +totalDespacho.toFixed(2) }
-      });
+    // Validación por despacho: la factura (incluye IGV) no debe exceder el valor
+    // del despacho CON IGV. El total_precio de la salida es neto (sin IGV), así que
+    // lo llevamos a bruto con la config de impuesto de la orden.
+    if (idSalida && totalDespacho > 0) {
+      const pctImp = parseFloat(orden.porcentaje_impuesto || 0);
+      const tipoImp = String(orden.tipo_impuesto || '').toUpperCase();
+      const sinIgv = pctImp <= 0 || ['EXO', 'EXONERADO', 'INA', 'INAFECTO', 'INAFECTA'].includes(tipoImp);
+      const totalDespachoConIgv = sinIgv ? totalDespacho : totalDespacho * (1 + pctImp / 100);
+
+      if ((yaFacturadoDespacho + totalNuevo) > (totalDespachoConIgv + tolerancia) && !forzarBool) {
+        const saldoDespacho = +(totalDespachoConIgv - yaFacturadoDespacho).toFixed(2);
+        return res.status(409).json({
+          success: false,
+          code: 'EXCEDE_DESPACHO',
+          error: `El total de esta factura (${totalNuevo.toFixed(2)}) excede el valor pendiente de facturar de este despacho (${saldoDespacho.toFixed(2)}, valor del despacho c/IGV: ${totalDespachoConIgv.toFixed(2)}).`,
+          data: { saldo_despacho: saldoDespacho, total_facturado_despacho: +yaFacturadoDespacho.toFixed(2), total_despacho: +totalDespachoConIgv.toFixed(2) }
+        });
+      }
     }
 
     // Subir PDF a Cloudinary

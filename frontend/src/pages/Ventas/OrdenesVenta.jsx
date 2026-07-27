@@ -202,17 +202,13 @@ function OrdenesVenta() {
     }
   };
 
-  // Abre en una pestaña nueva el PDF valorizado (con precios) de una salida/despacho.
-  const verSalidaValorizada = async (idSalida) => {
-    if (!idSalida || !modalSunat.orden) return;
-    try {
-      const res = await ordenesVentaAPI.descargarPDFDespacho(modalSunat.orden.id_orden_venta, idSalida, true);
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
-    } catch (e) {
-      console.error('No se pudo abrir la guía de salida valorizada', e);
-    }
+  // Devuelve una object-URL del PDF valorizado (con precios) de una salida/despacho,
+  // para mostrarlo dentro del mismo modal (sub-pestaña "Guía de salida").
+  const fetchSalidaValorizada = async (idSalida) => {
+    if (!idSalida || !modalSunat.orden) return null;
+    const res = await ordenesVentaAPI.descargarPDFDespacho(modalSunat.orden.id_orden_venta, idSalida, true);
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    return window.URL.createObjectURL(blob);
   };
 
   const getSessionArray = (key) => {
@@ -1040,7 +1036,7 @@ function OrdenesVenta() {
         orden={modalSunat.orden}
         facturas={modalSunat.facturas}
         resumen={modalSunat.resumen}
-        onVerSalidaPDF={verSalidaValorizada}
+        fetchSalidaPDF={fetchSalidaValorizada}
         file={null}
         readOnly={true}
         existingData={modalSunat.orden}

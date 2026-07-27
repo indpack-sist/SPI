@@ -2133,20 +2133,24 @@ export async function descargarPDFDespacho(req, res) {
 
     const salida = salidaResult.data[0];
 
+    // El precio unitario se toma de detalle_orden_venta (precisión completa, hasta 6
+    // decimales), no de detalle_salidas (que puede estar truncado a 2). Fallback a ds.
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         ds.cantidad,
         ds.costo_unitario,
-        ds.precio_unitario,
+        COALESCE(dov.precio_unitario, ds.precio_unitario) AS precio_unitario,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
         p.unidad_medida,
         p.peso_unitario
       FROM detalle_salidas ds
       INNER JOIN productos p ON ds.id_producto = p.id_producto
+      LEFT JOIN detalle_orden_venta dov
+        ON dov.id_orden_venta = ? AND dov.id_producto = ds.id_producto
       WHERE ds.id_salida = ?
       ORDER BY p.codigo
-    `, [idSalida]);
+    `, [id, idSalida]);
 
     if (!detalleResult.success) {
       return res.status(500).json({

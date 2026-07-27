@@ -3,7 +3,7 @@ import { api } from '../../config/api';
 import Alert from '../UI/Alert';
 import './ModalValidacionSunat.css';
 
-const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null }) => {
+const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null, facturas = null }) => {
     const esFacturacionParcial = Number(totalFacturado) > 0;
     // Monto contra el que se valida: saldo pendiente si ya hay facturas, si no el total de la orden.
     const montoObjetivo = (saldoPendiente !== null && saldoPendiente !== undefined)
@@ -23,6 +23,10 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
         importe_total: ''
     });
     const [pdfUrl, setPdfUrl] = useState(null);
+    // Pestañas por factura (modo visor con múltiples facturas por orden).
+    const tieneTabs = readOnly && Array.isArray(facturas) && facturas.length > 0;
+    const [tabActiva, setTabActiva] = useState(0);
+    useEffect(() => { if (isOpen) setTabActiva(0); }, [isOpen]);
 
     useEffect(() => {
         if (isOpen) {
@@ -38,18 +42,22 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
     useEffect(() => {
         if (!isOpen) return;
 
-        if (readOnly && existingData) {
-            // Modo Visor: Usamos datos guardados
+        if (readOnly && (tieneTabs || existingData)) {
+            // Modo Visor. Con pestañas: usamos la factura activa; sin pestañas: datos de la orden.
+            const f = tieneTabs ? facturas[Math.min(tabActiva, facturas.length - 1)] : null;
+
             setFormData({
-                numero_comprobante_sunat: orden.numero_comprobante_sunat || '',
-                fecha_emision: orden.fecha_facturacion_sunat ? new Date(orden.fecha_facturacion_sunat).toLocaleDateString('es-PE') : '',
-                ruc_cliente: orden.ruc_cliente || '',
-                razon_social: orden.cliente || '',
-                importe_total: orden.total || ''
+                numero_comprobante_sunat: f ? (f.numero_factura || '') : (orden.numero_comprobante_sunat || ''),
+                fecha_emision: f
+                    ? (f.fecha_emision ? new Date(f.fecha_emision).toLocaleDateString('es-PE') : '')
+                    : (orden.fecha_facturacion_sunat ? new Date(orden.fecha_facturacion_sunat).toLocaleDateString('es-PE') : ''),
+                ruc_cliente: orden?.ruc_cliente || '',
+                razon_social: orden?.cliente || '',
+                importe_total: f ? (f.total || '') : (orden.total || '')
             });
 
             // Resolver URL de PDF (puede ser string o array JSON)
-            let url = orden.comprobante_sunat_url;
+            let url = f ? f.url_pdf : orden.comprobante_sunat_url;
             if (url && typeof url === 'string' && url.startsWith('[')) {
                 try {
                     const parsed = JSON.parse(url);
@@ -82,7 +90,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
             setPdfUrl(null);
         };
         // eslint-disable-next-line
-    }, [isOpen, file, readOnly, existingData]);
+    }, [isOpen, file, readOnly, existingData, tabActiva, facturas]);
 
     useEffect(() => {
         if (!parsedData || readOnly) return;
@@ -250,7 +258,44 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                     <h2>{readOnly ? 'Detalle de Factura SUNAT' : 'Vincular Factura SUNAT'}</h2>
                     <button className="btn-close" onClick={onClose}>&times;</button>
                 </div>
-                
+
+                {tieneTabs && facturas.length > 1 && (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '8px 16px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
+                        {facturas.map((f, idx) => (
+                            <button
+                                key={f.id_factura || idx}
+                                type="button"
+                                onClick={() => setTabActiva(idx)}
+                                style={{
+                                    fontFamily: 'monospace',
+                                    fontSize: '12px',
+                                    fontWeight: idx === tabActiva ? 700 : 500,
+                                    padding: '4px 10px',
+                                    borderRadius: '6px',
+                                    border: idx === tabActiva ? '1px solid #059669' : '1px solid #d1d5db',
+                                    background: idx === tabActiva ? '#ecfdf5' : '#fff',
+                                    color: idx === tabActiva ? '#047857' : '#6b7280',
+                                    cursor: 'pointer'
+                                }}
+                                title={f.id_salida ? `Despacho SAL-${String(f.id_salida).padStart(6, '0')}` : 'Orden completa'}
+                            >
+                                {f.numero_factura}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {tieneTabs && facturas[Math.min(tabActiva, facturas.length - 1)] && (
+                    <div style={{ padding: '6px 16px', fontSize: '12px', color: '#4b5563', borderBottom: '1px solid #f0f0f0' }}>
+                        Asociada a:{' '}
+                        <strong>
+                            {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida
+                                ? `Despacho SAL-${String(facturas[Math.min(tabActiva, facturas.length - 1)].id_salida).padStart(6, '0')}`
+                                : 'Orden completa'}
+                        </strong>
+                    </div>
+                )}
+
                 <div className="modal-sunat-body">
                     {/* Panel Izquierdo: Formulario de Datos Extraídos */}
                     <div className="sunat-panel-izquierdo">

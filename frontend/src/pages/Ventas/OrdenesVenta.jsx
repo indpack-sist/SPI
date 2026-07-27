@@ -164,7 +164,8 @@ function OrdenesVenta() {
   const [modalSunat, setModalSunat] = useState({
     isOpen: false,
     orden: null,
-    facturas: null
+    facturas: null,
+    resumen: null
   });
 
   const abrirVisor = (url, titulo) => {
@@ -184,7 +185,8 @@ function OrdenesVenta() {
     setModalSunat({
       isOpen: true,
       orden: row,
-      facturas: null
+      facturas: null,
+      resumen: null
     });
   };
 
@@ -193,10 +195,23 @@ function OrdenesVenta() {
       const res = await ordenesVentaAPI.getFacturas(row.id_orden_venta);
       const data = res.data?.data || {};
       const emitidas = (data.facturas || []).filter(f => f.estado === 'Emitida');
-      setModalSunat({ isOpen: true, orden: row, facturas: emitidas });
+      setModalSunat({ isOpen: true, orden: row, facturas: emitidas, resumen: data.resumen || null });
     } catch (e) {
       // Fallback: abre el visor simple con lo que tenga la orden.
-      setModalSunat({ isOpen: true, orden: row, facturas: null });
+      setModalSunat({ isOpen: true, orden: row, facturas: null, resumen: null });
+    }
+  };
+
+  // Abre en una pestaña nueva el PDF valorizado (con precios) de una salida/despacho.
+  const verSalidaValorizada = async (idSalida) => {
+    if (!idSalida || !modalSunat.orden) return;
+    try {
+      const res = await ordenesVentaAPI.descargarPDFDespacho(modalSunat.orden.id_orden_venta, idSalida, true);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (e) {
+      console.error('No se pudo abrir la guía de salida valorizada', e);
     }
   };
 
@@ -738,7 +753,7 @@ function OrdenesVenta() {
               {(numFacturas > 1 || row.comprobante_sunat_url) && (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); numFacturas > 1 ? abrirListaFacturas(row) : abrirVisorSunat(row); }}
+                  onClick={(e) => { e.stopPropagation(); abrirListaFacturas(row); }}
                   className="mt-1.5 flex items-center justify-center btn-sunat-viewer px-3 py-1 rounded shadow-sm group"
                   title={numFacturas > 1 ? 'Ver todas las facturas de esta orden' : 'Ver Detalle Factura SUNAT'}
                 >
@@ -1021,9 +1036,11 @@ function OrdenesVenta() {
 
       <ModalValidacionSunat
         isOpen={modalSunat.isOpen}
-        onClose={() => setModalSunat({ isOpen: false, orden: null, facturas: null })}
+        onClose={() => setModalSunat({ isOpen: false, orden: null, facturas: null, resumen: null })}
         orden={modalSunat.orden}
         facturas={modalSunat.facturas}
+        resumen={modalSunat.resumen}
+        onVerSalidaPDF={verSalidaValorizada}
         file={null}
         readOnly={true}
         existingData={modalSunat.orden}

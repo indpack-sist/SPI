@@ -3,7 +3,7 @@ import { api } from '../../config/api';
 import Alert from '../UI/Alert';
 import './ModalValidacionSunat.css';
 
-const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null, facturas = null }) => {
+const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null, facturas = null, resumen = null, onVerSalidaPDF = null }) => {
     const esFacturacionParcial = Number(totalFacturado) > 0;
     // Monto contra el que se valida: saldo pendiente si ya hay facturas, si no el total de la orden.
     const montoObjetivo = (saldoPendiente !== null && saldoPendiente !== undefined)
@@ -285,14 +285,39 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                     </div>
                 )}
 
+                {readOnly && resumen && (
+                    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', padding: '8px 16px', borderBottom: '1px solid #f0f0f0', fontSize: '12px', background: '#fbfbfb' }}>
+                        <span>Total orden: <strong>{fmtMoneda(resumen.total_orden)}</strong></span>
+                        <span style={{ color: '#047857' }}>Facturado: <strong>{fmtMoneda(resumen.total_facturado)}</strong></span>
+                        <span style={{ color: (resumen.saldo_pendiente > 1) ? '#b45309' : '#047857' }}>
+                            Pendiente: <strong>{fmtMoneda(resumen.saldo_pendiente)}</strong>
+                        </span>
+                    </div>
+                )}
+
                 {tieneTabs && facturas[Math.min(tabActiva, facturas.length - 1)] && (
-                    <div style={{ padding: '6px 16px', fontSize: '12px', color: '#4b5563', borderBottom: '1px solid #f0f0f0' }}>
-                        Asociada a:{' '}
-                        <strong>
-                            {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida
-                                ? `Despacho SAL-${String(facturas[Math.min(tabActiva, facturas.length - 1)].id_salida).padStart(6, '0')}`
-                                : 'Orden completa'}
-                        </strong>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', padding: '6px 16px', fontSize: '12px', color: '#4b5563', borderBottom: '1px solid #f0f0f0' }}>
+                        <span>
+                            Asociada a:{' '}
+                            <strong>
+                                {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida
+                                    ? `Despacho SAL-${String(facturas[Math.min(tabActiva, facturas.length - 1)].id_salida).padStart(6, '0')}`
+                                    : 'Orden completa'}
+                            </strong>
+                        </span>
+                        {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida && onVerSalidaPDF && (
+                            <button
+                                type="button"
+                                onClick={() => onVerSalidaPDF(facturas[Math.min(tabActiva, facturas.length - 1)].id_salida)}
+                                style={{
+                                    fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px',
+                                    border: '1px solid #6366f1', background: '#eef2ff', color: '#4338ca', cursor: 'pointer'
+                                }}
+                                title="Abrir la guía de salida valorizada (con precios) de este despacho"
+                            >
+                                Ver guía de salida (con precios)
+                            </button>
+                        )}
                     </div>
                 )}
 

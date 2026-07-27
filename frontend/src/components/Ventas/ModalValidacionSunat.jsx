@@ -3,7 +3,7 @@ import { api } from '../../config/api';
 import Alert from '../UI/Alert';
 import './ModalValidacionSunat.css';
 
-const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null, facturas = null, resumen = null, onVerSalidaPDF = null }) => {
+const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnly = false, existingData = null, saldoPendiente = null, totalFacturado = 0, idSalida = null, facturas = null, resumen = null, fetchSalidaPDF = null }) => {
     const esFacturacionParcial = Number(totalFacturado) > 0;
     // Monto contra el que se valida: saldo pendiente si ya hay facturas, si no el total de la orden.
     const montoObjetivo = (saldoPendiente !== null && saldoPendiente !== undefined)
@@ -27,6 +27,29 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
     const tieneTabs = readOnly && Array.isArray(facturas) && facturas.length > 0;
     const [tabActiva, setTabActiva] = useState(0);
     useEffect(() => { if (isOpen) setTabActiva(0); }, [isOpen]);
+
+    // Sub-pestañas del visor: alternar entre la Factura y la Guía de Salida (con precios).
+    const [vistaDoc, setVistaDoc] = useState('factura');
+    const [salidaUrl, setSalidaUrl] = useState(null);
+    const [loadingSalida, setLoadingSalida] = useState(false);
+    // Al cambiar de factura (pestaña) o abrir/cerrar, se vuelve a la vista de factura.
+    useEffect(() => { setVistaDoc('factura'); setSalidaUrl(null); }, [tabActiva, isOpen]);
+    // Libera la object-URL de la salida cuando se reemplaza o al desmontar.
+    useEffect(() => () => { if (salidaUrl) URL.revokeObjectURL(salidaUrl); }, [salidaUrl]);
+
+    const cargarVerSalida = async (idSal) => {
+        if (!idSal || !fetchSalidaPDF) return;
+        if (salidaUrl) { setVistaDoc('salida'); return; }
+        setLoadingSalida(true);
+        try {
+            const url = await fetchSalidaPDF(idSal);
+            if (url) { setSalidaUrl(url); setVistaDoc('salida'); }
+        } catch (e) {
+            setAlert({ type: 'error', message: 'No se pudo cargar la guía de salida.' });
+        } finally {
+            setLoadingSalida(false);
+        }
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -251,6 +274,15 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
 
     if (!isOpen) return null;
 
+    const facturaActivaModal = tieneTabs ? facturas[Math.min(tabActiva, facturas.length - 1)] : null;
+    const salidaActiva = facturaActivaModal?.id_salida || null;
+    const puedeVerSalida = !!(salidaActiva && fetchSalidaPDF);
+    const subTabStyle = (activo) => ({
+        fontSize: '11px', fontWeight: activo ? 700 : 500, padding: '3px 10px', borderRadius: '6px',
+        border: activo ? '1px solid #059669' : '1px solid #d1d5db',
+        background: activo ? '#ecfdf5' : '#fff', color: activo ? '#047857' : '#6b7280', cursor: 'pointer'
+    });
+
     return (
         <div className="modal-sunat-overlay">
             <div className="modal-sunat-content">
@@ -296,28 +328,13 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                 )}
 
                 {tieneTabs && facturas[Math.min(tabActiva, facturas.length - 1)] && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', padding: '6px 16px', fontSize: '12px', color: '#4b5563', borderBottom: '1px solid #f0f0f0' }}>
-                        <span>
-                            Asociada a:{' '}
-                            <strong>
-                                {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida
-                                    ? `Despacho SAL-${String(facturas[Math.min(tabActiva, facturas.length - 1)].id_salida).padStart(6, '0')}`
-                                    : 'Orden completa'}
-                            </strong>
-                        </span>
-                        {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida && onVerSalidaPDF && (
-                            <button
-                                type="button"
-                                onClick={() => onVerSalidaPDF(facturas[Math.min(tabActiva, facturas.length - 1)].id_salida)}
-                                style={{
-                                    fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px',
-                                    border: '1px solid #6366f1', background: '#eef2ff', color: '#4338ca', cursor: 'pointer'
-                                }}
-                                title="Abrir la guía de salida valorizada (con precios) de este despacho"
-                            >
-                                Ver guía de salida (con precios)
-                            </button>
-                        )}
+                    <div style={{ padding: '6px 16px', fontSize: '12px', color: '#4b5563', borderBottom: '1px solid #f0f0f0' }}>
+                        Asociada a:{' '}
+                        <strong>
+                            {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida
+                                ? `Despacho SAL-${String(facturas[Math.min(tabActiva, facturas.length - 1)].id_salida).padStart(6, '0')}`
+                                : 'Orden completa'}
+                        </strong>
                     </div>
                 )}
 
@@ -415,18 +432,35 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                         </form>
                     </div>
 
-                    {/* Panel Derecho: Visor de PDF */}
+                    {/* Panel Derecho: Visor de PDF (con sub-pestañas Factura / Guía de salida) */}
                     <div className="sunat-panel-derecho">
-                        <h3>Vista del Documento</h3>
-                        {pdfUrl ? (
-                            <iframe 
-                                src={pdfUrl} 
-                                title="Visor PDF SUNAT" 
-                                className="sunat-pdf-viewer"
-                            />
-                        ) : (
-                            <div className="sunat-pdf-placeholder">Cargando documento...</div>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                            <h3 style={{ margin: 0 }}>Vista del Documento</h3>
+                            {puedeVerSalida && (
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    <button type="button" style={subTabStyle(vistaDoc === 'factura')} onClick={() => setVistaDoc('factura')}>
+                                        Factura
+                                    </button>
+                                    <button type="button" style={subTabStyle(vistaDoc === 'salida')} onClick={() => cargarVerSalida(salidaActiva)} disabled={loadingSalida}>
+                                        {loadingSalida ? 'Cargando…' : 'Guía de salida'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {(() => {
+                            const urlMostrar = vistaDoc === 'salida' ? salidaUrl : pdfUrl;
+                            return urlMostrar ? (
+                                <iframe
+                                    src={urlMostrar}
+                                    title={vistaDoc === 'salida' ? 'Guía de Salida valorizada' : 'Visor PDF SUNAT'}
+                                    className="sunat-pdf-viewer"
+                                />
+                            ) : (
+                                <div className="sunat-pdf-placeholder">
+                                    {loadingSalida ? 'Cargando guía de salida…' : 'Cargando documento...'}
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>

@@ -87,6 +87,13 @@ function DetalleOrdenVenta() {
   const [facturaAAnular, setFacturaAAnular] = useState(null);
   const [modalConfirmarGuiaInterna, setModalConfirmarGuiaInterna] = useState(false);
   const [salidaSeleccionadaGI, setSalidaSeleccionadaGI] = useState(null);
+  // Vincular factura / documento a un despacho concreto (id_salida)
+  const [salidaParaFactura, setSalidaParaFactura] = useState(null);
+  const [salidaFacturaInfo, setSalidaFacturaInfo] = useState({ valor: 0, facturado: 0 });
+  const [modalDocDespacho, setModalDocDespacho] = useState(false);
+  const [salidaParaDoc, setSalidaParaDoc] = useState(null);
+  const [formDocDespacho, setFormDocDespacho] = useState({ tipo_documento: '', correlativo: '', archivos: [] });
+  const [guardandoDocDespacho, setGuardandoDocDespacho] = useState(false);
   
   const [visorArchivo, setVisorArchivo] = useState({
     open: false,
@@ -1115,11 +1122,12 @@ function DetalleOrdenVenta() {
   const handleVerPDFSalida = async (idSalida, numeroSalida) => {
     try {
       setDescargandoPDF(`ver-${idSalida}`);
-      const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida);
+      // Vista en pantalla: variante valorizada (con precios) para poder cruzar contra la factura.
+      const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida, true);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const numeroSalidaFormat = numeroSalida ? `SAL-${String(numeroSalida).padStart(6, '0')}` : idSalida;
-      setVisorArchivo({ open: true, url, tipo: 'pdf', titulo: `Constancia de Salida – ${numeroSalidaFormat}`, isObjectUrl: true });
+      setVisorArchivo({ open: true, url, tipo: 'pdf', titulo: `Constancia de Salida (valorizada) – ${numeroSalidaFormat}`, isObjectUrl: true });
     } catch (err) {
       console.error(err);
       setError('Error al cargar el PDF de la guía de salida');
@@ -1345,6 +1353,48 @@ function DetalleOrdenVenta() {
     } finally {
       setGuardandoDocumento(false);
     }
+  };
+
+  const handleAbrirDocDespacho = (idSalida) => {
+    setSalidaParaDoc(idSalida);
+    setFormDocDespacho({ tipo_documento: '', correlativo: '', archivos: [] });
+    setModalDocDespacho(true);
+  };
+
+  const handleAgregarDocDespacho = async () => {
+    if (!formDocDespacho.tipo_documento) {
+      setError('Seleccione el tipo de documento');
+      return;
+    }
+    try {
+      setGuardandoDocDespacho(true);
+      setError(null);
+      const fd = new FormData();
+      fd.append('tipo_documento', formDocDespacho.tipo_documento);
+      if (formDocDespacho.correlativo) fd.append('correlativo', formDocDespacho.correlativo);
+      if (salidaParaDoc) fd.append('id_salida', salidaParaDoc);
+      formDocDespacho.archivos.forEach(f => fd.append('documentos_adicionales', f));
+      const res = await ordenesVentaAPI.agregarDocumentoAdicional(id, fd);
+      if (res.data.success) {
+        setModalDocDespacho(false);
+        setSalidaParaDoc(null);
+        setFormDocDespacho({ tipo_documento: '', correlativo: '', archivos: [] });
+        setSuccess('Documento adjuntado al despacho correctamente');
+        await cargarDatos();
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al adjuntar documento al despacho');
+    } finally {
+      setGuardandoDocDespacho(false);
+    }
+  };
+
+  const handleSubirFacturaDespacho = (row) => {
+    const facturado = row.factura ? parseFloat(row.factura.total || 0) : 0;
+    setSalidaParaFactura(row.id_salida);
+    setSalidaFacturaInfo({ valor: parseFloat(row.total_precio || 0), facturado });
+    const input = document.getElementById('facturaSunatDespachoInput');
+    if (input) input.click();
   };
 
   const handleEliminarDocumento = async (idDoc) => {
@@ -1935,6 +1985,7 @@ function DetalleOrdenVenta() {
                   onChange={(e) => {
                     const file = e.target.files[0];
                     if (file) {
+                      setSalidaParaFactura(null); // factura a nivel orden
                       setFileSunat(file);
                       setModalSunatOpen(true);
                     }
@@ -3128,11 +3179,111 @@ function DetalleOrdenVenta() {
                            )
                          },
                          { header: 'Observaciones', accessor: 'observaciones' },
-                         { 
-                           header: 'Acciones', 
-                           accessor: 'id_salida', 
+                         {
+                           header: 'Factura (cruce)',
+                           accessor: 'factura',
+                           width: '180px',
+                           align: 'center',
+                           render: (factura, row) => {
+                             const valorDespacho = parseFloat(row.total_precio || 0);
+                             const puedeFacturar = orden.tipo_comprobante === 'Factura' && row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada';
+
+                             if (factura) {
+                               const totalFactura = parseFloat(factura.total || 0);
+                               const calza = Math.abs(totalFactura - valorDespacho) <= 1;
+                               return (
+                                 <div className="flex flex-col items-center gap-1">
+                                   <span className="badge badge-success font-mono text-xs">{factura.numero_factura}</span>
+                                   {factura.url_pdf && (
+                                     <button
+                                       className="btn btn-xs btn-outline"
+                                       onClick={() => abrirVisor(factura.url_pdf, `Factura ${factura.numero_factura}`)}
+                                       title="Ver factura del despacho"
+                                     >
+                                       <Eye size={12} className="mr-1"/> Ver
+                                     </button>
+                                   )}
+                                   <div
+                                     className={`text-[10px] leading-tight mt-0.5 px-1.5 py-0.5 rounded ${calza ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                                     title="Cruce: valor del despacho (según precios de la OV) vs total de la factura"
+                                   >
+                                     <div className="flex items-center gap-1 justify-center font-semibold">
+                                       {calza ? <CheckCircle size={11}/> : <AlertTriangle size={11}/>}
+                                       {calza ? 'Calza' : 'Difiere'}
+                                     </div>
+                                     <div>Desp: {formatearMoneda(valorDespacho)}</div>
+                                     <div>Fact: {formatearMoneda(totalFactura)}</div>
+                                   </div>
+                                 </div>
+                               );
+                             }
+
+                             return puedeFacturar ? (
+                               <div className="flex flex-col items-center gap-1">
+                                 <span className="text-[10px] text-gray-500">Valor: {formatearMoneda(valorDespacho)}</span>
+                                 <button
+                                   className="btn btn-xs btn-outline border-teal-300 text-teal-700 hover:bg-teal-50"
+                                   onClick={() => handleSubirFacturaDespacho(row)}
+                                   title="Vincular factura a este despacho"
+                                 >
+                                   <BadgeCheck size={12} className="mr-1"/> + Factura
+                                 </button>
+                               </div>
+                             ) : <span className="text-xs text-gray-400">—</span>;
+                           }
+                         },
+                         {
+                           header: 'Documentos',
+                           accessor: 'documentos',
+                           width: '200px',
+                           render: (documentos, row) => {
+                             const docs = documentos || [];
+                             const parseUrls = (d) => {
+                               try {
+                                 const p = typeof d.archivos_url === 'string' ? JSON.parse(d.archivos_url) : d.archivos_url;
+                                 return Array.isArray(p) ? p : (p ? [p] : []);
+                               } catch { return []; }
+                             };
+                             return (
+                               <div className="flex flex-col gap-1 items-start">
+                                 {docs.map(d => {
+                                   const urls = parseUrls(d);
+                                   return (
+                                     <div key={d.id_documento} className="flex items-center gap-1 flex-wrap">
+                                       <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{d.tipo_documento}</span>
+                                       {d.correlativo && <span className="font-mono text-[10px] text-gray-600">{d.correlativo}</span>}
+                                       {urls.map((u, i) => (
+                                         <button
+                                           key={i}
+                                           className="btn btn-xs btn-outline py-0 px-1"
+                                           onClick={() => abrirVisor(u, `${d.tipo_documento}${d.correlativo ? ' ' + d.correlativo : ''}`)}
+                                           title="Ver documento"
+                                         >
+                                           <Eye size={11}/>
+                                         </button>
+                                       ))}
+                                     </div>
+                                   );
+                                 })}
+                                 {row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
+                                   <button
+                                     className="btn btn-xs btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                                     onClick={() => handleAbrirDocDespacho(row.id_salida)}
+                                     title="Adjuntar guía / documento a este despacho"
+                                   >
+                                     <Plus size={11} className="mr-1"/> Documento
+                                   </button>
+                                 )}
+                                 {docs.length === 0 && row.estado !== 'Activo' && <span className="text-xs text-gray-400">—</span>}
+                               </div>
+                             );
+                           }
+                         },
+                         {
+                           header: 'Acciones',
+                           accessor: 'id_salida',
                            width: '150px',
-                           align:'center', 
+                           align:'center',
                            render: (val, row) => (
                              <div className="flex gap-2 justify-center">
                                <button
@@ -4280,22 +4431,114 @@ function DetalleOrdenVenta() {
         </div>
       </Modal>
 
+      {/* Input oculto: factura vinculada a un despacho concreto */}
+      <input
+        type="file"
+        id="facturaSunatDespachoInput"
+        accept=".pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files[0];
+          if (file) {
+            setFileSunat(file);
+            setModalSunatOpen(true);
+          }
+          e.target.value = null;
+        }}
+      />
+
+      {/* Modal: adjuntar documento (guía, etc.) a un despacho */}
+      <Modal
+        isOpen={modalDocDespacho}
+        onClose={() => { setModalDocDespacho(false); setSalidaParaDoc(null); }}
+        title={`Adjuntar documento al despacho SAL-${String(salidaParaDoc || '').padStart(6, '0')}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="form-group">
+            <label className="form-label">Tipo de documento *</label>
+            <select
+              className="form-select"
+              value={formDocDespacho.tipo_documento}
+              onChange={e => setFormDocDespacho(f => ({ ...f, tipo_documento: e.target.value }))}
+            >
+              <option value="">Seleccione...</option>
+              {TIPOS_DOCUMENTO_ADICIONAL.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Correlativo / N° (opcional)</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Ej: T001-000123"
+              value={formDocDespacho.correlativo}
+              onChange={e => setFormDocDespacho(f => ({ ...f, correlativo: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label className={`flex items-center gap-2 border-2 border-dashed rounded-lg px-3 py-3 cursor-pointer transition-colors text-sm
+              ${formDocDespacho.archivos.length > 0 ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-primary bg-white text-gray-500'}`}>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,image/*"
+                className="hidden"
+                onChange={e => setFormDocDespacho(f => ({ ...f, archivos: Array.from(e.target.files) }))}
+              />
+              {formDocDespacho.archivos.length > 0
+                ? <><CheckCircle size={16} /> {formDocDespacho.archivos.length} archivo(s) seleccionado(s)</>
+                : <><Plus size={16} /> Adjuntar archivo(s)</>}
+            </label>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn btn-outline" onClick={() => { setModalDocDespacho(false); setSalidaParaDoc(null); }}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleAgregarDocDespacho}
+              disabled={guardandoDocDespacho || !formDocDespacho.tipo_documento}
+            >
+              {guardandoDocDespacho ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
+              {guardandoDocDespacho ? 'Guardando...' : 'Adjuntar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       <ModalValidacionSunat
         isOpen={modalSunatOpen}
         onClose={() => {
             setModalSunatOpen(false);
             setFileSunat(null);
+            setSalidaParaFactura(null);
         }}
         orden={orden}
         file={fileSunat}
-        saldoPendiente={resumenFacturacion ? resumenFacturacion.saldo_pendiente : parseFloat(orden.total || 0)}
-        totalFacturado={resumenFacturacion ? resumenFacturacion.total_facturado : 0}
+        idSalida={salidaParaFactura}
+        saldoPendiente={
+          salidaParaFactura
+            ? Math.max(0, salidaFacturaInfo.valor - salidaFacturaInfo.facturado)
+            : (resumenFacturacion ? resumenFacturacion.saldo_pendiente : parseFloat(orden.total || 0))
+        }
+        totalFacturado={
+          salidaParaFactura
+            ? salidaFacturaInfo.facturado
+            : (resumenFacturacion ? resumenFacturacion.total_facturado : 0)
+        }
         readOnly={false}
         existingData={null}
         onConfirm={(data) => {
             setModalSunatOpen(false);
             setFileSunat(null);
-            setSuccess(`Factura SUNAT ${data.numero_comprobante_sunat} vinculada correctamente`);
+            setSalidaParaFactura(null);
+            setSuccess(
+              salidaParaFactura
+                ? `Factura ${data.numero_comprobante_sunat} vinculada al despacho`
+                : `Factura SUNAT ${data.numero_comprobante_sunat} vinculada correctamente`
+            );
             cargarDatos();
         }}
       />

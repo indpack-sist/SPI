@@ -644,8 +644,9 @@ export const ordenesVentaAPI = {
     });
   },
 
-  descargarPDFDespacho: (id, idSalida) => {
+  descargarPDFDespacho: (id, idSalida, incluirValores = false) => {
     return api.get(`/ordenes-venta/${id}/salidas/${idSalida}/pdf`, {
+      params: incluirValores ? { valores: 1 } : {},
       responseType: 'blob'
     });
   },

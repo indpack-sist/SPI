@@ -734,7 +734,7 @@ function OrdenesVenta() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); abrirListaFacturas(row); }}
-                  className="badge badge-info badge-sm cursor-pointer"
+                  className="badge badge-info cursor-pointer text-sm"
                   title="Ver todas las facturas de esta orden"
                 >
                   {numFacturas} facturas

@@ -2683,7 +2683,7 @@ function DetalleOrdenVenta() {
                                     {facturas.map((f, idx) => (
                                         <button
                                             key={f.id_factura}
-                                            className={`badge badge-sm cursor-pointer font-mono transition-colors ${
+                                            className={`badge text-sm cursor-pointer font-mono transition-colors ${
                                                 idx === facturaTabActiva
                                                     ? 'badge-success'
                                                     : 'badge-secondary'

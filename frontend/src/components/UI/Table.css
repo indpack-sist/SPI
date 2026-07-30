@@ -129,13 +129,32 @@
     border-bottom: none;
   }
 
-  /* El valor de cada celda alineado a la derecha, sin desbordar la tarjeta */
+  /* En modo tarjeta la tabla ocupa el ancho disponible: sin scroll horizontal */
+  .table-mobile,
+  .table-mobile tbody { display: block; width: 100%; }
+  .table-container:has(> .table-mobile) { overflow-x: hidden; }
+
+  /* El valor de cada celda: ocupa el espacio restante, alineado a la derecha,
+     y envuelve por líneas (no por caracteres) para no desbordar la tarjeta */
   .table-mobile tbody td > * {
-    text-align: right;
-    margin-left: auto;
     min-width: 0;
-    max-width: 100%;
-    overflow-wrap: anywhere;
+    margin-left: auto;
+    text-align: right;
+    overflow-wrap: break-word;
+  }
+
+  /* Filas flex internas (badge + código) se envuelven en vez de generar scroll */
+  .table-mobile tbody td .flex {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  /* Códigos, números y badges no se parten carácter por carácter */
+  .table-mobile tbody td .font-mono,
+  .table-mobile tbody td .badge {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: keep-all;
   }
 
   .table-mobile tbody td::before {

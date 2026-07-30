@@ -815,7 +815,8 @@ function OrdenesVenta() {
         .page-ordenes-venta button.pagination-btn:hover:not(.pagination-btn-active) {
           border-color: var(--primary) !important; color: var(--primary) !important; background-color: var(--carbon-light) !important;
         }
-        .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; overflow: hidden !important; }
+        .page-ordenes-venta .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; }
+        @media (min-width: 641px) { .page-ordenes-venta .table-container { overflow: hidden !important; } }
         .page-ordenes-venta .stat-card { min-height: 85px !important; padding: 1rem !important; border-radius: 8px !important; }
         
         .btn-sunat-viewer {

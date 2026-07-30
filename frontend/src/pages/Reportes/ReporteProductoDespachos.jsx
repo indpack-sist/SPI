@@ -478,7 +478,8 @@ const ReporteProductoDespachos = () => {
                 }
                 .page-reporte-despachos .dropdown-menu { background-color: var(--carbon-light) !important; border: 1px solid var(--steel) !important; z-index: 100 !important; }
                 .page-reporte-despachos .dropdown-item:hover { background-color: var(--steel) !important; }
-                .page-reporte-despachos .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; overflow: hidden !important; }
+                .page-reporte-despachos .table-container { background-color: var(--carbon) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; }
+                @media (min-width: 641px) { .page-reporte-despachos .table-container { overflow: hidden !important; } }
                 .page-reporte-despachos table { background-color: var(--carbon) !important; }
                 .page-reporte-despachos th { background-color: var(--carbon-light) !important; color: var(--wire) !important; text-transform: uppercase !important; font-size: 0.65rem !important; letter-spacing: 0.05em !important; border-bottom: 2px solid var(--steel) !important; padding: 10px 12px !important; }
                 .page-reporte-despachos td { border-bottom: 1px solid var(--border) !important; color: var(--mist) !important; padding: 10px 12px !important; font-size: 0.75rem !important; }

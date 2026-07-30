@@ -122,16 +122,20 @@
     text-align: right !important;
     font-size: 0.8125rem;
     min-height: 2.5rem;
+    min-width: 0;
   }
 
   .table-mobile tbody td:last-child {
     border-bottom: none;
   }
 
-  /* El valor de cada celda alineado a la derecha, permitiendo salto de línea */
+  /* El valor de cada celda alineado a la derecha, sin desbordar la tarjeta */
   .table-mobile tbody td > * {
     text-align: right;
     margin-left: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
   .table-mobile tbody td::before {

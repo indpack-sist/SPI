@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trash2, Save, Search,
@@ -57,6 +57,7 @@ function NuevaCotizacion() {
     
   const [loading, setLoading] = useState(false);
   const [cooldownActivo, setCooldownActivo] = useState(false);
+  const submitCooldown = useRef(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [cotizacionConvertida, setCotizacionConvertida] = useState(false);
@@ -695,11 +696,14 @@ setFormCabecera(prev => ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (cooldownActivo || loading) return;
+    if (loading || submitCooldown.current) return;
+
+    submitCooldown.current = true;
+    setCooldownActivo(true);
+
     setError(null);
     try {
       setLoading(true);
-      setCooldownActivo(true);
       const payload = {
         id_cliente: parseInt(formCabecera.id_cliente),
         id_comercial: formCabecera.id_comercial ? parseInt(formCabecera.id_comercial) : null,
@@ -737,20 +741,29 @@ setFormCabecera(prev => ({
       let response;
       if (modoEdicion) {
         response = await cotizacionesAPI.update(id, payload);
-        if (response.data.success) {
-          setSuccess('Cotizacion actualizada exitosamente');
-          setTimeout(() => navigate(`/ventas/cotizaciones/${id}`), 1500);
-        }
       } else {
         response = await cotizacionesAPI.create(payload);
-        if (response.data.success) {
+      }
+
+      if (response.data.success) {
+        if (modoEdicion) {
+          setSuccess('Cotizacion actualizada exitosamente');
+          setTimeout(() => navigate(`/ventas/cotizaciones/${id}`), 1500);
+        } else {
           setSuccess(`Cotizacion creada: ${response.data.data.numero_cotizacion}`);
           setTimeout(() => navigate(`/ventas/cotizaciones/${response.data.data.id_cotizacion}`), 1500);
         }
+        // Éxito: se mantiene el bloqueo mientras se redirige. No reactivar el botón.
+      } else {
+        // Respuesta sin éxito: liberar para permitir reintento.
+        submitCooldown.current = false;
+        setCooldownActivo(false);
       }
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} cotizacion`);
+      submitCooldown.current = false;
+      setCooldownActivo(false);
     } finally {
       setLoading(false);
     }

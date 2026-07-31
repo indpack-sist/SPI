@@ -680,10 +680,6 @@ useEffect(() => {
 
     submitCooldown.current = true;
     setCooldownActivo(true);
-    setTimeout(() => {
-      submitCooldown.current = false;
-      setCooldownActivo(false);
-    }, 5000);
 
     try {
       setLoading(true);
@@ -734,16 +730,23 @@ useEffect(() => {
       let response;
       if (modoEdicion) {
         response = await ordenesVentaAPI.update(id, formData);
-        if (response.data.success) {
-          setSuccess('Orden actualizada exitosamente');
-          setTimeout(() => navigate(`/ventas/ordenes/${id}`), 1500);
-        }
       } else {
         response = await ordenesVentaAPI.create(formData);
-        if (response.data.success) {
+      }
+
+      if (response.data.success) {
+        if (modoEdicion) {
+          setSuccess('Orden actualizada exitosamente');
+          setTimeout(() => navigate(`/ventas/ordenes/${id}`), 1500);
+        } else {
           setSuccess(`Orden creada: ${response.data.data.numero_orden}`);
           setTimeout(() => navigate(`/ventas/ordenes/${response.data.data.id_orden_venta}`), 1500);
         }
+        // Éxito: se mantiene el bloqueo mientras se redirige. No reactivar el botón.
+      } else {
+        // Respuesta sin éxito: liberar para permitir reintento.
+        submitCooldown.current = false;
+        setCooldownActivo(false);
       }
 
     } catch (err) {
@@ -1699,6 +1702,7 @@ useEffect(() => {
         detalle={detalle}
         totales={totales}
         moneda={formCabecera.moneda}
+        guardando={loading || cooldownActivo}
       />
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">

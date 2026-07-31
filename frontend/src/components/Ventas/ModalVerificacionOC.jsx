@@ -173,10 +173,11 @@ export default function ModalVerificacionOC({
         {onOmitir != null ? (
           <button
             onClick={onOmitir}
-            className="flex items-center gap-2 btn btn-outline text-gray-600 border-gray-300 hover:bg-gray-100"
+            disabled={guardando}
+            className="flex items-center gap-2 btn btn-outline text-gray-600 border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <SkipForward size={15} />
-            Guardar sin verificar
+            {guardando ? 'Guardando...' : 'Guardar sin verificar'}
           </button>
         ) : (
           <button

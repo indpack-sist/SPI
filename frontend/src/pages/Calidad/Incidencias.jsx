@@ -169,6 +169,11 @@ function Incidencias() {
     filtroDisposicion, filtroDecision, fechaInicio, fechaFin, busqueda
   ].filter(Boolean).length;
 
+  // Si hay algún filtro activo, abrimos el panel automáticamente.
+  useEffect(() => {
+    if (filtrosActivos > 0) setMostrarFiltros(true);
+  }, [filtrosActivos]);
+
   const limpiarFiltros = () => {
     setFiltroEstado('');
     setFiltroSeveridad('');

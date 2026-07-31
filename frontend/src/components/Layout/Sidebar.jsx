@@ -81,7 +81,9 @@ function Sidebar({ onToggle }) {
 
         {menuConfig.map((section, idx) => {
           const itemsVisibles = section.items.filter(item =>
-            tienePermiso(item.modulo) && !item.rolesExcluidos?.includes(rol)
+            tienePermiso(item.modulo)
+            && !item.rolesExcluidos?.includes(rol)
+            && (!item.rolesIncluidos || item.rolesIncluidos.includes(rol))
           );
           if (itemsVisibles.length === 0) return null;
 

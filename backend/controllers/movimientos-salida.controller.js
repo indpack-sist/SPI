@@ -1,5 +1,51 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
+import { PERMISOS_POR_ROL } from '../middleware/auth.js';
+
+// Roles que NUNCA deben ver montos en el módulo de Salidas, sin importar su flag
+// global verPrecios (requerimiento explícito: seguimiento operativo/calidad sin precios).
+const ROLES_SIN_PRECIOS_SALIDAS = ['Calidad', 'Supervisor', 'Produccion'];
+
+// Determina si el rol autenticado puede ver montos (precios, costos, IGV, totales).
+// Fuente de verdad para el gating de información sensible en el backend.
+function puedeVerPrecios(req) {
+    const rol = req.user?.rol;
+    if (ROLES_SIN_PRECIOS_SALIDAS.includes(rol)) return false;
+    return !!PERMISOS_POR_ROL[rol]?.ui?.verPrecios;
+}
+
+// Calcula subtotal (neto), IGV y total con impuesto de una salida a partir del
+// régimen de impuesto de su Orden de Venta origen. Replica la lógica de Detalle OV:
+// INAFECTO/EXONERADO o Nota de Venta => 0%, en otro caso porcentaje_impuesto (18% por defecto).
+function calcularImpuestosSalida(row) {
+    const subtotal = parseFloat(row.total_precio || 0);
+    const tipoImpuesto = String(row.tipo_impuesto || '').toUpperCase().trim();
+    const esNotaVenta = String(row.tipo_comprobante || '') === 'Nota de Venta';
+    const sinImpuesto = esNotaVenta || ['INAFECTO', 'EXONERADO'].includes(tipoImpuesto);
+    const porcentaje = sinImpuesto ? 0 : parseFloat(row.porcentaje_impuesto ?? 18);
+    const igv = Math.round(subtotal * (porcentaje / 100) * 100) / 100;
+    const total_con_igv = Math.round((subtotal + igv) * 100) / 100;
+    return {
+        subtotal: Math.round(subtotal * 100) / 100,
+        igv,
+        total_con_igv,
+        porcentaje_impuesto: porcentaje
+    };
+}
+
+// Elimina cualquier campo monetario/costo de un objeto (cabecera o detalle) para
+// roles sin permiso de ver precios. Evita fugas por la API (no basta con ocultar en el front).
+function ocultarMontos(obj) {
+    delete obj.total_precio;
+    delete obj.total_costo;
+    delete obj.subtotal;
+    delete obj.igv;
+    delete obj.total_con_igv;
+    delete obj.porcentaje_impuesto;
+    delete obj.precio_unitario;
+    delete obj.costo_unitario;
+    return obj;
+}
 
 export async function getAllSalidas(req, res) {
     try {
@@ -29,6 +75,11 @@ export async function getAllSalidas(req, res) {
                 s.fecha_movimiento,
                 s.observaciones,
                 s.estado,
+                s.id_orden_venta,
+                ov.numero_orden,
+                ov.tipo_impuesto,
+                ov.porcentaje_impuesto,
+                ov.tipo_comprobante,
                 COUNT(ds.id_detalle) AS num_productos,
                 GROUP_CONCAT(p.nombre SEPARATOR ', ') AS productos_resumen
             FROM salidas s -- CAMBIO CLAVE: Usamos la tabla 'salidas'
@@ -36,6 +87,7 @@ export async function getAllSalidas(req, res) {
             LEFT JOIN clientes c ON s.id_cliente = c.id_cliente
             LEFT JOIN flota v ON s.id_vehiculo = v.id_vehiculo
             INNER JOIN empleados e ON s.id_registrado_por = e.id_empleado
+            LEFT JOIN ordenes_venta ov ON s.id_orden_venta = ov.id_orden_venta
             LEFT JOIN detalle_salidas ds ON s.id_salida = ds.id_salida
             LEFT JOIN productos p ON ds.id_producto = p.id_producto
             WHERE 1=1
@@ -67,15 +119,25 @@ export async function getAllSalidas(req, res) {
         sql += ' ORDER BY s.fecha_movimiento DESC';
         
         const result = await executeQuery(sql, params);
-        
+
         if (!result.success) {
             return res.status(500).json({ error: result.error });
         }
-        
+
+        const canSeePrices = puedeVerPrecios(req);
+        const data = result.data.map(row => {
+            const imp = calcularImpuestosSalida(row);
+            row.subtotal = imp.subtotal;
+            row.igv = imp.igv;
+            row.total_con_igv = imp.total_con_igv;
+            row.porcentaje_impuesto = imp.porcentaje_impuesto;
+            return canSeePrices ? row : ocultarMontos(row);
+        });
+
         res.json({
             success: true,
-            data: result.data,
-            total: result.data.length
+            data,
+            total: data.length
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -86,17 +148,23 @@ export async function getSalidaById(req, res) {
     try {
         const { id } = req.params;
         const cabeceraSql = `
-            SELECT 
+            SELECT
                 s.*,
                 ti.nombre AS tipo_inventario,
                 c.razon_social AS cliente,
+                c.ruc AS cliente_ruc,
                 v.placa AS vehiculo,
-                e.nombre_completo AS registrado_por
+                e.nombre_completo AS registrado_por,
+                ov.numero_orden,
+                ov.tipo_impuesto,
+                ov.porcentaje_impuesto,
+                ov.tipo_comprobante
             FROM salidas s
             INNER JOIN tipos_inventario ti ON s.id_tipo_inventario = ti.id_tipo_inventario
             LEFT JOIN clientes c ON s.id_cliente = c.id_cliente
             LEFT JOIN flota v ON s.id_vehiculo = v.id_vehiculo
             INNER JOIN empleados e ON s.id_registrado_por = e.id_empleado
+            LEFT JOIN ordenes_venta ov ON s.id_orden_venta = ov.id_orden_venta
             WHERE s.id_salida = ?
         `;
         
@@ -120,12 +188,27 @@ export async function getSalidaById(req, res) {
             WHERE ds.id_salida = ?
         `;
         const detallesResult = await executeQuery(detallesSql, [id]);
-        
+
+        const cabecera = cabeceraResult.data[0];
+        const imp = calcularImpuestosSalida(cabecera);
+        cabecera.subtotal = imp.subtotal;
+        cabecera.igv = imp.igv;
+        cabecera.total_con_igv = imp.total_con_igv;
+        cabecera.porcentaje_impuesto = imp.porcentaje_impuesto;
+
+        const canSeePrices = puedeVerPrecios(req);
+        let detalles = detallesResult.data || [];
+
+        if (!canSeePrices) {
+            ocultarMontos(cabecera);
+            detalles = detalles.map(d => ocultarMontos({ ...d }));
+        }
+
         const data = {
-            ...cabeceraResult.data[0],
-            detalles: detallesResult.data || []
+            ...cabecera,
+            detalles
         };
-        
+
         res.json({
             success: true,
             data: data
@@ -457,8 +540,13 @@ export async function getTiposMovimientoSalida(req, res) {
 }
 export const generarPDFSalidaController = async (req, res, next) => {
   try {
+    // El PDF de salida contiene costos/importes: solo roles con permiso de precios.
+    if (!puedeVerPrecios(req)) {
+      return res.status(403).json({ error: 'No tiene permiso para generar el PDF valorizado de la salida.' });
+    }
+
     const { id } = req.params;
-    
+
     // MODIFICACIÓN: Agregamos los JOINs a ordenes_venta y cotizaciones
     const salidasResult = await executeQuery(`
       SELECT 

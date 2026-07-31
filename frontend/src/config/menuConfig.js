@@ -80,14 +80,15 @@ export const menuConfig = [
       { path: '/solicitudes-credito', icon: FileInput, label: 'Créditos', modulo: 'solicitudesCredito', color: '#5D6D7E' }
     ]
   },
-  // {
-  //   title: 'Inventario',
-  //   items: [
-  //     { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas', color: '#2980B9' },
-  //     { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas', color: '#C0392B' },
-  //     { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias', modulo: 'transferencias', color: '#F39C12' }
-  //   ]
-  // },
+  {
+    title: 'Inventario',
+    items: [
+      // Visible solo para Administrador y Calidad (seguimiento de despachos).
+      { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas', color: '#C0392B', rolesIncluidos: ['Administrador', 'Calidad'] }
+      // { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas', color: '#2980B9' },
+      // { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias', modulo: 'transferencias', color: '#F39C12' }
+    ]
+  },
   // {
   //   title: 'Reportes', 
   //   items: [

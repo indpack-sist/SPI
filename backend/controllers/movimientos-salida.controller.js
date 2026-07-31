@@ -81,7 +81,8 @@ export async function getAllSalidas(req, res) {
                 ov.porcentaje_impuesto,
                 ov.tipo_comprobante,
                 COUNT(ds.id_detalle) AS num_productos,
-                GROUP_CONCAT(p.nombre SEPARATOR ', ') AS productos_resumen
+                GROUP_CONCAT(p.nombre SEPARATOR ', ') AS productos_resumen,
+                GROUP_CONCAT(CONCAT(ds.cantidad, '::', COALESCE(p.unidad_medida, ''), '::', p.nombre) ORDER BY p.nombre SEPARATOR '||') AS productos_detalle
             FROM salidas s -- CAMBIO CLAVE: Usamos la tabla 'salidas'
             INNER JOIN tipos_inventario ti ON s.id_tipo_inventario = ti.id_tipo_inventario
             LEFT JOIN clientes c ON s.id_cliente = c.id_cliente

@@ -431,12 +431,27 @@ function Salidas() {
     { header: 'Tipo', accessor: 'tipo_movimiento' },
     {
       header: 'Productos',
-      accessor: 'productos_resumen', 
-      render: (value, row) => (
-        <div className="tooltip" data-tip={value}>
-          <strong>{row.num_productos}</strong> {row.num_productos === 1 ? row.productos_resumen : 'productos'}
-        </div>
-      )
+      accessor: 'productos_detalle',
+      render: (value) => {
+        if (!value) return '-';
+        const items = value.split('||').map(par => {
+          const [cant, unidad, ...nombreParts] = par.split('::');
+          return {
+            cantidad: parseFloat(cant),
+            unidad: unidad || '',
+            nombre: nombreParts.join('::')
+          };
+        });
+        return (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {items.map((it, i) => (
+              <li key={i} className="text-sm" style={{ whiteSpace: 'normal' }}>
+                <strong>{it.cantidad}{it.unidad ? ` ${it.unidad}` : ''}</strong> × {it.nombre}
+              </li>
+            ))}
+          </ul>
+        );
+      }
     },
     { 
       header: 'Cliente/Destino', 

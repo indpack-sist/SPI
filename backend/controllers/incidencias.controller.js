@@ -36,6 +36,10 @@ const SELECT_INCIDENCIA = `
     (SELECT dov.cantidad FROM detalle_orden_venta dov
        WHERE dov.id_orden_venta = i.id_orden_venta
          AND dov.id_producto = i.id_producto LIMIT 1) AS cantidad_ov_producto,
+    (SELECT SUM(dsl.cantidad) FROM detalle_salidas dsl
+       WHERE dsl.id_salida = i.id_salida
+         AND dsl.id_producto = i.id_producto) AS cantidad_despachada,
+    CASE WHEN i.id_salida IS NOT NULL THEN 'Post-despacho' ELSE 'Producción' END AS origen_deteccion,
     edet.nombre_completo AS detectado_por,
     ecierre.nombre_completo AS responsable_cierre,
     (SELECT COUNT(*) FROM incidencias_adjuntos ia WHERE ia.id_incidencia = i.id_incidencia) AS total_adjuntos
@@ -132,6 +136,7 @@ export async function crearIncidencia(req, res) {
     const {
       id_orden,
       id_orden_venta,
+      id_salida,
       id_producto,
       id_registro_produccion,
       id_tipo,
@@ -140,69 +145,116 @@ export async function crearIncidencia(req, res) {
       descripcion,
       cantidad_afectada,
       unidad_medida,
-      disposicion
+      disposicion,
+      decision_final,
+      productos // opcional: [{ id_producto, unidad_medida, cantidad_afectada }] cuando la queja
+                // abarca varios productos de una misma salida (se crea 1 incidencia por producto)
     } = req.body;
 
     if (!descripcion || !descripcion.trim()) {
       return res.status(400).json({ success: false, error: 'La descripción es requerida' });
     }
 
+    // Normalizamos la lista de productos afectados. Si viene 'productos' (desde una salida),
+    // se genera una incidencia por cada uno; si no, se respeta el comportamiento clásico (1 producto o ninguno).
+    let lineas;
+    if (Array.isArray(productos) && productos.length > 0) {
+      lineas = productos
+        .filter(p => p && p.id_producto)
+        .map(p => ({
+          id_producto: p.id_producto,
+          unidad_medida: p.unidad_medida || null,
+          cantidad_afectada: (p.cantidad_afectada === '' || p.cantidad_afectada === undefined) ? null : p.cantidad_afectada
+        }));
+      if (lineas.length === 0) {
+        return res.status(400).json({ success: false, error: 'Debe seleccionar al menos un producto de la salida.' });
+      }
+    } else {
+      lineas = [{
+        id_producto: id_producto || null,
+        unidad_medida: unidad_medida || null,
+        cantidad_afectada: (cantidad_afectada === '' || cantidad_afectada === undefined) ? null : cantidad_afectada
+      }];
+    }
+
     const idEmpleado = getIdEmpleado(req);
     const fechaActual = getFechaPeru();
+    const year = new Date().getFullYear();
 
-    // Generar código correlativo INC-YYYY-NNNN
+    // Secuencia base a partir del último correlativo; se incrementa localmente por cada producto.
     const ultimaResult = await executeQuery(
       'SELECT codigo FROM incidencias_calidad ORDER BY id_incidencia DESC LIMIT 1'
     );
-    let secuencia = 1;
+    let secuenciaBase = 1;
     if (ultimaResult.success && ultimaResult.data.length > 0) {
       const match = ultimaResult.data[0].codigo.match(/(\d+)$/);
-      if (match) secuencia = parseInt(match[1]) + 1;
-    }
-    const year = new Date().getFullYear();
-    const codigo = `INC-${year}-${String(secuencia).padStart(4, '0')}`;
-
-    const insertResult = await executeQuery(
-      `INSERT INTO incidencias_calidad (
-        codigo, id_orden, id_orden_venta, id_producto, id_registro_produccion,
-        id_tipo, severidad, fase_deteccion, descripcion, cantidad_afectada,
-        unidad_medida, disposicion, estado, id_detectado_por, fecha_deteccion, fecha_creacion
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Abierta', ?, ?, ?)`,
-      [
-        codigo,
-        id_orden || null,
-        id_orden_venta || null,
-        id_producto || null,
-        id_registro_produccion || null,
-        id_tipo || null,
-        severidad || 'Menor',
-        fase_deteccion || 'Proceso',
-        descripcion.trim(),
-        cantidad_afectada || null,
-        unidad_medida || null,
-        disposicion || 'Pendiente',
-        idEmpleado,
-        fechaActual,
-        fechaActual
-      ]
-    );
-
-    if (!insertResult.success) {
-      return res.status(500).json({ success: false, error: insertResult.error });
+      if (match) secuenciaBase = parseInt(match[1]) + 1;
     }
 
-    const idIncidencia = insertResult.data.insertId;
+    const creadas = [];
 
-    await executeQuery(
-      `INSERT INTO incidencias_historial (id_incidencia, accion, estado_anterior, estado_nuevo, comentario, id_usuario, fecha)
-       VALUES (?, 'Creación', NULL, 'Abierta', ?, ?, ?)`,
-      [idIncidencia, `Incidencia ${codigo} registrada`, idEmpleado, fechaActual]
-    );
+    for (let i = 0; i < lineas.length; i++) {
+      const linea = lineas[i];
+      const codigo = `INC-${year}-${String(secuenciaBase + i).padStart(4, '0')}`;
+
+      const insertResult = await executeQuery(
+        `INSERT INTO incidencias_calidad (
+          codigo, id_orden, id_orden_venta, id_salida, id_producto, id_registro_produccion,
+          id_tipo, severidad, fase_deteccion, descripcion, cantidad_afectada,
+          unidad_medida, disposicion, decision_final, estado, id_detectado_por, fecha_deteccion, fecha_creacion
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Abierta', ?, ?, ?)`,
+        [
+          codigo,
+          id_orden || null,
+          id_orden_venta || null,
+          id_salida || null,
+          linea.id_producto,
+          id_registro_produccion || null,
+          id_tipo || null,
+          severidad || 'Menor',
+          fase_deteccion || 'Proceso',
+          descripcion.trim(),
+          linea.cantidad_afectada,
+          linea.unidad_medida,
+          disposicion || 'Pendiente',
+          decision_final || 'Ninguna',
+          idEmpleado,
+          fechaActual,
+          fechaActual
+        ]
+      );
+
+      if (!insertResult.success) {
+        return res.status(500).json({
+          success: false,
+          error: insertResult.error,
+          message: creadas.length > 0 ? `Se crearon ${creadas.length} incidencia(s) antes del error.` : undefined
+        });
+      }
+
+      const idIncidencia = insertResult.data.insertId;
+
+      await executeQuery(
+        `INSERT INTO incidencias_historial (id_incidencia, accion, estado_anterior, estado_nuevo, comentario, id_usuario, fecha)
+         VALUES (?, 'Creación', NULL, 'Abierta', ?, ?, ?)`,
+        [idIncidencia, `Incidencia ${codigo} registrada`, idEmpleado, fechaActual]
+      );
+
+      creadas.push({ id_incidencia: idIncidencia, codigo });
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Incidencia registrada exitosamente',
-      data: { id_incidencia: idIncidencia, codigo }
+      message: creadas.length === 1
+        ? 'Incidencia registrada exitosamente'
+        : `${creadas.length} incidencias registradas exitosamente`,
+      data: {
+        // Compatibilidad: primer registro en la raíz; lista completa en 'incidencias'.
+        id_incidencia: creadas[0].id_incidencia,
+        codigo: creadas[0].codigo,
+        creadas: creadas.length,
+        incidencias: creadas
+      }
     });
   } catch (error) {
     console.error('Error al crear incidencia:', error);
@@ -221,6 +273,7 @@ export async function actualizarIncidencia(req, res) {
       cantidad_afectada,
       unidad_medida,
       disposicion,
+      decision_final,
       accion_correctiva,
       accion_preventiva,
       costo_estimado
@@ -240,7 +293,7 @@ export async function actualizarIncidencia(req, res) {
     const params = [];
     const campos = {
       id_tipo, severidad, fase_deteccion, descripcion, cantidad_afectada,
-      unidad_medida, disposicion, accion_correctiva, accion_preventiva, costo_estimado
+      unidad_medida, disposicion, decision_final, accion_correctiva, accion_preventiva, costo_estimado
     };
     for (const [campo, valor] of Object.entries(campos)) {
       if (valor !== undefined) {
@@ -364,6 +417,11 @@ export async function subirAdjunto(req, res) {
       return res.status(400).json({ success: false, error: 'No se recibió ningún archivo.' });
     }
 
+    // Categoría del adjunto: 'Evidencia' (enviada por el cliente) o 'Informe' (documento
+    // de resolución que elabora Calidad). Cualquier otro valor cae en 'Otro'.
+    const CATEGORIAS_VALIDAS = ['Evidencia', 'Informe', 'Otro'];
+    const categoria = CATEGORIAS_VALIDAS.includes(req.body.categoria) ? req.body.categoria : 'Evidencia';
+
     const incidenciaResult = await executeQuery('SELECT id_incidencia FROM incidencias_calidad WHERE id_incidencia = ?', [id]);
     if (!incidenciaResult.success || incidenciaResult.data.length === 0) {
       return res.status(404).json({ success: false, error: 'Incidencia no encontrada.' });
@@ -378,13 +436,14 @@ export async function subirAdjunto(req, res) {
     else if (mime.includes('word') || mime.includes('document')) tipo_archivo = 'documento';
 
     const insertResult = await executeQuery(
-      `INSERT INTO incidencias_adjuntos (id_incidencia, url, nombre_archivo, tipo_archivo, public_id_cloudinary, id_subido_por, fecha_subida)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO incidencias_adjuntos (id_incidencia, url, nombre_archivo, tipo_archivo, categoria, public_id_cloudinary, id_subido_por, fecha_subida)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         resultado.secure_url,
         req.file.originalname,
         tipo_archivo,
+        categoria,
         resultado.public_id,
         usuario.id_empleado || null,
         getFechaPeru()
@@ -402,6 +461,7 @@ export async function subirAdjunto(req, res) {
         url: resultado.secure_url,
         nombre_archivo: req.file.originalname,
         tipo_archivo,
+        categoria,
         fecha_subida: getFechaPeru(),
         subido_por: usuario.nombre_completo || null
       }
@@ -416,7 +476,7 @@ export async function getAdjuntos(req, res) {
   try {
     const { id } = req.params;
     const result = await executeQuery(
-      `SELECT ia.id_adjunto, ia.url, ia.nombre_archivo, ia.tipo_archivo, ia.fecha_subida,
+      `SELECT ia.id_adjunto, ia.url, ia.nombre_archivo, ia.tipo_archivo, ia.categoria, ia.fecha_subida,
               e.nombre_completo AS subido_por
        FROM incidencias_adjuntos ia
        LEFT JOIN empleados e ON ia.id_subido_por = e.id_empleado

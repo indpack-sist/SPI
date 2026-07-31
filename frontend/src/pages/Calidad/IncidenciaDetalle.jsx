@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ShieldAlert, Paperclip, Image, FileText, Trash2, X, Save,
   Factory, ShoppingCart, Package, Calendar, User, History, ClipboardCheck,
-  AlertTriangle
+  AlertTriangle, Truck
 } from 'lucide-react';
 import { incidenciasAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +14,16 @@ import { getEstadoBadge, getSeveridadBadge, formatearFecha } from './Incidencias
 
 const ESTADOS = ['Abierta', 'En análisis', 'En tratamiento', 'Verificación', 'Cerrada', 'Anulada'];
 const DISPOSICIONES = ['Pendiente', 'Reproceso', 'Descarte', 'Aceptar con desviación', 'Devolución'];
+const DECISIONES_FINALES = ['Ninguna', 'Reposición', 'Cambio de producto', 'Nota de crédito', 'Devolución'];
+const CATEGORIAS_ADJ = [
+  { value: 'Evidencia', label: 'Evidencia (cliente)' },
+  { value: 'Informe', label: 'Informe / Resolución (Calidad)' }
+];
+const GRUPOS_ADJ = [
+  { key: 'Evidencia', titulo: 'Evidencias del cliente' },
+  { key: 'Informe', titulo: 'Informes / Resolución (Calidad)' },
+  { key: 'Otro', titulo: 'Otros' }
+];
 
 function IncidenciaDetalle() {
   const { id } = useParams();
@@ -30,9 +40,10 @@ function IncidenciaDetalle() {
 
   const [subiendoAdjunto, setSubiendoAdjunto] = useState(false);
   const [adjuntoVisor, setAdjuntoVisor] = useState(null);
+  const [categoriaSubida, setCategoriaSubida] = useState('Evidencia');
 
   const [guardandoTrat, setGuardandoTrat] = useState(false);
-  const [tratamiento, setTratamiento] = useState({ disposicion: '', accion_correctiva: '', accion_preventiva: '', costo_estimado: '' });
+  const [tratamiento, setTratamiento] = useState({ disposicion: '', decision_final: 'Ninguna', accion_correctiva: '', accion_preventiva: '', costo_estimado: '' });
 
   const [modalEstado, setModalEstado] = useState(null); // estado destino
   const [comentarioEstado, setComentarioEstado] = useState('');
@@ -57,6 +68,7 @@ function IncidenciaDetalle() {
       setHistorial(histRes.data.data || []);
       setTratamiento({
         disposicion: inc.disposicion || 'Pendiente',
+        decision_final: inc.decision_final || 'Ninguna',
         accion_correctiva: inc.accion_correctiva || '',
         accion_preventiva: inc.accion_preventiva || '',
         costo_estimado: inc.costo_estimado || ''
@@ -69,16 +81,22 @@ function IncidenciaDetalle() {
   };
 
   const handleSubirAdjunto = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     try {
       setSubiendoAdjunto(true);
-      const formData = new FormData();
-      formData.append('archivo', file);
-      const res = await incidenciasAPI.subirAdjunto(id, formData);
-      if (res.data.success) {
-        setAdjuntos(prev => [res.data.adjunto, ...prev]);
-        setSuccess('Adjunto subido correctamente.');
+      setError(null);
+      const nuevos = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('archivo', file);
+        formData.append('categoria', categoriaSubida);
+        const res = await incidenciasAPI.subirAdjunto(id, formData);
+        if (res.data.success) nuevos.push(res.data.adjunto);
+      }
+      if (nuevos.length > 0) {
+        setAdjuntos(prev => [...nuevos, ...prev]);
+        setSuccess(nuevos.length === 1 ? 'Adjunto subido correctamente.' : `${nuevos.length} adjuntos subidos correctamente.`);
       }
     } catch (err) {
       setError(err.response?.data?.error || err.error || 'Error al subir el adjunto.');
@@ -175,8 +193,30 @@ function IncidenciaDetalle() {
           <div className="card">
             <div className="card-header"><h2 className="card-title flex items-center gap-2"><Package size={18} /> Trazabilidad</h2></div>
             <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="sm:col-span-2">
+                <p className="text-xs text-muted">Origen de detección</p>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <span className={`badge ${incidencia.origen_deteccion === 'Post-despacho' ? 'badge-warning' : 'badge-info'}`}>
+                    {incidencia.origen_deteccion === 'Post-despacho' ? 'Detectada tras despacho' : 'Detectada en producción'}
+                  </span>
+                  {incidencia.id_salida && (
+                    <span className="text-xs text-orange-700 inline-flex items-center gap-1"><Truck size={12} /> Salida #{incidencia.id_salida}</span>
+                  )}
+                </div>
+              </div>
               <div><p className="text-xs text-muted">Producto</p><p className="font-medium">{incidencia.producto || 'Sin producto'} {incidencia.codigo_producto && <span className="text-muted font-mono">({incidencia.codigo_producto})</span>}</p></div>
-              <div><p className="text-xs text-muted">Cantidad afectada</p><p className="font-medium">{incidencia.cantidad_afectada ? `${incidencia.cantidad_afectada} ${incidencia.unidad_medida || ''}` : '-'}</p></div>
+              <div>
+                <p className="text-xs text-muted">Cantidad afectada</p>
+                <p className="font-medium">
+                  {incidencia.cantidad_afectada != null
+                    ? <>
+                        {incidencia.cantidad_afectada}
+                        {incidencia.cantidad_despachada != null && <span className="text-muted"> de {incidencia.cantidad_despachada} despachadas</span>}
+                        {incidencia.unidad_medida ? ` ${incidencia.unidad_medida}` : ''}
+                      </>
+                    : '-'}
+                </p>
+              </div>
               <div><p className="text-xs text-muted flex items-center gap-1"><Factory size={12} /> Orden de Producción</p><p className="font-medium">{incidencia.numero_op || '-'}</p></div>
               <div><p className="text-xs text-muted flex items-center gap-1"><ShoppingCart size={12} /> Orden de Venta</p><p className="font-medium">{incidencia.numero_ov || '-'}</p></div>
               {/* Datos de OV permitidos (SIN precios) */}
@@ -208,10 +248,17 @@ function IncidenciaDetalle() {
             <div className="card-body grid grid-cols-1 gap-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="form-label">Disposición</label>
+                  <label className="form-label">Disposición (técnica)</label>
                   <select className="form-select" disabled={terminada} value={tratamiento.disposicion}
                     onChange={(e) => setTratamiento(p => ({ ...p, disposicion: e.target.value }))}>
                     {DISPOSICIONES.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Decisión final (cliente)</label>
+                  <select className="form-select" disabled={terminada} value={tratamiento.decision_final}
+                    onChange={(e) => setTratamiento(p => ({ ...p, decision_final: e.target.value }))}>
+                    {DECISIONES_FINALES.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
@@ -240,53 +287,72 @@ function IncidenciaDetalle() {
             </div>
           </div>
 
-          {/* Adjuntos (mismo patrón que OrdenDetalle) */}
+          {/* Evidencias y documentos, agrupados por categoría */}
           <div className="card">
             <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Paperclip size={18} className="text-primary" />
-                <h2 className="card-title">Fotos y Adjuntos ({adjuntos.length})</h2>
+                <h2 className="card-title">Evidencias y Documentos ({adjuntos.length})</h2>
               </div>
-              <div className={`flex gap-2 ${subiendoAdjunto ? 'opacity-50 pointer-events-none' : ''}`}>
-                <label className="btn btn-primary btn-sm flex items-center gap-1 cursor-pointer flex-1 sm:flex-none justify-center">
+              <div className={`flex flex-wrap items-center gap-2 ${subiendoAdjunto ? 'opacity-50 pointer-events-none' : ''}`}>
+                <select
+                  className="form-select"
+                  style={{ width: 'auto' }}
+                  value={categoriaSubida}
+                  onChange={(e) => setCategoriaSubida(e.target.value)}
+                  disabled={subiendoAdjunto}
+                  title="Tipo de archivo a subir"
+                >
+                  {CATEGORIAS_ADJ.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                <label className="btn btn-primary btn-sm flex items-center gap-1 cursor-pointer justify-center">
                   <Image size={14} /> {subiendoAdjunto ? 'Subiendo...' : 'Tomar foto'}
                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleSubirAdjunto} disabled={subiendoAdjunto} />
                 </label>
-                <label className="btn btn-outline btn-sm flex items-center gap-1 cursor-pointer flex-1 sm:flex-none justify-center">
-                  <Paperclip size={14} /> Adjuntar archivo
-                  <input type="file" accept="image/*,application/pdf,.doc,.docx" className="hidden" onChange={handleSubirAdjunto} disabled={subiendoAdjunto} />
+                <label className="btn btn-outline btn-sm flex items-center gap-1 cursor-pointer justify-center">
+                  <Paperclip size={14} /> Adjuntar archivo(s)
+                  <input type="file" multiple accept="image/*,application/pdf,.doc,.docx" className="hidden" onChange={handleSubirAdjunto} disabled={subiendoAdjunto} />
                 </label>
               </div>
             </div>
-            <div className="p-4">
+            <div className="p-4 flex flex-col gap-5">
               {adjuntos.length === 0 ? (
-                <p className="text-muted text-sm text-center py-6">No hay fotos ni archivos adjuntos.</p>
+                <p className="text-muted text-sm text-center py-6">No hay evidencias ni documentos adjuntos.</p>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {adjuntos.map(adj => (
-                    <div key={adj.id_adjunto} className="border rounded-lg overflow-hidden bg-gray-50 flex flex-col">
-                      {adj.tipo_archivo === 'imagen' ? (
-                        <button className="block w-full aspect-square" onClick={() => setAdjuntoVisor(adj)}>
-                          <img src={adj.url} alt={adj.nombre_archivo} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
-                        </button>
-                      ) : (
-                        <a href={adj.url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center aspect-square gap-2 hover:bg-gray-100 transition-colors px-2">
-                          <FileText size={28} className="text-gray-400 shrink-0" />
-                          <span className="text-xs text-center text-gray-600 truncate w-full">{adj.nombre_archivo}</span>
-                        </a>
-                      )}
-                      <div className="p-2 border-t border-gray-100 flex items-start justify-between gap-1 bg-white">
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-gray-700 truncate">{adj.nombre_archivo}</p>
-                          <p className="text-xs text-muted truncate">{adj.subido_por || 'Desconocido'}</p>
-                        </div>
-                        <button className="btn btn-sm btn-danger p-1 shrink-0" onClick={() => handleEliminarAdjunto(adj.id_adjunto)} title="Eliminar">
-                          <Trash2 size={14} />
-                        </button>
+                GRUPOS_ADJ.map(grupo => {
+                  const items = adjuntos.filter(a => (a.categoria || 'Evidencia') === grupo.key);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={grupo.key}>
+                      <h3 className="text-sm font-semibold text-gray-600 mb-2">{grupo.titulo} ({items.length})</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {items.map(adj => (
+                          <div key={adj.id_adjunto} className="border rounded-lg overflow-hidden bg-gray-50 flex flex-col">
+                            {adj.tipo_archivo === 'imagen' ? (
+                              <button className="block w-full aspect-square" onClick={() => setAdjuntoVisor(adj)}>
+                                <img src={adj.url} alt={adj.nombre_archivo} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                              </button>
+                            ) : (
+                              <a href={adj.url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center aspect-square gap-2 hover:bg-gray-100 transition-colors px-2">
+                                <FileText size={28} className="text-gray-400 shrink-0" />
+                                <span className="text-xs text-center text-gray-600 truncate w-full">{adj.nombre_archivo}</span>
+                              </a>
+                            )}
+                            <div className="p-2 border-t border-gray-100 flex items-start justify-between gap-1 bg-white">
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-gray-700 truncate">{adj.nombre_archivo}</p>
+                                <p className="text-xs text-muted truncate">{adj.subido_por || 'Desconocido'}</p>
+                              </div>
+                              <button className="btn btn-sm btn-danger p-1 shrink-0" onClick={() => handleEliminarAdjunto(adj.id_adjunto)} title="Eliminar">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })
               )}
             </div>
           </div>

@@ -8,9 +8,11 @@ import {
   FileText,
   Loader,
   Eye,
+  ShieldAlert,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { salidasAPI, productosAPI, clientesAPI, flotaAPI, empleadosAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 import Table from '../../components/UI/Table';
@@ -20,9 +22,11 @@ import Loading from '../../components/UI/Loading';
 
 function Salidas() {
   const { tienePermiso } = usePermisos();
+  const navigate = useNavigate();
   const [salidas, setSalidas] = useState([]);
-  
+
   const canSeePrices = tienePermiso('verPrecios');
+  const canRegistrarIncidencia = tienePermiso('incidencias');
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [vehiculos, setVehiculos] = useState([]);
@@ -324,6 +328,19 @@ function Salidas() {
     });
   };
 
+  const registrarIncidencia = (salida) => {
+    navigate('/calidad/incidencias', {
+      state: {
+        prefillSalida: {
+          id_salida: salida.id_salida,
+          id_orden_venta: salida.id_orden_venta || null,
+          numero_ov: salida.numero_orden || null,
+          cliente: salida.cliente || salida.destino_final || null
+        }
+      }
+    });
+  };
+
   const abrirVer = async (salida) => {
     setError(null);
     setSalidaDetalle(null);
@@ -498,7 +515,7 @@ function Salidas() {
     {
       header: 'Acciones',
       accessor: 'id_salida',
-      width: '160px',
+      width: '200px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-2 justify-center">
@@ -509,6 +526,16 @@ function Salidas() {
           >
             <Eye size={14} />
           </button>
+          {canRegistrarIncidencia && (
+            <button
+              className="btn btn-sm btn-outline"
+              onClick={() => registrarIncidencia(row)}
+              title="Registrar incidencia de calidad"
+              disabled={row.estado === 'Anulado'}
+            >
+              <ShieldAlert size={14} />
+            </button>
+          )}
           {canSeePrices && (
             <>
               <button

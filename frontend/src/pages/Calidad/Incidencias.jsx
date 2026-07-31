@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus, Eye, Filter, Search, XCircle, RefreshCw, ShieldAlert,
   AlertTriangle, AlertCircle, CheckCircle, Clock, Paperclip,
-  ShoppingCart, Factory, Package, Calendar
+  ShoppingCart, Factory, Package, Calendar, Truck
 } from 'lucide-react';
 import { incidenciasAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -13,6 +13,10 @@ import ModalNuevaIncidencia from './ModalNuevaIncidencia';
 
 const ESTADOS = ['Abierta', 'En análisis', 'En tratamiento', 'Verificación', 'Cerrada', 'Anulada'];
 const SEVERIDADES = ['Crítica', 'Mayor', 'Menor'];
+const ORIGENES = ['Producción', 'Post-despacho'];
+const FASES = ['Recepción', 'Proceso', 'Producto Terminado', 'Despacho', 'Cliente'];
+const DISPOSICIONES = ['Pendiente', 'Reproceso', 'Descarte', 'Aceptar con desviación', 'Devolución'];
+const DECISIONES_FINALES = ['Ninguna', 'Reposición', 'Cambio de producto', 'Nota de crédito', 'Devolución'];
 
 export const getEstadoBadge = (estado) => {
   const configs = {
@@ -69,6 +73,7 @@ export const formatearFecha = (fecha) => {
 
 function Incidencias() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [incidencias, setIncidencias] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,21 +83,38 @@ function Incidencias() {
 
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroSeveridad, setFiltroSeveridad] = useState('');
+  const [filtroOrigen, setFiltroOrigen] = useState('');
+  const [filtroFase, setFiltroFase] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroDisposicion, setFiltroDisposicion] = useState('');
+  const [filtroDecision, setFiltroDecision] = useState('');
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [modalNueva, setModalNueva] = useState(false);
+  const [prefillModal, setPrefillModal] = useState(null);
 
+  // Apertura automática del modal cuando se llega desde Salidas con una salida precargada.
+  useEffect(() => {
+    if (location.state?.prefillSalida) {
+      setPrefillModal(location.state.prefillSalida);
+      setModalNueva(true);
+      // Limpiamos el state de navegación para que no se reabra al refrescar/volver.
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state]);
+
+  // Cargamos todas las incidencias una vez; el filtrado es 100% en cliente para
+  // que todos los filtros se combinen (AND) de forma instantánea.
   useEffect(() => {
     cargarDatos({ silencioso: incidencias.length > 0 });
-  }, [filtroEstado, filtroSeveridad]);
+  }, []);
 
   const cargarDatos = async ({ silencioso = false } = {}) => {
     try {
       silencioso ? setRefreshing(true) : setLoading(true);
       setError(null);
-      const params = {};
-      if (filtroEstado) params.estado = filtroEstado;
-      if (filtroSeveridad) params.severidad = filtroSeveridad;
-      const res = await incidenciasAPI.getAll(params);
+      const res = await incidenciasAPI.getAll();
       setIncidencias(res.data.data || []);
     } catch (err) {
       setError(err.error || 'Error al cargar las incidencias');
@@ -102,6 +124,9 @@ function Incidencias() {
     }
   };
 
+  // Tipos de defecto presentes en los datos (para el desplegable de filtro).
+  const tiposDisponibles = [...new Set(incidencias.map(i => i.tipo_nombre).filter(Boolean))].sort();
+
   const stats = {
     total: incidencias.length,
     abiertas: incidencias.filter(i => !['Cerrada', 'Anulada'].includes(i.estado)).length,
@@ -110,20 +135,48 @@ function Incidencias() {
   };
 
   const incidenciasFiltradas = incidencias.filter(i => {
-    if (!busqueda) return true;
-    const t = busqueda.toLowerCase();
-    return (
-      i.codigo?.toLowerCase().includes(t) ||
-      i.producto?.toLowerCase().includes(t) ||
-      i.numero_op?.toLowerCase().includes(t) ||
-      i.numero_ov?.toLowerCase().includes(t) ||
-      i.descripcion?.toLowerCase().includes(t)
-    );
+    if (filtroEstado && i.estado !== filtroEstado) return false;
+    if (filtroSeveridad && i.severidad !== filtroSeveridad) return false;
+    if (filtroOrigen && (i.origen_deteccion || 'Producción') !== filtroOrigen) return false;
+    if (filtroFase && i.fase_deteccion !== filtroFase) return false;
+    if (filtroTipo && i.tipo_nombre !== filtroTipo) return false;
+    if (filtroDisposicion && i.disposicion !== filtroDisposicion) return false;
+    if (filtroDecision && (i.decision_final || 'Ninguna') !== filtroDecision) return false;
+
+    const fecha = i.fecha_deteccion ? String(i.fecha_deteccion).slice(0, 10) : '';
+    if (fechaInicio && (!fecha || fecha < fechaInicio)) return false;
+    if (fechaFin && (!fecha || fecha > fechaFin)) return false;
+
+    if (busqueda) {
+      const t = busqueda.toLowerCase();
+      const match = (
+        i.codigo?.toLowerCase().includes(t) ||
+        i.producto?.toLowerCase().includes(t) ||
+        i.numero_op?.toLowerCase().includes(t) ||
+        i.numero_ov?.toLowerCase().includes(t) ||
+        i.cliente?.toLowerCase().includes(t) ||
+        i.descripcion?.toLowerCase().includes(t)
+      );
+      if (!match) return false;
+    }
+    return true;
   });
+
+  const filtrosActivos = [
+    filtroEstado, filtroSeveridad, filtroOrigen, filtroFase, filtroTipo,
+    filtroDisposicion, filtroDecision, fechaInicio, fechaFin, busqueda
+  ].filter(Boolean).length;
 
   const limpiarFiltros = () => {
     setFiltroEstado('');
     setFiltroSeveridad('');
+    setFiltroOrigen('');
+    setFiltroFase('');
+    setFiltroTipo('');
+    setFiltroDisposicion('');
+    setFiltroDecision('');
+    setFechaInicio('');
+    setFechaFin('');
     setBusqueda('');
   };
 
@@ -144,10 +197,16 @@ function Incidencias() {
       accessor: 'producto',
       render: (value, row) => (
         <div className="flex flex-col gap-1">
+          <span className={`badge text-xs w-fit ${row.origen_deteccion === 'Post-despacho' ? 'badge-warning' : 'badge-info'}`}>
+            {row.origen_deteccion === 'Post-despacho' ? 'Post-despacho' : 'Producción'}
+          </span>
           <div className="font-medium text-sm flex items-center gap-1">
             <Package size={12} className="text-muted" /> {value || 'Sin producto'}
           </div>
           {row.codigo_producto && <div className="text-xs text-muted font-mono">{row.codigo_producto}</div>}
+          {row.id_salida && (
+            <div className="text-xs text-orange-700 flex items-center gap-1"><Truck size={11} /> Salida #{row.id_salida}</div>
+          )}
           {row.numero_op && (
             <div className="text-xs text-purple-700 flex items-center gap-1"><Factory size={11} /> {row.numero_op}</div>
           )}
@@ -169,6 +228,26 @@ function Incidencias() {
       accessor: 'fase_deteccion',
       width: '120px',
       render: (value) => <span className="text-xs text-gray-600">{value}</span>
+    },
+    {
+      header: 'Afect./Desp.',
+      accessor: 'cantidad_afectada',
+      align: 'center',
+      width: '120px',
+      render: (value, row) => {
+        const afect = value != null ? parseFloat(value) : null;
+        const desp = row.cantidad_despachada != null ? parseFloat(row.cantidad_despachada) : null;
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-sm font-medium">
+              {afect != null ? afect : '-'}{desp != null ? ` / ${desp}` : ''}
+            </span>
+            {row.decision_final && row.decision_final !== 'Ninguna' && (
+              <span className="badge badge-info text-xs">{row.decision_final}</span>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Descripción',
@@ -222,7 +301,7 @@ function Incidencias() {
           </h1>
           <p className="text-muted text-sm mt-1">Registro y seguimiento de no conformidades</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setModalNueva(true)}>
+        <button className="btn btn-primary" onClick={() => { setPrefillModal(null); setModalNueva(true); }}>
           <Plus size={18} /> Nueva Incidencia
         </button>
       </div>
@@ -267,12 +346,18 @@ function Incidencias() {
 
       <div className="card mb-6">
         <div className="card-header flex justify-between items-center">
-          <h3 className="card-title text-lg flex items-center gap-2"><Filter size={18} /> Filtros</h3>
-          {(filtroEstado || filtroSeveridad || busqueda) && (
-            <button className="btn btn-sm btn-outline text-danger border-danger" onClick={limpiarFiltros}>
-              <XCircle size={14} /> Limpiar
-            </button>
-          )}
+          <h3 className="card-title text-lg flex items-center gap-2">
+            <Filter size={18} /> Filtros
+            {filtrosActivos > 0 && <span className="badge badge-primary text-xs">{filtrosActivos}</span>}
+          </h3>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted">{incidenciasFiltradas.length} de {incidencias.length}</span>
+            {filtrosActivos > 0 && (
+              <button className="btn btn-sm btn-outline text-danger border-danger" onClick={limpiarFiltros}>
+                <XCircle size={14} /> Limpiar
+              </button>
+            )}
+          </div>
         </div>
         <div className="card-body">
           <div className="grid grid-cols-1 gap-4">
@@ -281,11 +366,58 @@ function Incidencias() {
               <input
                 type="text"
                 className="form-input search-input"
-                placeholder="Buscar código, producto, OP, OV, descripción..."
+                placeholder="Buscar código, producto, cliente, OP, OV, descripción..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label text-xs">Origen</label>
+                <select className="form-select" value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)}>
+                  <option value="">Todos</option>
+                  {ORIGENES.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label text-xs">Fase de detección</label>
+                <select className="form-select" value={filtroFase} onChange={(e) => setFiltroFase(e.target.value)}>
+                  <option value="">Todas</option>
+                  {FASES.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label text-xs">Tipo de defecto</label>
+                <select className="form-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+                  <option value="">Todos</option>
+                  {tiposDisponibles.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label text-xs">Disposición</label>
+                <select className="form-select" value={filtroDisposicion} onChange={(e) => setFiltroDisposicion(e.target.value)}>
+                  <option value="">Todas</option>
+                  {DISPOSICIONES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label text-xs">Decisión final</label>
+                <select className="form-select" value={filtroDecision} onChange={(e) => setFiltroDecision(e.target.value)}>
+                  <option value="">Todas</option>
+                  {DECISIONES_FINALES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label text-xs">Desde (detección)</label>
+                <input type="date" className="form-input" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label text-xs">Hasta (detección)</label>
+                <input type="date" className="form-input" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+              </div>
+            </div>
+
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-muted">Estado:</span>
               {ESTADOS.map(est => (
@@ -324,8 +456,13 @@ function Incidencias() {
 
       <ModalNuevaIncidencia
         isOpen={modalNueva}
-        onClose={() => setModalNueva(false)}
-        onCreated={() => { setSuccess('Incidencia registrada correctamente.'); cargarDatos({ silencioso: true }); }}
+        onClose={() => { setModalNueva(false); setPrefillModal(null); }}
+        onCreated={(data) => {
+          const n = data?.creadas || 1;
+          setSuccess(n === 1 ? 'Incidencia registrada correctamente.' : `${n} incidencias registradas correctamente.`);
+          cargarDatos({ silencioso: true });
+        }}
+        prefill={prefillModal || {}}
       />
     </div>
   );

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Search, 
-  X, 
-  FileText, 
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  X,
+  FileText,
   Loader,
+  Eye,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -35,6 +36,10 @@ function Salidas() {
   
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState(null);
+
+  const [verModalOpen, setVerModalOpen] = useState(false);
+  const [salidaDetalle, setSalidaDetalle] = useState(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
 
@@ -311,14 +316,28 @@ function Salidas() {
     return `${simbolos[moneda] || moneda} ${parseFloat(valor || 0).toFixed(2)}`;
   };
 
-  const formatearFecha = (fecha) => {
-    return new Date(fecha).toLocaleString('es-PE', {
+  const formatearFechaCorta = (fecha) => {
+    return new Date(fecha).toLocaleDateString('es-PE', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: 'numeric'
     });
+  };
+
+  const abrirVer = async (salida) => {
+    setError(null);
+    setSalidaDetalle(null);
+    setVerModalOpen(true);
+    setCargandoDetalle(true);
+    try {
+      const res = await salidasAPI.getById(salida.id_salida);
+      setSalidaDetalle(res.data.data);
+    } catch (err) {
+      setError(err.error || 'Error al cargar el detalle de la salida.');
+      setVerModalOpen(false);
+    } finally {
+      setCargandoDetalle(false);
+    }
   };
 
   const calcularPrecioTotal = () => {
@@ -399,14 +418,19 @@ function Salidas() {
 
   const columns = [
     { header: 'ID', accessor: 'id_salida', width: '80px' }, 
-    { 
-      header: 'Fecha', 
+    {
+      header: 'Fecha',
       accessor: 'fecha_movimiento',
-      render: (value) => formatearFecha(value)
+      render: (value) => formatearFechaCorta(value)
+    },
+    {
+      header: 'OV Origen',
+      accessor: 'numero_orden',
+      render: (value) => value || '-'
     },
     { header: 'Tipo', accessor: 'tipo_movimiento' },
-    { 
-      header: 'Productos', 
+    {
+      header: 'Productos',
       accessor: 'productos_resumen', 
       render: (value, row) => (
         <div className="tooltip" data-tip={value}>
@@ -421,8 +445,8 @@ function Salidas() {
     },
     ...(canSeePrices ? [
       {
-        header: 'Precio Total',
-        accessor: 'total_precio', 
+        header: 'Total c/IGV',
+        accessor: 'total_con_igv',
         align: 'right',
         render: (value, row) => value ? formatearMoneda(value, row.moneda) : '-'
       }
@@ -436,9 +460,9 @@ function Salidas() {
         </span>
       )
     },
-    {
+    ...(canSeePrices ? [{
       header: 'PDF',
-      accessor: 'id_salida', 
+      accessor: 'id_salida',
       width: '80px',
       align: 'center',
       render: (value, row) => (
@@ -455,30 +479,41 @@ function Salidas() {
           )}
         </button>
       )
-    },
+    }] : []),
     {
       header: 'Acciones',
-      accessor: 'id_salida', 
-      width: '120px',
+      accessor: 'id_salida',
+      width: '160px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-2 justify-center">
           <button
             className="btn btn-sm btn-outline"
-            onClick={() => abrirModal(row)}
-            title="Editar"
-            disabled={row.estado === 'Anulado'}
+            onClick={() => abrirVer(row)}
+            title="Ver detalle"
           >
-            <Edit size={14} />
+            <Eye size={14} />
           </button>
-          <button
-            className="btn btn-sm btn-danger"
-            onClick={() => handleDelete(value)}
-            title="Anular"
-            disabled={row.estado === 'Anulado'}
-          >
-            <Trash2 size={14} />
-          </button>
+          {canSeePrices && (
+            <>
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={() => abrirModal(row)}
+                title="Editar"
+                disabled={row.estado === 'Anulado'}
+              >
+                <Edit size={14} />
+              </button>
+              <button
+                className="btn btn-sm btn-danger"
+                onClick={() => handleDelete(value)}
+                title="Anular"
+                disabled={row.estado === 'Anulado'}
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
         </div>
       )
     }
@@ -849,7 +884,7 @@ function Salidas() {
 
           {canSeePrices && esVenta && detalles.some(d => d.cantidad && d.precio_unitario) && (
             <div className="alert alert-info">
-              <strong>Precio Total de la Venta:</strong> {formatearMoneda(calcularPrecioTotal(), formData.moneda)}
+              <strong>Subtotal (sin IGV):</strong> {formatearMoneda(calcularPrecioTotal(), formData.moneda)}
             </div>
           )}
 
@@ -862,6 +897,121 @@ function Salidas() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={verModalOpen}
+        onClose={() => { setVerModalOpen(false); setSalidaDetalle(null); }}
+        title="Detalle de Salida"
+        size="lg"
+      >
+        {cargandoDetalle && <Loading message="Cargando detalle..." />}
+
+        {!cargandoDetalle && salidaDetalle && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              <div>
+                <div className="text-muted text-xs">N° Salida</div>
+                <div className="font-semibold">#{salidaDetalle.id_salida}</div>
+              </div>
+              <div>
+                <div className="text-muted text-xs">OV Origen</div>
+                <div className="font-semibold">{salidaDetalle.numero_orden || '-'}</div>
+              </div>
+              <div>
+                <div className="text-muted text-xs">Fecha de Despacho</div>
+                <div className="font-semibold">{formatearFechaCorta(salidaDetalle.fecha_movimiento)}</div>
+              </div>
+              <div>
+                <div className="text-muted text-xs">Cliente / Destino</div>
+                <div className="font-semibold">{salidaDetalle.cliente || salidaDetalle.departamento || '-'}</div>
+              </div>
+              <div>
+                <div className="text-muted text-xs">Tipo de Movimiento</div>
+                <div className="font-semibold">{salidaDetalle.tipo_movimiento}</div>
+              </div>
+              <div>
+                <div className="text-muted text-xs">Estado</div>
+                <span className={`badge ${salidaDetalle.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`}>
+                  {salidaDetalle.estado}
+                </span>
+              </div>
+              {salidaDetalle.vehiculo && (
+                <div>
+                  <div className="text-muted text-xs">Vehículo</div>
+                  <div className="font-semibold">{salidaDetalle.vehiculo}</div>
+                </div>
+              )}
+              <div>
+                <div className="text-muted text-xs">Registrado Por</div>
+                <div className="font-semibold">{salidaDetalle.registrado_por}</div>
+              </div>
+            </div>
+
+            {salidaDetalle.observaciones && (
+              <div className="text-sm">
+                <div className="text-muted text-xs">Observaciones</div>
+                <div>{salidaDetalle.observaciones}</div>
+              </div>
+            )}
+
+            <div className="table-container">
+              <table className="table w-full text-sm">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th className="text-right">Cantidad</th>
+                    <th>Unidad</th>
+                    {canSeePrices && <th className="text-right">P. Unit.</th>}
+                    {canSeePrices && <th className="text-right">Subtotal</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(salidaDetalle.detalles || []).map((d) => (
+                    <tr key={d.id_detalle}>
+                      <td>{d.producto}</td>
+                      <td className="text-right">{parseFloat(d.cantidad).toFixed(2)}</td>
+                      <td>{d.unidad_medida || '-'}</td>
+                      {canSeePrices && <td className="text-right">{formatearMoneda(d.precio_unitario, salidaDetalle.moneda)}</td>}
+                      {canSeePrices && (
+                        <td className="text-right">
+                          {formatearMoneda(parseFloat(d.cantidad || 0) * parseFloat(d.precio_unitario || 0), salidaDetalle.moneda)}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {canSeePrices && (
+              <div className="flex justify-end">
+                <div className="w-full md:w-1/2 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted">Subtotal</span>
+                    <span className="font-semibold">{formatearMoneda(salidaDetalle.subtotal, salidaDetalle.moneda)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">
+                      IGV ({parseFloat(salidaDetalle.porcentaje_impuesto || 0).toFixed(0)}%)
+                    </span>
+                    <span className="font-semibold">{formatearMoneda(salidaDetalle.igv, salidaDetalle.moneda)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-1">
+                    <span className="font-bold">Total</span>
+                    <span className="font-bold text-lg">{formatearMoneda(salidaDetalle.total_con_igv, salidaDetalle.moneda)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end mt-4">
+              <button className="btn btn-outline" onClick={() => { setVerModalOpen(false); setSalidaDetalle(null); }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

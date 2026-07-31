@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus, Eye, Filter, Search, XCircle, RefreshCw, ShieldAlert,
   AlertTriangle, AlertCircle, CheckCircle, Clock, Paperclip,
-  ShoppingCart, Factory, Package, Calendar, Truck
+  ShoppingCart, Factory, Package, Calendar, Truck, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { incidenciasAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -93,6 +93,8 @@ function Incidencias() {
   const [busqueda, setBusqueda] = useState('');
   const [modalNueva, setModalNueva] = useState(false);
   const [prefillModal, setPrefillModal] = useState(null);
+  const [mostrarResumen, setMostrarResumen] = useState(false);
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
   // Apertura automática del modal cuando se llega desde Salidas con una salida precargada.
   useEffect(() => {
@@ -309,47 +311,69 @@ function Incidencias() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <div className="card">
+      <div className="card mb-6">
+        <button
+          type="button"
+          className="card-header flex justify-between items-center w-full text-left"
+          onClick={() => setMostrarResumen(v => !v)}
+        >
+          <h3 className="card-title text-lg flex items-center gap-2"><ShieldAlert size={18} /> Resumen</h3>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted hidden sm:inline">
+              Total {stats.total} · Abiertas {stats.abiertas} · Críticas {stats.criticas} · Cerradas {stats.cerradas}
+            </span>
+            {mostrarResumen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </div>
+        </button>
+        {mostrarResumen && (
           <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div><p className="text-sm text-muted">Total</p><h3 className="text-2xl font-bold">{stats.total}</h3></div>
-              <div className="p-3 bg-blue-100 rounded-lg"><ShieldAlert size={24} className="text-primary" /></div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="card">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-muted">Total</p><h3 className="text-2xl font-bold">{stats.total}</h3></div>
+                    <div className="p-3 bg-blue-100 rounded-lg"><ShieldAlert size={24} className="text-primary" /></div>
+                  </div>
+                </div>
+              </div>
+              <div className="card border-l-4 border-warning">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-muted">Abiertas</p><h3 className="text-2xl font-bold text-warning">{stats.abiertas}</h3></div>
+                    <div className="p-3 bg-yellow-100 rounded-lg"><Clock size={24} className="text-warning" /></div>
+                  </div>
+                </div>
+              </div>
+              <div className="card border-l-4 border-danger">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-muted">Críticas activas</p><h3 className="text-2xl font-bold text-danger">{stats.criticas}</h3></div>
+                    <div className="p-3 bg-red-100 rounded-lg"><AlertTriangle size={24} className="text-danger" /></div>
+                  </div>
+                </div>
+              </div>
+              <div className="card border-l-4 border-success">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-muted">Cerradas</p><h3 className="text-2xl font-bold text-success">{stats.cerradas}</h3></div>
+                    <div className="p-3 bg-green-100 rounded-lg"><CheckCircle size={24} className="text-success" /></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="card border-l-4 border-warning">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div><p className="text-sm text-muted">Abiertas</p><h3 className="text-2xl font-bold text-warning">{stats.abiertas}</h3></div>
-              <div className="p-3 bg-yellow-100 rounded-lg"><Clock size={24} className="text-warning" /></div>
-            </div>
-          </div>
-        </div>
-        <div className="card border-l-4 border-danger">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div><p className="text-sm text-muted">Críticas activas</p><h3 className="text-2xl font-bold text-danger">{stats.criticas}</h3></div>
-              <div className="p-3 bg-red-100 rounded-lg"><AlertTriangle size={24} className="text-danger" /></div>
-            </div>
-          </div>
-        </div>
-        <div className="card border-l-4 border-success">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div><p className="text-sm text-muted">Cerradas</p><h3 className="text-2xl font-bold text-success">{stats.cerradas}</h3></div>
-              <div className="p-3 bg-green-100 rounded-lg"><CheckCircle size={24} className="text-success" /></div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="card mb-6">
         <div className="card-header flex justify-between items-center">
-          <h3 className="card-title text-lg flex items-center gap-2">
-            <Filter size={18} /> Filtros
-            {filtrosActivos > 0 && <span className="badge badge-primary text-xs">{filtrosActivos}</span>}
-          </h3>
+          <button type="button" className="flex items-center gap-2 text-left" onClick={() => setMostrarFiltros(v => !v)}>
+            <h3 className="card-title text-lg flex items-center gap-2">
+              <Filter size={18} /> Filtros
+              {filtrosActivos > 0 && <span className="badge badge-primary text-xs">{filtrosActivos}</span>}
+            </h3>
+            {mostrarFiltros ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted">{incidenciasFiltradas.length} de {incidencias.length}</span>
             {filtrosActivos > 0 && (
@@ -359,6 +383,7 @@ function Incidencias() {
             )}
           </div>
         </div>
+        {mostrarFiltros && (
         <div className="card-body">
           <div className="grid grid-cols-1 gap-4">
             <div className="search-input-wrapper">
@@ -434,6 +459,7 @@ function Incidencias() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       <div className="card">

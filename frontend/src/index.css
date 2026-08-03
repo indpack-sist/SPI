@@ -1428,3 +1428,19 @@ input.bg-blue-50 {
   margin-top: 0;
   background-color: var(--carbon-mid);
 }
+
+/* =====================================================
+   SECTION TOGGLE — botones que actúan como cabecera/acordeón.
+   Sin la clase .btn, el navegador les pinta cromo nativo (borde/fondo
+   gris) que rompe el tema oscuro. Esto lo neutraliza.
+   ===================================================== */
+.section-toggle {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.section-toggle:hover .card-title { color: var(--accent); }

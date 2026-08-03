@@ -7,6 +7,8 @@ import {
   Truck, Package, Search, X, Users, RefreshCw
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import { pagosCobranzasAPI, cuentasPagoAPI, clientesAPI } from '../../config/api';
@@ -253,6 +255,8 @@ function PagosCobranzas() {
 
     return true;
   });
+
+  const { currentItems: movimientosPagina, setCurrentPage, ...paginacionMov } = usePagination(movimientos, { storageKey: 'movimientos_pagina' });
 
   const columnsMovimientos = [
     {
@@ -733,10 +737,11 @@ function PagosCobranzas() {
             <div className="card-body p-0">
               <Table
                 columns={columnsMovimientos}
-                data={movimientos}
+                data={movimientosPagina}
                 emptyMessage="No hay movimientos en el período seleccionado"
               />
             </div>
+            <Pagination {...paginacionMov} setCurrentPage={setCurrentPage} />
           </div>
         </>
       ) : (

@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { incidenciasAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import ModalNuevaIncidencia from './ModalNuevaIncidencia';
@@ -163,6 +165,8 @@ function Incidencias() {
     }
     return true;
   });
+
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(incidenciasFiltradas, { storageKey: 'incidencias_pagina' });
 
   const filtrosActivos = [
     filtroEstado, filtroSeveridad, filtroOrigen, filtroFase, filtroTipo,
@@ -477,11 +481,12 @@ function Incidencias() {
         <div className="card-body table-container">
           <Table
             columns={columns}
-            data={incidenciasFiltradas}
+            data={currentItems}
             emptyMessage="No hay incidencias registradas"
             onRowClick={(row) => navigate(`/calidad/incidencias/${row.id_incidencia}`)}
             mobileCards={true}
           />
+          <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
         </div>
       </div>
 

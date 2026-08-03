@@ -7,6 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { clientesAPI, solicitudesCreditoAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -347,6 +349,8 @@ function Clientes() {
     c.ruc.includes(filtro)
   );
 
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(clientesFiltrados, { storageKey: 'clientes_pagina' });
+
   const columns = [
     { 
       header: 'Tipo',
@@ -466,7 +470,8 @@ function Clientes() {
         </div>
       </div>
 
-      <Table columns={columns} data={clientesFiltrados} emptyMessage="No se encontraron clientes" />
+      <Table columns={columns} data={currentItems} emptyMessage="No se encontraron clientes" />
+      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
 
       <Modal isOpen={modalOpen} onClose={cerrarModal} title={editando ? 'Editar Cliente' : 'Nuevo Cliente'} size="lg">
         <form onSubmit={handleSubmit}>

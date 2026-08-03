@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { solicitudesCreditoAPI, archivosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -111,9 +113,12 @@ function SolicitudesCredito() {
     return isNaN(date.getTime()) ? '-' : date.toLocaleString('es-PE');
   };
 
-  const solicitudesFiltradas = solicitudes.filter(s => 
+  const solicitudesFiltradas = solicitudes.filter(s =>
     filtroEstado === 'Todas' ? true : s.estado === filtroEstado
   );
+
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(solicitudesFiltradas, { storageKey: 'solicitudes_credito_pagina' });
+  useEffect(() => { setCurrentPage(1); }, [filtroEstado]);
 
   const columns = [
     {
@@ -319,9 +324,10 @@ function SolicitudesCredito() {
 
       <Table
         columns={columns}
-        data={solicitudesFiltradas}
+        data={currentItems}
         emptyMessage="No se encontraron solicitudes"
       />
+      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
 
       <Modal
         isOpen={modalAccionOpen}

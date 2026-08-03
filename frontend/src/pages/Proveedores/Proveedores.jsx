@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Building2 } from 'lucide-react';
 import { proveedoresAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -176,6 +178,8 @@ function Proveedores() {
     p.ruc.includes(filtro)
   );
 
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(proveedoresFiltrados, { storageKey: 'proveedores_pagina' });
+
   const columns = [
     { header: 'RUC', accessor: 'ruc', width: '120px' },
     { header: 'Razón Social', accessor: 'razon_social' },
@@ -265,9 +269,10 @@ function Proveedores() {
 
       <Table
         columns={columns}
-        data={proveedoresFiltrados}
+        data={currentItems}
         emptyMessage="No se encontraron proveedores"
       />
+      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
 
       <Modal
         isOpen={modalOpen}

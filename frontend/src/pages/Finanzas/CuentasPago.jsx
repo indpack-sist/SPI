@@ -6,6 +6,8 @@ import {
   Receipt
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
@@ -140,6 +142,8 @@ function CuentasPago() {
     };
     return icons[tipo] || Wallet;
   };
+
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(cuentas, { storageKey: 'cuentas_pago_pagina' });
 
   const columns = [
     {
@@ -338,7 +342,7 @@ function CuentasPago() {
         <div className="card-body p-0">
           <Table
             columns={columns}
-            data={cuentas}
+            data={currentItems}
             emptyMessage={
                 <div className="text-center py-12">
                     <Wallet size={48} className="mx-auto text-gray-300 mb-3"/>
@@ -346,6 +350,7 @@ function CuentasPago() {
                 </div>
             }
           />
+          <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
         </div>
       </div>
 

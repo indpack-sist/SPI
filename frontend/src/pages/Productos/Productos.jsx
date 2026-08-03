@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { productosAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -206,6 +208,8 @@ function Productos() {
     
     return matchTexto && matchTipo && matchStock;
   });
+
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(productosFiltrados, { storageKey: 'productos_pagina' });
 
   const esProductoVendible = (tipoId) => {
     const tipo = tiposInventario.find(t => t.id_tipo_inventario == tipoId);
@@ -414,10 +418,11 @@ function Productos() {
 
       <Table
         columns={columns}
-        data={productosFiltrados}
+        data={currentItems}
         emptyMessage="No se encontraron productos"
         onRowClick={(row) => navigate(`/productos/${row.id_producto}`)}
       />
+      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
 
       <Modal
         isOpen={modalOpen}

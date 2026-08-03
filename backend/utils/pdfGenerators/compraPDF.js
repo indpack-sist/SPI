@@ -90,8 +90,11 @@ export const generarCompraPDF = async (orden) => {
       drawLeft('Fecha Emisión:', orden.fecha_emision ? new Date(orden.fecha_emision).toLocaleDateString('es-PE') : '-');
       drawLeft('Fecha Venc.:', orden.fecha_vencimiento ? new Date(orden.fecha_vencimiento).toLocaleDateString('es-PE') : '-');
 
-      // Columna Derecha
-      const esCredito = ['Credito', 'Letra', 'Letras'].includes(orden.tipo_compra);
+      // Columna Derecha (normalizamos para tolerar tildes: 'Crédito' vs 'Credito')
+      const diacriticos = new RegExp('[\\u0300-\\u036f]', 'g');
+      const normalizarTipo = (v) => (v || '').normalize('NFD').replace(diacriticos, '').toLowerCase();
+      const tipoNorm = normalizarTipo(orden.tipo_compra) || normalizarTipo(orden.forma_pago_detalle);
+      const esCredito = tipoNorm === 'credito' || tipoNorm === 'letra' || tipoNorm === 'letras';
       drawRight('Condición:', orden.forma_pago_detalle || orden.tipo_compra || '-');
       drawRight('Moneda:', orden.moneda === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES');
       

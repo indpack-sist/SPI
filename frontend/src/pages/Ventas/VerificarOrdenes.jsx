@@ -22,6 +22,8 @@ import {
   ShieldOff
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -290,6 +292,10 @@ function VerificarOrdenes() {
     };
     return configs[prioridad] || configs['Media'];
   };
+
+  const listaActiva = activeTab === 'pendientes' ? ordenesPendientes : historialReciente;
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(listaActiva);
+  useEffect(() => { setCurrentPage(1); }, [activeTab]);
 
   const columns = [
     {
@@ -580,9 +586,10 @@ function VerificarOrdenes() {
                   render: (value) => <div className="text-xs">{formatearFecha(value)}</div>
                 }
               ]}
-              data={activeTab === 'pendientes' ? ordenesPendientes : historialReciente}
+              data={currentItems}
               emptyMessage={activeTab === 'pendientes' ? "No hay órdenes pendientes" : "No hay historial reciente"}
             />
+            <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
           </div>
         </div>
       )}

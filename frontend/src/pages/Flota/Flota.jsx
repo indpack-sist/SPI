@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { flotaAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -106,6 +108,8 @@ function Flota() {
     (v.marca_modelo && v.marca_modelo.toLowerCase().includes(filtro.toLowerCase()))
   );
 
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(vehiculosFiltrados, { storageKey: 'flota_pagina' });
+
   const columns = [
     { header: 'ID', accessor: 'id_vehiculo', width: '80px' },
     { header: 'Placa', accessor: 'placa' },
@@ -209,9 +213,10 @@ function Flota() {
 
       <Table
         columns={columns}
-        data={vehiculosFiltrados}
+        data={currentItems}
         emptyMessage="No se encontraron vehículos"
       />
+      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
 
       <Modal
         isOpen={modalOpen}

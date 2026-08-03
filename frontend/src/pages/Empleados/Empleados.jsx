@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Eye, EyeOff, Mail } from 'lucide-react';
 import { empleadosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
@@ -237,6 +239,8 @@ function Empleados() {
     (emp.email && emp.email.toLowerCase().includes(filtro.toLowerCase()))
   );
 
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(empleadosFiltrados, { storageKey: 'empleados_pagina' });
+
   const getRolBadgeClass = (rol) => {
     // CAMBIO: Se cambió 'Gerencia' por 'Calidad'
     if (rol === 'Administrador') return 'badge-danger';
@@ -368,9 +372,10 @@ function Empleados() {
 
       <Table
         columns={columns}
-        data={empleadosFiltrados}
+        data={currentItems}
         emptyMessage="No se encontraron empleados"
       />
+      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
     
       <Modal
         isOpen={modalOpen}

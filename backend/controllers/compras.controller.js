@@ -158,35 +158,23 @@ export async function getCompraById(req, res) {
     const compra = compraResult.data[0];
     
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         doc.*,
-        p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida,
+        COALESCE(p.codigo, 'MANUAL') AS codigo_producto,
+        COALESCE(p.nombre, doc.descripcion_manual) AS producto,
+        COALESCE(p.unidad_medida, 'UND') AS unidad_medida,
         p.stock_actual AS stock_disponible,
         ti.nombre AS tipo_inventario
       FROM detalle_orden_compra doc
-      INNER JOIN productos p ON doc.id_producto = p.id_producto
+      LEFT JOIN productos p ON doc.id_producto = p.id_producto
       LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
       WHERE doc.id_orden_compra = ?
       ORDER BY doc.orden, doc.id_detalle
     `, [id]);
-    
-    if (!detalleResult.success) return res.status(500).json({ success: false, error: detalleResult.error });
-    
-    // Procesar nombres manuales desde observaciones
-    const detalleProcesado = detalleResult.data.map(item => {
-      if (item.id_producto === 1 && item.codigo_producto === 'MANUAL') {
-        const regex = new RegExp(`\\[ITEM_MANUAL_ID_${item.orden}\\]: (.*?)(?=\\n|$)`, 'i');
-        const match = compra.observaciones?.match(regex);
-        if (match) {
-          return { ...item, producto: match[1].trim() };
-        }
-      }
-      return item;
-    });
 
-    compra.detalle = detalleProcesado;
+    if (!detalleResult.success) return res.status(500).json({ success: false, error: detalleResult.error });
+
+    compra.detalle = detalleResult.data;
     
     const cuotasResult = await executeQuery(`
       SELECT 
@@ -291,11 +279,14 @@ export async function createCompra(req, res) {
       const valorCompra = (item.cantidad * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorCompra;
 
+      // Los ítems manuales (sin id_producto) NO ingresan a inventario
       let cantidadRecibirAhora = 0;
-      if (tipo_recepcion === 'Total') {
-        cantidadRecibirAhora = parseFloat(item.cantidad);
-      } else if (tipo_recepcion === 'Parcial') {
-        cantidadRecibirAhora = parseFloat(item.cantidad_a_recibir || 0);
+      if (item.id_producto) {
+        if (tipo_recepcion === 'Total') {
+          cantidadRecibirAhora = parseFloat(item.cantidad);
+        } else if (tipo_recepcion === 'Parcial') {
+          cantidadRecibirAhora = parseFloat(item.cantidad_a_recibir || 0);
+        }
       }
 
       if (cantidadRecibirAhora > 0) {
@@ -336,6 +327,12 @@ export async function createCompra(req, res) {
       }
     }
 
+    // El pago inicial no puede superar el total ni ser negativo
+    if (montoAPagarAhora < 0) montoAPagarAhora = 0;
+    if (montoAPagarAhora > total + 0.01) {
+      return res.status(400).json({ success: false, error: `El pago/adelanto (${montoAPagarAhora.toFixed(2)}) no puede superar el total de la compra (${total.toFixed(2)}).` });
+    }
+
     const saldoPendiente = total - montoAPagarAhora;
 
     let estadoPago = 'Pendiente';
@@ -354,16 +351,8 @@ export async function createCompra(req, res) {
     let cronogramaDefinido = 0;
     let cronogramaFinal = [];
 
-    console.log('=== CRONOGRAMA DEBUG ===');
-    console.log('esCredito:', esCredito);
-    console.log('cronograma recibido:', JSON.stringify(cronograma));
-    console.log('cronograma length:', cronograma?.length);
-    console.log('saldoPendiente:', saldoPendiente);
-
     if (esCredito && cronograma && Array.isArray(cronograma) && cronograma.length > 0) {
       const totalCronograma = cronograma.reduce((acc, letra) => acc + parseFloat(letra.monto), 0);
-      console.log('totalCronograma:', totalCronograma);
-      console.log('diferencia abs:', Math.abs(totalCronograma - saldoPendiente));
 
       if (Math.abs(totalCronograma - saldoPendiente) > 1.00) {
         return res.status(400).json({
@@ -371,16 +360,13 @@ export async function createCompra(req, res) {
           error: `La suma de las letras (${totalCronograma.toFixed(2)}) no coincide con el saldo pendiente (${saldoPendiente.toFixed(2)})`
         });
       }
-      console.log('✓ Usando cronograma del frontend');
       cronogramaFinal = cronograma;
       cronogramaDefinido = 1;
     } else if (esCredito && saldoPendiente > 0.01 && parseInt(numero_cuotas || 0) > 0 && tipo_compra !== 'Letras' && tipo_compra !== 'Letra') {
-      console.log('⚠ Generando cronograma automático en backend');
       const numCuotas = parseInt(numero_cuotas);
       const diasEntreC = parseInt(dias_entre_cuotas || 30);
       const montoPorCuota = parseFloat((saldoPendiente / numCuotas).toFixed(3));
       const diferencia = parseFloat((saldoPendiente - montoPorCuota * numCuotas).toFixed(3));
-      console.log('montoPorCuota:', montoPorCuota, 'diferencia:', diferencia);
 
       let fechaBase;
       if (fecha_primera_cuota) {
@@ -402,9 +388,7 @@ export async function createCompra(req, res) {
         });
       }
       cronogramaDefinido = 1;
-      console.log('cronogramaFinal generado:', JSON.stringify(cronogramaFinal));
     }
-    console.log('=== FIN CRONOGRAMA DEBUG ===');
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -417,13 +401,20 @@ export async function createCompra(req, res) {
         if (cuentas.length === 0) throw new Error('Cuenta de pago no válida');
       }
 
-      const [ultimaResult] = await connection.query('SELECT numero_orden FROM ordenes_compra ORDER BY id_orden_compra DESC LIMIT 1');
-      let numeroSecuencia = 1;
-      if (ultimaResult.length > 0) {
-        const match = ultimaResult[0].numero_orden.match(/(\d+)$/);
-        if (match) numeroSecuencia = parseInt(match[1]) + 1;
-      }
-      const numeroCompra = `COM-${new Date().getFullYear()}-${String(numeroSecuencia).padStart(5, '0')}`;
+      const anioActual = new Date().getFullYear();
+      const generarNumeroCompra = async () => {
+        const [ultimaResult] = await connection.query(
+          'SELECT numero_orden FROM ordenes_compra WHERE numero_orden LIKE ? ORDER BY id_orden_compra DESC LIMIT 1',
+          [`COM-${anioActual}-%`]
+        );
+        let numeroSecuencia = 1;
+        if (ultimaResult.length > 0) {
+          const match = ultimaResult[0].numero_orden.match(/(\d+)$/);
+          if (match) numeroSecuencia = parseInt(match[1]) + 1;
+        }
+        return `COM-${anioActual}-${String(numeroSecuencia).padStart(5, '0')}`;
+      };
+      let numeroCompra = await generarNumeroCompra();
 
       let fechaVencimientoFinal = fecha_vencimiento;
       if (!fechaVencimientoFinal) {
@@ -445,36 +436,49 @@ export async function createCompra(req, res) {
       const montoReembolsarFinal = usa_fondos_propios ? parseFloat(monto_reembolsar || total) : 0;
       const estadoReembolsoFinal = usa_fondos_propios ? 'Pendiente' : 'No Aplica';
 
-    const [resultCompra] = await connection.query(`
-        INSERT INTO ordenes_compra (
-          numero_orden, id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
-          prioridad, moneda, tipo_cambio, tipo_impuesto, porcentaje_impuesto, tipo_compra,
-          numero_cuotas, dias_entre_cuotas, dias_credito, contacto_proveedor, direccion_entrega,
-          observaciones, id_responsable, id_registrado_por, subtotal, igv, total,
-          estado, estado_pago, saldo_pendiente, monto_pagado, cronograma_definido,
-          tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante, forma_pago_detalle,
-          usa_fondos_propios, id_comprador, monto_reembolsar, estado_reembolso
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        numeroCompra, id_proveedor, id_cuenta_pago || null, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
-        prioridad || 'Media', moneda, tipoCambioFinal, tipoImpuestoFinal, porcentaje, tipo_compra,
-        esCredito ? parseInt(numero_cuotas || 0) : 0,
-        esCredito ? parseInt(dias_entre_cuotas || 30) : 0,
-        esCredito ? parseInt(dias_credito || 30) : 0,
-        contacto_proveedor || null, direccion_entrega || null, 
-        `${observaciones || ''}\n[PLAZO_PAGO]: ${req.body.plazo_pago || '-'}\n[LUGAR_ENTREGA]: ${req.body.lugar_entrega || 'Almacén Principal'}`, 
-        id_responsable || null, id_registrado_por,
-        subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, montoAPagarAhora,
-        cronogramaDefinido,
-        tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null,
-        tipo_compra,
-        usa_fondos_propios ? 1 : 0,
-        usa_fondos_propios ? (id_comprador || null) : null,
-        montoReembolsarFinal,
-        estadoReembolsoFinal
-      ]);
-
-      const idCompra = resultCompra.insertId;
+      // Inserta la cabecera reintentando si el número de orden colisiona (concurrencia).
+      // En MySQL un error de clave duplicada revierte solo la sentencia, no la transacción.
+      let idCompra;
+      for (let intento = 0; ; intento++) {
+        try {
+          const [resultCompra] = await connection.query(`
+            INSERT INTO ordenes_compra (
+              numero_orden, id_proveedor, id_cuenta_pago, fecha_emision, fecha_entrega_estimada, fecha_vencimiento,
+              prioridad, moneda, tipo_cambio, tipo_impuesto, porcentaje_impuesto, tipo_compra,
+              numero_cuotas, dias_entre_cuotas, dias_credito, contacto_proveedor, direccion_entrega,
+              observaciones, id_responsable, id_registrado_por, subtotal, igv, total,
+              estado, estado_pago, saldo_pendiente, monto_pagado, cronograma_definido,
+              tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante, forma_pago_detalle,
+              usa_fondos_propios, id_comprador, monto_reembolsar, estado_reembolso
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            numeroCompra, id_proveedor, id_cuenta_pago || null, fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal,
+            prioridad || 'Media', moneda, tipoCambioFinal, tipoImpuestoFinal, porcentaje, tipo_compra,
+            esCredito ? parseInt(numero_cuotas || 0) : 0,
+            esCredito ? parseInt(dias_entre_cuotas || 30) : 0,
+            esCredito ? parseInt(dias_credito || 30) : 0,
+            contacto_proveedor || null, direccion_entrega || null,
+            observaciones || null,
+            id_responsable || null, id_registrado_por,
+            subtotal, impuesto, total, estadoOrden, estadoPago, saldoPendiente, montoAPagarAhora,
+            cronogramaDefinido,
+            tipo_documento || null, serie_documento || null, numero_documento || null, fecha_emision_documento || null, url_comprobante || null,
+            tipo_compra,
+            usa_fondos_propios ? 1 : 0,
+            usa_fondos_propios ? (id_comprador || null) : null,
+            montoReembolsarFinal,
+            estadoReembolsoFinal
+          ]);
+          idCompra = resultCompra.insertId;
+          break;
+        } catch (e) {
+          if (e && e.code === 'ER_DUP_ENTRY' && intento < 5) {
+            numeroCompra = await generarNumeroCompra();
+            continue;
+          }
+          throw e;
+        }
+      }
 
       if (montoAPagarAhora > 0 && id_cuenta_pago) {
         const conceptoMov = (tipo_compra === 'Contado' && Math.abs(montoAPagarAhora - total) < 0.1)
@@ -509,7 +513,9 @@ export async function createCompra(req, res) {
 
       let idEntrada = null;
       if (tieneItemsParaRecepcion) {
-        const [primerProducto] = await connection.query('SELECT id_tipo_inventario FROM productos WHERE id_producto = ?', [detalle[0].id_producto]);
+        const primerItemReal = detalle.find(it => it.id_producto);
+        if (!primerItemReal) throw new Error('No hay productos de catálogo válidos para la recepción de inventario.');
+        const [primerProducto] = await connection.query('SELECT id_tipo_inventario FROM productos WHERE id_producto = ?', [primerItemReal.id_producto]);
         const id_tipo_inventario_entrada = primerProducto[0]?.id_tipo_inventario;
         if (!id_tipo_inventario_entrada) throw new Error('Error al determinar inventario');
 
@@ -540,25 +546,24 @@ export async function createCompra(req, res) {
         const descuento = parseFloat(item.descuento_porcentaje || 0);
         const subtotalItem = (item.cantidad * precioUnitario) * (1 - descuento / 100);
 
+        // Los ítems manuales (sin id_producto) no ingresan a inventario
         let cantidadRecibida = 0;
-        if (tipo_recepcion === 'Total') cantidadRecibida = parseFloat(item.cantidad);
-        else if (tipo_recepcion === 'Parcial') cantidadRecibida = parseFloat(item.cantidad_a_recibir || 0);
-
-        await connection.query(`
-          INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, cantidad, cantidad_recibida, precio_unitario, descuento_porcentaje, subtotal, orden)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [idCompra, item.id_producto || 1, parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1]);
-
-        // Si es item manual, guardamos el nombre real en una tabla de apoyo o en las observaciones de la orden
-        if (!item.id_producto) {
-          await connection.query(`
-            UPDATE ordenes_compra 
-            SET observaciones = CONCAT(IFNULL(observaciones, ''), '\n[ITEM_MANUAL_ID_', ?, ']: ', ?)
-            WHERE id_orden_compra = ?
-          `, [i + 1, item.producto, idCompra]);
+        if (item.id_producto) {
+          if (tipo_recepcion === 'Total') cantidadRecibida = parseFloat(item.cantidad);
+          else if (tipo_recepcion === 'Parcial') cantidadRecibida = parseFloat(item.cantidad_a_recibir || 0);
         }
 
-        if (idEntrada && cantidadRecibida > 0) {
+        await connection.query(`
+          INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, descripcion_manual, cantidad, cantidad_recibida, precio_unitario, descuento_porcentaje, subtotal, orden)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          idCompra,
+          item.id_producto || null,
+          item.id_producto ? null : (item.descripcion_manual || item.producto || 'ITEM MANUAL'),
+          parseFloat(item.cantidad), cantidadRecibida, precioUnitario, descuento, subtotalItem, i + 1
+        ]);
+
+        if (idEntrada && item.id_producto && cantidadRecibida > 0) {
           const costoUnitarioNeto = precioUnitario * (1 - descuento / 100);
           let costoPEN = 0, costoUSD = 0;
           if (moneda === 'PEN') {
@@ -593,7 +598,6 @@ export async function createCompra(req, res) {
     }
   } catch (error) {
     console.error(error);
-    if (connection) connection.release();
     res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
@@ -646,6 +650,7 @@ export async function establecerCronograma(req, res) {
 }
 
 export async function updateCompra(req, res) {
+  let connection;
   try {
     const { id } = req.params;
     const {
@@ -654,13 +659,34 @@ export async function updateCompra(req, res) {
       tipo_documento, serie_documento, numero_documento, fecha_emision_documento, url_comprobante
     } = req.body;
 
-    const [compraExistente] = await pool.query('SELECT estado, total, monto_pagado, tipo_documento FROM ordenes_compra WHERE id_orden_compra = ?', [id]);
+    const [compraExistente] = await pool.query(
+      'SELECT estado, total, monto_pagado, tipo_documento, porcentaje_impuesto, tipo_impuesto FROM ordenes_compra WHERE id_orden_compra = ?',
+      [id]
+    );
     if (!compraExistente || compraExistente.length === 0) return res.status(404).json({ success: false, error: 'Compra no encontrada' });
-    
+
     const compra = compraExistente[0];
     if (compra.estado === 'Recibida' && !tipo_documento) {
        return res.status(400).json({ success: false, error: 'No se pueden editar compras ya recibidas.' });
     }
+
+    // No permitir reemplazar el detalle si ya hubo recepción de mercadería (afectaría stock/costos)
+    if (detalle && Array.isArray(detalle)) {
+      const [recepcion] = await pool.query(
+        'SELECT COALESCE(SUM(cantidad_recibida), 0) AS recibido FROM detalle_orden_compra WHERE id_orden_compra = ?',
+        [id]
+      );
+      if (parseFloat(recepcion[0].recibido) > 0.001) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se puede modificar el detalle: la compra ya tiene mercadería recibida. Use ingresos/anulación para ajustarla.'
+        });
+      }
+    }
+
+    // Impuesto según la configuración real de la orden (no asumir 18%)
+    const tipoImp = compra.tipo_impuesto || 'IGV';
+    const porcentaje = (tipoImp === 'EXO' || tipoImp === 'INA') ? 0 : parseFloat(compra.porcentaje_impuesto ?? 18);
 
     let subtotal = 0;
     if (detalle && Array.isArray(detalle)) {
@@ -669,15 +695,11 @@ export async function updateCompra(req, res) {
         const desc = parseFloat(item.descuento_porcentaje || 0);
         subtotal += (item.cantidad * precio) * (1 - desc / 100);
       }
-    } else {
-      // Si no viene detalle, mantenemos los montos actuales (o los recalculamos si es necesario)
-      // En este caso, si solo estamos convirtiendo, no necesitamos el detalle
     }
-    
-    const impuesto = subtotal * 0.18;
+
+    const impuesto = subtotal * (porcentaje / 100);
     const total = subtotal + impuesto;
 
-    // Campos a actualizar
     const updates = [];
     const params = [];
 
@@ -689,17 +711,16 @@ export async function updateCompra(req, res) {
     if (id_responsable) { updates.push('id_responsable = ?'); params.push(id_responsable); }
     if (contacto_proveedor !== undefined) { updates.push('contacto_proveedor = ?'); params.push(contacto_proveedor); }
     if (direccion_entrega !== undefined) { updates.push('direccion_entrega = ?'); params.push(direccion_entrega); }
-    
+
     if (detalle) {
       updates.push('subtotal = ?', 'igv = ?', 'total = ?');
       params.push(subtotal, impuesto, total);
-      
-      // Si cambia el total, recalculamos saldo y estado_pago
+
       const nuevoSaldo = total - parseFloat(compra.monto_pagado);
       let nuevoEstadoPago = 'Pendiente';
       if (nuevoSaldo <= 0.01) nuevoEstadoPago = 'Pagado';
       else if (parseFloat(compra.monto_pagado) > 0) nuevoEstadoPago = 'Parcial';
-      
+
       updates.push('saldo_pendiente = ?', 'estado_pago = ?');
       params.push(nuevoSaldo, nuevoEstadoPago);
     }
@@ -710,28 +731,45 @@ export async function updateCompra(req, res) {
     if (fecha_emision_documento) { updates.push('fecha_emision_documento = ?'); params.push(fecha_emision_documento); }
     if (url_comprobante !== undefined) { updates.push('url_comprobante = ?'); params.push(url_comprobante); }
 
-    if (updates.length > 0) {
-      params.push(id);
-      await pool.query(`UPDATE ordenes_compra SET ${updates.join(', ')} WHERE id_orden_compra = ?`, params);
-    }
-
-    if (detalle) {
-      await pool.query('DELETE FROM detalle_orden_compra WHERE id_orden_compra = ?', [id]);
-      for (let i = 0; i < detalle.length; i++) {
-        const item = detalle[i];
-        const precio = parseFloat(item.precio_unitario);
-        const desc = parseFloat(item.descuento_porcentaje || 0);
-        const subItem = (item.cantidad * precio) * (1 - desc / 100);
-        await pool.query(`
-          INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, cantidad, precio_unitario, descuento_porcentaje, subtotal, orden) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [id, item.id_producto, parseFloat(item.cantidad), precio, desc, subItem, i+1]);
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    try {
+      if (updates.length > 0) {
+        params.push(id);
+        await connection.query(`UPDATE ordenes_compra SET ${updates.join(', ')} WHERE id_orden_compra = ?`, params);
       }
+
+      if (detalle) {
+        await connection.query('DELETE FROM detalle_orden_compra WHERE id_orden_compra = ?', [id]);
+        for (let i = 0; i < detalle.length; i++) {
+          const item = detalle[i];
+          const precio = parseFloat(item.precio_unitario);
+          const desc = parseFloat(item.descuento_porcentaje || 0);
+          const subItem = (item.cantidad * precio) * (1 - desc / 100);
+          await connection.query(`
+            INSERT INTO detalle_orden_compra (id_orden_compra, id_producto, descripcion_manual, cantidad, precio_unitario, descuento_porcentaje, subtotal, orden)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            id,
+            item.id_producto || null,
+            item.id_producto ? null : (item.descripcion_manual || item.producto || 'ITEM MANUAL'),
+            parseFloat(item.cantidad), precio, desc, subItem, i + 1
+          ]);
+        }
+      }
+
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
     }
 
     res.json({ success: true, message: 'Compra actualizada exitosamente' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
   }
 }
 
@@ -801,18 +839,49 @@ export async function cancelarCompra(req, res) {
 
       await connection.query(`UPDATE cuotas_orden_compra SET estado='Cancelada' WHERE id_orden_compra=?`, [id]);
 
-      const [detalles] = await connection.query(
-        'SELECT id_producto, cantidad_recibida FROM detalle_orden_compra WHERE id_orden_compra = ?', 
-        [id]
-      );
-      
-      for (const d of detalles) {
-        if (parseFloat(d.cantidad_recibida) > 0) {
-          await connection.query(
-            'UPDATE productos SET stock_actual = stock_actual - ? WHERE id_producto = ?', 
-            [d.cantidad_recibida, d.id_producto]
-          );
+      // Revertir inventario: usamos los movimientos reales de entrada (detalle_entradas)
+      // para deshacer TANTO el stock COMO el costo unitario promedio móvil (PEN/USD).
+      const [movInventario] = await connection.query(`
+        SELECT de.id_producto, de.cantidad, de.costo_unitario_calculado_pen, de.costo_unitario_calculado_usd
+        FROM detalle_entradas de
+        INNER JOIN entradas e ON de.id_entrada = e.id_entrada
+        WHERE e.id_orden_compra = ?
+      `, [id]);
+
+      for (const mov of movInventario) {
+        const cant = parseFloat(mov.cantidad || 0);
+        if (cant <= 0) continue;
+
+        const [prodRows] = await connection.query(
+          'SELECT stock_actual, costo_unitario_promedio, costo_unitario_promedio_usd FROM productos WHERE id_producto = ? FOR UPDATE',
+          [mov.id_producto]
+        );
+        if (prodRows.length === 0) continue;
+
+        const stockAnt = parseFloat(prodRows[0].stock_actual || 0);
+        const cupPEN = parseFloat(prodRows[0].costo_unitario_promedio || 0);
+        const cupUSD = parseFloat(prodRows[0].costo_unitario_promedio_usd || 0);
+        const costoPEN = parseFloat(mov.costo_unitario_calculado_pen || 0);
+        const costoUSD = parseFloat(mov.costo_unitario_calculado_usd || 0);
+
+        const nuevoStock = stockAnt - cant;
+        let nuevoCupPEN = cupPEN;
+        let nuevoCupUSD = cupUSD;
+
+        if (nuevoStock > 0.0001) {
+          // Deshacer la ponderación: (stock*cup - cant*costoEntrada) / stockRestante
+          nuevoCupPEN = ((stockAnt * cupPEN) - (cant * costoPEN)) / nuevoStock;
+          nuevoCupUSD = ((stockAnt * cupUSD) - (cant * costoUSD)) / nuevoStock;
+          if (nuevoCupPEN < 0) nuevoCupPEN = 0;
+          if (nuevoCupUSD < 0) nuevoCupUSD = 0;
         }
+        // Si el stock queda en 0 o negativo, conservamos el último CUP conocido.
+
+        const stockFinal = nuevoStock < 0 ? 0 : nuevoStock;
+        await connection.query(
+          'UPDATE productos SET stock_actual = ?, costo_unitario_promedio = ?, costo_unitario_promedio_usd = ? WHERE id_producto = ?',
+          [stockFinal, nuevoCupPEN, nuevoCupUSD, mov.id_producto]
+        );
       }
 
       await connection.commit();
@@ -1039,7 +1108,8 @@ export async function getResumenPagosCompra(req, res) {
     const compra = compraResult.data[0];
     
     let cuotasInfo = null;
-    if (['Credito', 'Letras'].includes(compra.tipo_compra)) {
+    const tipoNorm = (compra.tipo_compra || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    if (tipoNorm === 'credito' || tipoNorm === 'letras' || tipoNorm === 'letra') {
       const cuotas = await executeQuery(`
         SELECT COUNT(*) as total, SUM(CASE WHEN estado='Pagada' THEN 1 ELSE 0 END) as pagadas, SUM(CASE WHEN estado!='Pagada' AND fecha_vencimiento<CURDATE() THEN 1 ELSE 0 END) as vencidas
         FROM cuotas_orden_compra WHERE id_orden_compra = ?
@@ -1094,41 +1164,20 @@ export async function descargarPDFCompra(req, res) {
     
     const compra = compraResult.data[0];
 
-    // Extraer condiciones comerciales desde observaciones para el PDF
-    const plazoMatch = compra.observaciones?.match(/\[PLAZO_PAGO\]: (.*?)(?=\n|$)/);
-    const lugarMatch = compra.observaciones?.match(/\[LUGAR_ENTREGA\]: (.*?)(?=\n|$)/);
-    
-    compra.plazo_pago = plazoMatch ? plazoMatch[1].trim() : '-';
-    compra.lugar_entrega = lugarMatch ? lugarMatch[1].trim() : 'Almacén Principal';
-    
-    // Obtenemos el detalle de productos
+    // Obtenemos el detalle de productos (incluye ítems manuales sin catálogo)
     const detalleResult = await executeQuery(`
-      SELECT 
+      SELECT
         doc.*,
-        p.codigo AS codigo_producto,
-        p.nombre AS producto,
-        p.unidad_medida
+        COALESCE(p.codigo, 'MANUAL') AS codigo_producto,
+        COALESCE(p.nombre, doc.descripcion_manual) AS producto,
+        COALESCE(p.unidad_medida, 'UND') AS unidad_medida
       FROM detalle_orden_compra doc
       LEFT JOIN productos p ON doc.id_producto = p.id_producto
       WHERE doc.id_orden_compra = ?
       ORDER BY doc.orden, doc.id_detalle
     `, [id]);
-    
-    const detalleOriginal = detalleResult.data || [];
 
-    // Procesar nombres manuales desde observaciones para el PDF
-    const detalleProcesado = detalleOriginal.map(item => {
-      if (item.id_producto === 1 && item.codigo_producto === 'MANUAL') {
-        const regex = new RegExp(`\\[ITEM_MANUAL_ID_${item.orden}\\]: (.*?)(?=\\n|$)`, 'i');
-        const match = compra.observaciones?.match(regex);
-        if (match) {
-          return { ...item, producto: match[1].trim() };
-        }
-      }
-      return item;
-    });
-
-    compra.detalle = detalleProcesado;
+    compra.detalle = detalleResult.data || [];
 
     // Obtener cronograma de cuotas para el PDF
     const cuotasResult = await executeQuery(`

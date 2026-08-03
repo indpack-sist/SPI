@@ -977,11 +977,19 @@ function DetalleCompra() {
                   </h3>
                 </div>
                 <div className="card-body text-sm text-gray-600">
-                  {compra.observaciones ? (
-                    <div className="whitespace-pre-wrap">{compra.observaciones}</div>
-                  ) : (
-                    <span className="italic text-muted">Sin observaciones.</span>
-                  )}
+                  {(() => {
+                    // Ocultar metadatos internos embebidos en registros antiguos
+                    const obs = (compra.observaciones || '')
+                      .replace(/\[ITEM_MANUAL_ID_\d+\]:.*(\n|$)/g, '')
+                      .replace(/\[PLAZO_PAGO\]:.*(\n|$)/g, '')
+                      .replace(/\[LUGAR_ENTREGA\]:.*(\n|$)/g, '')
+                      .trim();
+                    return obs ? (
+                      <div className="whitespace-pre-wrap">{obs}</div>
+                    ) : (
+                      <span className="italic text-muted">Sin observaciones.</span>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="card">

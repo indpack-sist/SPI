@@ -9,6 +9,8 @@ import {
 import Table from '../../components/UI/Table';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import Pagination from '../../components/UI/Pagination';
+import { usePagination } from '../../hooks/usePagination';
 import { comprasAPI, cuentasPagoAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
 
@@ -43,6 +45,9 @@ function Compras() {
       return c.tipo_documento === 'Orden de Compra';
     }
   });
+
+  const { currentItems, setCurrentPage, ...paginacion } = usePagination(comprasFiltradas, { storageKey: 'compras_pagina' });
+  useEffect(() => { setCurrentPage(1); }, [activeTab]);
 
   useEffect(() => {
     cargarDatos();
@@ -624,10 +629,11 @@ function Compras() {
               base.push(columns[7]); // Acciones
               return base;
             })()}
-            data={comprasFiltradas}
+            data={currentItems}
             emptyMessage={activeTab === 'compras' ? "No hay compras registradas" : "No hay formatos de solicitud guardados"}
           />
         </div>
+        <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
       </div>
     </div>
   );

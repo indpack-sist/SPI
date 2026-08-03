@@ -109,8 +109,8 @@ function NuevaCompra() {
         ...prev,
         tipo_documento: 'Orden de Compra',
         tipo_recepcion: 'Ninguna',
-        serie_documento: 'OC',
-        numero_documento: 'FORMATO'
+        serie_documento: '',
+        numero_documento: ''
       }));
     } else {
       setFormData(prev => ({
@@ -440,7 +440,8 @@ function NuevaCompra() {
         monto_adelanto: formData.usa_fondos_propios ? 0 : parseFloat(formData.monto_pagado_inicial || 0),
         cronograma: cronogramaPayload,
         detalle: detalle.map(item => ({
-          id_producto: item.id_producto,
+          id_producto: item.id_producto || null,
+          descripcion_manual: item.id_producto ? null : item.producto,
           cantidad: parseFloat(item.cantidad),
           cantidad_a_recibir: formData.tipo_recepcion === 'Parcial' ? parseFloat(item.cantidad_a_recibir) : parseFloat(item.cantidad),
           precio_unitario: parseFloat(item.precio_unitario),
@@ -556,107 +557,28 @@ function NuevaCompra() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="form-group">
                         <label className="form-label text-xs uppercase text-muted">Fecha Emisión</label>
-                        <input 
-                          type="date" 
-                          className="form-input" 
-                          value={formData.fecha_emision} 
-                          onChange={(e) => setFormData({ ...formData, fecha_emision: e.target.value })} 
-                          required 
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label text-xs uppercase text-muted">Condición de Pago</label>
-                        <div className="tabs-navigation !bg-transparent p-0 border border-gray-200 rounded-lg overflow-hidden">
-                          <button
-                            type="button"
-                            className={`tab-item !py-2 !text-xs ${formData.forma_pago_detalle === 'Contado' ? 'active' : ''}`}
-                            onClick={() => handleFormaPagoChange('Contado')}
-                          >
-                            CONTADO
-                          </button>
-                          <button
-                            type="button"
-                            className={`tab-item !py-2 !text-xs ${formData.forma_pago_detalle === 'Credito' ? 'active' : ''}`}
-                            onClick={() => handleFormaPagoChange('Credito')}
-                          >
-                            CRÉDITO
-                          </button>
-                          <button
-                            type="button"
-                            className={`tab-item !py-2 !text-xs ${formData.forma_pago_detalle === 'Letras' ? 'active' : ''}`}
-                            onClick={() => handleFormaPagoChange('Letras')}
-                          >
-                            LETRAS
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(formData.tipo_compra === 'Credito' || formData.tipo_compra === 'Letras') && (
-                        <div className="col-span-2 card bg-amber-50/30 border-amber-200 p-4 space-y-4">
-                          <h4 className="text-xs font-bold text-amber-800 uppercase flex items-center gap-2">
-                            <Calendar size={14} /> Configuración de Cronograma de Pagos
-                          </h4>
-                          <div className="grid grid-cols-3 gap-4">
-                            <div className="form-group">
-                              <label className="form-label text-[10px] uppercase text-muted">N° de Cuotas</label>
-                              <input 
-                                type="number" 
-                                className="form-input border-amber-200" 
-                                min="1"
-                                value={formData.numero_cuotas} 
-                                onChange={(e) => setFormData({ ...formData, numero_cuotas: e.target.value })} 
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label text-[10px] uppercase text-muted">Días entre Cuotas</label>
-                              <input 
-                                type="number" 
-                                className="form-input border-amber-200" 
-                                min="1"
-                                value={formData.dias_entre_cuotas} 
-                                onChange={(e) => setFormData({ ...formData, dias_entre_cuotas: e.target.value })} 
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label text-[10px] uppercase text-muted">1° Vencimiento</label>
-                              <input 
-                                type="date" 
-                                className="form-input border-amber-200" 
-                                value={formData.fecha_primera_cuota} 
-                                onChange={(e) => setFormData({ ...formData, fecha_primera_cuota: e.target.value })} 
-                              />
-                            </div>
-                          </div>
-                          {cronograma.length > 0 && (
-                            <div className="text-[10px] text-amber-900 bg-white/50 p-2 rounded border border-amber-100 italic">
-                              Se generarán {cronograma.length} cuotas. La última vence el {cronograma[cronograma.length-1].fecha.toLocaleDateString('es-PE')}.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      <div className="form-group">
-                        <label className="form-label text-xs uppercase text-muted">Lugar de Entrega</label>
-                        <input 
-                          type="text" 
-                          className="form-input" 
-                          placeholder="Dirección del almacén" 
-                          value={formData.lugar_entrega} 
-                          onChange={(e) => setFormData({ ...formData, lugar_entrega: e.target.value })} 
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={formData.fecha_emision}
+                          onChange={(e) => setFormData({ ...formData, fecha_emision: e.target.value })}
+                          required
                         />
                       </div>
                       <div className="form-group">
                         <label className="form-label text-xs uppercase text-muted">Contacto (Opcional)</label>
-                        <input 
-                          type="text" 
-                          className="form-input" 
-                          placeholder="Nombre del vendedor" 
-                          value={formData.contacto_proveedor} 
-                          onChange={(e) => setFormData({ ...formData, contacto_proveedor: e.target.value })} 
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Nombre del vendedor"
+                          value={formData.contacto_proveedor}
+                          onChange={(e) => setFormData({ ...formData, contacto_proveedor: e.target.value })}
                         />
                       </div>
                     </div>
+                    <p className="text-xs text-muted italic">
+                      La condición de pago y el cronograma se configuran en el panel <strong>Forma de Pago</strong> (a la derecha), luego de agregar productos.
+                    </p>
                   </div>
                 )}
               </div>
@@ -899,7 +821,8 @@ function NuevaCompra() {
           <div className="space-y-6">
             {detalle.length > 0 && (
               <>
-                {modoRegistro === 'compra' && (
+                {/* Panel único de Condición de Pago + Cronograma (visible en compra y solicitud) */}
+                {(modoRegistro === 'compra' || modoRegistro === 'solicitud') && (
                   <div className="card">
                     <div className="card-header bg-gray-50">
                       <h2 className="card-title text-base">
@@ -934,7 +857,7 @@ function NuevaCompra() {
                         </button>
                       </div>
 
-                      {formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
+                      {modoRegistro === 'compra' && formData.forma_pago_detalle === 'Contado' && !formData.usa_fondos_propios && (
                         <div className="slide-down space-y-3 pt-2 border-t border-dashed">
                           <div className="grid grid-cols-3 gap-2 mb-3">
                             <button 
@@ -1020,7 +943,7 @@ function NuevaCompra() {
                         </div>
                       )}
 
-                      {formData.forma_pago_detalle === 'Letras' && (
+                      {modoRegistro === 'compra' && formData.forma_pago_detalle === 'Letras' && (
                         <div className="slide-down">
                           <div className="p-3 bg-purple-50 border border-purple-500 rounded text-xs text-purple-900 mb-3 flex items-start gap-3">
                             <AlertCircle size={18} className="shrink-0 mt-0.5" />
@@ -1134,7 +1057,7 @@ function NuevaCompra() {
                             </div>
                           )}
 
-                          {!formData.usa_fondos_propios && (
+                          {modoRegistro === 'compra' && !formData.usa_fondos_propios && (
                             <div className="bg-gray-50 p-3 rounded border">
                               <label className="form-label text-xs uppercase text-blue-700 font-bold mb-2">
                                 Adelanto (Opcional)
@@ -1234,11 +1157,12 @@ function NuevaCompra() {
                 <div className="card">
                   <div className="card-body space-y-3">
                     <div className="form-group m-0">
-                      <label className="form-label text-xs uppercase text-muted">Direccion Entrega</label>
-                      <textarea 
-                        className="form-textarea text-sm min-h-[60px]" 
-                        value={formData.direccion_entrega} 
-                        onChange={(e) => setFormData({...formData, direccion_entrega: e.target.value})} 
+                      <label className="form-label text-xs uppercase text-muted">Lugar / Dirección de Entrega</label>
+                      <textarea
+                        className="form-textarea text-sm min-h-[60px]"
+                        placeholder="Almacén Principal / dirección de entrega"
+                        value={formData.direccion_entrega}
+                        onChange={(e) => setFormData({...formData, direccion_entrega: e.target.value})}
                       />
                     </div>
                     <div className="form-group m-0">

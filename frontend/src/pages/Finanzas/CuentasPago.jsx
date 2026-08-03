@@ -332,8 +332,8 @@ function CuentasPago() {
         </div>
       </div>
 
-      <div className="card shadow-md border-0">
-        <div className="card-header bg-white border-b py-4">
+      <div className="card list-panel">
+        <div className="card-header border-b py-4">
           <h2 className="card-title flex items-center gap-2">
             Listado de Cuentas Activas
             <span className="badge badge-primary ml-2 rounded-full px-3">{cuentas.length}</span>

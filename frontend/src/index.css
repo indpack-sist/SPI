@@ -1386,3 +1386,45 @@ input.bg-blue-50 {
   background-color: rgba(93, 173, 226, 0.08) !important;
   color: var(--white) !important;
 }
+
+/* =====================================================
+   LIST PANEL — contenedor oscuro de listados (estilo OrdenesVenta)
+   Aplicar la clase `list-panel` (junto a `card` si ya lo usa) al
+   contenedor que envuelve la tabla + paginación.
+   ===================================================== */
+.list-panel {
+  background-color: var(--carbon) !important;
+  border: 1px solid var(--steel) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--shadow-lg) !important;
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+.list-panel .card-header {
+  padding: 1rem 1.25rem;
+  margin: 0;
+  border-bottom: 1px solid var(--steel);
+  background-color: var(--carbon);
+}
+
+.list-panel .card-body { padding: 0; }
+
+.list-panel .table-container {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.list-panel .table th {
+  background-color: var(--carbon);
+  border-bottom-color: var(--steel);
+}
+
+.list-panel .table td { border-bottom-color: var(--steel); }
+
+/* La barra de paginación queda embebida (footer del panel) */
+.list-panel .ui-pagination {
+  margin-top: 0;
+  background-color: var(--carbon-mid);
+}

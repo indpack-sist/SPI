@@ -416,13 +416,17 @@ function Productos() {
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        data={currentItems}
-        emptyMessage="No se encontraron productos"
-        onRowClick={(row) => navigate(`/productos/${row.id_producto}`)}
-      />
-      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      <div className="card list-panel">
+        <div className="card-body p-0">
+          <Table
+            columns={columns}
+            data={currentItems}
+            emptyMessage="No se encontraron productos"
+            onRowClick={(row) => navigate(`/productos/${row.id_producto}`)}
+          />
+        </div>
+        <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      </div>
 
       <Modal
         isOpen={modalOpen}

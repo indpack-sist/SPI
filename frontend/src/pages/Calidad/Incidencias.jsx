@@ -471,7 +471,7 @@ function Incidencias() {
         )}
       </div>
 
-      <div className="card">
+      <div className="card list-panel">
         <div className="card-header flex justify-between items-center">
           <h2 className="card-title">Listado ({incidenciasFiltradas.length})</h2>
           <button className="btn btn-sm btn-outline" onClick={() => cargarDatos({ silencioso: true })} disabled={refreshing}>

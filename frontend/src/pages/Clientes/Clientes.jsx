@@ -470,8 +470,12 @@ function Clientes() {
         </div>
       </div>
 
-      <Table columns={columns} data={currentItems} emptyMessage="No se encontraron clientes" />
-      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      <div className="card list-panel">
+        <div className="card-body p-0">
+          <Table columns={columns} data={currentItems} emptyMessage="No se encontraron clientes" />
+        </div>
+        <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      </div>
 
       <Modal isOpen={modalOpen} onClose={cerrarModal} title={editando ? 'Editar Cliente' : 'Nuevo Cliente'} size="lg">
         <form onSubmit={handleSubmit}>

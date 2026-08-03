@@ -267,12 +267,16 @@ function Proveedores() {
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        data={currentItems}
-        emptyMessage="No se encontraron proveedores"
-      />
-      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      <div className="card list-panel">
+        <div className="card-body p-0">
+          <Table
+            columns={columns}
+            data={currentItems}
+            emptyMessage="No se encontraron proveedores"
+          />
+        </div>
+        <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      </div>
 
       <Modal
         isOpen={modalOpen}

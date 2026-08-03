@@ -600,7 +600,7 @@ function Compras() {
         </div>
       </div>
 
-      <div className="card shadow-md">
+      <div className="card list-panel">
         <div className="card-header border-b-0 flex justify-between items-center">
           <h2 className="card-title">
             {activeTab === 'compras' ? 'Listado de Compras' : 'Formatos de Solicitud OC'}

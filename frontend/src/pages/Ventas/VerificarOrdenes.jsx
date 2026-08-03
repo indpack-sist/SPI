@@ -554,8 +554,8 @@ function VerificarOrdenes() {
           </div>
         </div>
       ) : (
-        <div className="card shadow-sm">
-          <div className="card-header flex justify-between items-center bg-gray-50/50">
+        <div className="card list-panel">
+          <div className="card-header flex justify-between items-center">
             <h2 className="card-title">
               {activeTab === 'pendientes' ? 'Órdenes Pendientes de Verificación' : 'Historial de Verificaciones Recientes'}
             </h2>

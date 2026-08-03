@@ -725,7 +725,7 @@ function PagosCobranzas() {
             </div>
           </div>
 
-          <div className="card">
+          <div className="card list-panel">
             <div className="card-header border-b-0">
               <h2 className="card-title">
                 Historial de Transacciones

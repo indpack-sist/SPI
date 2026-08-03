@@ -7,6 +7,7 @@ import {
   ArrowUpDown, RefreshCcw, AlertTriangle, Clock, ArrowRightLeft
 } from 'lucide-react';
 import Table from '../../components/UI/Table';
+import Pagination from '../../components/UI/Pagination';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import { cotizacionesAPI, tipoCambioAPI } from '../../config/api';
@@ -162,9 +163,6 @@ function Cotizaciones() {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = cotizacionesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(cotizacionesFiltradas.length / itemsPerPage);
-
-  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
-  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
 
   const estadisticas = (() => {
     const base = {
@@ -707,7 +705,7 @@ function Cotizaciones() {
         </div>
       </div>
 
-      <div className="card shadow-sm" ref={tablaRef}>
+      <div className="card list-panel" ref={tablaRef}>
         <div className="card-header">
           <div className="flex items-center gap-2">
             <h2 className="card-title">Lista de Cotizaciones</h2>
@@ -733,31 +731,13 @@ function Cotizaciones() {
           </div>
         </div>
 
-        {cotizacionesFiltradas.length > itemsPerPage && (
-          <div className="card-footer flex-wrap gap-2">
-            <button 
-              className="btn btn-sm btn-outline flex items-center gap-1"
-              onClick={goToPrevPage}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft size={16} /> <span className="hidden sm:inline">Anterior</span>
-            </button>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">
-                Página {currentPage} de {totalPages}
-              </span>
-            </div>
-
-            <button 
-              className="btn btn-sm btn-outline flex items-center gap-1"
-              onClick={goToNextPage}
-              disabled={currentPage === totalPages}
-            >
-              <span className="hidden sm:inline">Siguiente</span> <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={cotizacionesFiltradas.length}
+          itemsPerPage={itemsPerPage}
+          setCurrentPage={setCurrentPage}
+        />
       </div>
     </div>
   );

@@ -153,17 +153,17 @@ function IncidenciasPorProducto() {
                       style={{
                         padding: '8px 10px',
                         borderRadius: '8px',
-                        border: activo ? '1px solid #2563EB' : '1px solid #E5E7EB',
-                        backgroundColor: activo ? '#EFF6FF' : '#FFFFFF',
+                        border: activo ? '1px solid var(--accent)' : '1px solid var(--steel)',
+                        backgroundColor: activo ? 'var(--accent-dim)' : 'var(--carbon-mid)',
                         cursor: 'pointer'
                       }}
-                      onMouseEnter={(e) => { if (!activo) e.currentTarget.style.backgroundColor = '#F9FAFB'; }}
-                      onMouseLeave={(e) => { if (!activo) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
+                      onMouseEnter={(e) => { if (!activo) e.currentTarget.style.backgroundColor = 'var(--carbon-light)'; }}
+                      onMouseLeave={(e) => { if (!activo) e.currentTarget.style.backgroundColor = 'var(--carbon-mid)'; }}
                     >
-                      <Package size={16} style={{ color: activo ? '#2563EB' : '#9CA3AF', flexShrink: 0 }} />
+                      <Package size={16} style={{ color: activo ? 'var(--accent)' : 'var(--wire)', flexShrink: 0 }} />
                       <div style={{ minWidth: 0 }}>
-                        <div className="text-sm font-medium truncate" style={{ color: '#111827' }}>{p.nombre}</div>
-                        <div className="text-xs font-mono" style={{ color: '#6B7280' }}>{p.codigo}</div>
+                        <div className="text-sm font-medium truncate" style={{ color: 'var(--white)' }}>{p.nombre}</div>
+                        <div className="text-xs font-mono" style={{ color: 'var(--wire)' }}>{p.codigo}</div>
                       </div>
                     </button>
                   );

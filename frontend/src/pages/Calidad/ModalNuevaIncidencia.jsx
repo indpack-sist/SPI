@@ -225,14 +225,14 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
             ) : salidaProductos.length === 0 ? (
               <p className="text-muted text-sm py-2">Esta salida no tiene productos.</p>
             ) : (
-              <div className="flex flex-col gap-2" style={{ border: '1px solid #E5E7EB', borderRadius: '8px', padding: '8px' }}>
+              <div className="flex flex-col gap-2" style={{ border: '1px solid var(--steel)', borderRadius: '8px', padding: '8px' }}>
                 {salidaProductos.map(d => {
                   const sel = seleccionSalida[d.id_producto] || {};
                   return (
                     <div
                       key={d.id_producto}
                       className="flex items-center gap-3"
-                      style={{ padding: '6px 8px', borderRadius: '6px', backgroundColor: sel.checked ? '#EFF6FF' : 'transparent' }}
+                      style={{ padding: '6px 8px', borderRadius: '6px', backgroundColor: sel.checked ? 'var(--accent-dim)' : 'transparent' }}
                     >
                       <input
                         type="checkbox"
@@ -241,8 +241,8 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
                         style={{ width: 16, height: 16, flexShrink: 0 }}
                       />
                       <div className="flex items-center gap-2 min-w-0" style={{ flex: 1 }}>
-                        <Package size={16} style={{ color: '#9CA3AF', flexShrink: 0 }} />
-                        <span className="text-sm font-medium truncate" style={{ color: '#111827' }}>{d.producto}</span>
+                        <Package size={16} style={{ color: 'var(--wire)', flexShrink: 0 }} />
+                        <span className="text-sm font-medium truncate" style={{ color: 'var(--white)' }}>{d.producto}</span>
                         <span className="text-xs text-muted whitespace-nowrap">
                           (despachado: {parseFloat(d.cantidad)} {d.unidad_medida || ''})
                         </span>
@@ -279,12 +279,12 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
             <label className="form-label">Producto afectado</label>
 
             {prodSeleccionado ? (
-              <div className="flex items-center justify-between gap-2 p-2 rounded-lg border" style={{ borderColor: '#2563EB', backgroundColor: '#EFF6FF' }}>
+              <div className="flex items-center justify-between gap-2 p-2 rounded-lg border" style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--accent-dim)' }}>
                 <div className="flex items-center gap-2 min-w-0">
-                  <Package size={16} style={{ color: '#2563EB', flexShrink: 0 }} />
+                  <Package size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
-                    <div className="text-sm font-medium truncate" style={{ color: '#111827' }}>{prodSeleccionado.nombre}</div>
-                    <div className="text-xs font-mono" style={{ color: '#6B7280' }}>{prodSeleccionado.codigo}</div>
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--white)' }}>{prodSeleccionado.nombre}</div>
+                    <div className="text-xs font-mono" style={{ color: 'var(--wire)' }}>{prodSeleccionado.codigo}</div>
                   </div>
                 </div>
                 <button
@@ -314,7 +314,7 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
                 {prodBusqueda.trim() && (
                   <div
                     className="flex flex-col gap-1"
-                    style={{ maxHeight: '220px', overflowY: 'auto', marginTop: '6px', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '6px', backgroundColor: '#FFFFFF' }}
+                    style={{ maxHeight: '220px', overflowY: 'auto', marginTop: '6px', border: '1px solid var(--steel)', borderRadius: '8px', padding: '6px', backgroundColor: 'var(--carbon-mid)' }}
                   >
                     {productosFiltrados.length === 0 ? (
                       <p className="text-muted text-sm text-center py-3">Sin resultados para "{prodBusqueda}".</p>
@@ -330,14 +330,14 @@ function ModalNuevaIncidencia({ isOpen, onClose, onCreated, prefill = {} }) {
                             setProdBusqueda('');
                           }}
                           className="text-left w-full flex items-center gap-2"
-                          style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#FFFFFF', cursor: 'pointer' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F9FAFB'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
+                          style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--steel)', backgroundColor: 'var(--carbon-mid)', cursor: 'pointer' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--carbon-light)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--carbon-mid)'; }}
                         >
-                          <Package size={16} style={{ color: '#9CA3AF', flexShrink: 0 }} />
+                          <Package size={16} style={{ color: 'var(--wire)', flexShrink: 0 }} />
                           <div style={{ minWidth: 0 }}>
-                            <div className="text-sm font-medium truncate" style={{ color: '#111827' }}>{p.nombre}</div>
-                            <div className="text-xs font-mono" style={{ color: '#6B7280' }}>{p.codigo}</div>
+                            <div className="text-sm font-medium truncate" style={{ color: 'var(--white)' }}>{p.nombre}</div>
+                            <div className="text-xs font-mono" style={{ color: 'var(--wire)' }}>{p.codigo}</div>
                           </div>
                         </button>
                       ))

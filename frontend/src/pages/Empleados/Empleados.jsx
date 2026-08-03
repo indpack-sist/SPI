@@ -370,12 +370,16 @@ function Empleados() {
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        data={currentItems}
-        emptyMessage="No se encontraron empleados"
-      />
-      <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      <div className="card list-panel">
+        <div className="card-body p-0">
+          <Table
+            columns={columns}
+            data={currentItems}
+            emptyMessage="No se encontraron empleados"
+          />
+        </div>
+        <Pagination {...paginacion} setCurrentPage={setCurrentPage} />
+      </div>
     
       <Modal
         isOpen={modalOpen}

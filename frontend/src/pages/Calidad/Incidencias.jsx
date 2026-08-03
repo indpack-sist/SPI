@@ -323,7 +323,7 @@ function Incidencias() {
       <div className="card mb-6">
         <button
           type="button"
-          className="card-header flex justify-between items-center w-full text-left"
+          className="card-header section-toggle flex justify-between items-center w-full text-left"
           onClick={() => setMostrarResumen(v => !v)}
         >
           <h3 className="card-title text-lg flex items-center gap-2"><ShieldAlert size={18} /> Resumen</h3>
@@ -376,7 +376,7 @@ function Incidencias() {
 
       <div className="card mb-6">
         <div className="card-header flex justify-between items-center">
-          <button type="button" className="flex items-center gap-2 text-left" onClick={() => setMostrarFiltros(v => !v)}>
+          <button type="button" className="section-toggle flex items-center gap-2 text-left" onClick={() => setMostrarFiltros(v => !v)}>
             <h3 className="card-title text-lg flex items-center gap-2">
               <Filter size={18} /> Filtros
               {filtrosActivos > 0 && <span className="badge badge-primary text-xs">{filtrosActivos}</span>}

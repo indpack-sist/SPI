@@ -33,6 +33,7 @@
     "node-forge": "^1.4.0",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.13.0",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
     "xlsx": "^0.18.5",
     "xml-crypto": "^6.1.2",

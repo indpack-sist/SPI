@@ -49,6 +49,7 @@ import {
   vincularFacturaSunat,
   emitirFacturaElectronica,
   anularFacturaElectronica,
+  generarPDFFacturaElectronica,
   verificarOC,
   getDocumentosAdicionales,
   agregarDocumentoAdicional,
@@ -130,5 +131,6 @@ router.put('/:id', verificarToken, puedeEditarOrdenRechazada, uploadArchivos, up
 router.put('/:id/vincular-sunat', verificarToken, verificarOrdenAprobada, uploadMiddleware.single('pdf'), vincularFacturaSunat);
 router.post('/:id/despachos/:idSalida/emitir-electronica', verificarToken, verificarOrdenAprobada, emitirFacturaElectronica);
 router.post('/:id/facturas/:idFactura/anular-electronica', verificarToken, anularFacturaElectronica);
+router.get('/:id/facturas/:idFactura/pdf-electronico', verificarToken, generarPDFFacturaElectronica);
 
 export default router;

@@ -609,6 +609,9 @@ export const ordenesVentaAPI = {
   emitirFacturaElectronica: (id, idSalida, data = {}) =>
     api.post(`/ordenes-venta/${id}/despachos/${idSalida}/emitir-electronica`, data),
 
+  anularFacturaElectronica: (id, idFactura, data) =>
+    api.post(`/ordenes-venta/${id}/facturas/${idFactura}/anular-electronica`, data),
+
   anularOrden: (id, motivo_anulacion) => 
     api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),
 

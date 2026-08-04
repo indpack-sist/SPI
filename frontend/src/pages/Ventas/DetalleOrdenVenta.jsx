@@ -1290,13 +1290,21 @@ function DetalleOrdenVenta() {
       return;
     }
 
+    // Facturas emitidas por el sistema (electrónicas) se anulan ante SUNAT
+    // (Comunicación de Baja). Las manuales solo se marcan en BD.
+    const esElectronica = ['ACEPTADO', 'OBSERVADO'].includes(facturaAAnular.sunat_estado);
+
     try {
       setProcesando(true);
       setError(null);
 
-      const response = await ordenesVentaAPI.anularFacturaSunat(id, facturaAAnular.id_factura, {
-        motivo_anulacion: motivoAnulacionFactura
-      });
+      const response = esElectronica
+        ? await ordenesVentaAPI.anularFacturaElectronica(id, facturaAAnular.id_factura, {
+            motivo_anulacion: motivoAnulacionFactura,
+          })
+        : await ordenesVentaAPI.anularFacturaSunat(id, facturaAAnular.id_factura, {
+            motivo_anulacion: motivoAnulacionFactura,
+          });
 
       if (response.data.success) {
         setSuccess(response.data.message);

@@ -8,49 +8,22 @@
  * producto único por orden, precio inmutable).
  */
 import { pool } from '../../config/database.js';
-import { AMBIENTE } from './config.js';
 import { construirFacturaXml } from './ubl/factura.builder.js';
 import { firmarXml } from './firma.service.js';
 import { enviarFactura } from './cpe.client.js';
 import { siguienteCorrelativo } from './correlativo.service.js';
+import { getEmisor } from './emisor.service.js';
 
 const SERIE_FACTURA = 'F002'; // serie dedicada del sistema (manual = E001, aparte)
 
-// Emisor de PRUEBAS para Beta (homologación SUNAT).
-const EMISOR_BETA = {
-  ruc: '20000000001',
-  razonSocial: 'EMPRESA DE PRUEBA SEE',
-  nombreComercial: 'EMPRESA DE PRUEBA SEE',
-  ubigeo: '150101',
-  direccion: 'AV. PRUEBA 123',
-  distrito: 'LIMA',
-  provincia: 'LIMA',
-  departamento: 'LIMA',
-};
-
 const TIPO_DOC_SUNAT = { RUC: '6', DNI: '1' };
-
-async function getEmisor() {
-  if (AMBIENTE !== 'produccion') return EMISOR_BETA;
-  const [[c]] = await pool.query('SELECT * FROM empresa_config WHERE id=1');
-  if (!c) throw new Error('empresa_config no configurada para Producción');
-  return {
-    ruc: c.ruc,
-    razonSocial: c.razon_social,
-    nombreComercial: c.nombre_comercial || c.razon_social,
-    ubigeo: c.ubigeo,
-    direccion: c.direccion,
-    distrito: c.distrito,
-    provincia: c.provincia,
-    departamento: c.departamento,
-  };
-}
 
 /** Lee de la BD y arma el objeto `datos` que consume el builder. */
 export async function construirDatosDesdeSalida(idSalida) {
   const [[salida]] = await pool.query(
     `SELECT s.id_salida, s.id_orden_venta, s.moneda,
-            ov.tipo_venta, ov.dias_credito, ov.fecha_vencimiento, ov.id_cliente
+            ov.tipo_venta, ov.dias_credito, ov.fecha_vencimiento, ov.id_cliente,
+            ov.es_exportacion
      FROM salidas s
      JOIN ordenes_venta ov ON ov.id_orden_venta = s.id_orden_venta
      WHERE s.id_salida = ?`,
@@ -89,12 +62,14 @@ export async function construirDatosDesdeSalida(idSalida) {
     };
   });
 
-  const tipoDoc = TIPO_DOC_SUNAT[cliente.tipo_documento] || '6';
+  const esExportacion = salida.es_exportacion === 1;
+  // En exportación el receptor es no domiciliado: tipo de documento 0 (no RUC).
+  const tipoDoc = esExportacion ? '0' : (TIPO_DOC_SUNAT[cliente.tipo_documento] || '6');
 
   return {
     _salida: salida,
     serie: SERIE_FACTURA,
-    tipoOperacion: '0101', // venta interna gravada (exportación se marcará aparte)
+    tipoOperacion: esExportacion ? '0200' : '0101', // 0200 = exportación (IGV 0%)
     moneda: salida.moneda === 'USD' ? 'USD' : 'PEN',
     formaPago: salida.tipo_venta === 'Crédito' ? 'Credito' : 'Contado',
     cuotas:

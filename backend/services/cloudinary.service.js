@@ -13,6 +13,25 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
+/**
+ * Sube contenido de texto (XML firmado, CDR) a Cloudinary como archivo raw.
+ * @param {string} nombre     nombre base sin extensión, ej. 20550932297-01-F002-1
+ * @param {string} contenido  texto a subir
+ * @param {string} folder
+ * @param {string} extension  ej. '.xml'
+ * @returns {Promise<object>} resultado Cloudinary (con secure_url)
+ */
+export const subirTextoACloudinary = async (nombre, contenido, folder, extension = '.xml') => {
+  return new Promise((resolve, reject) => {
+    const publicId = `${nombre.replace(/\s+/g, '_')}${extension}`;
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: 'raw', public_id: publicId },
+      (error, result) => (error ? reject(error) : resolve(result))
+    );
+    uploadStream.end(Buffer.from(contenido, 'utf8'));
+  });
+};
+
 export const subirArchivoACloudinary = async (file, folder = 'indpack_solicitudes') => {
   return new Promise((resolve, reject) => {
     try {

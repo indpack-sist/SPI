@@ -93,6 +93,7 @@ function DetalleOrdenVenta() {
   // Vincular factura / documento a un despacho concreto (id_salida)
   const [salidaParaFactura, setSalidaParaFactura] = useState(null);
   const [salidaFacturaInfo, setSalidaFacturaInfo] = useState({ valor: 0, facturado: 0 });
+  const [emitiendoSee, setEmitiendoSee] = useState(null); // id_salida en emisión electrónica
   const [modalDocDespacho, setModalDocDespacho] = useState(false);
   const [salidaParaDoc, setSalidaParaDoc] = useState(null);
   const [formDocDespacho, setFormDocDespacho] = useState({ tipo_documento: '', correlativo: '', archivos: [] });
@@ -1451,6 +1452,31 @@ function DetalleOrdenVenta() {
     setSalidaFacturaInfo({ valor: calcularValorConIgv(row.total_precio), facturado });
     const input = document.getElementById('facturaSunatDespachoInput');
     if (input) input.click();
+  };
+
+  // Emisión electrónica nativa (SEE SUNAT) del despacho. Serie del sistema F002.
+  const handleEmitirElectronica = async (row, forzar = false) => {
+    const numSal = `SAL-${String(row.numero_salida).padStart(6, '0')}`;
+    if (!forzar && !confirm(`¿Emitir factura electrónica (SUNAT) del despacho ${numSal}?\nSe generará un comprobante en serie F002 y se enviará a SUNAT.`)) return;
+    try {
+      setEmitiendoSee(row.id_salida);
+      setError(null);
+      const res = await ordenesVentaAPI.emitirFacturaElectronica(id, row.id_salida, forzar ? { forzar: true } : {});
+      if (res.data.success) {
+        const d = res.data.data;
+        setSuccess(`Factura ${d.numeroFactura} ${d.estado} por SUNAT.${d.observaciones?.length ? ' Obs: ' + d.observaciones.join('; ') : ''}`);
+        await cargarDatos();
+      }
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.code === 'DESPACHO_YA_EMITIDO') {
+        if (confirm(`${data.error}\n¿Emitir otra de todas formas?`)) return handleEmitirElectronica(row, true);
+        return;
+      }
+      setError(data?.error || 'Error al emitir la factura electrónica');
+    } finally {
+      setEmitiendoSee(null);
+    }
   };
 
   const handleEliminarDocumento = async (idDoc) => {
@@ -3294,6 +3320,17 @@ function DetalleOrdenVenta() {
                                    title="Vincular factura a este despacho"
                                  >
                                    <BadgeCheck size={12} className="mr-1"/> + Factura
+                                 </button>
+                                 <button
+                                   className="btn btn-xs btn-outline border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                                   onClick={() => handleEmitirElectronica(row)}
+                                   disabled={emitiendoSee === row.id_salida}
+                                   title="Emitir factura electrónica a SUNAT (serie F002)"
+                                 >
+                                   {emitiendoSee === row.id_salida
+                                     ? <span className="animate-spin rounded-full h-3 w-3 border-2 border-current mr-1 inline-block"></span>
+                                     : <FileText size={12} className="mr-1"/>}
+                                   Emitir SEE
                                  </button>
                                </div>
                              ) : <span className="text-xs text-gray-400">—</span>;

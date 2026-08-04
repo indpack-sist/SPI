@@ -47,6 +47,7 @@ import {
   asignarGuiaInternaASalida,
   parsearFacturaSunat,
   vincularFacturaSunat,
+  emitirFacturaElectronica,
   verificarOC,
   getDocumentosAdicionales,
   agregarDocumentoAdicional,
@@ -126,5 +127,6 @@ router.delete('/:id/documentos/:idDoc', verificarToken, eliminarDocumentoAdicion
 router.get('/:id', verificarToken, getOrdenVentaById);
 router.put('/:id', verificarToken, puedeEditarOrdenRechazada, uploadArchivos, updateOrdenVenta);
 router.put('/:id/vincular-sunat', verificarToken, verificarOrdenAprobada, uploadMiddleware.single('pdf'), vincularFacturaSunat);
+router.post('/:id/despachos/:idSalida/emitir-electronica', verificarToken, verificarOrdenAprobada, emitirFacturaElectronica);
 
 export default router;

@@ -3,7 +3,8 @@ import { parseSunatInvoice } from '../services/sunat-parser.service.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
-import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
+import { subirArchivoACloudinary, subirTextoACloudinary } from '../services/cloudinary.service.js';
+import { emitirDesdeSalida } from '../services/sunat/emision.service.js';
 import { 
   verificarOrdenAprobada, 
   esVerificador, 
@@ -4690,5 +4691,106 @@ export async function vincularFacturaSunat(req, res) {
   } catch (error) {
     console.error('Error en vincularFacturaSunat:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+// POST /:id/despachos/:idSalida/emitir-electronica
+// Emite la factura de un despacho vía SEE (SUNAT) de forma nativa y la registra
+// en facturas_venta. Serie dedicada del sistema (F002), separada de la manual.
+export async function emitirFacturaElectronica(req, res) {
+  const idOrden = parseInt(req.params.id, 10);
+  const idSalida = parseInt(req.params.idSalida, 10);
+  const forzar = [true, 'true', 1, '1'].includes(req.body?.forzar);
+  const id_empleado = req.user?.id_empleado || null;
+
+  try {
+    // 1. El despacho debe pertenecer a la orden
+    const salidaRes = await executeQuery(
+      `SELECT id_salida, id_cliente, moneda, id_orden_venta
+         FROM salidas WHERE id_salida = ? AND id_orden_venta = ?`,
+      [idSalida, idOrden]
+    );
+    if (!salidaRes.success || salidaRes.data.length === 0) {
+      return res.status(400).json({ success: false, error: 'El despacho no pertenece a esta orden.' });
+    }
+    const salida = salidaRes.data[0];
+
+    // 2. Regla: 1 factura electrónica por despacho (evita doble emisión)
+    const yaRes = await executeQuery(
+      `SELECT numero_factura FROM facturas_venta
+         WHERE id_salida = ? AND estado = 'Emitida' AND sunat_estado IN ('ACEPTADO','OBSERVADO') LIMIT 1`,
+      [idSalida]
+    );
+    if (yaRes.success && yaRes.data.length > 0 && !forzar) {
+      return res.status(409).json({
+        success: false, code: 'DESPACHO_YA_EMITIDO',
+        error: `Este despacho ya fue facturado electrónicamente (${yaRes.data[0].numero_factura}).`,
+      });
+    }
+
+    // 3. Emitir a SUNAT (consume correlativo F002 real)
+    const r = await emitirDesdeSalida(idSalida);
+    const numeroFactura = `${r.serie}-${r.correlativo}`;
+
+    if (r.cdr.estado === 'RECHAZADO') {
+      return res.status(422).json({
+        success: false, code: 'SUNAT_RECHAZO',
+        error: `SUNAT rechazó ${numeroFactura}: [${r.cdr.responseCode}] ${r.cdr.description}`,
+        data: { numeroFactura, responseCode: r.cdr.responseCode, description: r.cdr.description },
+      });
+    }
+
+    // 4. Respaldo del XML firmado y el CDR en Cloudinary (no bloquea si falla)
+    let xmlUrl = null, cdrUrl = null;
+    try {
+      xmlUrl = (await subirTextoACloudinary(r.nombreArchivo, r.xmlFirmado, 'indpack_ventas/see_xml', '.xml')).secure_url;
+      cdrUrl = (await subirTextoACloudinary('R-' + r.nombreArchivo, r.cdr.cdrXml, 'indpack_ventas/see_cdr', '.xml')).secure_url;
+    } catch (e) {
+      console.error('Fallo subida XML/CDR a Cloudinary:', e.message);
+    }
+
+    // 5. Registrar en facturas_venta
+    const subtotal = +(r.totales.gravado + r.totales.exportacion).toFixed(2);
+    const insert = await executeQuery(
+      `INSERT INTO facturas_venta
+         (numero_factura, id_orden_venta, id_salida, id_cliente, fecha_emision, tipo_comprobante,
+          serie, numero, subtotal, igv, total, moneda, estado,
+          sunat_estado, sunat_response_code, sunat_response_desc, hash_see, xml_url, cdr_url,
+          codigo_tipo_sunat, id_registrado_por)
+       VALUES (?, ?, ?, ?, ?, 'Factura', ?, ?, ?, ?, ?, ?, 'Emitida',
+               ?, ?, ?, ?, ?, ?, '01', ?)`,
+      [
+        numeroFactura, idOrden, idSalida, salida.id_cliente, getFechaPeru(),
+        r.serie, r.correlativo, subtotal, r.totales.igv, r.totales.total,
+        (salida.moneda === 'USD' ? 'USD' : 'PEN'),
+        r.cdr.estado, r.cdr.responseCode, (r.cdr.description || '').slice(0, 255),
+        r.digestValue, xmlUrl ? JSON.stringify([xmlUrl]) : null, cdrUrl ? JSON.stringify([cdrUrl]) : null,
+        id_empleado,
+      ]
+    );
+    if (!insert.success) {
+      // Se emitió en SUNAT pero falló el registro: devolvemos las URLs para no perder el respaldo.
+      return res.status(500).json({
+        success: false, code: 'EMITIDO_SIN_REGISTRO',
+        error: `La factura ${numeroFactura} fue ${r.cdr.estado} por SUNAT, pero falló su registro en BD.`,
+        data: { numeroFactura, responseCode: r.cdr.responseCode, xmlUrl, cdrUrl },
+        details: insert.error,
+      });
+    }
+
+    await sincronizarResumenFacturacion(idOrden);
+
+    return res.json({
+      success: true,
+      message: `Factura ${numeroFactura} emitida y ${r.cdr.estado} por SUNAT`,
+      data: {
+        id_factura: insert.data.insertId, numeroFactura, estado: r.cdr.estado,
+        responseCode: r.cdr.responseCode, totales: r.totales,
+        observaciones: r.cdr.observaciones || [], xmlUrl, cdrUrl,
+      },
+    });
+  } catch (error) {
+    console.error('Error en emitirFacturaElectronica:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 }

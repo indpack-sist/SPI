@@ -1487,6 +1487,21 @@ function DetalleOrdenVenta() {
     }
   };
 
+  // Abre la representación impresa (PDF con QR) de una factura electrónica.
+  const handleVerPDFElectronico = async (factura) => {
+    try {
+      setError(null);
+      const res = await ordenesVentaAPI.pdfFacturaElectronica(id, factura.id_factura);
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      let msg = 'Error al generar el PDF electrónico';
+      try { if (err.response?.data?.text) msg = JSON.parse(await err.response.data.text())?.error || msg; } catch {}
+      setError(msg);
+    }
+  };
+
   const handleEliminarDocumento = async (idDoc) => {
     try {
       setEliminandoDocumento(idDoc);
@@ -2739,6 +2754,15 @@ function DetalleOrdenVenta() {
                                             <span className="font-mono font-bold text-emerald-800">{facturas[facturaTabActiva].numero_factura}</span>
                                         </div>
                                         <div className="flex items-center gap-1">
+                                            {['ACEPTADO', 'OBSERVADO', 'BAJA'].includes(facturas[facturaTabActiva].sunat_estado) && (
+                                                <button
+                                                    className="btn btn-xs btn-outline border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+                                                    onClick={() => handleVerPDFElectronico(facturas[facturaTabActiva])}
+                                                    title="Ver representación impresa (PDF con QR) de la factura electrónica"
+                                                >
+                                                    <FileText size={14} className="mr-1" /> PDF SEE
+                                                </button>
+                                            )}
                                             {facturas[facturaTabActiva].url_pdf && (
                                                 <button
                                                     className="btn btn-xs btn-outline border-emerald-300 text-emerald-700 hover:bg-emerald-100"

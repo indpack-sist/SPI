@@ -612,6 +612,9 @@ export const ordenesVentaAPI = {
   anularFacturaElectronica: (id, idFactura, data) =>
     api.post(`/ordenes-venta/${id}/facturas/${idFactura}/anular-electronica`, data),
 
+  pdfFacturaElectronica: (id, idFactura) =>
+    api.get(`/ordenes-venta/${id}/facturas/${idFactura}/pdf-electronico`, { responseType: 'blob' }),
+
   anularOrden: (id, motivo_anulacion) => 
     api.delete(`/ordenes-venta/${id}/anular`, { data: { motivo_anulacion } }),
 

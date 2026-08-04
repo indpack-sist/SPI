@@ -4,8 +4,10 @@ import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 import { subirArchivoACloudinary, subirTextoACloudinary } from '../services/cloudinary.service.js';
-import { emitirDesdeSalida } from '../services/sunat/emision.service.js';
+import { emitirDesdeSalida, construirDatosDesdeSalida } from '../services/sunat/emision.service.js';
 import { anularFactura } from '../services/sunat/anulacion.service.js';
+import { getEmisor } from '../services/sunat/emisor.service.js';
+import { generarFacturaElectronicaPDF } from '../utils/pdfGenerators/facturaElectronicaPDF.js';
 import { 
   verificarOrdenAprobada, 
   esVerificador, 
@@ -4879,6 +4881,78 @@ export async function anularFacturaElectronica(req, res) {
     });
   } catch (error) {
     console.error('Error en anularFacturaElectronica:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+// GET /:id/facturas/:idFactura/pdf-electronico
+// Genera la representación impresa (PDF con QR) de una factura electrónica.
+export async function generarPDFFacturaElectronica(req, res) {
+  try {
+    const { id, idFactura } = req.params;
+
+    const facRes = await executeQuery(
+      `SELECT id_factura, numero_factura, serie, numero, moneda, fecha_emision,
+              subtotal, igv, total, hash_see, id_salida, id_cliente, estado, sunat_estado
+         FROM facturas_venta WHERE id_factura = ? AND id_orden_venta = ?`,
+      [idFactura, id]
+    );
+    if (!facRes.success || facRes.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Factura no encontrada' });
+    }
+    const f = facRes.data[0];
+    if (!f.id_salida) {
+      return res.status(400).json({ success: false, error: 'La factura no está asociada a un despacho; no se puede reconstruir el detalle.' });
+    }
+
+    const [emisor, datos] = await Promise.all([getEmisor(), construirDatosDesdeSalida(f.id_salida)]);
+    const esExportacion = datos.tipoOperacion === '0200';
+
+    const docLabelMap = { '6': 'RUC', '1': 'DNI', '0': 'Doc. No Domic.' };
+    const fecha = new Date(f.fecha_emision);
+    const fechaISO = fecha.toISOString().slice(0, 10);
+    const fechaDisplay = fechaISO.split('-').reverse().join('/');
+
+    const igv = Number(f.igv || 0);
+    const total = Number(f.total || 0);
+    const subtotal = Number(f.subtotal || 0);
+
+    // QR: RUC|tipo|serie|numero|IGV|total|fecha|tipoDocReceptor|numDocReceptor|hash
+    const qrString = [
+      emisor.ruc, '01', f.serie, f.numero, igv.toFixed(2), total.toFixed(2),
+      fechaISO, datos.cliente.tipoDoc, datos.cliente.numDoc, f.hash_see || '',
+    ].join('|');
+
+    const pdfBuffer = await generarFacturaElectronicaPDF({
+      emisor,
+      serie: f.serie,
+      numero: f.numero,
+      fechaEmision: fechaDisplay,
+      moneda: f.moneda,
+      esExportacion,
+      cliente: {
+        razonSocial: datos.cliente.razonSocial,
+        docLabel: docLabelMap[datos.cliente.tipoDoc] || 'Doc.',
+        numDoc: datos.cliente.numDoc,
+        direccion: datos.cliente.direccion,
+      },
+      lineas: datos.lineas,
+      totales: {
+        gravado: esExportacion ? 0 : subtotal,
+        exportacion: esExportacion ? subtotal : 0,
+        igv,
+        total,
+      },
+      hash: f.hash_see,
+      sunatEstado: f.estado === 'Anulada' ? 'ANULADA' : f.sunat_estado,
+      qrString,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${f.numero_factura}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error en generarPDFFacturaElectronica:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }

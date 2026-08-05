@@ -87,7 +87,9 @@ export const menuConfig = [
     items: [
       // Visible solo para Administrador y Calidad (seguimiento de despachos).
       { path: '/inventario/salidas', icon: ArrowUpFromLine, label: 'Salidas', modulo: 'salidas', color: '#C0392B', rolesIncluidos: ['Administrador', 'Calidad'] },
-      { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas', color: '#2980B9', rolesIncluidos: ['Administrador'] }
+      { path: '/inventario/entradas', icon: ArrowDownToLine, label: 'Entradas', modulo: 'entradas', color: '#2980B9', rolesIncluidos: ['Administrador'] },
+      // Valorización + reportes PDF (Kardex y Reporte por Producto). Muestra costos: solo Administrador.
+      { path: '/inventario/stock', icon: FileSpreadsheet, label: 'Valorización y Reportes', modulo: 'salidas', color: '#16A085', rolesIncluidos: ['Administrador'] }
       // { path: '/inventario/transferencias', icon: ArrowLeftRight, label: 'Transferencias', modulo: 'transferencias', color: '#F39C12' }
     ]
   },

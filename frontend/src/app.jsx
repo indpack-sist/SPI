@@ -51,6 +51,8 @@ import GuiasTransportista from './pages/Ventas/GuiasTransportista';
 import NuevaGuiaTransportista from './pages/Ventas/NuevaGuiaTransportista';
 import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
 import ReporteVentas from './pages/Ventas/ReporteVentas'; // <--- NUEVO IMPORT
+import SeguimientoVentas from './pages/Ventas/SeguimientoVentas';
+import SeguimientoVentaDetalle from './pages/Ventas/SeguimientoVentaDetalle';
 
 import Compras from './pages/Compras/Compras';
 import NuevaCompra from './pages/Compras/NuevaCompra';
@@ -359,13 +361,31 @@ function App() {
                         } 
                       />
                       
-                      <Route 
-                        path="/ventas/guias-remision" 
+                      {/* --- SEGUIMIENTO DE DESPACHOS (Calidad, sin precios) --- */}
+                      <Route
+                        path="/ventas/seguimiento"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="seguimientoVentas">
+                            <SeguimientoVentas />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+                      <Route
+                        path="/ventas/seguimiento/:id"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="seguimientoVentas">
+                            <SeguimientoVentaDetalle />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+
+                      <Route
+                        path="/ventas/guias-remision"
                         element={
                           <ProtectedRouteWithPermiso modulo="guiasRemision">
                             <GuiasRemision />
                           </ProtectedRouteWithPermiso>
-                        } 
+                        }
                       />
                       <Route 
                         path="/ventas/guias-remision/nueva" 

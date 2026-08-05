@@ -23,6 +23,7 @@ const PERMISOS_POR_ROL = {
       pagosCobranzas: true,
       listasPrecios: true,
       reportes: true,
+      seguimientoVentas: true,
       verPrecios: true
     },
     api: {
@@ -45,7 +46,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: true,
-      reportes: true
+      reportes: true,
+      seguimientoVentas: true
     }
   },
   'Calidad': {
@@ -65,6 +67,7 @@ const PERMISOS_POR_ROL = {
       incidencias: true,
       cotizaciones: false,
       ordenesVenta: false,
+      seguimientoVentas: false,
       compras: true,
       cuentasPago: false,
       pagosCobranzas: false,
@@ -88,6 +91,7 @@ const PERMISOS_POR_ROL = {
       incidencias: true,
       cotizaciones: false,
       ordenesVenta: false,
+      seguimientoVentas: false,
       compras: true,
       cuentasPago: true,
       pagosCobranzas: false,

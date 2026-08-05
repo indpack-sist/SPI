@@ -4,3 +4,10 @@ dist
 build
 .vercel
 .env*.local
+
+# Certificados digitales SEE (nunca versionar)
+backend/certs/
+*.pfx
+*.p12
+# XML/CDR generados en pruebas
+backend/sunat-output/

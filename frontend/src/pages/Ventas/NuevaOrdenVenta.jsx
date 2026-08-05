@@ -92,8 +92,9 @@ function NuevaOrdenVenta() {
     tipo_impuesto: 'IGV',
     porcentaje_impuesto: 18.00,
     prioridad: 'Media',
-    tipo_venta: 'Contado', 
-    dias_credito: 0,       
+    es_exportacion: false,
+    tipo_venta: 'Contado',
+    dias_credito: 0,
     plazo_pago: 'Contado',
     forma_pago: '',
     direccion_entrega: '',
@@ -276,6 +277,7 @@ useEffect(() => {
           tipo_impuesto: configImpuesto.codigo,
           porcentaje_impuesto: configImpuesto.porcentaje,
           prioridad: orden.prioridad,
+          es_exportacion: !!orden.es_exportacion,
           tipo_venta: orden.tipo_venta || 'Contado',
           dias_credito: orden.dias_credito || 0,
           plazo_pago: orden.plazo_pago || '',
@@ -1189,6 +1191,24 @@ useEffect(() => {
                     />
                   </div>
                 </div>
+
+                {/* Facturación electrónica (SEE) — checkbox de exportación OCULTO temporalmente. Reactivar cambiando `false` por `true`. */}
+                {false && (
+                <div className="mb-3 p-2 rounded-lg border border-indigo-200 bg-indigo-50/50">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-indigo-800">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-indigo-600"
+                      checked={formCabecera.es_exportacion}
+                      onChange={(e) => setFormCabecera({ ...formCabecera, es_exportacion: e.target.checked })}
+                    />
+                    Factura de exportación (IGV 0%)
+                  </label>
+                  <p className="text-[11px] text-indigo-600 mt-0.5 ml-6">
+                    Marca esto si la venta es de exportación; el comprobante se emitirá como operación 0200 sin IGV.
+                  </p>
+                </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

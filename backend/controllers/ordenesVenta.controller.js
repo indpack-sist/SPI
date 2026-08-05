@@ -3,7 +3,11 @@ import { parseSunatInvoice } from '../services/sunat-parser.service.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
-import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
+import { subirArchivoACloudinary, subirTextoACloudinary } from '../services/cloudinary.service.js';
+import { emitirDesdeSalida, construirDatosDesdeSalida } from '../services/sunat/emision.service.js';
+import { anularFactura } from '../services/sunat/anulacion.service.js';
+import { getEmisor } from '../services/sunat/emisor.service.js';
+import { generarFacturaElectronicaPDF } from '../utils/pdfGenerators/facturaElectronicaPDF.js';
 import { 
   verificarOrdenAprobada, 
   esVerificador, 
@@ -711,8 +715,8 @@ export async function createOrdenVenta(req, res) {
         transporte_conductor, transporte_dni, direccion_entrega, lugar_entrega, ciudad_entrega,
         contacto_entrega, telefono_entrega, observaciones, id_comercial, id_registrado_por,
         subtotal, igv, total, estado, estado_verificacion, stock_reservado,
-        estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc
-      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?)
+        estado_verificacion_oc, verificado_oc_por, fecha_verificacion_oc, es_exportacion
+      ) VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En Espera', 'Pendiente', 0, ?, ?, ?, ?)
     `, [
       numeroOrden, id_cliente, id_cotizacion || null,
       fecha_emision, fecha_entrega_estimada || null, fechaVencimientoFinal, prioridad || 'Media', moneda,
@@ -724,7 +728,8 @@ export async function createOrdenVenta(req, res) {
       subtotal, impuesto, total,
       estado_verificacion_oc || 'Sin verificar',
       estado_verificacion_oc === 'Verificado' ? (id_registrado_por || null) : null,
-      estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null
+      estado_verificacion_oc === 'Verificado' ? getFechaPeru() : null,
+      [true, 'true', 1, '1'].includes(req.body.es_exportacion) ? 1 : 0
     ]);
 
     if (!result.success) {
@@ -4498,6 +4503,7 @@ export async function getFacturasOrden(req, res) {
       SELECT
         fv.id_factura, fv.numero_factura, fv.serie, fv.numero, fv.tipo_comprobante,
         fv.fecha_emision, fv.subtotal, fv.igv, fv.total, fv.moneda, fv.estado,
+        fv.sunat_estado, fv.xml_url, fv.cdr_url,
         fv.url_pdf, fv.motivo_anulacion, fv.fecha_anulacion, fv.id_salida,
         e.nombre_completo  AS registrado_por,
         e2.nombre_completo AS anulado_por
@@ -4690,5 +4696,263 @@ export async function vincularFacturaSunat(req, res) {
   } catch (error) {
     console.error('Error en vincularFacturaSunat:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+// POST /:id/despachos/:idSalida/emitir-electronica
+// Emite la factura de un despacho vía SEE (SUNAT) de forma nativa y la registra
+// en facturas_venta. Serie dedicada del sistema (F002), separada de la manual.
+export async function emitirFacturaElectronica(req, res) {
+  const idOrden = parseInt(req.params.id, 10);
+  const idSalida = parseInt(req.params.idSalida, 10);
+  const forzar = [true, 'true', 1, '1'].includes(req.body?.forzar);
+  const id_empleado = req.user?.id_empleado || null;
+
+  try {
+    // 1. El despacho debe pertenecer a la orden
+    const salidaRes = await executeQuery(
+      `SELECT id_salida, id_cliente, moneda, id_orden_venta
+         FROM salidas WHERE id_salida = ? AND id_orden_venta = ?`,
+      [idSalida, idOrden]
+    );
+    if (!salidaRes.success || salidaRes.data.length === 0) {
+      return res.status(400).json({ success: false, error: 'El despacho no pertenece a esta orden.' });
+    }
+    const salida = salidaRes.data[0];
+
+    // 2. Regla: 1 factura electrónica por despacho (evita doble emisión)
+    const yaRes = await executeQuery(
+      `SELECT numero_factura FROM facturas_venta
+         WHERE id_salida = ? AND estado = 'Emitida' AND sunat_estado IN ('ACEPTADO','OBSERVADO') LIMIT 1`,
+      [idSalida]
+    );
+    if (yaRes.success && yaRes.data.length > 0 && !forzar) {
+      return res.status(409).json({
+        success: false, code: 'DESPACHO_YA_EMITIDO',
+        error: `Este despacho ya fue facturado electrónicamente (${yaRes.data[0].numero_factura}).`,
+      });
+    }
+
+    // 3. Emitir a SUNAT (consume correlativo F002 real)
+    const r = await emitirDesdeSalida(idSalida);
+    const numeroFactura = `${r.serie}-${r.correlativo}`;
+
+    if (r.cdr.estado === 'RECHAZADO') {
+      return res.status(422).json({
+        success: false, code: 'SUNAT_RECHAZO',
+        error: `SUNAT rechazó ${numeroFactura}: [${r.cdr.responseCode}] ${r.cdr.description}`,
+        data: { numeroFactura, responseCode: r.cdr.responseCode, description: r.cdr.description },
+      });
+    }
+
+    // 4. Respaldo del XML firmado y el CDR en Cloudinary (no bloquea si falla)
+    let xmlUrl = null, cdrUrl = null;
+    try {
+      xmlUrl = (await subirTextoACloudinary(r.nombreArchivo, r.xmlFirmado, 'indpack_ventas/see_xml', '.xml')).secure_url;
+      cdrUrl = (await subirTextoACloudinary('R-' + r.nombreArchivo, r.cdr.cdrXml, 'indpack_ventas/see_cdr', '.xml')).secure_url;
+    } catch (e) {
+      console.error('Fallo subida XML/CDR a Cloudinary:', e.message);
+    }
+
+    // 5. Registrar en facturas_venta
+    const subtotal = +(r.totales.gravado + r.totales.exportacion).toFixed(2);
+    const insert = await executeQuery(
+      `INSERT INTO facturas_venta
+         (numero_factura, id_orden_venta, id_salida, id_cliente, fecha_emision, tipo_comprobante,
+          serie, numero, subtotal, igv, total, moneda, estado,
+          sunat_estado, sunat_response_code, sunat_response_desc, hash_see, xml_url, cdr_url,
+          codigo_tipo_sunat, id_registrado_por)
+       VALUES (?, ?, ?, ?, ?, 'Factura', ?, ?, ?, ?, ?, ?, 'Emitida',
+               ?, ?, ?, ?, ?, ?, '01', ?)`,
+      [
+        numeroFactura, idOrden, idSalida, salida.id_cliente, getFechaPeru(),
+        r.serie, r.correlativo, subtotal, r.totales.igv, r.totales.total,
+        (salida.moneda === 'USD' ? 'USD' : 'PEN'),
+        r.cdr.estado, r.cdr.responseCode, (r.cdr.description || '').slice(0, 255),
+        r.digestValue, xmlUrl ? JSON.stringify([xmlUrl]) : null, cdrUrl ? JSON.stringify([cdrUrl]) : null,
+        id_empleado,
+      ]
+    );
+    if (!insert.success) {
+      // Se emitió en SUNAT pero falló el registro: devolvemos las URLs para no perder el respaldo.
+      return res.status(500).json({
+        success: false, code: 'EMITIDO_SIN_REGISTRO',
+        error: `La factura ${numeroFactura} fue ${r.cdr.estado} por SUNAT, pero falló su registro en BD.`,
+        data: { numeroFactura, responseCode: r.cdr.responseCode, xmlUrl, cdrUrl },
+        details: insert.error,
+      });
+    }
+
+    await sincronizarResumenFacturacion(idOrden);
+
+    return res.json({
+      success: true,
+      message: `Factura ${numeroFactura} emitida y ${r.cdr.estado} por SUNAT`,
+      data: {
+        id_factura: insert.data.insertId, numeroFactura, estado: r.cdr.estado,
+        responseCode: r.cdr.responseCode, totales: r.totales,
+        observaciones: r.cdr.observaciones || [], xmlUrl, cdrUrl,
+      },
+    });
+  } catch (error) {
+    console.error('Error en emitirFacturaElectronica:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+// POST /:id/facturas/:idFactura/anular-electronica
+// Anula ante SUNAT (Comunicación de Baja) una factura emitida por el sistema.
+export async function anularFacturaElectronica(req, res) {
+  try {
+    const { id, idFactura } = req.params;
+    const { motivo_anulacion } = req.body;
+    const { id_empleado, rol } = req.user;
+
+    if (!['Administrador', 'Gerencia', 'Administrativo'].includes(rol)) {
+      return res.status(403).json({ success: false, error: 'No tienes permisos para anular facturación SUNAT' });
+    }
+    if (!motivo_anulacion || !motivo_anulacion.trim()) {
+      return res.status(400).json({ success: false, error: 'El motivo de anulación es obligatorio' });
+    }
+
+    const facRes = await executeQuery(
+      `SELECT id_factura, numero_factura, serie, numero, fecha_emision, estado, sunat_estado
+         FROM facturas_venta WHERE id_factura = ? AND id_orden_venta = ?`,
+      [idFactura, id]
+    );
+    if (!facRes.success || facRes.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Factura no encontrada para esta orden' });
+    }
+    const f = facRes.data[0];
+    if (f.estado === 'Anulada') {
+      return res.status(400).json({ success: false, error: 'Esta factura ya está anulada' });
+    }
+    if (!['ACEPTADO', 'OBSERVADO'].includes(f.sunat_estado)) {
+      return res.status(400).json({
+        success: false, code: 'NO_ELECTRONICA',
+        error: 'Esta factura no fue emitida electrónicamente por el sistema. Usa la anulación manual.',
+      });
+    }
+
+    // Comunicación de Baja a SUNAT (asíncrona: ticket + poll)
+    const baja = await anularFactura({
+      serie: f.serie, numero: f.numero, fechaEmision: f.fecha_emision, motivo: motivo_anulacion.trim(),
+    });
+
+    if (baja.estado !== 'ACEPTADO') {
+      return res.status(422).json({
+        success: false, code: 'SUNAT_BAJA_RECHAZADA',
+        error: `SUNAT no aceptó la baja de ${f.numero_factura}: [${baja.responseCode || baja.statusCode}] ${baja.description || baja.estado}`,
+        data: { ticket: baja.ticket, statusCode: baja.statusCode, responseCode: baja.responseCode, estado: baja.estado },
+      });
+    }
+
+    let bajaCdrUrl = null;
+    try {
+      if (baja.cdrXml) {
+        bajaCdrUrl = (await subirTextoACloudinary('R-' + baja.nombreArchivo, baja.cdrXml, 'indpack_ventas/see_cdr', '.xml')).secure_url;
+      }
+    } catch (e) {
+      console.error('Fallo subida CDR de baja a Cloudinary:', e.message);
+    }
+
+    const upd = await executeQuery(
+      `UPDATE facturas_venta
+          SET estado = 'Anulada', sunat_estado = 'BAJA', sunat_ticket = ?, sunat_response_code = ?,
+              motivo_anulacion = ?, fecha_anulacion = ?, id_anulado_por = ?
+        WHERE id_factura = ?`,
+      [baja.ticket, String(baja.responseCode || '0'), motivo_anulacion.trim(), getFechaPeru(), id_empleado, idFactura]
+    );
+    if (!upd.success) {
+      return res.status(500).json({
+        success: false, code: 'BAJA_SIN_REGISTRO',
+        error: `La baja ${baja.idBaja} fue ACEPTADA por SUNAT, pero falló su registro en BD.`,
+        data: { idBaja: baja.idBaja, ticket: baja.ticket },
+        details: upd.error,
+      });
+    }
+
+    await sincronizarResumenFacturacion(id);
+
+    return res.json({
+      success: true,
+      message: `Factura ${f.numero_factura} anulada ante SUNAT (${baja.idBaja}).`,
+      data: { id_factura: parseInt(idFactura, 10), numero_factura: f.numero_factura, idBaja: baja.idBaja, ticket: baja.ticket, bajaCdrUrl },
+    });
+  } catch (error) {
+    console.error('Error en anularFacturaElectronica:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+}
+
+// GET /:id/facturas/:idFactura/pdf-electronico
+// Genera la representación impresa (PDF con QR) de una factura electrónica.
+export async function generarPDFFacturaElectronica(req, res) {
+  try {
+    const { id, idFactura } = req.params;
+
+    const facRes = await executeQuery(
+      `SELECT id_factura, numero_factura, serie, numero, moneda, fecha_emision,
+              subtotal, igv, total, hash_see, id_salida, id_cliente, estado, sunat_estado
+         FROM facturas_venta WHERE id_factura = ? AND id_orden_venta = ?`,
+      [idFactura, id]
+    );
+    if (!facRes.success || facRes.data.length === 0) {
+      return res.status(404).json({ success: false, error: 'Factura no encontrada' });
+    }
+    const f = facRes.data[0];
+    if (!f.id_salida) {
+      return res.status(400).json({ success: false, error: 'La factura no está asociada a un despacho; no se puede reconstruir el detalle.' });
+    }
+
+    const [emisor, datos] = await Promise.all([getEmisor(), construirDatosDesdeSalida(f.id_salida)]);
+    const esExportacion = datos.tipoOperacion === '0200';
+
+    const docLabelMap = { '6': 'RUC', '1': 'DNI', '0': 'Doc. No Domic.' };
+    const fecha = new Date(f.fecha_emision);
+    const fechaISO = fecha.toISOString().slice(0, 10);
+    const fechaDisplay = fechaISO.split('-').reverse().join('/');
+
+    const igv = Number(f.igv || 0);
+    const total = Number(f.total || 0);
+    const subtotal = Number(f.subtotal || 0);
+
+    // QR: RUC|tipo|serie|numero|IGV|total|fecha|tipoDocReceptor|numDocReceptor|hash
+    const qrString = [
+      emisor.ruc, '01', f.serie, f.numero, igv.toFixed(2), total.toFixed(2),
+      fechaISO, datos.cliente.tipoDoc, datos.cliente.numDoc, f.hash_see || '',
+    ].join('|');
+
+    const pdfBuffer = await generarFacturaElectronicaPDF({
+      emisor,
+      serie: f.serie,
+      numero: f.numero,
+      fechaEmision: fechaDisplay,
+      moneda: f.moneda,
+      esExportacion,
+      cliente: {
+        razonSocial: datos.cliente.razonSocial,
+        docLabel: docLabelMap[datos.cliente.tipoDoc] || 'Doc.',
+        numDoc: datos.cliente.numDoc,
+        direccion: datos.cliente.direccion,
+      },
+      lineas: datos.lineas,
+      totales: {
+        gravado: esExportacion ? 0 : subtotal,
+        exportacion: esExportacion ? subtotal : 0,
+        igv,
+        total,
+      },
+      hash: f.hash_see,
+      sunatEstado: f.estado === 'Anulada' ? 'ANULADA' : f.sunat_estado,
+      qrString,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${f.numero_factura}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error en generarPDFFacturaElectronica:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 }

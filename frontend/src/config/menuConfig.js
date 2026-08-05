@@ -52,6 +52,8 @@ export const menuConfig = [
       { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
       { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },
+      // Vista de solo seguimiento (sin precios) para Calidad: pedido/despachado/pendiente.
+      { path: '/ventas/seguimiento', icon: Truck, label: 'Seguimiento', modulo: 'seguimientoVentas', color: '#2980B9' },
       { 
         label: 'Reportes', 
         icon: TrendingUp, 

@@ -242,28 +242,58 @@ function SeguimientoVentaDetalle() {
               {despachos.length === 0 ? (
                 <div className="text-center text-wire py-6 text-sm">Aún no se registran despachos para esta orden.</div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {despachos.map((d) => {
-                    const cfg = getEstadoConfig(d.estado === 'Activo' ? orden.estado : d.estado);
+                    const productos = d.productos || [];
                     return (
-                      <div key={d.id_salida} className="flex items-center justify-between px-4 py-3 bg-carbon-mid border border-steel/30 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-primary/10 rounded-lg"><Truck size={18} className="text-primary" /></div>
-                          <div>
-                            <div className="font-bold text-mist">Despacho #{d.numero_salida || d.id_salida}</div>
-                            <div className="text-xs text-wire flex items-center gap-1">
-                              <Calendar size={12} /> {formatearFechaVisual(d.fecha_salida)}
+                      <div key={d.id_salida} className="bg-carbon-mid border border-steel/30 rounded-lg overflow-hidden">
+                        {/* Cabecera del despacho */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-steel/20 bg-carbon/40">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-primary/10 rounded-lg"><Truck size={18} className="text-primary" /></div>
+                            <div>
+                              <div className="font-bold text-mist">Despacho #{d.numero_salida || d.id_salida}</div>
+                              <div className="text-xs text-wire flex items-center gap-1">
+                                <Calendar size={12} /> {formatearFechaVisual(d.fecha_salida)}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-3">
+                            <span className="inline-flex items-center gap-1 text-xs text-mist">
+                              <Package size={14} className="text-wire" /> {productos.length || d.total_items || 0} ítem(s)
+                            </span>
+                            <span className={`badge text-[10px] ${d.estado === 'Anulado' ? 'badge-danger' : 'badge-success'}`}>
+                              {d.estado === 'Anulado' ? 'Anulado' : 'Activo'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="inline-flex items-center gap-1 text-xs text-mist">
-                            <Package size={14} className="text-wire" /> {d.total_items || 0} ítem(s)
-                          </span>
-                          <span className={`badge text-[10px] ${d.estado === 'Anulado' ? 'badge-danger' : 'badge-success'}`}>
-                            {d.estado === 'Anulado' ? 'Anulado' : 'Activo'}
-                          </span>
-                        </div>
+
+                        {/* Productos y cantidades despachadas en este despacho */}
+                        {productos.length === 0 ? (
+                          <div className="px-4 py-3 text-xs text-wire">Sin detalle de productos para este despacho.</div>
+                        ) : (
+                          <ul className="divide-y divide-steel/15">
+                            {productos.map((p, idx) => (
+                              <li key={`${d.id_salida}-${p.id_producto}-${idx}`} className="flex items-center justify-between px-4 py-2.5">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Package size={14} className="text-wire shrink-0" />
+                                  <div className="min-w-0">
+                                    <div className="text-sm text-mist font-medium truncate">{p.producto || `Producto ${p.id_producto}`}</div>
+                                    {p.codigo_producto && (
+                                      <div className="text-[10px] text-wire font-mono uppercase tracking-wider">{p.codigo_producto}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0 ml-3">
+                                  <span className="font-bold text-primary">{formatearNumero(p.cantidad)}</span>
+                                  {p.unidad_medida && (
+                                    <span className="text-[10px] text-wire ml-1 uppercase">{p.unidad_medida}</span>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     );
                   })}

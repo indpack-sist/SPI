@@ -2717,10 +2717,31 @@ export async function getSalidasOrden(req, res) {
         (docsPorSalida[d.id_salida] = docsPorSalida[d.id_salida] || []).push(d);
       });
 
+      // Productos despachados por cada salida (sin datos de precio/costo).
+      const detalleRes = await executeQuery(`
+        SELECT
+          ds.id_salida,
+          ds.id_producto,
+          ds.cantidad,
+          p.codigo AS codigo_producto,
+          p.nombre AS producto,
+          p.unidad_medida
+        FROM detalle_salidas ds
+        LEFT JOIN productos p ON ds.id_producto = p.id_producto
+        WHERE ds.id_salida IN (${placeholders})
+        ORDER BY p.nombre
+      `, ids);
+
+      const productosPorSalida = {};
+      (detalleRes.success ? detalleRes.data : []).forEach(it => {
+        (productosPorSalida[it.id_salida] = productosPorSalida[it.id_salida] || []).push(it);
+      });
+
       salidas.forEach(s => {
         const fs = facturasPorSalida[s.id_salida] || [];
         s.factura = fs[0] || null;                    // 1 factura por despacho
         s.documentos = docsPorSalida[s.id_salida] || [];
+        s.productos = productosPorSalida[s.id_salida] || [];
       });
     }
 

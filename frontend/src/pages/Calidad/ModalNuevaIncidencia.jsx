@@ -3,7 +3,7 @@ import { ShieldAlert, Save, Package, Search, X, Truck } from 'lucide-react';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import { incidenciasAPI, productosAPI, salidasAPI } from '../../config/api';
-
+//prueba
 const SEVERIDADES = ['Crítica', 'Mayor', 'Menor'];
 const FASES = ['Recepción', 'Proceso', 'Producto Terminado', 'Despacho', 'Cliente'];
 const DISPOSICIONES = ['Pendiente', 'Reproceso', 'Descarte', 'Aceptar con desviación', 'Devolución'];

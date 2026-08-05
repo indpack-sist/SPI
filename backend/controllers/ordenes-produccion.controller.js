@@ -1364,7 +1364,7 @@ export const generarPDFOrdenController = async (req, res) => {
     const { id } = req.params;
     
     const ordenResult = await executeQuery(`
-      SELECT 
+      SELECT
         op.*,
         p.codigo AS codigo_producto,
         p.nombre AS producto,
@@ -1375,7 +1375,7 @@ export const generarPDFOrdenController = async (req, res) => {
         cl.razon_social AS cliente
       FROM ordenes_produccion op
       INNER JOIN productos p ON op.id_producto_terminado = p.id_producto
-      INNER JOIN empleados e ON op.id_supervisor = e.id_empleado
+      LEFT JOIN empleados e ON op.id_supervisor = e.id_empleado
       LEFT JOIN recetas_productos rp ON op.id_receta_producto = rp.id_receta_producto
       LEFT JOIN ordenes_venta ov ON op.id_orden_venta_origen = ov.id_orden_venta
       LEFT JOIN clientes cl ON ov.id_cliente = cl.id_cliente
@@ -1388,35 +1388,67 @@ export const generarPDFOrdenController = async (req, res) => {
 
     const orden = ordenResult.data[0];
 
-    const consumoResult = await executeQuery(`
-      SELECT 
-        opm.cantidad_requerida,
-        opm.cantidad_real_consumida,
-        opm.costo_unitario,
-        opm.costo_total,
-        p.nombre AS insumo,
-        p.unidad_medida
-      FROM op_consumo_materiales opm
-      INNER JOIN productos p ON opm.id_insumo = p.id_producto
-      WHERE opm.id_orden = ?
-      ORDER BY p.nombre
-    `, [id]);
-    const consumo = consumoResult.success ? consumoResult.data : [];
+    // Productos consumidos. Si la orden ya está en curso/finalizada usamos el consumo
+    // real registrado; si sigue en planificación tomamos la receta (o receta provisional).
+    let consumo = [];
+    const esPlanificacion = ['Pendiente', 'Pendiente Asignación'].includes(orden.estado);
 
-    const mermasResult = await executeQuery(`
-      SELECT 
-        mp.cantidad,
-        mp.observaciones,
-        p.codigo,
-        p.nombre AS producto_merma,
-        p.unidad_medida
-      FROM mermas_produccion mp
-      INNER JOIN productos p ON mp.id_producto_merma = p.id_producto
-      WHERE mp.id_orden_produccion = ?
-    `, [id]);
-    const mermas = mermasResult.success ? mermasResult.data : [];
+    if (!esPlanificacion) {
+      const r = await executeQuery(`
+        SELECT
+          p.codigo AS codigo_insumo,
+          p.nombre AS insumo,
+          p.unidad_medida,
+          p.stock_actual AS disponible,
+          COALESCE(NULLIF(cm.cantidad_real_consumida, 0), cm.cantidad_requerida) AS cantidad_total,
+          ti.nombre AS origen
+        FROM op_consumo_materiales cm
+        INNER JOIN productos p ON cm.id_insumo = p.id_producto
+        LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+        WHERE cm.id_orden = ?
+        ORDER BY p.nombre
+      `, [id]);
+      consumo = r.success ? r.data : [];
+    }
 
-    const pdfBuffer = await generarPDFOrdenProduccion(orden, consumo, mermas);
+    if (esPlanificacion || consumo.length === 0) {
+      let r;
+      if (orden.id_receta_producto) {
+        r = await executeQuery(`
+          SELECT
+            p.codigo AS codigo_insumo,
+            p.nombre AS insumo,
+            p.unidad_medida,
+            p.stock_actual AS disponible,
+            (rd.cantidad_requerida * CEIL(? / rp.rendimiento_unidades)) AS cantidad_total,
+            ti.nombre AS origen
+          FROM recetas_detalle rd
+          INNER JOIN recetas_productos rp ON rd.id_receta_producto = rp.id_receta_producto
+          INNER JOIN productos p ON rd.id_insumo = p.id_producto
+          LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+          WHERE rd.id_receta_producto = ?
+          ORDER BY p.nombre
+        `, [orden.cantidad_planificada || 0, orden.id_receta_producto]);
+      } else {
+        r = await executeQuery(`
+          SELECT
+            p.codigo AS codigo_insumo,
+            p.nombre AS insumo,
+            p.unidad_medida,
+            p.stock_actual AS disponible,
+            rpv.cantidad_requerida AS cantidad_total,
+            ti.nombre AS origen
+          FROM op_recetas_provisionales rpv
+          INNER JOIN productos p ON rpv.id_insumo = p.id_producto
+          LEFT JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+          WHERE rpv.id_orden = ?
+          ORDER BY p.nombre
+        `, [id]);
+      }
+      if (r && r.success && r.data.length > 0) consumo = r.data;
+    }
+
+    const pdfBuffer = await generarPDFOrdenProduccion(orden, consumo);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="orden_${orden.numero_orden}.pdf"`);

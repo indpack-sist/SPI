@@ -649,6 +649,18 @@ function OrdenDetalle() {
     }
   };
 
+  const handleDescargarPDF = async () => {
+    try {
+        setProcesando(true);
+        await ordenesProduccionAPI.generarPDF(id);
+        setProcesando(false);
+    } catch (err) {
+        console.error("Error descargando PDF de la orden", err);
+        setError("Error al descargar el PDF de la orden");
+        setProcesando(false);
+    }
+  };
+
   const pasarParcialAFinalizar = () => {
     const reqMap = {};
     consumoMateriales.forEach(item => {
@@ -1217,6 +1229,15 @@ function OrdenDetalle() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={handleDescargarPDF}
+            disabled={procesando}
+            title="Descargar Orden de Producción en PDF"
+          >
+            <FileText size={16} className="mr-1" /> Orden PDF
+          </button>
+
           <button
             className="btn btn-outline btn-sm"
             onClick={handleDescargarHojaRuta}

@@ -1002,6 +1002,9 @@ function DetalleOrdenVenta() {
         const tipoDoc = (orden.tipo_comprobante || 'DOC').toUpperCase().replace(/\s+/g, '_');
         const numDoc = orden.numero_comprobante || orden.numero_orden;
         nombreArchivo = `${clienteSanitizado}_${tipoDoc}_${numDoc}.pdf`;
+      } else if (tipoDocumento === 'pedido') {
+        const nroOrden = orden.numero_orden || id;
+        nombreArchivo = `${clienteSanitizado}_PEDIDO_${nroOrden}.pdf`;
       } else {
         const nroOrden = orden.numero_orden || id;
         nombreArchivo = `${clienteSanitizado}_${nroOrden}.pdf`;
@@ -2081,13 +2084,22 @@ function DetalleOrdenVenta() {
              </button>
           )}
 
-          <button 
-            className="btn btn-outline" 
-            onClick={() => handleDescargarPDF('orden')} 
+          <button
+            className="btn btn-outline"
+            onClick={() => handleDescargarPDF('orden')}
             disabled={procesando}
             title="Descargar Orden Interna"
           >
             <FileText size={20} /> PDF Orden
+          </button>
+
+          <button
+            className="btn btn-outline"
+            onClick={() => handleDescargarPDF('pedido')}
+            disabled={procesando}
+            title="Descargar Pedido (formato comercial)"
+          >
+            <FileText size={20} /> PDF Pedido
           </button>
 
           {!sinComprobanteAsignado && orden.tipo_comprobante && orden.tipo_comprobante !== 'Factura' && (

@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 import { generarPDFEntrada } from '../utils/pdf-generator.js';
+import { generarControlMateriaPrimaPDF } from '../utils/pdfGenerators/controlMateriaPrimaPDF.js';
 
 class AppError extends Error {
   constructor(message, statusCode) {
@@ -774,6 +775,57 @@ export const generarPDFEntradaController = async (req, res, next) => {
     const pdfBuffer = await generarPDFEntrada(entrada);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="entrada_${id}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const generarControlMateriaPrimaPDFController = async (req, res, next) => {
+  try {
+    const { fecha_inicio, fecha_fin, id_tipo_inventario } = req.query;
+
+    if (!fecha_inicio || !fecha_fin) {
+      throw new AppError('Fecha de inicio y fecha de fin son obligatorias', 400);
+    }
+
+    const params = [fecha_inicio, fecha_fin];
+    // "Materia prima" abarca los tipos de inventario Insumo* y Materia Prima*
+    let filtroInventario = `(ti.nombre LIKE 'Insumo%' OR ti.nombre LIKE 'Materia Prima%')`;
+
+    if (id_tipo_inventario) {
+      filtroInventario = `p.id_tipo_inventario = ?`;
+      params.push(id_tipo_inventario);
+    }
+
+    const [movimientos] = await pool.query(`
+      SELECT
+        e.fecha_movimiento,
+        e.tipo_entrada,
+        e.documento_soporte,
+        e.estado,
+        oc.tipo_documento AS tipo_documento,
+        p.nombre AS material,
+        p.unidad_medida,
+        de.cantidad,
+        prov.razon_social AS proveedor,
+        ti.nombre AS tipo_inventario
+      FROM entradas e
+      INNER JOIN detalle_entradas de ON e.id_entrada = de.id_entrada
+      INNER JOIN productos p ON de.id_producto = p.id_producto
+      INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+      LEFT JOIN proveedores prov ON e.id_proveedor = prov.id_proveedor
+      LEFT JOIN ordenes_compra oc ON e.id_orden_compra = oc.id_orden_compra
+      WHERE DATE(e.fecha_movimiento) BETWEEN ? AND ?
+        AND e.estado != 'Anulado'
+        AND ${filtroInventario}
+      ORDER BY e.fecha_movimiento ASC, p.nombre ASC
+    `, params);
+
+    const pdfBuffer = await generarControlMateriaPrimaPDF(movimientos, { fecha_inicio, fecha_fin, id_tipo_inventario });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="control-materia-prima-${fecha_inicio}_${fecha_fin}.pdf"`);
     res.send(pdfBuffer);
   } catch (error) {
     next(error);

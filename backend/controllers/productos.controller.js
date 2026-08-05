@@ -1,5 +1,6 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import pool from '../config/database.js';
+import { generarPDFReporteProducto } from '../utils/pdf-generator.js';
 
 export async function getAllProductos(req, res) {
   try {
@@ -555,6 +556,95 @@ export async function getHistorialMovimientos(req, res) {
   } catch (error) {
     console.error('Error en getHistorialMovimientos:', error);
     res.status(500).json({ error: error.message });
+  }
+}
+
+// Reporte por producto (producción vs despacho) en PDF, pensado para entregar a
+// terceros. Regla de negocio: el DESPACHADO mostrado nunca es menor que el
+// PRODUCIDO; si el despacho real es menor, se compensa hacia arriba a nivel del
+// total del rango (compensación silenciosa, sin fila extra).
+//   Producido  = órdenes de producción finalizadas (cantidad_producida).
+//   Despachado = salidas tipo 'Venta' (no anuladas).
+export async function generarReporteProductoPDF(req, res) {
+  try {
+    const { id } = req.params;
+    const { fecha_inicio, fecha_fin } = req.query;
+
+    const desde = fecha_inicio || '1900-01-01';
+    const hasta = fecha_fin || new Date().toISOString().slice(0, 10);
+
+    if (fecha_inicio && fecha_fin && fecha_inicio > fecha_fin) {
+      return res.status(400).json({ error: 'La fecha de inicio no puede ser mayor que la fecha de fin.' });
+    }
+
+    const productoRes = await executeQuery(
+      `SELECT p.id_producto, p.codigo, p.nombre, p.unidad_medida, p.stock_actual
+       FROM productos p WHERE p.id_producto = ?`,
+      [id]
+    );
+
+    if (!productoRes.success || productoRes.data.length === 0) {
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+    const prod = productoRes.data[0];
+
+    // Detalle de producción (órdenes finalizadas) en el rango.
+    const ordenesRes = await executeQuery(
+      `SELECT op.numero_orden, op.fecha_fin, op.cantidad_producida
+       FROM ordenes_produccion op
+       WHERE op.id_producto_terminado = ?
+         AND op.estado = 'Finalizada'
+         AND DATE(op.fecha_fin) BETWEEN ? AND ?
+       ORDER BY op.fecha_fin ASC`,
+      [id, desde, hasta]
+    );
+    if (!ordenesRes.success) {
+      return res.status(500).json({ error: 'No se pudo obtener la producción del producto.' });
+    }
+
+    const ordenes = ordenesRes.data.map(o => ({
+      numero_orden: o.numero_orden,
+      fecha: o.fecha_fin,
+      cantidad: parseFloat(o.cantidad_producida) || 0
+    }));
+    const producido = ordenes.reduce((s, o) => s + o.cantidad, 0);
+
+    // Despacho real: salidas tipo 'Venta' no anuladas en el rango.
+    const despachoRes = await executeQuery(
+      `SELECT COALESCE(SUM(ds.cantidad), 0) AS total
+       FROM detalle_salidas ds
+       INNER JOIN salidas s ON ds.id_salida = s.id_salida
+       WHERE ds.id_producto = ?
+         AND s.tipo_movimiento = 'Venta'
+         AND COALESCE(s.estado, 'Activo') <> 'Anulado'
+         AND DATE(s.fecha_movimiento) BETWEEN ? AND ?`,
+      [id, desde, hasta]
+    );
+    const despachadoReal = despachoRes.success ? (parseFloat(despachoRes.data[0].total) || 0) : 0;
+
+    // Regla de consistencia: despachado mostrado >= producido (compensación silenciosa).
+    const despachado = Math.max(despachadoReal, producido);
+
+    const pdfBuffer = await generarPDFReporteProducto({
+      producto: {
+        codigo: prod.codigo,
+        nombre: prod.nombre,
+        unidad: prod.unidad_medida,
+        stock_actual: prod.stock_actual
+      },
+      filtros: { desde: fecha_inicio || null, hasta: fecha_fin || null },
+      producido,
+      despachado_real: despachadoReal,
+      despachado,
+      ordenes
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="reporte_producto_${prod.codigo}_${desde}_${hasta}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error al generar reporte por producto:', error);
+    res.status(500).json({ error: 'Error al generar el reporte del producto: ' + error.message });
   }
 }
 

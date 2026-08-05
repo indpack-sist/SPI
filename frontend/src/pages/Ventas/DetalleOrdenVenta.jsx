@@ -2754,7 +2754,8 @@ function DetalleOrdenVenta() {
                                             <span className="font-mono font-bold text-emerald-800">{facturas[facturaTabActiva].numero_factura}</span>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            {['ACEPTADO', 'OBSERVADO', 'BAJA'].includes(facturas[facturaTabActiva].sunat_estado) && (
+                                            {/* Facturación electrónica (SEE) — OCULTO temporalmente. Reactivar cambiando `false &&` -> quitar. */}
+                                            {false && ['ACEPTADO', 'OBSERVADO', 'BAJA'].includes(facturas[facturaTabActiva].sunat_estado) && (
                                                 <button
                                                     className="btn btn-xs btn-outline border-indigo-300 text-indigo-700 hover:bg-indigo-100"
                                                     onClick={() => handleVerPDFElectronico(facturas[facturaTabActiva])}
@@ -3353,6 +3354,8 @@ function DetalleOrdenVenta() {
                                  >
                                    <BadgeCheck size={12} className="mr-1"/> + Factura
                                  </button>
+                                 {/* Facturación electrónica (SEE) — OCULTO temporalmente. Reactivar cambiando `false` por `true`. */}
+                                 {false && (
                                  <button
                                    className="btn btn-xs btn-outline border-indigo-300 text-indigo-700 hover:bg-indigo-50"
                                    onClick={() => handleEmitirElectronica(row)}
@@ -3364,6 +3367,7 @@ function DetalleOrdenVenta() {
                                      : <FileText size={12} className="mr-1"/>}
                                    Emitir SEE
                                  </button>
+                                 )}
                                </div>
                              ) : <span className="text-xs text-gray-400">—</span>;
                            }

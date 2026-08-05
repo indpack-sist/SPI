@@ -1192,6 +1192,8 @@ useEffect(() => {
                   </div>
                 </div>
 
+                {/* Facturación electrónica (SEE) — checkbox de exportación OCULTO temporalmente. Reactivar cambiando `false` por `true`. */}
+                {false && (
                 <div className="mb-3 p-2 rounded-lg border border-indigo-200 bg-indigo-50/50">
                   <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-indigo-800">
                     <input
@@ -1206,6 +1208,7 @@ useEffect(() => {
                     Marca esto si la venta es de exportación; el comprobante se emitirá como operación 0200 sin IGV.
                   </p>
                 </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

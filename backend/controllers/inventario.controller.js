@@ -1,4 +1,5 @@
 import { executeQuery } from '../config/database.js';
+import { generarPDFKardex } from '../utils/pdf-generator.js';
 
 export async function getResumenStockInventario(_req, res) {
   try {
@@ -76,5 +77,170 @@ export async function getResumenStockInventario(_req, res) {
     });
   } catch (error) {
     res.status(500).json({ error: 'Error al procesar la información de inventario: ' + error.message });
+  }
+}
+
+// Genera el PDF del Kardex: resumen por producto de balance inicial, entradas,
+// salidas y stock resultante en un rango de fechas.
+// Fuentes de movimiento: detalle_entradas (compras/producción/merma),
+// detalle_salidas (ventas/consumo/producción) y ajustes_inventario
+// (diferencia con signo: positiva = entrada, negativa = salida).
+export async function generarKardexPDF(req, res) {
+  try {
+    const { fecha_inicio, fecha_fin, id_tipo_inventario } = req.query;
+
+    // Rango por defecto: desde el inicio de los tiempos hasta hoy.
+    const desde = fecha_inicio || '1900-01-01';
+    const hasta = fecha_fin || new Date().toISOString().slice(0, 10);
+
+    if (fecha_inicio && fecha_fin && fecha_inicio > fecha_fin) {
+      return res.status(400).json({ error: 'La fecha de inicio no puede ser mayor que la fecha de fin.' });
+    }
+
+    // Subconsultas de movimientos: se calculan por producto tanto antes del
+    // periodo (para el balance inicial) como dentro del periodo.
+    const sql = `
+      SELECT
+        p.id_producto,
+        p.codigo,
+        p.nombre AS producto,
+        p.unidad_medida,
+        ti.nombre AS tipo_inventario,
+        COALESCE(c.nombre, 'SIN CATEGORÍA') AS categoria,
+
+        COALESCE((
+          SELECT SUM(de.cantidad)
+          FROM detalle_entradas de
+          INNER JOIN entradas e ON de.id_entrada = e.id_entrada
+          WHERE de.id_producto = p.id_producto
+            AND COALESCE(e.estado, 'Activo') <> 'Anulado'
+            AND DATE(e.fecha_movimiento) < ?
+        ), 0) AS ent_antes,
+
+        COALESCE((
+          SELECT SUM(ds.cantidad)
+          FROM detalle_salidas ds
+          INNER JOIN salidas s ON ds.id_salida = s.id_salida
+          WHERE ds.id_producto = p.id_producto
+            AND COALESCE(s.estado, 'Activo') <> 'Anulado'
+            AND DATE(s.fecha_movimiento) < ?
+        ), 0) AS sal_antes,
+
+        COALESCE((
+          SELECT SUM(ai.diferencia)
+          FROM ajustes_inventario ai
+          WHERE ai.id_producto = p.id_producto
+            AND DATE(ai.fecha_ajuste) < ?
+        ), 0) AS aj_antes,
+
+        COALESCE((
+          SELECT SUM(de.cantidad)
+          FROM detalle_entradas de
+          INNER JOIN entradas e ON de.id_entrada = e.id_entrada
+          WHERE de.id_producto = p.id_producto
+            AND COALESCE(e.estado, 'Activo') <> 'Anulado'
+            AND DATE(e.fecha_movimiento) BETWEEN ? AND ?
+        ), 0) AS ent_periodo,
+
+        COALESCE((
+          SELECT SUM(ds.cantidad)
+          FROM detalle_salidas ds
+          INNER JOIN salidas s ON ds.id_salida = s.id_salida
+          WHERE ds.id_producto = p.id_producto
+            AND COALESCE(s.estado, 'Activo') <> 'Anulado'
+            AND DATE(s.fecha_movimiento) BETWEEN ? AND ?
+        ), 0) AS sal_periodo,
+
+        COALESCE((
+          SELECT SUM(CASE WHEN ai.diferencia > 0 THEN ai.diferencia ELSE 0 END)
+          FROM ajustes_inventario ai
+          WHERE ai.id_producto = p.id_producto
+            AND DATE(ai.fecha_ajuste) BETWEEN ? AND ?
+        ), 0) AS aj_pos_periodo,
+
+        COALESCE((
+          SELECT SUM(CASE WHEN ai.diferencia < 0 THEN -ai.diferencia ELSE 0 END)
+          FROM ajustes_inventario ai
+          WHERE ai.id_producto = p.id_producto
+            AND DATE(ai.fecha_ajuste) BETWEEN ? AND ?
+        ), 0) AS aj_neg_periodo
+
+      FROM productos p
+      INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
+      LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+      WHERE p.estado = 'Activo'
+      ${id_tipo_inventario ? 'AND p.id_tipo_inventario = ?' : ''}
+      ORDER BY categoria ASC, p.codigo ASC
+    `;
+
+    const params = [
+      desde, desde, desde,          // ..._antes
+      desde, hasta,                 // ent_periodo
+      desde, hasta,                 // sal_periodo
+      desde, hasta,                 // aj_pos_periodo
+      desde, hasta                  // aj_neg_periodo
+    ];
+    if (id_tipo_inventario) params.push(id_tipo_inventario);
+
+    const result = await executeQuery(sql, params);
+
+    if (!result.success) {
+      return res.status(500).json({ error: 'No se pudo generar el Kardex. Intente de nuevo.' });
+    }
+
+    // Consolidación: balance inicial, entradas y salidas del periodo (incluyendo
+    // ajustes), y stock resultante. Se descartan productos sin movimiento ni
+    // saldo en el periodo (no se pidió incluir stock cero).
+    const filas = result.data
+      .map(row => {
+        const balance_inicial =
+          parseFloat(row.ent_antes) - parseFloat(row.sal_antes) + parseFloat(row.aj_antes);
+        const entrada = parseFloat(row.ent_periodo) + parseFloat(row.aj_pos_periodo);
+        const salida = parseFloat(row.sal_periodo) + parseFloat(row.aj_neg_periodo);
+        const stock = balance_inicial + entrada - salida;
+        return {
+          categoria: row.categoria,
+          codigo: row.codigo,
+          producto: row.producto,
+          unidad: row.unidad_medida,
+          balance_inicial,
+          entrada,
+          salida,
+          stock,
+          stock_terminado: stock
+        };
+      })
+      .filter(f =>
+        f.balance_inicial !== 0 || f.entrada !== 0 || f.salida !== 0 || f.stock !== 0
+      );
+
+    let tipoInventarioNombre = 'Todos';
+    if (id_tipo_inventario && result.data.length > 0) {
+      tipoInventarioNombre = result.data[0].tipo_inventario;
+    } else if (id_tipo_inventario) {
+      const tipoRes = await executeQuery(
+        'SELECT nombre FROM tipos_inventario WHERE id_tipo_inventario = ?',
+        [id_tipo_inventario]
+      );
+      if (tipoRes.success && tipoRes.data.length > 0) {
+        tipoInventarioNombre = tipoRes.data[0].nombre;
+      }
+    }
+
+    const pdfBuffer = await generarPDFKardex({
+      filas,
+      filtros: {
+        desde: fecha_inicio || null,
+        hasta: fecha_fin || null,
+        tipo_inventario: tipoInventarioNombre
+      }
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="kardex_${desde}_${hasta}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error al generar Kardex PDF:', error);
+    res.status(500).json({ error: 'Error al generar el Kardex: ' + error.message });
   }
 }

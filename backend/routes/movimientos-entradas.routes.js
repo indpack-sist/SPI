@@ -12,7 +12,8 @@ import {
   registrarPagoEntrada,
   getPagosEntrada,
   anularPagoEntrada,
-  getResumenPagosEntrada
+  getResumenPagosEntrada,
+  generarControlMateriaPrimaPDFController
 } from '../controllers/movimientos-entradas.controller.js';
 
 const router = express.Router();
@@ -21,6 +22,7 @@ router.post('/producto-rapido', createProductoRapido);
 router.post('/validar-inventario', validarProductosInventario);
 router.post('/crear-multi-inventario', crearProductoMultiInventario);
 
+router.get('/reportes/control-materia-prima', generarControlMateriaPrimaPDFController);
 router.get('/', getAllEntradas);
 router.get('/:id', getEntradaById);
 router.get('/:id/pdf', generarPDFEntradaController);

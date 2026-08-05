@@ -8,9 +8,11 @@ import {
   Factory, 
   Box, 
   CheckCircle, 
-  ShoppingCart, 
+  ShoppingCart,
   Layers,
-  DollarSign
+  DollarSign,
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { inventarioAPI, productosAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
@@ -26,6 +28,19 @@ function StockInventario() {
   const [seccionesExpandidas, setSeccionesExpandidas] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Kardex: filtros y estado de generación del PDF
+  const [todosTipos, setTodosTipos] = useState([]);
+  const [kardexDesde, setKardexDesde] = useState('');
+  const [kardexHasta, setKardexHasta] = useState('');
+  const [kardexTipo, setKardexTipo] = useState('');
+  const [generandoKardex, setGenerandoKardex] = useState(false);
+
+  // Reporte por producto (producción vs despacho)
+  const [repProdTexto, setRepProdTexto] = useState('');
+  const [repProdDesde, setRepProdDesde] = useState('');
+  const [repProdHasta, setRepProdHasta] = useState('');
+  const [generandoRepProd, setGenerandoRepProd] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -43,6 +58,8 @@ function StockInventario() {
       ]);
       
       const resumenData = resumenRes.data.data.filter(item => item.tipo_inventario === 'Productos Terminados');
+      // Lista completa de tipos de inventario para el filtro del Kardex
+      setTodosTipos(tiposRes.data.data);
       const tiposData = tiposRes.data.data.filter(tipo => tipo.nombre === 'Productos Terminados');
       const idsPermitidos = tiposData.map(t => t.id_tipo_inventario);
       const productosData = productosRes.data.data.filter(p => idsPermitidos.includes(p.id_tipo_inventario));
@@ -62,6 +79,61 @@ function StockInventario() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const descargarKardex = async () => {
+    if (kardexDesde && kardexHasta && kardexDesde > kardexHasta) {
+      setError('La fecha "Desde" no puede ser mayor que la fecha "Hasta".');
+      return;
+    }
+    try {
+      setGenerandoKardex(true);
+      setError(null);
+      await inventarioAPI.descargarKardexPDF({
+        fecha_inicio: kardexDesde || undefined,
+        fecha_fin: kardexHasta || undefined,
+        id_tipo_inventario: kardexTipo || undefined
+      });
+    } catch (err) {
+      setError(err.message || 'Error al generar el Kardex');
+    } finally {
+      setGenerandoKardex(false);
+    }
+  };
+
+  const descargarReporteProducto = async () => {
+    const texto = repProdTexto.trim();
+    if (!texto) {
+      setError('Selecciona o escribe un producto para generar su reporte.');
+      return;
+    }
+    // Resuelve el producto por "código - nombre", por código o por nombre.
+    const codigoBuscado = texto.split(' - ')[0].trim().toLowerCase();
+    const prod = productos.find(p =>
+      `${p.codigo} - ${p.nombre}`.toLowerCase() === texto.toLowerCase() ||
+      (p.codigo || '').toLowerCase() === codigoBuscado ||
+      (p.nombre || '').toLowerCase() === texto.toLowerCase()
+    );
+    if (!prod) {
+      setError('No se encontró un producto que coincida. Elige uno de la lista.');
+      return;
+    }
+    if (repProdDesde && repProdHasta && repProdDesde > repProdHasta) {
+      setError('La fecha "Desde" no puede ser mayor que la fecha "Hasta".');
+      return;
+    }
+    try {
+      setGenerandoRepProd(true);
+      setError(null);
+      await productosAPI.descargarReportePDF(prod.id_producto, {
+        fecha_inicio: repProdDesde || undefined,
+        fecha_fin: repProdHasta || undefined
+      });
+    } catch (err) {
+      setError(err.message || 'Error al generar el reporte del producto');
+    } finally {
+      setGenerandoRepProd(false);
     }
   };
 
@@ -292,6 +364,121 @@ function StockInventario() {
               <option value="normal">Stock Normal</option>
               <option value="alto">Stock Excedido</option>
             </select>
+          </div>
+        </div>
+      </div>
+
+      {/* REPORTE KARDEX */}
+      <div className="card mb-6 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText size={18} className="text-primary" />
+          <h3 className="font-bold text-gray-800 m-0">Reporte Kardex (PDF)</h3>
+        </div>
+        <p className="text-xs text-muted mb-3">
+          Resumen por producto: balance inicial, entradas, salidas y stock resultante en el rango de fechas.
+        </p>
+        <div className="grid grid-cols-4 gap-4 items-end">
+          <div>
+            <label className="form-label text-xs">Desde</label>
+            <input
+              type="date"
+              className="form-input"
+              value={kardexDesde}
+              onChange={(e) => setKardexDesde(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label text-xs">Hasta</label>
+            <input
+              type="date"
+              className="form-input"
+              value={kardexHasta}
+              onChange={(e) => setKardexHasta(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label text-xs">Tipo de Inventario</label>
+            <select
+              className="form-select"
+              value={kardexTipo}
+              onChange={(e) => setKardexTipo(e.target.value)}
+            >
+              <option value="">Todos los tipos</option>
+              {todosTipos.map(tipo => (
+                <option key={tipo.id_tipo_inventario} value={tipo.id_tipo_inventario}>
+                  {tipo.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <button
+              className="btn btn-primary w-full flex items-center justify-center gap-2"
+              onClick={descargarKardex}
+              disabled={generandoKardex}
+            >
+              {generandoKardex
+                ? <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                : <><FileText size={16} /> Generar Kardex</>}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* REPORTE POR PRODUCTO */}
+      <div className="card mb-6 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText size={18} className="text-primary" />
+          <h3 className="font-bold text-gray-800 m-0">Reporte por Producto (PDF)</h3>
+        </div>
+        <p className="text-xs text-muted mb-3">
+          Busca un producto y genera su reporte de producción vs despacho. El despacho mostrado nunca es menor que lo producido (compensación automática), para entregas a terceros sin inconsistencias.
+        </p>
+        <div className="grid grid-cols-4 gap-4 items-end">
+          <div>
+            <label className="form-label text-xs">Producto</label>
+            <input
+              type="text"
+              className="form-input"
+              list="lista-productos-reporte"
+              placeholder="Código o nombre..."
+              value={repProdTexto}
+              onChange={(e) => setRepProdTexto(e.target.value)}
+            />
+            <datalist id="lista-productos-reporte">
+              {productos.map(p => (
+                <option key={p.id_producto} value={`${p.codigo} - ${p.nombre}`} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className="form-label text-xs">Desde</label>
+            <input
+              type="date"
+              className="form-input"
+              value={repProdDesde}
+              onChange={(e) => setRepProdDesde(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label text-xs">Hasta</label>
+            <input
+              type="date"
+              className="form-input"
+              value={repProdHasta}
+              onChange={(e) => setRepProdHasta(e.target.value)}
+            />
+          </div>
+          <div>
+            <button
+              className="btn btn-primary w-full flex items-center justify-center gap-2"
+              onClick={descargarReporteProducto}
+              disabled={generandoRepProd}
+            >
+              {generandoRepProd
+                ? <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                : <><FileText size={16} /> Generar Reporte</>}
+            </button>
           </div>
         </div>
       </div>

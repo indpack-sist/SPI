@@ -197,6 +197,38 @@ export const productosAPI = {
     realizarConteo: (data) => api.post('/productos/ajustes/conteo-fisico', data),
     getMotivos: () => api.get('/productos/ajustes/motivos'),
     getPorProducto: (id, params) => api.get(`/productos/${id}/ajustes`, { params })
+  },
+
+  descargarReportePDF: async (id, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.fecha_inicio) query.append('fecha_inicio', params.fecha_inicio);
+    if (params.fecha_fin) query.append('fecha_fin', params.fecha_fin);
+
+    const response = await fetch(`${API_URL}/productos/${id}/reporte-pdf?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Error al generar el reporte' }));
+      throw new Error(errorData.error || 'Error al generar el reporte');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reporte-producto-${id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+
+    return { success: true };
   }
 };
 
@@ -252,7 +284,47 @@ export const entradasAPI = {
     }
   },
   
-  getTiposInventario: () => api.get('/productos/tipos-inventario')
+  getTiposInventario: () => api.get('/productos/tipos-inventario'),
+
+  generarControlMateriaPrimaPDF: async ({ fecha_inicio, fecha_fin, id_tipo_inventario } = {}) => {
+    try {
+      const query = new URLSearchParams({ fecha_inicio, fecha_fin });
+      if (id_tipo_inventario) query.append('id_tipo_inventario', id_tipo_inventario);
+
+      const response = await fetch(
+        `${API_URL}/inventario/movimientos-entradas/reportes/control-materia-prima?${query.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Error al generar PDF' }));
+        throw new Error(errorData.error || 'Error al generar PDF');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `control-materia-prima-${fecha_inicio}_${fecha_fin}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar Control de Materia Prima:', error);
+      throw error;
+    }
+  }
 };
 
 export const salidasAPI = {
@@ -355,6 +427,40 @@ export const transferenciasAPI = {
 
 export const inventarioAPI = {
   getResumenStock: () => api.get('/inventario/transferencias/resumen-stock'),
+
+  descargarKardexPDF: async (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.fecha_inicio) query.append('fecha_inicio', params.fecha_inicio);
+    if (params.fecha_fin) query.append('fecha_fin', params.fecha_fin);
+    if (params.id_tipo_inventario) query.append('id_tipo_inventario', params.id_tipo_inventario);
+
+    const response = await fetch(`${API_URL}/inventario/kardex/pdf?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Error al generar el Kardex' }));
+      throw new Error(errorData.error || 'Error al generar el Kardex');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `kardex-${params.fecha_inicio || 'inicio'}-${params.fecha_fin || 'hoy'}.pdf`;
+
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+
+    return { success: true };
+  }
 };
 
 export const dashboard = {

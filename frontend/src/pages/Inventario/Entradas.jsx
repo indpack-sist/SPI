@@ -37,6 +37,13 @@ function Entradas() {
   const [filtro, setFiltro] = useState('');
   const [generandoPDF, setGenerandoPDF] = useState({});
 
+  const hoy = new Date();
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const toInputDate = (d) => d.toISOString().split('T')[0];
+  const [fechaInicioReporte, setFechaInicioReporte] = useState(toInputDate(primerDiaMes));
+  const [fechaFinReporte, setFechaFinReporte] = useState(toInputDate(hoy));
+  const [descargandoReporte, setDescargandoReporte] = useState(false);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -113,6 +120,29 @@ function Entradas() {
       setError(err.error || 'Error al cargar datos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const descargarControlMateriaPrima = async () => {
+    if (!fechaInicioReporte || !fechaFinReporte) {
+      setError('Selecciona la fecha de inicio y fin del reporte');
+      return;
+    }
+    if (fechaInicioReporte > fechaFinReporte) {
+      setError('La fecha de inicio no puede ser mayor que la fecha de fin');
+      return;
+    }
+    try {
+      setDescargandoReporte(true);
+      setError(null);
+      await entradasAPI.generarControlMateriaPrimaPDF({
+        fecha_inicio: fechaInicioReporte,
+        fecha_fin: fechaFinReporte
+      });
+    } catch (err) {
+      setError(err.message || 'Error al generar el Control de Materia Prima');
+    } finally {
+      setDescargandoReporte(false);
     }
   };
 
@@ -465,10 +495,38 @@ function Entradas() {
           <h1 className="card-title">Entradas de Inventario</h1>
           <p className="text-muted">Registro de compras y entradas de materiales</p>
         </div>
-        <button className="btn btn-primary" onClick={() => abrirModal()}>
-          <Plus size={20} />
-          Nueva Entrada
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1" title="Rango de fechas del reporte">
+            <input
+              type="date"
+              className="form-input"
+              style={{ width: 'auto' }}
+              value={fechaInicioReporte}
+              onChange={(e) => setFechaInicioReporte(e.target.value)}
+            />
+            <span className="text-muted">-</span>
+            <input
+              type="date"
+              className="form-input"
+              style={{ width: 'auto' }}
+              value={fechaFinReporte}
+              onChange={(e) => setFechaFinReporte(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn btn-outline"
+            onClick={descargarControlMateriaPrima}
+            disabled={descargandoReporte}
+            title="Control de Materia Prima del rango seleccionado"
+          >
+            {descargandoReporte ? <Loader size={20} className="animate-spin" /> : <FileText size={20} />}
+            Control M. Prima
+          </button>
+          <button className="btn btn-primary" onClick={() => abrirModal()}>
+            <Plus size={20} />
+            Nueva Entrada
+          </button>
+        </div>
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}

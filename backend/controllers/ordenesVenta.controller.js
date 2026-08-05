@@ -2,6 +2,7 @@ import { executeQuery, executeTransaction } from '../config/database.js';
 import { parseSunatInvoice } from '../services/sunat-parser.service.js';
 import { generarOrdenVentaPDF } from '../utils/pdfGenerators/ordenVentaPDF.js';
 import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
+import { generarPedidoVentaPDF } from '../utils/pdfGenerators/pedidoVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
 import { 
@@ -2049,11 +2050,15 @@ export async function descargarPDFOrdenVenta(req, res) {
 
     // 2. LÓGICA PARA SELECCIONAR EL GENERADOR CORRECTO
     // Si el frontend solicita específicamente el "comprobante" Y es una Nota de Venta
-    if (tipo === 'comprobante' && orden.tipo_comprobante === 'Nota de Venta') {
+    if (tipo === 'pedido') {
+        pdfBuffer = await generarPedidoVentaPDF(orden);
+        nombreArchivo = `Pedido-${orden.numero_orden}.pdf`;
+    }
+    else if (tipo === 'comprobante' && orden.tipo_comprobante === 'Nota de Venta') {
         pdfBuffer = await generarNotaVentaPDF(orden);
         const correlativo = orden.numero_comprobante || orden.numero_orden;
         nombreArchivo = `NotaVenta-${correlativo}.pdf`;
-    } 
+    }
     // Si tienes un generador de Factura, agrégalo aquí con un else if
     // else if (tipo === 'comprobante' && orden.tipo_comprobante === 'Factura') { ... }
     else {

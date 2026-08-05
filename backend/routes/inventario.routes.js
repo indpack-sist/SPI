@@ -17,7 +17,7 @@ import {
   getTiposMovimientoSalida
 } from '../controllers/movimientos-salida.controller.js';
 
-import { 
+import {
   getAllTransferencias,
   getTransferenciaById,
   createTransferenciaMultiple,
@@ -27,9 +27,12 @@ import {
   generarPDFTransferenciaController
 } from '../controllers/transferencias.controller.js';
 
+import { generarKardexPDF } from '../controllers/inventario.controller.js';
+
 const router = express.Router();
 
 router.get('/resumen-stock', getResumenStockInventario);
+router.get('/kardex/pdf', generarKardexPDF);
 
 router.get('/entradas', getAllEntradas);
 router.get('/entradas/:id', getEntradaById);

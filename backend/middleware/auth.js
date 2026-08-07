@@ -93,7 +93,7 @@ const PERMISOS_POR_ROL = {
       ordenesVenta: false,
       seguimientoVentas: false,
       compras: true,
-      cuentasPago: true,
+      cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
       reportes: false

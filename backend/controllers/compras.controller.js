@@ -1,6 +1,64 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { generarCompraPDF } from '../utils/pdfGenerators/compraPDF.js';
 import pool from '../config/database.js';
+import { PERMISOS_POR_ROL } from '../middleware/auth.js';
+
+// --- Control de visibilidad de montos/finanzas en Compras ---
+// Regla: un rol con verPrecios ve todo. Un rol sin verPrecios (ej. Calidad)
+// solo ve los montos de las compras que ÉL MISMO registró (id_registrado_por).
+// Las cuentas/créditos/cuotas/letras/pagos NUNCA son visibles para roles sin verPrecios.
+function rolVePreciosGlobal(user) {
+  return !!PERMISOS_POR_ROL[user?.rol]?.ui?.verPrecios;
+}
+
+function puedeVerMontos(user, compra) {
+  if (rolVePreciosGlobal(user)) return true;
+  return !!(
+    user?.id_empleado &&
+    compra?.id_registrado_por != null &&
+    Number(compra.id_registrado_por) === Number(user.id_empleado)
+  );
+}
+
+function nullFields(obj, fields) {
+  if (!obj) return obj;
+  for (const f of fields) if (f in obj) obj[f] = null;
+  return obj;
+}
+
+// Campos monetarios/financieros a redactar a nivel de cabecera de compra
+const CAMPOS_MONTO_COMPRA = [
+  'subtotal', 'igv', 'total', 'monto_pagado', 'saldo_pendiente', 'tipo_cambio',
+  'dias_credito', 'estado_pago', 'numero_cuotas', 'cuotas_pendientes',
+  'forma_pago_detalle', 'id_cuenta_pago', 'cuenta_pago', 'tipo_cuenta_pago',
+  'tipo_cuenta', 'banco_cuenta', 'numero_cuenta_pago'
+];
+
+// Campos monetarios a redactar en cada línea del detalle
+const CAMPOS_MONTO_DETALLE = [
+  'precio_unitario', 'descuento_porcentaje', 'descuento', 'subtotal',
+  'importe', 'total', 'valor_compra', 'monto', 'precio'
+];
+
+// Redacta una cabecera de compra (fila de lista) segun visibilidad
+function redactarCompra(user, compra) {
+  if (puedeVerMontos(user, compra)) return compra;
+  return nullFields(compra, CAMPOS_MONTO_COMPRA);
+}
+
+// Bloquea endpoints puramente financieros (cuentas, creditos, cuotas, letras,
+// pagos, cronograma) para roles sin verPrecios como Calidad. Devuelve true si
+// ya respondio con 403 (el caller debe hacer `return`).
+function bloquearFinanzas(req, res) {
+  if (!rolVePreciosGlobal(req.user)) {
+    res.status(403).json({
+      success: false,
+      error: 'No tienes permiso para gestionar la información financiera de compras (cuentas, créditos, pagos).'
+    });
+    return true;
+  }
+  return false;
+}
 
 export async function getAllCompras(req, res) {
   try {
@@ -12,6 +70,7 @@ export async function getAllCompras(req, res) {
     let sql = `
       SELECT 
         oc.id_orden_compra,
+        oc.id_registrado_por,
         oc.numero_orden,
         oc.fecha_emision,
         oc.fecha_entrega_estimada,
@@ -114,8 +173,13 @@ export async function getAllCompras(req, res) {
     const result = await executeQuery(sql, params);
     
     if (!result.success) return res.status(500).json({ success: false, error: result.error });
-    
-    res.json({ success: true, data: result.data, total: result.data.length });
+
+    // Redacta montos/finanzas por fila segun propiedad (ver puedeVerMontos)
+    const dataRedactada = rolVePreciosGlobal(req.user)
+      ? result.data
+      : result.data.map(c => redactarCompra(req.user, c));
+
+    res.json({ success: true, data: dataRedactada, total: dataRedactada.length });
     
   } catch (error) {
     console.error(error);
@@ -204,7 +268,32 @@ export async function getCompraById(req, res) {
         ORDER BY mc.fecha_movimiento DESC
     `, [id]);
     compra.pagos_realizados = pagosResult.data || [];
-    
+
+    // Redaccion: si no puede ver montos de esta compra, ocultar precios y
+    // TODO el bloque financiero (cuotas, pagos, cuentas), incluso si es dueño
+    // no debe ver cuentas/creditos -> eso se refuerza en los endpoints financieros.
+    if (!puedeVerMontos(req.user, compra)) {
+      nullFields(compra, CAMPOS_MONTO_COMPRA);
+      (compra.detalle || []).forEach(d => nullFields(d, CAMPOS_MONTO_DETALLE));
+      compra.cuotas = [];
+      compra.pagos_realizados = [];
+      compra.puede_ver_montos = false;
+    } else {
+      compra.puede_ver_montos = true;
+    }
+
+    // Las cuentas/creditos/cuotas/letras/estado de pago nunca se muestran a roles
+    // sin verPrecios, aunque sean dueños de la compra: Calidad ve el PRECIO de su
+    // compra pero no la parte financiera (solo recibe guias de remision).
+    if (!rolVePreciosGlobal(req.user)) {
+      nullFields(compra, [
+        'id_cuenta_pago', 'cuenta_pago', 'tipo_cuenta', 'banco_cuenta', 'numero_cuenta_pago',
+        'monto_pagado', 'saldo_pendiente', 'estado_pago'
+      ]);
+      compra.cuotas = [];
+      compra.pagos_realizados = [];
+    }
+
     res.json({ success: true, data: compra });
     
   } catch (error) {
@@ -275,7 +364,8 @@ export async function createCompra(req, res) {
     let totalUnidadesRecepcion = 0;
 
     for (const item of detalle) {
-      const precioUnitario = parseFloat(item.precio_unitario);
+      // Precio opcional: Calidad puede registrar la compra sin montos (se regulariza luego)
+      const precioUnitario = parseFloat(item.precio_unitario) || 0;
       const valorCompra = (item.cantidad * precioUnitario) * (1 - parseFloat(item.descuento_porcentaje || 0) / 100);
       subtotal += valorCompra;
 
@@ -605,6 +695,7 @@ export async function createCompra(req, res) {
 }
 
 export async function establecerCronograma(req, res) {
+  if (bloquearFinanzas(req, res)) return;
     const connection = await pool.getConnection();
     try {
         const { id } = req.params;
@@ -901,6 +992,7 @@ export async function cancelarCompra(req, res) {
 }
 
 export async function getCuotasCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   try {
     const { id } = req.params;
     const { estado } = req.query;
@@ -917,6 +1009,7 @@ export async function getCuotasCompra(req, res) {
 }
 
 export async function getCuotaById(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   try {
     const { id, idCuota } = req.params;
     const result = await executeQuery(`
@@ -948,6 +1041,7 @@ export async function getCuotaById(req, res) {
 }
 
 export async function pagarCuota(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { id, idCuota } = req.params;
@@ -1010,6 +1104,7 @@ export async function pagarCuota(req, res) {
 }
 
 export async function registrarPagoCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;
@@ -1098,6 +1193,7 @@ export async function getEstadisticasCompras(req, res) {
 }
 
 export async function getResumenPagosCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   try {
     const { id } = req.params;
     const compraResult = await executeQuery(`
@@ -1123,6 +1219,7 @@ export async function getResumenPagosCompra(req, res) {
 }
 
 export async function getHistorialPagosCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   try {
     const { id } = req.params;
     const result = await executeQuery(`
@@ -1204,6 +1301,7 @@ export async function descargarPDFCompra(req, res) {
 }
 
 export async function getComprasPorCuenta(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   try {
     const result = await executeQuery(`
       SELECT cp.nombre, COUNT(oc.id_orden_compra) as cantidad, SUM(oc.total) as total FROM cuentas_pago cp 
@@ -1216,6 +1314,7 @@ export async function getComprasPorCuenta(req, res) {
 }
 
 export async function registrarLetrasCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;
@@ -1296,6 +1395,7 @@ export async function registrarLetrasCompra(req, res) {
 }
 
 export async function getLetrasCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   try {
     const { id } = req.params;
     const { estado } = req.query;
@@ -1343,6 +1443,7 @@ export async function getLetrasCompra(req, res) {
 }
 
 export async function pagarLetraCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { idLetra } = req.params;
@@ -1457,6 +1558,7 @@ export async function pagarLetraCompra(req, res) {
 }
 
 export async function registrarReembolsoComprador(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { id } = req.params;
@@ -1833,6 +1935,7 @@ export async function getItemsPendientesIngreso(req, res) {
 }
 
 export async function cambiarCuentaCompra(req, res) {
+  if (bloquearFinanzas(req, res)) return;
   let connection;
   try {
     const { id } = req.params;

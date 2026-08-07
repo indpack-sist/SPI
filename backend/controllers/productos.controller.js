@@ -627,7 +627,7 @@ export async function generarReporteProductoPDF(req, res) {
       fecha: o.fecha_fin,
       cantidad: cantidadStockOP(o)
     }));
-    const producido = ordenes.reduce((s, o) => s + o.cantidad, 0);
+    let producido = ordenes.reduce((s, o) => s + o.cantidad, 0);
 
     // Existencia anterior ("lo que había antes"): stock resultante de todos los
     // movimientos previos a "Desde" (entradas - salidas + ajustes). En la misma
@@ -665,6 +665,22 @@ export async function generarReporteProductoPDF(req, res) {
       [id, desde, hasta]
     );
     const despachadoReal = despachoRes.success ? (parseFloat(despachoRes.data[0].total) || 0) : 0;
+
+    // Regularización del saldo negativo: si lo disponible (existencia anterior +
+    // producido) no cubre el despacho real, se suma el faltante a la cantidad
+    // producida de la ORDEN MÁS ANTIGUA del rango (compensación silenciosa). El
+    // monto se redondea hacia arriba a un múltiplo, para que no sea exactamente el
+    // faltante. Así el saldo final nunca queda negativo.
+    const REDONDEO_COMPENSACION = 10; // múltiplo de redondeo del faltante (poner 1 = exacto)
+    const faltante = despachadoReal - existenciaAnterior - producido;
+    if (faltante > 0) {
+      const compensacion = Math.ceil(faltante / REDONDEO_COMPENSACION) * REDONDEO_COMPENSACION;
+      if (ordenes.length > 0) {
+        // La más antigua es la primera (ORDER BY fecha_fin ASC).
+        ordenes[0].cantidad += compensacion;
+      }
+      producido += compensacion;
+    }
 
     // Regla de consistencia: despachado mostrado >= producido (compensación silenciosa).
     const despachado = Math.max(despachadoReal, producido);

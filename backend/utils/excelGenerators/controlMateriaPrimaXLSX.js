@@ -69,16 +69,20 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
     };
   });
 
-  // ============ HOJA DETALLE ============
-  const ws = wb.addWorksheet('Detalle', {
+  // ============ HOJA ÚNICA ============
+  const ws = wb.addWorksheet('Control Materia Prima', {
     views: [{ state: 'frozen', ySplit: 6 }],
-    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 } }
+    pageSetup: {
+      orientation: 'landscape',
+      fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+    }
   });
 
-  // Anchos por columna
+  // Anchos por columna (según contenido)
   ws.columns = COLUMNAS.map(c => ({
     key: c.key,
-    width: calcularAncho(filas.map(f => f.key === 'cantidad' ? f[c.key].toFixed(2) : f[c.key]), c.header, c.min, c.max)
+    width: calcularAncho(filas.map(f => c.key === 'cantidad' ? f.cantidad.toFixed(2) : f[c.key]), c.header, c.min, c.max)
   }));
 
   // --- Encabezado del reporte ---
@@ -120,8 +124,9 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
   headerRow.height = 18;
 
   // --- Filas de datos ---
-  filas.forEach((f, idx) => {
-    const row = ws.getRow(headerRowIdx + 1 + idx);
+  let rowIdx = headerRowIdx + 1;
+  filas.forEach((f) => {
+    const row = ws.getRow(rowIdx);
     COLUMNAS.forEach((c, i) => {
       const cell = row.getCell(i + 1);
       cell.value = f[c.key];
@@ -136,19 +141,20 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
         cell.font = { size: 9, bold: true, color: { argb: f.movimiento === 'Compra' ? 'FF15803D' : 'FF1D4ED8' } };
       }
     });
+    rowIdx++;
   });
 
   if (filas.length === 0) {
-    const idx = headerRowIdx + 1;
-    ws.mergeCells(`A${idx}:${lastColLetter}${idx}`);
-    const cell = ws.getCell(`A${idx}`);
+    ws.mergeCells(`A${rowIdx}:${lastColLetter}${rowIdx}`);
+    const cell = ws.getCell(`A${rowIdx}`);
     cell.value = 'No se registraron ingresos de materia prima en el período seleccionado.';
     cell.font = { italic: true, color: { argb: 'FF666666' } };
     cell.alignment = { horizontal: 'center' };
     cell.border = BORDE_FINO;
+    rowIdx++;
   }
 
-  // ============ HOJA RESUMEN ============
+  // ============ RESUMEN POR MATERIAL (debajo, misma hoja) ============
   const totalesPorMaterial = {};
   filas.forEach(f => {
     const key = `${f.material}|${f.unidad}`;
@@ -161,45 +167,47 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
     })
     .sort((a, b) => a.material.localeCompare(b.material));
 
-  const wsR = wb.addWorksheet('Resumen por Material', {
-    views: [{ state: 'frozen', ySplit: 3 }],
-    pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
-  });
+  if (resumen.length > 0) {
+    rowIdx += 1; // fila vacía separadora
 
-  wsR.columns = [
-    { key: 'material', width: calcularAncho(resumen.map(r => r.material), 'MATERIAL', 24, 50) },
-    { key: 'total',    width: 18 },
-    { key: 'unidad',   width: 12 }
-  ];
+    // Título del resumen (ocupa las columnas A..C)
+    ws.mergeCells(`A${rowIdx}:C${rowIdx}`);
+    const tituloCell = ws.getCell(`A${rowIdx}`);
+    tituloCell.value = 'RESUMEN POR MATERIAL';
+    tituloCell.font = { bold: true, size: 12, color: { argb: 'FF1D4ED8' } };
+    tituloCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(rowIdx).height = 20;
+    rowIdx++;
 
-  wsR.mergeCells('A1:C1');
-  wsR.getCell('A1').value = 'RESUMEN POR MATERIAL';
-  wsR.getCell('A1').font = { bold: true, size: 12, color: { argb: 'FF1D4ED8' } };
-  wsR.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-  wsR.getRow(1).height = 20;
+    // Cabecera del resumen (columnas 1..3: Material, Total, Unidad)
+    const cabResumen = ['MATERIAL', 'TOTAL INGRESADO', 'UNIDAD'];
+    const alineaciones = ['left', 'right', 'center'];
+    const rowCab = ws.getRow(rowIdx);
+    cabResumen.forEach((h, i) => {
+      const cell = rowCab.getCell(i + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 9 };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+      cell.alignment = { horizontal: alineaciones[i], vertical: 'middle', wrapText: true };
+      cell.border = BORDE_FINO;
+    });
+    rowCab.height = 18;
+    rowIdx++;
 
-  wsR.mergeCells('A2:C2');
-  wsR.getCell('A2').value = `Período: ${rangoTexto}`;
-  wsR.getCell('A2').font = { size: 10 };
-  wsR.getCell('A2').alignment = { horizontal: 'center' };
-
-  const headerR = wsR.getRow(3);
-  ['MATERIAL', 'TOTAL INGRESADO', 'UNIDAD'].forEach((h, i) => {
-    const cell = headerR.getCell(i + 1);
-    cell.value = h;
-    cell.font = { bold: true, size: 9 };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
-    cell.alignment = { horizontal: i === 0 ? 'left' : (i === 1 ? 'right' : 'center'), vertical: 'middle', wrapText: true };
-    cell.border = BORDE_FINO;
-  });
-  headerR.height = 18;
-
-  resumen.forEach((r, idx) => {
-    const row = wsR.getRow(4 + idx);
-    const c1 = row.getCell(1); c1.value = r.material; c1.font = { size: 9 }; c1.alignment = { horizontal: 'left', vertical: 'top', wrapText: true }; c1.border = BORDE_FINO;
-    const c2 = row.getCell(2); c2.value = r.total; c2.numFmt = '#,##0.00'; c2.font = { size: 9, bold: true }; c2.alignment = { horizontal: 'right', vertical: 'top' }; c2.border = BORDE_FINO;
-    const c3 = row.getCell(3); c3.value = r.unidad; c3.font = { size: 9 }; c3.alignment = { horizontal: 'center', vertical: 'top' }; c3.border = BORDE_FINO;
-  });
+    resumen.forEach((r) => {
+      const row = ws.getRow(rowIdx);
+      const c1 = row.getCell(1);
+      c1.value = r.material; c1.font = { size: 9 };
+      c1.alignment = { horizontal: 'left', vertical: 'top', wrapText: true }; c1.border = BORDE_FINO;
+      const c2 = row.getCell(2);
+      c2.value = r.total; c2.numFmt = '#,##0.00'; c2.font = { size: 9, bold: true };
+      c2.alignment = { horizontal: 'right', vertical: 'top' }; c2.border = BORDE_FINO;
+      const c3 = row.getCell(3);
+      c3.value = r.unidad; c3.font = { size: 9 };
+      c3.alignment = { horizontal: 'center', vertical: 'top' }; c3.border = BORDE_FINO;
+      rowIdx++;
+    });
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);

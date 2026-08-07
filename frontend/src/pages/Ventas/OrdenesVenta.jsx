@@ -843,7 +843,7 @@ function OrdenesVenta() {
             <div>
               <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
                 <div className="p-2 bg-primary/10 rounded-lg"><ShoppingCart size={28} className="text-primary" /></div>
-                <span className="uppercase font-barlow text-white">Órdenes de Venta</span>
+                <span className="uppercase font-barlow text-heading">Órdenes de Venta</span>
               </h1>
               <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
             </div>
@@ -977,7 +977,7 @@ function OrdenesVenta() {
 
         <div className="card shadow-2xl relative" ref={tablaRef}>
           <div className="card-header flex items-center justify-between border-b border-steel/20">
-            <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{ordenesFiltradas.length}</span></h2>
+            <h2 className="text-lg font-black text-heading uppercase tracking-tight flex items-center gap-2">Lista de Órdenes <span className="text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{ordenesFiltradas.length}</span></h2>
             <div className="text-[0.6rem] font-bold text-wire uppercase tracking-widest">Mostrando {currentItems.length} registros</div>
           </div>
           

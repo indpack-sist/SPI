@@ -664,6 +664,9 @@ body {
 .text-danger       { color: #e74c3c; }
 .text-info         { color: #5dade2; }
 .text-white        { color: #ffffff; }
+/* Texto de encabezado que sigue el tema (usar en vez de text-white en
+   títulos sobre cards/fondos que se aclaran en modo claro). */
+.text-heading      { color: var(--text-primary); }
 
 .text-blue-600  { color: #5dade2; }
 .text-blue-700  { color: #4a9fc4; }

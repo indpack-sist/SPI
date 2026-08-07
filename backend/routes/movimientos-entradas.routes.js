@@ -13,7 +13,8 @@ import {
   getPagosEntrada,
   anularPagoEntrada,
   getResumenPagosEntrada,
-  generarControlMateriaPrimaPDFController
+  generarControlMateriaPrimaPDFController,
+  generarControlMateriaPrimaXLSXController
 } from '../controllers/movimientos-entradas.controller.js';
 
 const router = express.Router();
@@ -23,6 +24,7 @@ router.post('/validar-inventario', validarProductosInventario);
 router.post('/crear-multi-inventario', crearProductoMultiInventario);
 
 router.get('/reportes/control-materia-prima', generarControlMateriaPrimaPDFController);
+router.get('/reportes/control-materia-prima/xlsx', generarControlMateriaPrimaXLSXController);
 router.get('/', getAllEntradas);
 router.get('/:id', getEntradaById);
 router.get('/:id/pdf', generarPDFEntradaController);

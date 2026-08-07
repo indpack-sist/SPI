@@ -563,8 +563,10 @@ export async function getHistorialMovimientos(req, res) {
 // terceros. Regla de negocio: el DESPACHADO mostrado nunca es menor que el
 // PRODUCIDO; si el despacho real es menor, se compensa hacia arriba a nivel del
 // total del rango (compensación silenciosa, sin fila extra).
-//   Producido  = órdenes de producción finalizadas (cantidad_producida).
+//   Producido  = órdenes de producción finalizadas, en la unidad real de stock
+//                (unidades para productos por unidad, kg para el resto).
 //   Despachado = salidas tipo 'Venta' (no anuladas).
+//   Existencia anterior = stock resultante de los movimientos previos a "Desde".
 export async function generarReporteProductoPDF(req, res) {
   try {
     const { id } = req.params;
@@ -588,9 +590,20 @@ export async function generarReporteProductoPDF(req, res) {
     }
     const prod = productoRes.data[0];
 
-    // Detalle de producción (órdenes finalizadas) en el rango.
+    // Determina si el producto se mide por unidad (misma regla que la finalización
+    // de órdenes): en ese caso la producción real vive en cantidad_unidades_producida.
+    const unidad = (prod.unidad_medida || '').toUpperCase();
+    const nombreUp = (prod.nombre || '').toUpperCase();
+    const esPorUnidad =
+      ['UNIDAD', 'UND', 'ROLLO', 'PZA', 'MILLAR', 'MLL'].includes(unidad) ||
+      nombreUp.includes('LÁMINA') || nombreUp.includes('LAMINA');
+
+    // Detalle de producción (órdenes finalizadas) en el rango. Traemos ambas
+    // columnas y elegimos la que realmente ingresó a stock, igual que el cierre de OP.
     const ordenesRes = await executeQuery(
-      `SELECT op.numero_orden, op.fecha_fin, op.cantidad_producida
+      `SELECT op.numero_orden, op.fecha_fin,
+              op.cantidad_producida,
+              op.cantidad_unidades_producida
        FROM ordenes_produccion op
        WHERE op.id_producto_terminado = ?
          AND op.estado = 'Finalizada'
@@ -602,12 +615,43 @@ export async function generarReporteProductoPDF(req, res) {
       return res.status(500).json({ error: 'No se pudo obtener la producción del producto.' });
     }
 
+    const cantidadStockOP = (o) => {
+      const kg = parseFloat(o.cantidad_producida) || 0;
+      const und = parseFloat(o.cantidad_unidades_producida) || 0;
+      // Igual que 'cantidadParaStock' en el cierre de la orden.
+      return (esPorUnidad && und > 0) ? und : kg;
+    };
+
     const ordenes = ordenesRes.data.map(o => ({
       numero_orden: o.numero_orden,
       fecha: o.fecha_fin,
-      cantidad: parseFloat(o.cantidad_producida) || 0
+      cantidad: cantidadStockOP(o)
     }));
     const producido = ordenes.reduce((s, o) => s + o.cantidad, 0);
+
+    // Existencia anterior ("lo que había antes"): stock resultante de todos los
+    // movimientos previos a "Desde" (entradas - salidas + ajustes). En la misma
+    // unidad de stock, coherente con producido y despachado.
+    const antesRes = await executeQuery(
+      `SELECT
+        COALESCE((SELECT SUM(de.cantidad) FROM detalle_entradas de
+                  INNER JOIN entradas e ON de.id_entrada = e.id_entrada
+                  WHERE de.id_producto = ?
+                    AND COALESCE(e.estado, 'Activo') <> 'Anulado'
+                    AND DATE(e.fecha_movimiento) < ?), 0) AS ent_antes,
+        COALESCE((SELECT SUM(ds.cantidad) FROM detalle_salidas ds
+                  INNER JOIN salidas s ON ds.id_salida = s.id_salida
+                  WHERE ds.id_producto = ?
+                    AND COALESCE(s.estado, 'Activo') <> 'Anulado'
+                    AND DATE(s.fecha_movimiento) < ?), 0) AS sal_antes,
+        COALESCE((SELECT SUM(ai.diferencia) FROM ajustes_inventario ai
+                  WHERE ai.id_producto = ?
+                    AND DATE(ai.fecha_ajuste) < ?), 0) AS aj_antes`,
+      [id, desde, id, desde, id, desde]
+    );
+    const a = antesRes.success ? antesRes.data[0] : { ent_antes: 0, sal_antes: 0, aj_antes: 0 };
+    const existenciaAnterior =
+      (parseFloat(a.ent_antes) || 0) - (parseFloat(a.sal_antes) || 0) + (parseFloat(a.aj_antes) || 0);
 
     // Despacho real: salidas tipo 'Venta' no anuladas en el rango.
     const despachoRes = await executeQuery(
@@ -633,6 +677,7 @@ export async function generarReporteProductoPDF(req, res) {
         stock_actual: prod.stock_actual
       },
       filtros: { desde: fecha_inicio || null, hasta: fecha_fin || null },
+      existencia_anterior: existenciaAnterior,
       producido,
       despachado_real: despachadoReal,
       despachado,

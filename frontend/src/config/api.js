@@ -324,6 +324,46 @@ export const entradasAPI = {
       console.error('Error al descargar Control de Materia Prima:', error);
       throw error;
     }
+  },
+
+  generarControlMateriaPrimaXLSX: async ({ fecha_inicio, fecha_fin, id_tipo_inventario } = {}) => {
+    try {
+      const query = new URLSearchParams({ fecha_inicio, fecha_fin });
+      if (id_tipo_inventario) query.append('id_tipo_inventario', id_tipo_inventario);
+
+      const response = await fetch(
+        `${API_URL}/inventario/movimientos-entradas/reportes/control-materia-prima/xlsx?${query.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Error al generar Excel' }));
+        throw new Error(errorData.error || 'Error al generar Excel');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `control-materia-prima-${fecha_inicio}_${fecha_fin}.xlsx`;
+
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error al descargar Control de Materia Prima (Excel):', error);
+      throw error;
+    }
   }
 };
 

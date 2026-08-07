@@ -1,5 +1,6 @@
 import { executeQuery } from '../config/database.js';
 import { generarPDFKardex } from '../utils/pdf-generator.js';
+import { generarKardexXLSX as construirKardexXLSX } from '../utils/excelGenerators/kardexXLSX.js';
 
 export async function getResumenStockInventario(_req, res) {
   try {
@@ -80,23 +81,25 @@ export async function getResumenStockInventario(_req, res) {
   }
 }
 
-// Genera el PDF del Kardex: resumen por producto de balance inicial, entradas,
-// salidas y stock resultante en un rango de fechas.
+// Construye los datos del Kardex (filas + filtros) a partir de los parámetros de
+// consulta. Se comparte entre la exportación a PDF y a Excel.
 // Fuentes de movimiento: detalle_entradas (compras/producción/merma),
 // detalle_salidas (ventas/consumo/producción) y ajustes_inventario
 // (diferencia con signo: positiva = entrada, negativa = salida).
-export async function generarKardexPDF(req, res) {
-  try {
-    const { fecha_inicio, fecha_fin, id_tipo_inventario } = req.query;
+async function construirDatosKardex(query) {
+  const { fecha_inicio, fecha_fin, id_tipo_inventario } = query;
 
-    // Rango por defecto: desde el inicio de los tiempos hasta hoy.
-    const desde = fecha_inicio || '1900-01-01';
-    const hasta = fecha_fin || new Date().toISOString().slice(0, 10);
+  // Rango por defecto: desde el inicio de los tiempos hasta hoy.
+  const desde = fecha_inicio || '1900-01-01';
+  const hasta = fecha_fin || new Date().toISOString().slice(0, 10);
 
-    if (fecha_inicio && fecha_fin && fecha_inicio > fecha_fin) {
-      return res.status(400).json({ error: 'La fecha de inicio no puede ser mayor que la fecha de fin.' });
-    }
+  if (fecha_inicio && fecha_fin && fecha_inicio > fecha_fin) {
+    const err = new Error('La fecha de inicio no puede ser mayor que la fecha de fin.');
+    err.status = 400;
+    throw err;
+  }
 
+  {
     // Subconsultas de movimientos: se calculan por producto tanto antes del
     // periodo (para el balance inicial) como dentro del periodo.
     const sql = `
@@ -185,7 +188,9 @@ export async function generarKardexPDF(req, res) {
     const result = await executeQuery(sql, params);
 
     if (!result.success) {
-      return res.status(500).json({ error: 'No se pudo generar el Kardex. Intente de nuevo.' });
+      const err = new Error('No se pudo generar el Kardex. Intente de nuevo.');
+      err.status = 500;
+      throw err;
     }
 
     // Consolidación: balance inicial, entradas y salidas del periodo (incluyendo
@@ -227,20 +232,45 @@ export async function generarKardexPDF(req, res) {
       }
     }
 
-    const pdfBuffer = await generarPDFKardex({
+    return {
       filas,
       filtros: {
         desde: fecha_inicio || null,
         hasta: fecha_fin || null,
         tipo_inventario: tipoInventarioNombre
-      }
-    });
+      },
+      desde,
+      hasta
+    };
+  }
+}
+
+// Exportación del Kardex a PDF.
+export async function generarKardexPDF(req, res) {
+  try {
+    const { filas, filtros, desde, hasta } = await construirDatosKardex(req.query);
+    const pdfBuffer = await generarPDFKardex({ filas, filtros });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="kardex_${desde}_${hasta}.pdf"`);
     res.send(pdfBuffer);
   } catch (error) {
     console.error('Error al generar Kardex PDF:', error);
-    res.status(500).json({ error: 'Error al generar el Kardex: ' + error.message });
+    res.status(error.status || 500).json({ error: 'Error al generar el Kardex: ' + error.message });
+  }
+}
+
+// Exportación del Kardex a Excel (XLSX) con el mismo contenido que el PDF.
+export async function generarKardexXLSX(req, res) {
+  try {
+    const { filas, filtros, desde, hasta } = await construirDatosKardex(req.query);
+    const xlsxBuffer = await construirKardexXLSX({ filas, filtros });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="kardex_${desde}_${hasta}.xlsx"`);
+    res.send(xlsxBuffer);
+  } catch (error) {
+    console.error('Error al generar Kardex XLSX:', error);
+    res.status(error.status || 500).json({ error: 'Error al generar el Kardex: ' + error.message });
   }
 }

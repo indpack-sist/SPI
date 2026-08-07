@@ -27,12 +27,13 @@ import {
   generarPDFTransferenciaController
 } from '../controllers/transferencias.controller.js';
 
-import { generarKardexPDF } from '../controllers/inventario.controller.js';
+import { generarKardexPDF, generarKardexXLSX } from '../controllers/inventario.controller.js';
 
 const router = express.Router();
 
 router.get('/resumen-stock', getResumenStockInventario);
 router.get('/kardex/pdf', generarKardexPDF);
+router.get('/kardex/xlsx', generarKardexXLSX);
 
 router.get('/entradas', getAllEntradas);
 router.get('/entradas/:id', getEntradaById);

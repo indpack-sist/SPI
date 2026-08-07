@@ -1,6 +1,7 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import pool from '../config/database.js';
 import { generarPDFReporteProducto } from '../utils/pdf-generator.js';
+import { generarReporteProductoXLSX as generarReporteProductoXLSX_ } from '../utils/excelGenerators/reporteProductoXLSX.js';
 
 export async function getAllProductos(req, res) {
   try {
@@ -567,16 +568,19 @@ export async function getHistorialMovimientos(req, res) {
 //                (unidades para productos por unidad, kg para el resto).
 //   Despachado = salidas tipo 'Venta' (no anuladas).
 //   Existencia anterior = stock resultante de los movimientos previos a "Desde".
-export async function generarReporteProductoPDF(req, res) {
-  try {
-    const { id } = req.params;
-    const { fecha_inicio, fecha_fin } = req.query;
+// Construye los datos del reporte por producto (producción vs despacho).
+// Se comparte entre la exportación a PDF y a Excel.
+async function construirDatosReporteProducto(id, query) {
+  {
+    const { fecha_inicio, fecha_fin } = query;
 
     const desde = fecha_inicio || '1900-01-01';
     const hasta = fecha_fin || new Date().toISOString().slice(0, 10);
 
     if (fecha_inicio && fecha_fin && fecha_inicio > fecha_fin) {
-      return res.status(400).json({ error: 'La fecha de inicio no puede ser mayor que la fecha de fin.' });
+      const err = new Error('La fecha de inicio no puede ser mayor que la fecha de fin.');
+      err.status = 400;
+      throw err;
     }
 
     const productoRes = await executeQuery(
@@ -586,7 +590,9 @@ export async function generarReporteProductoPDF(req, res) {
     );
 
     if (!productoRes.success || productoRes.data.length === 0) {
-      return res.status(404).json({ error: 'Producto no encontrado' });
+      const err = new Error('Producto no encontrado');
+      err.status = 404;
+      throw err;
     }
     const prod = productoRes.data[0];
 
@@ -612,7 +618,9 @@ export async function generarReporteProductoPDF(req, res) {
       [id, desde, hasta]
     );
     if (!ordenesRes.success) {
-      return res.status(500).json({ error: 'No se pudo obtener la producción del producto.' });
+      const err = new Error('No se pudo obtener la producción del producto.');
+      err.status = 500;
+      throw err;
     }
 
     const cantidadStockOP = (o) => {
@@ -685,27 +693,55 @@ export async function generarReporteProductoPDF(req, res) {
     // Regla de consistencia: despachado mostrado >= producido (compensación silenciosa).
     const despachado = Math.max(despachadoReal, producido);
 
-    const pdfBuffer = await generarPDFReporteProducto({
-      producto: {
-        codigo: prod.codigo,
-        nombre: prod.nombre,
-        unidad: prod.unidad_medida,
-        stock_actual: prod.stock_actual
+    return {
+      datos: {
+        producto: {
+          codigo: prod.codigo,
+          nombre: prod.nombre,
+          unidad: prod.unidad_medida,
+          stock_actual: prod.stock_actual
+        },
+        filtros: { desde: fecha_inicio || null, hasta: fecha_fin || null },
+        existencia_anterior: existenciaAnterior,
+        producido,
+        despachado_real: despachadoReal,
+        despachado,
+        ordenes
       },
-      filtros: { desde: fecha_inicio || null, hasta: fecha_fin || null },
-      existencia_anterior: existenciaAnterior,
-      producido,
-      despachado_real: despachadoReal,
-      despachado,
-      ordenes
-    });
+      codigo: prod.codigo,
+      desde,
+      hasta
+    };
+  }
+}
+
+// Exportación del reporte por producto a PDF.
+export async function generarReporteProductoPDF(req, res) {
+  try {
+    const { datos, codigo, desde, hasta } = await construirDatosReporteProducto(req.params.id, req.query);
+    const pdfBuffer = await generarPDFReporteProducto(datos);
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="reporte_producto_${prod.codigo}_${desde}_${hasta}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="reporte_producto_${codigo}_${desde}_${hasta}.pdf"`);
     res.send(pdfBuffer);
   } catch (error) {
     console.error('Error al generar reporte por producto:', error);
-    res.status(500).json({ error: 'Error al generar el reporte del producto: ' + error.message });
+    res.status(error.status || 500).json({ error: 'Error al generar el reporte del producto: ' + error.message });
+  }
+}
+
+// Exportación del reporte por producto a Excel (XLSX) con el mismo contenido.
+export async function generarReporteProductoXLSX(req, res) {
+  try {
+    const { datos, codigo, desde, hasta } = await construirDatosReporteProducto(req.params.id, req.query);
+    const xlsxBuffer = await generarReporteProductoXLSX_(datos);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="reporte_producto_${codigo}_${desde}_${hasta}.xlsx"`);
+    res.send(xlsxBuffer);
+  } catch (error) {
+    console.error('Error al generar reporte por producto (Excel):', error);
+    res.status(error.status || 500).json({ error: 'Error al generar el reporte del producto: ' + error.message });
   }
 }
 

@@ -23,7 +23,8 @@ import {
   verCUPPorRecetas,
   calcularEvolucionCUP,
   getHistorialComprasProducto,
-  generarReporteProductoPDF
+  generarReporteProductoPDF,
+  generarReporteProductoXLSX
 } from '../controllers/productos.controller.js';
 
 import {
@@ -62,6 +63,7 @@ router.post('/', createProducto);
 router.get('/:id/historial-compras', getHistorialComprasProducto);
 router.get('/:id/historial-movimientos', getHistorialMovimientos);
 router.get('/:id/reporte-pdf', generarReporteProductoPDF);
+router.get('/:id/reporte-xlsx', generarReporteProductoXLSX);
 router.get('/:id/recetas', getRecetasByProducto);
 router.get('/:id/calcular-cup-receta', calcularCUPDesdeReceta);
 router.get('/:id/evolucion-cup', calcularEvolucionCUP);

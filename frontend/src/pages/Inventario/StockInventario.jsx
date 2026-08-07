@@ -12,6 +12,7 @@ import {
   Layers,
   DollarSign,
   FileText,
+  FileSpreadsheet,
   Loader2
 } from 'lucide-react';
 import { inventarioAPI, productosAPI } from '../../config/api';
@@ -35,12 +36,14 @@ function StockInventario() {
   const [kardexHasta, setKardexHasta] = useState('');
   const [kardexTipo, setKardexTipo] = useState('');
   const [generandoKardex, setGenerandoKardex] = useState(false);
+  const [generandoKardexXLSX, setGenerandoKardexXLSX] = useState(false);
 
   // Reporte por producto (producción vs despacho)
   const [repProdTexto, setRepProdTexto] = useState('');
   const [repProdDesde, setRepProdDesde] = useState('');
   const [repProdHasta, setRepProdHasta] = useState('');
   const [generandoRepProd, setGenerandoRepProd] = useState(false);
+  const [generandoRepProdXLSX, setGenerandoRepProdXLSX] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -82,27 +85,33 @@ function StockInventario() {
     }
   };
 
-  const descargarKardex = async () => {
+  const descargarKardex = async (formato = 'pdf') => {
     if (kardexDesde && kardexHasta && kardexDesde > kardexHasta) {
       setError('La fecha "Desde" no puede ser mayor que la fecha "Hasta".');
       return;
     }
+    const setGenerando = formato === 'xlsx' ? setGenerandoKardexXLSX : setGenerandoKardex;
     try {
-      setGenerandoKardex(true);
+      setGenerando(true);
       setError(null);
-      await inventarioAPI.descargarKardexPDF({
+      const params = {
         fecha_inicio: kardexDesde || undefined,
         fecha_fin: kardexHasta || undefined,
         id_tipo_inventario: kardexTipo || undefined
-      });
+      };
+      if (formato === 'xlsx') {
+        await inventarioAPI.descargarKardexXLSX(params);
+      } else {
+        await inventarioAPI.descargarKardexPDF(params);
+      }
     } catch (err) {
       setError(err.message || 'Error al generar el Kardex');
     } finally {
-      setGenerandoKardex(false);
+      setGenerando(false);
     }
   };
 
-  const descargarReporteProducto = async () => {
+  const descargarReporteProducto = async (formato = 'pdf') => {
     const texto = repProdTexto.trim();
     if (!texto) {
       setError('Selecciona o escribe un producto para generar su reporte.');
@@ -123,17 +132,23 @@ function StockInventario() {
       setError('La fecha "Desde" no puede ser mayor que la fecha "Hasta".');
       return;
     }
+    const setGenerando = formato === 'xlsx' ? setGenerandoRepProdXLSX : setGenerandoRepProd;
     try {
-      setGenerandoRepProd(true);
+      setGenerando(true);
       setError(null);
-      await productosAPI.descargarReportePDF(prod.id_producto, {
+      const params = {
         fecha_inicio: repProdDesde || undefined,
         fecha_fin: repProdHasta || undefined
-      });
+      };
+      if (formato === 'xlsx') {
+        await productosAPI.descargarReporteXLSX(prod.id_producto, params);
+      } else {
+        await productosAPI.descargarReportePDF(prod.id_producto, params);
+      }
     } catch (err) {
       setError(err.message || 'Error al generar el reporte del producto');
     } finally {
-      setGenerandoRepProd(false);
+      setGenerando(false);
     }
   };
 
@@ -411,15 +426,24 @@ function StockInventario() {
               ))}
             </select>
           </div>
-          <div>
+          <div className="flex flex-col gap-2">
             <button
               className="btn btn-primary w-full flex items-center justify-center gap-2"
-              onClick={descargarKardex}
-              disabled={generandoKardex}
+              onClick={() => descargarKardex('pdf')}
+              disabled={generandoKardex || generandoKardexXLSX}
             >
               {generandoKardex
                 ? <><Loader2 size={16} className="animate-spin" /> Generando...</>
-                : <><FileText size={16} /> Generar Kardex</>}
+                : <><FileText size={16} /> PDF</>}
+            </button>
+            <button
+              className="btn btn-success w-full flex items-center justify-center gap-2"
+              onClick={() => descargarKardex('xlsx')}
+              disabled={generandoKardex || generandoKardexXLSX}
+            >
+              {generandoKardexXLSX
+                ? <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                : <><FileSpreadsheet size={16} /> Excel</>}
             </button>
           </div>
         </div>
@@ -469,15 +493,24 @@ function StockInventario() {
               onChange={(e) => setRepProdHasta(e.target.value)}
             />
           </div>
-          <div>
+          <div className="flex flex-col gap-2">
             <button
               className="btn btn-primary w-full flex items-center justify-center gap-2"
-              onClick={descargarReporteProducto}
-              disabled={generandoRepProd}
+              onClick={() => descargarReporteProducto('pdf')}
+              disabled={generandoRepProd || generandoRepProdXLSX}
             >
               {generandoRepProd
                 ? <><Loader2 size={16} className="animate-spin" /> Generando...</>
-                : <><FileText size={16} /> Generar Reporte</>}
+                : <><FileText size={16} /> PDF</>}
+            </button>
+            <button
+              className="btn btn-success w-full flex items-center justify-center gap-2"
+              onClick={() => descargarReporteProducto('xlsx')}
+              disabled={generandoRepProd || generandoRepProdXLSX}
+            >
+              {generandoRepProdXLSX
+                ? <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                : <><FileSpreadsheet size={16} /> Excel</>}
             </button>
           </div>
         </div>

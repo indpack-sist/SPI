@@ -229,6 +229,38 @@ export const productosAPI = {
     }, 100);
 
     return { success: true };
+  },
+
+  descargarReporteXLSX: async (id, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.fecha_inicio) query.append('fecha_inicio', params.fecha_inicio);
+    if (params.fecha_fin) query.append('fecha_fin', params.fecha_fin);
+
+    const response = await fetch(`${API_URL}/productos/${id}/reporte-xlsx?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Error al generar el reporte' }));
+      throw new Error(errorData.error || 'Error al generar el reporte');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reporte-producto-${id}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+
+    return { success: true };
   }
 };
 
@@ -491,6 +523,40 @@ export const inventarioAPI = {
     const link = document.createElement('a');
     link.href = url;
     link.download = `kardex-${params.fecha_inicio || 'inicio'}-${params.fecha_fin || 'hoy'}.pdf`;
+
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+
+    return { success: true };
+  },
+
+  descargarKardexXLSX: async (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.fecha_inicio) query.append('fecha_inicio', params.fecha_inicio);
+    if (params.fecha_fin) query.append('fecha_fin', params.fecha_fin);
+    if (params.id_tipo_inventario) query.append('id_tipo_inventario', params.id_tipo_inventario);
+
+    const response = await fetch(`${API_URL}/inventario/kardex/xlsx?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Error al generar el Kardex' }));
+      throw new Error(errorData.error || 'Error al generar el Kardex');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `kardex-${params.fecha_inicio || 'inicio'}-${params.fecha_fin || 'hoy'}.xlsx`;
 
     document.body.appendChild(link);
     link.click();

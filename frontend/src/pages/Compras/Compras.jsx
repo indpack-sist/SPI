@@ -17,7 +17,11 @@ import { usePermisos } from '../../context/PermisosContext';
 function Compras() {
   const navigate = useNavigate();
   const { tienePermiso } = usePermisos();
-  const verMontos = tienePermiso('verPrecios'); // Calidad = false → vista sin datos financieros
+  // verFinanzas: cuentas/créditos/pagos/estadísticas → nunca para Calidad.
+  // puedeCrear: Calidad SÍ registra compras (recibe guías de remisión); los montos
+  // por fila los redacta el backend según propiedad (id_registrado_por).
+  const verFinanzas = tienePermiso('verPrecios');
+  const puedeCrear = tienePermiso('compras');
   
   const [compras, setCompras] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
@@ -62,26 +66,32 @@ function Compras() {
         Object.entries(filtros).filter(([_, value]) => value !== '')
       );
       
-      const [comprasRes, statsRes, alertasRes, cuentasRes] = await Promise.all([
-        comprasAPI.getAll(filtrosActivos),
-        comprasAPI.getEstadisticas(filtrosActivos),
-        comprasAPI.getAlertas(filtrosActivos),
-        cuentasPagoAPI.getAll({ estado: 'Activo' })
-      ]);
-      
+      // Roles sin acceso a finanzas (Calidad) no piden estadísticas/alertas/cuentas
+      // (esas rutas devuelven 403 y además exponen agregados financieros).
+      const promesas = [comprasAPI.getAll(filtrosActivos)];
+      if (verFinanzas) {
+        promesas.push(
+          comprasAPI.getEstadisticas(filtrosActivos),
+          comprasAPI.getAlertas(filtrosActivos),
+          cuentasPagoAPI.getAll({ estado: 'Activo' })
+        );
+      }
+
+      const [comprasRes, statsRes, alertasRes, cuentasRes] = await Promise.all(promesas);
+
       if (comprasRes.data.success) {
         setCompras(comprasRes.data.data || []);
       }
-      
-      if (statsRes.data.success) {
+
+      if (statsRes?.data?.success) {
         setEstadisticas(statsRes.data.data || null);
       }
 
-      if (alertasRes.data.success) {
+      if (alertasRes?.data?.success) {
         setAlertas(alertasRes.data.data || null);
       }
 
-      if (cuentasRes.data.success) {
+      if (cuentasRes?.data?.success) {
         setCuentas(cuentasRes.data.data || []);
       }
       
@@ -241,6 +251,10 @@ function Compras() {
       width: '130px',
       align: 'right',
       render: (value, row) => {
+        // value === null → monto redactado por backend (compra ajena para Calidad)
+        if (value === null || value === undefined) {
+          return <span className="text-gray-400">—</span>;
+        }
         const esContado = (row.forma_pago_detalle || row.tipo_compra) === 'Contado';
         return (
             <div>
@@ -327,7 +341,7 @@ function Compras() {
           </h1>
           <p className="text-muted">Registro, control de pagos y trazabilidad</p>
         </div>
-        {verMontos && (
+        {puedeCrear && (
           <button
             className="btn btn-primary shadow-lg hover:shadow-xl transition-all"
             onClick={() => navigate('/compras/nueva')}
@@ -357,7 +371,7 @@ function Compras() {
         </button>
       </div>
 
-      {verMontos && activeTab === 'compras' && estadisticas && (
+      {verFinanzas && activeTab === 'compras' && estadisticas && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <div className="card hover:border-blue-300 transition-colors">
             <div className="card-body">
@@ -442,7 +456,7 @@ function Compras() {
         </div>
       )}
 
-      {verMontos && alertas && (
+      {verFinanzas && alertas && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {alertas.cuotas_vencidas?.cantidad > 0 && (
             <div 
@@ -554,7 +568,7 @@ function Compras() {
                 />
             </div>
 
-            {verMontos && (
+            {verFinanzas && (
             <div className="w-40">
               <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Tipo de Compra</label>
               <select
@@ -570,7 +584,7 @@ function Compras() {
             </div>
             )}
 
-            {verMontos && (
+            {verFinanzas && (
             <div className="w-48">
               <label className="text-xs font-semibold uppercase text-gray-500 mb-1 block">Cuenta de Pago</label>
               <select
@@ -611,8 +625,9 @@ function Compras() {
           <Table
             columns={(() => {
               if (activeTab === 'compras') {
-                // Calidad (sin verPrecios): N° Compra, Proveedor, Recepción y Acciones (sin montos/pagos)
-                return verMontos ? columns : [columns[0], columns[1], columns[2], columns[7]];
+                // Calidad (sin verFinanzas): N° Compra, Proveedor, Recepción, Total y Acciones.
+                // El Total lo redacta el backend: muestra monto en compras propias y "—" en ajenas.
+                return verFinanzas ? columns : [columns[0], columns[1], columns[2], columns[5], columns[7]];
               }
               // Pestaña Solicitudes OC
               const base = [
@@ -625,7 +640,7 @@ function Compras() {
                   render: () => <span className="badge badge-outline">Formato OC</span>
                 }
               ];
-              if (verMontos) base.push(columns[5]); // Total solo si puede ver montos
+              if (verFinanzas) base.push(columns[5]); // Total solo si puede ver montos
               base.push(columns[7]); // Acciones
               return base;
             })()}

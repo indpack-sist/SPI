@@ -19,9 +19,13 @@ function DetalleCompra() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { tienePermiso } = usePermisos();
-  const verMontos = tienePermiso('verPrecios'); // Calidad = false → oculta montos/factura/condiciones
+  // verFinanzas: cuentas/créditos/pagos/letras y acciones financieras → nunca para Calidad
+  const verFinanzas = tienePermiso('verPrecios');
 
   const [compra, setCompra] = useState(null);
+  // verMontos: mostrar PRECIOS de ESTA compra. El backend marca puede_ver_montos
+  // por propiedad (Calidad ve montos solo en las compras que él mismo registró).
+  const verMontos = compra?.puede_ver_montos ?? verFinanzas;
   const [cuentasPago, setCuentasPago] = useState([]);
   const [letras, setLetras] = useState([]);
   const [ingresos, setIngresos] = useState([]);
@@ -109,12 +113,16 @@ function DetalleCompra() {
     try {
       setLoading(true); 
       setError(null);
-      const [compraRes, cuentasRes, productosRes] = await Promise.all([
+      // Calidad no accede a cuentas de pago (403): solo se piden si maneja finanzas.
+      const peticiones = [
         comprasAPI.getById(id),
-        cuentasPagoAPI.getAll({ estado: 'Activo' }),
         productosAPI.getAll({ estado: 'Activo' })
-      ]);
-      
+      ];
+      if (verFinanzas) {
+        peticiones.push(cuentasPagoAPI.getAll({ estado: 'Activo' }));
+      }
+      const [compraRes, productosRes, cuentasRes] = await Promise.all(peticiones);
+
       if (compraRes.data.success) {
         setCompra(compraRes.data.data);
         if (compraRes.data.data.id_cuenta_pago) {
@@ -124,7 +132,7 @@ function DetalleCompra() {
         setError('Compra no encontrada');
       }
 
-      if (cuentasRes.data.success) setCuentasPago(cuentasRes.data.data || []);
+      if (cuentasRes?.data?.success) setCuentasPago(cuentasRes.data.data || []);
       if (productosRes.data.success) setProductos(productosRes.data.data || []);
     } catch (err) {
       console.error(err);
@@ -622,25 +630,25 @@ function DetalleCompra() {
               }`}>
                 {compra.estado}
               </span>
-              {verMontos && usaFondosPropios && (
+              {verFinanzas && usaFondosPropios && (
                 <span className="badge badge-purple">Fondos Propios</span>
               )}
-              {verMontos && (
+              {verFinanzas && (
                 <span className="badge badge-outline">
                   {compra.forma_pago_detalle || compra.tipo_compra}
                 </span>
               )}
-              {verMontos && esContadoSinPago && (
+              {verFinanzas && esContadoSinPago && (
                 <span className="badge badge-warning flex items-center gap-1">
                   <Clock size={12} /> Solo Registro
                 </span>
               )}
-              {verMontos && (esCredito || esLetras) && tieneCronogramaPendiente && (
+              {verFinanzas && (esCredito || esLetras) && tieneCronogramaPendiente && (
                 <span className="badge badge-warning flex items-center gap-1">
                   <AlertCircle size={12} /> Sin Cronograma
                 </span>
               )}
-              {verMontos && (esCredito || esLetras) && compra.cronograma_definido && (
+              {verFinanzas && (esCredito || esLetras) && compra.cronograma_definido && (
                 <span className="badge badge-success flex items-center gap-1">
                   <CheckCircle2 size={12} /> Cronograma OK
                 </span>
@@ -649,7 +657,7 @@ function DetalleCompra() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
-          {verMontos && (<>
+          {verFinanzas && (<>
           {compra.url_comprobante && (
             <a
               href={compra.url_comprobante}
@@ -715,7 +723,7 @@ function DetalleCompra() {
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-      {verMontos && (<>
+      {verFinanzas && (<>
       <div className={`card mb-6 border-l-4 ${
         estaCancelada ? 'border-danger' :
         estaPagado ? 'border-success' :
@@ -851,7 +859,7 @@ function DetalleCompra() {
           
           {!esSoloFormato && (
             <>
-              {verMontos && (
+              {verFinanzas && (
               <button
                 className={`tab-item ${tabActiva === 'pagos' ? 'active' : ''}`}
                 onClick={() => setTabActiva('pagos')}
@@ -859,7 +867,7 @@ function DetalleCompra() {
                 Pagos
               </button>
               )}
-              {verMontos && (esLetras || esCredito) && (
+              {verFinanzas && (esLetras || esCredito) && (
                 <button
                   className={`tab-item ${tabActiva === 'letras' ? 'active' : ''}`}
                   onClick={() => setTabActiva('letras')}
@@ -1044,7 +1052,7 @@ function DetalleCompra() {
               </div>
             </div>
 
-            {verMontos && compra.id_cuenta_pago && !usaFondosPropios && (
+            {verFinanzas && compra.id_cuenta_pago && !usaFondosPropios && (
               <div className="card">
                 <div className="card-header bg-gray-50">
                   <h3 className="card-title flex gap-2">
@@ -1061,7 +1069,7 @@ function DetalleCompra() {
               </div>
             )}
 
-            {verMontos && !compra.id_cuenta_pago && !usaFondosPropios && esContadoSinPago && (
+            {verFinanzas && !compra.id_cuenta_pago && !usaFondosPropios && esContadoSinPago && (
               <div className="card border-l-4 border-orange-500">
                 <div className="card-body">
                   <div className="flex items-start gap-2">
@@ -1077,7 +1085,7 @@ function DetalleCompra() {
               </div>
             )}
 
-            {verMontos && esCredito && !esSoloFormato && (
+            {verFinanzas && esCredito && !esSoloFormato && (
               <div className="card">
                 <div className="card-header bg-gray-50 flex justify-between items-center">
                   <h3 className="card-title flex gap-2">
@@ -1149,7 +1157,7 @@ function DetalleCompra() {
         </div>
       )}
 
-      {verMontos && tabActiva === 'pagos' && (
+      {verFinanzas && tabActiva === 'pagos' && (
         <div className="card">
           <div className="card-header bg-gray-50">
             <h3 className="card-title flex gap-2">
@@ -1234,7 +1242,7 @@ function DetalleCompra() {
         </div>
       )}
 
-      {verMontos && tabActiva === 'letras' && (
+      {verFinanzas && tabActiva === 'letras' && (
         <div className="space-y-6">
           {esCredito && (
             <div className="card">

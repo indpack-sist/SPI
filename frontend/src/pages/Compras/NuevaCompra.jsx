@@ -10,13 +10,18 @@ import {
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
-import { 
+import {
   comprasAPI, proveedoresAPI, productosAPI, cuentasPagoAPI, empleadosAPI
 } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 
 function NuevaCompra() {
   const navigate = useNavigate();
-  
+  const { tienePermiso } = usePermisos();
+  // verFinanzas: quién maneja cuentas/créditos/condiciones de pago. Calidad = false:
+  // registra la compra (con o sin montos) y la parte de pago la regulariza un Admin.
+  const verFinanzas = tienePermiso('verPrecios');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -176,21 +181,25 @@ function NuevaCompra() {
   const cargarCatalogos = async () => {
     try {
       setLoading(true);
-      const [resProveedores, resProductos, resCuentas, resTiposInv, resCategorias, resEmpleados] = await Promise.all([
+      // Calidad no accede a cuentas de pago (403): solo se piden si maneja finanzas.
+      const peticiones = [
         proveedoresAPI.getAll({ estado: 'Activo' }),
         productosAPI.getAll({ estado: 'Activo', id_tipo_inventario: '1,2,4,5,6' }),
-        cuentasPagoAPI.getAll({ estado: 'Activo' }),
         productosAPI.getTiposInventario(),
         productosAPI.getCategorias(),
         empleadosAPI.getAll({ estado: 'Activo' })
-      ]);
-      
+      ];
+      if (verFinanzas) {
+        peticiones.push(cuentasPagoAPI.getAll({ estado: 'Activo' }));
+      }
+      const [resProveedores, resProductos, resTiposInv, resCategorias, resEmpleados, resCuentas] = await Promise.all(peticiones);
+
       if (resProveedores.data.success) setProveedores(resProveedores.data.data || []);
       if (resProductos.data.success) setProductos(resProductos.data.data || []);
-      if (resCuentas.data.success) setCuentasPago(resCuentas.data.data || []);
       if (resTiposInv.data.success) setTiposInventario(resTiposInv.data.data || []);
       if (resCategorias.data.success) setCategorias(resCategorias.data.data || []);
       if (resEmpleados.data.success) setEmpleados(resEmpleados.data.data || []);
+      if (resCuentas?.data?.success) setCuentasPago(resCuentas.data.data || []);
     } catch (err) {
       console.error(err);
       setError('Error al cargar catalogos');
@@ -822,7 +831,9 @@ function NuevaCompra() {
             {detalle.length > 0 && (
               <>
                 {/* Panel único de Condición de Pago + Cronograma (visible en compra y solicitud) */}
-                {(modoRegistro === 'compra' || modoRegistro === 'solicitud') && (
+                {/* Calidad (sin verFinanzas) no ve/elige cuentas ni condiciones: la compra
+                    nace pendiente de regularizar (Contado, accionPago='registro', sin cuenta). */}
+                {verFinanzas && (modoRegistro === 'compra' || modoRegistro === 'solicitud') && (
                   <div className="card">
                     <div className="card-header bg-gray-50">
                       <h2 className="card-title text-base">

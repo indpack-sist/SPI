@@ -280,7 +280,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
     const subTabStyle = (activo) => ({
         fontSize: '11px', fontWeight: activo ? 700 : 500, padding: '3px 10px', borderRadius: '6px',
         border: activo ? '1px solid #059669' : '1px solid #d1d5db',
-        background: activo ? '#ecfdf5' : '#fff', color: activo ? '#047857' : '#6b7280', cursor: 'pointer'
+        background: activo ? '#ecfdf5' : '#fff', color: activo ? '#047857' : 'var(--text-secondary)', cursor: 'pointer'
     });
 
     return (
@@ -306,7 +306,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                                     borderRadius: '6px',
                                     border: idx === tabActiva ? '1px solid #059669' : '1px solid #d1d5db',
                                     background: idx === tabActiva ? '#ecfdf5' : '#fff',
-                                    color: idx === tabActiva ? '#047857' : '#6b7280',
+                                    color: idx === tabActiva ? '#047857' : 'var(--text-secondary)',
                                     cursor: 'pointer'
                                 }}
                                 title={f.id_salida ? `Despacho SAL-${String(f.id_salida).padStart(6, '0')}` : 'Orden completa'}
@@ -328,7 +328,7 @@ const ModalValidacionSunat = ({ isOpen, onClose, orden, file, onConfirm, readOnl
                 )}
 
                 {tieneTabs && facturas[Math.min(tabActiva, facturas.length - 1)] && (
-                    <div style={{ padding: '6px 16px', fontSize: '12px', color: '#4b5563', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ padding: '6px 16px', fontSize: '12px', color: 'var(--text-secondary)', borderBottom: '1px solid #f0f0f0' }}>
                         Asociada a:{' '}
                         <strong>
                             {facturas[Math.min(tabActiva, facturas.length - 1)].id_salida

@@ -21,16 +21,16 @@
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
   padding: 0.5rem;
-  background: rgba(26, 26, 26, 0.5);
-  border: 1px solid #2a2a2a;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
 .filter-btn {
   padding: 0.4rem 0.8rem;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  color: #888;
+  background: var(--bg-primary);
+  border: 1px solid var(--steel);
+  color: var(--wire);
   border-radius: 2px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -41,13 +41,13 @@
 }
 
 .filter-btn:hover {
-  border-color: #555;
-  color: #bbb;
+  border-color: var(--steel-light);
+  color: var(--mist);
 }
 
 .filter-btn.active {
-  background: #e8b84b;
-  border-color: #e8b84b;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #000;
 }
 
@@ -59,9 +59,9 @@
 }
 
 .date-input {
-  background: #111;
-  border: 1px solid #333;
-  color: #f5f5f0;
+  background: var(--carbon);
+  border: 1px solid var(--steel);
+  color: var(--white);
   padding: 0.3rem 0.5rem;
   font-size: 0.75rem;
   border-radius: 2px;
@@ -69,7 +69,7 @@
 }
 
 .date-input:focus {
-  border-color: #e8b84b;
+  border-color: var(--accent);
 }
 
 /* =====================================================
@@ -91,7 +91,7 @@
 
 .progress-bar {
   height: 100%;
-  background: #e8b84b;
+  background: var(--accent);
   border-radius: 2px;
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -103,13 +103,13 @@
 
 .rank-name {
   font-weight: 600;
-  color: #f5f5f0;
+  color: var(--white);
   font-size: 0.85rem;
 }
 
 .rank-sub {
   font-size: 0.7rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* =====================================================
@@ -124,8 +124,8 @@
 }
 
 .analytics-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
   border-radius: 4px;
   display: flex;
   flex-direction: column;
@@ -133,7 +133,7 @@
 
 .analytics-card .card-header {
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -145,7 +145,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #e8b84b;
+  color: var(--accent);
   margin: 0;
 }
 
@@ -163,8 +163,8 @@
 }
 
 .kpi-stat {
-  background: #1a1a1a;
-  border-left: 3px solid #e8b84b;
+  background: var(--bg-primary);
+  border-left: 3px solid var(--accent);
   padding: 1rem;
   border-radius: 0 4px 4px 0;
 }
@@ -177,7 +177,7 @@
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
@@ -185,7 +185,7 @@
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #f5f5f0;
+  color: var(--white);
 }
 
 .kpi-trend {
@@ -202,7 +202,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #f5f5f0;
+  color: var(--white);
   margin: 0;
 }
 
@@ -211,7 +211,7 @@
   font-weight: 300;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
@@ -263,10 +263,10 @@
   align-items: center;
   gap: 0.6rem;
   padding: 0.5rem 1rem;
-  background-color: #1a1a1a;
-  border: 1px solid #3a3a3a;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--steel);
   border-radius: 2px;
-  color: #888;
+  color: var(--wire);
 }
 
 .tipo-cambio-info {
@@ -279,13 +279,13 @@
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 1rem;
   font-weight: 700;
-  color: #e8b84b;
+  color: var(--accent);
   letter-spacing: 0.05em;
 }
 
 .tipo-cambio-label {
   font-size: 0.6rem;
-  color: #555;
+  color: var(--steel-light);
   text-transform: uppercase;
   letter-spacing: 0.2em;
 }
@@ -325,7 +325,7 @@
 .stat-icon.employees {
   background-color: rgba(232, 184, 75, 0.12);
   border-color: rgba(232, 184, 75, 0.3);
-  color: #e8b84b;
+  color: var(--accent);
 }
 
 .stat-icon.production {
@@ -371,8 +371,8 @@
 }
 
 .inventario-card {
-  background-color: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border);
   border-radius: 2px;
   overflow: hidden;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -418,14 +418,14 @@
   font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .stat-value-medium {
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 1.4rem;
   font-weight: 700;
-  color: #f5f5f0;
+  color: var(--white);
   letter-spacing: 0.03em;
 }
 
@@ -435,7 +435,7 @@
   flex-direction: column;
   gap: 4px;
   padding-top: 0.75rem;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--border);
   margin-top: 0.5rem;
 }
 
@@ -457,13 +457,13 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .valor-amount { font-weight: 700; }
 .produccion-item .valor-amount { color: #5dade2; }
 .venta-item .valor-amount      { color: #2ecc71; }
-.margen-item .valor-amount     { color: #e8b84b; }
+.margen-item .valor-amount     { color: var(--accent); }
 
 /* =====================================================
    TIPO BADGE (tabla)
@@ -477,7 +477,7 @@
   border-radius: 2px;
   font-size: 0.78rem;
   font-weight: 500;
-  background-color: #222;
+  background-color: var(--bg-tertiary);
 }
 
 /* =====================================================
@@ -496,13 +496,13 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--border);
   border-radius: 2px;
   cursor: pointer;
   transition: all 0.2s;
-  color: #c8c8c8;
+  color: var(--mist);
   text-decoration: none;
-  background-color: #1a1a1a;
+  background-color: var(--bg-primary);
   position: relative;
   overflow: hidden;
 }
@@ -514,16 +514,16 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--action-color, #e8b84b);
+  background: var(--action-color, var(--accent));
   transform: scaleY(0);
   transition: transform 0.2s;
 }
 
 .action-btn:hover {
-  background-color: #222;
-  color: #f5f5f0;
+  background-color: var(--bg-tertiary);
+  color: var(--white);
   transform: translateX(4px);
-  border-color: var(--action-color, #e8b84b);
+  border-color: var(--action-color, var(--accent));
 }
 
 .action-btn:hover::before { transform: scaleY(1); }
@@ -537,15 +537,15 @@
   justify-content: center;
   flex-shrink: 0;
   background-color: rgba(255,255,255,0.04);
-  border: 1px solid #333;
-  color: var(--action-color, #e8b84b);
+  border: 1px solid var(--steel);
+  color: var(--action-color, var(--accent));
   transition: all 0.2s;
 }
 
 .action-btn:hover .action-icon {
-  background-color: var(--action-color, #e8b84b);
+  background-color: var(--action-color, var(--accent));
   color: #0f0f0f;
-  border-color: var(--action-color, #e8b84b);
+  border-color: var(--action-color, var(--accent));
 }
 
 .action-content { flex: 1; text-align: left; }
@@ -564,15 +564,15 @@
   display: block;
   font-size: 0.7rem;
   letter-spacing: 0.08em;
-  color: #555;
+  color: var(--steel-light);
 }
 
 .action-btn.primary  { --action-color: #5dade2; }
 .action-btn.danger   { --action-color: #e74c3c; }
 .action-btn.success  { --action-color: #2ecc71; }
 .action-btn.info     { --action-color: #1abc9c; }
-.action-btn.warning  { --action-color: #e8b84b; }
-.action-btn.secondary { --action-color: #888; }
+.action-btn.warning  { --action-color: var(--accent); }
+.action-btn.secondary { --action-color: var(--wire); }
 
 /* =====================================================
    DESGLOSE POR MONEDA (sección movimientos)

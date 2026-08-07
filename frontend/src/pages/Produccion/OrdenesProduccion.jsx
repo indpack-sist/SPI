@@ -359,7 +359,7 @@ function OrdenesProduccion() {
               </div>
               
               {/* Barra Kilos: Estilos en línea para forzar visualización */}
-              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '9999px', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '9999px', overflow: 'hidden' }}>
                 <div 
                   style={{ 
                     width: `${Math.min(pctKg, 100)}%`, 
@@ -388,7 +388,7 @@ function OrdenesProduccion() {
               </div>
 
               {/* Barra Unidades: Estilos en línea para forzar visualización */}
-              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '9999px', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '9999px', overflow: 'hidden' }}>
                 <div 
                   style={{ 
                     width: `${Math.min(pctUnd, 100)}%`, 

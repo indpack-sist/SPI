@@ -114,7 +114,7 @@ function Dashboard() {
 
   const prepararDatosPieChart = () => {
     if (!resumen?.valoracion_stock) return [];
-    const colores = ['#5dade2', '#2ecc71', '#e8b84b', '#9b59b6', '#e74c3c'];
+    const colores = ['#5dade2', '#2ecc71', 'var(--accent)', '#9b59b6', '#e74c3c'];
     return resumen.valoracion_stock.map((tipo, i) => ({
       name: tipo.tipo_inventario,
       value: tipo.valor_pen,

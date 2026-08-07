@@ -299,12 +299,12 @@ const ReporteDeudasClientes = () => {
                                     <BarChart data={data.aging} layout="vertical" margin={{ left: 30, right: 50, top: 10, bottom: 10 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#444" horizontal={false} />
                                         <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" stroke="#fff" fontSize={13} width={100} tick={{ fontWeight: '900', fill: '#fff' }} />
+                                        <YAxis dataKey="name" type="category" stroke="var(--text-primary)" fontSize={13} width={100} tick={{ fontWeight: '900', fill: 'var(--text-primary)' }} />
                                         <Tooltip
                                             cursor={{ fill: 'rgba(255,255,255,0.08)' }}
                                             contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
                                             itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
+                                            labelStyle={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
                                             formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
                                         />
                                         <Bar
@@ -333,12 +333,12 @@ const ReporteDeudasClientes = () => {
                             <div style={{ width: '100%', height: 320 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={data.topDeudores} margin={{ bottom: 80, top: 10, right: 30 }}>
-                                        <XAxis dataKey="name" stroke="#fff" interval={0} height={90} tick={<CustomTick />} />
-                                        <YAxis stroke="#aaa" fontSize={11} tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v / 1000)}k`} tick={{ fontWeight: 'bold' }} />
+                                        <XAxis dataKey="name" stroke="var(--text-primary)" interval={0} height={90} tick={<CustomTick />} />
+                                        <YAxis stroke="var(--text-secondary)" fontSize={11} tickFormatter={(v) => `${moneda === 'USD' ? '$' : 'S/'}${Math.round(v / 1000)}k`} tick={{ fontWeight: 'bold' }} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#000', border: '2px solid #444', borderRadius: '12px', padding: '12px' }}
                                             itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '900' }}
-                                            labelStyle={{ color: '#aaa', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
+                                            labelStyle={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold' }}
                                             formatter={(v) => `${moneda === 'USD' ? '$' : 'S/'} ${formatearNum(v)}`}
                                         />
                                         <Bar
@@ -409,7 +409,7 @@ const ReporteDeudasClientes = () => {
                                     onFocus={() => setMostrarDropdownCliente(true)}
                                 />
                                 {mostrarDropdownCliente && busquedaCliente && (
-                                    <div className="absolute z-[100] left-0 right-0 top-full mt-2 dropdown-menu-solido border-2 border-steel rounded-xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] max-h-72 overflow-y-auto p-2" style={{ backgroundColor: '#111111' }}>
+                                    <div className="absolute z-[100] left-0 right-0 top-full mt-2 dropdown-menu-solido border-2 border-steel rounded-xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] max-h-72 overflow-y-auto p-2" style={{ backgroundColor: 'var(--carbon)' }}>
                                         {clientesFiltrados.length > 0 ? (
                                             clientesFiltrados.map(c => (
                                                 <div key={c.id_cliente} onClick={() => handleSelectCliente(c)} className="p-3.5 hover:bg-steel/40 cursor-pointer rounded-lg transition-all border-b border-white/5 last:border-0 mb-1">
@@ -544,7 +544,7 @@ const ReporteDeudasClientes = () => {
 
                     <div className="space-y-20 pb-32 mt-12">
                         {renderGrupoGraficos('facturasPEN', 'Análisis: Facturas (PEN)', '#10B981', 'PEN')}
-                        {renderGrupoGraficos('facturasUSD', 'Análisis: Facturas (USD)', '#e8b84b', 'USD')}
+                        {renderGrupoGraficos('facturasUSD', 'Análisis: Facturas (USD)', 'var(--accent)', 'USD')}
                         {renderGrupoGraficos('notasVentaPEN', 'Análisis: N. Venta (PEN)', '#3B82F6', 'PEN')}
                         {renderGrupoGraficos('notasVentaUSD', 'Análisis: N. Venta (USD)', '#60A5FA', 'USD')}
                         {renderGrupoGraficos('sinComprPEN', 'Análisis: Sin Compr. (PEN)', '#F59E0B', 'PEN')}

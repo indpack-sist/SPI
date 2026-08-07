@@ -8,7 +8,10 @@
   padding: 0;
 }
 
-:root {
+/* La pantalla de login mantiene su identidad oscura (es pre-login, sin el
+   toggle de tema). Los tokens se scopean aquí en vez de :root para no
+   filtrarse al resto de la app ni pelear con [data-theme]. */
+.login-container {
   --carbon: #0f0f0f;
   --carbon-mid: #1a1a1a;
   --carbon-light: #2a2a2a;
@@ -21,11 +24,7 @@
   --accent-dim: rgba(232, 184, 75, 0.15);
   --accent-border: rgba(232, 184, 75, 0.4);
   --danger: #c0392b;
-  --font-display: 'Barlow Condensed', sans-serif;
-  --font-body: 'Barlow', sans-serif;
-}
 
-.login-container {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr 480px;

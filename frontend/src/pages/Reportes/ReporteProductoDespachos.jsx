@@ -98,10 +98,10 @@ const ReporteProductoDespachos = () => {
                 : data.fecha;
 
             return (
-                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: '#1a1a1a', border: '2px solid #444', color: '#fff', zIndex: 1000, position: 'relative', minWidth: '280px' }}>
+                <div className="p-5 rounded-lg shadow-2xl" style={{ backgroundColor: 'var(--bg-primary)', border: '2px solid #444', color: 'var(--text-primary)', zIndex: 1000, position: 'relative', minWidth: '280px' }}>
                     <div className="flex justify-between items-start mb-2 border-b border-steel/30 pb-2">
                         <div>
-                            <p className="font-bold text-lg" style={{ color: '#fff' }}>{fechaPrincipal}</p>
+                            <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{fechaPrincipal}</p>
                             <p className="text-[10px] text-wire uppercase font-black tracking-widest">
                                 {filtros.tipoFecha === 'despacho' ? 'Ref: Fecha Despacho' : 'Ref: Fecha Emisión'}
                             </p>
@@ -142,7 +142,7 @@ const ReporteProductoDespachos = () => {
                         </div>
                     </div>
 
-                    <p className="text-mist text-base font-bold" style={{ color: '#e8b84b' }}>
+                    <p className="text-mist text-base font-bold" style={{ color: 'var(--accent)' }}>
                         <span className="text-wire font-bold mr-1">Precio Unitario:</span> {data.moneda === 'USD' ? '$' : 'S/'} {data.precio.toFixed(2)}
                     </p>
                 </div>
@@ -192,14 +192,14 @@ const ReporteProductoDespachos = () => {
                                 width={80}
                             />
                             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#444', strokeWidth: 1 }} isAnimationActive={false} />
-                            <Legend wrapperStyle={{ fontSize: `${fontSizeEjes + 2}px`, color: '#ccc', paddingTop: '30px', fontWeight: 'bold' }} />
+                            <Legend wrapperStyle={{ fontSize: `${fontSizeEjes + 2}px`, color: 'var(--text-secondary)', paddingTop: '30px', fontWeight: 'bold' }} />
                             <Line
                                 type="monotone"
                                 dataKey="precio"
                                 name="Precio Unitario"
                                 stroke={colorLinea}
                                 strokeWidth={strokeLinea}
-                                dot={{ r: radioPunto, strokeWidth: 2, fill: '#1a1a1a', stroke: colorLinea }}
+                                dot={{ r: radioPunto, strokeWidth: 2, fill: 'var(--bg-primary)', stroke: colorLinea }}
                                 activeDot={{ r: radioPunto + 3, strokeWidth: 0, fill: colorLinea }}
                                 isAnimationActive={false}
                             />
@@ -384,8 +384,8 @@ const ReporteProductoDespachos = () => {
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead>
                         <tr>
-                            <th style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Emisión</th>
-                            <th style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
+                            <th style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Emisión</th>
+                            <th style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Despacho</th>
                             <th>N° Orden</th>
                             <th>Documento</th>
                             <th>Cliente</th>
@@ -408,10 +408,10 @@ const ReporteProductoDespachos = () => {
 
                             return (
                                 <tr key={idx} className="transition-colors">
-                                    <td className="font-medium" style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
+                                    <td className="font-medium" style={filtros.tipoFecha === 'emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)' } : {}}>
                                         {new Date(row.fecha_emision).toLocaleDateString('es-PE')}
                                     </td>
-                                    <td className="font-medium" style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b' } : {}}>
+                                    <td className="font-medium" style={filtros.tipoFecha === 'despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)' } : {}}>
                                         {row.fecha_despacho_real ? new Date(row.fecha_despacho_real).toLocaleDateString('es-PE') : '-'}
                                     </td>
                                     <td className="font-mono font-bold">
@@ -772,7 +772,7 @@ const ReporteProductoDespachos = () => {
                                 {graficosProd && (
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-t border-steel/20 bg-carbon-mid">
                                         {renderGrafico(graficosProd.facturasPEN, 'Evolución: Facturas (PEN)', '#10B981')}
-                                        {renderGrafico(graficosProd.facturasUSD, 'Evolución: Facturas (USD)', '#e8b84b')}
+                                        {renderGrafico(graficosProd.facturasUSD, 'Evolución: Facturas (USD)', 'var(--accent)')}
                                         {renderGrafico(graficosProd.notasVentaPEN, 'Evolución: N. Venta (PEN)', '#3B82F6')}
                                         {renderGrafico(graficosProd.notasVentaUSD, 'Evolución: N. Venta (USD)', '#60A5FA')}
                                         {renderGrafico(graficosProd.sinComprPEN, 'Evolución: Sin Compr. (PEN)', '#F59E0B')}

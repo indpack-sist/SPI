@@ -53,7 +53,7 @@ const AppLauncher = () => {
                 to={targetPath}
                 key={index}
                 className="launcher-card"
-                style={{ '--card-color': app.color || '#e8b84b' }}
+                style={{ '--card-color': app.color || 'var(--accent)' }}
               >
                 <span className="launcher-card-index">
                   {String(index + 1).padStart(2, '0')}

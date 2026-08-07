@@ -864,7 +864,7 @@
 
 .texto-anulado {
   text-decoration: line-through;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .badge-anulado {

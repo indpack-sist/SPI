@@ -731,10 +731,10 @@ function DetalleCotizacion() {
             <div className="p-2 rounded-lg" style={{ 
               background: tipoCambio ? 'rgba(234,179,8,0.15)' : '#f3f4f6'
             }}>
-              <DollarSign size={18} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : '#9ca3af' }} />
+              <DollarSign size={18} style={{ color: tipoCambio ? 'var(--accent, #ca8a04)' : 'var(--text-secondary)' }} />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6b7280' }}>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
                 Tipo de Cambio SUNAT — Conversión referencial
               </p>
               {tipoCambio ? (
@@ -745,7 +745,7 @@ function DetalleCotizacion() {
                   <span className="text-sm">
                     Venta: <strong style={{ color: 'var(--accent, #ca8a04)' }}>S/ {tipoCambio.venta.toFixed(3)}</strong>
                   </span>
-                  <span className="text-xs" style={{ color: '#9ca3af' }}>
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                     <Calendar size={11} className="inline mr-1" />
                     SUNAT: {formatearFecha(tipoCambio.fecha)}
                     <span className="mx-1">·</span>
@@ -754,7 +754,7 @@ function DetalleCotizacion() {
                   </span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 mt-0.5 text-sm" style={{ color: '#9ca3af' }}>
+                <div className="flex items-center gap-2 mt-0.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
                   <AlertTriangle size={13} />
                   <span>No disponible — Presione "Actualizar TC" para ver conversión a soles</span>
                 </div>
@@ -809,7 +809,7 @@ function DetalleCotizacion() {
         />
       )}
 
-      <div className="card mb-6" style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : '#e2e8f0' }}>
+      <div className="card mb-6" style={{ border: '2px solid transparent', borderColor: estadoConfig.clase.includes('border') ? '' : 'var(--border)' }}>
         <div className={`card-body rounded-lg border-2 ${estadoConfig.clase}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
@@ -1107,14 +1107,14 @@ function DetalleCotizacion() {
           <div className="card-body">
             <div className="space-y-3">
               {pesoTotal > 0 && (
-                <div className="flex justify-between py-2 border-b items-center" style={{ borderBottomColor: '#e2e8f0' }}>
+                <div className="flex justify-between py-2 border-b items-center" style={{ borderBottomColor: 'var(--border)' }}>
                   <span className="text-muted flex items-center gap-1">
                     <Package size={14} /> Peso Total:
                   </span>
                   <span className="font-bold text-lg text-primary">{formatearPeso(pesoTotal)}</span>
                 </div>
               )}
-              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: '#e2e8f0' }}>
+              <div className="flex justify-between py-2 border-b" style={{ borderBottomColor: 'var(--border)' }}>
                 <span className="text-muted">Sub Total:</span>
                 <span className="font-bold text-lg">{formatearMoneda(subtotalReal)}</span>
               </div>
@@ -1137,15 +1137,15 @@ function DetalleCotizacion() {
                       S/ {formatearNumero(totalReal * tcVenta)}
                     </span>
                   </div>
-                  <p className="text-xs" style={{ color: '#9ca3af' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                     TC Venta: S/ {tcVenta.toFixed(3)} — SUNAT: {formatearFecha(tipoCambio.fecha)}
                   </p>
                   {parseFloat(cotizacion.tipo_cambio || 0) > 1 && (
                     <div className="mt-2 pt-2 flex justify-between items-center" style={{ borderTop: '1px solid var(--accent-border, rgba(234,179,8,0.2))' }}>
-                      <span className="text-xs" style={{ color: '#9ca3af' }}>
+                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                         Equiv. con TC de cotización (S/ {parseFloat(cotizacion.tipo_cambio).toFixed(4)}):
                       </span>
-                      <span className="font-semibold text-sm" style={{ color: '#6b7280' }}>
+                      <span className="font-semibold text-sm" style={{ color: 'var(--text-secondary)' }}>
                         S/ {formatearNumero(totalReal * parseFloat(cotizacion.tipo_cambio))}
                       </span>
                     </div>
@@ -1169,7 +1169,7 @@ function DetalleCotizacion() {
             </div>
 
             {estadoCredito && estadoCredito.usar_limite_credito && !esMuestra && (
-              <div className="mt-6 pt-4 border-t" style={{ borderTopColor: '#e2e8f0' }}>
+              <div className="mt-6 pt-4 border-t" style={{ borderTopColor: 'var(--border)' }}>
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                   <CreditCard size={14} /> Saldo de Credito del Cliente
                 </h4>

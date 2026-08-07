@@ -39,6 +39,91 @@
 
   --safe-bottom: env(safe-area-inset-bottom, 20px);
   --safe-top: env(safe-area-inset-top, 0px);
+
+  --launcher-grid: rgba(255, 255, 255, 0.025);
+
+  /* Alias usados por algunas páginas (HistorialTipoCambio, etc.).
+     Apuntan a tokens del tema, por lo que se invierten automáticamente. */
+  --text-muted: var(--text-secondary);
+  --border-color: var(--border);
+  --bg-card: var(--bg-primary);
+  --bg-card-hover: var(--carbon-light);
+  --primary-dim: var(--accent-dim);
+}
+
+/* =====================================================
+   TEMA CLARO
+   Redefine los MISMOS tokens con valores claros. Como
+   casi todo el sistema (incluidos los overrides !important
+   de más abajo) consume estas variables, el cambio de tema
+   ocurre al vuelo con solo cambiar data-theme en <html>.
+   ===================================================== */
+[data-theme="light"] {
+  --primary: #b8860b;
+  --primary-dark: #8a6508;
+  --secondary: #6b7280;
+  --success: #1e8e4a;
+  --warning: #b7791f;
+  --danger: #c0392b;
+
+  --bg-primary: #ffffff;      /* superficies elevadas (cards) */
+  --bg-secondary: #eef1f4;    /* fondo de página */
+  --bg-tertiary: #e6eaef;
+  --text-primary: #1f2328;
+  --text-secondary: #6b7280;
+  --border: #dfe3e8;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.10);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.12);
+
+  /* Escala "carbon/steel": se invierte la luminosidad respecto al
+     tema oscuro, conservando la jerarquía de contraste. */
+  --carbon: #f5f7f9;          /* navbar, cabeceras de tabla */
+  --carbon-mid: #ffffff;      /* paneles/cards */
+  --carbon-light: #e9edf1;    /* hover */
+  --steel: #cbd2da;           /* bordes */
+  --steel-light: #9aa3ad;
+  --wire: #5c6570;            /* texto secundario/íconos */
+  --mist: #3b4149;            /* texto medio-fuerte */
+  --white: #1f2328;           /* texto principal (antes era claro) */
+  --accent: #d4a017;
+  --accent-dim: rgba(212, 160, 23, 0.14);
+  --accent-border: rgba(212, 160, 23, 0.45);
+
+  --launcher-grid: rgba(0, 0, 0, 0.04);
+}
+
+/* --- Ajustes de primer plano sobre el dorado (el token que hacía de
+       texto oscuro sobre el acento no debe invertirse) --- */
+[data-theme="light"] .btn-primary { color: #1a1a1a; }
+[data-theme="light"] .btn-primary:disabled { color: var(--wire); }
+
+/* Botones de color mantienen texto claro (su fondo sigue saturado) */
+[data-theme="light"] .btn-success,
+[data-theme="light"] .btn-warning,
+[data-theme="light"] .btn-danger,
+[data-theme="light"] .btn-info { color: #f7f7f5; }
+
+/* Stat-card especial (fondo dorado): texto oscuro en ambos temas */
+[data-theme="light"] .bg-gradient-to-br.from-primary.to-blue-600,
+[data-theme="light"] .bg-gradient-to-br.from-primary.to-blue-600 .stat-label,
+[data-theme="light"] .bg-gradient-to-br.from-primary.to-blue-600 .stat-value,
+[data-theme="light"] .bg-gradient-to-br.from-primary.to-blue-600 .stat-icon {
+  color: #1a1a1a !important;
+}
+
+/* Inputs "modo muestra" con inline fffbeb/fcd34d: en claro deben verse
+   como fondo ámbar claro + texto oscuro (los literales oscuros de más
+   abajo se neutralizan aquí). */
+[data-theme="light"] input[style*="fffbeb"],
+[data-theme="light"] input[style*="fcd34d"] {
+  background-color: #fffbeb !important;
+  border-color: rgba(184, 134, 11, 0.5) !important;
+  color: #1f2328 !important;
+}
+[data-theme="light"] input[style*="fffbeb"]::placeholder,
+[data-theme="light"] input[style*="fcd34d"]::placeholder {
+  color: #9aa3ad !important;
 }
 
 body {
@@ -48,6 +133,21 @@ body {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   line-height: 1.5;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Transición suave del tema en las superficies principales (fluido, sin recargar) */
+.navbar,
+.sidebar,
+.card,
+.stat-card,
+.table-container,
+.list-panel,
+.modal-content,
+.form-input,
+.form-select,
+.form-textarea {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 #root {

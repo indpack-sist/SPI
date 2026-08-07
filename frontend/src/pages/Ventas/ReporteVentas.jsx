@@ -62,9 +62,9 @@ const FilterCheckboxGroup = ({ label, options, selectedValues, onChange }) => {
         <div 
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(!isOpen); }}
           className="form-input flex justify-between items-center transition-all bg-carbon-mid"
-style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--accent)' : 'var(--steel)', color: '#fff', height: '38px', width: '100%', backgroundColor: 'var(--carbon-mid)' }}
+style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--accent)' : 'var(--steel)', color: 'var(--text-primary)', height: '38px', width: '100%', backgroundColor: 'var(--carbon-mid)' }}
         >
-          <span className="text-xs font-bold truncate pr-2" style={{ color: '#fff' }}>
+          <span className="text-xs font-bold truncate pr-2" style={{ color: 'var(--text-primary)' }}>
             {selectedValues.length === 0 ? 'Todos' : 
              selectedValues.length === 1 ? selectedValues[0] : 
              `${selectedValues.length} seleccionados`}
@@ -74,7 +74,7 @@ style={{ cursor: 'pointer', borderColor: selectedValues.length > 0 ? 'var(--acce
 
         {isOpen && (
           <div className="absolute left-0 right-0 w-full border border-steel/30 rounded-lg shadow-2xl py-2 animate-in fade-in zoom-in duration-200" 
-               style={{ top: '100%', marginTop: '4px', backgroundColor: '#111', zIndex: 1000 }}>
+               style={{ top: '100%', marginTop: '4px', backgroundColor: 'var(--carbon)', zIndex: 1000 }}>
             <div className="max-h-60 overflow-y-auto custom-scrollbar px-1">
               {options.map((opt) => (
                 <div 
@@ -242,7 +242,7 @@ const ModalTC = ({ mostrarModalTC, tcVenta, setMostrarModalTC, aplicarModoUnific
                 top: 0,
                 right: 0,
                 backgroundColor: 'var(--primary)',
-                color: '#fff',
+                color: 'var(--text-primary)',
                 fontSize: '9px',
                 fontWeight: 700,
                 padding: '3px 8px',
@@ -1864,7 +1864,7 @@ const ReporteVentas = () => {
                   <input
                     type="date"
                     className={`form-input text-xs font-bold bg-carbon-mid ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
-                    style={{ cursor: 'text', color: '#fff' }}
+                    style={{ cursor: 'text', color: 'var(--text-primary)' }}
                     value={filtros.fechaInicio}
                     max={filtros.fechaFin || undefined}
                     onChange={handleChangeFechaInicio}
@@ -1879,7 +1879,7 @@ const ReporteVentas = () => {
                   <input
                     type="date"
                     className={`form-input text-xs font-bold bg-carbon-mid ${errorFecha ? 'border-red-500/70 !border-red-500/70' : ''}`}
-                    style={{ cursor: 'text', color: '#fff' }}
+                    style={{ cursor: 'text', color: 'var(--text-primary)' }}
                     value={filtros.fechaFin}
                     min={filtros.fechaInicio || undefined}
                     onChange={handleChangeFechaFin}
@@ -1895,7 +1895,7 @@ const ReporteVentas = () => {
                     type="text"
                     placeholder="Buscar cliente por nombre o RUC..."
                     className="form-input search-input text-xs font-bold bg-carbon-mid"
-                    style={{ cursor: 'text', color: '#fff' }}
+                    style={{ cursor: 'text', color: 'var(--text-primary)' }}
                     value={busquedaCliente}
                     onChange={(e) => { setBusquedaCliente(e.target.value); if (filtros.idCliente) setFiltros({ ...filtros, idCliente: '' }); }}
                     onFocus={() => busquedaCliente && setMostrarSugerencias(true)}
@@ -1905,7 +1905,7 @@ const ReporteVentas = () => {
                   )}
                 </div>
                 {mostrarSugerencias && clientesSugeridos.length > 0 && (
-                  <ul className="absolute z-[9999] w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto" style={{ backgroundColor: '#1a1a1a', top: '100%' }}>
+                  <ul className="absolute z-[9999] w-full border border-steel/30 rounded-lg shadow-2xl mt-1 max-h-96 overflow-y-auto" style={{ backgroundColor: 'var(--bg-primary)', top: '100%' }}>
                     {clientesSugeridos.map(cliente => (
                       <li key={cliente.id_cliente} onClick={() => seleccionarCliente(cliente)} className="px-4 py-2 cursor-pointer text-xs border-b border-steel/20 last:border-0 hover:bg-white/10 transition-colors relative z-[10000]">
                         <div className="font-bold text-mist">{cliente.razon_social}</div>
@@ -2141,9 +2141,9 @@ const ReporteVentas = () => {
                 <th className="px-4 py-3">Orden</th>
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Vendedor</th>
-                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Emision</th>
-                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>SUNAT</th>
-                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: '#e8b84b', borderBottomColor: '#e8b84b' } : {}}>Despacho</th>
+                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Emision</th>
+                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>SUNAT</th>
+                <th className="px-4 py-3 text-center" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.15)', color: 'var(--accent)', borderBottomColor: 'var(--accent)' } : {}}>Despacho</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 {convertirUSD && tcVenta && <th className="px-4 py-3 text-right">Total (PEN)</th>}
                 <th className="px-4 py-3 text-center">Estado Pago</th>
@@ -2181,11 +2181,11 @@ const ReporteVentas = () => {
                       <div className="text-xs text-muted">{item.ruc}</div>
                     </td>
                     <td className="px-4 py-3 text-muted text-xs truncate w-24">{item.vendedor}</td>
-                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>{formatearFecha(item.fecha_emision)}</td>
-                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
+                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_emision' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)', fontWeight: 'bold' } : {}}>{formatearFecha(item.fecha_emision)}</td>
+                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_sunat' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)', fontWeight: 'bold' } : {}}>
                       {item.fecha_facturacion_sunat ? formatearFecha(item.fecha_facturacion_sunat) : '-'}
                     </td>
-                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: '#e8b84b', fontWeight: 'bold' } : {}}>
+                    <td className="px-4 py-3 text-center text-xs" style={filtros.filtroFecha === 'fecha_despacho' ? { backgroundColor: 'rgba(232, 184, 75, 0.05)', color: 'var(--accent)', fontWeight: 'bold' } : {}}>
                       {item.fecha_despacho ? formatearFecha(item.fecha_despacho) : <span className="text-gray-400 italic">Pendiente</span>}
                     </td>
                     <td className="px-4 py-3 text-right">

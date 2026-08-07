@@ -12,7 +12,7 @@
 }
 
 .modal-sunat-content {
-    background-color: #fff;
+    background-color: var(--carbon-mid);
     width: 95vw;
     height: 90vh;
     border-radius: 8px;
@@ -27,14 +27,14 @@
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    background-color: var(--carbon);
+    border-bottom: 1px solid var(--steel);
 }
 
 .modal-sunat-header h2 {
     margin: 0;
     font-size: 1.25rem;
-    color: #333;
+    color: var(--white);
 }
 
 .btn-close {
@@ -42,7 +42,7 @@
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #666;
+    color: var(--wire);
 }
 
 .modal-sunat-body {
@@ -54,15 +54,15 @@
 .sunat-panel-izquierdo {
     width: 400px;
     padding: 20px;
-    border-right: 1px solid #dee2e6;
+    border-right: 1px solid var(--steel);
     overflow-y: auto;
-    background-color: #fcfcfc;
+    background-color: var(--carbon-mid);
 }
 
 .sunat-panel-derecho {
     flex: 1;
     padding: 0; /* Removemos padding para que el PDF ocupe todo */
-    background-color: #e9ecef;
+    background-color: var(--bg-tertiary);
     display: flex;
     flex-direction: column;
 }
@@ -70,10 +70,10 @@
 .sunat-panel-derecho h3 {
     margin: 0;
     padding: 10px 20px;
-    background-color: #f1f3f5;
-    border-bottom: 1px solid #dee2e6;
+    background-color: var(--carbon);
+    border-bottom: 1px solid var(--steel);
     font-size: 1rem;
-    color: #495057;
+    color: var(--mist);
 }
 
 .sunat-pdf-viewer {
@@ -87,7 +87,7 @@
     justify-content: center;
     align-items: center;
     height: 100%;
-    color: #6c757d;
+    color: var(--wire);
 }
 
 .sunat-form {
@@ -105,19 +105,19 @@
 .form-group label {
     font-weight: 600;
     font-size: 0.9rem;
-    color: #495057;
+    color: var(--mist);
 }
 
 .form-group input {
     padding: 8px 12px;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--steel);
     border-radius: 4px;
     font-size: 1rem;
 }
 
 .form-group input.input-readonly {
-    background-color: #e9ecef;
-    color: #495057;
+    background-color: var(--bg-tertiary);
+    color: var(--mist);
     cursor: not-allowed;
 }
 
@@ -127,13 +127,13 @@
 
 .form-group small {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--wire);
 }
 
 .sunat-divider {
     margin: 15px 0;
     border: 0;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--steel);
 }
 
 .sunat-form-actions {
@@ -142,7 +142,7 @@
     gap: 12px;
     margin-top: 24px;
     padding-top: 16px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border);
 }
 
 .sunat-form-actions .btn {
@@ -159,14 +159,14 @@
 }
 
 .sunat-form-actions .btn-secondary {
-    background-color: #f1f3f5;
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background-color: var(--carbon);
+    color: var(--mist);
+    border: 1px solid var(--steel);
 }
 
 .sunat-form-actions .btn-secondary:hover:not(:disabled) {
-    background-color: #e9ecef;
-    border-color: #ced4da;
+    background-color: var(--bg-tertiary);
+    border-color: var(--steel);
     transform: translateY(-1px);
 }
 

@@ -285,7 +285,7 @@ function VerificarOrdenes() {
 
   const getPrioridadConfig = (prioridad) => {
     const configs = {
-      'Baja': { clase: 'badge-secondary', color: '#6b7280' },
+      'Baja': { clase: 'badge-secondary', color: 'var(--text-secondary)' },
       'Media': { clase: 'badge-info', color: '#3b82f6' },
       'Alta': { clase: 'badge-warning', color: '#f59e0b' },
       'Urgente': { clase: 'badge-danger', color: '#ef4444' }

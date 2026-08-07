@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Menu, Bell, User, LogOut, X, ShoppingCart, Factory, Info, CheckCircle, AlertTriangle, Sun, Moon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { notificacionesAPI } from '../../config/api';
 import './Navbar.css';
 
 function Navbar({ onToggleSidebar }) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   
   const [notificaciones, setNotificaciones] = useState([]);
@@ -193,6 +195,15 @@ function Navbar({ onToggleSidebar }) {
         </div>
 
         <div className="navbar-right">
+          <button
+            className="navbar-icon-btn navbar-theme-toggle"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            aria-label="Cambiar tema"
+          >
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+
           <div className="navbar-notifications-container">
             <button 
               className="navbar-icon-btn navbar-notifications-btn" 

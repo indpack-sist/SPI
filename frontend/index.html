@@ -15,8 +15,21 @@
     <meta name="apple-mobile-web-app-title" content="INDPACK ERP" />
 
     <title>INDPACK</title>
-    
+
     <link rel="manifest" href="/manifest.json" />
+
+    <!-- Tema: aplica el tema guardado antes del primer paint para evitar parpadeo -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('theme');
+          if (t !== 'light' && t !== 'dark') t = 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

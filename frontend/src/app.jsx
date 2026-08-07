@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PermisosProvider } from './context/PermisosContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ProtectedRoute as ProtectedRouteWithPermiso } from './components/ProtectedRouteWithPermiso';
 import { RedirectToFirstAvailable } from './components/RedirectToFirstAvailable';
@@ -70,6 +71,7 @@ import ReporteDeudasClientes from './pages/Reportes/ReporteDeudasClientes';
 function App() {
   return (
     <Router>
+      <ThemeProvider>
       <AuthProvider>
         <PermisosProvider>
           <Routes>
@@ -540,6 +542,7 @@ function App() {
           </Routes>
         </PermisosProvider>
       </AuthProvider>
+      </ThemeProvider>
     </Router>
   );
 }

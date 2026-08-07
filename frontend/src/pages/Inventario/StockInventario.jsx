@@ -219,7 +219,7 @@ function StockInventario() {
       }
     };
     return colores[nombreTipo] || { 
-      bg: '#f3f4f6', color: '#6b7280', icon: Layers,
+      bg: '#f3f4f6', color: 'var(--text-secondary)', icon: Layers,
       gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
     };
   };

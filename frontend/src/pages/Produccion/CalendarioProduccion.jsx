@@ -252,7 +252,7 @@ const S = {
 /* ─── Colores de estado (se mantienen como valores directos para bordes) ─── */
 const getStatusColor = (estado) => {
   switch(estado) {
-    case 'Pendiente': case 'Pendiente Asignación': return '#e8b84b';
+    case 'Pendiente': case 'Pendiente Asignación': return 'var(--accent)';
     case 'En Curso':   return '#5dade2';
     case 'En Pausa':   return '#f39c12';
     case 'Finalizada': return '#2ecc71';
@@ -267,7 +267,7 @@ const getPriorityStyle = (prioridad) => {
     case 'ALTA':    return { bg: 'rgba(243,156,18,0.12)', text: '#f39c12', border: 'rgba(243,156,18,0.3)' };
     case 'MEDIA':   return { bg: 'rgba(93,173,226,0.12)', text: '#5dade2', border: 'rgba(93,173,226,0.3)' };
     case 'BAJA':    return { bg: 'rgba(46,204,113,0.12)', text: '#2ecc71', border: 'rgba(46,204,113,0.3)' };
-    default:        return { bg: 'rgba(85,85,85,0.12)',   text: '#888888', border: 'rgba(85,85,85,0.3)' };
+    default:        return { bg: 'rgba(85,85,85,0.12)',   text: 'var(--wire)', border: 'rgba(85,85,85,0.3)' };
   }
 };
 

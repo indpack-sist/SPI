@@ -2908,19 +2908,23 @@ export async function generarPDFReporteProducto(datos) {
       doc.text(`${fmtNum(producido)} ${unidad}`, cols.cant.x, y + 5, { width: cols.cant.w - 5, align: 'right' });
       y += 26;
 
-      // --- Nota al pie ---
-      doc.fontSize(7).font('Helvetica-Oblique').fillColor('#888888');
-      doc.text(
-        'El total despachado corresponde a las salidas por venta del producto en el periodo. Documento informativo emitido por INDPACK S.A.C.',
-        izq, 800, { width: anchoUtil, align: 'center' }
-      );
-
-      // --- Numeración de páginas ---
+      // --- Pie de página (nota + numeración) por página, en posición fija dentro
+      // de los márgenes para no desbordar y crear una hoja vacía. ---
       const rango = doc.bufferedPageRange();
       for (let i = rango.start; i < rango.start + rango.count; i++) {
         doc.switchToPage(i);
+        const pageH = doc.page.height;          // A4 ~ 841.9
+        const notaY = pageH - 66;               // ~776
+        const pagY = pageH - 44;                // ~798 (dentro del margen inferior)
+
+        doc.fontSize(7).font('Helvetica-Oblique').fillColor('#888888');
+        doc.text(
+          'El total despachado corresponde a las salidas por venta del producto en el periodo. Documento informativo emitido por INDPACK S.A.C.',
+          izq, notaY, { width: anchoUtil, align: 'center', lineBreak: true }
+        );
+
         doc.fontSize(7).font('Helvetica').fillColor('#666666');
-        doc.text(`Página ${i - rango.start + 1} de ${rango.count}`, izq, 812, { align: 'right', width: anchoUtil });
+        doc.text(`Página ${i - rango.start + 1} de ${rango.count}`, izq, pagY, { align: 'right', width: anchoUtil, lineBreak: false });
       }
 
       doc.end();

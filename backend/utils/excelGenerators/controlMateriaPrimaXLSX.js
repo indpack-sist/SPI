@@ -99,7 +99,7 @@ export async function generarControlMateriaPrimaXLSX(movimientos, filtros) {
   ws.getRow(2).height = 22;
 
   ws.mergeCells(`A3:${lastColLetter}3`);
-  ws.getCell('A3').value = `Período: ${rangoTexto}    |    Ingresos de Materia Prima e Insumos (Compras y Entradas)`;
+  ws.getCell('A3').value = `Período: ${rangoTexto}    |    Ingresos por Compras de Materia Prima e Insumos`;
   ws.getCell('A3').font = { size: 10 };
   ws.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
 

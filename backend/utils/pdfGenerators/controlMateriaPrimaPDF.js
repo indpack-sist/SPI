@@ -102,7 +102,7 @@ export async function generarControlMateriaPrimaPDF(movimientos, filtros) {
       doc.roundedRect(30, 145, 782, 40, 3).stroke('#000000');
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Reporte:', 40, 155);
-      doc.font('Helvetica').text('Ingresos de Materia Prima e Insumos (Compras y Entradas)', 100, 155);
+      doc.font('Helvetica').text('Ingresos por Compras de Materia Prima e Insumos', 100, 155);
       doc.font('Helvetica-Bold').text('Período:', 40, 168);
       doc.font('Helvetica').text(rangoTexto, 100, 168);
       doc.font('Helvetica-Bold').text('Registros:', 450, 155);

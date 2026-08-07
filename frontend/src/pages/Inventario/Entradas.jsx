@@ -9,7 +9,8 @@ import {
   Loader,
   ChevronLeft,
   ChevronRight,
-  ArrowRightLeft
+  ArrowRightLeft,
+  FileSpreadsheet
 } from 'lucide-react';
 import { entradasAPI, productosAPI, proveedoresAPI, empleadosAPI } from '../../config/api';
 import { usePermisos } from '../../context/PermisosContext';
@@ -43,6 +44,7 @@ function Entradas() {
   const [fechaInicioReporte, setFechaInicioReporte] = useState(toInputDate(primerDiaMes));
   const [fechaFinReporte, setFechaFinReporte] = useState(toInputDate(hoy));
   const [descargandoReporte, setDescargandoReporte] = useState(false);
+  const [descargandoReporteExcel, setDescargandoReporteExcel] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -143,6 +145,29 @@ function Entradas() {
       setError(err.message || 'Error al generar el Control de Materia Prima');
     } finally {
       setDescargandoReporte(false);
+    }
+  };
+
+  const descargarControlMateriaPrimaExcel = async () => {
+    if (!fechaInicioReporte || !fechaFinReporte) {
+      setError('Selecciona la fecha de inicio y fin del reporte');
+      return;
+    }
+    if (fechaInicioReporte > fechaFinReporte) {
+      setError('La fecha de inicio no puede ser mayor que la fecha de fin');
+      return;
+    }
+    try {
+      setDescargandoReporteExcel(true);
+      setError(null);
+      await entradasAPI.generarControlMateriaPrimaXLSX({
+        fecha_inicio: fechaInicioReporte,
+        fecha_fin: fechaFinReporte
+      });
+    } catch (err) {
+      setError(err.message || 'Error al generar el Control de Materia Prima (Excel)');
+    } finally {
+      setDescargandoReporteExcel(false);
     }
   };
 
@@ -517,10 +542,19 @@ function Entradas() {
             className="btn btn-outline"
             onClick={descargarControlMateriaPrima}
             disabled={descargandoReporte}
-            title="Control de Materia Prima del rango seleccionado"
+            title="Control de Materia Prima (PDF) del rango seleccionado"
           >
             {descargandoReporte ? <Loader size={20} className="animate-spin" /> : <FileText size={20} />}
-            Control M. Prima
+            PDF
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={descargarControlMateriaPrimaExcel}
+            disabled={descargandoReporteExcel}
+            title="Control de Materia Prima (Excel) del rango seleccionado"
+          >
+            {descargandoReporteExcel ? <Loader size={20} className="animate-spin" /> : <FileSpreadsheet size={20} />}
+            Excel
           </button>
           <button className="btn btn-primary" onClick={() => abrirModal()}>
             <Plus size={20} />

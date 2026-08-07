@@ -2828,24 +2828,27 @@ export async function generarPDFReporteProducto(datos) {
       doc.font('Helvetica-Bold').text('Fecha de impresión:', izq + 8, y + 60, { continued: true });
       doc.font('Helvetica').text(` ${formatearFechaHora(new Date())}`);
 
-      // --- Resumen: Producido / Despachado / Saldo ---
+      // --- Resumen: Existencia anterior / Producido / Despachado / Saldo final ---
       y += 92;
+      const existenciaAnterior = parseFloat(datos.existencia_anterior || 0);
       const producido = parseFloat(datos.producido || 0);
       const despachado = parseFloat(datos.despachado || 0);
-      const saldo = despachado - producido; // >= 0 por la regla de compensación
+      // Saldo final = lo que había antes + lo producido - lo despachado.
+      const saldo = existenciaAnterior + producido - despachado;
 
-      const cajaW = (anchoUtil - 20) / 3;
       const cajas = [
+        { titulo: 'EXISTENCIA ANTERIOR', valor: existenciaAnterior, color: '#8e44ad' },
         { titulo: 'TOTAL PRODUCIDO', valor: producido, color: '#1e88e5' },
         { titulo: 'TOTAL DESPACHADO', valor: despachado, color: '#2e7d32' },
-        { titulo: 'SALDO (DESP. - PROD.)', valor: saldo, color: '#616161' }
+        { titulo: 'SALDO FINAL', valor: saldo, color: '#616161' }
       ];
+      const cajaW = (anchoUtil - 10 * (cajas.length - 1)) / cajas.length;
       cajas.forEach((c, i) => {
         const cx = izq + i * (cajaW + 10);
         doc.roundedRect(cx, y, cajaW, 50, 4).fillAndStroke('#F5F5F5', '#CCCCCC');
-        doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#555555');
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
         doc.text(c.titulo, cx, y + 8, { align: 'center', width: cajaW });
-        doc.fontSize(16).font('Helvetica-Bold').fillColor(c.color);
+        doc.fontSize(15).font('Helvetica-Bold').fillColor(c.color);
         doc.text(`${fmtNum(c.valor)}`, cx, y + 22, { align: 'center', width: cajaW });
         doc.fontSize(7).font('Helvetica').fillColor('#777777');
         doc.text(unidad, cx, y + 40, { align: 'center', width: cajaW });

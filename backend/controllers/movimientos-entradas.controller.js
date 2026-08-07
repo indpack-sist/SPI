@@ -814,9 +814,7 @@ async function obtenerMovimientosMateriaPrima({ fecha_inicio, fecha_fin, id_tipo
     WHERE DATE(e.fecha_movimiento) BETWEEN ? AND ?
       AND e.estado != 'Anulado'
       AND p.estado = 'Activo'
-      AND e.tipo_entrada <> 'Devolucion'
-      AND COALESCE(e.documento_soporte, '') NOT LIKE 'Cancelación O.P.%'
-      AND COALESCE(e.documento_soporte, '') NOT LIKE 'Anulación O.P.%'
+      AND e.tipo_entrada = 'Compra'
       AND ${filtroInventario}
     ORDER BY e.fecha_movimiento ASC, p.nombre ASC
   `, params);

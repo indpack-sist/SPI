@@ -21,9 +21,8 @@ const COLUMNAS = [
   { key: 'producto',        header: 'PRODUCTO',       min: 24, max: 50, wrap: true,  align: 'left',   num: false },
   { key: 'unidad',          header: 'UNIDAD',         min: 10, max: 14, wrap: false, align: 'center', num: false },
   { key: 'balance_inicial', header: 'BALANCE INICIAL', min: 14, max: 18, wrap: false, align: 'right', num: true },
-  { key: 'entrada',         header: 'ENTRADA',        min: 12, max: 16, wrap: false, align: 'right',  num: true },
+  { key: 'entrada',         header: 'ENTRADA (PROD.)', min: 14, max: 18, wrap: false, align: 'right', num: true },
   { key: 'salida',          header: 'SALIDA',         min: 12, max: 16, wrap: false, align: 'right',  num: true },
-  { key: 'stock',           header: 'STOCK',          min: 12, max: 16, wrap: false, align: 'right',  num: true },
   { key: 'stock_terminado', header: 'STOCK TERMINADO', min: 14, max: 18, wrap: false, align: 'right', num: true }
 ];
 
@@ -57,7 +56,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
     balance_inicial: parseFloat(f.balance_inicial || 0),
     entrada: parseFloat(f.entrada || 0),
     salida: parseFloat(f.salida || 0),
-    stock: parseFloat(f.stock || 0),
     stock_terminado: parseFloat(f.stock_terminado || 0)
   }));
 
@@ -120,7 +118,7 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
 
   // --- Filas de datos ---
   let rowIdx = headerRowIdx + 1;
-  const totales = { balance_inicial: 0, entrada: 0, salida: 0, stock: 0, stock_terminado: 0 };
+  const totales = { balance_inicial: 0, entrada: 0, salida: 0, stock_terminado: 0 };
 
   datos.forEach((f) => {
     const row = ws.getRow(rowIdx);
@@ -131,14 +129,13 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
       cell.alignment = { horizontal: c.align, vertical: 'top', wrapText: c.wrap };
       cell.border = BORDE_FINO;
       if (c.num) cell.numFmt = '#,##0.00';
-      if (c.key === 'stock' || c.key === 'stock_terminado') {
+      if (c.key === 'stock_terminado') {
         cell.font = { size: 9, bold: true };
       }
     });
     totales.balance_inicial += f.balance_inicial;
     totales.entrada += f.entrada;
     totales.salida += f.salida;
-    totales.stock += f.stock;
     totales.stock_terminado += f.stock_terminado;
     rowIdx++;
   });

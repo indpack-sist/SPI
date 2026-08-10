@@ -198,11 +198,20 @@ async function construirDatosKardex(query) {
     // saldo en el periodo (no se pidió incluir stock cero).
     const filas = result.data
       .map(row => {
-        const balance_inicial =
-          parseFloat(row.ent_antes) - parseFloat(row.sal_antes) + parseFloat(row.aj_antes);
+        // Balance inicial = lo que había hasta el día anterior a "desde"
+        // (movimientos con fecha < desde). Se reconstruye del historial y puede
+        // quedar negativo cuando nunca se cargó el inventario inicial de un
+        // producto; en ese caso se fija en 0: no existen cantidades físicas
+        // negativas en almacén.
+        const balance_inicial = Math.max(
+          0,
+          parseFloat(row.ent_antes) - parseFloat(row.sal_antes) + parseFloat(row.aj_antes)
+        );
         const entrada = parseFloat(row.ent_periodo) + parseFloat(row.aj_pos_periodo);
         const salida = parseFloat(row.sal_periodo) + parseFloat(row.aj_neg_periodo);
-        const stock = balance_inicial + entrada - salida;
+        // Stock terminado = lo que quedó al cierre del período (BI + entradas −
+        // salidas). También se acota a 0 para no arrastrar negativos.
+        const stock_terminado = Math.max(0, balance_inicial + entrada - salida);
         return {
           categoria: row.categoria,
           codigo: row.codigo,
@@ -211,12 +220,11 @@ async function construirDatosKardex(query) {
           balance_inicial,
           entrada,
           salida,
-          stock,
-          stock_terminado: stock
+          stock_terminado
         };
       })
       .filter(f =>
-        f.balance_inicial !== 0 || f.entrada !== 0 || f.salida !== 0 || f.stock !== 0
+        f.balance_inicial !== 0 || f.entrada !== 0 || f.salida !== 0 || f.stock_terminado !== 0
       );
 
     let tipoInventarioNombre = 'Todos';

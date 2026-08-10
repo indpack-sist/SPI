@@ -225,8 +225,11 @@ async function construirDatosKardex(query) {
       // en el período: si no hubo entrada ni salida (incluidos los ajustes ya
       // sumados en cada columna), el producto no aparece aunque tenga balance o
       // stock.
+      // TEMPORAL: también se excluye la categoría Burbupack (quitar esta línea
+      // para volver a incluirla).
       .filter(f =>
         !/^merma/i.test(f.categoria || '') &&
+        !/^burbupack/i.test(f.categoria || '') &&
         (f.entrada !== 0 || f.salida !== 0)
       );
 

@@ -118,7 +118,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
 
   // --- Filas de datos ---
   let rowIdx = headerRowIdx + 1;
-  const totales = { balance_inicial: 0, entrada: 0, salida: 0, stock_terminado: 0 };
 
   datos.forEach((f) => {
     const row = ws.getRow(rowIdx);
@@ -133,10 +132,6 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
         cell.font = { size: 9, bold: true };
       }
     });
-    totales.balance_inicial += f.balance_inicial;
-    totales.entrada += f.entrada;
-    totales.salida += f.salida;
-    totales.stock_terminado += f.stock_terminado;
     rowIdx++;
   });
 
@@ -149,7 +144,8 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
     cell.border = BORDE_FINO;
     rowIdx++;
   } else {
-    // --- Fila de totales ---
+    // --- Conteo de productos (sin totales numéricos: las unidades de medida
+    // difieren entre productos, así que sumar cantidades no tiene sentido) ---
     const row = ws.getRow(rowIdx);
     COLUMNAS.forEach((c, i) => {
       const cell = row.getCell(i + 1);
@@ -157,14 +153,10 @@ export async function generarKardexXLSX({ filas = [], filtros = {} } = {}) {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDDDDD' } };
       cell.alignment = { horizontal: c.align, vertical: 'middle' };
       cell.border = BORDE_FINO;
-      if (c.key === 'categoria') {
-        cell.value = `TOTALES (${datos.length} productos)`;
-        cell.alignment = { horizontal: 'left', vertical: 'middle' };
-      } else if (c.num) {
-        cell.value = totales[c.key];
-        cell.numFmt = '#,##0.00';
-      }
     });
+    const first = row.getCell(1);
+    first.value = `Total de productos: ${datos.length}`;
+    first.alignment = { horizontal: 'left', vertical: 'middle' };
     row.height = 18;
     rowIdx++;
   }

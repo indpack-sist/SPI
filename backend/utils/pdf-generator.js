@@ -2575,7 +2575,7 @@ export async function generarPDFHojaRuta(orden, receta = []) {
 
 // Reporte Kardex de inventario (resumen por producto en un rango de fechas).
 // `datos.filas` es un arreglo con: categoria, codigo, producto, unidad,
-// balance_inicial, entrada, salida, stock, stock_terminado.
+// balance_inicial, entrada, salida, stock_terminado.
 // `datos.filtros` lleva { desde, hasta, tipo_inventario } para el encabezado.
 export async function generarPDFKardex(datos) {
   const logoBuffer = await cargarLogoURL();
@@ -2614,11 +2614,10 @@ export async function generarPDFKardex(datos) {
         categoria: { x: 30, w: 90, align: 'left' },
         codigo: { x: 120, w: 85, align: 'left' },
         producto: { x: 205, w: 210, align: 'left' },
-        balance: { x: 415, w: 70, align: 'right' },
-        entrada: { x: 485, w: 60, align: 'right' },
-        salida: { x: 545, w: 60, align: 'right' },
-        stock: { x: 605, w: 60, align: 'right' },
-        stockTerm: { x: 665, w: 80, align: 'right' }
+        balance: { x: 415, w: 80, align: 'right' },
+        entrada: { x: 495, w: 80, align: 'right' },
+        salida: { x: 575, w: 75, align: 'right' },
+        stockTerm: { x: 650, w: 95, align: 'right' }
       };
       const tablaFin = cols.stockTerm.x + cols.stockTerm.w; // 745
       const LIMITE_Y = 560; // salto de página
@@ -2661,9 +2660,8 @@ export async function generarPDFKardex(datos) {
         doc.text('CÓDIGO', cols.codigo.x + 3, y + 7, { width: cols.codigo.w - 4 });
         doc.text('PRODUCTO', cols.producto.x + 3, y + 7, { width: cols.producto.w - 4 });
         doc.text('BALANCE\nINICIAL', cols.balance.x, y + 3, { width: cols.balance.w - 4, align: 'right' });
-        doc.text('ENTRADA', cols.entrada.x, y + 7, { width: cols.entrada.w - 4, align: 'right' });
+        doc.text('ENTRADA\n(PROD.)', cols.entrada.x, y + 3, { width: cols.entrada.w - 4, align: 'right' });
         doc.text('SALIDA', cols.salida.x, y + 7, { width: cols.salida.w - 4, align: 'right' });
-        doc.text('STOCK', cols.stock.x, y + 7, { width: cols.stock.w - 4, align: 'right' });
         doc.text('STOCK\nTERMI.', cols.stockTerm.x, y + 3, { width: cols.stockTerm.w - 4, align: 'right' });
         return y + 22;
       };
@@ -2671,7 +2669,7 @@ export async function generarPDFKardex(datos) {
       yPos = dibujarCabecera(yPos);
 
       // --- Filas ---
-      const totales = { balance: 0, entrada: 0, salida: 0, stock: 0, stockTerm: 0 };
+      const totales = { balance: 0, entrada: 0, salida: 0, stockTerm: 0 };
 
       if (filas.length === 0) {
         doc.fontSize(9).font('Helvetica-Oblique').fillColor('#666666');
@@ -2703,13 +2701,11 @@ export async function generarPDFKardex(datos) {
         doc.text(fmtNum(fila.entrada), cols.entrada.x, yPos + 4, { width: cols.entrada.w - 4, align: 'right' });
         doc.text(fmtNum(fila.salida), cols.salida.x, yPos + 4, { width: cols.salida.w - 4, align: 'right' });
         doc.font('Helvetica-Bold');
-        doc.text(fmtNum(fila.stock), cols.stock.x, yPos + 4, { width: cols.stock.w - 4, align: 'right' });
         doc.text(fmtNum(fila.stock_terminado), cols.stockTerm.x, yPos + 4, { width: cols.stockTerm.w - 4, align: 'right' });
 
         totales.balance += parseFloat(fila.balance_inicial || 0);
         totales.entrada += parseFloat(fila.entrada || 0);
         totales.salida += parseFloat(fila.salida || 0);
-        totales.stock += parseFloat(fila.stock || 0);
         totales.stockTerm += parseFloat(fila.stock_terminado || 0);
 
         yPos += altoFila;
@@ -2728,7 +2724,6 @@ export async function generarPDFKardex(datos) {
         doc.text(fmtNum(totales.balance), cols.balance.x, yPos + 5, { width: cols.balance.w - 4, align: 'right' });
         doc.text(fmtNum(totales.entrada), cols.entrada.x, yPos + 5, { width: cols.entrada.w - 4, align: 'right' });
         doc.text(fmtNum(totales.salida), cols.salida.x, yPos + 5, { width: cols.salida.w - 4, align: 'right' });
-        doc.text(fmtNum(totales.stock), cols.stock.x, yPos + 5, { width: cols.stock.w - 4, align: 'right' });
         doc.text(fmtNum(totales.stockTerm), cols.stockTerm.x, yPos + 5, { width: cols.stockTerm.w - 4, align: 'right' });
         yPos += 18;
       }

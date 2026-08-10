@@ -223,10 +223,14 @@ async function construirDatosKardex(query) {
           stock_terminado
         };
       })
-      // Solo se listan productos con movimiento en el período: si no hubo
-      // entrada ni salida (incluidos los ajustes ya sumados en cada columna),
-      // el producto no aparece aunque tenga balance o stock.
-      .filter(f => f.entrada !== 0 || f.salida !== 0);
+      // Se excluye la categoría Mermas y solo se listan productos con movimiento
+      // en el período: si no hubo entrada ni salida (incluidos los ajustes ya
+      // sumados en cada columna), el producto no aparece aunque tenga balance o
+      // stock.
+      .filter(f =>
+        !/^merma/i.test(f.categoria || '') &&
+        (f.entrada !== 0 || f.salida !== 0)
+      );
 
     let tipoInventarioNombre = 'Todos';
     if (id_tipo_inventario && result.data.length > 0) {

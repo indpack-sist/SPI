@@ -2671,8 +2671,6 @@ export async function generarPDFKardex(datos) {
       yPos = dibujarCabecera(yPos);
 
       // --- Filas ---
-      const totales = { balance: 0, entrada: 0, salida: 0, stockTerm: 0 };
-
       if (filas.length === 0) {
         doc.fontSize(9).font('Helvetica-Oblique').fillColor('#666666');
         doc.text('No se encontraron productos con movimientos o stock en el rango seleccionado.', 30, yPos + 10, { width: tablaFin - 30, align: 'center' });
@@ -2706,15 +2704,11 @@ export async function generarPDFKardex(datos) {
         doc.font('Helvetica-Bold');
         doc.text(fmtNum(fila.stock_terminado), cols.stockTerm.x, yPos + 4, { width: cols.stockTerm.w - 4, align: 'right' });
 
-        totales.balance += parseFloat(fila.balance_inicial || 0);
-        totales.entrada += parseFloat(fila.entrada || 0);
-        totales.salida += parseFloat(fila.salida || 0);
-        totales.stockTerm += parseFloat(fila.stock_terminado || 0);
-
         yPos += altoFila;
       });
 
-      // --- Fila de totales ---
+      // --- Conteo de productos (sin totales numéricos: las unidades de medida
+      // difieren entre productos, así que sumar cantidades no tiene sentido) ---
       if (filas.length > 0) {
         if (yPos + 20 > LIMITE_Y) {
           doc.addPage();
@@ -2723,11 +2717,7 @@ export async function generarPDFKardex(datos) {
         }
         doc.rect(30, yPos, tablaFin - 30, 18).fill('#DDDDDD');
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
-        doc.text(`TOTALES (${filas.length} productos)`, cols.categoria.x + 3, yPos + 5, { width: cols.producto.w + cols.codigo.w });
-        doc.text(fmtNum(totales.balance), cols.balance.x, yPos + 5, { width: cols.balance.w - 4, align: 'right' });
-        doc.text(fmtNum(totales.entrada), cols.entrada.x, yPos + 5, { width: cols.entrada.w - 4, align: 'right' });
-        doc.text(fmtNum(totales.salida), cols.salida.x, yPos + 5, { width: cols.salida.w - 4, align: 'right' });
-        doc.text(fmtNum(totales.stockTerm), cols.stockTerm.x, yPos + 5, { width: cols.stockTerm.w - 4, align: 'right' });
+        doc.text(`Total de productos: ${filas.length}`, cols.categoria.x + 3, yPos + 5, { width: tablaFin - cols.categoria.x - 6 });
         yPos += 18;
       }
 

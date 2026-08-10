@@ -223,9 +223,10 @@ async function construirDatosKardex(query) {
           stock_terminado
         };
       })
-      .filter(f =>
-        f.balance_inicial !== 0 || f.entrada !== 0 || f.salida !== 0 || f.stock_terminado !== 0
-      );
+      // Solo se listan productos con movimiento en el período: si no hubo
+      // entrada ni salida (incluidos los ajustes ya sumados en cada columna),
+      // el producto no aparece aunque tenga balance o stock.
+      .filter(f => f.entrada !== 0 || f.salida !== 0);
 
     let tipoInventarioNombre = 'Todos';
     if (id_tipo_inventario && result.data.length > 0) {

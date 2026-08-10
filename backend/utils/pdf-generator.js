@@ -2611,13 +2611,14 @@ export async function generarPDFKardex(datos) {
 
       // Geometría de columnas (A4 apaisado: 842 x 595, usable ~782)
       const cols = {
-        categoria: { x: 30, w: 90, align: 'left' },
-        codigo: { x: 120, w: 85, align: 'left' },
-        producto: { x: 205, w: 210, align: 'left' },
-        balance: { x: 415, w: 80, align: 'right' },
-        entrada: { x: 495, w: 80, align: 'right' },
-        salida: { x: 575, w: 75, align: 'right' },
-        stockTerm: { x: 650, w: 95, align: 'right' }
+        categoria: { x: 30, w: 82, align: 'left' },
+        codigo: { x: 112, w: 78, align: 'left' },
+        producto: { x: 190, w: 175, align: 'left' },
+        unidad: { x: 365, w: 42, align: 'center' },
+        balance: { x: 407, w: 75, align: 'right' },
+        entrada: { x: 482, w: 78, align: 'right' },
+        salida: { x: 560, w: 70, align: 'right' },
+        stockTerm: { x: 630, w: 115, align: 'right' }
       };
       const tablaFin = cols.stockTerm.x + cols.stockTerm.w; // 745
       const LIMITE_Y = 560; // salto de página
@@ -2659,6 +2660,7 @@ export async function generarPDFKardex(datos) {
         doc.text('CATEGORÍA', cols.categoria.x + 3, y + 7, { width: cols.categoria.w - 4 });
         doc.text('CÓDIGO', cols.codigo.x + 3, y + 7, { width: cols.codigo.w - 4 });
         doc.text('PRODUCTO', cols.producto.x + 3, y + 7, { width: cols.producto.w - 4 });
+        doc.text('UNIDAD', cols.unidad.x, y + 7, { width: cols.unidad.w - 4, align: 'center' });
         doc.text('BALANCE\nINICIAL', cols.balance.x, y + 3, { width: cols.balance.w - 4, align: 'right' });
         doc.text('ENTRADA\n(PROD.)', cols.entrada.x, y + 3, { width: cols.entrada.w - 4, align: 'right' });
         doc.text('SALIDA', cols.salida.x, y + 7, { width: cols.salida.w - 4, align: 'right' });
@@ -2697,6 +2699,7 @@ export async function generarPDFKardex(datos) {
         doc.text(fila.categoria || '-', cols.categoria.x + 3, yPos + 4, { width: cols.categoria.w - 4, ellipsis: true });
         doc.text(fila.codigo || '-', cols.codigo.x + 3, yPos + 4, { width: cols.codigo.w - 4, ellipsis: true });
         doc.text(nombre, cols.producto.x + 3, yPos + 4, { width: cols.producto.w - 4, lineGap: 1 });
+        doc.text(fila.unidad || '-', cols.unidad.x, yPos + 4, { width: cols.unidad.w - 4, align: 'center' });
         doc.text(fmtNum(fila.balance_inicial), cols.balance.x, yPos + 4, { width: cols.balance.w - 4, align: 'right' });
         doc.text(fmtNum(fila.entrada), cols.entrada.x, yPos + 4, { width: cols.entrada.w - 4, align: 'right' });
         doc.text(fmtNum(fila.salida), cols.salida.x, yPos + 4, { width: cols.salida.w - 4, align: 'right' });
@@ -2729,11 +2732,21 @@ export async function generarPDFKardex(datos) {
       }
 
       // --- Numeración de páginas ---
+      // El pie va cerca del borde inferior; se anula el margen inferior de la
+      // página mientras se escribe para que PDFKit no cuente el texto como
+      // desbordamiento y agregue páginas en blanco al final.
       const rango = doc.bufferedPageRange();
       for (let i = rango.start; i < rango.start + rango.count; i++) {
         doc.switchToPage(i);
+        const bottomPrev = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
         doc.fontSize(7).font('Helvetica').fillColor('#666666');
-        doc.text(`Página ${i - rango.start + 1} de ${rango.count}`, 30, 570, { align: 'right', width: tablaFin - 30 });
+        doc.text(`Página ${i - rango.start + 1} de ${rango.count}`, 30, 570, {
+          align: 'right',
+          width: tablaFin - 30,
+          lineBreak: false
+        });
+        doc.page.margins.bottom = bottomPrev;
       }
 
       doc.end();

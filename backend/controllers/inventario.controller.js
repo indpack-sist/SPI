@@ -155,18 +155,11 @@ async function construirDatosKardex(query) {
         ), 0) AS sal_periodo,
 
         COALESCE((
-          SELECT SUM(CASE WHEN ai.diferencia > 0 THEN ai.diferencia ELSE 0 END)
+          SELECT SUM(ai.diferencia)
           FROM ajustes_inventario ai
           WHERE ai.id_producto = p.id_producto
             AND DATE(ai.fecha_ajuste) BETWEEN ? AND ?
-        ), 0) AS aj_pos_periodo,
-
-        COALESCE((
-          SELECT SUM(CASE WHEN ai.diferencia < 0 THEN -ai.diferencia ELSE 0 END)
-          FROM ajustes_inventario ai
-          WHERE ai.id_producto = p.id_producto
-            AND DATE(ai.fecha_ajuste) BETWEEN ? AND ?
-        ), 0) AS aj_neg_periodo
+        ), 0) AS aj_net_periodo
 
       FROM productos p
       INNER JOIN tipos_inventario ti ON p.id_tipo_inventario = ti.id_tipo_inventario
@@ -180,8 +173,7 @@ async function construirDatosKardex(query) {
       desde, desde, desde,          // ..._antes
       desde, hasta,                 // ent_periodo
       desde, hasta,                 // sal_periodo
-      desde, hasta,                 // aj_pos_periodo
-      desde, hasta                  // aj_neg_periodo
+      desde, hasta                  // aj_net_periodo
     ];
     if (id_tipo_inventario) params.push(id_tipo_inventario);
 
@@ -207,8 +199,14 @@ async function construirDatosKardex(query) {
           0,
           parseFloat(row.ent_antes) - parseFloat(row.sal_antes) + parseFloat(row.aj_antes)
         );
-        const entrada = parseFloat(row.ent_periodo) + parseFloat(row.aj_pos_periodo);
-        const salida = parseFloat(row.sal_periodo) + parseFloat(row.aj_neg_periodo);
+        // Los ajustes del período se netean por producto: solo el saldo neto
+        // suma a ENTRADA (si es positivo) o a SALIDA (si es negativo). Así los
+        // pares de corrección que se cancelan (ej. subir a 800 y bajar a 0.80)
+        // no inflan ambas columnas; el escenario de ajustes todos positivos
+        // (0→2000 varias veces) se conserva porque el neto sigue siendo positivo.
+        const ajNet = parseFloat(row.aj_net_periodo);
+        const entrada = parseFloat(row.ent_periodo) + Math.max(0, ajNet);
+        const salida = parseFloat(row.sal_periodo) + Math.max(0, -ajNet);
         // Stock terminado = lo que quedó al cierre del período (BI + entradas −
         // salidas). También se acota a 0 para no arrastrar negativos.
         const stock_terminado = Math.max(0, balance_inicial + entrada - salida);

@@ -1,5 +1,8 @@
 import { executeQuery } from '../config/database.js';
 
+// Estados de orden de venta que cuentan como "atencion" a un cliente.
+export const ESTADOS_ATENCION = ['Despachada', 'Despacho Parcial', 'Entregada'];
+
 /**
  * Determina si un empleado puede atender (crear cotizaciones/ordenes) a un cliente.
  * - Si el empleado no esta restringido (restringir_clientes = 0) -> siempre permitido.

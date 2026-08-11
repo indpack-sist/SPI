@@ -12,6 +12,7 @@ import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import AtencionesBadge from '../../components/UI/AtencionesBadge';
 
 function Clientes() {
   const navigate = useNavigate();
@@ -397,8 +398,20 @@ function Clientes() {
         </div>
       )
     },
-    { 
-      header: 'Límite Crédito', 
+    {
+      header: 'Atenciones',
+      width: '110px',
+      align: 'center',
+      render: (_, row) => (
+        <AtencionesBadge
+          atenciones={row.atenciones}
+          totalOrdenes={row.total_ordenes}
+          desglose={row.ordenes_desglose}
+        />
+      )
+    },
+    {
+      header: 'Límite Crédito',
       width: '140px',
       render: (_, row) => (
         row.usar_limite_credito === 1 || row.usar_limite_credito === true ? (

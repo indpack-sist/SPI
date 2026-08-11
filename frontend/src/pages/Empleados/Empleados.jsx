@@ -7,6 +7,7 @@ import { usePagination } from '../../hooks/usePagination';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
+import AtencionesBadge from '../../components/UI/AtencionesBadge';
 
 function Empleados() {
   const [empleados, setEmpleados] = useState([]);
@@ -876,9 +877,11 @@ function Empleados() {
                         {marcado && (
                           <span className="badge badge-primary text-xs">Asignado</span>
                         )}
-                        {Number(c.tiene_atencion) === 1 && (
-                          <span className="badge badge-success text-xs">Con atención</span>
-                        )}
+                        <AtencionesBadge
+                          atenciones={c.atenciones}
+                          totalOrdenes={c.total_ordenes}
+                          desglose={c.ordenes_desglose}
+                        />
                       </label>
                       );
                     })

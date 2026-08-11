@@ -1,5 +1,8 @@
 import { executeQuery } from '../config/database.js';
 import { validarDNI } from '../services/api-validation.service.js';
+import { ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
+
+const ATENCION_PLACEHOLDERS = ESTADOS_ATENCION.map(() => '?').join(', ');
 
 export async function getAllEmpleados(req, res) {
   try {
@@ -381,12 +384,17 @@ export async function getClientesAsignados(req, res) {
     if (empleado.data.length === 0) return res.status(404).json({ error: 'Empleado no encontrado' });
 
     const asignados = await executeQuery(
-      `SELECT a.id_cliente, c.razon_social, c.ruc, c.tipo_documento
+      `SELECT a.id_cliente, c.razon_social, c.ruc, c.tipo_documento,
+         (SELECT COUNT(*) FROM ordenes_venta ov WHERE ov.id_cliente = c.id_cliente) AS total_ordenes,
+         (SELECT COUNT(*) FROM ordenes_venta ov WHERE ov.id_cliente = c.id_cliente AND ov.estado IN (${ATENCION_PLACEHOLDERS})) AS atenciones,
+         (SELECT GROUP_CONCAT(CONCAT(t.estado, ':', t.cnt) ORDER BY t.cnt DESC SEPARATOR '|')
+            FROM (SELECT estado, COUNT(*) AS cnt FROM ordenes_venta WHERE id_cliente = c.id_cliente GROUP BY estado) t
+         ) AS ordenes_desglose
        FROM empleado_clientes_asignados a
        INNER JOIN clientes c ON a.id_cliente = c.id_cliente
        WHERE a.id_empleado = ?
        ORDER BY c.razon_social ASC`,
-      [id]
+      [...ESTADOS_ATENCION, id]
     );
 
     if (!asignados.success) return res.status(500).json({ error: asignados.error });

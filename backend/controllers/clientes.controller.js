@@ -1,16 +1,22 @@
 import { executeQuery } from '../config/database.js';
 import { validarRUC, validarDNI } from '../services/api-validation.service.js';
-import { empleadoRestringido } from '../utils/asignacionClientes.js';
+import { empleadoRestringido, ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
 
-// Estados de orden de venta que cuentan como "cliente con atencion"
-const ESTADOS_ATENCION = ['Despachada', 'Despacho Parcial', 'Entregada'];
-const ATENCION_EXISTS = `EXISTS (SELECT 1 FROM ordenes_venta ov WHERE ov.id_cliente = clientes.id_cliente AND ov.estado IN (${ESTADOS_ATENCION.map(() => '?').join(', ')}))`;
+const ATENCION_PLACEHOLDERS = ESTADOS_ATENCION.map(() => '?').join(', ');
 
 export async function getAllClientes(req, res) {
   try {
     const { estado, search, atencion } = req.query;
 
-    let sql = `SELECT *, ${ATENCION_EXISTS} AS tiene_atencion FROM clientes WHERE 1=1`;
+    let sql = `
+      SELECT clientes.*,
+        (SELECT COUNT(*) FROM ordenes_venta ov WHERE ov.id_cliente = clientes.id_cliente) AS total_ordenes,
+        (SELECT COUNT(*) FROM ordenes_venta ov WHERE ov.id_cliente = clientes.id_cliente AND ov.estado IN (${ATENCION_PLACEHOLDERS})) AS atenciones,
+        (SELECT GROUP_CONCAT(CONCAT(t.estado, ':', t.cnt) ORDER BY t.cnt DESC SEPARATOR '|')
+           FROM (SELECT estado, COUNT(*) AS cnt FROM ordenes_venta WHERE id_cliente = clientes.id_cliente GROUP BY estado) t
+        ) AS ordenes_desglose
+      FROM clientes
+      WHERE 1=1`;
     const params = [...ESTADOS_ATENCION];
 
     if (estado) {
@@ -23,12 +29,11 @@ export async function getAllClientes(req, res) {
       params.push(`%${search}%`, `%${search}%`);
     }
 
+    // atenciones es un alias calculado; se filtra con HAVING (MySQL lo aplica por fila).
     if (atencion === 'con') {
-      sql += ` AND ${ATENCION_EXISTS}`;
-      params.push(...ESTADOS_ATENCION);
+      sql += ' HAVING atenciones > 0';
     } else if (atencion === 'sin') {
-      sql += ` AND NOT ${ATENCION_EXISTS}`;
-      params.push(...ESTADOS_ATENCION);
+      sql += ' HAVING atenciones = 0';
     }
 
     sql += ' ORDER BY razon_social ASC';

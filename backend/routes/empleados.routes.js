@@ -8,7 +8,9 @@ import {
   validarEmailEmpleado, 
   createEmpleado,
   updateEmpleado,
-  deleteEmpleado
+  deleteEmpleado,
+  getClientesAsignados,
+  updateClientesAsignados
 } from '../controllers/empleados.controller.js';
 
 const router = express.Router();
@@ -18,6 +20,8 @@ router.get('/conductores', getConductores);
 router.get('/rol/:rol', getEmpleadosByRol);
 router.get('/validar-dni/:dni', validarDNIEmpleado);
 router.get('/validar-email/:email', validarEmailEmpleado);
+router.get('/:id/clientes-asignados', getClientesAsignados);
+router.put('/:id/clientes-asignados', updateClientesAsignados);
 router.get('/:id', getEmpleadoById);
 router.post('/', createEmpleado);
 router.put('/:id', updateEmpleado);

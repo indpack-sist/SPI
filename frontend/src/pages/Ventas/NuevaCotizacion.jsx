@@ -78,6 +78,10 @@ function NuevaCotizacion() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
     
   const [tabCliente, setTabCliente] = useState('lista');
+  // Restriccion de cartera de clientes (roles Comercial / Ventas)
+  const [restringidoCartera, setRestringidoCartera] = useState(false);
+  const [idsAsignados, setIdsAsignados] = useState([]);
+  const [vistaCartera, setVistaCartera] = useState('asignados');
   const [nuevoClienteDoc, setNuevoClienteDoc] = useState({ tipo: 'RUC', numero: '' });
   const [clienteApiData, setClienteApiData] = useState(null);
   const [loadingApi, setLoadingApi] = useState(false);
@@ -376,7 +380,30 @@ function NuevaCotizacion() {
   }
 };
 
-  const handleSelectCliente = async (cliente) => {
+  const cargarCartera = async () => {
+    if (!user?.id || !['Comercial', 'Ventas'].includes(user.rol)) return;
+    try {
+      const res = await empleadosAPI.getClientesAsignados(user.id);
+      const data = res.data.data;
+      setRestringidoCartera(!!data.restringir_clientes);
+      setIdsAsignados(data.ids || []);
+      setVistaCartera(data.restringir_clientes ? 'asignados' : 'todos');
+    } catch (err) {
+      console.error('Error al cargar cartera de clientes:', err);
+    }
+  };
+
+  useEffect(() => {
+    cargarCartera();
+  }, [user?.id]);
+
+  const esClienteAsignado = (idCliente) => !restringidoCartera || idsAsignados.includes(idCliente);
+
+  const handleSelectCliente = async (cliente, omitirValidacion = false) => {
+    if (!omitirValidacion && !esClienteAsignado(cliente.id_cliente)) {
+      setError('Este cliente no forma parte de tu cartera asignada. Solo puedes crear cotizaciones para tus clientes asignados.');
+      return;
+    }
     try {
       const resFullCliente = await clientesAPI.getById(cliente.id_cliente);
       const clienteCompleto = resFullCliente.data.data;
@@ -496,7 +523,11 @@ setFormCabecera(prev => ({
       if (response.data.success) {
         const clienteCreado = response.data.data;
         setClientes(prev => [...prev, clienteCreado]);
-        handleSelectCliente(clienteCreado);
+        // Si el usuario esta restringido, el backend auto-asigna el cliente nuevo a su cartera.
+        if (restringidoCartera && !idsAsignados.includes(clienteCreado.id_cliente)) {
+          setIdsAsignados(prev => [...prev, clienteCreado.id_cliente]);
+        }
+        handleSelectCliente(clienteCreado, true);
         setSuccess('Cliente creado y seleccionado automaticamente');
         setModalClienteOpen(false);
         setTabCliente('lista');
@@ -769,10 +800,16 @@ setFormCabecera(prev => ({
     }
   };
 
-  const clientesFiltrados = clientes.filter(c =>
-    c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) ||
-    c.ruc.includes(busquedaCliente)
-  );
+  const clientesFiltrados = clientes.filter(c => {
+    const coincideBusqueda =
+      c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) ||
+      c.ruc.includes(busquedaCliente);
+    if (!coincideBusqueda) return false;
+    if (restringidoCartera && vistaCartera === 'asignados') {
+      return idsAsignados.includes(c.id_cliente);
+    }
+    return true;
+  });
 
   const productosFiltrados = productos.filter(p =>
     p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) ||
@@ -1627,6 +1664,24 @@ setFormCabecera(prev => ({
         </div>
         {tabCliente === 'lista' ? (
           <>
+            {restringidoCartera && (
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  className={`btn btn-sm flex-1 ${vistaCartera === 'asignados' ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setVistaCartera('asignados')}
+                >
+                  Mis clientes asignados ({idsAsignados.length})
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm flex-1 ${vistaCartera === 'todos' ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setVistaCartera('todos')}
+                >
+                  Ver todos
+                </button>
+              </div>
+            )}
             <div className="mb-4 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
@@ -1641,17 +1696,25 @@ setFormCabecera(prev => ({
             <div className="max-h-96 overflow-y-auto">
               {clientesFiltrados.length > 0 ? (
                 <div className="space-y-2 pr-2">
-                  {clientesFiltrados.map(cliente => (
+                  {clientesFiltrados.map(cliente => {
+                    const asignado = esClienteAsignado(cliente.id_cliente);
+                    return (
                     <div
                       key={cliente.id_cliente}
-                      className="p-4 border rounded-lg hover:border-primary hover:bg-blue-50 cursor-pointer transition flex justify-between items-center group"
-                      onClick={() => handleSelectCliente(cliente)}
+                      className={`p-4 border rounded-lg transition flex justify-between items-center group ${asignado ? 'hover:border-primary hover:bg-blue-50 cursor-pointer' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
+                      onClick={() => asignado ? handleSelectCliente(cliente) : setError('Este cliente no forma parte de tu cartera asignada.')}
+                      title={asignado ? '' : 'Cliente no asignado a tu cartera'}
                     >
                       <div>
-                        <div className="font-bold text-gray-800 group-hover:text-primary transition-colors">{cliente.razon_social}</div>
+                        <div className={`font-bold text-gray-800 ${asignado ? 'group-hover:text-primary' : ''} transition-colors`}>{cliente.razon_social}</div>
                         <div className="text-sm text-muted font-mono">{cliente.ruc}</div>
                       </div>
                       <div className="text-right flex flex-col items-end gap-1">
+                        {!asignado && (
+                          <div className="flex items-center gap-1 badge badge-secondary text-[10px] uppercase font-bold py-0.5">
+                            <Lock size={10}/> No asignado
+                          </div>
+                        )}
                         {cliente.usar_limite_credito === 1 ? (
                           <>
                             <div className="flex items-center gap-1 badge badge-success text-[10px] uppercase font-bold py-0.5">
@@ -1668,7 +1731,8 @@ setFormCabecera(prev => ({
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-center text-muted py-8">No se encontraron clientes</p>

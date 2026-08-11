@@ -1,6 +1,7 @@
 import { executeQuery, executeTransaction } from '../config/database.js';
 import { obtenerTipoCambioCache } from '../services/tipo-cambio.service.js';
 import pool from '../config/database.js';
+import { clientePermitido } from '../utils/asignacionClientes.js';
 
 function getFechaPeru() {
   const now = new Date();
@@ -208,7 +209,12 @@ export async function createCotizacion(req, res) {
 
     if (!id_cliente) return res.status(400).json({ success: false, error: 'Cliente es obligatorio' });
     if (!detalle || detalle.length === 0) return res.status(400).json({ success: false, error: 'Debe agregar al menos un producto' });
-    
+
+    // Restriccion de cartera: si el usuario esta restringido, solo sus clientes asignados
+    if (req.user?.id_empleado && !(await clientePermitido(req.user.id_empleado, id_cliente))) {
+      return res.status(403).json({ success: false, error: 'Este cliente no forma parte de tu cartera asignada. Contacta al administrador para que te lo asigne.' });
+    }
+
     // Validación anti-doble clic: buscar cotización reciente
     if (registradorTemporal) {
       const resultDoble = await executeQuery(`

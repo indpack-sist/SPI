@@ -1,23 +1,36 @@
 import { executeQuery } from '../config/database.js';
 import { validarRUC, validarDNI } from '../services/api-validation.service.js';
+import { empleadoRestringido } from '../utils/asignacionClientes.js';
+
+// Estados de orden de venta que cuentan como "cliente con atencion"
+const ESTADOS_ATENCION = ['Despachada', 'Despacho Parcial', 'Entregada'];
+const ATENCION_EXISTS = `EXISTS (SELECT 1 FROM ordenes_venta ov WHERE ov.id_cliente = clientes.id_cliente AND ov.estado IN (${ESTADOS_ATENCION.map(() => '?').join(', ')}))`;
 
 export async function getAllClientes(req, res) {
   try {
-    const { estado, search } = req.query;
-    
-    let sql = 'SELECT * FROM clientes WHERE 1=1';
-    const params = [];
-    
+    const { estado, search, atencion } = req.query;
+
+    let sql = `SELECT *, ${ATENCION_EXISTS} AS tiene_atencion FROM clientes WHERE 1=1`;
+    const params = [...ESTADOS_ATENCION];
+
     if (estado) {
       sql += ' AND estado = ?';
       params.push(estado);
     }
-    
+
     if (search) {
       sql += ' AND (razon_social LIKE ? OR ruc LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
-    
+
+    if (atencion === 'con') {
+      sql += ` AND ${ATENCION_EXISTS}`;
+      params.push(...ESTADOS_ATENCION);
+    } else if (atencion === 'sin') {
+      sql += ` AND NOT ${ATENCION_EXISTS}`;
+      params.push(...ESTADOS_ATENCION);
+    }
+
     sql += ' ORDER BY razon_social ASC';
     
     const result = await executeQuery(sql, params);
@@ -293,7 +306,17 @@ export async function createCliente(req, res) {
         [idCliente, direccion_despacho]
       );
     }
-    
+
+    // Auto-asignacion: si un comercial/vendedor restringido registra el cliente (primer contacto),
+    // el cliente entra automaticamente a su cartera.
+    const idRegistrador = req.user?.id_empleado;
+    if (idRegistrador && await empleadoRestringido(idRegistrador)) {
+      await executeQuery(
+        `INSERT IGNORE INTO empleado_clientes_asignados (id_empleado, id_cliente, asignado_por) VALUES (?, ?, ?)`,
+        [idRegistrador, idCliente, idRegistrador]
+      );
+    }
+
     res.status(201).json({
       success: true,
       message: 'Cliente creado exitosamente',

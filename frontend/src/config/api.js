@@ -115,6 +115,8 @@ export const empleadosAPI = {
   create: (data) => api.post('/empleados', data),
   update: (id, data) => api.put(`/empleados/${id}`, data),
   delete: (id) => api.delete(`/empleados/${id}`),
+  getClientesAsignados: (id) => api.get(`/empleados/${id}/clientes-asignados`),
+  updateClientesAsignados: (id, data) => api.put(`/empleados/${id}/clientes-asignados`, data),
 };
 
 export const flotaAPI = {

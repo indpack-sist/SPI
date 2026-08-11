@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Eye, EyeOff, Mail } from 'lucide-react';
-import { empleadosAPI } from '../../config/api';
+import { Plus, Edit, Trash2, Search, CheckCircle, AlertCircle, Loader, Eye, EyeOff, Mail, Users, Lock, Unlock } from 'lucide-react';
+import { empleadosAPI, clientesAPI } from '../../config/api';
 import Table from '../../components/UI/Table';
 import Pagination from '../../components/UI/Pagination';
 import { usePagination } from '../../hooks/usePagination';
@@ -22,6 +22,19 @@ function Empleados() {
   const [emailValidado, setEmailValidado] = useState(null);
   const [datosRENIEC, setDatosRENIEC] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Cartera de clientes asignados (roles Comercial / Ventas)
+  const ROLES_CARTERA = ['Comercial', 'Ventas'];
+  const [carteraModalOpen, setCarteraModalOpen] = useState(false);
+  const [carteraEmpleado, setCarteraEmpleado] = useState(null);
+  const [carteraRestringir, setCarteraRestringir] = useState(false);
+  const [carteraIds, setCarteraIds] = useState([]);
+  const [carteraAsignadosInfo, setCarteraAsignadosInfo] = useState([]);
+  const [carteraClientes, setCarteraClientes] = useState([]);
+  const [carteraSearch, setCarteraSearch] = useState('');
+  const [carteraAtencion, setCarteraAtencion] = useState('todos');
+  const [carteraLoading, setCarteraLoading] = useState(false);
+  const [carteraSaving, setCarteraSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     dni: '',
@@ -232,6 +245,96 @@ function Empleados() {
     }
   };
 
+  const abrirCartera = async (empleado) => {
+    setCarteraEmpleado(empleado);
+    setCarteraModalOpen(true);
+    setCarteraSearch('');
+    setCarteraAtencion('todos');
+    setError(null);
+    setCarteraLoading(true);
+    try {
+      const res = await empleadosAPI.getClientesAsignados(empleado.id_empleado);
+      const data = res.data.data;
+      setCarteraRestringir(data.restringir_clientes);
+      setCarteraIds(data.ids || []);
+      setCarteraAsignadosInfo(data.clientes || []);
+    } catch (err) {
+      setError(err.error || 'Error al cargar la cartera');
+      setCarteraRestringir(false);
+      setCarteraIds([]);
+      setCarteraAsignadosInfo([]);
+    } finally {
+      setCarteraLoading(false);
+    }
+  };
+
+  const cerrarCartera = () => {
+    setCarteraModalOpen(false);
+    setCarteraEmpleado(null);
+    setCarteraClientes([]);
+    setCarteraIds([]);
+    setCarteraAsignadosInfo([]);
+  };
+
+  const cargarClientesCartera = async () => {
+    try {
+      const params = {};
+      if (carteraSearch.trim()) params.search = carteraSearch.trim();
+      if (carteraAtencion === 'con') params.atencion = 'con';
+      else if (carteraAtencion === 'sin') params.atencion = 'sin';
+      const res = await clientesAPI.getAll(params);
+      setCarteraClientes(res.data.data || []);
+    } catch (err) {
+      setError(err.error || 'Error al cargar clientes');
+    }
+  };
+
+  useEffect(() => {
+    if (!carteraModalOpen || !carteraRestringir) return;
+    const t = setTimeout(cargarClientesCartera, 300);
+    return () => clearTimeout(t);
+  }, [carteraModalOpen, carteraRestringir, carteraSearch, carteraAtencion]);
+
+  const toggleClienteCartera = (idCliente) => {
+    setCarteraIds(prev =>
+      prev.includes(idCliente) ? prev.filter(id => id !== idCliente) : [...prev, idCliente]
+    );
+  };
+
+  const guardarCartera = async () => {
+    if (!carteraEmpleado) return;
+    setCarteraSaving(true);
+    setError(null);
+    try {
+      await empleadosAPI.updateClientesAsignados(carteraEmpleado.id_empleado, {
+        restringir_clientes: carteraRestringir,
+        // Se conserva la cartera aunque el interruptor este apagado (solo desactiva el enforcement).
+        ids: carteraIds
+      });
+      setSuccess(`Cartera de ${carteraEmpleado.nombre_completo} actualizada exitosamente`);
+      cerrarCartera();
+      cargarEmpleados();
+    } catch (err) {
+      setError(err.error || 'Error al guardar la cartera');
+    } finally {
+      setCarteraSaving(false);
+    }
+  };
+
+  // Lista del modal de cartera: los clientes ya asignados siempre aparecen primero
+  // (respetando la busqueda de texto, ignorando el filtro de atencion) para poder quitarlos.
+  const carteraListaMostrada = (() => {
+    const search = carteraSearch.trim();
+    const searchLower = search.toLowerCase();
+    const coincide = (c) => !search ||
+      (c.razon_social || '').toLowerCase().includes(searchLower) ||
+      (c.ruc || '').includes(search);
+    const asignados = carteraAsignadosInfo.filter(coincide);
+    const asignadosIds = new Set(carteraAsignadosInfo.map(c => c.id_cliente));
+    const otros = carteraClientes.filter(c => !asignadosIds.has(c.id_cliente));
+    return [...asignados, ...otros];
+  })();
+
   const empleadosFiltrados = empleados.filter(emp =>
     emp.nombre_completo.toLowerCase().includes(filtro.toLowerCase()) ||
     emp.rol.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -301,10 +404,19 @@ function Empleados() {
     {
       header: 'Acciones',
       accessor: 'id_empleado',
-      width: '120px',
+      width: '160px',
       align: 'center',
       render: (value, row) => (
         <div className="flex gap-2 justify-center">
+          {ROLES_CARTERA.includes(row.rol) && (
+            <button
+              className={`btn btn-sm ${Number(row.restringir_clientes) === 1 ? 'btn-warning' : 'btn-outline'}`}
+              onClick={() => abrirCartera(row)}
+              title={Number(row.restringir_clientes) === 1 ? 'Cartera restringida' : 'Gestionar cartera de clientes'}
+            >
+              {Number(row.restringir_clientes) === 1 ? <Lock size={14} /> : <Users size={14} />}
+            </button>
+          )}
           <button
             className="btn btn-sm btn-outline"
             onClick={() => abrirModal(row)}
@@ -677,6 +789,112 @@ function Empleados() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={carteraModalOpen}
+        onClose={cerrarCartera}
+        title={`Cartera de clientes${carteraEmpleado ? ' — ' + carteraEmpleado.nombre_completo : ''}`}
+        size="lg"
+      >
+        {carteraLoading ? (
+          <div className="text-center p-6"><Loader size={28} className="animate-spin" /></div>
+        ) : (
+          <div>
+            <div className="card bg-gray-50 border p-4 mb-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={carteraRestringir}
+                  onChange={(e) => setCarteraRestringir(e.target.checked)}
+                  className="form-checkbox"
+                  style={{ width: '18px', height: '18px' }}
+                />
+                {carteraRestringir ? <Lock size={18} className="text-warning" /> : <Unlock size={18} className="text-success" />}
+                <div>
+                  <span className="font-medium">Restringir a clientes asignados</span>
+                  <p className="text-xs text-muted mt-1">
+                    {carteraRestringir
+                      ? 'Solo podrá crear cotizaciones/órdenes de los clientes marcados abajo. Los clientes nuevos que registre se le asignarán automáticamente.'
+                      : 'Actualmente puede atender a todos los clientes (sin restricción).'}
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {carteraRestringir && (
+              <>
+                <div className="flex gap-3 items-end mb-3" style={{ flexWrap: 'wrap' }}>
+                  <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '200px' }}>
+                    <label className="form-label text-xs">Buscar cliente</label>
+                    <div style={{ position: 'relative' }}>
+                      <Search size={18} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Razón social o documento..."
+                        value={carteraSearch}
+                        onChange={(e) => setCarteraSearch(e.target.value)}
+                        style={{ paddingLeft: '2.5rem' }}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0, minWidth: '190px' }}>
+                    <label className="form-label text-xs">Atención</label>
+                    <select className="form-select" value={carteraAtencion} onChange={(e) => setCarteraAtencion(e.target.value)}>
+                      <option value="todos">Todos</option>
+                      <option value="con">Con atención</option>
+                      <option value="sin">Sin atención</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted mb-2">{carteraIds.length} cliente(s) asignado(s)</p>
+
+                <div style={{ maxHeight: '320px', overflowY: 'auto' }} className="border rounded">
+                  {carteraListaMostrada.length === 0 ? (
+                    <p className="text-center text-muted p-4 text-sm">No se encontraron clientes</p>
+                  ) : (
+                    carteraListaMostrada.map(c => {
+                      const marcado = carteraIds.includes(c.id_cliente);
+                      return (
+                      <label
+                        key={c.id_cliente}
+                        className={`flex items-center gap-3 p-2 border-b cursor-pointer hover:bg-gray-50 ${marcado ? 'bg-blue-50' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={marcado}
+                          onChange={() => toggleClienteCartera(c.id_cliente)}
+                          className="form-checkbox"
+                          style={{ width: '16px', height: '16px' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div className="text-sm font-medium">{c.razon_social}</div>
+                          <div className="text-xs text-muted font-mono">{c.tipo_documento || 'RUC'} {c.ruc}</div>
+                        </div>
+                        {marcado && (
+                          <span className="badge badge-primary text-xs">Asignado</span>
+                        )}
+                        {Number(c.tiene_atencion) === 1 && (
+                          <span className="badge badge-success text-xs">Con atención</span>
+                        )}
+                      </label>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-2 justify-end mt-4">
+              <button type="button" className="btn btn-outline" onClick={cerrarCartera}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={guardarCartera} disabled={carteraSaving}>
+                {carteraSaving ? <><Loader size={16} className="animate-spin" /> Guardando...</> : 'Guardar cartera'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

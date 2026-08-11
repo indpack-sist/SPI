@@ -42,9 +42,10 @@ export function AuthProvider({ children }) {
           email: usuario.email,
           cargo: usuario.cargo,
           rol: usuario.rol,
-          dni: usuario.dni
+          dni: usuario.dni,
+          restringir_clientes: Number(usuario.restringir_clientes) === 1
         };
-        
+
         console.log('✅ Usuario guardado en estado:', userData);
         
         setUser(userData);
@@ -118,9 +119,10 @@ export function AuthProvider({ children }) {
         email: usuario.email,
         cargo: usuario.cargo,
         rol: usuario.rol,
-        dni: usuario.dni
+        dni: usuario.dni,
+        restringir_clientes: Number(usuario.restringir_clientes) === 1
       };
-      
+
       console.log('💾 Guardando usuario en estado:', userData);
       console.log('💾 Rol que se guardará:', userData.rol);
       

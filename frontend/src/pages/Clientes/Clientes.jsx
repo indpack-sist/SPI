@@ -23,6 +23,7 @@ function Clientes() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState(null);
   const [filtro, setFiltro] = useState('');
+  const [filtroAtencion, setFiltroAtencion] = useState('todos');
 
   const [validandoDocumento, setValidandoDocumento] = useState(false);
   const [documentoValidado, setDocumentoValidado] = useState(null);
@@ -63,7 +64,7 @@ function Clientes() {
 
   useEffect(() => {
     cargarClientes();
-  }, []);
+  }, [filtroAtencion]);
 
   useEffect(() => {
     if (editando) {
@@ -78,7 +79,10 @@ function Clientes() {
     try {
       setLoading(true);
       setError(null);
-      const response = await clientesAPI.getAll();
+      const params = {};
+      if (filtroAtencion === 'con') params.atencion = 'con';
+      else if (filtroAtencion === 'sin') params.atencion = 'sin';
+      const response = await clientesAPI.getAll(params);
       setClientes(response.data.data);
     } catch (err) {
       setError(err.error || 'Error al cargar clientes');
@@ -462,10 +466,20 @@ function Clientes() {
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       <div className="card mb-3">
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={20} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-            <input type="text" className="form-input" placeholder="Buscar por razón social, nombre o documento..." value={filtro} onChange={(e) => setFiltro(e.target.value)} style={{ paddingLeft: '2.5rem' }} />
+        <div className="flex gap-3 items-end" style={{ flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '240px' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={20} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+              <input type="text" className="form-input" placeholder="Buscar por razón social, nombre o documento..." value={filtro} onChange={(e) => setFiltro(e.target.value)} style={{ paddingLeft: '2.5rem' }} />
+            </div>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0, minWidth: '200px' }}>
+            <label className="form-label text-xs">Atención</label>
+            <select className="form-select" value={filtroAtencion} onChange={(e) => setFiltroAtencion(e.target.value)}>
+              <option value="todos">Todos los clientes</option>
+              <option value="con">Con atención (órdenes despachadas/entregadas)</option>
+              <option value="sin">Sin atención</option>
+            </select>
           </div>
         </div>
       </div>

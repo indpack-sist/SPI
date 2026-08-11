@@ -53,6 +53,11 @@ function NuevaOrdenVenta() {
   
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
+
+  // Restriccion de cartera de clientes (roles Comercial / Ventas)
+  const [restringidoCartera, setRestringidoCartera] = useState(false);
+  const [idsAsignados, setIdsAsignados] = useState([]);
+  const [vistaCartera, setVistaCartera] = useState('asignados');
   
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [direccionesCliente, setDireccionesCliente] = useState([]);
@@ -457,7 +462,30 @@ useEffect(() => {
     }
   };
 
+  const cargarCartera = async () => {
+    if (!user?.id || !['Comercial', 'Ventas'].includes(user.rol)) return;
+    try {
+      const res = await empleadosAPI.getClientesAsignados(user.id);
+      const data = res.data.data;
+      setRestringidoCartera(!!data.restringir_clientes);
+      setIdsAsignados(data.ids || []);
+      setVistaCartera(data.restringir_clientes ? 'asignados' : 'todos');
+    } catch (err) {
+      console.error('Error al cargar cartera de clientes:', err);
+    }
+  };
+
+  useEffect(() => {
+    cargarCartera();
+  }, [user?.id]);
+
+  const esClienteAsignado = (idCliente) => !restringidoCartera || idsAsignados.includes(idCliente);
+
   const handleSelectCliente = async (cliente) => {
+    if (!esClienteAsignado(cliente.id_cliente)) {
+      setError('Este cliente no forma parte de tu cartera asignada. Solo puedes crear órdenes para tus clientes asignados.');
+      return;
+    }
     try {
         const resFullCliente = await clientesAPI.getById(cliente.id_cliente);
         const clienteCompleto = resFullCliente.data.data;
@@ -790,10 +818,16 @@ useEffect(() => {
     e.preventDefault();
   };
 
-  const clientesFiltrados = clientes.filter(c =>
-    c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) ||
-    c.ruc.includes(busquedaCliente)
-  );
+  const clientesFiltrados = clientes.filter(c => {
+    const coincideBusqueda =
+      c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase()) ||
+      c.ruc.includes(busquedaCliente);
+    if (!coincideBusqueda) return false;
+    if (restringidoCartera && vistaCartera === 'asignados') {
+      return idsAsignados.includes(c.id_cliente);
+    }
+    return true;
+  });
 
   const productosFiltrados = productos.filter(p =>
     p.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) ||
@@ -1706,6 +1740,24 @@ useEffect(() => {
       />
 
       <Modal isOpen={modalClienteOpen} onClose={() => setModalClienteOpen(false)} title="Seleccionar Cliente" size="lg">
+        {restringidoCartera && (
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              className={`btn btn-sm flex-1 ${vistaCartera === 'asignados' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setVistaCartera('asignados')}
+            >
+              Mis clientes asignados ({idsAsignados.length})
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm flex-1 ${vistaCartera === 'todos' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setVistaCartera('todos')}
+            >
+              Ver todos
+            </button>
+          </div>
+        )}
         <div className="mb-4">
           <input
             type="text"
@@ -1717,13 +1769,25 @@ useEffect(() => {
           />
         </div>
         <div className="max-h-96 overflow-y-auto space-y-2">
-          {clientesFiltrados.map(c => (
-            <div key={c.id_cliente} className="p-3 border rounded hover:bg-gray-50 cursor-pointer flex justify-between items-center" onClick={() => handleSelectCliente(c)}>
+          {clientesFiltrados.map(c => {
+            const asignado = esClienteAsignado(c.id_cliente);
+            return (
+            <div
+              key={c.id_cliente}
+              className={`p-3 border rounded flex justify-between items-center ${asignado ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
+              onClick={() => asignado ? handleSelectCliente(c) : setError('Este cliente no forma parte de tu cartera asignada.')}
+              title={asignado ? '' : 'Cliente no asignado a tu cartera'}
+            >
               <div>
                 <div className="font-bold">{c.razon_social}</div>
                 <div className="text-sm text-muted">{c.ruc}</div>
               </div>
-              <div className="text-right">
+              <div className="text-right flex flex-col items-end gap-1">
+                {!asignado && (
+                  <span className="badge badge-secondary flex items-center gap-1 text-[10px]">
+                    <Lock size={10} /> No asignado
+                  </span>
+                )}
                 {c.usar_limite_credito === 1 ? (
                     <span className="badge badge-success flex items-center gap-1 text-[10px]">
                       <CheckCircle size={10} /> Crédito Habilitado
@@ -1735,7 +1799,8 @@ useEffect(() => {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </Modal>
 

@@ -5,7 +5,7 @@ export async function getAllEmpleados(req, res) {
   try {
     const { estado, rol } = req.query;
     
-    let sql = 'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, fecha_registro FROM empleados WHERE 1=1';
+    let sql = 'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, fecha_registro FROM empleados WHERE 1=1';
     const params = [];
     
     if (estado) {
@@ -41,7 +41,7 @@ export async function getEmpleadoById(req, res) {
     const { id } = req.params;
     
     const result = await executeQuery(
-      'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, fecha_registro FROM empleados WHERE id_empleado = ?',
+      'SELECT id_empleado, dni, nombre_completo, email, cargo, rol, estado, restringir_clientes, fecha_registro FROM empleados WHERE id_empleado = ?',
       [id]
     );
     
@@ -366,6 +366,107 @@ export async function deleteEmpleado(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+const ROLES_CARTERA = ['Comercial', 'Ventas'];
+
+export async function getClientesAsignados(req, res) {
+  try {
+    const { id } = req.params;
+
+    const empleado = await executeQuery(
+      'SELECT id_empleado, nombre_completo, rol, restringir_clientes FROM empleados WHERE id_empleado = ?',
+      [id]
+    );
+
+    if (!empleado.success) return res.status(500).json({ error: empleado.error });
+    if (empleado.data.length === 0) return res.status(404).json({ error: 'Empleado no encontrado' });
+
+    const asignados = await executeQuery(
+      `SELECT a.id_cliente, c.razon_social, c.ruc, c.tipo_documento
+       FROM empleado_clientes_asignados a
+       INNER JOIN clientes c ON a.id_cliente = c.id_cliente
+       WHERE a.id_empleado = ?
+       ORDER BY c.razon_social ASC`,
+      [id]
+    );
+
+    if (!asignados.success) return res.status(500).json({ error: asignados.error });
+
+    res.json({
+      success: true,
+      data: {
+        id_empleado: empleado.data[0].id_empleado,
+        rol: empleado.data[0].rol,
+        restringir_clientes: Number(empleado.data[0].restringir_clientes) === 1,
+        ids: asignados.data.map(c => c.id_cliente),
+        clientes: asignados.data
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function updateClientesAsignados(req, res) {
+  try {
+    if (req.user?.rol !== 'Administrador') {
+      return res.status(403).json({ error: 'Solo el administrador puede gestionar la cartera de clientes' });
+    }
+
+    const { id } = req.params;
+    const { restringir_clientes, ids } = req.body;
+
+    const empleado = await executeQuery(
+      'SELECT id_empleado, rol FROM empleados WHERE id_empleado = ?',
+      [id]
+    );
+    if (!empleado.success) return res.status(500).json({ error: empleado.error });
+    if (empleado.data.length === 0) return res.status(404).json({ error: 'Empleado no encontrado' });
+
+    if (!ROLES_CARTERA.includes(empleado.data[0].rol)) {
+      return res.status(400).json({ error: 'La cartera de clientes solo aplica a roles Comercial o Ventas' });
+    }
+
+    const restringir = restringir_clientes ? 1 : 0;
+
+    const updFlag = await executeQuery(
+      'UPDATE empleados SET restringir_clientes = ? WHERE id_empleado = ?',
+      [restringir, id]
+    );
+    if (!updFlag.success) return res.status(500).json({ error: updFlag.error });
+
+    const delResult = await executeQuery(
+      'DELETE FROM empleado_clientes_asignados WHERE id_empleado = ?',
+      [id]
+    );
+    if (!delResult.success) return res.status(500).json({ error: delResult.error });
+
+    const idsLimpios = Array.isArray(ids)
+      ? [...new Set(ids.map(v => parseInt(v)).filter(v => !isNaN(v)))]
+      : [];
+
+    if (idsLimpios.length > 0) {
+      const placeholders = idsLimpios.map(() => '(?, ?, ?)').join(', ');
+      const params = [];
+      idsLimpios.forEach(idCliente => {
+        params.push(id, idCliente, req.user.id_empleado);
+      });
+      const insResult = await executeQuery(
+        `INSERT INTO empleado_clientes_asignados (id_empleado, id_cliente, asignado_por) VALUES ${placeholders}`,
+        params
+      );
+      if (!insResult.success) return res.status(500).json({ error: insResult.error });
+    }
+
+    res.json({
+      success: true,
+      message: 'Cartera de clientes actualizada exitosamente',
+      data: { restringir_clientes: restringir === 1, total: idsLimpios.length }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 export async function getConductores(req, res) {
   try {
     const result = await executeQuery(

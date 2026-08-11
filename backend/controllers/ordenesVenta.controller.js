@@ -5,6 +5,7 @@ import { generarNotaVentaPDF } from '../utils/pdfGenerators/NotaVentaPDF.js';
 import { generarPedidoVentaPDF } from '../utils/pdfGenerators/pedidoVentaPDF.js';
 import { generarPDFSalida } from '../utils/pdf-generator.js';
 import { subirArchivoACloudinary } from '../services/cloudinary.service.js';
+import { clientePermitido } from '../utils/asignacionClientes.js';
 import { 
   verificarOrdenAprobada, 
   esVerificador, 
@@ -582,6 +583,11 @@ export async function createOrdenVenta(req, res) {
 
     if (!id_registrado_por) {
       return res.status(400).json({ success: false, error: 'Usuario no autenticado' });
+    }
+
+    // Restriccion de cartera: si el usuario esta restringido, solo sus clientes asignados
+    if (!(await clientePermitido(id_registrado_por, id_cliente))) {
+      return res.status(403).json({ success: false, error: 'Este cliente no forma parte de tu cartera asignada. Contacta al administrador para que te lo asigne.' });
     }
 
     // Validación anti-doble clic: buscar orden reciente

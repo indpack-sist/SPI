@@ -69,7 +69,8 @@ export const login = async (req, res) => {
       email: empleado.email,
       rol: empleado.rol,
       cargo: empleado.cargo,
-      dni: empleado.dni
+      dni: empleado.dni,
+      restringir_clientes: empleado.restringir_clientes
     };
 
     console.log('✅ Login exitoso. Enviando respuesta:', {
@@ -131,7 +132,7 @@ export const verificarToken = async (req, res) => {
 
     // 2) Consulta a BD. Un fallo de BD NO debe cerrar la sesión => 500 (reintentable)
     const result = await executeQuery(
-      'SELECT id_empleado, nombre_completo, email, rol, cargo, dni FROM empleados WHERE id_empleado = ? AND estado = "Activo"',
+      'SELECT id_empleado, nombre_completo, email, rol, cargo, dni, restringir_clientes FROM empleados WHERE id_empleado = ? AND estado = "Activo"',
       [decoded.id_empleado]
     );
 

@@ -1,6 +1,6 @@
 import { executeQuery } from '../config/database.js';
 import { validarRUC, validarDNI } from '../services/api-validation.service.js';
-import { empleadoRestringido, ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
+import { ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
 
 const ATENCION_PLACEHOLDERS = ESTADOS_ATENCION.map(() => '?').join(', ');
 
@@ -312,10 +312,11 @@ export async function createCliente(req, res) {
       );
     }
 
-    // Auto-asignacion: si un comercial/vendedor restringido registra el cliente (primer contacto),
-    // el cliente entra automaticamente a su cartera.
+    // Auto-asignacion: un Comercial/Ventas queda como dueño de todo cliente que registra
+    // (primer contacto), este o no restringido. Asi, al activar la restriccion luego, sus
+    // clientes ya estan en su cartera. El vinculo es inofensivo mientras no este restringido.
     const idRegistrador = req.user?.id_empleado;
-    if (idRegistrador && await empleadoRestringido(idRegistrador)) {
+    if (idRegistrador && ['Comercial', 'Ventas'].includes(req.user?.rol)) {
       await executeQuery(
         `INSERT IGNORE INTO empleado_clientes_asignados (id_empleado, id_cliente, asignado_por) VALUES (?, ?, ?)`,
         [idRegistrador, idCliente, idRegistrador]

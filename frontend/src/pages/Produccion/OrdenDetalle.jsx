@@ -16,6 +16,25 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import ModalNuevaIncidencia from '../Calidad/ModalNuevaIncidencia';
 
+// Extrae las medidas numéricas de un nombre de producto.
+// Ej: "LÁMINA BURBUPACK 0.36 X 0.56 MTS" -> [0.36, 0.56]
+//     "ROLLO BURBUPACK 0.36 X 200 MTS"   -> [0.36, 200]
+const extraerMedidas = (nombre) => {
+  if (!nombre) return [];
+  const matches = nombre.toUpperCase().match(/\d+(?:[.,]\d+)?/g);
+  return matches ? matches.map(m => parseFloat(m.replace(',', '.'))) : [];
+};
+
+// Un rollo coincide con la lámina si su ANCHO (la medida más pequeña del rollo,
+// ya que el largo suele ser 200 MTS) es una de las medidas de la lámina.
+const rolloCoincideConLamina = (nombreLamina, nombreRollo) => {
+  const medidasLamina = extraerMedidas(nombreLamina);
+  const medidasRollo = extraerMedidas(nombreRollo);
+  if (medidasLamina.length === 0 || medidasRollo.length === 0) return true;
+  const anchoRollo = Math.min(...medidasRollo);
+  return medidasLamina.some(m => Math.abs(m - anchoRollo) < 0.001);
+};
+
 function OrdenDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -398,7 +417,8 @@ function OrdenDetalle() {
     const nombreInsumo = insumo.nombre.toUpperCase();
 
     if (nombreProd.includes('LÁMINA') || nombreProd.includes('LAMINA')) {
-        return nombreInsumo.includes('ROLLO BURBUPACK');
+        if (!nombreInsumo.includes('ROLLO BURBUPACK')) return false;
+        return rolloCoincideConLamina(nombreProd, nombreInsumo);
     }
 
     if (nombreProd.includes('ESQUINERO')) {

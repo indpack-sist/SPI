@@ -686,7 +686,8 @@ export async function createOrden(req, res) {
       cantidad_unidades,
       id_supervisor,
       observaciones,
-      insumos, 
+      insumos,
+      rollos,
       id_orden_venta_origen,
       turno,
       maquinista,
@@ -826,9 +827,24 @@ export async function createOrden(req, res) {
     }
     
     const idOrden = ordenResult.data.insertId;
-    
-    if (recetaCalculada.length > 0) {
-      const queries = recetaCalculada.map(item => ({
+
+    // Consumo previsto: insumos por receta (porcentaje) + rollos seleccionados para láminas.
+    // Los rollos se guardan con cantidad 0 porque la cantidad real se registra en producción.
+    const provisionales = recetaCalculada.map(item => ({
+      id_insumo: item.id_insumo,
+      cantidad_requerida: item.cantidad_requerida
+    }));
+
+    if (rollos && Array.isArray(rollos) && rollos.length > 0) {
+      for (const rollo of rollos) {
+        if (rollo && rollo.id_insumo && !provisionales.find(p => p.id_insumo == rollo.id_insumo)) {
+          provisionales.push({ id_insumo: rollo.id_insumo, cantidad_requerida: 0 });
+        }
+      }
+    }
+
+    if (provisionales.length > 0) {
+      const queries = provisionales.map(item => ({
         sql: `INSERT INTO op_recetas_provisionales (id_orden, id_insumo, cantidad_requerida) VALUES (?, ?, ?)`,
         params: [idOrden, item.id_insumo, item.cantidad_requerida]
       }));

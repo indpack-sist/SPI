@@ -9,6 +9,27 @@ import Alert from '../../components/UI/Alert';
 import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 
+// Extrae las medidas numéricas de un nombre de producto.
+// Ej: "LÁMINA BURBUPACK 0.36 X 0.56 MTS" -> [0.36, 0.56]
+//     "ROLLO BURBUPACK 0.36 X 200 MTS"   -> [0.36, 200]
+const extraerMedidas = (nombre) => {
+  if (!nombre) return [];
+  const matches = nombre.toUpperCase().match(/\d+(?:[.,]\d+)?/g);
+  return matches ? matches.map(m => parseFloat(m.replace(',', '.'))) : [];
+};
+
+// Un rollo coincide con la lámina si su ANCHO (la medida más pequeña del rollo,
+// ya que el largo suele ser 200 MTS) es una de las medidas de la lámina.
+// Ej: LÁMINA 0.36 X 0.56 -> aceptan ROLLO 0.36 X 200 y ROLLO 0.56 X 200.
+const rolloCoincideConLamina = (nombreLamina, nombreRollo) => {
+  const medidasLamina = extraerMedidas(nombreLamina);
+  const medidasRollo = extraerMedidas(nombreRollo);
+  // Si no podemos interpretar medidas, no filtramos (mostramos el rollo).
+  if (medidasLamina.length === 0 || medidasRollo.length === 0) return true;
+  const anchoRollo = Math.min(...medidasRollo);
+  return medidasLamina.some(m => Math.abs(m - anchoRollo) < 0.001);
+};
+
 function CrearOrden() {
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -27,9 +48,14 @@ function CrearOrden() {
   
   const [unidadMedidaSeleccionada, setUnidadMedidaSeleccionada] = useState('');
 
-  const [modoReceta, setModoReceta] = useState('porcentaje'); 
+  const [modoReceta, setModoReceta] = useState('porcentaje');
   const [listaInsumos, setListaInsumos] = useState([]);
   const [modalAgregarInsumo, setModalAgregarInsumo] = useState(false);
+
+  // Rollos seleccionados para láminas (solo selección; la cantidad se registra en producción)
+  const [listaRollos, setListaRollos] = useState([]);
+  const [modalAgregarRollo, setModalAgregarRollo] = useState(false);
+  const [rolloSeleccionado, setRolloSeleccionado] = useState('');
 
   const [formData, setFormData] = useState({
     numero_orden: '', 
@@ -120,6 +146,16 @@ function CrearOrden() {
     return insumo.id_tipo_inventario === 2;
   });
 
+  // Rollos disponibles para la lámina seleccionada, filtrados por medidas.
+  const productoLaminaSeleccionado = productosTerminados.find(p => p.id_producto == formData.id_producto_terminado);
+  const rollosFiltrados = (esProductoLamina && productoLaminaSeleccionado)
+    ? insumosDisponibles.filter(insumo => {
+        const nombreInsumo = insumo.nombre.toUpperCase();
+        return nombreInsumo.includes('ROLLO BURBUPACK')
+          && rolloCoincideConLamina(productoLaminaSeleccionado.nombre, insumo.nombre);
+      })
+    : [];
+
   useEffect(() => {
     cargarDatos();
     generarSiguienteCorrelativo(); 
@@ -192,6 +228,7 @@ function CrearOrden() {
     setUnidadMedidaSeleccionada(producto.unidad_medida || 'UND');
     setMostrarDropdown(false);
     setListaInsumos([]);
+    setListaRollos([]);
   };
 
   const handleLimpiarProducto = () => {
@@ -199,7 +236,8 @@ function CrearOrden() {
     setBusquedaProducto('');
     setUnidadMedidaSeleccionada('');
     setListaInsumos([]);
-    setMostrarDropdown(true); 
+    setListaRollos([]);
+    setMostrarDropdown(true);
     setTimeout(() => {
         if (dropdownRef.current) {
             const input = dropdownRef.current.querySelector('input');
@@ -248,6 +286,34 @@ function CrearOrden() {
     setListaInsumos(listaInsumos.filter(i => i.id_insumo != idInsumo));
   };
 
+  const agregarRollo = () => {
+    if (!rolloSeleccionado) return;
+    const rollo = insumosDisponibles.find(i => i.id_producto == rolloSeleccionado);
+    if (!rollo) return;
+
+    if (listaRollos.find(r => r.id_insumo == rolloSeleccionado)) {
+      setError('Ese rollo ya está en la lista');
+      return;
+    }
+
+    setListaRollos([
+      ...listaRollos,
+      {
+        id_insumo: rollo.id_producto,
+        nombre: rollo.nombre,
+        codigo: rollo.codigo,
+        unidad_medida: rollo.unidad_medida,
+        stock_actual: parseFloat(rollo.stock_actual)
+      }
+    ]);
+    setRolloSeleccionado('');
+    setModalAgregarRollo(false);
+  };
+
+  const eliminarRollo = (idInsumo) => {
+    setListaRollos(listaRollos.filter(r => r.id_insumo != idInsumo));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -292,6 +358,12 @@ function CrearOrden() {
             id_insumo: i.id_insumo,
             porcentaje: i.porcentaje
         }));
+      }
+
+      // Para láminas: se envían los rollos seleccionados como consumo previsto.
+      // La cantidad real de consumo se registra durante la producción.
+      if (esProductoLamina && listaRollos.length > 0) {
+        payload.rollos = listaRollos.map(r => ({ id_insumo: r.id_insumo }));
       }
 
       const response = await ordenesProduccionAPI.create(payload);
@@ -759,6 +831,71 @@ function CrearOrden() {
             </div>
         )}
 
+        {esProductoLamina && formData.id_producto_terminado && (
+            <div className="card">
+                <div className="card-header flex justify-between items-center">
+                    <div>
+                        <h2 className="card-title">Rollos a Consumir</h2>
+                        <p className="text-xs text-muted mt-1">
+                            Solo se muestran los rollos cuyo ancho coincide con las medidas de la lámina.
+                            La cantidad consumida se registra durante la producción.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => { setRolloSeleccionado(''); setModalAgregarRollo(true); }}
+                    >
+                        <Plus size={16} /> Agregar Rollo
+                    </button>
+                </div>
+
+                <div className="table-container">
+                    <table className="table table-mobile">
+                        <thead>
+                            <tr>
+                                <th>Rollo</th>
+                                <th className="text-right">Stock</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {listaRollos.length === 0 ? (
+                                <tr>
+                                    <td colSpan="3" className="text-center py-4 text-muted">
+                                        No hay rollos seleccionados. Puede agregarlos aquí o durante la producción.
+                                    </td>
+                                </tr>
+                            ) : (
+                                listaRollos.map(item => (
+                                    <tr key={item.id_insumo}>
+                                        <td data-label="Rollo">
+                                            <div className="font-medium">{item.codigo}</div>
+                                            <div className="text-xs text-muted">{item.nombre}</div>
+                                        </td>
+                                        <td data-label="Stock" className="text-right">
+                                            <span className={item.stock_actual > 0 ? 'text-success' : 'text-danger'}>
+                                                {item.stock_actual.toFixed(2)} {item.unidad_medida}
+                                            </span>
+                                        </td>
+                                        <td data-label="">
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm btn-danger p-1"
+                                                onClick={() => eliminarRollo(item.id_insumo)}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
+
         <div className="flex flex-col sm:flex-row gap-2 sm:justify-end mt-4">
           <button
             type="button"
@@ -831,11 +968,59 @@ function CrearOrden() {
           <button type="button" className="btn btn-outline" onClick={() => setModalAgregarInsumo(false)}>
             Cancelar
           </button>
-          <button 
-            type="button" 
-            className="btn btn-primary" 
+          <button
+            type="button"
+            className="btn btn-primary"
             onClick={agregarInsumoLista}
             disabled={!nuevoInsumo.id_insumo || !nuevoInsumo.porcentaje}
+          >
+            Agregar
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={modalAgregarRollo}
+        onClose={() => setModalAgregarRollo(false)}
+        title="Agregar Rollo a Consumir"
+        size="md"
+      >
+        <div className="form-group">
+          <label className="form-label">Rollo (filtrado por medidas de la lámina) *</label>
+          <select
+            className="form-select"
+            value={rolloSeleccionado}
+            onChange={(e) => setRolloSeleccionado(e.target.value)}
+          >
+            <option value="">Seleccione...</option>
+            {rollosFiltrados
+              .filter(r => !listaRollos.find(lr => lr.id_insumo == r.id_producto))
+              .map(rollo => (
+                <option key={rollo.id_producto} value={rollo.id_producto}>
+                  {rollo.nombre} - Stock: {parseFloat(rollo.stock_actual).toFixed(2)}
+                </option>
+              ))}
+          </select>
+          {rollosFiltrados.length === 0 ? (
+            <small className="text-xs text-danger block mt-1">
+              No se encontraron rollos que coincidan con las medidas de esta lámina.
+            </small>
+          ) : (
+            <small className="text-xs text-blue-600 block mt-1">
+              Mostrando solo rollos cuyo ancho coincide con las medidas de la lámina.
+            </small>
+          )}
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <button type="button" className="btn btn-outline" onClick={() => setModalAgregarRollo(false)}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={agregarRollo}
+            disabled={!rolloSeleccionado}
           >
             Agregar
           </button>

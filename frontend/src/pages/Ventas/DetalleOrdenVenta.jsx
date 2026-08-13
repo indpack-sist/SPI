@@ -1997,7 +1997,7 @@ function DetalleOrdenVenta() {
                   <Lock size={12} className="mr-1"/> Reserva Parcial
                 </span>
               )}
-              {orden.facturado_sunat === 1 && (
+              {verFinanzas && orden.facturado_sunat === 1 && (
                 <span className="badge badge-sm bg-emerald-600 text-white border-emerald-700 ml-2" title="Facturado en SUNAT">
                   <BadgeCheck size={12} className="mr-1"/> SUNAT
                 </span>
@@ -2835,6 +2835,7 @@ function DetalleOrdenVenta() {
         )}
 
         {/* Documentos Adicionales */}
+        {verFinanzas && (
         <div className="card h-full">
             <div className="card-header">
                 <h2 className="card-title"><FileText size={20} /> Documentos Adicionales</h2>
@@ -3021,6 +3022,7 @@ function DetalleOrdenVenta() {
                 })()}
             </div>
         </div>
+        )}
 
         <div className="card h-full">
             <div className="card-header flex justify-between items-center">
@@ -3339,7 +3341,7 @@ function DetalleOrdenVenta() {
                              ) : <span className="text-xs text-gray-400">—</span>;
                            }
                          }] : []),
-                         {
+                         ...(verFinanzas ? [{
                            header: 'Documentos',
                            accessor: 'documentos',
                            width: '200px',
@@ -3385,7 +3387,7 @@ function DetalleOrdenVenta() {
                                </div>
                              );
                            }
-                         },
+                         }] : []),
                          {
                            header: 'Acciones',
                            accessor: 'id_salida',

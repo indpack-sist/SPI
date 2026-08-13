@@ -38,6 +38,7 @@ import Loading from '../../components/UI/Loading';
 import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import { ordenesVentaAPI, tipoCambioAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
@@ -145,7 +146,10 @@ const FilterCheckboxGroup = memo(({ label, options, selectedValues, onChange }) 
 
 function OrdenesVenta() {
   const navigate = useNavigate();
-  
+  const { tienePermiso } = usePermisos();
+  const verFinanzas = tienePermiso('verFinanzasVentas');
+  const soloLectura = !verFinanzas;
+
   const [ordenes, setOrdenes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isFiltering, setIsFiltering] = useState(false);
@@ -795,6 +799,32 @@ function OrdenesVenta() {
     }
   ];
 
+  // Para roles sin acceso financiero (Calidad/Supervisor): se ocultan las columnas
+  // de montos/pagos/SUNAT y en Acciones solo queda "Ver" (sin editar ni PDF valorizado).
+  const columnasFinancieras = ['total', 'estado_pago', 'facturado_sunat'];
+  const columnasVisibles = verFinanzas
+    ? columns
+    : columns
+        .filter((c) => !columnasFinancieras.includes(c.accessor))
+        .map((c) =>
+          c.accessor === 'id_orden_venta'
+            ? {
+                ...c,
+                render: (value) => (
+                  <div className="flex gap-1 justify-center">
+                    <button
+                      className="btn btn-xs btn-primary p-1.5"
+                      onClick={(e) => { e.stopPropagation(); handleNavegaDetalle(value); }}
+                      title="Ver"
+                    >
+                      <Eye size={14} />
+                    </button>
+                  </div>
+                )
+              }
+            : c
+        );
+
   return (
     <div className="p-4 md:p-6 page-ordenes-venta">
       <style dangerouslySetInnerHTML={{__html: `
@@ -847,20 +877,22 @@ function OrdenesVenta() {
               </h1>
               <p className="text-[0.7rem] text-wire uppercase tracking-[0.2em] mt-1">Gestión de operaciones comerciales</p>
             </div>
-            <div className="flex gap-3">
-              <button 
-                className="btn btn-outline border-steel text-mist font-black text-sm tracking-widest h-12 px-6 shadow-xl" 
-                onClick={() => navigate('/ventas/ordenes/verificacion')}
-              >
-                <Shield size={20} /> VERIFICACIÓN
-              </button>
-              <button 
-                className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 active:scale-95 transition-all" 
-                onClick={() => navigate('/ventas/ordenes/nueva')}
-              >
-                <Plus size={22} /> NUEVA ORDEN
-              </button>
-            </div>
+            {!soloLectura && (
+              <div className="flex gap-3">
+                <button
+                  className="btn btn-outline border-steel text-mist font-black text-sm tracking-widest h-12 px-6 shadow-xl"
+                  onClick={() => navigate('/ventas/ordenes/verificacion')}
+                >
+                  <Shield size={20} /> VERIFICACIÓN
+                </button>
+                <button
+                  className="btn btn-primary font-black text-sm tracking-widest h-12 px-8 shadow-2xl shadow-primary/30 active:scale-95 transition-all"
+                  onClick={() => navigate('/ventas/ordenes/nueva')}
+                >
+                  <Plus size={22} /> NUEVA ORDEN
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col items-end gap-1 shrink-0 pt-1">
@@ -877,7 +909,7 @@ function OrdenesVenta() {
         {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
         {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
-        {estadisticas && (
+        {verFinanzas && estadisticas && (
           <div className="flex flex-col items-center mb-6">
             <button
   onClick={() => setMostrarEstadisticas(!mostrarEstadisticas)}
@@ -952,18 +984,22 @@ function OrdenesVenta() {
                 <FilterCheckboxGroup label="Estado Logístico" selectedValues={filtroEstado} onChange={setFiltroEstado} options={[
                   { label: 'En Espera', value: 'En Espera' }, { label: 'En Proceso', value: 'En Proceso' }, { label: 'Atendido por Producción', value: 'Atendido por Producción' }, { label: 'Despacho Parcial', value: 'Despacho Parcial' }, { label: 'Despachada', value: 'Despachada' }, { label: 'Entregada', value: 'Entregada' }, { label: 'Cancelada', value: 'Cancelada' }
                 ]} />
-                <FilterCheckboxGroup label="Estado Pago" selectedValues={filtroEstadoPago} onChange={setFiltroEstadoPago} options={[
-                  { label: 'Sin Pagar', value: 'Pendiente' }, { label: 'Pago Parcial', value: 'Parcial' }, { label: 'Pagado', value: 'Pagado' }
-                ]} />
+                {verFinanzas && (
+                  <FilterCheckboxGroup label="Estado Pago" selectedValues={filtroEstadoPago} onChange={setFiltroEstadoPago} options={[
+                    { label: 'Sin Pagar', value: 'Pendiente' }, { label: 'Pago Parcial', value: 'Parcial' }, { label: 'Pagado', value: 'Pagado' }
+                  ]} />
+                )}
                 <FilterCheckboxGroup label="Verificación" selectedValues={filtroVerificacion} onChange={setFiltroVerificacion} options={[
                   { label: 'Aprobadas', value: 'Aprobada' }, { label: 'Pendientes', value: 'Pendiente' }, { label: 'Rechazadas', value: 'Rechazada' }
                 ]} />
                 <FilterCheckboxGroup label="Documento" selectedValues={filtroTipoComprobante} onChange={setFiltroTipoComprobante} options={[
                   { label: 'Facturas', value: 'Factura' }, { label: 'Notas de Venta', value: 'Nota de Venta' }, { label: 'Sin Comprobante', value: 'Sin Comprobante' }
                 ]} />
-                <FilterCheckboxGroup label="Estado SUNAT" selectedValues={filtroEstadoSunat} onChange={setFiltroEstadoSunat} options={[
-                  { label: 'Facturado', value: 'Facturado' }, { label: 'Pendiente', value: 'Pendiente' }, { label: 'No amerita', value: 'No Amerita' }
-                ]} />
+                {verFinanzas && (
+                  <FilterCheckboxGroup label="Estado SUNAT" selectedValues={filtroEstadoSunat} onChange={setFiltroEstadoSunat} options={[
+                    { label: 'Facturado', value: 'Facturado' }, { label: 'Pendiente', value: 'Pendiente' }, { label: 'No amerita', value: 'No Amerita' }
+                  ]} />
+                )}
                 <FilterCheckboxGroup label="Vendedor" selectedValues={filtroVendedor} onChange={setFiltroVendedor} options={[
                   { label: 'JOHANNA VALLE TORRES', value: '12' }, { label: 'YESSICA GABY ORDOÑEZ PEREZ', value: '13' }, { label: 'VALESHKA BETSABETH LAZARO COLMENARES', value: '20' }
                 ]} />
@@ -991,7 +1027,7 @@ function OrdenesVenta() {
               </div>
             )}
             <div className="table-container">
-              <Table columns={columns} data={currentItems} emptyMessage="No hay registros con los filtros aplicados" onRowClick={(row) => handleNavegaDetalle(row.id_orden_venta)} />
+              <Table columns={columnasVisibles} data={currentItems} emptyMessage="No hay registros con los filtros aplicados" onRowClick={(row) => handleNavegaDetalle(row.id_orden_venta)} />
             </div>
           </div>
 

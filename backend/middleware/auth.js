@@ -24,7 +24,8 @@ const PERMISOS_POR_ROL = {
       listasPrecios: true,
       reportes: true,
       seguimientoVentas: true,
-      verPrecios: true
+      verPrecios: true,
+      verFinanzasVentas: true
     },
     api: {
       dashboard: true,
@@ -66,14 +67,15 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       incidencias: true,
       cotizaciones: false,
-      ordenesVenta: false,
+      ordenesVenta: true,
       seguimientoVentas: false,
       compras: true,
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
       reportes: false,
-      verPrecios: false
+      verPrecios: false,
+      verFinanzasVentas: false
     },
     api: {
       dashboard: false,
@@ -90,7 +92,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       incidencias: true,
       cotizaciones: false,
-      ordenesVenta: false,
+      ordenesVenta: true,
       seguimientoVentas: false,
       compras: true,
       cuentasPago: false,
@@ -119,7 +121,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: true,
-      reportes: false
+      reportes: false,
+      verFinanzasVentas: true
     },
     api: {
       dashboard: false,
@@ -163,7 +166,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: true,
-      reportes: false
+      reportes: false,
+      verFinanzasVentas: true
     },
     api: {
       dashboard: false,
@@ -249,13 +253,14 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       incidencias: true,
       cotizaciones: false,
-      ordenesVenta: false,
+      ordenesVenta: true,
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
       listasPrecios: false,
       reportes: false,
-      verPrecios: false
+      verPrecios: false,
+      verFinanzasVentas: false
     },
     api: {
       dashboard: false,
@@ -272,7 +277,7 @@ const PERMISOS_POR_ROL = {
       ordenesProduccion: true,
       incidencias: true,
       cotizaciones: false,
-      ordenesVenta: false,
+      ordenesVenta: true,
       compras: false,
       cuentasPago: false,
       pagosCobranzas: false,
@@ -475,7 +480,8 @@ const PERMISOS_POR_ROL = {
       cuentasPago: true,
       pagosCobranzas: true,
       listasPrecios: false,
-      reportes: true
+      reportes: true,
+      verFinanzasVentas: true
     },
     api: {
       dashboard: false,
@@ -520,7 +526,8 @@ const PERMISOS_POR_ROL = {
       pagosCobranzas: true,
       listasPrecios: false,
       reportes: true,
-      verPrecios: true
+      verPrecios: true,
+      verFinanzasVentas: true
     },
     api: {
       dashboard: true,

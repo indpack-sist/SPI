@@ -15,12 +15,17 @@ import Modal from '../../components/UI/Modal';
 import ModalValidacionSunat from '../../components/Ventas/ModalValidacionSunat';
 import ModalVerificacionOC from '../../components/Ventas/ModalVerificacionOC';
 import { ordenesVentaAPI, salidasAPI, clientesAPI, cuentasPagoAPI, archivosAPI } from '../../config/api';
+import { usePermisos } from '../../context/PermisosContext';
 
 const TC_SESSION_KEY = 'indpack_tipo_cambio';
 
 function DetalleOrdenVenta() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { tienePermiso } = usePermisos();
+  // Calidad/Supervisor: acceso de solo lectura sin datos financieros.
+  const verFinanzas = tienePermiso('verFinanzasVentas');
+  const soloLectura = !verFinanzas;
   
   const getFechaLocal = () => {
     const fecha = new Date();
@@ -377,22 +382,28 @@ function DetalleOrdenVenta() {
       setLoading(true);
       setError(null);
       
+      // Fallback neutro para roles de solo lectura (Calidad/Supervisor) o si algún
+      // endpoint financiero responde 403; así la página no se rompe.
+      const vacio = (data) => Promise.resolve({ data: { success: true, data } });
+
       const [ordenRes, pagosRes, resumenRes, salidasRes, cuentasRes, facturasAnuladasRes, documentosRes, facturasRes] = await Promise.all([
         ordenesVentaAPI.getById(id),
-        ordenesVentaAPI.getPagos(id),
-        ordenesVentaAPI.getResumenPagos(id),
+        verFinanzas ? ordenesVentaAPI.getPagos(id).catch(() => vacio([])) : vacio([]),
+        verFinanzas ? ordenesVentaAPI.getResumenPagos(id).catch(() => vacio(null)) : vacio(null),
         ordenesVentaAPI.getSalidas(id).catch(() => ({ data: { success: true, data: [] } })),
-        cuentasPagoAPI.getAll({ estado: 'Activo' }),
-        ordenesVentaAPI.getHistorialFacturasAnuladas(id).catch(() => ({ data: { success: true, data: [] } })),
+        verFinanzas ? cuentasPagoAPI.getAll({ estado: 'Activo' }).catch(() => vacio([])) : vacio([]),
+        verFinanzas ? ordenesVentaAPI.getHistorialFacturasAnuladas(id).catch(() => ({ data: { success: true, data: [] } })) : vacio([]),
         ordenesVentaAPI.getDocumentosAdicionales(id).catch(() => ({ data: { success: true, data: [] } })),
-        ordenesVentaAPI.getFacturas(id).catch(() => ({ data: { success: true, data: { facturas: [], resumen: null } } }))
+        verFinanzas ? ordenesVentaAPI.getFacturas(id).catch(() => ({ data: { success: true, data: { facturas: [], resumen: null } } })) : vacio({ facturas: [], resumen: null })
       ]);
-      
+
       if (ordenRes.data.success) {
         setOrden(ordenRes.data.data);
-        const creditoRes = await clientesAPI.getEstadoCredito(ordenRes.data.data.id_cliente);
-        if (creditoRes.data.success) {
-          setEstadoCredito(creditoRes.data.data);
+        if (verFinanzas) {
+          const creditoRes = await clientesAPI.getEstadoCredito(ordenRes.data.data.id_cliente).catch(() => null);
+          if (creditoRes?.data?.success) {
+            setEstadoCredito(creditoRes.data.data);
+          }
         }
       }
       
@@ -1147,12 +1158,13 @@ function DetalleOrdenVenta() {
   const handleVerPDFSalida = async (idSalida, numeroSalida) => {
     try {
       setDescargandoPDF(`ver-${idSalida}`);
-      // Vista en pantalla: variante valorizada (con precios) para poder cruzar contra la factura.
-      const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida, true);
+      // Vista en pantalla: variante valorizada (con precios) solo para roles con acceso
+      // financiero; Calidad/Supervisor ven la guía sin precios.
+      const response = await ordenesVentaAPI.descargarPDFDespacho(id, idSalida, verFinanzas);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const numeroSalidaFormat = numeroSalida ? `SAL-${String(numeroSalida).padStart(6, '0')}` : idSalida;
-      setVisorArchivo({ open: true, url, tipo: 'pdf', titulo: `Constancia de Salida (valorizada) – ${numeroSalidaFormat}`, isObjectUrl: true });
+      setVisorArchivo({ open: true, url, tipo: 'pdf', titulo: `Constancia de Salida${verFinanzas ? ' (valorizada)' : ''} – ${numeroSalidaFormat}`, isObjectUrl: true });
     } catch (err) {
       console.error(err);
       setError('Error al cargar el PDF de la guía de salida');
@@ -1849,6 +1861,12 @@ function DetalleOrdenVenta() {
     }
   ];
 
+  // Calidad/Supervisor: sin precio unitario, margen, subtotal ni acciones (mutaciones).
+  const columnasProductoFinancieras = ['precio_unitario', 'descuento_porcentaje', 'valor_venta', 'id_producto'];
+  const columnsDetalleVisibles = verFinanzas
+    ? columns
+    : columns.filter((c) => !columnasProductoFinancieras.includes(c.accessor));
+
   const columnsPagos = [
     {
       header: 'N° Pago',
@@ -2024,6 +2042,7 @@ function DetalleOrdenVenta() {
           </div>
         </div>
         
+        {!soloLectura && (
         <div className="flex gap-2">
           {orden.estado_verificacion === 'Aprobada' && orden.estado !== 'Cancelada' && orden.tipo_comprobante === 'Factura' && (
             (facturas.length > 0 && resumenFacturacion && resumenFacturacion.saldo_pendiente <= 1) ? (
@@ -2134,13 +2153,14 @@ function DetalleOrdenVenta() {
             </>
           )}
         </div>
+        )}
       </div>
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
 
       {/* Alerta de Tipo de Cambio 1 en USD */}
-      {orden.moneda === 'USD' && parseFloat(orden.tipo_cambio) === 1 && (
+      {verFinanzas && orden.moneda === 'USD' && parseFloat(orden.tipo_cambio) === 1 && (
         <div className="alert alert-error mb-6 border-2 border-red-500 bg-red-50 animate-pulse shadow-lg">
           <div className="flex items-center gap-4">
             <div className="bg-red-500 text-white p-2 rounded-full shadow-md animate-bounce">
@@ -2164,7 +2184,7 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      {esUSD && (
+      {verFinanzas && esUSD && (
         <div className="rounded-lg mb-4 p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
           style={{ 
             background: tipoCambio ? 'var(--accent-dim, rgba(234,179,8,0.08))' : 'var(--bg-tertiary, #f9fafb)',
@@ -2216,7 +2236,7 @@ function DetalleOrdenVenta() {
         </div>
       )}
 
-      {sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && (
+      {!soloLectura && sinComprobanteAsignado && orden.estado_verificacion === 'Aprobada' && (
         <div className="alert alert-warning mb-4">
           <AlertTriangle size={20} />
           <div className="flex-1">
@@ -2284,21 +2304,23 @@ function DetalleOrdenVenta() {
                     </p>
                   )}
 
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      className="btn btn-warning"
-                      onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
-                    >
-                      <Edit size={18} /> Corregir y Editar Orden
-                    </button>
-                    <button
-                      className="btn btn-outline border-orange-300 hover:bg-orange-50"
-                      onClick={handleReenviarVerificacion}
-                      disabled={procesando}
-                    >
-                      <RefreshCw size={18} /> Reenviar para Verificación
-                    </button>
-                  </div>
+                  {!soloLectura && (
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        className="btn btn-warning"
+                        onClick={() => navigate(`/ventas/ordenes/${id}/editar`)}
+                      >
+                        <Edit size={18} /> Corregir y Editar Orden
+                      </button>
+                      <button
+                        className="btn btn-outline border-orange-300 hover:bg-orange-50"
+                        onClick={handleReenviarVerificacion}
+                        disabled={procesando}
+                      >
+                        <RefreshCw size={18} /> Reenviar para Verificación
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2360,17 +2382,17 @@ function DetalleOrdenVenta() {
               
               <div className="text-right">
                 <p className="text-sm uppercase font-semibold text-muted mb-2">Prioridad</p>
-                <button 
+                <button
                   className={`badge ${prioridadConfig.clase} text-lg px-4 py-2`}
                   onClick={() => setModalPrioridadOpen(true)}
-                  disabled={orden.estado === 'Cancelada' || orden.estado === 'Entregada'}
+                  disabled={soloLectura || orden.estado === 'Cancelada' || orden.estado === 'Entregada'}
                 >
                   {prioridadConfig.icono} {orden.prioridad}
                 </button>
               </div>
             </div>
             
-            {orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
+            {!soloLectura && orden.estado !== 'Cancelada' && orden.estado !== 'Entregada' && (
               <div className="border-t border-gray-200 pt-4 mt-2">
                 <p className="text-xs font-bold uppercase text-muted mb-3">Cambiar Estado:</p>
                 <div className="flex gap-3 flex-wrap">
@@ -2450,6 +2472,7 @@ function DetalleOrdenVenta() {
             </div>
         </div>
 
+        {verFinanzas && (
         <div className="card h-full">
             <div className="card-header">
                 <h2 className="card-title"><DollarSign size={20} /> Condiciones Comerciales</h2>
@@ -2809,6 +2832,7 @@ function DetalleOrdenVenta() {
                 </div>
             </div>
         </div>
+        )}
 
         {/* Documentos Adicionales */}
         <div className="card h-full">
@@ -2818,7 +2842,7 @@ function DetalleOrdenVenta() {
             <div className="card-body space-y-3">
 
                 {/* Formulario agregar */}
-                {orden.estado !== 'Cancelada' && (
+                {!soloLectura && orden.estado !== 'Cancelada' && (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
                         <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Agregar documento</p>
                         <div className="flex gap-2 flex-wrap">
@@ -2945,7 +2969,7 @@ function DetalleOrdenVenta() {
                                                     {doc.registrado_por} · {new Date(doc.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                 </p>
                                             </div>
-                                            {orden.estado !== 'Cancelada' && (
+                                            {!soloLectura && orden.estado !== 'Cancelada' && (
                                                 <button
                                                     className="btn btn-xs btn-outline border-red-200 text-red-500 hover:bg-red-50 shrink-0"
                                                     onClick={() => handleEliminarDocumento(doc.id_documento)}
@@ -3001,14 +3025,16 @@ function DetalleOrdenVenta() {
         <div className="card h-full">
             <div className="card-header flex justify-between items-center">
                 <h2 className="card-title"><MapPin size={20} /> Entrega y Logística</h2>
-                <button 
-                  className="btn btn-xs btn-outline" 
-                  onClick={handleAbrirTransporte}
-                  title="Editar datos de transporte"
-                  disabled={orden.estado === 'Cancelada' || orden.estado_verificacion === 'Pendiente'}
-                >
-                  <Edit size={14} />
-                </button>
+                {!soloLectura && (
+                  <button
+                    className="btn btn-xs btn-outline"
+                    onClick={handleAbrirTransporte}
+                    title="Editar datos de transporte"
+                    disabled={orden.estado === 'Cancelada' || orden.estado_verificacion === 'Pendiente'}
+                  >
+                    <Edit size={14} />
+                  </button>
+                )}
             </div>
             <div className="card-body space-y-2">
                 <div>
@@ -3107,7 +3133,7 @@ function DetalleOrdenVenta() {
           <span className="badge badge-neutral">{orden.detalle.length} items</span>
         </div>
         <div className="card-body">
-          <Table columns={columns} data={orden.detalle} />
+          <Table columns={columnsDetalleVisibles} data={orden.detalle} />
         </div>
       </div>
 
@@ -3116,8 +3142,8 @@ function DetalleOrdenVenta() {
             <div className="card-header"><h3 className="card-title">Observaciones</h3></div>
             <div className="card-body">
                 <p className="whitespace-pre-wrap mb-4">{orden.observaciones || 'Sin observaciones.'}</p>
-                
-                {orden.comprobante_url && (
+
+                {verFinanzas && orden.comprobante_url && (
                     <div className="bg-green-50 p-3 rounded border border-green-200 flex justify-between items-center flex-wrap gap-2">
                         <div className="flex items-center gap-2 text-green-800">
                             <FileText size={20}/>
@@ -3154,6 +3180,7 @@ function DetalleOrdenVenta() {
             </div>
         </div>
 
+        {verFinanzas && (
         <div className={`card ml-auto w-full`}>
           <div className="card-header">
             <h3 className="card-title"><Calculator size={20} /> Totales</h3>
@@ -3232,6 +3259,7 @@ function DetalleOrdenVenta() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {salidas.length > 0 && (
@@ -3257,7 +3285,7 @@ function DetalleOrdenVenta() {
                            )
                          },
                          { header: 'Observaciones', accessor: 'observaciones' },
-                         {
+                         ...(verFinanzas ? [{
                            header: 'Factura (cruce)',
                            accessor: 'factura',
                            width: '180px',
@@ -3310,7 +3338,7 @@ function DetalleOrdenVenta() {
                                </div>
                              ) : <span className="text-xs text-gray-400">—</span>;
                            }
-                         },
+                         }] : []),
                          {
                            header: 'Documentos',
                            accessor: 'documentos',
@@ -3344,7 +3372,7 @@ function DetalleOrdenVenta() {
                                      </div>
                                    );
                                  })}
-                                 {row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
+                                 {!soloLectura && row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
                                    <button
                                      className="btn btn-xs btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                                      onClick={() => handleAbrirDocDespacho(row.id_salida)}
@@ -3418,24 +3446,24 @@ function DetalleOrdenVenta() {
                                      )}
                                    </button>
                                    </>
-                                 ) : (
-                                   <button 
-                                     className="btn btn-sm btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50" 
+                                 ) : (!soloLectura && (
+                                   <button
+                                     className="btn btn-sm btn-outline border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                                      onClick={() => {
                                        setSalidaSeleccionadaGI(val);
                                        setModalConfirmarGuiaInterna(true);
-                                     }} 
+                                     }}
                                      disabled={procesando}
                                      title="Generar Guía Interna para este despacho"
                                    >
                                      <ClipboardList size={14} className="mr-1"/> Generar GI
                                    </button>
-                                 )
+                                 ))
                                )}
 
-                               {row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
-                                 <button 
-                                   className="btn btn-sm btn-danger" 
+                               {!soloLectura && row.estado === 'Activo' && orden.estado !== 'Cancelada' && orden.estado_verificacion === 'Aprobada' && (
+                                 <button
+                                   className="btn btn-sm btn-danger"
                                    onClick={() => handleAnularDespacho(val)}
                                    disabled={procesando}
                                    title="Anular despacho"
@@ -3454,7 +3482,7 @@ function DetalleOrdenVenta() {
          </div>
       )}
 
-      {orden.estado_verificacion === 'Aprobada' && (
+      {verFinanzas && orden.estado_verificacion === 'Aprobada' && (
         <div className="mt-8 border-t-2 border-gray-100 pt-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700">
               <CreditCard size={24} /> Gestión de Cobranzas

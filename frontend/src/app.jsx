@@ -331,25 +331,25 @@ function App() {
                         } 
                       />
                       <Route 
-                        path="/ventas/ordenes/verificacion" 
+                        path="/ventas/ordenes/verificacion"
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
+                          <ProtectedRouteWithPermiso modulo="verFinanzasVentas">
                             <VerificarOrdenes />
                           </ProtectedRouteWithPermiso>
                         } 
                       />
                       <Route 
-                        path="/ventas/ordenes/nueva" 
+                        path="/ventas/ordenes/nueva"
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
+                          <ProtectedRouteWithPermiso modulo="verFinanzasVentas">
                             <NuevaOrdenVenta />
                           </ProtectedRouteWithPermiso>
                         } 
                       />
                       <Route 
-                        path="/ventas/ordenes/:id/editar" 
+                        path="/ventas/ordenes/:id/editar"
                         element={
-                          <ProtectedRouteWithPermiso modulo="ordenesVenta">
+                          <ProtectedRouteWithPermiso modulo="verFinanzasVentas">
                             <NuevaOrdenVenta />
                           </ProtectedRouteWithPermiso>
                         } 

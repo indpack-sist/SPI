@@ -25,7 +25,8 @@ export async function getAllProspectos(req, res) {
         e.nombre_completo AS empleado_asignado,
         c.razon_social    AS cliente_match_nombre,
         (SELECT COUNT(*) FROM prospecto_contactos pc WHERE pc.id_prospecto = p.id_prospecto) AS total_contactos,
-        (SELECT GROUP_CONCAT(pc.valor SEPARATOR ' / ') FROM prospecto_contactos pc
+        (SELECT GROUP_CONCAT(pc.valor ORDER BY (pc.valor_normalizado LIKE '9%') DESC, pc.id_contacto SEPARATOR ' / ')
+           FROM prospecto_contactos pc
            WHERE pc.id_prospecto = p.id_prospecto AND pc.tipo IN ('Telefono','Celular','Whatsapp')) AS telefonos,
         (SELECT GROUP_CONCAT(pc.valor SEPARATOR ' / ') FROM prospecto_contactos pc
            WHERE pc.id_prospecto = p.id_prospecto AND pc.tipo = 'Email') AS emails

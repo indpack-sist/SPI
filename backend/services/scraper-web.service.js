@@ -14,8 +14,10 @@ const TIMEOUT = 12000;
 const RUTAS_CONTACTO = ['', '/contacto', '/contacto.html', '/contactenos', '/nosotros', '/contact'];
 
 const RE_EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-// Móvil peruano (9########) y fijos con código; tolera separadores y prefijo +51.
-const RE_TEL = /(?:\+?51[\s.-]?)?(?:\(0?1\)[\s.-]?)?(?:9\d{2}|\d{1,2})[\s.-]?\d{3}[\s.-]?\d{2,4}/g;
+// Teléfonos peruanos plausibles: móvil 9######### (con +51 opcional) o fijo con
+// código de área entre paréntesis o con 0 inicial. Estricto A PROPÓSITO para NO
+// capturar cifras sueltas de la web (fechas, precios, IDs, códigos) como teléfono.
+const RE_TEL = /(?:\+?51[\s.\-]?)?(?:9\d{2}[\s.\-]?\d{3}[\s.\-]?\d{3}|\(0\d{1,2}\)[\s.\-]?\d{6,7}|0\d{1,2}[\s.\-]\d{6,7})/g;
 
 // Áreas/roles a los que suele pertenecer un teléfono o correo. Se detectan
 // por la etiqueta que rodea al número en la web (ej. "Ventas: 999...") o por
@@ -62,7 +64,7 @@ const REDES = {
 };
 
 // Descarta correos basura frecuentes en plantillas/CDN.
-const EMAIL_BASURA = /(sentry|wixpress|example\.com|@2x|\.png|\.jpg|\.gif|\.svg|domain\.com|email\.com|tuempresa)/i;
+const EMAIL_BASURA = /(sentry|wixpress|example\.com|ejemplo\.|@2x|\.png|\.jpg|\.gif|\.svg|domain\.com|email\.com|tuempresa|tucorreo|correo@)/i;
 
 function normalizarUrl(url) {
   if (!url) return null;
@@ -77,11 +79,13 @@ function normalizarUrl(url) {
 }
 
 function limpiarTelefono(t) {
-  const d = String(t).replace(/\D/g, '');
-  // Nos quedamos con teléfonos plausibles en Perú (9 dígitos móvil, 6-8 fijo, o con 51).
+  let d = String(t).replace(/\D/g, '');
+  if (d.length === 11 && d.startsWith('51')) d = d.slice(2); // quita prefijo país +51
+  // Móvil peruano: 9 dígitos empezando en 9 (el preferido como principal).
   if (d.length === 9 && d.startsWith('9')) return d;
-  if (d.length === 11 && d.startsWith('51')) return d.slice(2);
-  if (d.length >= 6 && d.length <= 8) return d;
+  // Fijo con código de área: 0 + código válido (no "00") → 8-9 dígitos.
+  // Rechazamos secuencias sueltas de 6-8 dígitos: son la fuente de la basura.
+  if ((d.length === 8 || d.length === 9) && d[0] === '0' && d[1] !== '0') return d;
   return null;
 }
 

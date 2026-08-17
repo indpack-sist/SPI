@@ -756,7 +756,11 @@ export default function Prospectos() {
                   {(() => {
                     // Correos primero (canal prioritario), luego teléfonos y el resto.
                     const orden = { Email: 0, Telefono: 1, Celular: 1, Whatsapp: 1, Web: 2, RedSocial: 3 };
-                    const cts = [...(detalle.contactos || [])].sort((a, b) => (orden[a.tipo] ?? 9) - (orden[b.tipo] ?? 9));
+                    const esMovil = (c) => /^9\d{8}$/.test(c.valor_normalizado || '');
+                    const cts = [...(detalle.contactos || [])].sort((a, b) => {
+                      const d = (orden[a.tipo] ?? 9) - (orden[b.tipo] ?? 9);
+                      return d !== 0 ? d : (esMovil(a) ? 0 : 1) - (esMovil(b) ? 0 : 1); // móvil primero
+                    });
                     const tieneTel = cts.some((c) => ['Telefono', 'Celular', 'Whatsapp'].includes(c.tipo));
                     const tieneEmail = cts.some((c) => c.tipo === 'Email');
                     if (cts.length === 0) {

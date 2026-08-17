@@ -50,8 +50,8 @@ export const menuConfig = [
   {
     title: 'Ventas',
     items: [
-      // Prospección / captación de leads. Por ahora exclusivo de Administrador.
-      { path: '/ventas/prospectos', icon: Radar, label: 'Prospección', modulo: 'prospectos', color: '#E8B84B', rolesIncluidos: ['Administrador'] },
+      // Prospección / captación de leads. Disponible para Administrador y Comercial.
+      { path: '/ventas/prospectos', icon: Radar, label: 'Prospección', modulo: 'prospectos', color: '#E8B84B', rolesIncluidos: ['Administrador', 'Comercial'] },
       { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
       { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },

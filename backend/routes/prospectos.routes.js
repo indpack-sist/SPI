@@ -16,7 +16,9 @@ import {
   crearJob,
   listarJobs,
   descubrirEmpresas,
+  descubrirTodo,
   enriquecerProspecto,
+  excluirProspecto,
 } from '../controllers/prospectos.controller.js';
 
 const router = express.Router();
@@ -29,6 +31,7 @@ router.get('/:id', getProspectoById);
 router.post('/', createProspecto);
 router.post('/ingesta-lista', ingestaLista);
 router.post('/descubrir', descubrirEmpresas);
+router.post('/descubrir-todo', descubrirTodo);
 router.post('/jobs', crearJob);
 router.post('/:id/enriquecer', enriquecerProspecto);
 
@@ -41,6 +44,7 @@ router.delete('/contactos/:id_contacto', deleteContacto);
 
 router.post('/:id/convertir', convertirACliente);
 router.patch('/:id/descartar', descartarProspecto);
+router.patch('/:id/excluir', excluirProspecto);
 router.delete('/:id', deleteProspecto);
 
 export default router;

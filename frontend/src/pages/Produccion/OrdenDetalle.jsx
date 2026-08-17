@@ -76,6 +76,7 @@ function OrdenDetalle() {
   const [modalFinalizar, setModalFinalizar] = useState(false);
   const [cantidadUnidadesFinal, setCantidadUnidadesFinal] = useState('');
   const [observacionesFinal, setObservacionesFinal] = useState('');
+  const [totalRealInsumos, setTotalRealInsumos] = useState('');
     
   const [modalParcial, setModalParcial] = useState(false);
   const [cantidadUnidadesParcial, setCantidadUnidadesParcial] = useState('');
@@ -592,13 +593,48 @@ function OrdenDetalle() {
   };
 
   const actualizarCantidadInsumoFinal = (id_insumo, valor) => {
-    setInsumosFinalesConsumo(prev => 
-      prev.map(item => 
-        item.id_insumo === id_insumo 
+    setInsumosFinalesConsumo(prev =>
+      prev.map(item =>
+        item.id_insumo === id_insumo
           ? { ...item, cantidad: valor }
           : item
       )
     );
+  };
+
+  // Reparte un total real de insumos entre los insumos de la receta según su
+  // porcentaje original (derivado de cantidad_requerida) y llena las cantidades
+  // adicionales del cierre. El usuario revisa el resultado antes de confirmar.
+  const distribuirTotalRealPorPorcentaje = () => {
+    const total = parseFloat(totalRealInsumos);
+    if (!total || total <= 0) {
+      setError('Ingrese un total de insumos reales válido (mayor a 0).');
+      return;
+    }
+
+    // Peso de cada insumo = su cantidad requerida planificada (el % de la receta).
+    const sumaRequerida = insumosFinalesConsumo.reduce(
+      (acc, item) => acc + (parseFloat(item.cantidad_requerida) || 0),
+      0
+    );
+
+    if (sumaRequerida <= 0) {
+      setError('No hay porcentajes de receta definidos para repartir el total.');
+      return;
+    }
+
+    setInsumosFinalesConsumo(prev =>
+      prev.map(item => {
+        const requerido = parseFloat(item.cantidad_requerida) || 0;
+        const porcentaje = requerido / sumaRequerida;
+        const objetivoTotal = total * porcentaje;
+        // Descuenta lo ya consumido en parciales para obtener solo el adicional del cierre.
+        const yaConsumido = parseFloat(item.cantidad_ya_consumida) || 0;
+        const adicional = Math.max(0, objetivoTotal - yaConsumido);
+        return { ...item, cantidad: parseFloat(adicional.toFixed(4)).toString() };
+      })
+    );
+    setError(null);
   };
 
   const abrirModalInsumo = () => {
@@ -806,6 +842,7 @@ function OrdenDetalle() {
         setMermas([]);
         setMostrarMermas(false);
         setInsumosFinalesConsumo([]);
+        setTotalRealInsumos('');
         cargarDatos();
       }
         
@@ -1066,6 +1103,7 @@ function OrdenDetalle() {
   };
 
   const totalInsumosReales = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0) + (parseFloat(item.cantidad_ya_consumida) || 0), 0);
+  const sumaRequeridaFinal = insumosFinalesConsumo.reduce((acc, item) => acc + (parseFloat(item.cantidad_requerida) || 0), 0);
   const totalMerma = mermas.reduce((acc, m) => acc + (parseFloat(m.cantidad) || 0), 0);
   const totalKilosProd = kilosFinalesCalculados; 
   const diferenciaMasa = totalInsumosReales - (totalKilosProd + totalMerma);
@@ -2032,6 +2070,11 @@ function OrdenDetalle() {
                           placeholder="0.00"
                           required={mermas.length > 0}
                         />
+                        {parseFloat(merma.cantidad) > 0 && kilosParcialCalculados > 0 && (
+                          <small className="text-xs text-red-600 font-medium block mt-1">
+                            {((parseFloat(merma.cantidad) / kilosParcialCalculados) * 100).toFixed(2)}% del total de insumos
+                          </small>
+                        )}
                       </div>
 
                       <div className="col-span-3">
@@ -2154,7 +2197,7 @@ function OrdenDetalle() {
 
       <Modal
         isOpen={modalFinalizar}
-        onClose={() => { setModalFinalizar(false); setFinalizarVieneDeParcial(false); }}
+        onClose={() => { setModalFinalizar(false); setFinalizarVieneDeParcial(false); setTotalRealInsumos(''); }}
         title={
           <span className="flex items-center gap-2">
             <CheckCircle className="text-success" /> Finalizar Producción
@@ -2212,6 +2255,40 @@ function OrdenDetalle() {
               </div>
           </div>
 
+          {!esLamina && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Scale size={16} className="text-indigo-600" />
+                <h4 className="font-semibold text-sm text-indigo-800">Repartir por porcentaje de receta</h4>
+              </div>
+              <p className="text-xs text-indigo-700 mb-3">
+                Ingrese el <strong>total real de insumos</strong> y se distribuirá automáticamente
+                entre los insumos según el porcentaje original de la orden. Revise el resultado antes de confirmar.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="form-group mb-0 flex-1 min-w-[160px]">
+                  <label className="form-label text-xs">Total insumos reales (Kg)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="form-input form-input-sm"
+                    value={totalRealInsumos}
+                    onChange={(e) => setTotalRealInsumos(e.target.value)}
+                    placeholder="Ej: 200"
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={distribuirTotalRealPorPorcentaje}
+                >
+                  Aplicar distribución
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="border-t border-gray-200 pt-4 mt-4">
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -2248,11 +2325,19 @@ function OrdenDetalle() {
                         const acumulado = parseFloat(item.cantidad_ya_consumida || 0);
                         const adicional = parseFloat(item.cantidad || 0);
                         const total = acumulado + adicional;
-                        
+                        const porcentajeReceta = sumaRequeridaFinal > 0
+                          ? ((parseFloat(item.cantidad_requerida) || 0) / sumaRequeridaFinal) * 100
+                          : 0;
+
                         return (
                           <tr key={idx}>
                             <td>
-                                <div className="font-medium text-sm">{item.insumo}</div>
+                                <div className="font-medium text-sm">
+                                    {item.insumo}
+                                    {!esLamina && porcentajeReceta > 0 && (
+                                        <span className="ml-2 text-xs font-bold text-indigo-600">{porcentajeReceta.toFixed(1)}%</span>
+                                    )}
+                                </div>
                                 <div className="text-xs text-muted">{item.codigo_insumo}</div>
                             </td>
                             <td className="text-right text-muted text-xs">
@@ -2371,6 +2456,11 @@ function OrdenDetalle() {
                           placeholder="0.00"
                           required={mermas.length > 0}
                         />
+                        {parseFloat(merma.cantidad) > 0 && totalInsumosReales > 0 && (
+                          <small className="text-xs text-red-600 font-medium block mt-1">
+                            {((parseFloat(merma.cantidad) / totalInsumosReales) * 100).toFixed(2)}% del total de insumos
+                          </small>
+                        )}
                       </div>
 
                       <div className="col-span-3">

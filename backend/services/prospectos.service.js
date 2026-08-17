@@ -9,15 +9,26 @@ import { executeQuery } from '../config/database.js';
 // "sector legible" y un bono de encaje al score. Se detecta por
 // palabras clave en la razón social / nombre comercial mientras no
 // tengamos el CIIU real de otra fuente.
+// Sectores que COMPRAN empaque industrial (burbupack, stretch film, zunchos,
+// esquineros, etc.): empresas que mueven, paletizan o protegen carga. Cada
+// patrón aporta un "sector legible" y un bono de encaje al score. El orden
+// importa: gana la primera coincidencia, así que van primero los de mayor fit.
 const SECTORES_OBJETIVO = [
-  { patron: /\b(ALIMENT|SNACK|GALLET|PANIFIC|LACTE|CONSERV|EMBUTID|GOLOSIN)/i, sector: 'Alimentos', bono: 15 },
-  { patron: /\b(AGRO|AGRIC|AGROEXPORT|FRUT|HORTALIZ|ESPARRAG|PALTA|ARANDANO)/i, sector: 'Agroexportación', bono: 15 },
-  { patron: /\b(PESQ|PESCA|MARIN|CONGELAD|HIDROBIOL)/i, sector: 'Pesca', bono: 12 },
-  { patron: /\b(FARMA|LABORATOR|MEDIC|SALUD|QUIMIC)/i, sector: 'Farmacéutica / Química', bono: 12 },
-  { patron: /\b(TEXTIL|CONFECC|PRENDA|ALGODON)/i, sector: 'Textil', bono: 10 },
-  { patron: /\b(PLASTIC|POLIMER|ENVAS|EMPAQUE|EMBALAJ)/i, sector: 'Plásticos / Envases', bono: 10 },
-  { patron: /\b(DISTRIBU|COMERCIAL|IMPORT|EXPORT|MAYORIST)/i, sector: 'Distribución / Comercio', bono: 8 },
-  { patron: /\b(INDUSTRI|MANUFACTUR|FABRICA|PRODUCC)/i, sector: 'Industria / Manufactura', bono: 8 },
+  { patron: /\b(AGRO|AGRIC|AGROEXPORT|FRUT|HORTALIZ|ESPARRAG|PALTA|ARANDAN|UVA|CITRIC)/i, sector: 'Agroexportación', bono: 16 },
+  { patron: /\b(LOGISTIC|ALMACEN|OPERADOR LOG|CENTRO DE DISTRIBU|WAREHOUSE|FULFILL)/i, sector: 'Logística / Almacenes', bono: 15 },
+  { patron: /\b(ECOMMERCE|E-COMMERCE|TIENDA ONLINE|MARKETPLACE|COURIER|PAQUETER|DELIVERY|MENSAJER)/i, sector: 'E-commerce / Courier', bono: 14 },
+  { patron: /\b(MUDANZA|EMBALAD|RELOCAT|EMBALAJE)/i, sector: 'Mudanzas / Embalaje', bono: 13 },
+  { patron: /\b(ALIMENT|SNACK|GALLET|PANIFIC|LACTE|CONSERV|EMBUTID|GOLOSIN|MOLINER)/i, sector: 'Alimentos', bono: 13 },
+  { patron: /\b(BEBIDA|CERVEC|GASEOSA|EMBOTELL|LICOR|VINO|AGUA MINERAL)/i, sector: 'Bebidas', bono: 12 },
+  { patron: /\b(PESQ|PESCA|MARIN|CONGELAD|HIDROBIOL)/i, sector: 'Pesca / Congelados', bono: 12 },
+  { patron: /\b(ELECTRO|ELECTRODOMEST|ELECTRONIC|COMPUTO|TECNOLOG|LINEA BLANCA)/i, sector: 'Electrodomésticos / Electrónica', bono: 12 },
+  { patron: /\b(VIDRIO|CRISTAL|CERAMIC|PORCELAN|SANITARIO|MAYOLIC)/i, sector: 'Vidrio / Cerámica', bono: 12 },
+  { patron: /\b(FARMA|LABORATOR|MEDIC|COSMETIC|QUIMIC)/i, sector: 'Farmacéutica / Química', bono: 11 },
+  { patron: /\b(MUEBL|MADERE|CARPINTER|MELAMIN)/i, sector: 'Muebles / Madera', bono: 10 },
+  { patron: /\b(IMPORT|EXPORT|DISTRIBU|MAYORIST|COMERCIALIZ)/i, sector: 'Importación / Distribución', bono: 10 },
+  { patron: /\b(INDUSTRI|MANUFACTUR|FABRICA|PLANTA|PRODUCC|METALMEC)/i, sector: 'Industria / Manufactura', bono: 9 },
+  { patron: /\b(TEXTIL|CONFECC|PRENDA|ALGODON|CALZAD)/i, sector: 'Textil / Calzado', bono: 8 },
+  { patron: /\b(FERRETER|FERRETERIA INDUSTRIAL|SUMINISTRO)/i, sector: 'Ferretería / Suministros', bono: 8 },
 ];
 
 /** Deja solo dígitos de un teléfono (para comparar/deduplicar). */
@@ -230,6 +241,13 @@ export async function buscarProspectoPorTelefono(telefono) {
   return r.success && r.data.length > 0 ? r.data[0].id_prospecto : null;
 }
 
+/** Dedup por el ID único de Google Places (idempotencia del descubrimiento). */
+export async function buscarProspectoPorPlaceId(placeId) {
+  if (!placeId) return null;
+  const r = await executeQuery('SELECT id_prospecto FROM prospectos WHERE place_id = ? LIMIT 1', [placeId]);
+  return r.success && r.data.length > 0 ? r.data[0].id_prospecto : null;
+}
+
 /**
  * Inserta un prospecto ya armado con sus contactos y su fuente, aplicando
  * dedup contra clientes y scoring. Reutilizado por el controller (manual /
@@ -241,7 +259,12 @@ export async function buscarProspectoPorTelefono(telefono) {
 export async function crearProspectoDesdeDatos(datos, idEmpleado) {
   const doc = normalizarDocumento(datos.documento);
 
-  // Anti-duplicado entre prospectos: por documento (formal) o teléfono (informal).
+  // Anti-duplicado entre prospectos: por place_id (Google), documento
+  // (formal) o teléfono (informal). Cualquiera que coincida = ya existe.
+  if (datos.place_id) {
+    const existe = await buscarProspectoPorPlaceId(datos.place_id);
+    if (existe) return { success: true, duplicado_prospecto: existe };
+  }
   if (doc) {
     const existe = await buscarProspectoPorDocumento(doc);
     if (existe) return { success: true, duplicado_prospecto: existe };
@@ -269,8 +292,8 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
     `INSERT INTO prospectos
       (segmento, tipo_documento, documento, razon_social, nombre_comercial, sector, ciiu,
        departamento, provincia, distrito, direccion, web, origen, score, score_detalle,
-       flag_duplicado, id_cliente_match, id_empleado_asignado)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       flag_duplicado, id_cliente_match, id_empleado_asignado, logo_url, foto_referencia, place_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       datos.segmento || 'Formal',
       datos.tipo_documento || null,
@@ -290,6 +313,9 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
       dup.flag,
       dup.id_cliente,
       idEmpleado || null,
+      datos.logo_url || null,
+      datos.foto_referencia || null,
+      datos.place_id || null,
     ]
   );
   if (!ins.success) return { success: false, error: ins.error };

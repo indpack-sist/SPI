@@ -13,6 +13,7 @@ import flotaRoutes from './routes/flota.routes.js';
 import proveedoresRoutes from './routes/proveedores.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
 import prospectosRoutes from './routes/prospectos.routes.js';
+import prospectosMediaRoutes from './routes/prospectos-media.routes.js';
 import solicitudesCreditoRoutes from './routes/solicitudes-credito.routes.js';
 
 import productosRoutes from './routes/productos.routes.js';
@@ -142,6 +143,13 @@ app.use('/api/empleados', verificarToken, verificarPermiso('empleados'), emplead
 app.use('/api/flota', verificarToken, verificarPermiso('flota'), flotaRoutes);
 app.use('/api/proveedores', verificarToken, verificarPermiso('proveedores'), proveedoresRoutes);
 app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesRoutes);
+// Medios de prospección (imágenes): token por query para <img>, como /api/archivos.
+app.use('/api/prospectos-media', (req, res, next) => {
+  if (!req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+}, verificarToken, verificarPermiso('prospectos'), prospectosMediaRoutes);
 app.use('/api/prospectos', verificarToken, verificarPermiso('prospectos'), prospectosRoutes);
 app.use('/api/solicitudes-credito', verificarToken, verificarPermiso('solicitudesCredito'), solicitudesCreditoRoutes);
 

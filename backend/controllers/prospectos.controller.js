@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { executeQuery } from '../config/database.js';
 import { validarRUC } from '../services/documento-cache.service.js';
 import {
@@ -7,7 +8,7 @@ import {
   normalizarTelefono,
   normalizarEmail,
 } from '../services/prospectos.service.js';
-import { placesDisponible } from '../services/scraper-places.service.js';
+import { placesDisponible, RUBROS_OBJETIVO } from '../services/scraper-places.service.js';
 import { notificarJob } from '../services/scraping-worker.js';
 
 const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'Descartado'];
@@ -17,7 +18,7 @@ const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'De
 // ------------------------------------------------------------
 export async function getAllProspectos(req, res) {
   try {
-    const { segmento, estado, flag, search, orden } = req.query;
+    const { segmento, estado, flag, search, orden, vista } = req.query;
 
     let sql = `
       SELECT p.*,
@@ -34,12 +35,17 @@ export async function getAllProspectos(req, res) {
       WHERE 1=1`;
     const params = [];
 
+    // Vista: por defecto oculta los excluidos; "excluidos" muestra solo esos.
+    sql += vista === 'excluidos' ? ' AND p.excluido = 1' : ' AND p.excluido = 0';
+
     if (segmento) { sql += ' AND p.segmento = ?'; params.push(segmento); }
     if (estado)   { sql += ' AND p.estado_workflow = ?'; params.push(estado); }
     if (flag)     { sql += ' AND p.flag_duplicado = ?'; params.push(flag); }
     if (search) {
-      sql += ' AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      sql += ` AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?
+                OR p.distrito LIKE ? OR p.provincia LIKE ? OR p.departamento LIKE ? OR p.sector LIKE ?)`;
+      const like = `%${search}%`;
+      params.push(like, like, like, like, like, like, like);
     }
 
     if (orden === 'recientes') sql += ' ORDER BY p.fecha_captura DESC';
@@ -70,6 +76,7 @@ export async function getEstadisticas(req, res) {
         ROUND(AVG(CASE WHEN flag_duplicado = 'Ninguno' THEN score END)) AS score_promedio,
         SUM(score >= 70 AND flag_duplicado = 'Ninguno')                AS calientes
       FROM prospectos
+      WHERE excluido = 0
     `);
     if (!r.success) return res.status(500).json({ error: r.error });
     res.json({ success: true, data: r.data[0] });
@@ -380,15 +387,21 @@ export async function convertirACliente(req, res) {
 // ============================================================
 const TIPOS_JOB = ['google_places', 'web_scrape', 'sunat_ruc', 'sunat_ciiu', 'enriquecer'];
 
-async function encolarJob(tipo, parametros, idEmpleado) {
+async function encolarJob(tipo, parametros, idEmpleado, prioridad = 5) {
   const ins = await executeQuery(
-    'INSERT INTO scraping_jobs (tipo, parametros, id_empleado_solicita) VALUES (?,?,?)',
-    [tipo, JSON.stringify(parametros || {}), idEmpleado || null]
+    'INSERT INTO scraping_jobs (tipo, parametros, id_empleado_solicita, prioridad) VALUES (?,?,?,?)',
+    [tipo, JSON.stringify(parametros || {}), idEmpleado || null, prioridad]
   );
   if (!ins.success) throw new Error(ins.error);
   const idJob = ins.data.insertId;
   notificarJob(); // despierta al worker
   return idJob;
+}
+
+function parseZonas(zonas) {
+  let lista = Array.isArray(zonas) ? zonas : String(zonas || '').split(/[\n;]+/);
+  lista = lista.map((z) => z.trim()).filter(Boolean);
+  return lista.length ? lista : ['Perú'];
 }
 
 // Crea un job genérico
@@ -443,6 +456,40 @@ export async function descubrirEmpresas(req, res) {
   }
 }
 
+// Descubrimiento MASIVO: barre todos los rubros objetivo en las zonas dadas,
+// priorizando por afinidad (los mejores clientes potenciales primero).
+export async function descubrirTodo(req, res) {
+  try {
+    if (!placesDisponible()) {
+      return res.status(400).json({
+        error: 'Google Places no está configurado. Define GOOGLE_PLACES_API_KEY en el .env del backend.',
+        requiere_key: true,
+      });
+    }
+    const { zonas, segmento, limite } = req.body;
+    const listaZonas = parseZonas(zonas);
+    const lim = Math.min(parseInt(limite || 15), 20);
+
+    let encolados = 0;
+    for (const rubro of RUBROS_OBJETIVO) {
+      for (const zona of listaZonas) {
+        await encolarJob('google_places', {
+          query: rubro.q, zona, segmento: segmento || 'Formal', limite: lim,
+        }, req.user?.id_empleado, rubro.prioridad);
+        encolados++;
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `${encolados} búsquedas encoladas (${RUBROS_OBJETIVO.length} rubros × ${listaZonas.length} zona(s)), priorizadas por afinidad`,
+      jobs: encolados,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 // Enriquecer un prospecto scrapeando su web
 export async function enriquecerProspecto(req, res) {
   try {
@@ -458,6 +505,43 @@ export async function enriquecerProspecto(req, res) {
     res.status(201).json({ success: true, message: 'Enriquecimiento encolado', id_job: idJob });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
+// Excluir / restaurar (lista de exclusión)
+// ------------------------------------------------------------
+export async function excluirProspecto(req, res) {
+  try {
+    const { id } = req.params;
+    const excluido = req.body.excluido ? 1 : 0;
+    const r = await executeQuery('UPDATE prospectos SET excluido = ? WHERE id_prospecto = ?', [excluido, id]);
+    if (!r.success) return res.status(500).json({ error: r.error });
+    res.json({ success: true, message: excluido ? 'Prospecto excluido' : 'Exclusión cancelada' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
+// Proxy de foto de Google Places (mantiene la API key en el backend)
+// ------------------------------------------------------------
+export async function fotoProxy(req, res) {
+  try {
+    const ref = req.query.ref;
+    const key = process.env.GOOGLE_PLACES_API_KEY;
+    if (!ref || !key) return res.status(404).end();
+
+    const img = await axios.get('https://maps.googleapis.com/maps/api/place/photo', {
+      params: { maxwidth: 480, photo_reference: ref, key },
+      responseType: 'arraybuffer',
+      timeout: 12000,
+    });
+    res.set('Content-Type', img.headers['content-type'] || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(Buffer.from(img.data));
+  } catch {
+    res.status(404).end();
   }
 }
 

@@ -2,17 +2,65 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Radar, Search, Upload, Users, Flame, Sparkles, UserCheck, Gauge,
   Phone, Mail, Globe, Building2, CheckCircle2, X, Loader,
-  UserPlus, Trash2, Eye, AlertTriangle, Compass, Activity, Zap, FileSpreadsheet
+  UserPlus, Trash2, Eye, AlertTriangle, Compass, Activity, Zap, FileSpreadsheet,
+  EyeOff, RotateCcw
 } from 'lucide-react';
 import { prospectosAPI } from '../../config/api';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import './Prospectos.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
 // Color del score segun rango.
 const colorScore = (s) => (s >= 70 ? '#2ecc71' : s >= 45 ? '#e8b84b' : '#e74c3c');
 
 const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
+
+// Fuente de imagen del prospecto: logo de su web (directo) o foto de
+// Google Places (vía proxy del backend con token en la URL).
+const imgSrc = (p) => {
+  if (p.logo_url) return p.logo_url;
+  if (p.foto_referencia) {
+    const token = localStorage.getItem('token') || '';
+    return `${API_URL}/prospectos-media/foto?ref=${encodeURIComponent(p.foto_referencia)}&token=${token}`;
+  }
+  return null;
+};
+
+function Thumb({ p, size = 34 }) {
+  const src = imgSrc(p);
+  if (!src) {
+    return (
+      <div className="pros-thumb pros-thumb-empty" style={{ width: size, height: size }}>
+        <Building2 size={size * 0.5} />
+      </div>
+    );
+  }
+  return <img className="pros-thumb" style={{ width: size, height: size }} src={src} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />;
+}
+
+// Rubros objetivo: empresas que COMPRAN empaque industrial (burbupack,
+// stretch film, zunchos, esquineros, flejadoras…). Son negocios que mueven,
+// paletizan o protegen carga. El valor es el término que se busca en Maps.
+const RUBROS_OBJETIVO = [
+  { label: 'Agroexportadoras', q: 'empresa agroexportadora' },
+  { label: 'Operadores logísticos / almacenes', q: 'operador logistico almacen' },
+  { label: 'Centros de distribución', q: 'centro de distribucion' },
+  { label: 'E-commerce / tiendas online', q: 'empresa ecommerce tienda online' },
+  { label: 'Courier / paquetería', q: 'empresa courier paqueteria' },
+  { label: 'Empresas de mudanzas', q: 'empresa de mudanzas y embalaje' },
+  { label: 'Procesadoras de alimentos', q: 'planta procesadora de alimentos' },
+  { label: 'Plantas de bebidas', q: 'planta embotelladora de bebidas' },
+  { label: 'Distribuidoras mayoristas', q: 'distribuidora mayorista' },
+  { label: 'Importadoras', q: 'empresa importadora' },
+  { label: 'Fábricas / industrias', q: 'fabrica industrial' },
+  { label: 'Electrodomésticos / electrónica', q: 'distribuidora de electrodomesticos' },
+  { label: 'Vidrios / cerámicos', q: 'fabrica de vidrios y ceramicos' },
+  { label: 'Fábricas de muebles', q: 'fabrica de muebles' },
+  { label: 'Laboratorios / farmacéutica', q: 'laboratorio farmaceutico' },
+  { label: 'Ferreterías industriales', q: 'ferreteria industrial' },
+];
 
 const ESTADO_CHIP = {
   Nuevo:      { cls: 'chip-nuevo', label: 'Nuevo' },
@@ -53,6 +101,7 @@ export default function Prospectos() {
   const [fEstado, setFEstado] = useState('');
   const [fFlag, setFFlag] = useState('');
   const [orden, setOrden] = useState('score');
+  const [vista, setVista] = useState('activos'); // 'activos' | 'excluidos'
 
   // Ingesta
   const [ingestaOpen, setIngestaOpen] = useState(false);
@@ -72,7 +121,7 @@ export default function Prospectos() {
 
   // Descubrimiento (Google Places)
   const [descubrirOpen, setDescubrirOpen] = useState(false);
-  const [descubrirData, setDescubrirData] = useState({ query: '', zona: 'Lima, Perú', segmento: 'Pequeno', limite: 20 });
+  const [descubrirData, setDescubrirData] = useState({ query: '', zonas: 'Lima, Perú', segmento: 'Formal', limite: 20, todos: true });
   const [descubrirLoading, setDescubrirLoading] = useState(false);
 
   // Panel de actividad (jobs)
@@ -89,6 +138,7 @@ export default function Prospectos() {
       if (fSegmento) params.segmento = fSegmento;
       if (fEstado) params.estado = fEstado;
       if (fFlag) params.flag = fFlag;
+      if (vista === 'excluidos') params.vista = 'excluidos';
       const [lista, est] = await Promise.all([
         prospectosAPI.getAll(params),
         prospectosAPI.getEstadisticas(),
@@ -100,7 +150,7 @@ export default function Prospectos() {
     } finally {
       setLoading(false);
     }
-  }, [search, fSegmento, fEstado, fFlag, orden]);
+  }, [search, fSegmento, fEstado, fFlag, orden, vista]);
 
   useEffect(() => {
     const t = setTimeout(cargar, search ? 300 : 0);
@@ -140,8 +190,20 @@ export default function Prospectos() {
   const hacerDescubrir = async () => {
     try {
       setDescubrirLoading(true);
-      await prospectosAPI.descubrir(descubrirData);
-      notify('Búsqueda encolada. Verás los resultados llegar en el panel de actividad.');
+      const zonasArr = descubrirData.zonas.split('\n').map((z) => z.trim()).filter(Boolean);
+      const zonas = zonasArr.length ? zonasArr : ['Perú'];
+      const { segmento, limite } = descubrirData;
+
+      if (descubrirData.todos) {
+        const res = await prospectosAPI.descubrirTodo({ zonas, segmento, limite });
+        notify(res.data.message || 'Búsqueda masiva encolada.');
+      } else {
+        if (!descubrirData.query.trim()) { setError('Elige un rubro o escribe uno'); return; }
+        for (const z of zonas) {
+          await prospectosAPI.descubrir({ query: descubrirData.query, zona: z, segmento, limite });
+        }
+        notify(`Búsqueda encolada en ${zonas.length} zona(s).`);
+      }
       setDescubrirOpen(false);
       setJobsOpen(true);
       refreshJobs();
@@ -190,6 +252,17 @@ export default function Prospectos() {
       refreshJobs();
     } catch (err) {
       setError(err.error || 'No se pudo enriquecer el prospecto');
+    }
+  };
+
+  const excluir = async (id, excluido) => {
+    try {
+      await prospectosAPI.excluir(id, excluido);
+      notify(excluido ? 'Prospecto excluido del descubrimiento' : 'Exclusión cancelada');
+      setDetalle(null);
+      cargar();
+    } catch (err) {
+      setError(err.error || 'No se pudo actualizar la exclusión');
     }
   };
 
@@ -399,6 +472,13 @@ export default function Prospectos() {
           <option value="recientes">Más recientes</option>
           <option value="nombre">Nombre A-Z</option>
         </select>
+        <button
+          className={`btn btn-sm ${vista === 'excluidos' ? 'btn-warning' : 'btn-outline'}`}
+          onClick={() => setVista((v) => (v === 'excluidos' ? 'activos' : 'excluidos'))}
+          title="Ver la lista de excluidos"
+        >
+          {vista === 'excluidos' ? <><RotateCcw size={15} /> Ver activos</> : <><EyeOff size={15} /> Excluidos</>}
+        </button>
       </div>
 
       {/* Tabla */}
@@ -430,9 +510,14 @@ export default function Prospectos() {
                   <tr key={p.id_prospecto} style={{ animationDelay: `${Math.min(i * 0.025, 0.5)}s` }} onClick={() => verDetalle(p.id_prospecto)}>
                     <td><ScoreRing score={p.score} /></td>
                     <td>
-                      <span className="pros-empresa-nom">{p.razon_social}</span>
-                      <span className="pros-empresa-doc">{p.documento || 'Sin documento'} · {p.segmento}</span>
-                      <div style={{ marginTop: 4 }}><DupBadge flag={p.flag_duplicado} /></div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Thumb p={p} />
+                        <div style={{ minWidth: 0 }}>
+                          <span className="pros-empresa-nom">{p.razon_social}</span>
+                          <span className="pros-empresa-doc">{p.documento || 'Sin documento'} · {p.segmento}</span>
+                          <div style={{ marginTop: 4 }}><DupBadge flag={p.flag_duplicado} /></div>
+                        </div>
+                      </div>
                     </td>
                     <td className="pros-hide-sm">{p.sector || <span style={{ color: 'var(--text-secondary)' }}>—</span>}</td>
                     <td className="pros-hide-sm" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
@@ -444,6 +529,11 @@ export default function Prospectos() {
                         <button className="btn btn-ghost btn-sm" title="Ver detalle" onClick={() => verDetalle(p.id_prospecto)}><Eye size={15} /></button>
                         {p.web && (
                           <button className="btn btn-ghost btn-sm" title="Enriquecer desde su web" onClick={() => enriquecer(p.id_prospecto, p.web)}><Zap size={15} /></button>
+                        )}
+                        {vista === 'excluidos' ? (
+                          <button className="btn btn-outline btn-sm" title="Cancelar exclusión" onClick={() => excluir(p.id_prospecto, false)}><RotateCcw size={15} /></button>
+                        ) : (
+                          <button className="btn btn-ghost btn-sm" title="Excluir del descubrimiento" onClick={() => excluir(p.id_prospecto, true)}><EyeOff size={15} /></button>
                         )}
                         {p.estado_workflow !== 'Convertido' && (
                           <button className="btn btn-success btn-sm" title="Crear cliente" onClick={() => abrirConvertir(p)}><UserPlus size={15} /></button>
@@ -465,7 +555,8 @@ export default function Prospectos() {
           <aside className="pros-panel">
             <div className="pros-panel-head">
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Thumb p={detalle} size={48} />
                   <ScoreRing score={detalle.score || 0} />
                   <div>
                     <div style={{ fontWeight: 700, color: 'var(--white)', fontSize: '1rem' }}>{detalle.razon_social || 'Cargando…'}</div>
@@ -534,6 +625,11 @@ export default function Prospectos() {
               {detalle.web && (
                 <button className="btn btn-outline btn-sm" onClick={() => enriquecer(detalle.id_prospecto, detalle.web)}><Zap size={15} /> Enriquecer</button>
               )}
+              {vista === 'excluidos' ? (
+                <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, false)}><RotateCcw size={15} /> Restaurar</button>
+              ) : (
+                <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, true)}><EyeOff size={15} /> Excluir</button>
+              )}
               {detalle.estado_workflow !== 'Convertido' ? (
                 <button className="btn btn-success" style={{ flex: 1 }} onClick={() => abrirConvertir(detalle)}><UserPlus size={16} /> Crear cliente</button>
               ) : (
@@ -588,36 +684,56 @@ export default function Prospectos() {
       {/* ---------- Modal descubrir (Google Places) ---------- */}
       <Modal isOpen={descubrirOpen} onClose={() => setDescubrirOpen(false)} title="Descubrir empresas por rubro y zona" size="md">
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
-          Busca negocios en Google Maps por rubro y ubicación —ideal para empresas pequeñas y de venta libre que no aparecen fácil en SUNAT—. Se crean como prospectos con su teléfono y web, se puntúan y se marcan los que ya son clientes.
+          Busca en Google Maps <b>empresas que compran empaque industrial</b> (burbupack, stretch film, zunchos, esquineros…): negocios que mueven, paletizan o protegen carga. Se crean como prospectos con teléfono, web y foto, se puntúan y se marcan los que ya son clientes. <b>No duplica</b> lo que ya tienes.
         </p>
-        <label className="form-label">Rubro / término de búsqueda</label>
-        <input className="form-input" placeholder="distribuidora de alimentos, bodegas, panaderías…"
-          value={descubrirData.query} onChange={(e) => setDescubrirData({ ...descubrirData, query: e.target.value })} />
+
+        <label className="pros-toggle">
+          <input type="checkbox" checked={descubrirData.todos} onChange={(e) => setDescubrirData({ ...descubrirData, todos: e.target.checked })} />
+          <span><b>Descubrir en TODOS los rubros objetivo</b><br /><small style={{ color: 'var(--text-secondary)' }}>Barre los {RUBROS_OBJETIVO.length} rubros, priorizando los de mayor afinidad (agroexport, logística, e-commerce… primero).</small></span>
+        </label>
+
+        {!descubrirData.todos && (
+          <>
+            <label className="form-label">Rubro objetivo</label>
+            <select className="form-select" value={descubrirData.query} onChange={(e) => setDescubrirData({ ...descubrirData, query: e.target.value })}>
+              <option value="">— Elige un rubro —</option>
+              {RUBROS_OBJETIVO.map((r) => <option key={r.q} value={r.q}>{r.label}</option>)}
+            </select>
+            <label className="form-label" style={{ marginTop: '0.6rem' }}>…o escribe uno personalizado</label>
+            <input className="form-input" placeholder="ej. exportadora de textiles, distribuidora de licores…"
+              value={descubrirData.query} onChange={(e) => setDescubrirData({ ...descubrirData, query: e.target.value })} />
+          </>
+        )}
+
+        <label className="form-label" style={{ marginTop: '0.7rem' }}>Ubicaciones — una por línea (plantas, ciudades…)</label>
+        <textarea className="form-input" rows={3} placeholder={'Lima, Perú\nIca, Perú\nArequipa, Perú'}
+          value={descubrirData.zonas} onChange={(e) => setDescubrirData({ ...descubrirData, zonas: e.target.value })}
+          style={{ resize: 'vertical' }} />
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }}>
           <div>
-            <label className="form-label">Zona</label>
-            <input className="form-input" placeholder="Lima, Perú" value={descubrirData.zona} onChange={(e) => setDescubrirData({ ...descubrirData, zona: e.target.value })} />
-          </div>
-          <div>
-            <label className="form-label">Cantidad (máx. 40)</label>
+            <label className="form-label">Cantidad por búsqueda</label>
             <input type="number" className="form-input" min={1} max={40} value={descubrirData.limite} onChange={(e) => setDescubrirData({ ...descubrirData, limite: e.target.value })} />
           </div>
+          <div>
+            <label className="form-label">Segmento</label>
+            <select className="form-select" value={descubrirData.segmento} onChange={(e) => setDescubrirData({ ...descubrirData, segmento: e.target.value })}>
+              <option value="Formal">Formal</option>
+              <option value="Pequeno">Pequeño (compra libre)</option>
+              <option value="Informal">Informal</option>
+            </select>
+          </div>
         </div>
-        <div style={{ marginTop: '0.6rem' }}>
-          <label className="form-label">Segmento</label>
-          <select className="form-select" value={descubrirData.segmento} onChange={(e) => setDescubrirData({ ...descubrirData, segmento: e.target.value })}>
-            <option value="Pequeno">Pequeño (compra libre / sin IGV)</option>
-            <option value="Formal">Formal</option>
-            <option value="Informal">Informal</option>
-          </select>
-        </div>
+
         <div style={{ marginTop: '0.8rem', fontSize: '0.76rem', color: 'var(--text-secondary)', background: 'var(--carbon)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
-          Requiere <b>GOOGLE_PLACES_API_KEY</b> configurada en el backend. Si no está, el sistema te avisará al iniciar la búsqueda.
+          {descubrirData.todos
+            ? <>El modo “todos” lanza {RUBROS_OBJETIVO.length} búsquedas por ubicación y consume más cuota de Google. Recomendado 1 vez por zona; las siguientes veces solo trae lo nuevo (no re-cobra los duplicados).</>
+            : <>Requiere <b>GOOGLE_PLACES_API_KEY</b> en el backend. Si falta, el sistema te avisará.</>}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.1rem' }}>
           <button className="btn btn-outline" onClick={() => setDescubrirOpen(false)}>Cancelar</button>
-          <button className="btn btn-primary" onClick={hacerDescubrir} disabled={descubrirLoading || !descubrirData.query.trim()}>
-            {descubrirLoading ? <><Loader size={16} className="pros-spin" /> Encolando…</> : <><Compass size={16} /> Buscar</>}
+          <button className="btn btn-primary" onClick={hacerDescubrir} disabled={descubrirLoading || (!descubrirData.todos && !descubrirData.query.trim())}>
+            {descubrirLoading ? <><Loader size={16} className="pros-spin" /> Encolando…</> : <><Compass size={16} /> {descubrirData.todos ? 'Descubrir todo' : 'Buscar'}</>}
           </button>
         </div>
       </Modal>

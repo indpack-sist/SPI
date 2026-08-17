@@ -119,6 +119,18 @@
 @keyframes prosRow { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
 .pros-table tbody tr:hover { background: var(--carbon-light); }
 .pros-table td { padding: 0.7rem 0.9rem; font-size: 0.85rem; color: var(--text-primary); vertical-align: middle; }
+.pros-thumb {
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--steel);
+  background: var(--carbon);
+  flex-shrink: 0;
+}
+.pros-thumb-empty {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--steel-light);
+}
+
 .pros-empresa-nom { font-weight: 600; color: var(--white); display: block; }
 .pros-empresa-doc { font-size: 0.72rem; color: var(--text-secondary); }
 
@@ -237,6 +249,19 @@
 .pros-ingesta-box { text-align: center; padding: 0.7rem; border-radius: 10px; border: 1px solid var(--steel); background: var(--carbon); }
 .pros-ingesta-box b { font-family: var(--font-display); font-size: 1.4rem; display: block; color: var(--white); }
 .pros-ingesta-box span { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
+
+.pros-toggle {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 0.8rem;
+  font-size: 0.86rem;
+  color: var(--white);
+}
+.pros-toggle input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
 
 .pros-loading-inline { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); }
 .pros-spin { animation: spin 0.9s linear infinite; }

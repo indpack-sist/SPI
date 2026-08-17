@@ -277,7 +277,7 @@ function App() {
                       <Route
                         path="/ventas/prospectos"
                         element={
-                          <ProtectedRouteWithPermiso modulo="prospectos" requiredRoles={['Administrador']}>
+                          <ProtectedRouteWithPermiso modulo="prospectos" requiredRoles={['Administrador', 'Comercial']}>
                             <Prospectos />
                           </ProtectedRouteWithPermiso>
                         }

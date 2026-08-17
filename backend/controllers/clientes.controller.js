@@ -1,5 +1,5 @@
 import { executeQuery } from '../config/database.js';
-import { validarRUC, validarDNI } from '../services/api-validation.service.js';
+import { validarRUC, validarDNI } from '../services/documento-cache.service.js';
 import { ESTADOS_ATENCION } from '../utils/asignacionClientes.js';
 
 const ATENCION_PLACEHOLDERS = ESTADOS_ATENCION.map(() => '?').join(', ');

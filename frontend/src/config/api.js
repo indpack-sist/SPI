@@ -158,6 +158,26 @@ export const clientesAPI = {
   deleteDireccion: (idDireccion) => api.delete(`/clientes/direcciones/${idDireccion}`)
 };
 
+export const prospectosAPI = {
+  getAll: (params) => api.get('/prospectos', { params }),
+  getEstadisticas: () => api.get('/prospectos/estadisticas'),
+  getById: (id) => api.get(`/prospectos/${id}`),
+  create: (data) => api.post('/prospectos', data),
+  ingestaLista: (data) => api.post('/prospectos/ingesta-lista', data),
+  update: (id, data) => api.put(`/prospectos/${id}`, data),
+  cambiarEstado: (id, estado) => api.patch(`/prospectos/${id}/estado`, { estado }),
+  asignar: (id, id_empleado) => api.patch(`/prospectos/${id}/asignar`, { id_empleado }),
+  addContacto: (id, data) => api.post(`/prospectos/${id}/contactos`, data),
+  deleteContacto: (idContacto) => api.delete(`/prospectos/contactos/${idContacto}`),
+  convertir: (id, data) => api.post(`/prospectos/${id}/convertir`, data),
+  descartar: (id) => api.patch(`/prospectos/${id}/descartar`),
+  delete: (id) => api.delete(`/prospectos/${id}`),
+  // Cola de scraping / descubrimiento
+  descubrir: (data) => api.post('/prospectos/descubrir', data),
+  enriquecer: (id, data) => api.post(`/prospectos/${id}/enriquecer`, data),
+  getJobs: () => api.get('/prospectos/jobs')
+};
+
 export const solicitudesCreditoAPI = {
   create: (data) => api.post('/solicitudes-credito', data, {
     headers: { 'Content-Type': 'multipart/form-data' }

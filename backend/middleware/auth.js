@@ -24,6 +24,7 @@ const PERMISOS_POR_ROL = {
       listasPrecios: true,
       reportes: true,
       seguimientoVentas: true,
+      prospectos: true,
       verPrecios: true,
       verFinanzasVentas: true
     },
@@ -48,7 +49,8 @@ const PERMISOS_POR_ROL = {
       pagosCobranzas: true,
       listasPrecios: true,
       reportes: true,
-      seguimientoVentas: true
+      seguimientoVentas: true,
+      prospectos: true
     }
   },
   'Calidad': {

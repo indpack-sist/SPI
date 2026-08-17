@@ -54,6 +54,7 @@ import DetalleGuiaTransportista from './pages/Ventas/DetalleGuiaTransportista';
 import ReporteVentas from './pages/Ventas/ReporteVentas'; // <--- NUEVO IMPORT
 import SeguimientoVentas from './pages/Ventas/SeguimientoVentas';
 import SeguimientoVentaDetalle from './pages/Ventas/SeguimientoVentaDetalle';
+import Prospectos from './pages/Ventas/Prospectos';
 
 import Compras from './pages/Compras/Compras';
 import NuevaCompra from './pages/Compras/NuevaCompra';
@@ -274,12 +275,20 @@ function App() {
                       />
 
                       <Route
+                        path="/ventas/prospectos"
+                        element={
+                          <ProtectedRouteWithPermiso modulo="prospectos" requiredRoles={['Administrador']}>
+                            <Prospectos />
+                          </ProtectedRouteWithPermiso>
+                        }
+                      />
+                      <Route
                         path="/ventas/cotizaciones"
                         element={
                           <ProtectedRouteWithPermiso modulo="cotizaciones">
                             <Cotizaciones />
                           </ProtectedRouteWithPermiso>
-                        } 
+                        }
                       />
                       <Route 
                         path="/ventas/cotizaciones/nueva" 

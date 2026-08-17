@@ -79,6 +79,7 @@ export async function scrapeWebsite(website) {
   const emails = new Set();
   const telefonos = new Set();
   const redes = {};
+  let logo = null;
   let paginasLeidas = 0;
 
   for (const ruta of RUTAS_CONTACTO) {
@@ -104,6 +105,15 @@ export async function scrapeWebsite(website) {
         if (found) redes[red] = found[0].replace(/["'<>)]+$/, '');
       }
     }
+
+    // Logo / imagen representativa: og:image de la home.
+    if (!logo) {
+      const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+      if (og && og[1]) {
+        try { logo = new URL(og[1], base).href; } catch { logo = og[1]; }
+      }
+    }
   }
 
   return {
@@ -112,6 +122,7 @@ export async function scrapeWebsite(website) {
     emails: [...emails].slice(0, 8),
     telefonos: [...telefonos].slice(0, 6),
     redes,
+    logo,
     paginas_leidas: paginasLeidas,
   };
 }

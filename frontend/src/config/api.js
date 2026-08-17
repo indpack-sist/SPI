@@ -171,9 +171,11 @@ export const prospectosAPI = {
   deleteContacto: (idContacto) => api.delete(`/prospectos/contactos/${idContacto}`),
   convertir: (id, data) => api.post(`/prospectos/${id}/convertir`, data),
   descartar: (id) => api.patch(`/prospectos/${id}/descartar`),
+  excluir: (id, excluido) => api.patch(`/prospectos/${id}/excluir`, { excluido }),
   delete: (id) => api.delete(`/prospectos/${id}`),
   // Cola de scraping / descubrimiento
   descubrir: (data) => api.post('/prospectos/descubrir', data),
+  descubrirTodo: (data) => api.post('/prospectos/descubrir-todo', data),
   enriquecer: (id, data) => api.post(`/prospectos/${id}/enriquecer`, data),
   getJobs: () => api.get('/prospectos/jobs')
 };

@@ -5,7 +5,7 @@ import {
   normalizarTelefono,
   normalizarEmail,
 } from './prospectos.service.js';
-import { buscarNegocios } from './scraper-places.service.js';
+import { buscarBasico, detallar } from './scraper-places.service.js';
 import { scrapeWebsite } from './scraper-web.service.js';
 
 // ============================================================
@@ -113,23 +113,34 @@ async function procesarJob(job) {
 // ---- Descubrimiento por Google Places ----
 async function procesarPlaces(job, params) {
   const { query, zona, segmento, limite } = params;
-  const res = await buscarNegocios(query, { zona, limite });
+  const res = await buscarBasico(query, { zona, limite });
   if (!res.ok) return fallar(job.id_job, res.error || 'Búsqueda fallida');
 
-  const resumen = { encontrados: res.empresas.length, creados: 0, duplicados: 0, ya_cliente: 0 };
+  const resumen = { encontrados: res.resultados.length, creados: 0, duplicados: 0, ya_cliente: 0 };
 
-  for (const emp of res.empresas) {
+  for (const base of res.resultados) {
+    // Dedup barato por place_id: si ya existe, se salta SIN pedir el detalle
+    // (ahorra cuota) y respeta exclusiones previas (no lo recrea).
+    if (base.place_id) {
+      const existe = await executeQuery('SELECT id_prospecto FROM prospectos WHERE place_id = ? LIMIT 1', [base.place_id]);
+      if (existe.success && existe.data.length > 0) { resumen.duplicados++; continue; }
+    }
+
+    const det = await detallar(base.place_id);
+
     const r = await crearProspectoDesdeDatos({
-      segmento: segmento || 'Pequeno',
-      razon_social: emp.razon_social,
-      direccion: emp.direccion,
-      distrito: emp.distrito,
-      provincia: emp.provincia,
-      telefono: emp.telefono,
-      web: emp.web,
+      segmento: segmento || 'Formal',
+      razon_social: det?.razon_social || base.razon_social,
+      direccion: det?.direccion || base.direccion,
+      distrito: det?.distrito || base.distrito,
+      provincia: det?.provincia || base.provincia,
+      telefono: det?.telefono || null,
+      web: det?.web || null,
+      foto_referencia: base.foto_referencia,
+      place_id: base.place_id,
       origen: 'google_maps',
-      url: emp.maps_url,
-      datos_raw: emp.datos_raw,
+      url: det?.maps_url || null,
+      datos_raw: { ...base.datos_raw, detalle: det?.detalle_raw },
     }, job.id_empleado_solicita);
 
     if (!r.success) continue;
@@ -163,11 +174,17 @@ async function procesarWebScrape(job, params) {
   for (const tel of data.telefonos) await agregar('Telefono', tel, normalizarTelefono(tel));
   for (const [, url] of Object.entries(data.redes)) await agregar('RedSocial', url, String(url).toLowerCase());
 
-  // Guarda la web en el prospecto si no la tenía.
+  // Guarda la web y el logo en el prospecto si no los tenía.
   if (data.base) {
     await executeQuery(
       'UPDATE prospectos SET web = COALESCE(NULLIF(web, ""), ?) WHERE id_prospecto = ?',
       [data.base, idProspecto]
+    );
+  }
+  if (data.logo) {
+    await executeQuery(
+      'UPDATE prospectos SET logo_url = COALESCE(NULLIF(logo_url, ""), ?) WHERE id_prospecto = ?',
+      [data.logo, idProspecto]
     );
   }
 

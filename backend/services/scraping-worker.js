@@ -7,6 +7,7 @@ import {
 } from './prospectos.service.js';
 import { buscarBasico, detallar } from './scraper-places.service.js';
 import { scrapeWebsite } from './scraper-web.service.js';
+import { validarRUC } from './documento-cache.service.js';
 
 // ============================================================
 // Worker en proceso para la cola scraping_jobs. Corre dentro del
@@ -148,32 +149,58 @@ async function procesarPlaces(job, params) {
     if (r.duplicado_prospecto) { resumen.duplicados++; continue; }
     if (r.flag === 'Ya_cliente') resumen.ya_cliente++;
     resumen.creados++;
+
+    // Auto-enriquecimiento en el mismo descubrimiento: si Google nos dio la
+    // web, la leemos (gratis, no consume cuota de Places) para completar el
+    // RUC y priorizar correos SIN depender del botón "Enriquecer".
+    if (r.id_prospecto && det?.web) {
+      try {
+        const enr = await enriquecerDesdeWeb(r.id_prospecto, det.web);
+        if (enr?.ruc) resumen.con_ruc = (resumen.con_ruc || 0) + 1;
+        if (enr?.emails) resumen.con_email = (resumen.con_email || 0) + (enr.emails > 0 ? 1 : 0);
+      } catch { /* el prospecto ya quedó creado; el scraping es best-effort */ }
+    }
   }
 
   await completar(job.id_job, resumen);
 }
 
-// ---- Enriquecimiento por scraping de web corporativa ----
+// ---- Enriquecimiento por scraping de web corporativa (job manual) ----
 async function procesarWebScrape(job, params) {
   const idProspecto = params.id_prospecto;
   if (!idProspecto) return fallar(job.id_job, 'Falta id_prospecto');
 
-  const data = await scrapeWebsite(params.url);
-  if (!data.ok) return fallar(job.id_job, data.error || 'No se pudo leer el sitio web');
+  const resultado = await enriquecerDesdeWeb(idProspecto, params.url);
+  if (!resultado) return fallar(job.id_job, 'No se pudo leer el sitio web');
+  await completar(job.id_job, { id_prospecto: idProspecto, ...resultado });
+}
+
+/**
+ * Lee la web de un prospecto y vuelca lo público: correos y teléfonos (con el
+ * área a la que pertenecen), redes, logo y RUC. Reutilizado por el job manual
+ * "Enriquecer" y por el descubrimiento (para traer el RUC sin pasos extra).
+ * @returns {Promise<Object|null>} resumen o null si no se pudo leer la web.
+ */
+async function enriquecerDesdeWeb(idProspecto, url) {
+  const data = await scrapeWebsite(url);
+  if (!data.ok) return null;
 
   let nuevos = 0;
-  const agregar = async (tipo, valor, norm) => {
+  const agregar = async (tipo, valor, norm, area) => {
     const r = await executeQuery(
-      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, fuente)
-       VALUES (?,?,?,?,'web')`,
-      [idProspecto, tipo, valor, norm]
+      `INSERT IGNORE INTO prospecto_contactos (id_prospecto, tipo, valor, valor_normalizado, area, fuente)
+       VALUES (?,?,?,?,?,'web')`,
+      [idProspecto, tipo, valor, norm, area || null]
     );
     if (r.success && r.data.affectedRows > 0) nuevos++;
   };
 
-  for (const email of data.emails) await agregar('Email', email, normalizarEmail(email));
-  for (const tel of data.telefonos) await agregar('Telefono', tel, normalizarTelefono(tel));
-  for (const [, url] of Object.entries(data.redes)) await agregar('RedSocial', url, String(url).toLowerCase());
+  // Contactos con área (correos primero, ya vienen priorizados del scraper).
+  for (const c of data.contactos || []) {
+    const norm = c.tipo === 'Email' ? normalizarEmail(c.valor) : normalizarTelefono(c.valor);
+    await agregar(c.tipo, c.valor, norm, c.area);
+  }
+  for (const [, redUrl] of Object.entries(data.redes)) await agregar('RedSocial', redUrl, String(redUrl).toLowerCase(), null);
 
   // Guarda la web y el logo en el prospecto si no los tenía.
   if (data.base) {
@@ -189,6 +216,39 @@ async function procesarWebScrape(job, params) {
     );
   }
 
+  // RUC encontrado en la web: si el prospecto no tenía documento, lo
+  // completa, lo valida con SUNAT (cacheado) y detecta si ya es cliente.
+  let rucAplicado = null;
+  if (data.ruc) {
+    const pr = await executeQuery('SELECT documento FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
+    const sinDoc = pr.success && pr.data[0] && !pr.data[0].documento;
+    if (sinDoc) {
+      const val = await validarRUC(data.ruc);
+      const d = (val && val.datos) || {};
+      await executeQuery(
+        `UPDATE prospectos SET
+           documento = ?, tipo_documento = 'RUC', segmento = 'Formal',
+           razon_social  = COALESCE(NULLIF(?, ''), razon_social),
+           departamento  = COALESCE(departamento, ?),
+           provincia     = COALESCE(provincia, ?),
+           distrito      = COALESCE(distrito, ?),
+           direccion     = COALESCE(NULLIF(direccion, ''), ?)
+         WHERE id_prospecto = ?`,
+        [data.ruc, d.razon_social || null, d.departamento || null, d.provincia || null,
+         d.distrito || null, d.direccion || null, idProspecto]
+      );
+      // ¿Ese RUC ya es cliente?
+      const cli = await executeQuery('SELECT id_cliente FROM clientes WHERE ruc = ? LIMIT 1', [data.ruc]);
+      if (cli.success && cli.data.length > 0) {
+        await executeQuery(
+          "UPDATE prospectos SET flag_duplicado = 'Ya_cliente', id_cliente_match = ? WHERE id_prospecto = ?",
+          [cli.data[0].id_cliente, idProspecto]
+        );
+      }
+      rucAplicado = data.ruc;
+    }
+  }
+
   // Trazabilidad + recálculo de score con lo nuevo.
   await executeQuery(
     'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw) VALUES (?, "web", ?, ?)',
@@ -196,12 +256,12 @@ async function procesarWebScrape(job, params) {
   );
   const score = await recalcularScore(idProspecto);
 
-  await completar(job.id_job, {
-    id_prospecto: idProspecto,
+  return {
     contactos_nuevos: nuevos,
     emails: data.emails.length,
     telefonos: data.telefonos.length,
     redes: Object.keys(data.redes).length,
+    ruc: rucAplicado,
     score,
-  });
+  };
 }

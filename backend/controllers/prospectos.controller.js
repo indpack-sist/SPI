@@ -114,15 +114,53 @@ export async function getFacetas(req, res) {
 }
 
 // ------------------------------------------------------------
+// Últimos barridos (Google Places) por zona: para avisar que una
+// zona ya fue explorada y evitar que otro usuario la repita sin querer.
+// ------------------------------------------------------------
+export async function getBarridos(req, res) {
+  try {
+    const r = await executeQuery(`
+      SELECT
+        JSON_UNQUOTE(JSON_EXTRACT(j.parametros, '$.zona')) AS zona,
+        MAX(j.fecha_creacion) AS ultima_fecha,
+        COUNT(*) AS busquedas,
+        SUBSTRING_INDEX(
+          GROUP_CONCAT(COALESCE(e.nombre_completo, 'Sistema') ORDER BY j.fecha_creacion DESC SEPARATOR '|#|'),
+          '|#|', 1) AS ultimo_usuario
+      FROM scraping_jobs j
+      LEFT JOIN empleados e ON j.id_empleado_solicita = e.id_empleado
+      WHERE j.tipo = 'google_places'
+        AND JSON_UNQUOTE(JSON_EXTRACT(j.parametros, '$.zona')) IS NOT NULL
+      GROUP BY zona
+      ORDER BY ultima_fecha DESC
+      LIMIT 60`);
+    if (!r.success) return res.status(500).json({ error: r.error });
+
+    const data = r.data.map((row) => ({
+      zona: row.zona,
+      busquedas: row.busquedas,
+      ultimo_usuario: row.ultimo_usuario,
+      ultima_fecha: row.ultima_fecha,
+    }));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
 // Detalle con contactos y fuentes
 // ------------------------------------------------------------
 export async function getProspectoById(req, res) {
   try {
     const { id } = req.params;
     const r = await executeQuery(`
-      SELECT p.*, e.nombre_completo AS empleado_asignado, c.razon_social AS cliente_match_nombre
+      SELECT p.*, e.nombre_completo AS empleado_asignado,
+             g.nombre_completo AS gestor_nombre,
+             c.razon_social AS cliente_match_nombre
       FROM prospectos p
       LEFT JOIN empleados e ON p.id_empleado_asignado = e.id_empleado
+      LEFT JOIN empleados g ON p.id_gestor            = g.id_empleado
       LEFT JOIN clientes  c ON p.id_cliente_match      = c.id_cliente
       WHERE p.id_prospecto = ?`, [id]);
 
@@ -134,9 +172,17 @@ export async function getProspectoById(req, res) {
       'SELECT * FROM prospecto_contactos WHERE id_prospecto = ? ORDER BY tipo, id_contacto', [id]);
     const fuentes = await executeQuery(
       'SELECT id_fuente, fuente, url, fecha_scraping FROM prospecto_fuentes WHERE id_prospecto = ? ORDER BY fecha_scraping DESC', [id]);
+    const historial = await executeQuery(
+      `SELECT h.id_historial, h.accion, h.valor_anterior, h.valor_nuevo,
+              DATE_FORMAT(h.fecha, '%Y-%m-%d %H:%i') AS fecha,
+              e.nombre_completo AS usuario
+       FROM prospecto_historial h
+       LEFT JOIN empleados e ON h.id_empleado = e.id_empleado
+       WHERE h.id_prospecto = ? ORDER BY h.id_historial DESC`, [id]);
 
     prospecto.contactos = contactos.success ? contactos.data : [];
     prospecto.fuentes = fuentes.success ? fuentes.data : [];
+    prospecto.historial = historial.success ? historial.data : [];
 
     res.json({ success: true, data: prospecto });
   } catch (error) {
@@ -258,7 +304,38 @@ export async function updateProspecto(req, res) {
 }
 
 // ------------------------------------------------------------
+// Historial de gestión y bloqueo por dueño
+// ------------------------------------------------------------
+
+// Registra una entrada en el historial del prospecto (quién, cuándo, qué).
+async function registrarHistorial(idProspecto, idEmpleado, accion, anterior, nuevo) {
+  await executeQuery(
+    `INSERT INTO prospecto_historial (id_prospecto, id_empleado, accion, valor_anterior, valor_nuevo)
+     VALUES (?,?,?,?,?)`,
+    [idProspecto, idEmpleado || null, accion, anterior ?? null, nuevo ?? null]
+  );
+}
+
+// Devuelve el nombre del gestor si el prospecto está siendo gestionado por OTRO
+// usuario (bloqueado para el actual); null si está libre o es del propio usuario.
+// Usa id_gestor (se fija al gestionar), NO id_empleado_asignado (que marca quién
+// lo descubrió/creó y no debe bloquear).
+async function bloqueadoPorOtro(idProspecto, idEmpleado) {
+  const r = await executeQuery(
+    `SELECT p.id_gestor, e.nombre_completo
+     FROM prospectos p LEFT JOIN empleados e ON p.id_gestor = e.id_empleado
+     WHERE p.id_prospecto = ?`, [idProspecto]
+  );
+  const row = r.data?.[0];
+  if (row && row.id_gestor && Number(row.id_gestor) !== Number(idEmpleado)) {
+    return row.nombre_completo || 'otro usuario';
+  }
+  return null;
+}
+
+// ------------------------------------------------------------
 // Cambiar estado del workflow comercial
+// (reclama el prospecto para quien lo gestiona y bloquea a terceros)
 // ------------------------------------------------------------
 export async function cambiarEstado(req, res) {
   try {
@@ -267,9 +344,69 @@ export async function cambiarEstado(req, res) {
     if (!ESTADOS_WORKFLOW.includes(estado)) {
       return res.status(400).json({ error: 'Estado inválido' });
     }
-    const r = await executeQuery('UPDATE prospectos SET estado_workflow = ? WHERE id_prospecto = ?', [estado, id]);
+
+    const yo = req.user?.id_empleado;
+    const actual = await executeQuery(
+      'SELECT estado_workflow, id_gestor FROM prospectos WHERE id_prospecto = ?', [id]);
+    if (!actual.success || actual.data.length === 0) {
+      return res.status(404).json({ error: 'Prospecto no encontrado' });
+    }
+    const prev = actual.data[0];
+
+    // Bloqueo: si ya lo gestiona otro usuario, no se permite editar.
+    const dueno = await bloqueadoPorOtro(id, yo);
+    if (dueno) {
+      return res.status(409).json({
+        error: `Este prospecto está siendo gestionado por ${dueno}. Pídele que lo libere para poder editarlo.`,
+        bloqueado: true,
+      });
+    }
+
+    // Si nadie lo gestiona aún, lo reclama el usuario actual (queda bloqueado
+    // para los demás desde este momento).
+    let sql, params;
+    if (!prev.id_gestor) {
+      sql = 'UPDATE prospectos SET estado_workflow = ?, id_gestor = ?, fecha_gestion = NOW() WHERE id_prospecto = ?';
+      params = [estado, yo || null, id];
+    } else {
+      sql = 'UPDATE prospectos SET estado_workflow = ? WHERE id_prospecto = ?';
+      params = [estado, id];
+    }
+    const r = await executeQuery(sql, params);
     if (!r.success) return res.status(500).json({ error: r.error });
-    res.json({ success: true, message: 'Estado actualizado' });
+
+    await registrarHistorial(id, yo, 'estado', prev.estado_workflow, estado);
+    res.json({ success: true, message: 'Estado actualizado', id_gestor: prev.id_gestor || yo });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
+// Liberar la gestión (quita el dueño) para que otro pueda tomarlo.
+// Permitido al dueño actual o a un Administrador.
+// ------------------------------------------------------------
+export async function liberarProspecto(req, res) {
+  try {
+    const { id } = req.params;
+    const yo = req.user?.id_empleado;
+    const esAdmin = req.user?.rol === 'Administrador';
+
+    const r = await executeQuery(
+      'SELECT id_gestor FROM prospectos WHERE id_prospecto = ?', [id]);
+    if (!r.success || r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
+
+    const dueno = r.data[0].id_gestor;
+    if (dueno && Number(dueno) !== Number(yo) && !esAdmin) {
+      return res.status(403).json({ error: 'Solo el usuario que lo gestiona o un administrador pueden liberarlo.' });
+    }
+
+    const up = await executeQuery(
+      'UPDATE prospectos SET id_gestor = NULL, fecha_gestion = NULL WHERE id_prospecto = ?', [id]);
+    if (!up.success) return res.status(500).json({ error: up.error });
+
+    await registrarHistorial(id, yo, 'liberar', null, null);
+    res.json({ success: true, message: 'Prospecto liberado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -335,9 +472,18 @@ export async function deleteContacto(req, res) {
 export async function convertirACliente(req, res) {
   try {
     const { id } = req.params;
+    const yo = req.user?.id_empleado;
     const r = await executeQuery('SELECT * FROM prospectos WHERE id_prospecto = ?', [id]);
     if (r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
     const p = r.data[0];
+
+    const dueno = await bloqueadoPorOtro(id, yo);
+    if (dueno) {
+      return res.status(409).json({
+        error: `Este prospecto está siendo gestionado por ${dueno}. Pídele que lo libere para poder convertirlo.`,
+        bloqueado: true,
+      });
+    }
 
     if (p.estado_workflow === 'Convertido' && p.id_cliente_match) {
       return res.status(400).json({ error: 'Este prospecto ya fue convertido en cliente', id_cliente: p.id_cliente_match });
@@ -359,6 +505,7 @@ export async function convertirACliente(req, res) {
         "UPDATE prospectos SET estado_workflow = 'Convertido', flag_duplicado = 'Ya_cliente', id_cliente_match = ? WHERE id_prospecto = ?",
         [idCliente, id]
       );
+      await registrarHistorial(id, yo, 'convertido', p.estado_workflow, 'Convertido');
       return res.json({ success: true, message: 'El prospecto ya existía como cliente; se enlazó.', data: { id_cliente: idCliente, ya_existia: true } });
     }
 
@@ -403,6 +550,7 @@ export async function convertirACliente(req, res) {
       "UPDATE prospectos SET estado_workflow = 'Convertido', flag_duplicado = 'Ya_cliente', id_cliente_match = ? WHERE id_prospecto = ?",
       [idCliente, id]
     );
+    await registrarHistorial(id, yo, 'convertido', p.estado_workflow, 'Convertido');
 
     res.status(201).json({ success: true, message: 'Cliente creado desde el prospecto', data: { id_cliente: idCliente, razon_social } });
   } catch (error) {
@@ -579,8 +727,19 @@ export async function fotoProxy(req, res) {
 export async function descartarProspecto(req, res) {
   try {
     const { id } = req.params;
+    const yo = req.user?.id_empleado;
+
+    const dueno = await bloqueadoPorOtro(id, yo);
+    if (dueno) {
+      return res.status(409).json({
+        error: `Este prospecto está siendo gestionado por ${dueno}. Pídele que lo libere para poder editarlo.`,
+        bloqueado: true,
+      });
+    }
+
     const r = await executeQuery("UPDATE prospectos SET estado_workflow = 'Descartado' WHERE id_prospecto = ?", [id]);
     if (!r.success) return res.status(500).json({ error: r.error });
+    await registrarHistorial(id, yo, 'estado', null, 'Descartado');
     res.json({ success: true, message: 'Prospecto descartado' });
   } catch (error) {
     res.status(500).json({ error: error.message });

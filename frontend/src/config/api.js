@@ -162,6 +162,7 @@ export const prospectosAPI = {
   getAll: (params) => api.get('/prospectos', { params }),
   getEstadisticas: () => api.get('/prospectos/estadisticas'),
   getFacetas: () => api.get('/prospectos/facetas'),
+  getBarridos: () => api.get('/prospectos/barridos'),
   getById: (id) => api.get(`/prospectos/${id}`),
   create: (data) => api.post('/prospectos', data),
   ingestaLista: (data) => api.post('/prospectos/ingesta-lista', data),
@@ -172,6 +173,7 @@ export const prospectosAPI = {
   deleteContacto: (idContacto) => api.delete(`/prospectos/contactos/${idContacto}`),
   convertir: (id, data) => api.post(`/prospectos/${id}/convertir`, data),
   descartar: (id) => api.patch(`/prospectos/${id}/descartar`),
+  liberar: (id) => api.patch(`/prospectos/${id}/liberar`),
   excluir: (id, excluido) => api.patch(`/prospectos/${id}/excluir`, { excluido }),
   delete: (id) => api.delete(`/prospectos/${id}`),
   // Cola de scraping / descubrimiento

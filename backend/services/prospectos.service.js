@@ -192,7 +192,8 @@ function construirPorQue(p) {
   if (partes.length === 0) {
     return `${nombre} es un prospecto por evaluar; falta enriquecer datos de contacto y sector para priorizarlo.`;
   }
-  const prioridad = p.score >= 70 ? 'Prioridad alta' : p.score >= 45 ? 'Prioridad media' : 'Prioridad baja';
+  // Bandas del semáforo de potencial (alineadas con el frontend): 🟢≥75 🟡≥45 🔴<45.
+  const prioridad = p.score >= 75 ? 'Prioridad alta' : p.score >= 45 ? 'Prioridad media' : 'Prioridad baja';
   return `${prioridad}. ${partes.join(' ')}`;
 }
 

@@ -369,7 +369,7 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
  * web, etc.). Lee el estado actual + sus contactos y actualiza score y
  * score_detalle.
  */
-export async function recalcularScore(idProspecto) {
+export async function recalcularScore(idProspecto, sunat = {}) {
   const pr = await executeQuery('SELECT * FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
   if (!pr.success || pr.data.length === 0) return null;
   const p = pr.data[0];
@@ -387,8 +387,10 @@ export async function recalcularScore(idProspecto) {
     tiene_web: !!p.web || tipos.includes('Web'),
     tiene_direccion: !!p.direccion,
     ya_cliente: p.flag_duplicado === 'Ya_cliente',
-    // Señales SUNAT ya no están a mano aquí; se preservan las del alta si existían.
-    es_activo: p.origen === 'sunat' ? true : undefined,
+    // Vigencia SUNAT: si el enriquecido validó el RUC, la pasamos aquí; si no,
+    // se preserva la del alta (los ingresados por SUNAT se asumen activos).
+    es_activo: sunat.es_activo !== undefined ? sunat.es_activo : (p.origen === 'sunat' ? true : undefined),
+    es_habido: sunat.es_habido,
   });
 
   await executeQuery(

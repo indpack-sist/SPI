@@ -3,9 +3,10 @@ import {
   Radar, Search, Upload, Users, Flame, Sparkles, UserCheck, Gauge,
   Phone, Mail, Globe, Building2, CheckCircle2, X, Loader,
   UserPlus, Trash2, Eye, AlertTriangle, Compass, Activity, Zap, FileSpreadsheet,
-  EyeOff, RotateCcw
+  EyeOff, RotateCcw, Lock, Unlock, Clock, History
 } from 'lucide-react';
 import { prospectosAPI } from '../../config/api';
+import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/UI/Modal';
 import Alert from '../../components/UI/Alert';
 import './Prospectos.css';
@@ -90,11 +91,13 @@ function DupBadge({ flag }) {
 }
 
 export default function Prospectos() {
+  const { user } = useAuth();
   const [prospectos, setProspectos] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [barridos, setBarridos] = useState([]);
 
   const [search, setSearch] = useState('');
   const [fSegmento, setFSegmento] = useState('');
@@ -170,7 +173,15 @@ export default function Prospectos() {
     } catch { /* silencioso: si falla, los selects quedan vacíos */ }
   }, []);
 
-  useEffect(() => { cargarFacetas(); }, [cargarFacetas]);
+  // Barridos previos por zona: para avisar si una zona ya fue explorada.
+  const cargarBarridos = useCallback(async () => {
+    try {
+      const res = await prospectosAPI.getBarridos();
+      setBarridos(res.data.data || []);
+    } catch { /* silencioso */ }
+  }, []);
+
+  useEffect(() => { cargarFacetas(); cargarBarridos(); }, [cargarFacetas, cargarBarridos]);
 
   const notify = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3500); };
 
@@ -187,10 +198,10 @@ export default function Prospectos() {
           algoTermino = true;
         }
       }
-      if (algoTermino) { cargar(); cargarFacetas(); }
+      if (algoTermino) { cargar(); cargarFacetas(); cargarBarridos(); }
       return data;
     } catch { return []; }
-  }, [cargar, cargarFacetas]);
+  }, [cargar, cargarFacetas, cargarBarridos]);
 
   useEffect(() => {
     refreshJobs();
@@ -309,14 +320,23 @@ export default function Prospectos() {
     }
   };
 
+  // Recarga el detalle abierto (para reflejar dueño/historial actualizados).
+  const refrescarDetalle = async (id) => {
+    try {
+      const res = await prospectosAPI.getById(id);
+      setDetalle(res.data.data);
+    } catch { /* noop */ }
+  };
+
   const cambiarEstado = async (id, estado) => {
     try {
       await prospectosAPI.cambiarEstado(id, estado);
       notify('Estado actualizado');
       cargar();
-      if (detalle?.id_prospecto === id) setDetalle((d) => ({ ...d, estado_workflow: estado }));
+      if (detalle?.id_prospecto === id) await refrescarDetalle(id);
     } catch (err) {
-      setError(err.error || 'Error al cambiar estado');
+      setError(err.error || err.response?.data?.error || 'Error al cambiar estado');
+      if (detalle?.id_prospecto === id) await refrescarDetalle(id);
     }
   };
 
@@ -328,7 +348,18 @@ export default function Prospectos() {
       setDetalle(null);
       cargar();
     } catch (err) {
-      setError(err.error || 'Error al descartar');
+      setError(err.error || err.response?.data?.error || 'Error al descartar');
+    }
+  };
+
+  const liberar = async (id) => {
+    try {
+      await prospectosAPI.liberar(id);
+      notify('Prospecto liberado. Ya puede gestionarlo otro usuario.');
+      cargar();
+      if (detalle?.id_prospecto === id) await refrescarDetalle(id);
+    } catch (err) {
+      setError(err.error || err.response?.data?.error || 'Error al liberar');
     }
   };
 
@@ -363,6 +394,20 @@ export default function Prospectos() {
 
   const detalleSignals = detalle?.score_detalle?.señales || [];
   const detalleWhy = detalle?.score_detalle?.por_que_contactar;
+
+  // Bloqueo por gestor: si otro usuario lo gestiona, se bloquea la edición.
+  const esAdmin = user?.rol === 'Administrador';
+  const detalleDueno = detalle?.id_gestor || null;
+  const bloqueado = !!detalleDueno && Number(detalleDueno) !== Number(user?.id);
+  const puedeLiberar = !!detalleDueno && (!bloqueado || esAdmin);
+  const ACCION_LABEL = { estado: 'Cambió estado', liberar: 'Liberó la gestión', convertido: 'Convirtió a cliente' };
+
+  // Aviso de barrido: zonas escritas en el modal que ya fueron exploradas antes.
+  const barridosMap = new Map(barridos.map((b) => [String(b.zona || '').toLowerCase(), b]));
+  const zonasYaBarridas = (descubrirData.zonas || '')
+    .split('\n').map((z) => z.trim()).filter(Boolean)
+    .map((z) => barridosMap.get(z.toLowerCase()))
+    .filter(Boolean);
 
   return (
     <div className="pros-wrap">
@@ -545,7 +590,23 @@ export default function Prospectos() {
                         <Thumb p={p} />
                         <div style={{ minWidth: 0 }}>
                           <span className="pros-empresa-nom">{p.razon_social}</span>
-                          <span className="pros-empresa-doc">{p.documento || 'Sin documento'} · {p.segmento}</span>
+                          <span className="pros-empresa-doc">
+                            {p.documento
+                              ? `${p.tipo_documento || 'RUC'} ${p.documento}`
+                              : <span className="pros-sin-doc">Sin RUC</span>} · {p.segmento}
+                          </span>
+                          <div className="pros-contact-mini">
+                            {p.emails ? (
+                              <span title={p.emails}><Mail size={11} /> {p.emails.split(' / ')[0]}</span>
+                            ) : (
+                              <span className="pros-mini-warn"><AlertTriangle size={11} /> Sin correo</span>
+                            )}
+                            {p.telefonos ? (
+                              <span title={p.telefonos}><Phone size={11} /> {p.telefonos.split(' / ')[0]}</span>
+                            ) : (
+                              <span className="pros-mini-warn"><AlertTriangle size={11} /> Sin teléfono</span>
+                            )}
+                          </div>
                           <div style={{ marginTop: 4 }}><DupBadge flag={p.flag_duplicado} /></div>
                         </div>
                       </div>
@@ -554,7 +615,14 @@ export default function Prospectos() {
                     <td className="pros-hide-sm" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                       {[p.distrito, p.provincia].filter(Boolean).join(', ') || '—'}
                     </td>
-                    <td><span className={`pros-chip ${ec.cls}`}>{ec.label}</span></td>
+                    <td>
+                      <span className={`pros-chip ${ec.cls}`}>{ec.label}</span>
+                      {p.id_gestor && Number(p.id_gestor) !== Number(user?.id) && (
+                        <span title="Gestionado por otro usuario" style={{ marginLeft: 6, color: '#e74c3c', verticalAlign: 'middle', display: 'inline-flex' }}>
+                          <Lock size={13} />
+                        </span>
+                      )}
+                    </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="pros-actions-cell">
                         <button className="btn btn-ghost btn-sm" title="Ver detalle" onClick={() => verDetalle(p.id_prospecto)}><Eye size={15} /></button>
@@ -604,6 +672,32 @@ export default function Prospectos() {
                 <div className="pros-loading-inline"><Loader size={16} className="pros-spin" /> Cargando…</div>
               ) : (
                 <>
+                  {detalleDueno && (
+                    <div className={`pros-lock ${bloqueado ? 'pros-lock-blocked' : 'pros-lock-mine'}`}>
+                      {bloqueado ? <Lock size={15} /> : <UserCheck size={15} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--white)' }}>
+                          {bloqueado ? `Gestionado por ${detalle.gestor_nombre || 'otro usuario'}` : 'Lo estás gestionando tú'}
+                        </div>
+                        {detalle.fecha_gestion && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                            Desde {String(detalle.fecha_gestion).slice(0, 16).replace('T', ' ')}
+                          </div>
+                        )}
+                        {bloqueado && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                            No puedes editarlo hasta que lo libere{esAdmin ? ' (o libéralo tú como administrador)' : ''}.
+                          </div>
+                        )}
+                      </div>
+                      {puedeLiberar && (
+                        <button className="btn btn-outline btn-sm" onClick={() => liberar(detalle.id_prospecto)}>
+                          <Unlock size={14} /> Liberar
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {detalleWhy && (
                     <div className="pros-why">
                       <div className="pros-why-title">¿Por qué contactarlo?</div>
@@ -626,33 +720,84 @@ export default function Prospectos() {
                   )}
 
                   <div className="pros-section-title">Contactos</div>
-                  {(detalle.contactos || []).length === 0 ? (
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Sin contactos registrados aún.</div>
-                  ) : (
-                    (detalle.contactos || []).map((c) => (
-                      <div className="pros-contact-row" key={c.id_contacto}>
-                        {c.tipo === 'Email' ? <Mail size={15} /> : c.tipo === 'Web' ? <Globe size={15} /> : c.tipo === 'RedSocial' ? <Globe size={15} /> : <Phone size={15} />}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ color: 'var(--white)' }}>{c.valor}</div>
-                          {c.nombre_persona && <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{c.nombre_persona}{c.cargo ? ` · ${c.cargo}` : ''}</div>}
-                        </div>
-                      </div>
-                    ))
-                  )}
+                  {(() => {
+                    // Correos primero (canal prioritario), luego teléfonos y el resto.
+                    const orden = { Email: 0, Telefono: 1, Celular: 1, Whatsapp: 1, Web: 2, RedSocial: 3 };
+                    const cts = [...(detalle.contactos || [])].sort((a, b) => (orden[a.tipo] ?? 9) - (orden[b.tipo] ?? 9));
+                    const tieneTel = cts.some((c) => ['Telefono', 'Celular', 'Whatsapp'].includes(c.tipo));
+                    const tieneEmail = cts.some((c) => c.tipo === 'Email');
+                    if (cts.length === 0) {
+                      return <div className="pros-nocontact"><AlertTriangle size={14} /> Sin datos de contacto todavía.</div>;
+                    }
+                    return (
+                      <>
+                        {cts.map((c) => (
+                          <div className="pros-contact-row" key={c.id_contacto}>
+                            {c.tipo === 'Email' ? <Mail size={15} /> : c.tipo === 'Web' ? <Globe size={15} /> : c.tipo === 'RedSocial' ? <Globe size={15} /> : <Phone size={15} />}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ color: 'var(--white)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span style={{ wordBreak: 'break-all' }}>{c.valor}</span>
+                                {c.area && <span className="pros-area-badge">{c.area}</span>}
+                              </div>
+                              {(c.nombre_persona || c.cargo) && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                  {c.nombre_persona}{c.nombre_persona && c.cargo ? ' · ' : ''}{c.cargo}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {!tieneTel && (
+                          <div className="pros-nocontact"><AlertTriangle size={14} /> Sin número de contacto.</div>
+                        )}
+                        {!tieneEmail && (
+                          <div className="pros-nocontact"><AlertTriangle size={14} /> Sin correo de contacto.</div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   <div className="pros-section-title">Estado comercial</div>
-                  <select className="form-select" value={detalle.estado_workflow || 'Nuevo'} onChange={(e) => cambiarEstado(detalle.id_prospecto, e.target.value)}>
+                  <select
+                    className="form-select"
+                    value={detalle.estado_workflow || 'Nuevo'}
+                    disabled={bloqueado}
+                    title={bloqueado ? 'Bloqueado: lo gestiona otro usuario' : undefined}
+                    onChange={(e) => cambiarEstado(detalle.id_prospecto, e.target.value)}
+                  >
                     <option value="Nuevo">Nuevo</option>
                     <option value="En_gestion">En gestión</option>
                     <option value="Contactado">Contactado</option>
                     <option value="Descartado">Descartado</option>
                   </select>
+
+                  <div className="pros-section-title"><History size={13} style={{ verticalAlign: -2 }} /> Historial de gestión</div>
+                  {(detalle.historial || []).length === 0 ? (
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Sin movimientos registrados aún.</div>
+                  ) : (
+                    <ul className="pros-historial">
+                      {(detalle.historial || []).map((h) => (
+                        <li key={h.id_historial}>
+                          <Clock size={13} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: 'var(--white)', fontSize: '0.82rem' }}>
+                              {ACCION_LABEL[h.accion] || h.accion}
+                              {h.valor_nuevo && <span style={{ color: 'var(--text-secondary)' }}> → {ESTADO_CHIP[h.valor_nuevo]?.label || h.valor_nuevo}</span>}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                              {h.usuario || 'Sistema'} · {h.fecha}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </>
               )}
             </div>
 
             <div className="pros-panel-foot">
-              <button className="btn btn-danger btn-sm" onClick={() => descartar(detalle.id_prospecto)}><Trash2 size={15} /> Descartar</button>
+              <button className="btn btn-danger btn-sm" disabled={bloqueado} title={bloqueado ? 'Bloqueado por otro usuario' : undefined} onClick={() => descartar(detalle.id_prospecto)}><Trash2 size={15} /> Descartar</button>
               {detalle.web && (
                 <button className="btn btn-outline btn-sm" onClick={() => enriquecer(detalle.id_prospecto, detalle.web)}><Zap size={15} /> Enriquecer</button>
               )}
@@ -662,7 +807,7 @@ export default function Prospectos() {
                 <button className="btn btn-outline btn-sm" onClick={() => excluir(detalle.id_prospecto, true)}><EyeOff size={15} /> Excluir</button>
               )}
               {detalle.estado_workflow !== 'Convertido' ? (
-                <button className="btn btn-success" style={{ flex: 1 }} onClick={() => abrirConvertir(detalle)}><UserPlus size={16} /> Crear cliente</button>
+                <button className="btn btn-success" style={{ flex: 1 }} disabled={bloqueado} title={bloqueado ? 'Bloqueado por otro usuario' : undefined} onClick={() => abrirConvertir(detalle)}><UserPlus size={16} /> Crear cliente</button>
               ) : (
                 <span className="pros-chip chip-conv" style={{ alignSelf: 'center' }}><CheckCircle2 size={12} /> Convertido en cliente</span>
               )}
@@ -755,6 +900,22 @@ export default function Prospectos() {
             </select>
           </div>
         </div>
+
+        {zonasYaBarridas.length > 0 && (
+          <div style={{ marginTop: '0.8rem', fontSize: '0.78rem', background: 'rgba(232,184,75,0.12)', border: '1px solid rgba(232,184,75,0.5)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e8b84b', fontWeight: 700, marginBottom: 4 }}>
+              <AlertTriangle size={15} /> Zona(s) ya exploradas — evita repetir
+            </div>
+            {zonasYaBarridas.map((b) => (
+              <div key={b.zona} style={{ color: 'var(--text-secondary)' }}>
+                <b style={{ color: 'var(--white)' }}>{b.zona}</b>: barrida el {String(b.ultima_fecha).slice(0, 16).replace('T', ' ')} por {b.ultimo_usuario} ({b.busquedas} búsqueda{b.busquedas === 1 ? '' : 's'}).
+              </div>
+            ))}
+            <div style={{ marginTop: 4, color: 'var(--text-secondary)' }}>
+              Repetir solo trae lo nuevo (los duplicados no se re-cobran), pero el Text Search sí consume cuota. Si solo quieres novedades, adelante; si no, cambia de zona.
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: '0.8rem', fontSize: '0.76rem', color: 'var(--text-secondary)', background: 'var(--carbon)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
           {descubrirData.todos

@@ -3,6 +3,7 @@ import {
   getAllProspectos,
   getEstadisticas,
   getFacetas,
+  getBarridos,
   getProspectoById,
   createProspecto,
   ingestaLista,
@@ -13,6 +14,7 @@ import {
   deleteContacto,
   convertirACliente,
   descartarProspecto,
+  liberarProspecto,
   deleteProspecto,
   crearJob,
   listarJobs,
@@ -27,6 +29,7 @@ const router = express.Router();
 router.get('/', getAllProspectos);
 router.get('/estadisticas', getEstadisticas);
 router.get('/facetas', getFacetas);
+router.get('/barridos', getBarridos);
 router.get('/jobs', listarJobs);
 router.get('/:id', getProspectoById);
 
@@ -46,6 +49,7 @@ router.delete('/contactos/:id_contacto', deleteContacto);
 
 router.post('/:id/convertir', convertirACliente);
 router.patch('/:id/descartar', descartarProspecto);
+router.patch('/:id/liberar', liberarProspecto);
 router.patch('/:id/excluir', excluirProspecto);
 router.delete('/:id', deleteProspecto);
 

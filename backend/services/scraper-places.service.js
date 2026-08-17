@@ -119,11 +119,15 @@ export async function detallar(placeId) {
   try {
     const res = await axios.get(DETAILS, {
       timeout: TIMEOUT,
+      // Solo pedimos lo accionable (nombre, dirección, teléfono y web). Omitimos
+      // rating/user_ratings_total (SKU "Atmosphere", el más caro): ya vienen
+      // gratis en el Text Search. Así cada detalle cuesta menos y rinden más
+      // búsquedas con la misma cuota. La web basta para sacar correos y RUC.
       params: {
         place_id: placeId,
         key: KEY,
         language: 'es',
-        fields: 'name,formatted_address,formatted_phone_number,international_phone_number,website,url,rating,user_ratings_total',
+        fields: 'name,formatted_address,formatted_phone_number,international_phone_number,website,url',
       },
     });
     const det = res.data?.result;
@@ -137,8 +141,6 @@ export async function detallar(placeId) {
       telefono: det.formatted_phone_number || det.international_phone_number || null,
       web: det.website || null,
       maps_url: det.url || null,
-      rating: det.rating ?? null,
-      total_reviews: det.user_ratings_total ?? null,
       detalle_raw: det,
     };
   } catch {

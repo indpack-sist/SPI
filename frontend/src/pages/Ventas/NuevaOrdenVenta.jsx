@@ -327,7 +327,7 @@ useEffect(() => {
         }
 
         try {
-          const resCredito = await clientesAPI.getEstadoCredito(orden.id_cliente);
+          const resCredito = await clientesAPI.getEstadoCredito(orden.id_cliente, id);
           if (resCredito.data.success) {
             setEstadoCredito(resCredito.data.data);
           }

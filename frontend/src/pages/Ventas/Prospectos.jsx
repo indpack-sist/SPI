@@ -486,7 +486,7 @@ export default function Prospectos() {
                     {j.estado === 'completado' && (
                       <div><small>
                         {j.tipo === 'google_places'
-                          ? `${rez.creados ?? 0} creados · ${rez.duplicados ?? 0} dup · ${rez.ya_cliente ?? 0} ya clientes`
+                          ? `${rez.creados ?? 0} creados · ${rez.duplicados ?? 0} dup · ${rez.ya_cliente ?? 0} ya clientes${rez.irrelevantes ? ` · ${rez.irrelevantes} descartados` : ''}`
                           : `${rez.contactos_nuevos ?? 0} contactos nuevos · score ${rez.score ?? '—'}`}
                       </small></div>
                     )}

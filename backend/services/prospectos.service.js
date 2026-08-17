@@ -31,6 +31,14 @@ const SECTORES_OBJETIVO = [
   { patron: /\b(FERRETER|FERRETERIA INDUSTRIAL|SUMINISTRO)/i, sector: 'Ferretería / Suministros', bono: 8 },
 ];
 
+// Anti-sectores: empresas de SERVICIOS que NO compran empaque industrial, pero
+// cuyo nombre puede contener una palabra de sector objetivo (ej. "ecommerce" en
+// una agencia de diseño web). Si el nombre calza con esto, no se asigna sector
+// afín ni bono. Se usan términos específicos de servicios a propósito: NO se
+// filtra "agencia" a secas para no excluir prospectos válidos (ej. "agencia de
+// carga" sí es logística).
+const ANTISECTORES = /(AGENCIA\s+(DE\s+)?(MARKETING|PUBLICIDAD|VIAJES|SEGUROS|ADUANA|EMPLEO|DIGITAL)|MARKETING\s+DIGITAL|PUBLICIDAD|COMMUNITY\s+MANAGER|\bSEO\b|DISE[NÑ]O\s+(WEB|GR[AÁ]FICO)|DESARROLLO\s+(WEB|DE\s+SOFTWARE|DE\s+APP|DE\s+APLICACIONES)|P[AÁ]GINAS?\s+WEB|SITIOS?\s+WEB|TIENDAS?\s+VIRTUALES?|\bSOFTWARE\b|APLICACIONES\s+M[OÓ]VILES|INTELIGENCIA\s+ARTIFICIAL|AUTOMATIZACIONES?|CONSULTOR[IÍ]A|CONSULTORA|ESTUDIO\s+(CONTABLE|JUR[IÍ]DICO|DE\s+ABOGADOS)|ABOGADOS|NOTAR[IÍ]A|CONTABILIDAD|INMOBILIARIA|CORREDORA\s+DE)/i;
+
 /** Deja solo dígitos de un teléfono (para comparar/deduplicar). */
 export function normalizarTelefono(valor) {
   if (!valor) return '';
@@ -58,8 +66,19 @@ export function normalizarDocumento(valor) {
  * Detecta el sector objetivo a partir del nombre de la empresa.
  * Devuelve { sector, bono } o null si no calza con ninguno.
  */
+/**
+ * ¿El nombre corresponde a una empresa de SERVICIOS (agencia digital,
+ * consultora, estudio, notaría…) que no compra empaque industrial? Se usa para
+ * descartarlas en el descubrimiento automático antes de gastar cuota de Places.
+ */
+export function esEmpresaServicios(nombre) {
+  return ANTISECTORES.test(nombre || '');
+}
+
 export function detectarSector(nombre) {
   if (!nombre) return null;
+  // Empresa de servicios (agencia digital, consultora, estudio…): sin encaje.
+  if (ANTISECTORES.test(nombre)) return null;
   for (const s of SECTORES_OBJETIVO) {
     if (s.patron.test(nombre)) {
       return { sector: s.sector, bono: s.bono };
@@ -108,18 +127,18 @@ export function calcularScore(p = {}) {
     señales.push('Condición NO HABIDO');
   }
 
-  // --- Encaje de sector ---
+  // --- Encaje de sector (los anti-sectores de servicios no puntúan) ---
   let sectorDetectado = p.sector || null;
-  if (!sectorDetectado) {
-    const det = detectarSector(p.razon_social);
-    if (det) {
-      sectorDetectado = det.sector;
-      score += det.bono;
-      señales.push(`Sector afín: ${det.sector}`);
-    }
+  if (ANTISECTORES.test(p.razon_social || '')) {
+    // Empresa de servicios: no compra empaque físico. Se descarta el sector
+    // afín aunque su nombre contenga una palabra de sector objetivo
+    // (ej. "ecommerce" en una agencia web) o venga uno guardado de antes.
+    sectorDetectado = null;
+    señales.push('Empresa de servicios (no compra empaque): sin encaje de sector');
   } else {
-    const det = detectarSector(p.razon_social) || detectarSector(sectorDetectado);
+    const det = detectarSector(p.razon_social) || (sectorDetectado ? detectarSector(sectorDetectado) : null);
     if (det) {
+      sectorDetectado = sectorDetectado || det.sector;
       score += det.bono;
       señales.push(`Sector afín: ${sectorDetectado}`);
     }

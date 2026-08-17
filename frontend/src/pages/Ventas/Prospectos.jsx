@@ -105,6 +105,7 @@ export default function Prospectos() {
   const [fFlag, setFFlag] = useState('');
   const [fSector, setFSector] = useState('');
   const [fBusqueda, setFBusqueda] = useState('');
+  const [fMinScore, setFMinScore] = useState(''); // umbral de potencial mínimo
   const [orden, setOrden] = useState('score');
   const [vista, setVista] = useState('activos'); // 'activos' | 'excluidos'
   const [facetas, setFacetas] = useState({ sectores: [], busquedas: [] });
@@ -146,10 +147,11 @@ export default function Prospectos() {
       if (fFlag) params.flag = fFlag;
       if (fSector) params.sector = fSector;
       if (fBusqueda) params.busqueda = fBusqueda;
+      if (fMinScore) params.min_score = fMinScore;
       if (vista === 'excluidos') params.vista = 'excluidos';
       const [lista, est] = await Promise.all([
         prospectosAPI.getAll(params),
-        prospectosAPI.getEstadisticas(),
+        prospectosAPI.getEstadisticas(fMinScore ? { min_score: fMinScore } : undefined),
       ]);
       setProspectos(lista.data.data);
       setStats(est.data.data || {});
@@ -158,7 +160,7 @@ export default function Prospectos() {
     } finally {
       setLoading(false);
     }
-  }, [search, fSegmento, fEstado, fFlag, fSector, fBusqueda, orden, vista]);
+  }, [search, fSegmento, fEstado, fFlag, fSector, fBusqueda, fMinScore, orden, vista]);
 
   useEffect(() => {
     const t = setTimeout(cargar, search ? 300 : 0);
@@ -543,6 +545,12 @@ export default function Prospectos() {
             ))}
           </select>
         )}
+        <select className="form-select" style={{ maxWidth: 170 }} value={fMinScore} onChange={(e) => setFMinScore(e.target.value)} title="Mostrar solo prospectos con este potencial o más">
+          <option value="">Todo potencial</option>
+          <option value="70">Alto · ≥ 70%</option>
+          <option value="45">Medio · ≥ 45%</option>
+          <option value="25">Bajo · ≥ 25%</option>
+        </select>
         <select className="form-select" style={{ maxWidth: 150 }} value={orden} onChange={(e) => setOrden(e.target.value)}>
           <option value="score">Mayor score</option>
           <option value="recientes">Más recientes</option>

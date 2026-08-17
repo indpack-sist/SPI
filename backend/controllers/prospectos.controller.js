@@ -18,7 +18,7 @@ const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'De
 // ------------------------------------------------------------
 export async function getAllProspectos(req, res) {
   try {
-    const { segmento, estado, flag, search, orden, vista, sector, busqueda } = req.query;
+    const { segmento, estado, flag, search, orden, vista, sector, busqueda, min_score } = req.query;
 
     let sql = `
       SELECT p.*,
@@ -43,6 +43,10 @@ export async function getAllProspectos(req, res) {
     if (flag)     { sql += ' AND p.flag_duplicado = ?'; params.push(flag); }
     if (sector)   { sql += ' AND p.sector = ?'; params.push(sector); }
     if (busqueda) { sql += ' AND p.origen_query = ?'; params.push(busqueda); }
+    // Filtro por potencial mínimo (score 0-100). Se ignora si no es un número.
+    if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
+      sql += ' AND p.score >= ?'; params.push(Number(min_score));
+    }
     if (search) {
       sql += ` AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?
                 OR p.distrito LIKE ? OR p.provincia LIKE ? OR p.departamento LIKE ? OR p.sector LIKE ?)`;
@@ -68,6 +72,14 @@ export async function getAllProspectos(req, res) {
 // ------------------------------------------------------------
 export async function getEstadisticas(req, res) {
   try {
+    // El umbral de potencial (min_score) también recorta las tarjetas para
+    // que coincidan con la tabla y el Excel. Se ignora si no es número.
+    const { min_score } = req.query;
+    const params = [];
+    let filtroScore = '';
+    if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
+      filtroScore = ' AND score >= ?'; params.push(Number(min_score));
+    }
     const r = await executeQuery(`
       SELECT
         COUNT(*)                                                       AS total,
@@ -78,8 +90,8 @@ export async function getEstadisticas(req, res) {
         ROUND(AVG(CASE WHEN flag_duplicado = 'Ninguno' THEN score END)) AS score_promedio,
         SUM(score >= 70 AND flag_duplicado = 'Ninguno')                AS calientes
       FROM prospectos
-      WHERE excluido = 0
-    `);
+      WHERE excluido = 0${filtroScore}
+    `, params);
     if (!r.success) return res.status(500).json({ error: r.error });
     res.json({ success: true, data: r.data[0] });
   } catch (error) {

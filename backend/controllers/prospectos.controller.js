@@ -18,7 +18,7 @@ const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'De
 // ------------------------------------------------------------
 export async function getAllProspectos(req, res) {
   try {
-    const { segmento, estado, flag, search, orden, vista } = req.query;
+    const { segmento, estado, flag, search, orden, vista, sector, busqueda } = req.query;
 
     let sql = `
       SELECT p.*,
@@ -41,6 +41,8 @@ export async function getAllProspectos(req, res) {
     if (segmento) { sql += ' AND p.segmento = ?'; params.push(segmento); }
     if (estado)   { sql += ' AND p.estado_workflow = ?'; params.push(estado); }
     if (flag)     { sql += ' AND p.flag_duplicado = ?'; params.push(flag); }
+    if (sector)   { sql += ' AND p.sector = ?'; params.push(sector); }
+    if (busqueda) { sql += ' AND p.origen_query = ?'; params.push(busqueda); }
     if (search) {
       sql += ` AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?
                 OR p.distrito LIKE ? OR p.provincia LIKE ? OR p.departamento LIKE ? OR p.sector LIKE ?)`;
@@ -80,6 +82,32 @@ export async function getEstadisticas(req, res) {
     `);
     if (!r.success) return res.status(500).json({ error: r.error });
     res.json({ success: true, data: r.data[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
+// Facetas para los filtros de la barra: sectores detectados y
+// búsquedas (rubros de Google) que originaron los prospectos, con conteo.
+// ------------------------------------------------------------
+export async function getFacetas(req, res) {
+  try {
+    const [sectores, busquedas] = await Promise.all([
+      executeQuery(`
+        SELECT sector AS valor, COUNT(*) AS total
+        FROM prospectos
+        WHERE excluido = 0 AND sector IS NOT NULL AND sector <> ''
+        GROUP BY sector ORDER BY total DESC, sector ASC`),
+      executeQuery(`
+        SELECT origen_query AS valor, COUNT(*) AS total
+        FROM prospectos
+        WHERE excluido = 0 AND origen_query IS NOT NULL AND origen_query <> ''
+        GROUP BY origen_query ORDER BY total DESC, origen_query ASC`),
+    ]);
+    if (!sectores.success) return res.status(500).json({ error: sectores.error });
+    if (!busquedas.success) return res.status(500).json({ error: busquedas.error });
+    res.json({ success: true, data: { sectores: sectores.data, busquedas: busquedas.data } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

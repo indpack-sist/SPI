@@ -67,6 +67,14 @@ const RUBROS_OBJETIVO = [
   { label: 'Ferreterías industriales', q: 'ferreteria industrial' },
 ];
 
+// Los 25 departamentos del Perú (incluye Callao) para el selector de zonas del
+// descubrimiento. Se envían a Google como "<Departamento>, Perú".
+const DEPARTAMENTOS_PERU = [
+  'Amazonas', 'Áncash', 'Apurímac', 'Arequipa', 'Ayacucho', 'Cajamarca', 'Callao', 'Cusco',
+  'Huancavelica', 'Huánuco', 'Ica', 'Junín', 'La Libertad', 'Lambayeque', 'Lima', 'Loreto',
+  'Madre de Dios', 'Moquegua', 'Pasco', 'Piura', 'Puno', 'San Martín', 'Tacna', 'Tumbes', 'Ucayali',
+];
+
 const ESTADO_CHIP = {
   Nuevo:      { cls: 'chip-nuevo', label: 'Nuevo' },
   En_gestion: { cls: 'chip-gestion', label: 'En gestión' },
@@ -132,7 +140,7 @@ export default function Prospectos() {
 
   // Descubrimiento (Google Places)
   const [descubrirOpen, setDescubrirOpen] = useState(false);
-  const [descubrirData, setDescubrirData] = useState({ query: '', zonas: 'Lima, Perú', segmento: 'Formal', limite: 20, todos: true });
+  const [descubrirData, setDescubrirData] = useState({ query: '', zonasSel: ['Lima'], otras: '', segmento: 'Formal', limite: 20, todos: true });
   const [descubrirLoading, setDescubrirLoading] = useState(false);
 
   // Panel de actividad (jobs)
@@ -219,10 +227,24 @@ export default function Prospectos() {
 
   const jobsActivos = jobs.filter((j) => j.estado === 'pendiente' || j.estado === 'procesando').length;
 
+  // Zonas finales a barrer: departamentos marcados (como "X, Perú") + otras
+  // localidades sueltas escritas a mano (una por línea).
+  const construirZonas = () => [
+    ...(descubrirData.zonasSel || []).map((d) => `${d}, Perú`),
+    ...(descubrirData.otras || '').split('\n').map((z) => z.trim()).filter(Boolean),
+  ];
+
+  const toggleDep = (dep) => setDescubrirData((d) => ({
+    ...d,
+    zonasSel: d.zonasSel.includes(dep) ? d.zonasSel.filter((x) => x !== dep) : [...d.zonasSel, dep],
+  }));
+  const marcarTodo = () => setDescubrirData((d) => ({ ...d, zonasSel: [...DEPARTAMENTOS_PERU] }));
+  const desmarcarTodo = () => setDescubrirData((d) => ({ ...d, zonasSel: [] }));
+
   const hacerDescubrir = async () => {
     try {
       setDescubrirLoading(true);
-      const zonasArr = descubrirData.zonas.split('\n').map((z) => z.trim()).filter(Boolean);
+      const zonasArr = construirZonas();
       const zonas = zonasArr.length ? zonasArr : ['Perú'];
       const { segmento, limite } = descubrirData;
 
@@ -408,10 +430,10 @@ export default function Prospectos() {
   const puedeLiberar = !!detalleDueno && (!bloqueado || esAdmin);
   const ACCION_LABEL = { estado: 'Cambió estado', liberar: 'Liberó la gestión', convertido: 'Convirtió a cliente' };
 
-  // Aviso de barrido: zonas escritas en el modal que ya fueron exploradas antes.
+  // Aviso de barrido: zonas elegidas en el modal que ya fueron exploradas antes.
+  const zonasElegidas = construirZonas();
   const barridosMap = new Map(barridos.map((b) => [String(b.zona || '').toLowerCase(), b]));
-  const zonasYaBarridas = (descubrirData.zonas || '')
-    .split('\n').map((z) => z.trim()).filter(Boolean)
+  const zonasYaBarridas = zonasElegidas
     .map((z) => barridosMap.get(z.toLowerCase()))
     .filter(Boolean);
 
@@ -892,9 +914,28 @@ export default function Prospectos() {
           </>
         )}
 
-        <label className="form-label" style={{ marginTop: '0.7rem' }}>Ubicaciones — una por línea (plantas, ciudades…)</label>
-        <textarea className="form-input" rows={3} placeholder={'Lima, Perú\nIca, Perú\nArequipa, Perú'}
-          value={descubrirData.zonas} onChange={(e) => setDescubrirData({ ...descubrirData, zonas: e.target.value })}
+        <div className="pros-zonas-head">
+          <label className="form-label" style={{ margin: 0 }}>Ubicaciones — departamentos del Perú</label>
+          <div className="pros-zonas-actions">
+            <button type="button" className="btn btn-ghost btn-xs" onClick={marcarTodo}>Marcar todo</button>
+            <button type="button" className="btn btn-ghost btn-xs" onClick={desmarcarTodo}>Desmarcar todo</button>
+            <span className="pros-zonas-count">{descubrirData.zonasSel.length}/{DEPARTAMENTOS_PERU.length}</span>
+          </div>
+        </div>
+        <div className="pros-zonas-grid">
+          {DEPARTAMENTOS_PERU.map((dep) => {
+            const on = descubrirData.zonasSel.includes(dep);
+            return (
+              <label key={dep} className={`pros-zona-chk ${on ? 'on' : ''}`}>
+                <input type="checkbox" checked={on} onChange={() => toggleDep(dep)} />
+                <span>{dep}</span>
+              </label>
+            );
+          })}
+        </div>
+        <label className="form-label" style={{ marginTop: '0.6rem' }}>Otras localidades (opcional, una por línea — distritos, ciudades…)</label>
+        <textarea className="form-input" rows={2} placeholder={'ej. Trujillo\nChincha Alta'}
+          value={descubrirData.otras} onChange={(e) => setDescubrirData({ ...descubrirData, otras: e.target.value })}
           style={{ resize: 'vertical' }} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.6rem' }}>
@@ -935,7 +976,7 @@ export default function Prospectos() {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.1rem' }}>
           <button className="btn btn-outline" onClick={() => setDescubrirOpen(false)}>Cancelar</button>
-          <button className="btn btn-primary" onClick={hacerDescubrir} disabled={descubrirLoading || (!descubrirData.todos && !descubrirData.query.trim())}>
+          <button className="btn btn-primary" onClick={hacerDescubrir} disabled={descubrirLoading || zonasElegidas.length === 0 || (!descubrirData.todos && !descubrirData.query.trim())}>
             {descubrirLoading ? <><Loader size={16} className="pros-spin" /> Encolando…</> : <><Compass size={16} /> {descubrirData.todos ? 'Descubrir todo' : 'Buscar'}</>}
           </button>
         </div>

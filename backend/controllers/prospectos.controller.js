@@ -88,7 +88,7 @@ export async function getEstadisticas(req, res) {
         SUM(flag_duplicado = 'Posible_duplicado')                      AS posibles_dup,
         SUM(estado_workflow = 'Convertido')                            AS convertidos,
         ROUND(AVG(CASE WHEN flag_duplicado = 'Ninguno' THEN score END)) AS score_promedio,
-        SUM(score >= 70 AND flag_duplicado = 'Ninguno')                AS calientes
+        SUM(score >= 75 AND flag_duplicado = 'Ninguno')                AS calientes
       FROM prospectos
       WHERE excluido = 0${filtroScore}
     `, params);

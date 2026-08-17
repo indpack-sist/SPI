@@ -13,8 +13,12 @@ import './Prospectos.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-// Color del score segun rango.
-const colorScore = (s) => (s >= 70 ? '#2ecc71' : s >= 45 ? '#e8b84b' : '#e74c3c');
+// Semáforo de potencial (0-100), unificado en todo el módulo:
+//   🔴 Frío 0-44 · 🟡 Tibio 45-74 · 🟢 Caliente 75-100
+const SCORE_CALIENTE = 75;
+const SCORE_TIBIO = 45;
+const colorScore = (s) => (s >= SCORE_CALIENTE ? '#2ecc71' : s >= SCORE_TIBIO ? '#e8b84b' : '#e74c3c');
+const bandaScore = (s) => (s >= SCORE_CALIENTE ? 'Caliente' : s >= SCORE_TIBIO ? 'Tibio' : 'Frío');
 
 const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
 
@@ -77,7 +81,7 @@ function ScoreRing({ score }) {
     <div
       className="pros-ring"
       style={{ background: `conic-gradient(${c} ${score * 3.6}deg, var(--steel) 0deg)` }}
-      title={`Score ${score}/100`}
+      title={`Potencial ${score}/100 · ${bandaScore(score)}`}
     >
       <span style={{ color: c }}>{score}</span>
     </div>
@@ -447,7 +451,7 @@ export default function Prospectos() {
         </div>
         <div className="pros-stat">
           <div className="pros-stat-ico ico-hot"><Flame size={20} /></div>
-          <div><div className="pros-stat-val">{stats.calientes || 0}</div><div className="pros-stat-lbl">Calientes (≥70)</div></div>
+          <div><div className="pros-stat-val">{stats.calientes || 0}</div><div className="pros-stat-lbl">Calientes (≥75)</div></div>
         </div>
         <div className="pros-stat">
           <div className="pros-stat-ico ico-new"><Sparkles size={20} /></div>
@@ -547,9 +551,8 @@ export default function Prospectos() {
         )}
         <select className="form-select" style={{ maxWidth: 170 }} value={fMinScore} onChange={(e) => setFMinScore(e.target.value)} title="Mostrar solo prospectos con este potencial o más">
           <option value="">Todo potencial</option>
-          <option value="70">Alto · ≥ 70%</option>
-          <option value="45">Medio · ≥ 45%</option>
-          <option value="25">Bajo · ≥ 25%</option>
+          <option value="75">🟢 Caliente · ≥ 75%</option>
+          <option value="45">🟡 Tibio · ≥ 45%</option>
         </select>
         <select className="form-select" style={{ maxWidth: 150 }} value={orden} onChange={(e) => setOrden(e.target.value)}>
           <option value="score">Mayor score</option>

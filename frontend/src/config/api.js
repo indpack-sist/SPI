@@ -151,7 +151,7 @@ export const clientesAPI = {
   delete: (id) => api.delete(`/clientes/${id}`),
   getHistorialCotizaciones: (id) => api.get(`/clientes/${id}/cotizaciones`),
   getHistorialOrdenesVenta: (id) => api.get(`/clientes/${id}/ordenes-venta`),
-  getEstadoCredito: (id) => api.get(`/clientes/${id}/credito`),
+  getEstadoCredito: (id, excluirOrden) => api.get(`/clientes/${id}/credito`, excluirOrden ? { params: { excluir_orden: excluirOrden } } : undefined),
   getHistorialCondicion: (id) => api.get(`/clientes/${id}/historial-condicion`),
   
   addDireccion: (id, data) => api.post(`/clientes/${id}/direcciones`, data),

@@ -5,6 +5,7 @@ import {
   normalizarTelefono,
   normalizarEmail,
 } from './prospectos.service.js';
+import { esEmpresaServicios } from './prospectos.service.js';
 import { buscarBasico, detallar } from './scraper-places.service.js';
 import { scrapeWebsite } from './scraper-web.service.js';
 import { validarRUC } from './documento-cache.service.js';
@@ -117,9 +118,14 @@ async function procesarPlaces(job, params) {
   const res = await buscarBasico(query, { zona, limite });
   if (!res.ok) return fallar(job.id_job, res.error || 'Búsqueda fallida');
 
-  const resumen = { encontrados: res.resultados.length, creados: 0, duplicados: 0, ya_cliente: 0 };
+  const resumen = { encontrados: res.resultados.length, creados: 0, duplicados: 0, ya_cliente: 0, irrelevantes: 0 };
 
   for (const base of res.resultados) {
+    // Descartar empresas de servicios (agencias digitales, consultoras, estudios…)
+    // que NO compran empaque: no se crean como prospecto y, al filtrar por el
+    // nombre del Text Search, ni siquiera se pide el Place Details (ahorra cuota).
+    if (esEmpresaServicios(base.razon_social)) { resumen.irrelevantes++; continue; }
+
     // Dedup barato por place_id: si ya existe, se salta SIN pedir el detalle
     // (ahorra cuota) y respeta exclusiones previas (no lo recrea).
     if (base.place_id) {

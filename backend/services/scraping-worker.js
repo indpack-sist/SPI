@@ -139,6 +139,7 @@ async function procesarPlaces(job, params) {
       foto_referencia: base.foto_referencia,
       place_id: base.place_id,
       origen: 'google_maps',
+      origen_query: query,
       url: det?.maps_url || null,
       datos_raw: { ...base.datos_raw, detalle: det?.detalle_raw },
     }, job.id_empleado_solicita);

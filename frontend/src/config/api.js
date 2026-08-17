@@ -161,6 +161,7 @@ export const clientesAPI = {
 export const prospectosAPI = {
   getAll: (params) => api.get('/prospectos', { params }),
   getEstadisticas: () => api.get('/prospectos/estadisticas'),
+  getFacetas: () => api.get('/prospectos/facetas'),
   getById: (id) => api.get(`/prospectos/${id}`),
   create: (data) => api.post('/prospectos', data),
   ingestaLista: (data) => api.post('/prospectos/ingesta-lista', data),

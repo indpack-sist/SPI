@@ -100,8 +100,11 @@ export default function Prospectos() {
   const [fSegmento, setFSegmento] = useState('');
   const [fEstado, setFEstado] = useState('');
   const [fFlag, setFFlag] = useState('');
+  const [fSector, setFSector] = useState('');
+  const [fBusqueda, setFBusqueda] = useState('');
   const [orden, setOrden] = useState('score');
   const [vista, setVista] = useState('activos'); // 'activos' | 'excluidos'
+  const [facetas, setFacetas] = useState({ sectores: [], busquedas: [] });
 
   // Ingesta
   const [ingestaOpen, setIngestaOpen] = useState(false);
@@ -138,6 +141,8 @@ export default function Prospectos() {
       if (fSegmento) params.segmento = fSegmento;
       if (fEstado) params.estado = fEstado;
       if (fFlag) params.flag = fFlag;
+      if (fSector) params.sector = fSector;
+      if (fBusqueda) params.busqueda = fBusqueda;
       if (vista === 'excluidos') params.vista = 'excluidos';
       const [lista, est] = await Promise.all([
         prospectosAPI.getAll(params),
@@ -150,12 +155,22 @@ export default function Prospectos() {
     } finally {
       setLoading(false);
     }
-  }, [search, fSegmento, fEstado, fFlag, orden, vista]);
+  }, [search, fSegmento, fEstado, fFlag, fSector, fBusqueda, orden, vista]);
 
   useEffect(() => {
     const t = setTimeout(cargar, search ? 300 : 0);
     return () => clearTimeout(t);
   }, [cargar, search]);
+
+  // Facetas (sectores y búsquedas) para poblar los desplegables de filtro.
+  const cargarFacetas = useCallback(async () => {
+    try {
+      const res = await prospectosAPI.getFacetas();
+      setFacetas(res.data.data || { sectores: [], busquedas: [] });
+    } catch { /* silencioso: si falla, los selects quedan vacíos */ }
+  }, []);
+
+  useEffect(() => { cargarFacetas(); }, [cargarFacetas]);
 
   const notify = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3500); };
 
@@ -172,10 +187,10 @@ export default function Prospectos() {
           algoTermino = true;
         }
       }
-      if (algoTermino) cargar();
+      if (algoTermino) { cargar(); cargarFacetas(); }
       return data;
     } catch { return []; }
-  }, [cargar]);
+  }, [cargar, cargarFacetas]);
 
   useEffect(() => {
     refreshJobs();
@@ -467,6 +482,22 @@ export default function Prospectos() {
           <option value="Ya_cliente">Ya clientes</option>
           <option value="Posible_duplicado">Posibles duplicados</option>
         </select>
+        {facetas.busquedas.length > 0 && (
+          <select className="form-select" style={{ maxWidth: 220 }} value={fBusqueda} onChange={(e) => setFBusqueda(e.target.value)} title="Filtrar por la búsqueda que originó el prospecto">
+            <option value="">Toda búsqueda</option>
+            {facetas.busquedas.map((b) => (
+              <option key={b.valor} value={b.valor}>{b.valor} ({b.total})</option>
+            ))}
+          </select>
+        )}
+        {facetas.sectores.length > 0 && (
+          <select className="form-select" style={{ maxWidth: 200 }} value={fSector} onChange={(e) => setFSector(e.target.value)} title="Filtrar por sector detectado">
+            <option value="">Todo sector</option>
+            {facetas.sectores.map((s) => (
+              <option key={s.valor} value={s.valor}>{s.valor} ({s.total})</option>
+            ))}
+          </select>
+        )}
         <select className="form-select" style={{ maxWidth: 150 }} value={orden} onChange={(e) => setOrden(e.target.value)}>
           <option value="score">Mayor score</option>
           <option value="recientes">Más recientes</option>

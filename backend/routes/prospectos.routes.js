@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getAllProspectos,
   getEstadisticas,
+  getFacetas,
   getProspectoById,
   createProspecto,
   ingestaLista,
@@ -25,6 +26,7 @@ const router = express.Router();
 
 router.get('/', getAllProspectos);
 router.get('/estadisticas', getEstadisticas);
+router.get('/facetas', getFacetas);
 router.get('/jobs', listarJobs);
 router.get('/:id', getProspectoById);
 

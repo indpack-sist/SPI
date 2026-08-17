@@ -291,9 +291,9 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
   const ins = await executeQuery(
     `INSERT INTO prospectos
       (segmento, tipo_documento, documento, razon_social, nombre_comercial, sector, ciiu,
-       departamento, provincia, distrito, direccion, web, origen, score, score_detalle,
+       departamento, provincia, distrito, direccion, web, origen, origen_query, score, score_detalle,
        flag_duplicado, id_cliente_match, id_empleado_asignado, logo_url, foto_referencia, place_id)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       datos.segmento || 'Formal',
       datos.tipo_documento || null,
@@ -308,6 +308,7 @@ export async function crearProspectoDesdeDatos(datos, idEmpleado) {
       datos.direccion || null,
       datos.web || null,
       datos.origen || 'manual',
+      datos.origen_query || null,
       scoring.score,
       JSON.stringify({ señales: scoring.señales, por_que_contactar: scoring.por_que_contactar }),
       dup.flag,

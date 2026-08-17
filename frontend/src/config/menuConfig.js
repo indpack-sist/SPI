@@ -5,7 +5,8 @@ import {
   CreditCard, Banknote, FileInput, ArrowDownToLine,
   ArrowUpFromLine, ArrowLeftRight, FileSpreadsheet,
   TrendingUp, // <--- AGREGADO: Nuevo icono para reportes
-  ShieldAlert, PackageSearch // <--- Módulo Calidad
+  ShieldAlert, PackageSearch, // <--- Módulo Calidad
+  Radar // <--- Módulo Prospección
 } from 'lucide-react';
 
 export const menuConfig = [
@@ -49,6 +50,8 @@ export const menuConfig = [
   {
     title: 'Ventas',
     items: [
+      // Prospección / captación de leads. Por ahora exclusivo de Administrador.
+      { path: '/ventas/prospectos', icon: Radar, label: 'Prospección', modulo: 'prospectos', color: '#E8B84B', rolesIncluidos: ['Administrador'] },
       { path: '/ventas/cotizaciones', icon: FileText, label: 'Cotizaciones', modulo: 'cotizaciones', color: '#16A085' },
       { path: '/ventas/listas-precios', icon: Tags, label: 'Listas de Precios', modulo: 'cotizaciones', color: '#D68910' },
       { path: '/ventas/ordenes', icon: ShoppingCart, label: 'Ventas', modulo: 'ordenesVenta', color: '#2980B9' },

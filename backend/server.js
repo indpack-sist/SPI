@@ -5,12 +5,14 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { testConnection } from './config/database.js';
 import { verificarToken, verificarPermiso } from './middleware/auth.js';
+import { startWorker } from './services/scraping-worker.js';
 
 import authRoutes from './routes/auth.routes.js';
 import empleadosRoutes from './routes/empleados.routes.js';
 import flotaRoutes from './routes/flota.routes.js';
 import proveedoresRoutes from './routes/proveedores.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
+import prospectosRoutes from './routes/prospectos.routes.js';
 import solicitudesCreditoRoutes from './routes/solicitudes-credito.routes.js';
 
 import productosRoutes from './routes/productos.routes.js';
@@ -140,6 +142,7 @@ app.use('/api/empleados', verificarToken, verificarPermiso('empleados'), emplead
 app.use('/api/flota', verificarToken, verificarPermiso('flota'), flotaRoutes);
 app.use('/api/proveedores', verificarToken, verificarPermiso('proveedores'), proveedoresRoutes);
 app.use('/api/clientes', verificarToken, verificarPermiso('clientes'), clientesRoutes);
+app.use('/api/prospectos', verificarToken, verificarPermiso('prospectos'), prospectosRoutes);
 app.use('/api/solicitudes-credito', verificarToken, verificarPermiso('solicitudesCredito'), solicitudesCreditoRoutes);
 
 app.use('/api/productos', verificarToken, verificarPermiso('productos'), productosRoutes);
@@ -253,6 +256,8 @@ httpServer.listen(PORT, () => {
   testConnection().then(connected => {
     if (connected) {
       console.log('✓ BASE DE DATOS: CONECTADA CORRECTAMENTE');
+      // Worker de prospección (cola scraping_jobs). Requiere la BD lista.
+      startWorker(io);
     } else {
       console.error('⚠️ ALERTA: EL SERVIDOR WEB ESTA ACTIVO PERO LA BD FALLO');
     }

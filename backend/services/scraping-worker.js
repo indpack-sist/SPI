@@ -8,7 +8,6 @@ import {
 import { esEmpresaServicios } from './prospectos.service.js';
 import { buscarBasico, detallar } from './scraper-places.service.js';
 import { scrapeWebsite } from './scraper-web.service.js';
-import { buscarRucPorNombre } from './ruc-lookup.service.js';
 
 // ============================================================
 // Worker en proceso para la cola scraping_jobs. Corre dentro del
@@ -222,63 +221,36 @@ async function enriquecerDesdeWeb(idProspecto, url) {
     );
   }
 
-  // RUC del prospecto: preferimos el del pie de la web; si no está, lo
-  // deducimos del nombre en directorios públicos (opt-in RUC_LOOKUP_NOMBRE).
-  // En ambos casos se confirma con SUNAT (cacheado) y se detecta si ya es cliente.
+  // RUC del pie de la web: si el prospecto no tenía documento, lo aplica tal
+  // cual y detecta si ya es cliente. SIN APISPeru y SIN tocar ruc.pe. La
+  // búsqueda de RUC por NOMBRE se hace BAJO DEMANDA con el botón "Buscar RUC"
+  // (no en el barrido, para no depender de ruc.pe ni arriesgar baneo de IP).
   let rucAplicado = null;
-  let dSunat = null;
-  {
-    const pr = await executeQuery('SELECT documento, razon_social FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
-    const row = pr.success ? pr.data[0] : null;
-    const sinDoc = row && !row.documento;
-
-    let rucFinal = data.ruc || null;
-    // Sin RUC en la web → búsqueda por nombre (confirma contra SUNAT + parecido).
-    if (sinDoc && !rucFinal && process.env.RUC_LOOKUP_NOMBRE === '1' && row.razon_social) {
-      try {
-        const hit = await buscarRucPorNombre(row.razon_social);
-        if (hit) { rucFinal = hit.ruc; dSunat = hit.datos; }
-      } catch { /* best-effort */ }
-    }
-
-    if (sinDoc && rucFinal) {
-      // Sin APISPeru: si el RUC vino por nombre, ya trae datos de la página; si
-      // vino del pie de la web, se aplica tal cual (nombre/dirección de Google).
-      const d = dSunat || {};
+  if (data.ruc) {
+    const pr = await executeQuery('SELECT documento FROM prospectos WHERE id_prospecto = ?', [idProspecto]);
+    const sinDoc = pr.success && pr.data[0] && !pr.data[0].documento;
+    if (sinDoc) {
       await executeQuery(
-        `UPDATE prospectos SET
-           documento = ?, tipo_documento = 'RUC', segmento = 'Formal',
-           razon_social  = COALESCE(NULLIF(?, ''), razon_social),
-           departamento  = COALESCE(departamento, ?),
-           provincia     = COALESCE(provincia, ?),
-           distrito      = COALESCE(distrito, ?),
-           direccion     = COALESCE(NULLIF(direccion, ''), ?)
-         WHERE id_prospecto = ?`,
-        [rucFinal, d.razon_social || null, d.departamento || null, d.provincia || null,
-         d.distrito || null, d.direccion || null, idProspecto]
+        "UPDATE prospectos SET documento = ?, tipo_documento = 'RUC', segmento = 'Formal' WHERE id_prospecto = ?",
+        [data.ruc, idProspecto]
       );
-      // ¿Ese RUC ya es cliente?
-      const cli = await executeQuery('SELECT id_cliente FROM clientes WHERE ruc = ? LIMIT 1', [rucFinal]);
+      const cli = await executeQuery('SELECT id_cliente FROM clientes WHERE ruc = ? LIMIT 1', [data.ruc]);
       if (cli.success && cli.data.length > 0) {
         await executeQuery(
           "UPDATE prospectos SET flag_duplicado = 'Ya_cliente', id_cliente_match = ? WHERE id_prospecto = ?",
           [cli.data[0].id_cliente, idProspecto]
         );
       }
-      rucAplicado = rucFinal;
+      rucAplicado = data.ruc;
     }
   }
 
-  // Trazabilidad + recálculo de score con lo nuevo. Si validamos el RUC en SUNAT,
-  // pasamos vigencia (activo/habido) para que suba a "caliente" si corresponde.
+  // Trazabilidad + recálculo de score con lo nuevo.
   await executeQuery(
     'INSERT INTO prospecto_fuentes (id_prospecto, fuente, url, datos_raw) VALUES (?, "web", ?, ?)',
     [idProspecto, data.base, JSON.stringify({ emails: data.emails, telefonos: data.telefonos, redes: data.redes })]
   );
-  const score = await recalcularScore(
-    idProspecto,
-    dSunat ? { es_activo: dSunat.es_activo, es_habido: dSunat.es_habido } : {}
-  );
+  const score = await recalcularScore(idProspecto);
 
   return {
     contactos_nuevos: nuevos,

@@ -132,6 +132,7 @@ export default function Prospectos() {
   // Detalle
   const [detalle, setDetalle] = useState(null);
   const [detalleLoading, setDetalleLoading] = useState(false);
+  const [buscandoRuc, setBuscandoRuc] = useState(null); // id en búsqueda de RUC
 
   // Conversion
   const [convertOpen, setConvertOpen] = useState(false);
@@ -306,6 +307,28 @@ export default function Prospectos() {
       refreshJobs();
     } catch (err) {
       setError(err.error || 'No se pudo enriquecer el prospecto');
+    }
+  };
+
+  // Búsqueda de RUC por nombre en ruc.pe (bajo demanda, gratis, sin APISPeru).
+  const buscarRuc = async (id) => {
+    try {
+      setBuscandoRuc(id);
+      const res = await prospectosAPI.buscarRuc(id);
+      const d = res.data;
+      if (d.found) {
+        notify(d.ya_tenia
+          ? `El prospecto ya tenía RUC ${d.ruc}.`
+          : `RUC encontrado: ${d.ruc}${d.ya_cliente ? ' — ¡ya es cliente!' : ''}`);
+        cargar();
+        if (detalle?.id_prospecto === id) await refrescarDetalle(id);
+      } else {
+        setError(d.message || 'No se encontró un RUC que coincida en ruc.pe.');
+      }
+    } catch (err) {
+      setError(err.error || 'Error al buscar el RUC');
+    } finally {
+      setBuscandoRuc(null);
     }
   };
 
@@ -659,6 +682,11 @@ export default function Prospectos() {
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="pros-actions-cell">
                         <button className="btn btn-ghost btn-sm" title="Ver detalle" onClick={() => verDetalle(p.id_prospecto)}><Eye size={15} /></button>
+                        {!p.documento && (
+                          <button className="btn btn-ghost btn-sm" title="Buscar RUC por nombre (ruc.pe)" disabled={buscandoRuc === p.id_prospecto} onClick={() => buscarRuc(p.id_prospecto)}>
+                            {buscandoRuc === p.id_prospecto ? <Loader size={15} className="pros-spin" /> : <Search size={15} />}
+                          </button>
+                        )}
                         {p.web && (
                           <button className="btn btn-ghost btn-sm" title="Enriquecer desde su web" onClick={() => enriquecer(p.id_prospecto, p.web)}><Zap size={15} /></button>
                         )}
@@ -742,6 +770,20 @@ export default function Prospectos() {
                     <ul className="pros-signals">
                       {detalleSignals.map((s, i) => <li key={i}><CheckCircle2 size={14} /> {s}</li>)}
                     </ul>
+                  )}
+
+                  {!detalle.documento && (
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ width: '100%', marginTop: 10 }}
+                      disabled={buscandoRuc === detalle.id_prospecto}
+                      onClick={() => buscarRuc(detalle.id_prospecto)}
+                      title="Consulta ruc.pe por el nombre y completa el RUC si coincide (gratis)"
+                    >
+                      {buscandoRuc === detalle.id_prospecto
+                        ? <><Loader size={14} className="pros-spin" /> Buscando RUC en ruc.pe…</>
+                        : <><Search size={14} /> Buscar RUC por nombre</>}
+                    </button>
                   )}
 
                   <div className="pros-section-title">Datos</div>

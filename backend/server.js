@@ -44,15 +44,20 @@ import reportesRoutes from './routes/reportesventas.routes.js';
 import tipoCambioRoutes from './routes/tipoCambioRoutes.js';
 dotenv.config();
 
+// Orígenes permitidos para CORS (HTTP + WebSocket). Se define una sola vez
+// para no tener que actualizar la lista en varios lugares.
+const allowedOrigins = [
+  process.env.CORS_ORIGIN || 'http://localhost:5173',
+  'https://spi.indpackperu.com',
+  'https://spi-rho.vercel.app',
+  'http://localhost:3000'
+];
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      process.env.CORS_ORIGIN || 'http://localhost:5173',
-      'https://spi-rho.vercel.app',
-      'http://localhost:3000'
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -66,11 +71,7 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({
-  origin: [
-    process.env.CORS_ORIGIN || 'http://localhost:5173',
-    'https://spi-rho.vercel.app',
-    'http://localhost:3000'
-  ],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // ✅ agregado PATCH
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,

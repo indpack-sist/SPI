@@ -180,6 +180,7 @@ export const prospectosAPI = {
   descubrir: (data) => api.post('/prospectos/descubrir', data),
   descubrirTodo: (data) => api.post('/prospectos/descubrir-todo', data),
   enriquecer: (id, data) => api.post(`/prospectos/${id}/enriquecer`, data),
+  buscarRuc: (id) => api.post(`/prospectos/${id}/buscar-ruc`),
   getJobs: () => api.get('/prospectos/jobs')
 };
 

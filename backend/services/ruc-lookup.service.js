@@ -53,22 +53,19 @@ export function similitudNombre(a, b) {
   return inter / Math.max(ta.size, tb.size);
 }
 
-/** Slug conservando el sufijo (ruc.pe suele usar "indpack-sac"). */
-function slugConSufijo(nombre) {
-  return String(nombre || '')
-    .toLowerCase()
-    .normalize('NFD').replace(DIACRITICOS, '')
-    .replace(/[._]/g, '')          // "s.a.c" -> "sac"
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/** Slug sin el sufijo societario (universidadperu suele usar "indpack"). */
-function slugSinSufijo(nombre) {
-  return normNombre(nombre).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+// Throttle global: ruc.pe limita las peticiones rápidas (timeouts / posible
+// bloqueo de IP). Espaciamos todas las llamadas al menos MIN_GAP_MS entre sí,
+// así un barrido con muchos prospectos es "educado" y no se gana un baneo.
+const MIN_GAP_MS = Number(process.env.RUC_LOOKUP_GAP_MS) || 1500;
+let ultimaPeticion = 0;
+async function esperarTurno() {
+  const espera = ultimaPeticion + MIN_GAP_MS - Date.now();
+  if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+  ultimaPeticion = Date.now();
 }
 
 async function fetchText(url) {
+  await esperarTurno();
   try {
     const r = await axios.get(url, {
       timeout: TIMEOUT,
@@ -93,6 +90,20 @@ export function rucsEnHtml(html) {
   return [...out];
 }
 
+// Limpia el nombre de empresa quitando adornos de ruc.pe: el prefijo "RUC ",
+// la marca "RUC.PE", RUCs sueltos y separadores. Ej: "RUC INDPACK SAC - RUC.PE"
+// -> "INDPACK SAC".
+function limpiarNombreEmpresa(s) {
+  return String(s || '')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\bruc\.?\s*pe\b/gi, ' ')         // marca del sitio "RUC.PE"
+    .replace(/\b\d{11}\b/g, ' ')               // RUCs sueltos en el texto
+    .replace(/^[\s\-|»·:]*ruc\b[\s:]*/i, ' ')  // prefijo "RUC " de ruc.pe
+    .replace(/[\s\-|»·:]+$/g, '')              // colas de separadores
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Nombres candidatos de la empresa desde el HTML (título/og:title/h1, sin adornos). */
 function nombresEnHtml(html) {
   const cands = [];
@@ -102,10 +113,7 @@ function nombresEnHtml(html) {
   if (t) cands.push(t[1]);
   const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
   if (h1) cands.push(h1[1]);
-  // Corta el boilerplate: "- RUC 20...", " | ruc.pe", números largos, etc.
-  return cands
-    .map((s) => String(s).replace(/&[a-z]+;/gi, ' ').split(/\s[-|»·:]\s|\bRUC\b|\d{6,}/i)[0].trim())
-    .filter(Boolean);
+  return cands.map(limpiarNombreEmpresa).filter(Boolean);
 }
 
 /** Vigencia SUNAT leída de la propia página (gratis): estado y condición. */
@@ -120,11 +128,28 @@ function vigenciaEnHtml(html) {
   return { es_activo, es_habido };
 }
 
+/** Evalúa una ficha de empresa: RUC + nombre + vigencia, si el nombre calza. */
+function evaluarFicha(html, nombre, umbral) {
+  const rucs = rucsEnHtml(html);
+  if (!rucs.length) return null;
+  const nombres = nombresEnHtml(html);
+  const sim = nombres.reduce((mx, n) => Math.max(mx, similitudNombre(nombre, n)), 0);
+  if (sim < umbral) return null;
+  return { ruc: rucs[0], datos: { razon_social: nombres[0] || null, ...vigenciaEnHtml(html) }, sim };
+}
+
+// Slugs de ruc.pe que NO son fichas de empresa (evita seguirlos desde el buscador).
+const SLUG_NO_EMPRESA = /^(wp-|category|tag|author|page|feed|comments|privacidad|contacto|acerca|terminos|nosotros|blog)$|^$/i;
+
 /**
- * Busca el RUC de una empresa por su nombre en directorios públicos. Todo se
- * obtiene de la propia página (RUC, razón social, vigencia): SIN APISPeru.
- * Devuelve { ruc, datos, sim } solo si el nombre de la página se parece lo
- * suficiente al buscado (evita asignar el RUC de otra empresa).
+ * Busca el RUC de una empresa por su nombre en ruc.pe. Todo se obtiene de la
+ * propia página (RUC, razón social, vigencia): SIN APISPeru.
+ *
+ * Estrategia: buscador de ruc.pe (?s=nombre) → elige el resultado cuyo título
+ * más se parece al buscado → abre esa ficha y saca RUC + vigencia. Solo 2
+ * peticiones (buscar + ficha): rápido y sin martillar el sitio. Devuelve
+ * { ruc, datos, sim } solo si el nombre calza (evita asignar el RUC de otra
+ * empresa); null si no hay match claro.
  *
  * @param {string} nombre  razón social del prospecto
  * @param {object} [opts]  { umbral = 0.5 }
@@ -132,33 +157,27 @@ function vigenciaEnHtml(html) {
  */
 export async function buscarRucPorNombre(nombre, opts = {}) {
   const umbral = opts.umbral ?? 0.5;
-  const conSuf = slugConSufijo(nombre);
-  const sinSuf = slugSinSufijo(nombre);
-  if (!conSuf && !sinSuf) return null;
+  if (!nombre || nombre.trim().length < 3) return null;
 
-  // Deep-links por nombre (páginas de una sola empresa): regex de RUCs + nombre
-  // de la página. Resiliente a cambios de HTML (no depende de selectores CSS).
-  const urls = [
-    conSuf && `https://ruc.pe/${conSuf}`,
-    sinSuf && `https://www.universidadperu.com/empresas/${sinSuf}`,
-    conSuf && `https://www.universidadperu.com/empresas/${conSuf}`,
-    sinSuf && sinSuf !== conSuf && `https://ruc.pe/${sinSuf}`,
-  ].filter(Boolean);
+  const html = await fetchText(`https://ruc.pe/?s=${encodeURIComponent(nombre)}`);
+  if (!html) return null;
 
-  for (const u of urls) {
-    const html = await fetchText(u);
-    const rucs = rucsEnHtml(html);
-    if (!rucs.length) continue;
-
-    const nombres = nombresEnHtml(html);
-    const sim = nombres.reduce((mx, n) => Math.max(mx, similitudNombre(nombre, n)), 0);
-    if (sim >= umbral) {
-      return {
-        ruc: rucs[0],
-        datos: { razon_social: nombres[0] || null, ...vigenciaEnHtml(html) },
-        sim,
-      };
-    }
+  // Enlaces a fichas de empresa (URL absoluta de ruc.pe) con su título. Se elige
+  // el de mayor parecido de nombre; el resto (banca lateral, otras empresas) se
+  // descarta por baja similitud.
+  const vistos = new Set();
+  const cands = [];
+  for (const m of html.matchAll(/<a[^>]+href=["'](https?:\/\/ruc\.pe\/([a-z0-9][a-z0-9-]*)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const [, url, slug, inner] = m;
+    if (SLUG_NO_EMPRESA.test(slug) || vistos.has(slug)) continue;
+    vistos.add(slug);
+    const texto = limpiarNombreEmpresa(stripTags(inner));
+    if (texto) cands.push({ url, sim: similitudNombre(nombre, texto) });
   }
-  return null;
+  cands.sort((a, b) => b.sim - a.sim);
+  const mejor = cands[0];
+  if (!mejor || mejor.sim < umbral) return null;
+
+  // Abre la ficha del mejor candidato para obtener el RUC + vigencia.
+  return evaluarFicha(await fetchText(mejor.url), nombre, umbral);
 }

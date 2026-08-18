@@ -7,7 +7,9 @@ import {
   normalizarDocumento,
   normalizarTelefono,
   normalizarEmail,
+  recalcularScore,
 } from '../services/prospectos.service.js';
+import { buscarRucPorNombre } from '../services/ruc-lookup.service.js';
 import { placesDisponible, RUBROS_OBJETIVO } from '../services/scraper-places.service.js';
 import { notificarJob } from '../services/scraping-worker.js';
 
@@ -673,6 +675,52 @@ export async function descubrirTodo(req, res) {
       success: true,
       message: `${encolados} búsquedas encoladas (${RUBROS_OBJETIVO.length} rubros × ${listaZonas.length} zona(s)), priorizadas por afinidad`,
       jobs: encolados,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// Buscar el RUC de un prospecto por su nombre en ruc.pe (BAJO DEMANDA, gratis,
+// sin APISPeru). Se aplica solo si el nombre de la ficha calza con el prospecto.
+export async function buscarRucProspecto(req, res) {
+  try {
+    const { id } = req.params;
+    const r = await executeQuery(
+      'SELECT id_prospecto, razon_social, documento FROM prospectos WHERE id_prospecto = ?', [id]);
+    if (!r.success || r.data.length === 0) return res.status(404).json({ error: 'Prospecto no encontrado' });
+    const p = r.data[0];
+    if (p.documento) return res.json({ success: true, found: true, ya_tenia: true, ruc: p.documento });
+
+    const hit = await buscarRucPorNombre(p.razon_social);
+    if (!hit) {
+      return res.json({ success: true, found: false, message: 'No se encontró en ruc.pe un RUC que coincida con el nombre.' });
+    }
+
+    const d = hit.datos || {};
+    await executeQuery(
+      `UPDATE prospectos SET documento = ?, tipo_documento = 'RUC', segmento = 'Formal',
+         razon_social = COALESCE(NULLIF(?, ''), razon_social) WHERE id_prospecto = ?`,
+      [hit.ruc, d.razon_social || null, id]
+    );
+
+    // ¿Ese RUC ya es cliente?
+    let ya_cliente = false;
+    const cli = await executeQuery('SELECT id_cliente FROM clientes WHERE ruc = ? LIMIT 1', [hit.ruc]);
+    if (cli.success && cli.data.length > 0) {
+      await executeQuery(
+        "UPDATE prospectos SET flag_duplicado = 'Ya_cliente', id_cliente_match = ? WHERE id_prospecto = ?",
+        [cli.data[0].id_cliente, id]
+      );
+      ya_cliente = true;
+    }
+
+    // Recalcula con la vigencia leída de la ficha (activo/habido) → puede subir a caliente.
+    const score = await recalcularScore(id, { es_activo: d.es_activo, es_habido: d.es_habido });
+
+    res.json({
+      success: true, found: true, ruc: hit.ruc, razon_social: d.razon_social,
+      es_activo: d.es_activo, es_habido: d.es_habido, sim: hit.sim, ya_cliente, score,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

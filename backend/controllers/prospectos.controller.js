@@ -20,9 +20,47 @@ const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'De
 // ------------------------------------------------------------
 export async function getAllProspectos(req, res) {
   try {
-    const { segmento, estado, flag, search, orden, vista, sector, busqueda, min_score } = req.query;
+    const { segmento, estado, flag, search, orden, vista, sector, busqueda, min_score, page, limit } = req.query;
 
-    let sql = `
+    // --- Filtros (WHERE) compartidos entre el listado y el conteo total ---
+    let where = ' WHERE 1=1';
+    const params = [];
+
+    // Vista: por defecto oculta los excluidos; "excluidos" muestra solo esos.
+    where += vista === 'excluidos' ? ' AND p.excluido = 1' : ' AND p.excluido = 0';
+
+    if (segmento) { where += ' AND p.segmento = ?'; params.push(segmento); }
+    if (estado)   { where += ' AND p.estado_workflow = ?'; params.push(estado); }
+    if (flag)     { where += ' AND p.flag_duplicado = ?'; params.push(flag); }
+    if (sector)   { where += ' AND p.sector = ?'; params.push(sector); }
+    if (busqueda) { where += ' AND p.origen_query = ?'; params.push(busqueda); }
+    // Filtro por potencial mínimo (score 0-100). Se ignora si no es un número.
+    if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
+      where += ' AND p.score >= ?'; params.push(Number(min_score));
+    }
+    if (search) {
+      where += ` AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?
+                OR p.distrito LIKE ? OR p.provincia LIKE ? OR p.departamento LIKE ? OR p.sector LIKE ?)`;
+      const like = `%${search}%`;
+      params.push(like, like, like, like, like, like, like);
+    }
+
+    // --- Paginación (máx. 50 por página; se ignora si los valores no son válidos) ---
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const perPage = Math.min(Math.max(1, parseInt(limit) || 50), 50);
+    const offset = (pageNum - 1) * perPage;
+
+    // Conteo total con los mismos filtros (para saber cuántas páginas hay).
+    const countRes = await executeQuery(`SELECT COUNT(*) AS total FROM prospectos p${where}`, params);
+    if (!countRes.success) return res.status(500).json({ error: countRes.error });
+    const total = countRes.data[0].total;
+
+    let orderBy;
+    if (orden === 'recientes') orderBy = ' ORDER BY p.fecha_captura DESC';
+    else if (orden === 'nombre') orderBy = ' ORDER BY p.razon_social ASC';
+    else orderBy = ' ORDER BY p.score DESC, p.fecha_captura DESC';
+
+    const sql = `
       SELECT p.*,
         e.nombre_completo AS empleado_asignado,
         c.razon_social    AS cliente_match_nombre,
@@ -35,36 +73,20 @@ export async function getAllProspectos(req, res) {
       FROM prospectos p
       LEFT JOIN empleados e ON p.id_empleado_asignado = e.id_empleado
       LEFT JOIN clientes  c ON p.id_cliente_match      = c.id_cliente
-      WHERE 1=1`;
-    const params = [];
-
-    // Vista: por defecto oculta los excluidos; "excluidos" muestra solo esos.
-    sql += vista === 'excluidos' ? ' AND p.excluido = 1' : ' AND p.excluido = 0';
-
-    if (segmento) { sql += ' AND p.segmento = ?'; params.push(segmento); }
-    if (estado)   { sql += ' AND p.estado_workflow = ?'; params.push(estado); }
-    if (flag)     { sql += ' AND p.flag_duplicado = ?'; params.push(flag); }
-    if (sector)   { sql += ' AND p.sector = ?'; params.push(sector); }
-    if (busqueda) { sql += ' AND p.origen_query = ?'; params.push(busqueda); }
-    // Filtro por potencial mínimo (score 0-100). Se ignora si no es un número.
-    if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
-      sql += ' AND p.score >= ?'; params.push(Number(min_score));
-    }
-    if (search) {
-      sql += ` AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?
-                OR p.distrito LIKE ? OR p.provincia LIKE ? OR p.departamento LIKE ? OR p.sector LIKE ?)`;
-      const like = `%${search}%`;
-      params.push(like, like, like, like, like, like, like);
-    }
-
-    if (orden === 'recientes') sql += ' ORDER BY p.fecha_captura DESC';
-    else if (orden === 'nombre') sql += ' ORDER BY p.razon_social ASC';
-    else sql += ' ORDER BY p.score DESC, p.fecha_captura DESC';
+      ${where}${orderBy}
+      LIMIT ${perPage} OFFSET ${offset}`;
 
     const result = await executeQuery(sql, params);
     if (!result.success) return res.status(500).json({ error: result.error });
 
-    res.json({ success: true, data: result.data, total: result.data.length });
+    res.json({
+      success: true,
+      data: result.data,
+      total,
+      page: pageNum,
+      limit: perPage,
+      total_paginas: Math.max(1, Math.ceil(total / perPage)),
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -4,3 +4,11 @@ dist
 build
 .vercel
 .env*.local
+
+# Certificados y artefactos SUNAT (jamás subir a Git)
+certs/
+*.pem
+*.pfx
+*.p12
+*.b64
+backend/sunat-output/

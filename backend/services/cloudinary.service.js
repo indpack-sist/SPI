@@ -58,3 +58,29 @@ export const subirArchivoACloudinary = async (file, folder = 'indpack_solicitude
     }
   });
 };
+
+/**
+ * Sube un Buffer crudo (XML, ZIP del CDR, etc.) a Cloudinary como resource_type 'raw'.
+ * `publicPath` es la ruta lógica incluyendo extensión, ej: 'sunat/xml/20xxx-01-FE01-00000001.xml'.
+ * Devuelve la secure_url del archivo. Función NUEVA para el módulo SUNAT; no altera
+ * subirArchivoACloudinary (que sigue usándose para uploads vía multer).
+ */
+export const subirRaw = async (buffer, publicPath, { overwrite = true } = {}) => {
+  return new Promise((resolve, reject) => {
+    const lastSlash = publicPath.lastIndexOf('/');
+    const folder = lastSlash >= 0 ? publicPath.slice(0, lastSlash) : undefined;
+    const publicId = lastSlash >= 0 ? publicPath.slice(lastSlash + 1) : publicPath;
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { resource_type: 'raw', folder, public_id: publicId, overwrite },
+      (error, result) => {
+        if (error) {
+          console.error('Error subiendo raw a Cloudinary:', error);
+          return reject(error);
+        }
+        resolve(result.secure_url);
+      }
+    );
+    uploadStream.end(buffer);
+  });
+};

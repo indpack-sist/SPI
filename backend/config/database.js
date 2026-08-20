@@ -146,4 +146,33 @@ export async function executeTransaction(queries) {
   }
 }
 
+/**
+ * Ejecuta un callback dentro de una transacción MySQL sobre UNA sola conexión.
+ * El callback recibe la conexión (para usar conn.query con FOR UPDATE, leer insertId,
+ * decidir lógica y encadenar más queries). Hace commit si resuelve, rollback si lanza.
+ *
+ *   const r = await withTransaction(async (conn) => {
+ *     const [[ov]] = await conn.query('SELECT * FROM ordenes_venta WHERE id=? FOR UPDATE', [id]);
+ *     ...
+ *     return algo;
+ *   });
+ *
+ * No sustituye a executeTransaction (que recibe un array de queries pre-armadas);
+ * es un helper NUEVO para los flujos SUNAT que necesitan lógica entre queries.
+ */
+export async function withTransaction(callback) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await callback(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 export default pool;

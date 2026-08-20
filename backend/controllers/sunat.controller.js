@@ -130,6 +130,10 @@ export async function emitirComprobante(req, res, next) {
 
     // ── Fuera de transacción: envío a SUNAT + subida de archivos ──
     const { idFactura, numero, nombre, xmlFirmado, totales } = prep;
+    // Diagnóstico fault 1036: las TRES cadenas deben producir el mismo Serie-Número.
+    const cbcId = /<cbc:ID>([^<]+)<\/cbc:ID>/.exec(xmlFirmado)?.[1] || null;
+    const debug = { fileNameSoap: `${nombre}.zip`, zipEntry: `${nombre}.xml`, cbcId, rucLen: String(sunatConfig.ruc).length };
+    console.log('[SUNAT] emitir ->', JSON.stringify(debug));
     await copiaLocal(`${nombre}.xml`, xmlFirmado);
     const zipBuf = zipXml(`${nombre}.xml`, xmlFirmado);
 
@@ -147,7 +151,7 @@ export async function emitirComprobante(req, res, next) {
         exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
       return res.status(502).json({
         ok: false, estado: 'ENVIADO', idFactura, serie, numero,
-        faultCode: e.faultCode || null, error: e.message
+        faultCode: e.faultCode || null, error: e.message, debug
       });
     }
     await copiaLocal(`R-${nombre}.zip`, cdrZip);
@@ -189,7 +193,7 @@ export async function emitirComprobante(req, res, next) {
     res.json({
       ok: aceptado, estado: estadoFinal, idFactura, serie, numero,
       comprobante: `${serie}-${numero}`, responseCode: cdr.responseCode,
-      descripcion, totales, xmlUrl, cdrUrl
+      descripcion, totales, xmlUrl, cdrUrl, debug
     });
   } catch (e) { next(e); }
 }

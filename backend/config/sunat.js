@@ -53,17 +53,19 @@ if (!/BEGIN (RSA )?PRIVATE KEY/.test(key)) {
   throw new Error('[SUNAT] SUNAT_KEY_B64 no decodifica a una clave privada PEM válida (falta cabecera BEGIN PRIVATE KEY).');
 }
 
+const clean = (v) => (v == null ? v : String(v).trim());
+
 export const sunatConfig = {
   mode: MODE,
-  ruc: process.env.SUNAT_RUC,
+  ruc: clean(process.env.SUNAT_RUC),               // trim: un espacio/salto invisible rompe el nombre de archivo (fault 1036)
   razonSocial: process.env.SUNAT_RAZON_SOCIAL,
   nombreComercial: process.env.SUNAT_NOMBRE_COMERCIAL,
-  ubigeo: process.env.SUNAT_UBIGEO,
+  ubigeo: clean(process.env.SUNAT_UBIGEO),
   direccion: process.env.SUNAT_DIRECCION,
   distrito: process.env.SUNAT_DISTRITO,
   provincia: process.env.SUNAT_PROVINCIA,
   departamento: process.env.SUNAT_DEPARTAMENTO,
-  solUser: process.env.SUNAT_SOL_USER,
+  solUser: clean(process.env.SUNAT_SOL_USER),       // va en el UsernameToken (RUC+SOL_USER)
   solPass: process.env.SUNAT_SOL_PASS,
   cert,
   key,

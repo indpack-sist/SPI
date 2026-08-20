@@ -14,4 +14,7 @@ router.get('/ping', c.ping);
 // Protegido: requiere token + permiso 'facturacion' (Administrador / Administrativo).
 router.get('/health', verificarToken, verificarPermiso('facturacion'), c.health);
 
+// Emisión de comprobantes (Fase 6: solo Factura 01).
+router.post('/comprobantes/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirComprobante);
+
 export default router;

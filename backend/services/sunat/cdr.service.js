@@ -1,7 +1,21 @@
 // services/sunat/cdr.service.js  —  Parseo del CDR (ApplicationResponse) devuelto por SUNAT.
-// SKELETON: se implementa en la FASE 6 (fast-xml-parser). Evoluciona a sunat-parser.service.js existente.
-/* eslint-disable no-unused-vars */
+import { XMLParser } from 'fast-xml-parser';
+import { extraerCdr } from './zip.service.js';
 
+/**
+ * @param {Buffer} cdrZipBuffer  ZIP del CDR (R-....zip)
+ * @returns {{responseCode:string, description:string, notas:string[], referenceId:string, xmlCdr:string}}
+ */
 export function parsearCdr(cdrZipBuffer) {
-  throw new Error('cdr.service.parsearCdr no implementado (Fase 6)');
+  const xml = extraerCdr(cdrZipBuffer);
+  const p = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
+  const doc = p.parse(xml);
+  const resp = doc.ApplicationResponse?.DocumentResponse?.Response || {};
+  return {
+    responseCode: String(resp.ResponseCode ?? ''),   // '0' = aceptado
+    description: resp.Description ?? '',
+    notas: [].concat(doc.ApplicationResponse?.Note || []).filter(Boolean).map(String),
+    referenceId: doc.ApplicationResponse?.DocumentResponse?.DocumentReference?.ID ?? '',
+    xmlCdr: xml
+  };
 }

@@ -8,6 +8,8 @@ const roundN = (n, d) => { const f = 10 ** d; return Math.round((Number(n) + Num
 const m2 = (n) => round2(n).toFixed(2);              // montos: 2 decimales
 const u6 = (n) => roundN(n, 6).toFixed(6);           // valores unitarios: 6 decimales
 const cdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
+// Trunca a la longitud máxima que exige el anexo SUNAT (evita observaciones de formato).
+const trunc = (s, max) => String(s ?? '').trim().slice(0, max);
 
 // Catálogo 07 (afectación IGV) -> TaxScheme + porcentaje.
 const AFECTACION = {
@@ -181,7 +183,7 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
         <cac:RegistrationAddress>
           <cbc:ID>${empresa.ubigeo}</cbc:ID>
           <cbc:AddressTypeCode>${empresa.codigo_establecimiento || '0000'}</cbc:AddressTypeCode>
-          <cbc:CitySubdivisionName>${cdata(empresa.urbanizacion || '')}</cbc:CitySubdivisionName>
+          <cbc:CitySubdivisionName>${cdata(trunc(empresa.urbanizacion, 25))}</cbc:CitySubdivisionName>
           <cbc:CityName>${cdata(empresa.provincia)}</cbc:CityName>
           <cbc:CountrySubentity>${cdata(empresa.departamento)}</cbc:CountrySubentity>
           <cbc:District>${cdata(empresa.distrito)}</cbc:District>

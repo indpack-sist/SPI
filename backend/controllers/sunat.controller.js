@@ -103,7 +103,9 @@ export async function emitirComprobante(req, res, next) {
 
       const { xml, totales } = construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha });
       const { xmlFirmado, digestValue } = firmarXml(xml);
-      const nombre = `${sunatConfig.ruc}-${tipo}-${serie}-${String(numero).padStart(8, '0')}`;
+      // El número del nombre de archivo debe coincidir EXACTO con cbc:ID (serie-numero),
+      // SIN ceros a la izquierda: SUNAT (fault 1036) compara ambos sin normalizar el padding.
+      const nombre = `${sunatConfig.ruc}-${tipo}-${serie}-${numero}`;
 
       const qr = generarQr({
         ruc: sunatConfig.ruc, tipo, serie, numero,

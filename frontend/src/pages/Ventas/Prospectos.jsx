@@ -3,7 +3,7 @@ import {
   Radar, Search, Upload, Users, Flame, Sparkles, UserCheck, Gauge,
   Phone, Mail, Globe, Building2, CheckCircle2, X, Loader,
   UserPlus, Trash2, Eye, AlertTriangle, Compass, Activity, Zap, FileSpreadsheet,
-  EyeOff, RotateCcw, Lock, Unlock, Clock, History
+  EyeOff, RotateCcw, Lock, Unlock, Clock, History, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { prospectosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +21,25 @@ const colorScore = (s) => (s >= SCORE_CALIENTE ? '#2ecc71' : s >= SCORE_TIBIO ? 
 const bandaScore = (s) => (s >= SCORE_CALIENTE ? 'Caliente' : s >= SCORE_TIBIO ? 'Tibio' : 'Frío');
 
 const safeParse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
+
+// Prospectos por página en la tabla (tope acordado con el backend).
+const POR_PAGINA = 50;
+
+// Ventana de números de página con elipsis: siempre muestra la 1 y la última,
+// y un rango alrededor de la actual. Devuelve números y marcadores '…'.
+function construirPaginas(actual, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const paginas = new Set([1, total, actual, actual - 1, actual + 1]);
+  if (actual <= 3) [2, 3, 4].forEach((n) => paginas.add(n));
+  if (actual >= total - 2) [total - 1, total - 2, total - 3].forEach((n) => paginas.add(n));
+  const ord = [...paginas].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  const res = [];
+  for (let i = 0; i < ord.length; i++) {
+    if (i > 0 && ord[i] - ord[i - 1] > 1) res.push(`…${i}`); // clave única
+    res.push(ord[i]);
+  }
+  return res;
+}
 
 // Fuente de imagen del prospecto: logo de su web (directo) o foto de
 // Google Places (vía proxy del backend con token en la URL).
@@ -122,6 +141,11 @@ export default function Prospectos() {
   const [vista, setVista] = useState('activos'); // 'activos' | 'excluidos'
   const [facetas, setFacetas] = useState({ sectores: [], busquedas: [] });
 
+  // Paginación
+  const [page, setPage] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+
   // Ingesta
   const [ingestaOpen, setIngestaOpen] = useState(false);
   const [ingestaTexto, setIngestaTexto] = useState('');
@@ -153,7 +177,7 @@ export default function Prospectos() {
     try {
       setLoading(true);
       setError(null);
-      const params = { orden };
+      const params = { orden, page, limit: POR_PAGINA };
       if (search) params.search = search;
       if (fSegmento) params.segmento = fSegmento;
       if (fEstado) params.estado = fEstado;
@@ -167,18 +191,31 @@ export default function Prospectos() {
         prospectosAPI.getEstadisticas(fMinScore ? { min_score: fMinScore } : undefined),
       ]);
       setProspectos(lista.data.data);
+      setTotalRegistros(lista.data.total || 0);
+      setTotalPaginas(lista.data.total_paginas || 1);
       setStats(est.data.data || {});
     } catch (err) {
       setError(err.error || 'Error al cargar prospectos');
     } finally {
       setLoading(false);
     }
-  }, [search, fSegmento, fEstado, fFlag, fSector, fBusqueda, fMinScore, orden, vista]);
+  }, [search, fSegmento, fEstado, fFlag, fSector, fBusqueda, fMinScore, orden, vista, page]);
 
   useEffect(() => {
     const t = setTimeout(cargar, search ? 300 : 0);
     return () => clearTimeout(t);
   }, [cargar, search]);
+
+  // Al cambiar cualquier filtro/orden/vista, vuelve a la primera página.
+  useEffect(() => {
+    setPage(1);
+  }, [search, fSegmento, fEstado, fFlag, fSector, fBusqueda, fMinScore, orden, vista]);
+
+  // Navegación de páginas: acota al rango válido y sube al inicio de la tabla.
+  const irAPagina = (n) => {
+    const destino = Math.min(Math.max(1, n), totalPaginas);
+    if (destino !== page) setPage(destino);
+  };
 
   // Facetas (sectores y búsquedas) para poblar los desplegables de filtro.
   const cargarFacetas = useCallback(async () => {
@@ -269,10 +306,42 @@ export default function Prospectos() {
     }
   };
 
+  // Filtros actuales (sin paginación) para reusarlos en la exportación.
+  const filtrosActuales = () => {
+    const params = { orden };
+    if (search) params.search = search;
+    if (fSegmento) params.segmento = fSegmento;
+    if (fEstado) params.estado = fEstado;
+    if (fFlag) params.flag = fFlag;
+    if (fSector) params.sector = fSector;
+    if (fBusqueda) params.busqueda = fBusqueda;
+    if (fMinScore) params.min_score = fMinScore;
+    if (vista === 'excluidos') params.vista = 'excluidos';
+    return params;
+  };
+
   const exportarExcel = async () => {
-    if (prospectos.length === 0) { setError('No hay prospectos para exportar'); return; }
+    if (totalRegistros === 0) { setError('No hay prospectos para exportar'); return; }
+    // Trae TODO el conjunto filtrado recorriendo las páginas (el backend
+    // limita a 50 por request), no solo la página que se está viendo.
+    const base = filtrosActuales();
+    let todos = [];
+    try {
+      let pag = 1;
+      let paginas = 1;
+      do {
+        const res = await prospectosAPI.getAll({ ...base, page: pag, limit: POR_PAGINA });
+        todos = todos.concat(res.data.data || []);
+        paginas = res.data.total_paginas || 1;
+        pag++;
+      } while (pag <= paginas);
+    } catch (err) {
+      setError(err.error || 'No se pudo exportar la lista completa');
+      return;
+    }
+    if (todos.length === 0) { setError('No hay prospectos para exportar'); return; }
     const XLSX = await import('xlsx');
-    const rows = prospectos.map((p) => ({
+    const rows = todos.map((p) => ({
       Score: p.score,
       'Razón social': p.razon_social,
       Documento: p.documento || '',
@@ -707,6 +776,36 @@ export default function Prospectos() {
           </table>
         )}
       </div>
+
+      {/* Paginación */}
+      {!loading && totalRegistros > 0 && (
+        <div className="pros-pagination">
+          <div className="pros-pag-info">
+            {((page - 1) * POR_PAGINA) + 1}–{Math.min(page * POR_PAGINA, totalRegistros)} de {totalRegistros.toLocaleString('es-PE')}
+          </div>
+          <div className="pros-pag-controls">
+            <button className="pros-pag-btn" disabled={page <= 1} onClick={() => irAPagina(page - 1)} title="Anterior">
+              <ChevronLeft size={16} />
+            </button>
+            {construirPaginas(page, totalPaginas).map((n) =>
+              typeof n === 'string' ? (
+                <span key={n} className="pros-pag-ellipsis">…</span>
+              ) : (
+                <button
+                  key={n}
+                  className={`pros-pag-btn ${n === page ? 'active' : ''}`}
+                  onClick={() => irAPagina(n)}
+                >
+                  {n}
+                </button>
+              )
+            )}
+            <button className="pros-pag-btn" disabled={page >= totalPaginas} onClick={() => irAPagina(page + 1)} title="Siguiente">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ---------- Panel de detalle ---------- */}
       {detalle && (

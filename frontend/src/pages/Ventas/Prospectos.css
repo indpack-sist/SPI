@@ -393,6 +393,39 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
+/* ---------- Paginación ---------- */
+.pros-pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 0.8rem;
+  margin-top: 1rem;
+}
+.pros-pag-info {
+  font-size: 0.8rem; color: var(--text-secondary);
+}
+.pros-pag-controls {
+  display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap;
+}
+.pros-pag-btn {
+  min-width: 34px; height: 34px; padding: 0 0.5rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--carbon); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pros-pag-btn:hover:not(:disabled):not(.active) {
+  background: var(--carbon-light); border-color: var(--steel);
+}
+.pros-pag-btn.active {
+  background: var(--accent); color: #06121c; border-color: var(--accent);
+  cursor: default;
+}
+.pros-pag-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pros-pag-ellipsis {
+  min-width: 22px; text-align: center;
+  color: var(--text-secondary); font-weight: 700;
+}
+
 @media (max-width: 720px) {
   .pros-hide-sm { display: none; }
 }

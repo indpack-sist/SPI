@@ -42,6 +42,7 @@ import notificacionesRoutes from './routes/notificaciones.routes.js';
 import archivosRoutes from './routes/archivos.routes.js';
 import reportesRoutes from './routes/reportesventas.routes.js';
 import tipoCambioRoutes from './routes/tipoCambioRoutes.js';
+import sunatRoutes from './routes/sunat.routes.js';
 dotenv.config();
 
 // Orígenes permitidos para CORS (HTTP + WebSocket). Se define una sola vez
@@ -182,6 +183,7 @@ app.use('/api/cuentas-pago', verificarToken, verificarPermiso('cuentasPago'), cu
 app.use('/api/pagos-cobranzas', verificarToken, verificarPermiso('pagosCobranzas'), pagosCobranzasRoutes);
 
 app.use('/api/notificaciones', verificarToken, notificacionesRoutes);
+app.use('/api/sunat', sunatRoutes);
 app.use('/api/archivos', (req, res, next) => {
     if (!req.headers.authorization && req.query.token) {
         req.headers.authorization = `Bearer ${req.query.token}`;

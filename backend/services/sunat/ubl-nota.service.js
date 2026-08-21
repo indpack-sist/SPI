@@ -1,56 +1,94 @@
-// services/sunat/ubl.service.js  —  Constructores de XML UBL 2.1.
-// FASE 6: Factura (01). Notas de Crédito/Débito (07/08) en FASE 7.
+// services/sunat/ubl-nota.service.js  —  Constructor de XML UBL 2.1 para Notas.
+// FASE 7: Nota de Crédito (07 / CreditNote) y Nota de Débito (08 / DebitNote).
+// Reusa la firma, el zip, el envío (sendBill) y el CDR de la Fase 6 sin cambios.
 import { numeroALetras } from '../../utils/numeroALetras.js';
+import { round2, m2, u6, cdata, trunc, AFECTACION, schemeIdDocumento } from './ubl.service.js';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-// Helpers puros compartidos (reusados por ubl-nota.service.js — no dependen del orden XSD).
-export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-const roundN = (n, d) => { const f = 10 ** d; return Math.round((Number(n) + Number.EPSILON) * f) / f; };
-export const m2 = (n) => round2(n).toFixed(2);       // montos: 2 decimales
-export const u6 = (n) => roundN(n, 6).toFixed(6);    // valores unitarios: 6 decimales
-export const cdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
-// Trunca a la longitud máxima que exige el anexo SUNAT (evita observaciones de formato).
-export const trunc = (s, max) => String(s ?? '').trim().slice(0, max);
-
-// Catálogo 07 (afectación IGV) -> TaxScheme + porcentaje.
-export const AFECTACION = {
-  '10': { scheme: '1000', name: 'IGV', typeCode: 'VAT', percent: 18, gravado: true },
-  '20': { scheme: '9997', name: 'EXO', typeCode: 'VAT', percent: 0, gravado: false },
-  '30': { scheme: '9998', name: 'INA', typeCode: 'FRE', percent: 0, gravado: false },
-  '40': { scheme: '9995', name: 'EXP', typeCode: 'FRE', percent: 0, gravado: false }
+// Catálogo 09 (motivos de Nota de Crédito).
+const MOTIVOS_NC = {
+  '01': 'ANULACION DE LA OPERACION',
+  '02': 'ANULACION POR ERROR EN EL RUC',
+  '03': 'CORRECCION POR ERROR EN LA DESCRIPCION',
+  '04': 'DESCUENTO GLOBAL',
+  '05': 'DESCUENTO POR ITEM',
+  '06': 'DEVOLUCION TOTAL',
+  '07': 'DEVOLUCION POR ITEM',
+  '08': 'BONIFICACION',
+  '09': 'DISMINUCION EN EL VALOR',
+  '13': 'AJUSTES - MONTOS Y/O FECHAS DE PAGO'
+};
+// Catálogo 10 (motivos de Nota de Débito).
+const MOTIVOS_ND = {
+  '01': 'INTERESES POR MORA',
+  '02': 'AUMENTO EN EL VALOR',
+  '03': 'PENALIDADES / OTROS CONCEPTOS'
 };
 
-// Catálogo 06 (documento de identidad del cliente).
-export function schemeIdDocumento(tipoDoc) {
-  switch (String(tipoDoc || '').toUpperCase()) {
-    case 'RUC': return '6';
-    case 'DNI': return '1';
-    case 'CE':
-    case 'CARNET DE EXTRANJERIA': return '4';
-    case 'PASAPORTE': return '7';
-    default: return '0';
-  }
+export function motivosValidos(tipo) {
+  return tipo === '08' ? MOTIVOS_ND : MOTIVOS_NC;
 }
 
+// Perfiles por tipo de nota (elementos que cambian entre CreditNote y DebitNote).
+const PERFIL = {
+  '07': {
+    root: 'CreditNote',
+    ns: 'urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2',
+    lineTag: 'CreditNoteLine',
+    qtyTag: 'CreditedQuantity',
+    totalTag: 'LegalMonetaryTotal',
+    motivos: MOTIVOS_NC
+  },
+  '08': {
+    root: 'DebitNote',
+    ns: 'urn:oasis:names:specification:ubl:schema:xsd:DebitNote-2',
+    lineTag: 'DebitNoteLine',
+    qtyTag: 'DebitedQuantity',
+    totalTag: 'RequestedMonetaryTotal',
+    motivos: MOTIVOS_ND
+  }
+};
+
 /**
- * Construye el XML de una Factura (01) a partir de la OV, su detalle, el cliente y empresa_config.
+ * Construye el XML de una Nota de Crédito (07) o Débito (08).
+ * @param {object}  p
+ * @param {'07'|'08'} p.tipo
+ * @param {string}  p.serie          FC01 (NC) | FD01 (ND)
+ * @param {number}  p.numero
+ * @param {string}  p.motivoCodigo   catálogo 09 (NC) / 10 (ND)
+ * @param {object}  p.docAfectado    { comprobante:'FE01-1', tipo:'01' }
+ * @param {object}  p.ov             orden de venta del comprobante afectado (moneda, tipo_operacion_sunat, es_exportacion)
+ * @param {array}   p.detalle        líneas de la nota (total: replica la factura; parcial: subconjunto/ítems)
+ * @param {object}  p.cliente
+ * @param {object}  p.empresa        empresa_config
+ * @param {object}  p.fecha          { emision, hora }
  * @returns {{ xml: string, totales: {subtotal:number, igv:number, total:number} }}
  */
-export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empresa, fecha }) {
-  if (!detalle || !detalle.length) {
-    const err = new Error('La orden de venta no tiene líneas para facturar');
+export function construirNotaXML({ tipo, serie, numero, motivoCodigo, docAfectado, ov, detalle, cliente, empresa, fecha }) {
+  const perfil = PERFIL[tipo];
+  if (!perfil) {
+    const err = new Error(`Tipo de nota no soportado: ${tipo}`);
     err.statusCode = 422; err.isOperational = true; throw err;
   }
+  const motivoDesc = perfil.motivos[String(motivoCodigo)];
+  if (!motivoDesc) {
+    const err = new Error(`motivo_codigo ${motivoCodigo} inválido para el tipo ${tipo} (ver catálogo ${tipo === '08' ? '10' : '09'})`);
+    err.statusCode = 422; err.isOperational = true; throw err;
+  }
+  if (!detalle || !detalle.length) {
+    const err = new Error('La nota no tiene líneas');
+    err.statusCode = 422; err.isOperational = true; throw err;
+  }
+
   const moneda = ov.moneda || 'PEN';
   const esExport = Number(ov.es_exportacion) === 1;
   const idComprobante = `${serie}-${numero}`;
 
-  // ── Líneas ────────────────────────────────────────────────────────────────
-  const grupos = {}; // afectación -> { base, igv }
+  // ── Líneas (misma matemática que la factura de la Fase 6) ───────────────────
+  const grupos = {}; // afectación -> { base, igv, cfg }
   const lineasXml = detalle.map((d, i) => {
     const unidad = d.codigo_unidad_sunat;
     if (!unidad) {
-      const err = new Error(`El producto "${d.codigo || d.id_producto}" no tiene codigo_unidad_sunat; complétalo antes de facturar`);
+      const err = new Error(`El ítem "${d.codigo || d.descripcion || d.id_producto}" no tiene codigo_unidad_sunat`);
       err.statusCode = 422; err.isOperational = true; throw err;
     }
     const afect = esExport ? '40' : String(d.codigo_afectacion_igv || '10');
@@ -58,8 +96,8 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
 
     const cantidad = Number(d.cantidad);
     const desc = Number(d.descuento_porcentaje || 0);
-    const netUnit = Number(d.precio_unitario) * (1 - desc / 100);       // valor unitario sin IGV
-    const lineExt = round2(cantidad * netUnit);                         // valor de venta de la línea
+    const netUnit = Number(d.precio_unitario) * (1 - desc / 100);
+    const lineExt = round2(cantidad * netUnit);
     const igvLine = cfg.gravado ? round2(lineExt * (cfg.percent / 100)) : 0;
     const precioConIgvUnit = cfg.gravado ? netUnit * (1 + cfg.percent / 100) : netUnit;
 
@@ -67,9 +105,9 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
     grupos[afect].base += lineExt;
     grupos[afect].igv += igvLine;
 
-    return `  <cac:InvoiceLine>
+    return `  <cac:${perfil.lineTag}>
     <cbc:ID>${i + 1}</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="${unidad}">${cantidad}</cbc:InvoicedQuantity>
+    <cbc:${perfil.qtyTag} unitCode="${unidad}">${cantidad}</cbc:${perfil.qtyTag}>
     <cbc:LineExtensionAmount currencyID="${moneda}">${m2(lineExt)}</cbc:LineExtensionAmount>
     <cac:PricingReference>
       <cac:AlternativeConditionPrice>
@@ -93,13 +131,13 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
     </cac:TaxTotal>
     <cac:Item>
       <cbc:Description>${cdata(d.nombre || d.descripcion || d.codigo)}</cbc:Description>
-      <cac:SellersItemIdentification><cbc:ID>${cdata(d.codigo || d.id_producto)}</cbc:ID></cac:SellersItemIdentification>
+      <cac:SellersItemIdentification><cbc:ID>${cdata(d.codigo || d.id_producto || '-')}</cbc:ID></cac:SellersItemIdentification>
     </cac:Item>
     <cac:Price><cbc:PriceAmount currencyID="${moneda}">${u6(netUnit)}</cbc:PriceAmount></cac:Price>
-  </cac:InvoiceLine>`;
+  </cac:${perfil.lineTag}>`;
   }).join('\n');
 
-  // ── Totales (recalculados desde líneas) ─────────────────────────────────────
+  // ── Totales ─────────────────────────────────────────────────────────────────
   const totalBase = round2(Object.values(grupos).reduce((s, g) => s + g.base, 0));
   const totalIgv = round2(Object.values(grupos).reduce((s, g) => s + g.igv, 0));
   const totalPagar = round2(totalBase + totalIgv);
@@ -119,36 +157,13 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
     </cac:TaxSubtotal>`;
   }).join('\n');
 
-  // ── Forma de pago (Contado / Crédito 1 cuota) ───────────────────────────────
-  const esCredito = String(ov.tipo_venta || '').toLowerCase().startsWith('cr');
-  let paymentTerms;
-  if (esCredito) {
-    const venc = fecha.vencimiento || fecha.emision;
-    paymentTerms =
-`  <cac:PaymentTerms>
-    <cbc:ID>FormaPago</cbc:ID><cbc:PaymentMeansID>Credito</cbc:PaymentMeansID>
-    <cbc:Amount currencyID="${moneda}">${m2(totalPagar)}</cbc:Amount>
-  </cac:PaymentTerms>
-  <cac:PaymentTerms>
-    <cbc:ID>FormaPago</cbc:ID><cbc:PaymentMeansID>Cuota001</cbc:PaymentMeansID>
-    <cbc:Amount currencyID="${moneda}">${m2(totalPagar)}</cbc:Amount>
-    <cbc:PaymentDueDate>${venc}</cbc:PaymentDueDate>
-  </cac:PaymentTerms>`;
-  } else {
-    paymentTerms =
-`  <cac:PaymentTerms>
-    <cbc:ID>FormaPago</cbc:ID><cbc:PaymentMeansID>Contado</cbc:PaymentMeansID>
-  </cac:PaymentTerms>`;
-  }
-
-  // ── Cliente (receptor) ──────────────────────────────────────────────────────
   const cliScheme = esExport ? '0' : schemeIdDocumento(cliente.tipo_documento);
-  const cliNumDoc = esExport ? (cliente.ruc || '0') : (cliente.ruc || '0');
-  const dueDateLine = esCredito ? `\n  <cbc:DueDate>${fecha.vencimiento || fecha.emision}</cbc:DueDate>` : '';
-  const tipoOperacion = esExport ? '0200' : (ov.tipo_operacion_sunat || '0101');
+  const cliNumDoc = cliente.ruc || '0';
 
+  // ── XML. OJO orden XSD: DiscrepancyResponse y BillingReference van ANTES de
+  //    cac:Signature (mismo tipo de restricción que resolvió el 0306 en la dirección).
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+<${perfil.root} xmlns="${perfil.ns}"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
   xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
   xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
@@ -159,10 +174,20 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
   <cbc:CustomizationID>2.0</cbc:CustomizationID>
   <cbc:ID>${idComprobante}</cbc:ID>
   <cbc:IssueDate>${fecha.emision}</cbc:IssueDate>
-  <cbc:IssueTime>${fecha.hora}</cbc:IssueTime>${dueDateLine}
-  <cbc:InvoiceTypeCode listID="${tipoOperacion}">01</cbc:InvoiceTypeCode>
+  <cbc:IssueTime>${fecha.hora}</cbc:IssueTime>
   <cbc:Note languageLocaleID="1000">${cdata(numeroALetras(totalPagar, moneda))}</cbc:Note>
   <cbc:DocumentCurrencyCode>${moneda}</cbc:DocumentCurrencyCode>
+  <cac:DiscrepancyResponse>
+    <cbc:ReferenceID>${docAfectado.comprobante}</cbc:ReferenceID>
+    <cbc:ResponseCode>${motivoCodigo}</cbc:ResponseCode>
+    <cbc:Description>${cdata(motivoDesc)}</cbc:Description>
+  </cac:DiscrepancyResponse>
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>${docAfectado.comprobante}</cbc:ID>
+      <cbc:DocumentTypeCode>${docAfectado.tipo}</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   <cac:Signature>
     <cbc:ID>SignatureSP</cbc:ID>
     <cac:SignatoryParty>
@@ -207,18 +232,17 @@ export function construirInvoiceXML({ serie, numero, ov, detalle, cliente, empre
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
-${paymentTerms}
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="${moneda}">${m2(totalIgv)}</cbc:TaxAmount>
 ${taxSubtotalsHeader}
   </cac:TaxTotal>
-  <cac:LegalMonetaryTotal>
+  <cac:${perfil.totalTag}>
     <cbc:LineExtensionAmount currencyID="${moneda}">${m2(totalBase)}</cbc:LineExtensionAmount>
     <cbc:TaxInclusiveAmount currencyID="${moneda}">${m2(totalPagar)}</cbc:TaxInclusiveAmount>
     <cbc:PayableAmount currencyID="${moneda}">${m2(totalPagar)}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>
+  </cac:${perfil.totalTag}>
 ${lineasXml}
-</Invoice>`;
+</${perfil.root}>`;
 
   return { xml, totales: { subtotal: totalBase, igv: totalIgv, total: totalPagar } };
 }

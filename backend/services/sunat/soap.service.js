@@ -90,6 +90,31 @@ export async function getStatus(ticket) {
   };
 }
 
+/**
+ * Consulta el CDR de un comprobante ya enviado (SOLO PRODUCCIÓN, tipos 01/07/08).
+ * Usos: recuperar un CDR perdido, resolver fault 1033 (duplicado), verificar tras timeout.
+ * @returns {Promise<{statusCode:string, statusMessage:string, cdrZip:(Buffer|null)}>}
+ *   0001 aceptado (adjunta CDR) · 0002 rechazado · 0003 baja · 0004 no existe · 0098 en proceso
+ */
 export async function getStatusCdr(tipo, serie, numero) {
-  throw new Error('soap.service.getStatusCdr no implementado (Fase 9)');
+  if (!sunatConfig.urls.CONSULTA_CDR) {
+    const err = new Error('Consulta de CDR (getStatusCdr) no disponible en BETA: es un servicio solo de producción');
+    err.statusCode = 409; err.isOperational = true; throw err;
+  }
+  const body = '<ser:getStatusCdr>' +
+    '<rucComprobante>' + sunatConfig.ruc + '</rucComprobante>' +
+    '<tipoComprobante>' + tipo + '</tipoComprobante>' +
+    '<serieComprobante>' + serie + '</serieComprobante>' +
+    '<numeroComprobante>' + numero + '</numeroComprobante>' +
+  '</ser:getStatusCdr>';
+  const { data, status } = await post(envelope(body), 'urn:getStatusCdr', sunatConfig.urls.CONSULTA_CDR);
+  const statusCode = /<statusCode>([^<]*)<\/statusCode>/.exec(data)?.[1];
+  if (statusCode == null) lanzarFault(data, status, 'getStatusCdr');
+  const statusMessage = /<statusMessage>([\s\S]*?)<\/statusMessage>/.exec(data)?.[1] || '';
+  const contentB64 = /<content>([^<]+)<\/content>/.exec(data)?.[1] || null;
+  return {
+    statusCode: String(statusCode).trim(),
+    statusMessage,
+    cdrZip: contentB64 ? Buffer.from(contentB64, 'base64') : null
+  };
 }

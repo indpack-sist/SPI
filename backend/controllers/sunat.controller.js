@@ -9,7 +9,7 @@ import { construirNotaXML } from '../services/sunat/ubl-nota.service.js';
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
-import { sendBill, sendSummary, getStatus } from '../services/sunat/soap.service.js';
+import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
 import { parsearCdr } from '../services/sunat/cdr.service.js';
 import { generarQr } from '../services/sunat/qr.service.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
@@ -47,6 +47,12 @@ function diffDiasISO(desdeISO, hastaISO) {
   return Math.round((b - a) / 86400000);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Las columnas xml_url/cdr_url guardan {url:...} (JSON u objeto según el driver). Devuelve el string.
+function extraerUrl(v) {
+  if (!v) return null;
+  if (typeof v === 'object') return v.url || null;
+  try { return JSON.parse(v).url || null; } catch { return v; }
+}
 async function copiaLocal(nombre, contenido) {
   try {
     await fs.mkdir('sunat-output', { recursive: true });
@@ -518,6 +524,80 @@ export async function darDeBajaFactura(req, res, next) {
     return res.status(202).json({
       ok: null, estado: 'ENVIADO', idBaja, identificador, ticket,
       mensaje: 'RA en proceso (statusCode 98). Reintentar getStatus con el ticket más tarde.'
+    });
+  } catch (e) { next(e); }
+}
+
+// GET /api/sunat/comprobantes/:id/estado
+// Reconciliación: devuelve el estado en BD. En PROD, si el comprobante quedó ENVIADO sin CDR
+// resuelto, consulta getStatusCdr a SUNAT, actualiza la BD y devuelve el resultado en vivo.
+// En BETA no hay consulta en vivo (billConsultService es solo producción): se devuelve la BD.
+export async function verificarEstado(req, res, next) {
+  const id = Number(req.params.id);
+  try {
+    if (!id) throw new AppError('id de comprobante inválido', 400);
+    const [[f]] = await pool.query(
+      `SELECT id_factura, numero_factura, serie, numero, codigo_tipo_sunat,
+              sunat_estado, sunat_response_code, sunat_response_desc, cdr_url, xml_url
+         FROM facturas_venta WHERE id_factura = ?`, [id]);
+    if (!f) throw new AppError('Comprobante no existe', 404);
+
+    const base = {
+      idFactura: f.id_factura, comprobante: f.numero_factura, tipo: f.codigo_tipo_sunat,
+      sunatEstado: f.sunat_estado, responseCode: f.sunat_response_code,
+      descripcion: f.sunat_response_desc,
+      xmlUrl: extraerUrl(f.xml_url), cdrUrl: extraerUrl(f.cdr_url)
+    };
+
+    // Solo se consulta en vivo un comprobante que quedó ENVIADO (sin estado final) y en PROD.
+    const pendiente = f.sunat_estado === 'ENVIADO';
+    if (!(sunatConfig.mode === 'PROD' && pendiente)) {
+      return res.json({
+        ...base,
+        consultaEnVivo: false,
+        aviso: sunatConfig.mode !== 'PROD'
+          ? 'Consulta en vivo a SUNAT no disponible en BETA (billConsultService es solo producción); se devuelve el estado registrado en BD.'
+          : 'El comprobante ya tiene estado final; no se consultó en vivo.'
+      });
+    }
+
+    // PROD + ENVIADO → getStatusCdr y reconciliar.
+    const t0 = Date.now();
+    let cdrResp;
+    try {
+      cdrResp = await getStatusCdr(f.codigo_tipo_sunat, f.serie, f.numero);
+    } catch (e) {
+      await registrarSunatLog({ origen: 'CONSULTA', referenciaId: id, evento: 'getStatusCdr',
+        exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+      throw e;
+    }
+    // Catálogo getStatusCdr → estado interno. 0004 (no existe) / 0098 (en proceso): sigue ENVIADO.
+    const MAPA = { '0001': 'ACEPTADO', '0002': 'RECHAZADO', '0003': 'BAJA' };
+    const nuevoEstado = MAPA[cdrResp.statusCode] || 'ENVIADO';
+    let cdr = null, cdrUrl = extraerUrl(f.cdr_url);
+    if (cdrResp.cdrZip) {
+      cdr = parsearCdr(cdrResp.cdrZip);
+      const nombre = `${sunatConfig.ruc}-${f.codigo_tipo_sunat}-${f.serie}-${f.numero}`;
+      try { cdrUrl = await subirRaw(cdrResp.cdrZip, `sunat/cdr/R-${nombre}.zip`); }
+      catch (e) { console.warn('[SUNAT] subir CDR (consulta) falló:', e.message); }
+    }
+    if (nuevoEstado !== 'ENVIADO') {
+      await pool.query(
+        `UPDATE facturas_venta SET sunat_estado = ?, sunat_response_code = ?, sunat_response_desc = ?,
+           cdr_url = COALESCE(?, cdr_url) WHERE id_factura = ?`,
+        [nuevoEstado, cdr?.responseCode ?? cdrResp.statusCode,
+         (cdr?.description || cdrResp.statusMessage || '').slice(0, 4000),
+         cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, id]);
+    }
+    await registrarSunatLog({ origen: 'CONSULTA', referenciaId: id, evento: 'getStatusCdr',
+      exito: nuevoEstado !== 'ENVIADO', httpStatus: 200,
+      detalle: `${cdrResp.statusCode} ${cdrResp.statusMessage}`.slice(0, 4000), duracionMs: Date.now() - t0 });
+
+    return res.json({
+      idFactura: id, comprobante: f.numero_factura, tipo: f.codigo_tipo_sunat,
+      consultaEnVivo: true, statusCode: cdrResp.statusCode, statusMessage: cdrResp.statusMessage,
+      sunatEstado: nuevoEstado, responseCode: cdr?.responseCode ?? null,
+      xmlUrl: extraerUrl(f.xml_url), cdrUrl
     });
   } catch (e) { next(e); }
 }

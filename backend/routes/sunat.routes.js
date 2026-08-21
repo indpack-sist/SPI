@@ -23,4 +23,7 @@ router.post('/comprobantes/notas/emitir', verificarToken, verificarPermiso('fact
 // Comunicación de Baja (RA) sobre factura/nota aceptada, ≤7 días (Fase 8).
 router.post('/comprobantes/baja', verificarToken, verificarPermiso('facturacion'), c.darDeBajaFactura);
 
+// Consulta/reconciliación de estado (BD + getStatusCdr en PROD) — Fase 9.
+router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstado);
+
 export default router;

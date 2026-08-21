@@ -785,3 +785,31 @@ export async function verificarEstadoGuia(req, res, next) {
     });
   } catch (e) { next(e); }
 }
+
+// GET /api/sunat/gre/token/test → prueba AISLADA del token OAuth GRE (diagnóstico, sin emitir).
+// Devuelve el body REAL de SUNAT en el fallo + chequeos de config (sin filtrar secretos).
+export async function probarTokenGre(req, res, next) {
+  try {
+    const cid = String(sunatConfig.greClientId || '');
+    const sec = String(sunatConfig.greClientSecret || '');
+    const diag = {
+      mode: sunatConfig.mode,
+      tokenUrl: sunatConfig.urls.GRE_TOKEN.replace('{client_id}', cid ? `${cid.slice(0, 4)}…${cid.slice(-4)}` : '(vacío)'),
+      username: `${sunatConfig.ruc}${sunatConfig.solUser}`,      // lo que va como username del password grant
+      clientIdLen: cid.length,
+      clientIdSinEspacios: cid === cid.trim(),
+      clientSecretLen: sec.length,
+      clientSecretSinEspacios: sec === sec.trim(),
+      solPassLen: String(sunatConfig.solPass || '').length
+    };
+    try {
+      const token = await obtenerTokenGre();
+      return res.json({ ok: true, tokenPreview: `${String(token).slice(0, 10)}…`, diag });
+    } catch (e) {
+      return res.status(502).json({
+        ok: false, sunatStatus: e.sunatStatus ?? null, sunatBody: e.sunatBody ?? null,
+        error: e.message, diag
+      });
+    }
+  } catch (e) { next(e); }
+}

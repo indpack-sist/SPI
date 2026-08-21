@@ -20,4 +20,7 @@ router.post('/comprobantes/emitir', verificarToken, verificarPermiso('facturacio
 // Notas de Crédito (07) y Débito (08) sobre una factura aceptada (Fase 7).
 router.post('/comprobantes/notas/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirNota);
 
+// Comunicación de Baja (RA) sobre factura/nota aceptada, ≤7 días (Fase 8).
+router.post('/comprobantes/baja', verificarToken, verificarPermiso('facturacion'), c.darDeBajaFactura);
+
 export default router;

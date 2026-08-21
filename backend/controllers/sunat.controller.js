@@ -3,12 +3,13 @@
 import { promises as fs } from 'fs';
 import { sunatConfig } from '../config/sunat.js';
 import { pool, withTransaction } from '../config/database.js';
-import { obtenerCorrelativo } from '../services/sunat/numeracion.service.js';
+import { obtenerCorrelativo, obtenerCorrelativoDiario } from '../services/sunat/numeracion.service.js';
 import { construirInvoiceXML } from '../services/sunat/ubl.service.js';
 import { construirNotaXML } from '../services/sunat/ubl-nota.service.js';
+import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
-import { sendBill } from '../services/sunat/soap.service.js';
+import { sendBill, sendSummary, getStatus } from '../services/sunat/soap.service.js';
 import { parsearCdr } from '../services/sunat/cdr.service.js';
 import { generarQr } from '../services/sunat/qr.service.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
@@ -35,6 +36,13 @@ function addDiasISO(iso, dias) {
   d.setDate(d.getDate() + Number(dias || 0));
   return d.toISOString().slice(0, 10);
 }
+// Días calendario entre dos fechas ISO ('YYYY-MM-DD'). desde=emisión, hasta=hoy.
+function diffDiasISO(desdeISO, hastaISO) {
+  const a = new Date(desdeISO + 'T00:00:00');
+  const b = new Date(hastaISO + 'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function copiaLocal(nombre, contenido) {
   try {
     await fs.mkdir('sunat-output', { recursive: true });
@@ -118,12 +126,14 @@ export async function emitirComprobante(req, res, next) {
         `INSERT INTO facturas_venta
           (numero_factura, id_orden_venta, id_cliente, tipo_comprobante, serie, numero,
            subtotal, igv, total, moneda, estado, codigo_tipo_sunat, tipo_operacion_sunat,
+           fecha_emision,
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, NOW(), ?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?, 'ENVIADO', ?,?,?,?, NOW(), ?)`,
         [`${serie}-${numero}`, id_orden_venta, ov.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ov.moneda || 'PEN', 'Emitida',
          tipo, esExport ? '0200' : (ov.tipo_operacion_sunat || '0101'),
+         emision,
          digestValue, qr.data, nombre, digestValue, idEmpleado]);
 
       return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales };
@@ -194,7 +204,7 @@ export async function emitirComprobante(req, res, next) {
     res.json({
       ok: aceptado, estado: estadoFinal, idFactura, serie, numero,
       comprobante: `${serie}-${numero}`, responseCode: cdr.responseCode,
-      descripcion, totales, xmlUrl, cdrUrl, debug
+      descripcion, totales, xmlUrl, cdrUrl
     });
   } catch (e) { next(e); }
 }
@@ -274,14 +284,14 @@ export async function emitirNota(req, res, next) {
         `INSERT INTO facturas_venta
           (numero_factura, id_orden_venta, id_cliente, tipo_comprobante, serie, numero,
            subtotal, igv, total, moneda, estado, codigo_tipo_sunat, tipo_operacion_sunat,
-           id_factura_ref, motivo_nota_codigo,
+           id_factura_ref, motivo_nota_codigo, fecha_emision,
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, NOW(), ?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, NOW(), ?)`,
         [`${serie}-${numero}`, ref.id_orden_venta, ref.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ref.moneda || 'PEN', 'Emitida',
          tipo, ov.tipo_operacion_sunat || '0101',
-         id_factura_ref, String(motivo_codigo),
+         id_factura_ref, String(motivo_codigo), emision,
          digestValue, qr.data, nombre, digestValue, idEmpleado]);
 
       return { idNota: ins.insertId, numero, nombre, xmlFirmado, totales };
@@ -347,7 +357,161 @@ export async function emitirNota(req, res, next) {
     res.json({
       ok: aceptado, estado: estadoFinal, idNota, serie, numero,
       comprobante: `${serie}-${numero}`, tipo, responseCode: cdr.responseCode,
-      afectaFacturaId: id_factura_ref, descripcion, totales, xmlUrl, cdrUrl, debug
+      afectaFacturaId: id_factura_ref, descripcion, totales, xmlUrl, cdrUrl
+    });
+  } catch (e) { next(e); }
+}
+
+// POST /api/sunat/comprobantes/baja  { id_factura, motivo }
+// Comunicación de Baja (RA) — ÚNICO mecanismo de anulación de facturas (01) y notas (07/08),
+// dentro de los 7 días calendario siguientes a la emisión. Pasado el plazo → Nota de Crédito.
+export async function darDeBajaFactura(req, res, next) {
+  const { id_factura } = req.body;
+  const motivo = String(req.body.motivo || '').trim();
+  const idEmpleado = req.user?.id_empleado || null;
+  try {
+    if (!id_factura) throw new AppError('Falta id_factura', 400);
+    if (!motivo) throw new AppError('Falta motivo de la baja', 400);
+    const fechaComunicacion = fechaLima().emision;
+
+    // ── TX1: validar + reservar correlativo diario + INSERT sunat_bajas GENERADO ──
+    const prep = await withTransaction(async (conn) => {
+      // fecha_emision = IssueDate real del comprobante (lo que exige la regla de plazo);
+      // COALESCE a sunat_fecha_envio solo para filas emitidas antes de persistir fecha_emision.
+      const [[f]] = await conn.query(
+        `SELECT id_factura, id_orden_venta, serie, numero, codigo_tipo_sunat, sunat_estado, estado, id_baja,
+                DATE(COALESCE(fecha_emision, sunat_fecha_envio)) AS fecha_emision
+           FROM facturas_venta WHERE id_factura = ? FOR UPDATE`, [id_factura]);
+      if (!f) throw new AppError('Comprobante no existe', 404);
+      if (f.sunat_estado !== 'ACEPTADO') throw new AppError('Solo se dan de baja comprobantes ACEPTADOS por SUNAT', 422);
+      if (!['01', '07', '08'].includes(f.codigo_tipo_sunat))
+        throw new AppError('Tipo de documento no admite Comunicación de Baja', 422);
+      if (f.id_baja || f.estado === 'Anulada') throw new AppError('El comprobante ya está anulado/dado de baja', 409);
+      if (!f.fecha_emision) throw new AppError('El comprobante no tiene fecha de emisión registrada', 422);
+
+      const fechaReferencia = new Date(f.fecha_emision).toISOString().slice(0, 10);
+      const dias = diffDiasISO(fechaReferencia, fechaComunicacion);
+      if (dias > 7) throw new AppError('Plazo de 7 días vencido: la anulación debe hacerse por Nota de Crédito (motivo 01)', 422);
+
+      const correlativo = await obtenerCorrelativoDiario(conn, 'RA', fechaComunicacion);
+      const ymd = fechaComunicacion.replace(/-/g, '');
+      const corr5 = String(correlativo).padStart(5, '0');
+      const identificador = `RA-${ymd}-${corr5}`;
+
+      const [ins] = await conn.query(
+        `INSERT INTO sunat_bajas
+          (identificador, fecha_referencia, fecha_comunicacion, correlativo, estado, id_registrado_por)
+         VALUES (?, ?, ?, ?, 'GENERADO', ?)`,
+        [identificador, fechaReferencia, fechaComunicacion, correlativo, idEmpleado]);
+      const idBaja = ins.insertId;
+      await conn.query(
+        `INSERT INTO sunat_bajas_detalle (id_baja, id_factura, tipo_documento, serie, numero, motivo)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [idBaja, f.id_factura, f.codigo_tipo_sunat, f.serie, f.numero, motivo.slice(0, 200)]);
+
+      return { idBaja, identificador, fechaReferencia, corr5, ymd, factura: f };
+    });
+
+    const { idBaja, identificador, fechaReferencia, corr5, ymd, factura } = prep;
+    const [[empresa]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+
+    const ra = {
+      identificador, fechaReferencia, fechaComunicacion, empresa,
+      lineas: [{ lineId: 1, tipoDoc: factura.codigo_tipo_sunat, serie: factura.serie, numero: factura.numero, motivo }]
+    };
+    const xml = construirVoidedDocumentsXML(ra);
+    const { xmlFirmado } = firmarXml(xml);
+    const nombre = `${sunatConfig.ruc}-RA-${ymd}-${corr5}`;
+    await copiaLocal(`${nombre}.xml`, xmlFirmado);
+
+    // ── Envío asíncrono: sendSummary devuelve ticket ──
+    const t0 = Date.now();
+    let ticket;
+    try {
+      ticket = await sendSummary(`${nombre}.zip`, zipXml(`${nombre}.xml`, xmlFirmado));
+    } catch (e) {
+      await pool.query(
+        `UPDATE sunat_bajas SET estado = 'ERROR', response_desc = ?, intentos = intentos + 1 WHERE id_baja = ?`,
+        [`FAULT ${e.faultCode || ''}: ${e.message}`.slice(0, 4000), idBaja]);
+      await registrarSunatLog({ origen: 'BAJA', referenciaId: idBaja, evento: 'sendSummary',
+        exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+      return res.status(502).json({ ok: false, estado: 'ERROR', idBaja, identificador,
+        faultCode: e.faultCode || null, error: e.message });
+    }
+    let xmlUrl = null;
+    try { xmlUrl = await subirRaw(Buffer.from(xmlFirmado, 'utf8'), `sunat/xml/${nombre}.xml`); }
+    catch (e) { console.warn('[SUNAT] subir XML baja falló:', e.message); }
+    await pool.query(
+      `UPDATE sunat_bajas SET estado = 'ENVIADO', sunat_ticket = ?, xml_url = ? WHERE id_baja = ?`,
+      [ticket, xmlUrl ? JSON.stringify({ url: xmlUrl }) : null, idBaja]);
+    console.log('[SUNAT] darDeBaja ->', JSON.stringify({ idBaja, identificador, ticket }));
+
+    // ── Poll de getStatus (inline 3×15s; el job de la Fase 15 cierra los que queden en 98) ──
+    for (let i = 0; i < 3; i++) {
+      await sleep(15000);
+      let st;
+      try {
+        st = await getStatus(ticket);
+      } catch (e) {
+        await registrarSunatLog({ origen: 'BAJA', referenciaId: idBaja, evento: 'getStatus',
+          exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+        continue;
+      }
+      if (st.statusCode === '98') continue; // aún en proceso
+
+      const cdr = st.cdrZip ? parsearCdr(st.cdrZip) : null;
+      const aceptado = st.statusCode === '0' && cdr?.responseCode === '0';
+      const descripcion = (cdr?.description || `statusCode ${st.statusCode}`) +
+        (cdr?.notas?.length ? ' | OBS: ' + cdr.notas.join('; ') : '');
+      let cdrUrl = null;
+      if (st.cdrZip) {
+        try { cdrUrl = await subirRaw(st.cdrZip, `sunat/cdr/R-${nombre}.zip`); }
+        catch (e) { console.warn('[SUNAT] subir CDR baja falló:', e.message); }
+        await copiaLocal(`R-${nombre}.zip`, st.cdrZip);
+      }
+
+      await withTransaction(async (conn) => {
+        await conn.query(
+          `UPDATE sunat_bajas SET estado = ?, response_code = ?, response_desc = ?, cdr_url = ? WHERE id_baja = ?`,
+          [aceptado ? 'ACEPTADO' : 'RECHAZADO', cdr?.responseCode ?? String(st.statusCode),
+           descripcion.slice(0, 4000), cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, idBaja]);
+        if (aceptado) {
+          await conn.query(
+            `UPDATE facturas_venta SET sunat_estado = 'BAJA', estado = 'Anulada', id_baja = ? WHERE id_factura = ?`,
+            [idBaja, id_factura]);
+          // Al anularse una FACTURA (01), liberar su OV para poder re-facturar sobre la misma
+          // (caso error de digitación: cliente/dirección mal, cantidad correcta). El stock NO
+          // se toca aquí a propósito (los ajustes de inventario son un proceso de negocio aparte).
+          // En una NOTA (07/08) la factura original sigue vigente → la OV NO se libera.
+          if (factura.codigo_tipo_sunat === '01' && factura.id_orden_venta) {
+            await conn.query(
+              `UPDATE ordenes_venta SET facturado_sunat = 0, fecha_facturacion_sunat = NULL,
+                 numero_comprobante_sunat = NULL, id_facturador = NULL WHERE id_orden_venta = ?`,
+              [factura.id_orden_venta]);
+          }
+        }
+      });
+
+      await registrarSunatLog({ origen: 'BAJA', referenciaId: idBaja, evento: 'getStatus',
+        exito: aceptado, httpStatus: 200, detalle: `${st.statusCode} ${descripcion}`.slice(0, 4000),
+        duracionMs: Date.now() - t0 });
+
+      return res.json({
+        ok: aceptado, estado: aceptado ? 'ACEPTADO' : 'RECHAZADO', idBaja, identificador,
+        ticket, statusCode: st.statusCode, responseCode: cdr?.responseCode ?? null,
+        descripcion, cdrUrl,
+        nota: aceptado
+          ? (factura.codigo_tipo_sunat === '01'
+              ? 'Factura marcada BAJA/Anulada y OV liberada para re-facturar. Ajuste de stock NO automático (proceso de negocio aparte).'
+              : 'Nota marcada BAJA/Anulada. La factura original sigue vigente; la OV no se libera.')
+          : undefined
+      });
+    }
+
+    // Sigue en 98 tras 3 intentos: queda ENVIADO con ticket para cierre posterior.
+    return res.status(202).json({
+      ok: null, estado: 'ENVIADO', idBaja, identificador, ticket,
+      mensaje: 'RA en proceso (statusCode 98). Reintentar getStatus con el ticket más tarde.'
     });
   } catch (e) { next(e); }
 }

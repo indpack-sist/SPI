@@ -47,12 +47,47 @@ export async function sendBill(nombreZip, zipBuffer) {
   return Buffer.from(cdrB64, 'base64');
 }
 
-export async function sendSummary(nombreZip, zipBuffer) {
-  throw new Error('soap.service.sendSummary no implementado (Fase 8)');
+// Extrae fault de una respuesta SOAP y lanza un Error con faultCode numérico.
+function lanzarFault(data, status, contexto) {
+  const faultCode = /<faultcode>([^<]*)<\/faultcode>/.exec(data)?.[1] || String(status);
+  const faultMsg = /<faultstring>([\s\S]*?)<\/faultstring>/.exec(data)?.[1] || 'Sin detalle';
+  const err = new Error(`SUNAT fault ${faultCode} (${contexto}): ${faultMsg}`);
+  err.faultCode = faultCode.replace(/\D/g, '');
+  err.httpStatus = status;
+  throw err;
 }
 
+/**
+ * Envía un resumen/comunicación de baja (RA). Es ASÍNCRONO: devuelve un ticket que se
+ * consulta luego con getStatus. Lanza Error con faultCode si SUNAT responde un fault.
+ * @returns {Promise<string>} ticket
+ */
+export async function sendSummary(nombreZip, zipBuffer) {
+  const body = '<ser:sendSummary>' +
+    '<fileName>' + nombreZip + '</fileName>' +
+    '<contentFile>' + zipBuffer.toString('base64') + '</contentFile>' +
+  '</ser:sendSummary>';
+  const { data, status } = await post(envelope(body), 'urn:sendSummary');
+  const ticket = /<ticket>([^<]+)<\/ticket>/.exec(data)?.[1];
+  if (!ticket) lanzarFault(data, status, 'sendSummary');
+  return ticket;
+}
+
+/**
+ * Consulta el estado de un ticket de sendSummary.
+ * @returns {Promise<{statusCode:string, cdrZip:(Buffer|null)}>}
+ *   statusCode: '0' aceptado (cdrZip presente) · '98' en proceso · '99' rechazado (cdrZip con error)
+ */
 export async function getStatus(ticket) {
-  throw new Error('soap.service.getStatus no implementado (Fase 8)');
+  const body = '<ser:getStatus><ticket>' + ticket + '</ticket></ser:getStatus>';
+  const { data, status } = await post(envelope(body), 'urn:getStatus');
+  const statusCode = /<statusCode>([^<]*)<\/statusCode>/.exec(data)?.[1];
+  if (statusCode == null) lanzarFault(data, status, 'getStatus');
+  const contentB64 = /<content>([^<]+)<\/content>/.exec(data)?.[1] || null;
+  return {
+    statusCode: String(statusCode).trim(),
+    cdrZip: contentB64 ? Buffer.from(contentB64, 'base64') : null
+  };
 }
 
 export async function getStatusCdr(tipo, serie, numero) {

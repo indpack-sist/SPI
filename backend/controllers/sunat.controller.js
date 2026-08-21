@@ -29,7 +29,11 @@ function fechaLima() {
     timeZone: 'America/Lima', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
   }).format(now);
   hora = hora.replace(/^24/, '00'); // quirk de medianoche en algunos runtimes
-  return { emision, hora };
+  // Datetime Lima completo 'YYYY-MM-DD HH:MM:SS' para PERSISTIR en BD. Se escribe explícito
+  // (no NOW()/CURRENT_TIMESTAMP) porque la sesión MySQL corre en UTC (time_zone=SYSTEM) y
+  // guardaría la hora +5h. Coincide exactamente con el IssueDate+IssueTime del XML.
+  const emisionDateTime = `${emision} ${hora}`;
+  return { emision, hora, emisionDateTime };
 }
 function addDiasISO(iso, dias) {
   const d = new Date(iso + 'T00:00:00');
@@ -79,7 +83,7 @@ export async function emitirComprobante(req, res, next) {
       throw new AppError('Las notas 07/08 se emiten desde el endpoint de notas (Fase 7)', 400);
     }
 
-    const { emision, hora } = fechaLima();
+    const { emision, hora, emisionDateTime } = fechaLima();
     const serie = 'FE01';
 
     // ── TX1: validar + reservar correlativo + INSERT factura ENVIADO (traza) ──
@@ -129,12 +133,12 @@ export async function emitirComprobante(req, res, next) {
            fecha_emision,
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?, 'ENVIADO', ?,?,?,?, NOW(), ?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?, 'ENVIADO', ?,?,?,?, ?, ?)`,
         [`${serie}-${numero}`, id_orden_venta, ov.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ov.moneda || 'PEN', 'Emitida',
          tipo, esExport ? '0200' : (ov.tipo_operacion_sunat || '0101'),
-         emision,
-         digestValue, qr.data, nombre, digestValue, idEmpleado]);
+         emisionDateTime,
+         digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
       return { idFactura: ins.insertId, numero, nombre, xmlFirmado, digestValue, totales };
     });
@@ -191,9 +195,9 @@ export async function emitirComprobante(req, res, next) {
 
       if (aceptado) {
         await conn.query(
-          `UPDATE ordenes_venta SET facturado_sunat = 1, fecha_facturacion_sunat = NOW(),
+          `UPDATE ordenes_venta SET facturado_sunat = 1, fecha_facturacion_sunat = ?,
              numero_comprobante_sunat = ?, id_facturador = ? WHERE id_orden_venta = ?`,
-          [`${serie}-${numero}`, idEmpleado, id_orden_venta]);
+          [emisionDateTime, `${serie}-${numero}`, idEmpleado, id_orden_venta]);
       }
     });
 
@@ -224,7 +228,7 @@ export async function emitirNota(req, res, next) {
     if (!SERIES_NOTA[tipo]) throw new AppError('tipo de nota inválido (07 NC | 08 ND)', 400);
     if (!motivo_codigo) throw new AppError('Falta motivo_codigo', 400);
     const serie = SERIES_NOTA[tipo];
-    const { emision, hora } = fechaLima();
+    const { emision, hora, emisionDateTime } = fechaLima();
 
     // ── TX1: validar doc afectado + reservar correlativo + INSERT nota ENVIADO ──
     const prep = await withTransaction(async (conn) => {
@@ -287,12 +291,12 @@ export async function emitirNota(req, res, next) {
            id_factura_ref, motivo_nota_codigo, fecha_emision,
            sunat_estado, sunat_digest_value, sunat_qr_data, sunat_nombre_xml, hash_see,
            sunat_fecha_envio, id_registrado_por)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, NOW(), ?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'ENVIADO', ?,?,?,?, ?, ?)`,
         [`${serie}-${numero}`, ref.id_orden_venta, ref.id_cliente, 'Factura', serie, numero,
          totales.subtotal, totales.igv, totales.total, ref.moneda || 'PEN', 'Emitida',
          tipo, ov.tipo_operacion_sunat || '0101',
-         id_factura_ref, String(motivo_codigo), emision,
-         digestValue, qr.data, nombre, digestValue, idEmpleado]);
+         id_factura_ref, String(motivo_codigo), emisionDateTime,
+         digestValue, qr.data, nombre, digestValue, emisionDateTime, idEmpleado]);
 
       return { idNota: ins.insertId, numero, nombre, xmlFirmado, totales };
     });
@@ -372,15 +376,17 @@ export async function darDeBajaFactura(req, res, next) {
   try {
     if (!id_factura) throw new AppError('Falta id_factura', 400);
     if (!motivo) throw new AppError('Falta motivo de la baja', 400);
-    const fechaComunicacion = fechaLima().emision;
+    const { emision: fechaComunicacion, emisionDateTime: comunicacionDateTime } = fechaLima();
 
     // ── TX1: validar + reservar correlativo diario + INSERT sunat_bajas GENERADO ──
     const prep = await withTransaction(async (conn) => {
       // fecha_emision = IssueDate real del comprobante (lo que exige la regla de plazo);
       // COALESCE a sunat_fecha_envio solo para filas emitidas antes de persistir fecha_emision.
+      // DATE_FORMAT → string 'YYYY-MM-DD' directo (evita reconvertir un Date del driver, que
+      // volvería a introducir un corrimiento de zona horaria al pasar por toISOString()).
       const [[f]] = await conn.query(
         `SELECT id_factura, id_orden_venta, serie, numero, codigo_tipo_sunat, sunat_estado, estado, id_baja,
-                DATE(COALESCE(fecha_emision, sunat_fecha_envio)) AS fecha_emision
+                DATE_FORMAT(COALESCE(fecha_emision, sunat_fecha_envio), '%Y-%m-%d') AS fecha_emision
            FROM facturas_venta WHERE id_factura = ? FOR UPDATE`, [id_factura]);
       if (!f) throw new AppError('Comprobante no existe', 404);
       if (f.sunat_estado !== 'ACEPTADO') throw new AppError('Solo se dan de baja comprobantes ACEPTADOS por SUNAT', 422);
@@ -389,7 +395,7 @@ export async function darDeBajaFactura(req, res, next) {
       if (f.id_baja || f.estado === 'Anulada') throw new AppError('El comprobante ya está anulado/dado de baja', 409);
       if (!f.fecha_emision) throw new AppError('El comprobante no tiene fecha de emisión registrada', 422);
 
-      const fechaReferencia = new Date(f.fecha_emision).toISOString().slice(0, 10);
+      const fechaReferencia = f.fecha_emision; // ya es 'YYYY-MM-DD' (DATE_FORMAT)
       const dias = diffDiasISO(fechaReferencia, fechaComunicacion);
       if (dias > 7) throw new AppError('Plazo de 7 días vencido: la anulación debe hacerse por Nota de Crédito (motivo 01)', 422);
 
@@ -400,9 +406,9 @@ export async function darDeBajaFactura(req, res, next) {
 
       const [ins] = await conn.query(
         `INSERT INTO sunat_bajas
-          (identificador, fecha_referencia, fecha_comunicacion, correlativo, estado, id_registrado_por)
-         VALUES (?, ?, ?, ?, 'GENERADO', ?)`,
-        [identificador, fechaReferencia, fechaComunicacion, correlativo, idEmpleado]);
+          (identificador, fecha_referencia, fecha_comunicacion, correlativo, estado, id_registrado_por, fecha_registro)
+         VALUES (?, ?, ?, ?, 'GENERADO', ?, ?)`,
+        [identificador, fechaReferencia, fechaComunicacion, correlativo, idEmpleado, comunicacionDateTime]);
       const idBaja = ins.insertId;
       await conn.query(
         `INSERT INTO sunat_bajas_detalle (id_baja, id_factura, tipo_documento, serie, numero, motivo)

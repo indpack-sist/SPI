@@ -3,16 +3,17 @@
 import { numeroALetras } from '../../utils/numeroALetras.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+// Helpers puros compartidos (reusados por ubl-nota.service.js — no dependen del orden XSD).
+export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const roundN = (n, d) => { const f = 10 ** d; return Math.round((Number(n) + Number.EPSILON) * f) / f; };
-const m2 = (n) => round2(n).toFixed(2);              // montos: 2 decimales
-const u6 = (n) => roundN(n, 6).toFixed(6);           // valores unitarios: 6 decimales
-const cdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
+export const m2 = (n) => round2(n).toFixed(2);       // montos: 2 decimales
+export const u6 = (n) => roundN(n, 6).toFixed(6);    // valores unitarios: 6 decimales
+export const cdata = (s) => `<![CDATA[${String(s ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
 // Trunca a la longitud máxima que exige el anexo SUNAT (evita observaciones de formato).
-const trunc = (s, max) => String(s ?? '').trim().slice(0, max);
+export const trunc = (s, max) => String(s ?? '').trim().slice(0, max);
 
 // Catálogo 07 (afectación IGV) -> TaxScheme + porcentaje.
-const AFECTACION = {
+export const AFECTACION = {
   '10': { scheme: '1000', name: 'IGV', typeCode: 'VAT', percent: 18, gravado: true },
   '20': { scheme: '9997', name: 'EXO', typeCode: 'VAT', percent: 0, gravado: false },
   '30': { scheme: '9998', name: 'INA', typeCode: 'FRE', percent: 0, gravado: false },
@@ -20,7 +21,7 @@ const AFECTACION = {
 };
 
 // Catálogo 06 (documento de identidad del cliente).
-function schemeIdDocumento(tipoDoc) {
+export function schemeIdDocumento(tipoDoc) {
   switch (String(tipoDoc || '').toUpperCase()) {
     case 'RUC': return '6';
     case 'DNI': return '1';

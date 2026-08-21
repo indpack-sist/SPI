@@ -17,4 +17,7 @@ router.get('/health', verificarToken, verificarPermiso('facturacion'), c.health)
 // Emisión de comprobantes (Fase 6: solo Factura 01).
 router.post('/comprobantes/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirComprobante);
 
+// Notas de Crédito (07) y Débito (08) sobre una factura aceptada (Fase 7).
+router.post('/comprobantes/notas/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirNota);
+
 export default router;

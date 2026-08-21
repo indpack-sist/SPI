@@ -26,4 +26,8 @@ router.post('/comprobantes/baja', verificarToken, verificarPermiso('facturacion'
 // Consulta/reconciliación de estado (BD + getStatusCdr en PROD) — Fase 9.
 router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstado);
 
+// GRE Remitente (09) por API REST — Fase 10.
+router.post('/guias/:id/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirGuiaRemision);
+router.get('/guias/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstadoGuia);
+
 export default router;

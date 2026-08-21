@@ -7,6 +7,8 @@ import { obtenerCorrelativo, obtenerCorrelativoDiario } from '../services/sunat/
 import { construirInvoiceXML } from '../services/sunat/ubl.service.js';
 import { construirNotaXML } from '../services/sunat/ubl-nota.service.js';
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
+import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
+import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gre.service.js';
 import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
@@ -598,6 +600,188 @@ export async function verificarEstado(req, res, next) {
       consultaEnVivo: true, statusCode: cdrResp.statusCode, statusMessage: cdrResp.statusMessage,
       sunatEstado: nuevoEstado, responseCode: cdr?.responseCode ?? null,
       xmlUrl: extraerUrl(f.xml_url), cdrUrl
+    });
+  } catch (e) { next(e); }
+}
+
+// ── FASE 10: GRE Remitente (09) ─────────────────────────────────────────────
+// Cierra el ticket de una GRE contra el CDR (o el mock BETA) y persiste el estado.
+async function cerrarTicketGre(idGuia, nombre, ticket, st, t0) {
+  const aceptado = st.codRespuesta === '0';
+  const estadoFinal = aceptado ? 'ACEPTADO' : (st.codRespuesta === '99' ? 'RECHAZADO' : 'ENVIADO');
+  let cdr = null, cdrUrl = null, qrUrl = null;
+  if (st.cdrZip) {
+    cdr = parsearCdr(st.cdrZip);
+    try { cdrUrl = await subirRaw(st.cdrZip, `sunat/cdr/R-${nombre}.zip`); }
+    catch (e) { console.warn('[SUNAT] subir CDR GRE falló:', e.message); }
+    await copiaLocal(`R-${nombre}.zip`, st.cdrZip);
+  }
+  const descripcion = aceptado
+    ? (cdr?.description || (st.mock ? 'Guía aceptada (mock BETA, sin CDR real)' : 'Guía aceptada'))
+    : (st.error ? `${st.error.numError || ''} ${st.error.desError || ''}`.trim() : `codRespuesta ${st.codRespuesta}`);
+  await pool.query(
+    `UPDATE guias_remision SET sunat_estado = ?, sunat_response_code = ?, sunat_response_desc = ?,
+       cdr_url = COALESCE(?, cdr_url), sunat_qr_url = COALESCE(?, sunat_qr_url) WHERE id_guia = ?`,
+    [estadoFinal, st.codRespuesta, String(descripcion).slice(0, 4000),
+     cdrUrl ? JSON.stringify({ url: cdrUrl }) : null, qrUrl, idGuia]);
+  await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: idGuia, evento: 'consultarGuia',
+    exito: aceptado, httpStatus: 200, detalle: `${st.codRespuesta} ${descripcion}`.slice(0, 4000),
+    duracionMs: Date.now() - t0 });
+  return { aceptado, estadoFinal, codRespuesta: st.codRespuesta, descripcion, cdrUrl, mock: st.mock || false };
+}
+
+// POST /api/sunat/guias/:id/emitir  → GRE Remitente (09) de una guias_remision existente.
+export async function emitirGuiaRemision(req, res, next) {
+  const idGuia = Number(req.params.id);
+  const idEmpleado = req.user?.id_empleado || null;
+  try {
+    if (!idGuia) throw new AppError('id de guía inválido', 400);
+    const tipo = '09', serie = 'TE01';
+    const { emision, hora, emisionDateTime } = fechaLima();
+
+    // ── TX1: validar + reservar correlativo + marcar ENVIADO ──
+    const prep = await withTransaction(async (conn) => {
+      const [[g]] = await conn.query('SELECT * FROM guias_remision WHERE id_guia = ? FOR UPDATE', [idGuia]);
+      if (!g) throw new AppError('Guía no existe', 404);
+      if (g.sunat_estado === 'ACEPTADO') throw new AppError('La guía ya fue aceptada por SUNAT', 409);
+      if (!g.ubigeo_partida || !g.ubigeo_llegada) throw new AppError('Faltan ubigeos de partida/llegada (6 dígitos)', 422);
+      if (!(Number(g.peso_bruto_kg) > 0)) throw new AppError('peso_bruto_kg debe ser > 0', 422);
+      if (!g.motivo_traslado_cod) throw new AppError('Falta motivo_traslado_cod (catálogo 20)', 422);
+
+      const [[cliente]] = await conn.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
+      if (!cliente) throw new AppError('Cliente de la guía no existe', 404);
+      const [[empresa]] = await conn.query('SELECT * FROM empresa_config WHERE id = 1');
+      const [[conductor]] = g.id_conductor
+        ? await conn.query('SELECT id_empleado, dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
+        : [[null]];
+      // fecha_traslado como string 'YYYY-MM-DD' (sin corrimiento de zona).
+      const [[ft]] = await conn.query("SELECT DATE_FORMAT(fecha_traslado, '%Y-%m-%d') AS f FROM guias_remision WHERE id_guia = ?", [idGuia]);
+      const fechaTraslado = ft?.f || emision;
+
+      const [detalle] = await conn.query(
+        `SELECT d.id_detalle_orden, d.id_producto, d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat
+           FROM detalle_guia_remision d JOIN productos p ON p.id_producto = d.id_producto
+          WHERE d.id_guia = ?`, [idGuia]);
+      if (!detalle.length) throw new AppError('La guía no tiene detalle', 422);
+      for (const d of detalle) {
+        if (!d.codigo_unidad_sunat) throw new AppError(`Producto ${d.codigo} sin codigo_unidad_sunat`, 422);
+      }
+
+      // Modalidad: con conductor (DNI) → privado 02; sin conductor → público 01 (aún no soportado).
+      const modalidad = conductor?.dni ? '02' : '01';
+      if (modalidad === '01') {
+        throw new AppError('Transporte público (transportista) aún no soportado; usa una guía con conductor (privado)', 422);
+      }
+      let placa = g.placa_vehiculo || g.placa || null; // guias_remision no tiene placa propia
+      if (!placa) {
+        if (sunatConfig.mode === 'PROD') throw new AppError('Falta la placa del vehículo para transporte privado', 422);
+        placa = 'XXX-000'; // placeholder solo BETA/mock (no válido en PROD)
+      }
+
+      const numero = await obtenerCorrelativo(conn, tipo, serie);
+      const datos = {
+        tipo, serie, numero, empresa, cliente, guia: g, detalle,
+        fecha: { emision, hora }, fechaTraslado, modalidad, conductor, placa
+      };
+      const { xml } = construirDespatchAdviceXML(datos);
+      const { xmlFirmado, digestValue } = firmarXml(xml);
+      const nombre = `${sunatConfig.ruc}-${tipo}-${serie}-${numero}`;
+
+      await conn.query(
+        `UPDATE guias_remision SET serie_sunat = ?, numero_sunat = ?, sunat_estado = 'ENVIADO',
+           sunat_digest_value = ?, sunat_fecha_envio = ? WHERE id_guia = ?`,
+        [serie, numero, digestValue, emisionDateTime, idGuia]);
+
+      return { numero, nombre, xmlFirmado };
+    });
+
+    const { numero, nombre, xmlFirmado } = prep;
+    await copiaLocal(`${nombre}.xml`, xmlFirmado);
+    const zipBuf = zipXml(`${nombre}.xml`, xmlFirmado);
+
+    // Token real (aun en BETA, para cubrir el checkpoint) — no fatal si el SOL no tiene permiso GRE.
+    let tokenOk = false, tokenError = null;
+    try { await obtenerTokenGre(); tokenOk = true; }
+    catch (e) { tokenError = e.message; }
+
+    const t0 = Date.now();
+    let ticket;
+    try {
+      ticket = await enviarGuia(nombre, zipBuf);
+    } catch (e) {
+      await pool.query(
+        `UPDATE guias_remision SET sunat_estado = 'ERROR', sunat_response_desc = ?, sunat_intentos = sunat_intentos + 1 WHERE id_guia = ?`,
+        [String(e.message).slice(0, 4000), idGuia]);
+      await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: idGuia, evento: 'enviarGuia',
+        exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+      return res.status(502).json({ ok: false, estado: 'ERROR', idGuia, error: e.message, tokenOk, tokenError });
+    }
+
+    let xmlUrl = null;
+    try { xmlUrl = await subirRaw(Buffer.from(xmlFirmado, 'utf8'), `sunat/xml/${nombre}.xml`); }
+    catch (e) { console.warn('[SUNAT] subir XML GRE falló:', e.message); }
+    await pool.query(
+      `UPDATE guias_remision SET sunat_ticket = ?, xml_url = COALESCE(?, xml_url) WHERE id_guia = ?`,
+      [ticket, xmlUrl ? JSON.stringify({ url: xmlUrl }) : null, idGuia]);
+    console.log('[SUNAT] emitirGuia ->', JSON.stringify({ idGuia, comprobante: `${serie}-${numero}`, ticket }));
+
+    // Poll consultarGuia (en BETA el mock resuelve al instante; en PROD 15s × 3).
+    for (let i = 0; i < 3; i++) {
+      if (sunatConfig.mode === 'PROD') await sleep(15000);
+      let st;
+      try { st = await consultarGuia(ticket); }
+      catch (e) {
+        await registrarSunatLog({ origen: 'GRE_REMITENTE', referenciaId: idGuia, evento: 'consultarGuia',
+          exito: false, httpStatus: e.httpStatus || null, detalle: e.message, duracionMs: Date.now() - t0 });
+        continue;
+      }
+      if (st.codRespuesta === '98') continue;
+      const r = await cerrarTicketGre(idGuia, nombre, ticket, st, t0);
+      return res.json({
+        ok: r.aceptado, estado: r.estadoFinal, idGuia, serie, numero, comprobante: `${serie}-${numero}`,
+        ticket, codRespuesta: r.codRespuesta, descripcion: r.descripcion, xmlUrl, cdrUrl: r.cdrUrl,
+        mock: r.mock, tokenOk, tokenError
+      });
+    }
+    return res.status(202).json({
+      ok: null, estado: 'ENVIADO', idGuia, serie, numero, comprobante: `${serie}-${numero}`, ticket,
+      mensaje: 'GRE en proceso (codRespuesta 98). Reconsultar con GET /guias/:id/estado.', tokenOk, tokenError
+    });
+  } catch (e) { next(e); }
+}
+
+// GET /api/sunat/guias/:id/estado  → reconsulta el ticket de una GRE ENVIADA y reconcilia.
+export async function verificarEstadoGuia(req, res, next) {
+  const idGuia = Number(req.params.id);
+  try {
+    if (!idGuia) throw new AppError('id de guía inválido', 400);
+    const [[g]] = await pool.query(
+      `SELECT id_guia, numero_guia, serie_sunat, numero_sunat, sunat_estado, sunat_ticket,
+              sunat_response_code, sunat_response_desc, xml_url, cdr_url, sunat_qr_url
+         FROM guias_remision WHERE id_guia = ?`, [idGuia]);
+    if (!g) throw new AppError('Guía no existe', 404);
+
+    const base = {
+      idGuia, numeroGuia: g.numero_guia,
+      comprobante: g.serie_sunat && g.numero_sunat ? `${g.serie_sunat}-${g.numero_sunat}` : null,
+      sunatEstado: g.sunat_estado, ticket: g.sunat_ticket,
+      responseCode: g.sunat_response_code, descripcion: g.sunat_response_desc,
+      xmlUrl: extraerUrl(g.xml_url), cdrUrl: extraerUrl(g.cdr_url), qrUrl: g.sunat_qr_url
+    };
+    if (g.sunat_estado !== 'ENVIADO' || !g.sunat_ticket) {
+      return res.json({ ...base, consultaEnVivo: false });
+    }
+
+    const t0 = Date.now();
+    const st = await consultarGuia(g.sunat_ticket);
+    if (st.codRespuesta === '98') {
+      return res.json({ ...base, consultaEnVivo: true, codRespuesta: '98', mensaje: 'Aún en proceso' });
+    }
+    const nombre = `${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}`;
+    const r = await cerrarTicketGre(idGuia, nombre, g.sunat_ticket, st, t0);
+    return res.json({
+      ...base, consultaEnVivo: true, sunatEstado: r.estadoFinal, codRespuesta: r.codRespuesta,
+      descripcion: r.descripcion, cdrUrl: r.cdrUrl || base.cdrUrl, mock: r.mock
     });
   } catch (e) { next(e); }
 }

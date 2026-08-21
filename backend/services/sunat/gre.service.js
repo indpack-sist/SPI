@@ -18,18 +18,35 @@ export async function obtenerTokenGre() {
     const err = new Error('Faltan credenciales GRE (SUNAT_GRE_CLIENT_ID/SECRET) para obtener el token');
     err.statusCode = 422; err.isOperational = true; throw err;
   }
-  const url = sunatConfig.urls.GRE_TOKEN.replace('{client_id}', sunatConfig.greClientId);
+  // Trim defensivo: un espacio/salto invisible en las credenciales de Render rompe el OAuth
+  // con un 400 opaco (mismo tipo de problema que el fault 1036 con el RUC).
+  const clientId = String(sunatConfig.greClientId).trim();
+  const clientSecret = String(sunatConfig.greClientSecret).trim();
+  const url = sunatConfig.urls.GRE_TOKEN.replace('{client_id}', clientId);
   const body = new URLSearchParams({
     grant_type: 'password',
     scope: 'https://api-cpe.sunat.gob.pe',
-    client_id: sunatConfig.greClientId,
-    client_secret: sunatConfig.greClientSecret,
+    client_id: clientId,
+    client_secret: clientSecret,
     username: sunatConfig.ruc + sunatConfig.solUser,
     password: sunatConfig.solPass
   });
-  const { data } = await axios.post(url, body.toString(), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000
-  });
+  let data;
+  try {
+    ({ data } = await axios.post(url, body.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000
+    }));
+  } catch (e) {
+    // Propaga el BODY real de SUNAT (trae error/error_description específico), no el genérico de axios.
+    const status = e.response?.status;
+    const cuerpo = e.response?.data;
+    const detalle = typeof cuerpo === 'object' ? JSON.stringify(cuerpo) : String(cuerpo ?? e.message);
+    const err = new Error(`Token GRE falló (HTTP ${status ?? '?'}): ${detalle}`);
+    err.sunatStatus = status;
+    err.sunatBody = cuerpo ?? null;
+    err.httpStatus = status;
+    throw err;
+  }
   await pool.query(
     `INSERT INTO sunat_gre_token (id, access_token, expira_en)
        VALUES (1, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))

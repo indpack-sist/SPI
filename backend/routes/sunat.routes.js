@@ -29,5 +29,7 @@ router.get('/comprobantes/:id/estado', verificarToken, verificarPermiso('factura
 // GRE Remitente (09) por API REST — Fase 10.
 router.post('/guias/:id/emitir', verificarToken, verificarPermiso('facturacion'), c.emitirGuiaRemision);
 router.get('/guias/:id/estado', verificarToken, verificarPermiso('facturacion'), c.verificarEstadoGuia);
+// Diagnóstico aislado del token OAuth GRE (Fase 10).
+router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c.probarTokenGre);
 
 export default router;

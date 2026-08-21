@@ -66,7 +66,7 @@ export const sunatConfig = {
   provincia: process.env.SUNAT_PROVINCIA,
   departamento: process.env.SUNAT_DEPARTAMENTO,
   solUser: clean(process.env.SUNAT_SOL_USER),       // va en el UsernameToken (RUC+SOL_USER)
-  solPass: process.env.SUNAT_SOL_PASS,
+  solPass: clean(process.env.SUNAT_SOL_PASS),       // trim: whitespace invisible al pegar en Render rompe el token GRE (access_denied)
   cert,
   key,
   greClientId: process.env.SUNAT_GRE_CLIENT_ID,

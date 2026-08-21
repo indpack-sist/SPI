@@ -800,7 +800,10 @@ export async function probarTokenGre(req, res, next) {
       clientIdSinEspacios: cid === cid.trim(),
       clientSecretLen: sec.length,
       clientSecretSinEspacios: sec === sec.trim(),
-      solPassLen: String(sunatConfig.solPass || '').length
+      solPassLen: String(sunatConfig.solPass || '').length,
+      // punto ciego histórico: la clave era el único valor sin trim; reportar si el env CRUDO traía whitespace
+      solPassSinEspacios: String(process.env.SUNAT_SOL_PASS || '') === String(process.env.SUNAT_SOL_PASS || '').trim(),
+      solPassLenCrudo: String(process.env.SUNAT_SOL_PASS || '').length
     };
     try {
       const token = await obtenerTokenGre();

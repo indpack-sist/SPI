@@ -14,3 +14,13 @@ export function generarQr({ ruc, tipo, serie, numero, igv, total, fechaEmision, 
   ].join('|');
   return { data, png: () => QRCode.toBuffer(data, { width: 200, margin: 1 }) };
 }
+
+/**
+ * PNG de un QR a partir de una cadena arbitraria. FASE 13.
+ * Sirve tanto para la cadena pipe de comprobantes (sunat_qr_data) como para la
+ * URL que devuelve SUNAT en la GRE (sunat_qr_url).
+ * @returns {Promise<Buffer>}
+ */
+export function qrPng(data, opts = {}) {
+  return QRCode.toBuffer(String(data ?? ''), { width: 220, margin: 1, ...opts });
+}

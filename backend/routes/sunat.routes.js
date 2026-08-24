@@ -32,4 +32,8 @@ router.get('/guias/:id/estado', verificarToken, verificarPermiso('facturacion'),
 // Diagnóstico aislado del token OAuth GRE (Fase 10).
 router.get('/gre/token/test', verificarToken, verificarPermiso('facturacion'), c.probarTokenGre);
 
+// Representación impresa (PDF) con QR y hash — Fase 13.
+router.get('/comprobantes/:id/pdf', verificarToken, verificarPermiso('facturacion'), c.generarPdfComprobante);
+router.get('/guias/:id/pdf', verificarToken, verificarPermiso('facturacion'), c.generarPdfGuia);
+
 export default router;

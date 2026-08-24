@@ -5,7 +5,7 @@ import { sunatConfig } from '../config/sunat.js';
 import { pool, withTransaction } from '../config/database.js';
 import { obtenerCorrelativo, obtenerCorrelativoDiario } from '../services/sunat/numeracion.service.js';
 import { construirInvoiceXML } from '../services/sunat/ubl.service.js';
-import { construirNotaXML } from '../services/sunat/ubl-nota.service.js';
+import { construirNotaXML, motivosValidos } from '../services/sunat/ubl-nota.service.js';
 import { construirVoidedDocumentsXML } from '../services/sunat/ubl-baja.service.js';
 import { construirDespatchAdviceXML } from '../services/sunat/ubl-gre.service.js';
 import { obtenerTokenGre, enviarGuia, consultarGuia } from '../services/sunat/gre.service.js';
@@ -13,7 +13,9 @@ import { firmarXml } from '../services/sunat/firma.service.js';
 import { zipXml } from '../services/sunat/zip.service.js';
 import { sendBill, sendSummary, getStatus, getStatusCdr } from '../services/sunat/soap.service.js';
 import { parsearCdr } from '../services/sunat/cdr.service.js';
-import { generarQr } from '../services/sunat/qr.service.js';
+import { generarQr, qrPng } from '../services/sunat/qr.service.js';
+import { generarComprobanteSunatPDF } from '../utils/pdfGenerators/comprobanteSunatPDF.js';
+import { generarGuiaRemisionSunatPDF } from '../utils/pdfGenerators/guiaRemisionSunatPDF.js';
 import { registrarSunatLog } from '../services/sunat/log.service.js';
 import { subirRaw } from '../services/cloudinary.service.js';
 import AppError from '../utils/AppError.js';
@@ -814,5 +816,109 @@ export async function probarTokenGre(req, res, next) {
         error: e.message, diag
       });
     }
+  } catch (e) { next(e); }
+}
+
+// GET /api/sunat/comprobantes/:id/pdf → Representación impresa (RS 193-2020) de factura/NC/ND. FASE 13.
+// Solo se genera si el comprobante fue ACEPTADO (o BAJA, para dejar constancia con marca "ANULADO").
+export async function generarPdfComprobante(req, res, next) {
+  const idFactura = Number(req.params.id);
+  try {
+    if (!idFactura) throw new AppError('id de comprobante inválido', 400);
+    const [[f]] = await pool.query('SELECT * FROM facturas_venta WHERE id_factura = ?', [idFactura]);
+    if (!f) throw new AppError('Comprobante no existe', 404);
+    if (!['ACEPTADO', 'BAJA'].includes(f.sunat_estado)) {
+      throw new AppError(`El PDF solo se genera para comprobantes ACEPTADOS (estado actual: ${f.sunat_estado || 'sin enviar'})`, 409);
+    }
+
+    const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+    const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [f.id_cliente]);
+    // Detalle reconstruido desde la OV. Los TOTALES imprimibles salen de facturas_venta (autoritativos);
+    // en notas parciales las líneas reflejan la OV completa pero los importes del recuadro son los de la nota.
+    const [detalle] = await pool.query(
+      'SELECT d.cantidad, d.precio_unitario, d.descuento_porcentaje, p.codigo, p.nombre, ' +
+      'p.codigo_unidad_sunat AS unidad FROM detalle_orden_venta d JOIN productos p ON p.id_producto = d.id_producto ' +
+      'WHERE d.id_orden_venta = ?', [f.id_orden_venta]);
+
+    // Notas: documento afectado + descripción del motivo (catálogo 09/10).
+    let docAfectado = null;
+    if (f.id_factura_ref) {
+      const [[ref]] = await pool.query('SELECT numero_factura FROM facturas_venta WHERE id_factura = ?', [f.id_factura_ref]);
+      const motivos = motivosValidos(f.codigo_tipo_sunat);
+      docAfectado = {
+        comprobante: ref?.numero_factura || '-',
+        motivo: `${f.motivo_nota_codigo} - ${motivos[f.motivo_nota_codigo] || 'MODIFICACIÓN'}`
+      };
+    }
+
+    const qrBuffer = f.sunat_qr_data ? await qrPng(f.sunat_qr_data) : null;
+    const pdf = await generarComprobanteSunatPDF({
+      comprobante: {
+        codigo_tipo_sunat: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
+        fecha_emision: f.fecha_emision, moneda: f.moneda,
+        subtotal: f.subtotal, igv: f.igv, total: f.total,
+        sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado
+      },
+      emisor, cliente, detalle, qrBuffer
+    });
+
+    // Subida best-effort a Cloudinary (no crítica).
+    try {
+      const url = await subirRaw(pdf, `sunat/pdf/${f.sunat_nombre_xml || `${f.serie}-${f.numero}`}.pdf`);
+      await pool.query('UPDATE facturas_venta SET url_pdf = ? WHERE id_factura = ?', [url, idFactura]);
+    } catch (e) { console.warn('[SUNAT] subir PDF comprobante falló:', e.message); }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${f.serie}-${f.numero}.pdf"`);
+    res.send(pdf);
+  } catch (e) { next(e); }
+}
+
+// GET /api/sunat/guias/:id/pdf → Representación impresa de la GRE Remitente (09). FASE 13.
+// Requiere estado ACEPTADO y el QR-URL de SUNAT (solo existe en PROD; en BETA la GRE es mock sin QR).
+export async function generarPdfGuia(req, res, next) {
+  const idGuia = Number(req.params.id);
+  try {
+    if (!idGuia) throw new AppError('id de guía inválido', 400);
+    const [[g]] = await pool.query('SELECT * FROM guias_remision WHERE id_guia = ?', [idGuia]);
+    if (!g) throw new AppError('Guía no existe', 404);
+    if (g.sunat_estado !== 'ACEPTADO') {
+      throw new AppError(`El PDF de la GRE solo se genera en estado ACEPTADO (estado actual: ${g.sunat_estado || 'sin enviar'})`, 409);
+    }
+    if (!g.sunat_qr_url) {
+      throw new AppError('La GRE no tiene QR-URL de SUNAT: la representación impresa válida solo existe en PROD (Fase 16)', 409);
+    }
+
+    const [[emisor]] = await pool.query('SELECT * FROM empresa_config WHERE id = 1');
+    const [[cliente]] = await pool.query('SELECT * FROM clientes WHERE id_cliente = ?', [g.id_cliente]);
+    const [[conductor]] = g.id_conductor
+      ? await pool.query('SELECT dni, nombre_completo, licencia_conducir FROM empleados WHERE id_empleado = ?', [g.id_conductor])
+      : [[null]];
+    const [detalle] = await pool.query(
+      'SELECT d.cantidad, p.codigo, p.nombre, p.codigo_unidad_sunat FROM detalle_guia_remision d ' +
+      'JOIN productos p ON p.id_producto = d.id_producto WHERE d.id_guia = ?', [idGuia]);
+
+    const qrBuffer = await qrPng(g.sunat_qr_url);
+    const pdf = await generarGuiaRemisionSunatPDF({
+      guia: {
+        serie_sunat: g.serie_sunat, numero_sunat: g.numero_sunat,
+        fecha_emision: g.fecha_emision || g.sunat_fecha_envio, fecha_traslado: g.fecha_traslado,
+        motivo_traslado_cod: g.motivo_traslado_cod, peso_bruto_kg: g.peso_bruto_kg,
+        ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
+        ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,
+        sunat_estado: g.sunat_estado, sunat_digest_value: g.sunat_digest_value,
+        placa: g.placa_vehiculo || g.placa || null
+      },
+      emisor, cliente, detalle, conductor, qrBuffer
+    });
+
+    try {
+      const url = await subirRaw(pdf, `sunat/pdf/${sunatConfig.ruc}-09-${g.serie_sunat}-${g.numero_sunat}.pdf`);
+      await pool.query('UPDATE guias_remision SET url_pdf = COALESCE(?, url_pdf) WHERE id_guia = ?', [url, idGuia]);
+    } catch (e) { console.warn('[SUNAT] subir PDF GRE falló:', e.message); }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${g.serie_sunat}-${g.numero_sunat}.pdf"`);
+    res.send(pdf);
   } catch (e) { next(e); }
 }

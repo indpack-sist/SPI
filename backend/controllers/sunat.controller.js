@@ -826,9 +826,14 @@ export async function generarPdfComprobante(req, res, next) {
   try {
     if (!idFactura) throw new AppError('id de comprobante inválido', 400);
     // fecha_emision_fmt como STRING dd/mm/yyyy (DATE_FORMAT evita que el driver la devuelva como
-    // Date y se imprima en inglés / con corrimiento de zona horaria).
+    // Date y se imprima en inglés / con corrimiento de zona horaria). Se trae la condición comercial
+    // (tipo_venta Contado/Crédito + vencimiento) de la OV, que es la misma fuente del cac:PaymentTerms del XML.
     const [[f]] = await pool.query(
-      "SELECT *, DATE_FORMAT(fecha_emision, '%d/%m/%Y') AS fecha_emision_fmt FROM facturas_venta WHERE id_factura = ?",
+      "SELECT f.*, DATE_FORMAT(f.fecha_emision, '%d/%m/%Y') AS fecha_emision_fmt, " +
+      "ov.tipo_venta, ov.dias_credito, DATE_FORMAT(ov.fecha_vencimiento, '%d/%m/%Y') AS fecha_vencimiento_fmt, " +
+      "ov.observaciones, ov.orden_compra_cliente " +
+      "FROM facturas_venta f LEFT JOIN ordenes_venta ov ON ov.id_orden_venta = f.id_orden_venta " +
+      "WHERE f.id_factura = ?",
       [idFactura]);
     if (!f) throw new AppError('Comprobante no existe', 404);
     if (!['ACEPTADO', 'BAJA'].includes(f.sunat_estado)) {
@@ -860,6 +865,8 @@ export async function generarPdfComprobante(req, res, next) {
       comprobante: {
         codigo_tipo_sunat: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
         fecha_emision: f.fecha_emision_fmt, moneda: f.moneda,
+        tipo_venta: f.tipo_venta, dias_credito: f.dias_credito, fecha_vencimiento: f.fecha_vencimiento_fmt,
+        observaciones: f.observaciones, orden_compra: f.orden_compra_cliente,
         subtotal: f.subtotal, igv: f.igv, total: f.total,
         sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado
       },

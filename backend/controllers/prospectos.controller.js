@@ -15,39 +15,73 @@ import { notificarJob } from '../services/scraping-worker.js';
 
 const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'Descartado'];
 
+const POR_PAGINA = 50; // tamaño de página del sistema (también unidad de "hoja" en el export)
+
+// Arma el WHERE + ORDER BY del listado a partir de los filtros de la query.
+// Compartido entre el listado paginado y la exportación a Excel para que ambos
+// devuelvan exactamente el mismo conjunto.
+function construirFiltros(q = {}) {
+  const { segmento, estado, flag, search, orden, vista, sector, busqueda, min_score } = q;
+  let where = ' WHERE 1=1';
+  const params = [];
+
+  // Vista: por defecto oculta los excluidos; "excluidos" muestra solo esos.
+  where += vista === 'excluidos' ? ' AND p.excluido = 1' : ' AND p.excluido = 0';
+
+  if (segmento) { where += ' AND p.segmento = ?'; params.push(segmento); }
+  if (estado)   { where += ' AND p.estado_workflow = ?'; params.push(estado); }
+  if (flag)     { where += ' AND p.flag_duplicado = ?'; params.push(flag); }
+  if (sector)   { where += ' AND p.sector = ?'; params.push(sector); }
+  if (busqueda) { where += ' AND p.origen_query = ?'; params.push(busqueda); }
+  // Filtro por potencial mínimo (score 0-100). Se ignora si no es un número.
+  if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
+    where += ' AND p.score >= ?'; params.push(Number(min_score));
+  }
+  if (search) {
+    where += ` AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?
+              OR p.distrito LIKE ? OR p.provincia LIKE ? OR p.departamento LIKE ? OR p.sector LIKE ?)`;
+    const like = `%${search}%`;
+    params.push(like, like, like, like, like, like, like);
+  }
+
+  let orderBy;
+  if (orden === 'recientes') orderBy = ' ORDER BY p.fecha_captura DESC';
+  else if (orden === 'nombre') orderBy = ' ORDER BY p.razon_social ASC';
+  else orderBy = ' ORDER BY p.score DESC, p.fecha_captura DESC';
+
+  return { where, params, orderBy };
+}
+
+// SELECT del listado (con contactos agregados), reutilizado por listado y export.
+// El LIMIT/OFFSET se concatena aparte según el caso.
+function sqlListado(where, orderBy, limitClause = '') {
+  return `
+    SELECT p.*,
+      e.nombre_completo AS empleado_asignado,
+      c.razon_social    AS cliente_match_nombre,
+      (SELECT COUNT(*) FROM prospecto_contactos pc WHERE pc.id_prospecto = p.id_prospecto) AS total_contactos,
+      (SELECT GROUP_CONCAT(pc.valor ORDER BY (pc.valor_normalizado LIKE '9%') DESC, pc.id_contacto SEPARATOR ' / ')
+         FROM prospecto_contactos pc
+         WHERE pc.id_prospecto = p.id_prospecto AND pc.tipo IN ('Telefono','Celular','Whatsapp')) AS telefonos,
+      (SELECT GROUP_CONCAT(pc.valor SEPARATOR ' / ') FROM prospecto_contactos pc
+         WHERE pc.id_prospecto = p.id_prospecto AND pc.tipo = 'Email') AS emails
+    FROM prospectos p
+    LEFT JOIN empleados e ON p.id_empleado_asignado = e.id_empleado
+    LEFT JOIN clientes  c ON p.id_cliente_match      = c.id_cliente
+    ${where}${orderBy}${limitClause}`;
+}
+
 // ------------------------------------------------------------
 // Listado con filtros
 // ------------------------------------------------------------
 export async function getAllProspectos(req, res) {
   try {
-    const { segmento, estado, flag, search, orden, vista, sector, busqueda, min_score, page, limit } = req.query;
-
-    // --- Filtros (WHERE) compartidos entre el listado y el conteo total ---
-    let where = ' WHERE 1=1';
-    const params = [];
-
-    // Vista: por defecto oculta los excluidos; "excluidos" muestra solo esos.
-    where += vista === 'excluidos' ? ' AND p.excluido = 1' : ' AND p.excluido = 0';
-
-    if (segmento) { where += ' AND p.segmento = ?'; params.push(segmento); }
-    if (estado)   { where += ' AND p.estado_workflow = ?'; params.push(estado); }
-    if (flag)     { where += ' AND p.flag_duplicado = ?'; params.push(flag); }
-    if (sector)   { where += ' AND p.sector = ?'; params.push(sector); }
-    if (busqueda) { where += ' AND p.origen_query = ?'; params.push(busqueda); }
-    // Filtro por potencial mínimo (score 0-100). Se ignora si no es un número.
-    if (min_score !== undefined && min_score !== '' && !Number.isNaN(Number(min_score))) {
-      where += ' AND p.score >= ?'; params.push(Number(min_score));
-    }
-    if (search) {
-      where += ` AND (p.razon_social LIKE ? OR p.documento LIKE ? OR p.nombre_comercial LIKE ?
-                OR p.distrito LIKE ? OR p.provincia LIKE ? OR p.departamento LIKE ? OR p.sector LIKE ?)`;
-      const like = `%${search}%`;
-      params.push(like, like, like, like, like, like, like);
-    }
+    const { page, limit } = req.query;
+    const { where, params, orderBy } = construirFiltros(req.query);
 
     // --- Paginación (máx. 50 por página; se ignora si los valores no son válidos) ---
     const pageNum = Math.max(1, parseInt(page) || 1);
-    const perPage = Math.min(Math.max(1, parseInt(limit) || 50), 50);
+    const perPage = Math.min(Math.max(1, parseInt(limit) || POR_PAGINA), POR_PAGINA);
     const offset = (pageNum - 1) * perPage;
 
     // Conteo total con los mismos filtros (para saber cuántas páginas hay).
@@ -55,28 +89,7 @@ export async function getAllProspectos(req, res) {
     if (!countRes.success) return res.status(500).json({ error: countRes.error });
     const total = countRes.data[0].total;
 
-    let orderBy;
-    if (orden === 'recientes') orderBy = ' ORDER BY p.fecha_captura DESC';
-    else if (orden === 'nombre') orderBy = ' ORDER BY p.razon_social ASC';
-    else orderBy = ' ORDER BY p.score DESC, p.fecha_captura DESC';
-
-    const sql = `
-      SELECT p.*,
-        e.nombre_completo AS empleado_asignado,
-        c.razon_social    AS cliente_match_nombre,
-        (SELECT COUNT(*) FROM prospecto_contactos pc WHERE pc.id_prospecto = p.id_prospecto) AS total_contactos,
-        (SELECT GROUP_CONCAT(pc.valor ORDER BY (pc.valor_normalizado LIKE '9%') DESC, pc.id_contacto SEPARATOR ' / ')
-           FROM prospecto_contactos pc
-           WHERE pc.id_prospecto = p.id_prospecto AND pc.tipo IN ('Telefono','Celular','Whatsapp')) AS telefonos,
-        (SELECT GROUP_CONCAT(pc.valor SEPARATOR ' / ') FROM prospecto_contactos pc
-           WHERE pc.id_prospecto = p.id_prospecto AND pc.tipo = 'Email') AS emails
-      FROM prospectos p
-      LEFT JOIN empleados e ON p.id_empleado_asignado = e.id_empleado
-      LEFT JOIN clientes  c ON p.id_cliente_match      = c.id_cliente
-      ${where}${orderBy}
-      LIMIT ${perPage} OFFSET ${offset}`;
-
-    const result = await executeQuery(sql, params);
+    const result = await executeQuery(sqlListado(where, orderBy, ` LIMIT ${perPage} OFFSET ${offset}`), params);
     if (!result.success) return res.status(500).json({ error: result.error });
 
     res.json({
@@ -88,6 +101,75 @@ export async function getAllProspectos(req, res) {
       total_paginas: Math.max(1, Math.ceil(total / perPage)),
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ------------------------------------------------------------
+// Exportación a Excel (server-side). Genera el .xlsx en el backend y lo
+// envía como descarga, así el diálogo de guardado aparece de inmediato y no
+// hay que recorrer decenas de páginas desde el navegador.
+//
+// Alcance seleccionable con los mismos filtros del listado:
+//   - Todo el conjunto filtrado (sin desde_pagina/hasta_pagina), o
+//   - Un rango de "hojas" de 50 registros: desde_pagina..hasta_pagina.
+// Tope duro de seguridad para no generar archivos gigantes de golpe.
+// ------------------------------------------------------------
+const EXPORT_MAX_FILAS = 50000;
+
+export async function exportarProspectosExcel(req, res) {
+  try {
+    const { where, params, orderBy } = construirFiltros(req.query);
+
+    // Total con filtros: sirve para acotar el rango y para el encabezado.
+    const countRes = await executeQuery(`SELECT COUNT(*) AS total FROM prospectos p${where}`, params);
+    if (!countRes.success) return res.status(500).json({ error: countRes.error });
+    const total = countRes.data[0].total;
+
+    // --- Alcance: rango de páginas (50/hoja) o todo ---
+    let desdePag = parseInt(req.query.desde_pagina, 10);
+    let hastaPag = parseInt(req.query.hasta_pagina, 10);
+    const usaRango = Number.isFinite(desdePag) || Number.isFinite(hastaPag);
+
+    let limitClause = '';
+    let descripcion;
+    if (usaRango) {
+      const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+      // Normaliza el rango: valores por defecto y recorte a límites válidos.
+      if (!Number.isFinite(desdePag)) desdePag = 1;
+      if (!Number.isFinite(hastaPag)) hastaPag = totalPaginas;
+      desdePag = Math.min(Math.max(1, desdePag), totalPaginas);
+      hastaPag = Math.min(Math.max(desdePag, hastaPag), totalPaginas);
+
+      const offset = (desdePag - 1) * POR_PAGINA;
+      const cuenta = Math.min((hastaPag - desdePag + 1) * POR_PAGINA, EXPORT_MAX_FILAS);
+      limitClause = ` LIMIT ${cuenta} OFFSET ${offset}`;
+      descripcion = `Hojas ${desdePag} a ${hastaPag} (50 registros por hoja)`;
+    } else {
+      if (total > EXPORT_MAX_FILAS) {
+        return res.status(413).json({
+          error: `Hay ${total.toLocaleString('es-PE')} registros; el máximo por descarga es ${EXPORT_MAX_FILAS.toLocaleString('es-PE')}. Usa un rango de hojas o filtra más.`,
+        });
+      }
+      limitClause = ` LIMIT ${EXPORT_MAX_FILAS}`;
+      descripcion = 'Todos los prospectos del filtro actual';
+    }
+
+    const result = await executeQuery(sqlListado(where, orderBy, limitClause), params);
+    if (!result.success) return res.status(500).json({ error: result.error });
+
+    const { generarProspectosXLSX } = await import('../utils/excelGenerators/prospectosXLSX.js');
+    const buffer = await generarProspectosXLSX({ filas: result.data, filtros: { descripcion } });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const nombre = usaRango
+      ? `prospectos-${stamp}-hojas-${desdePag}-${hastaPag}.xlsx`
+      : `prospectos-${stamp}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error al exportar prospectos a Excel:', error);
     res.status(500).json({ error: error.message });
   }
 }

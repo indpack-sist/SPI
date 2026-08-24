@@ -26,6 +26,7 @@ export const NOMBRE_TIPO = {
 };
 
 const n2 = (v) => Number(v || 0).toFixed(2);
+const trunc = (s, n) => String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s);
 
 /**
  * @param {object} p
@@ -68,7 +69,7 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
 
       // ── Datos del cliente ──
       let y = 140;
-      doc.roundedRect(33, y, 529, 62, 3).stroke('#000');
+      doc.roundedRect(33, y, 529, 78, 3).stroke('#000');
       doc.fontSize(8).fillColor('#000');
       doc.font('Helvetica-Bold').text('Cliente:', 40, y + 8);
       doc.font('Helvetica').text(cliente.razon_social || '-', 110, y + 8, { width: 440 });
@@ -78,10 +79,26 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       doc.font('Helvetica').text((cliente.direccion || '-').replace(/[\r\n]+/g, ' '), 110, y + 36, { width: 440 });
       doc.font('Helvetica-Bold').text('Fecha emisión:', 40, y + 50);
       doc.font('Helvetica').text(String(c.fecha_emision || '-'), 110, y + 50);
+      // Condición comercial (misma fuente que el cac:PaymentTerms del XML): Contado / Crédito.
+      const esCredito = String(c.tipo_venta || '').toLowerCase().startsWith('cr');
+      const diasCredito = Number(c.dias_credito) || 0;
+      const formaPago = esCredito
+        ? (diasCredito > 0 ? `CRÉDITO A ${diasCredito} DÍAS` : 'CRÉDITO')
+        : 'CONTADO';
+      doc.font('Helvetica-Bold').text('Forma de pago:', 320, y + 8);
+      doc.font('Helvetica').text(formaPago, 400, y + 8, { width: 160 });
+      if (esCredito) {
+        doc.font('Helvetica-Bold').text('Vencimiento:', 320, y + 22);
+        doc.font('Helvetica').text(c.fecha_vencimiento || '-', 400, y + 22);
+      }
       doc.font('Helvetica-Bold').text('Moneda:', 320, y + 50);
-      doc.font('Helvetica').text(String(c.moneda) === 'USD' ? 'DÓLARES (USD)' : 'SOLES (PEN)', 380, y + 50);
+      doc.font('Helvetica').text(String(c.moneda) === 'USD' ? 'DÓLARES (USD)' : 'SOLES (PEN)', 400, y + 50);
+      // Observación (ordenes_venta.observaciones) — full width, una línea (se recorta si es larga).
+      doc.font('Helvetica-Bold').text('Observación:', 40, y + 64);
+      const obs = String(c.observaciones || '').replace(/[\r\n]+/g, ' ').trim();
+      doc.font('Helvetica').text(obs ? trunc(obs, 130) : '-', 110, y + 64, { width: 450 });
 
-      y += 70;
+      y += 86;
 
       // ── Notas: documento afectado + motivo ──
       if (c.docAfectado) {
@@ -139,11 +156,34 @@ export async function generarComprobanteSunatPDF({ comprobante: c, emisor, clien
       filaTotal('IGV (18%)', c.igv);
       filaTotal('IMPORTE TOTAL', c.total, true);
 
-      // ── SON: en letras (lado izquierdo, a la altura de los totales) ──
+      // ── SON en letras + Orden de compra (lado izquierdo, a la altura de los totales) ──
       doc.fontSize(8).font('Helvetica').fillColor('#000');
       doc.text(`SON: ${numeroALetras(Number(c.total || 0), c.moneda)}`, 40, yTotalesInicio, { width: 330 });
+      if (c.orden_compra) {
+        doc.font('Helvetica-Bold').text('Orden de compra:', 40, yTotalesInicio + 16);
+        doc.font('Helvetica').text(String(c.orden_compra), 130, yTotalesInicio + 16, { width: 230 });
+      }
 
       y += 6;
+
+      // ── Información del crédito (cuotas) — solo ventas a crédito, formato SUNAT ──
+      if (esCredito) {
+        const hCred = 60;
+        doc.roundedRect(33, y, 529, hCred, 3).stroke('#000');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000').text('Información del crédito', 40, y + 6);
+        doc.font('Helvetica-Bold').text('Monto neto pendiente de pago:', 40, y + 20);
+        doc.font('Helvetica').text(`${simbolo} ${n2(c.total)}`, 200, y + 20);
+        doc.font('Helvetica-Bold').text('Total de cuotas:', 320, y + 20);
+        doc.font('Helvetica').text('1', 400, y + 20);
+        // Encabezado de la tabla de cuotas (MVP: 1 cuota única).
+        doc.font('Helvetica-Bold').text('N° Cuota', 40, y + 36);
+        doc.text('Fec. Venc.', 120, y + 36);
+        doc.text('Monto', 220, y + 36, { width: 80, align: 'right' });
+        doc.font('Helvetica').text('1', 40, y + 48);
+        doc.text(c.fecha_vencimiento || '-', 120, y + 48);
+        doc.text(`${simbolo} ${n2(c.total)}`, 220, y + 48, { width: 80, align: 'right' });
+        y += hCred + 6;
+      }
 
       // ── Pie legal: QR + hash + leyenda ──
       const yPie = Math.max(y, 700);

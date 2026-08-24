@@ -182,7 +182,44 @@ export const prospectosAPI = {
   descubrirTodo: (data) => api.post('/prospectos/descubrir-todo', data),
   enriquecer: (id, data) => api.post(`/prospectos/${id}/enriquecer`, data),
   buscarRuc: (id) => api.post(`/prospectos/${id}/buscar-ruc`),
-  getJobs: () => api.get('/prospectos/jobs')
+  getJobs: () => api.get('/prospectos/jobs'),
+
+  // Exporta a Excel en el servidor y dispara la descarga (diálogo de guardado
+  // nativo). `params` lleva los filtros del listado y, opcionalmente,
+  // desde_pagina / hasta_pagina (50 registros por hoja). Sin rango = todo.
+  exportarExcel: async (params = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') query.append(k, v);
+    });
+
+    const response = await fetch(`${API_URL}/prospectos/export/excel?${query.toString()}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Error al exportar a Excel' }));
+      throw new Error(errorData.error || 'Error al exportar a Excel');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    // Usa el nombre que sugiere el backend (Content-Disposition) si está.
+    const cd = response.headers.get('Content-Disposition') || '';
+    const match = cd.match(/filename="?([^"]+)"?/);
+    link.download = match ? match[1] : `prospectos-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+
+    return { success: true };
+  }
 };
 
 export const solicitudesCreditoAPI = {

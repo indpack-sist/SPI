@@ -65,9 +65,9 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       doc.font('Helvetica-Bold').text('RUC/Doc:', 40, y + 22);
       doc.font('Helvetica').text(cliente.ruc || '-', 120, y + 22);
       doc.font('Helvetica-Bold').text('Fecha emisión:', 40, y + 36);
-      doc.font('Helvetica').text(String(g.fecha_emision || '').slice(0, 10), 120, y + 36);
+      doc.font('Helvetica').text(String(g.fecha_emision || '-'), 120, y + 36);
       doc.font('Helvetica-Bold').text('Inicio traslado:', 320, y + 36);
-      doc.font('Helvetica').text(String(g.fecha_traslado || '').slice(0, 10), 400, y + 36);
+      doc.font('Helvetica').text(String(g.fecha_traslado || '-'), 400, y + 36);
 
       y += 56;
 

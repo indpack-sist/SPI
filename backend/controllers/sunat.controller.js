@@ -825,7 +825,11 @@ export async function generarPdfComprobante(req, res, next) {
   const idFactura = Number(req.params.id);
   try {
     if (!idFactura) throw new AppError('id de comprobante inválido', 400);
-    const [[f]] = await pool.query('SELECT * FROM facturas_venta WHERE id_factura = ?', [idFactura]);
+    // fecha_emision_fmt como STRING dd/mm/yyyy (DATE_FORMAT evita que el driver la devuelva como
+    // Date y se imprima en inglés / con corrimiento de zona horaria).
+    const [[f]] = await pool.query(
+      "SELECT *, DATE_FORMAT(fecha_emision, '%d/%m/%Y') AS fecha_emision_fmt FROM facturas_venta WHERE id_factura = ?",
+      [idFactura]);
     if (!f) throw new AppError('Comprobante no existe', 404);
     if (!['ACEPTADO', 'BAJA'].includes(f.sunat_estado)) {
       throw new AppError(`El PDF solo se genera para comprobantes ACEPTADOS (estado actual: ${f.sunat_estado || 'sin enviar'})`, 409);
@@ -855,7 +859,7 @@ export async function generarPdfComprobante(req, res, next) {
     const pdf = await generarComprobanteSunatPDF({
       comprobante: {
         codigo_tipo_sunat: f.codigo_tipo_sunat, serie: f.serie, numero: f.numero,
-        fecha_emision: f.fecha_emision, moneda: f.moneda,
+        fecha_emision: f.fecha_emision_fmt, moneda: f.moneda,
         subtotal: f.subtotal, igv: f.igv, total: f.total,
         sunat_digest_value: f.sunat_digest_value, sunat_estado: f.sunat_estado, docAfectado
       },
@@ -880,7 +884,10 @@ export async function generarPdfGuia(req, res, next) {
   const idGuia = Number(req.params.id);
   try {
     if (!idGuia) throw new AppError('id de guía inválido', 400);
-    const [[g]] = await pool.query('SELECT * FROM guias_remision WHERE id_guia = ?', [idGuia]);
+    const [[g]] = await pool.query(
+      "SELECT *, DATE_FORMAT(COALESCE(fecha_emision, sunat_fecha_envio), '%d/%m/%Y') AS fecha_emision_fmt, " +
+      "DATE_FORMAT(fecha_traslado, '%d/%m/%Y') AS fecha_traslado_fmt FROM guias_remision WHERE id_guia = ?",
+      [idGuia]);
     if (!g) throw new AppError('Guía no existe', 404);
     if (g.sunat_estado !== 'ACEPTADO') {
       throw new AppError(`El PDF de la GRE solo se genera en estado ACEPTADO (estado actual: ${g.sunat_estado || 'sin enviar'})`, 409);
@@ -902,7 +909,7 @@ export async function generarPdfGuia(req, res, next) {
     const pdf = await generarGuiaRemisionSunatPDF({
       guia: {
         serie_sunat: g.serie_sunat, numero_sunat: g.numero_sunat,
-        fecha_emision: g.fecha_emision || g.sunat_fecha_envio, fecha_traslado: g.fecha_traslado,
+        fecha_emision: g.fecha_emision_fmt, fecha_traslado: g.fecha_traslado_fmt,
         motivo_traslado_cod: g.motivo_traslado_cod, peso_bruto_kg: g.peso_bruto_kg,
         ubigeo_partida: g.ubigeo_partida, direccion_partida: g.direccion_partida,
         ubigeo_llegada: g.ubigeo_llegada, direccion_llegada: g.direccion_llegada,

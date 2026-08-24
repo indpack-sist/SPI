@@ -50,7 +50,7 @@ async function main() {
   const qrFactura = await qrPng('20550932297|01|FE01|1|25.20|165.20|2026-08-24|6|20562860984|');
   const pdfFactura = await generarComprobanteSunatPDF({
     comprobante: {
-      codigo_tipo_sunat: '01', serie: 'FE01', numero: 1, fecha_emision: '2026-08-24',
+      codigo_tipo_sunat: '01', serie: 'FE01', numero: 1, fecha_emision: '24/08/2026',
       moneda: 'PEN', subtotal: 203.00, igv: 36.54, total: 239.54,
       sunat_digest_value: digestPara('FE01-1'), sunat_estado: 'ACEPTADO', docAfectado: null
     }, emisor, cliente, detalle, qrBuffer: qrFactura
@@ -62,7 +62,7 @@ async function main() {
   const qrNota = await qrPng('20550932297|07|FC01|1|9.00|59.00|2026-08-24|6|20562860984|');
   const pdfNota = await generarComprobanteSunatPDF({
     comprobante: {
-      codigo_tipo_sunat: '07', serie: 'FC01', numero: 1, fecha_emision: '2026-08-24',
+      codigo_tipo_sunat: '07', serie: 'FC01', numero: 1, fecha_emision: '24/08/2026',
       moneda: 'PEN', subtotal: 50.00, igv: 9.00, total: 59.00,
       sunat_digest_value: digestPara('FC01-1'), sunat_estado: 'ACEPTADO',
       docAfectado: { comprobante: 'FE01-2', motivo: '07 - DEVOLUCION POR ITEM' }
@@ -74,7 +74,7 @@ async function main() {
   // 3) Factura BAJA → marca de agua ANULADO
   const pdfBaja = await generarComprobanteSunatPDF({
     comprobante: {
-      codigo_tipo_sunat: '01', serie: 'FE01', numero: 3, fecha_emision: '2026-08-24',
+      codigo_tipo_sunat: '01', serie: 'FE01', numero: 3, fecha_emision: '24/08/2026',
       moneda: 'PEN', subtotal: 100, igv: 18, total: 118,
       sunat_digest_value: digestPara('FE01-3'), sunat_estado: 'BAJA', docAfectado: null
     }, emisor, cliente, detalle, qrBuffer: qrFactura
@@ -86,7 +86,7 @@ async function main() {
   const qrGre = await qrPng('https://ww1.sunat.gob.pe/ol-ti-itconsultaunificadalibre/consultaUnificadaLibre/consulta?...');
   const pdfGre = await generarGuiaRemisionSunatPDF({
     guia: {
-      serie_sunat: 'TE01', numero_sunat: 1, fecha_emision: '2026-08-24', fecha_traslado: '2026-08-24',
+      serie_sunat: 'TE01', numero_sunat: 1, fecha_emision: '24/08/2026', fecha_traslado: '24/08/2026',
       motivo_traslado_cod: '01', peso_bruto_kg: 100.50,
       ubigeo_partida: '150142', direccion_partida: 'COO. LAS VERTIENTES - VILLA EL SALVADOR',
       ubigeo_llegada: '150101', direccion_llegada: 'AV. ARGENTINA 1234 - LIMA',

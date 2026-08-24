@@ -17,6 +17,16 @@ const ESTADOS_WORKFLOW = ['Nuevo', 'En_gestion', 'Contactado', 'Convertido', 'De
 
 const POR_PAGINA = 50; // tamaño de página del sistema (también unidad de "hoja" en el export)
 
+// Avisa a todos los clientes que están viendo el módulo de Prospección que algo
+// cambió, para que refresquen la lista (y el detalle abierto) sin recargar la
+// página. Best-effort: si el socket no está, no pasa nada.
+function emitirCambioProspecto(req, data = {}) {
+  try {
+    const io = req.app.get('socketio');
+    io?.emit('prospectos:cambio', { ...data, ts: Date.now() });
+  } catch { /* noop */ }
+}
+
 // Arma el WHERE + ORDER BY del listado a partir de los filtros de la query.
 // Compartido entre el listado paginado y la exportación a Excel para que ambos
 // devuelvan exactamente el mismo conjunto.
@@ -325,6 +335,7 @@ export async function createProspecto(req, res) {
 
     const r = await crearProspectoDesdeDatos(req.body, req.user?.id_empleado);
     if (!r.success) return res.status(500).json({ error: r.error });
+    emitirCambioProspecto(req, { accion: 'crear', id_prospecto: r.id_prospecto });
     res.status(201).json({ success: true, message: 'Prospecto creado', data: r });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -390,6 +401,7 @@ export async function ingestaLista(req, res) {
       }
     }
 
+    if (resumen.creados > 0) emitirCambioProspecto(req, { accion: 'ingesta', creados: resumen.creados });
     res.json({ success: true, message: `Ingesta terminada: ${resumen.creados} creados`, resumen, detalle });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -416,6 +428,7 @@ export async function updateProspecto(req, res) {
        direccion || null, web || null, notas || null, id]
     );
     if (!r.success) return res.status(500).json({ error: r.error });
+    emitirCambioProspecto(req, { accion: 'actualizar', id_prospecto: Number(id) });
     res.json({ success: true, message: 'Prospecto actualizado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -495,6 +508,7 @@ export async function cambiarEstado(req, res) {
     if (!r.success) return res.status(500).json({ error: r.error });
 
     await registrarHistorial(id, yo, 'estado', prev.estado_workflow, estado);
+    emitirCambioProspecto(req, { accion: 'estado', id_prospecto: Number(id) });
     res.json({ success: true, message: 'Estado actualizado', id_gestor: prev.id_gestor || yo });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -525,6 +539,7 @@ export async function liberarProspecto(req, res) {
     if (!up.success) return res.status(500).json({ error: up.error });
 
     await registrarHistorial(id, yo, 'liberar', null, null);
+    emitirCambioProspecto(req, { accion: 'liberar', id_prospecto: Number(id) });
     res.json({ success: true, message: 'Prospecto liberado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -543,6 +558,7 @@ export async function asignarProspecto(req, res) {
       [id_empleado || null, id]
     );
     if (!r.success) return res.status(500).json({ error: r.error });
+    emitirCambioProspecto(req, { accion: 'asignar', id_prospecto: Number(id) });
     res.json({ success: true, message: 'Prospecto asignado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -568,6 +584,7 @@ export async function addContacto(req, res) {
       [id, tipo, valor, norm, nombre_persona || null, cargo || null, area || null, 'manual']
     );
     if (!r.success) return res.status(500).json({ error: r.error });
+    emitirCambioProspecto(req, { accion: 'contacto', id_prospecto: Number(id) });
     res.status(201).json({ success: true, message: 'Contacto agregado', id_contacto: r.data.insertId });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -577,8 +594,12 @@ export async function addContacto(req, res) {
 export async function deleteContacto(req, res) {
   try {
     const { id_contacto } = req.params;
+    // Recupera a qué prospecto pertenece ANTES de borrarlo, para avisar en vivo.
+    const dueno = await executeQuery('SELECT id_prospecto FROM prospecto_contactos WHERE id_contacto = ?', [id_contacto]);
+    const idProspecto = dueno.success && dueno.data[0] ? dueno.data[0].id_prospecto : null;
     const r = await executeQuery('DELETE FROM prospecto_contactos WHERE id_contacto = ?', [id_contacto]);
     if (!r.success) return res.status(500).json({ error: r.error });
+    emitirCambioProspecto(req, { accion: 'contacto', id_prospecto: idProspecto });
     res.json({ success: true, message: 'Contacto eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -671,6 +692,7 @@ export async function convertirACliente(req, res) {
     );
     await registrarHistorial(id, yo, 'convertido', p.estado_workflow, 'Convertido');
 
+    emitirCambioProspecto(req, { accion: 'convertir', id_prospecto: Number(id) });
     res.status(201).json({ success: true, message: 'Cliente creado desde el prospecto', data: { id_cliente: idCliente, razon_social } });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -822,6 +844,7 @@ export async function buscarRucProspecto(req, res) {
     // Recalcula con la vigencia leída de la ficha (activo/habido) → puede subir a caliente.
     const score = await recalcularScore(id, { es_activo: d.es_activo, es_habido: d.es_habido });
 
+    emitirCambioProspecto(req, { accion: 'buscar_ruc', id_prospecto: Number(id) });
     res.json({
       success: true, found: true, ruc: hit.ruc, razon_social: d.razon_social,
       es_activo: d.es_activo, es_habido: d.es_habido, sim: hit.sim, ya_cliente, score,
@@ -858,6 +881,7 @@ export async function excluirProspecto(req, res) {
     const excluido = req.body.excluido ? 1 : 0;
     const r = await executeQuery('UPDATE prospectos SET excluido = ? WHERE id_prospecto = ?', [excluido, id]);
     if (!r.success) return res.status(500).json({ error: r.error });
+    emitirCambioProspecto(req, { accion: 'excluir', id_prospecto: Number(id) });
     res.json({ success: true, message: excluido ? 'Prospecto excluido' : 'Exclusión cancelada' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -905,6 +929,7 @@ export async function descartarProspecto(req, res) {
     const r = await executeQuery("UPDATE prospectos SET estado_workflow = 'Descartado' WHERE id_prospecto = ?", [id]);
     if (!r.success) return res.status(500).json({ error: r.error });
     await registrarHistorial(id, yo, 'estado', null, 'Descartado');
+    emitirCambioProspecto(req, { accion: 'descartar', id_prospecto: Number(id) });
     res.json({ success: true, message: 'Prospecto descartado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -916,6 +941,7 @@ export async function deleteProspecto(req, res) {
     const { id } = req.params;
     const r = await executeQuery('DELETE FROM prospectos WHERE id_prospecto = ?', [id]);
     if (!r.success) return res.status(500).json({ error: r.error });
+    emitirCambioProspecto(req, { accion: 'eliminar', id_prospecto: Number(id) });
     res.json({ success: true, message: 'Prospecto eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });

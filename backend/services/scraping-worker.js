@@ -167,6 +167,8 @@ async function procesarPlaces(job, params) {
     }
   }
 
+  // Si el barrido creó prospectos nuevos, avisa en vivo a quien esté en el módulo.
+  if (resumen.creados > 0) emit('prospectos:cambio', { accion: 'descubrir', creados: resumen.creados, ts: Date.now() });
   await completar(job.id_job, resumen);
 }
 
@@ -177,6 +179,7 @@ async function procesarWebScrape(job, params) {
 
   const resultado = await enriquecerDesdeWeb(idProspecto, params.url);
   if (!resultado) return fallar(job.id_job, 'No se pudo leer el sitio web');
+  emit('prospectos:cambio', { accion: 'enriquecer', id_prospecto: Number(idProspecto), ts: Date.now() });
   await completar(job.id_job, { id_prospecto: idProspecto, ...resultado });
 }
 

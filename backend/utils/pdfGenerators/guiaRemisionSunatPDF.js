@@ -15,6 +15,8 @@ function logoBuffer() {
   return _logo;
 }
 
+const trunc = (s, n) => String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s);
+
 const MOTIVOS_TRASLADO = {
   '01': 'VENTA', '02': 'COMPRA', '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
   '08': 'IMPORTACION', '09': 'EXPORTACION', '13': 'OTROS',
@@ -57,19 +59,22 @@ export async function generarGuiaRemisionSunatPDF({ guia: g, emisor, cliente, de
       doc.fontSize(12).text(`${g.serie_sunat}-${g.numero_sunat}`, 385, 94, { align: 'center', width: 172 });
 
       // ── Destinatario + datos generales ──
+      // Doble dirección: la fiscal del destinatario va aquí; la de entrega es el "Punto de llegada".
       let y = 122;
-      doc.roundedRect(33, y, 529, 48, 3).stroke('#000');
+      doc.roundedRect(33, y, 529, 60, 3).stroke('#000');
       doc.fontSize(8).fillColor('#000');
       doc.font('Helvetica-Bold').text('Destinatario:', 40, y + 8);
       doc.font('Helvetica').text(cliente.razon_social || '-', 120, y + 8, { width: 430 });
-      doc.font('Helvetica-Bold').text('RUC/Doc:', 40, y + 22);
-      doc.font('Helvetica').text(cliente.ruc || '-', 120, y + 22);
-      doc.font('Helvetica-Bold').text('Fecha emisión:', 40, y + 36);
-      doc.font('Helvetica').text(String(g.fecha_emision || '-'), 120, y + 36);
-      doc.font('Helvetica-Bold').text('Inicio traslado:', 320, y + 36);
-      doc.font('Helvetica').text(String(g.fecha_traslado || '-'), 400, y + 36);
+      doc.font('Helvetica-Bold').text('RUC/Doc:', 40, y + 21);
+      doc.font('Helvetica').text(cliente.ruc || '-', 120, y + 21);
+      doc.font('Helvetica-Bold').text('Dir. fiscal:', 40, y + 34);
+      doc.font('Helvetica').text(trunc(String(cliente.direccion || '-').replace(/[\r\n]+/g, ' ').trim() || '-', 105), 120, y + 34, { width: 435 });
+      doc.font('Helvetica-Bold').text('Fecha emisión:', 40, y + 47);
+      doc.font('Helvetica').text(String(g.fecha_emision || '-'), 120, y + 47);
+      doc.font('Helvetica-Bold').text('Inicio traslado:', 320, y + 47);
+      doc.font('Helvetica').text(String(g.fecha_traslado || '-'), 400, y + 47);
 
-      y += 56;
+      y += 68;
 
       // ── Datos del traslado ──
       doc.roundedRect(33, y, 529, 76, 3).stroke('#000');

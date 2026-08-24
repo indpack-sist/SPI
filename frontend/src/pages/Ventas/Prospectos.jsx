@@ -5,6 +5,7 @@ import {
   UserPlus, Trash2, Eye, AlertTriangle, Compass, Activity, Zap, FileSpreadsheet,
   EyeOff, RotateCcw, Lock, Unlock, Clock, History, ChevronLeft, ChevronRight
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 import { prospectosAPI } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/UI/Modal';
@@ -180,6 +181,9 @@ export default function Prospectos() {
   const [jobsOpen, setJobsOpen] = useState(false);
   const completadosRef = useRef(new Set());
 
+  // Actualización en vivo (WebSocket): refleja lo que otros hacen sin recargar.
+  const [enVivo, setEnVivo] = useState(false);
+
   const cargar = useCallback(async () => {
     try {
       setLoading(true);
@@ -272,6 +276,63 @@ export default function Prospectos() {
 
   const jobsActivos = jobs.filter((j) => j.estado === 'pendiente' || j.estado === 'procesando').length;
 
+  // --- Actualización en vivo por WebSocket ---
+  // Refs a lo último (callbacks/estado) para que el socket se suscriba UNA vez y
+  // no se reconecte en cada cambio de filtro/página.
+  const cargarRef = useRef(cargar);
+  const cargarFacetasRef = useRef(cargarFacetas);
+  const detalleIdRef = useRef(null);
+  useEffect(() => { cargarRef.current = cargar; }, [cargar]);
+  useEffect(() => { cargarFacetasRef.current = cargarFacetas; }, [cargarFacetas]);
+  useEffect(() => { detalleIdRef.current = detalle?.id_prospecto || null; }, [detalle]);
+
+  // Recarga el detalle abierto sin el parpadeo de "cargando" (solo si sigue
+  // siendo el mismo prospecto), para refrescar su historial en vivo.
+  const recargarDetalleSilencioso = useCallback(async (id) => {
+    try {
+      const res = await prospectosAPI.getById(id);
+      setDetalle((prev) => (prev && prev.id_prospecto === id ? res.data.data : prev));
+    } catch { /* silencioso */ }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const SOCKET_URL = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : 'http://localhost:3000';
+    const socket = io(SOCKET_URL, {
+      withCredentials: true,
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+    });
+
+    // Coalesce ráfagas de cambios en un solo refresco de la lista.
+    let debounce = null;
+    const onCambio = (data) => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        cargarRef.current?.();
+        cargarFacetasRef.current?.();
+      }, 600);
+      // Si el detalle abierto es el afectado (o el cambio es genérico), refresca su historial.
+      const abierto = detalleIdRef.current;
+      if (abierto && (!data?.id_prospecto || Number(data.id_prospecto) === Number(abierto))) {
+        recargarDetalleSilencioso(abierto);
+      }
+    };
+
+    socket.on('connect', () => setEnVivo(true));
+    socket.on('disconnect', () => setEnVivo(false));
+    socket.on('prospectos:cambio', onCambio);
+
+    return () => {
+      clearTimeout(debounce);
+      socket.off('prospectos:cambio', onCambio);
+      socket.disconnect();
+    };
+  }, [user?.id, recargarDetalleSilencioso]);
+
   // Zonas finales a barrer: departamentos marcados (como "X, Perú") + otras
   // localidades sueltas escritas a mano (una por línea).
   const construirZonas = () => [
@@ -327,52 +388,37 @@ export default function Prospectos() {
     return params;
   };
 
-  const exportarExcel = async () => {
+  // Abre el modal de exportación con el rango por defecto = todas las hojas.
+  const abrirExport = () => {
     if (totalRegistros === 0) { setError('No hay prospectos para exportar'); return; }
-    // Trae TODO el conjunto filtrado recorriendo las páginas (el backend
-    // limita a 50 por request), no solo la página que se está viendo.
+    setExportModo('todo');
+    setExportDesde(1);
+    setExportHasta(totalPaginas);
+    setExportOpen(true);
+  };
+
+  // Ejecuta la exportación en el servidor (una sola descarga). Respeta los
+  // filtros actuales; en modo "rango" manda desde/hasta hoja (50 registros c/u).
+  const exportarExcel = async () => {
     const base = filtrosActuales();
-    let todos = [];
-    try {
-      let pag = 1;
-      let paginas = 1;
-      do {
-        const res = await prospectosAPI.getAll({ ...base, page: pag, limit: POR_PAGINA });
-        todos = todos.concat(res.data.data || []);
-        paginas = res.data.total_paginas || 1;
-        pag++;
-      } while (pag <= paginas);
-    } catch (err) {
-      setError(err.error || 'No se pudo exportar la lista completa');
-      return;
+    const params = { ...base };
+    if (exportModo === 'rango') {
+      const desde = Math.max(1, Math.min(exportDesde, totalPaginas));
+      const hasta = Math.max(desde, Math.min(exportHasta, totalPaginas));
+      params.desde_pagina = desde;
+      params.hasta_pagina = hasta;
     }
-    if (todos.length === 0) { setError('No hay prospectos para exportar'); return; }
-    const XLSX = await import('xlsx');
-    const rows = todos.map((p) => ({
-      Score: p.score,
-      'Razón social': p.razon_social,
-      Documento: p.documento || '',
-      Segmento: p.segmento,
-      Sector: p.sector || '',
-      Estado: ESTADO_CHIP[p.estado_workflow]?.label || p.estado_workflow,
-      Duplicado: p.flag_duplicado === 'Ya_cliente' ? 'Ya cliente' : p.flag_duplicado === 'Posible_duplicado' ? 'Posible duplicado' : '',
-      Departamento: p.departamento || '',
-      Provincia: p.provincia || '',
-      Distrito: p.distrito || '',
-      Teléfonos: p.telefonos || '',
-      Emails: p.emails || '',
-      Web: p.web || '',
-      Asignado: p.empleado_asignado || '',
-      Origen: p.origen,
-      'Fecha captura': p.fecha_captura ? String(p.fecha_captura).replace('T', ' ').slice(0, 16) : '',
-      'Por qué contactar': p.score_detalle?.por_que_contactar || '',
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [6, 38, 13, 10, 20, 12, 16, 14, 16, 16, 22, 26, 26, 20, 12, 17, 60].map((wch) => ({ wch }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Prospectos');
-    XLSX.writeFile(wb, `prospectos-${new Date().toISOString().slice(0, 10)}.xlsx`);
-    notify(`Exportados ${rows.length} prospectos a Excel`);
+    try {
+      setExportLoading(true);
+      setError(null);
+      await prospectosAPI.exportarExcel(params);
+      setExportOpen(false);
+      notify('Excel generado. Revisa tu carpeta de descargas.');
+    } catch (err) {
+      setError(err.message || 'No se pudo exportar a Excel');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const enriquecer = async (id, web) => {
@@ -544,7 +590,12 @@ export default function Prospectos() {
       {/* Encabezado */}
       <div className="pros-head">
         <div>
-          <div className="pros-title"><Radar size={26} /> Prospección de Ventas</div>
+          <div className="pros-title">
+            <Radar size={26} /> Prospección de Ventas
+            <span className={`pros-live ${enVivo ? 'on' : 'off'}`} title={enVivo ? 'Actualización en vivo activa: verás los cambios de otros usuarios sin recargar' : 'Sin conexión en vivo (se reintenta automáticamente)'}>
+              <span className="pros-live-dot" /> {enVivo ? 'En vivo' : 'Sin conexión'}
+            </span>
+          </div>
           <div className="pros-subtitle">Captación e inteligencia comercial de empresas · scoring y anti-duplicados</div>
         </div>
         <div className="pros-head-actions">
@@ -555,7 +606,7 @@ export default function Prospectos() {
           <button className="btn btn-outline" onClick={() => setDescubrirOpen(true)}>
             <Compass size={16} /> Descubrir
           </button>
-          <button className="btn btn-outline" onClick={exportarExcel} title="Exportar la vista actual a Excel">
+          <button className="btn btn-outline" onClick={abrirExport} title="Exportar a Excel (todo o por rango de hojas)">
             <FileSpreadsheet size={16} /> Excel
           </button>
           <button className="btn btn-primary" onClick={() => { setIngestaOpen(true); setIngestaRes(null); setIngestaTexto(''); }}>
@@ -1038,6 +1089,52 @@ export default function Prospectos() {
           <button className="btn btn-outline" onClick={() => setIngestaOpen(false)}>Cerrar</button>
           <button className="btn btn-primary" onClick={hacerIngesta} disabled={ingestaLoading || !ingestaTexto.trim()}>
             {ingestaLoading ? <><Loader size={16} className="pros-spin" /> Procesando…</> : <><Upload size={16} /> Procesar</>}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ---------- Modal exportar a Excel ---------- */}
+      <Modal isOpen={exportOpen} onClose={() => setExportOpen(false)} title="Exportar prospectos a Excel" size="sm">
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
+          Se exportan los prospectos con los <b>filtros actuales</b> ({totalRegistros.toLocaleString('es-PE')} registros · {totalPaginas.toLocaleString('es-PE')} hojas de 50). El archivo se genera en el servidor y se descarga directo.
+        </p>
+
+        <label className="pros-radio" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '0.6rem', cursor: 'pointer' }}>
+          <input type="radio" name="export-modo" checked={exportModo === 'todo'} onChange={() => setExportModo('todo')} style={{ marginTop: 3 }} />
+          <span><b>Exportar todo</b><br /><small style={{ color: 'var(--text-secondary)' }}>Los {totalRegistros.toLocaleString('es-PE')} registros del filtro actual en un solo archivo.</small></span>
+        </label>
+
+        <label className="pros-radio" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '0.6rem', cursor: 'pointer' }}>
+          <input type="radio" name="export-modo" checked={exportModo === 'rango'} onChange={() => setExportModo('rango')} style={{ marginTop: 3 }} />
+          <span><b>Rango de hojas</b><br /><small style={{ color: 'var(--text-secondary)' }}>Elige desde y hasta qué hoja abarcar (50 registros por hoja).</small></span>
+        </label>
+
+        {exportModo === 'rango' && (
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-end', margin: '0.4rem 0 0.2rem 1.6rem' }}>
+            <div>
+              <label className="form-label">Desde hoja</label>
+              <input type="number" className="form-input" min={1} max={totalPaginas}
+                value={exportDesde}
+                onChange={(e) => setExportDesde(Math.max(1, Math.min(parseInt(e.target.value) || 1, totalPaginas)))}
+                style={{ width: 100 }} />
+            </div>
+            <div>
+              <label className="form-label">Hasta hoja</label>
+              <input type="number" className="form-input" min={1} max={totalPaginas}
+                value={exportHasta}
+                onChange={(e) => setExportHasta(Math.max(1, Math.min(parseInt(e.target.value) || 1, totalPaginas)))}
+                style={{ width: 100 }} />
+            </div>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', paddingBottom: 8 }}>
+              ≈ {(Math.max(0, Math.min(exportHasta, totalPaginas) - Math.min(exportDesde, totalPaginas) + 1) * POR_PAGINA).toLocaleString('es-PE')} registros
+            </span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.2rem' }}>
+          <button className="btn btn-outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>Cancelar</button>
+          <button className="btn btn-primary" onClick={exportarExcel} disabled={exportLoading}>
+            {exportLoading ? <><Loader size={16} className="pros-spin" /> Generando…</> : <><FileSpreadsheet size={16} /> Descargar</>}
           </button>
         </div>
       </Modal>

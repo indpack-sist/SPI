@@ -21,6 +21,52 @@ function partirNombre(nombre) {
   return { first: t[0], family: t.slice(1).join(' ') };
 }
 
+// ── FASE 11 (tipo 31): sub-bloques de transporte ────────────────────────────
+// En GRE Transportista el emisor ES el transportista (INDPACK) y SIEMPRE declara
+// sus vehículos y conductores. Estos helpers arman las listas N (multi-conductor /
+// multi-placa que exige el punto de control XSD) y se componen dentro de Shipment.
+
+/** cac:CarrierParty del transportista (INDPACK). Se ubica dentro de cac:ShipmentStage. */
+function carrierPartyXml(transportista) {
+  return `      <cac:CarrierParty>
+        <cac:PartyIdentification><cbc:ID schemeID="6">${transportista.ruc}</cbc:ID></cac:PartyIdentification>
+        <cac:PartyLegalEntity><cbc:RegistrationName>${cdata(transportista.razon_social)}</cbc:RegistrationName></cac:PartyLegalEntity>
+      </cac:CarrierParty>`;
+}
+
+/** N conductores → cac:DriverPerson (el primero Principal, el resto Secundario). En cac:ShipmentStage. */
+function driversXml(conductores) {
+  return conductores.map((c, i) => {
+    const n = partirNombre(c.nombre_completo);
+    return `      <cac:DriverPerson>
+        <cbc:ID schemeID="1">${c.dni}</cbc:ID>
+        <cbc:FirstName>${cdata(n.first)}</cbc:FirstName>
+        <cbc:FamilyName>${cdata(n.family)}</cbc:FamilyName>
+        <cbc:JobTitle>${i === 0 ? 'Principal' : 'Secundario'}</cbc:JobTitle>
+        <cac:IdentityDocumentReference><cbc:ID>${c.licencia_conducir}</cbc:ID></cac:IdentityDocumentReference>
+      </cac:DriverPerson>`;
+  }).join('\n');
+}
+
+/** N vehículos → cac:TransportHandlingUnit/TransportEquipment con Nº MTC. En cac:Shipment (tras Delivery). */
+function vehiclesXml(vehiculos, mtcDefault) {
+  return vehiculos.map((v) => {
+    const mtc = v.certificado_habilitacion || mtcDefault;
+    // ⚠️ VERIFICAR CONTRA XSD: elemento exacto del Nº de registro MTC dentro de ApplicableTransportMeans.
+    const mtcXml = mtc
+      ? `
+        <cac:ApplicableTransportMeans>
+          <cbc:RegistrationNationalityID>${mtc}</cbc:RegistrationNationalityID>
+        </cac:ApplicableTransportMeans>`
+      : '';
+    return `    <cac:TransportHandlingUnit>
+      <cac:TransportEquipment>
+        <cbc:ID>${v.placa}</cbc:ID>${mtcXml}
+      </cac:TransportEquipment>
+    </cac:TransportHandlingUnit>`;
+  }).join('\n');
+}
+
 /**
  * Construye el XML DespatchAdvice (GRE Remitente 09).
  * @param {object} d

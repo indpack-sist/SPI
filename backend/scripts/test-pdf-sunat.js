@@ -52,6 +52,9 @@ async function main() {
     comprobante: {
       codigo_tipo_sunat: '01', serie: 'FE01', numero: 1, fecha_emision: '24/08/2026',
       moneda: 'PEN', subtotal: 203.00, igv: 36.54, total: 239.54,
+      tipo_venta: 'Credito', dias_credito: 30, fecha_vencimiento: '23/09/2026',
+      observaciones: 'GUIA DE REMISION REMITENTE: TE01-45. Entregar en almacén central.',
+      orden_compra: '260810058',
       sunat_digest_value: digestPara('FE01-1'), sunat_estado: 'ACEPTADO', docAfectado: null
     }, emisor, cliente, detalle, qrBuffer: qrFactura
   });

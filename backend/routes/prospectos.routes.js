@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   getAllProspectos,
+  exportarProspectosExcel,
   getEstadisticas,
   getFacetas,
   getBarridos,
@@ -28,6 +29,7 @@ import {
 const router = express.Router();
 
 router.get('/', getAllProspectos);
+router.get('/export/excel', exportarProspectosExcel);
 router.get('/estadisticas', getEstadisticas);
 router.get('/facetas', getFacetas);
 router.get('/barridos', getBarridos);

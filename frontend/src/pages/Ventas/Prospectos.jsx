@@ -146,6 +146,13 @@ export default function Prospectos() {
   const [totalRegistros, setTotalRegistros] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
+  // Exportación a Excel (server-side): todo o un rango de hojas de 50.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportModo, setExportModo] = useState('todo'); // 'todo' | 'rango'
+  const [exportDesde, setExportDesde] = useState(1);
+  const [exportHasta, setExportHasta] = useState(1);
+  const [exportLoading, setExportLoading] = useState(false);
+
   // Ingesta
   const [ingestaOpen, setIngestaOpen] = useState(false);
   const [ingestaTexto, setIngestaTexto] = useState('');
